@@ -39,7 +39,7 @@ public class MicroQRCodeDecoderImageTest
     [MethodDataSource(nameof(AllVersionEccCombinations))]
     public async Task Decode_CleanRender_AllVersionsAndEccLevels(MicroQRVersion version, MicroQREccLevel eccLevel, string content)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
+        var data = MicroQRCodeGenerator.Create(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
@@ -58,7 +58,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_VariousModulePixelSizes(int modulePixelSize)
     {
         const string content = "12345";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L);
         using var bitmap = RenderBitmap(data, modulePixelSize);
 
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out _);
@@ -72,7 +72,7 @@ public class MicroQRCodeDecoderImageTest
     {
         // 300px canvas over a 21-module matrix → 14.28 px/module
         const string content = "MICRO QR M4 TEST";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M);
         using var bitmap = new MicroQRCodeImageBuilder(data).WithSize(300, 300).ToBitmap();
 
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out _);
@@ -92,7 +92,7 @@ public class MicroQRCodeDecoderImageTest
         // decoder must preserve the finder pattern's horizontal and vertical
         // module scales instead of collapsing them to one square-module estimate.
         const string content = "MICRO QR M4 TEST";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M);
         using var rendered = new MicroQRCodeImageBuilder(data).WithSize(300, 400).ToBitmap();
         using var bitmap = Rotate(rendered, degrees);
 
@@ -106,7 +106,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_TranslatedOnLargerCanvas()
     {
         const string content = "12345";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L);
         using var content_bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         // Paste off-center on a larger white canvas
@@ -129,7 +129,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_QuietZoneVariants(int quietZoneModules)
     {
         const string content = "12345";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZoneModules });
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZoneModules });
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out _);
@@ -162,7 +162,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_RightAngleRotations(int degrees)
     {
         const string content = "MICRO QR M4 TEST";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M);
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
         using var rotated = Rotate(bitmap, degrees);
 
@@ -206,7 +206,7 @@ public class MicroQRCodeDecoderImageTest
 
     private static SKBitmap RenderRotated(string content, MicroQRVersion version, MicroQREccLevel eccLevel, float degrees)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
+        var data = MicroQRCodeGenerator.Create(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
         var qrPx = data.Size * 8;
         var canvasPx = (int)(qrPx * 1.5f) + 16;
         var bitmap = new SKBitmap(new SKImageInfo(canvasPx, canvasPx, SKColorType.Bgra8888, SKAlphaType.Premul));
@@ -215,7 +215,7 @@ public class MicroQRCodeDecoderImageTest
         canvas.Translate(canvasPx / 2f, canvasPx / 2f);
         canvas.RotateDegrees(degrees);
         canvas.Translate(-qrPx / 2f, -qrPx / 2f);
-        QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, qrPx, qrPx), data, SKColors.Black, SKColors.White);
+        SymbolRenderer.Render(canvas, SKRect.Create(0, 0, qrPx, qrPx), data, SKColors.Black, SKColors.White);
         canvas.Flush();
         return bitmap;
     }
@@ -224,7 +224,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_MirroredImage()
     {
         const string content = "12345";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L);
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         using var mirrored = new SKBitmap(bitmap.Width, bitmap.Height);
@@ -245,7 +245,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_InvertedColors()
     {
         const string content = "12345";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L);
         using var bitmap = new MicroQRCodeImageBuilder(data)
             .WithModulePixelSize(8)
             .WithColors(codeColor: SKColors.White, backgroundColor: SKColors.Black)
@@ -265,7 +265,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_JpegCompressionArtifacts()
     {
         const string content = "MICRO QR M4 TEST";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M);
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         using var image = SKImage.FromBitmap(bitmap);
@@ -282,7 +282,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_LowContrast()
     {
         const string content = "12345";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M);
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         // Compress the dynamic range: black → 100, white → 170
@@ -307,7 +307,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_AdditiveNoise_Deterministic()
     {
         const string content = "1234567";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M);
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         // ±24 uniform noise, fixed seed
@@ -337,7 +337,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task DecodeImage_LuminanceSpan_MatchesBitmapPath()
     {
         const string content = "MICRO QR M4 TEST";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M);
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         // Grayscale conversion by hand (rendered image is already black/white)
@@ -375,14 +375,14 @@ public class MicroQRCodeDecoderImageTest
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsNotEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.Success);
     }
 
     [Test]
     public async Task StandardDecoder_MicroQRImage_IsRejected()
     {
         // The Standard QR image decoder must not decode a Micro QR symbol
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         var success = QRCodeDecoder.TryDecode(bitmap, out _, out _);
@@ -403,7 +403,7 @@ public class MicroQRCodeDecoderImageTest
 
         await Assert.That(success).IsFalse();
         await Assert.That(text).IsEqualTo(string.Empty);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -418,7 +418,7 @@ public class MicroQRCodeDecoderImageTest
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -438,9 +438,9 @@ public class MicroQRCodeDecoderImageTest
             out var charsWritten,
             out var info);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(status).IsEqualTo(DecodeStatus.NotDetected);
         await Assert.That(charsWritten).IsEqualTo(0);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     #endregion

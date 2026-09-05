@@ -1,7 +1,7 @@
 using System.Buffers;
 using FeatherQR.Internals.BinaryDecoders;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Decodes a QR module matrix (one byte per module, no quiet zone) back into text.
@@ -35,15 +35,15 @@ internal static class QRMatrixDecoder
     /// <param name="destination">Destination buffer for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
-    public static QRCodeDecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
         // 1. Version from size
         if (size < 21 || size > 177 || (size - 21) % 4 != 0 || modules.Length < size * size)
         {
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
-            return QRCodeDecodeStatus.InvalidMatrix;
+            info = new QRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            return DecodeStatus.InvalidMatrix;
         }
         var version = (size - 21) / 4 + 1;
 
@@ -51,8 +51,8 @@ internal static class QRMatrixDecoder
         ReadFormatBits(modules, size, out var rawFormat1, out var rawFormat2);
         if (!FormatInformationDecoder.TryDecode(rawFormat1, rawFormat2, out var eccLevel, out var maskPattern))
         {
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.FormatInformationInvalid, version, default, -1, 0);
-            return QRCodeDecodeStatus.FormatInformationInvalid;
+            info = new QRCodeDecodeInfo(DecodeStatus.FormatInformationInvalid, version, default, -1, 0);
+            return DecodeStatus.FormatInformationInvalid;
         }
 
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
@@ -94,8 +94,8 @@ internal static class QRMatrixDecoder
 
                 if (!EccBinaryDecoder.TryCorrect(block, eccInfo.ECCPerBlock, out var blockErrors))
                 {
-                    info = new QRCodeDecodeInfo(QRCodeDecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
-                    return QRCodeDecodeStatus.DataUncorrectable;
+                    info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
+                    return DecodeStatus.DataUncorrectable;
                 }
 
                 errorsCorrected += blockErrors;
@@ -124,7 +124,7 @@ internal static class QRMatrixDecoder
     /// (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
     /// </remarks>
     public static int GetMaxCharCount(int version)
-        => QRCodeConstants.GetEccInfo(version, ECCLevel.L).TotalDataCodewords * 3;
+        => QRCodeConstants.GetEccInfo(version, QREccLevel.L).TotalDataCodewords * 3;
 
     /// <summary>
     /// Reads the two redundant 15-bit format information copies.

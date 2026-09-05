@@ -19,8 +19,8 @@ public class QRCodeImageEndToEnd
     [GlobalSetup]
     public void Setup()
     {
-        _small = QRCodeGenerator.CreateQrCode("HELLO WORLD 2026", ECCLevel.M); // version 1-2
-        _large = QRCodeGenerator.CreateQrCode(BuildDeterministicText(2900), ECCLevel.L); // version 40
+        _small = QRCodeGenerator.Create("HELLO WORLD 2026", QREccLevel.M); // version 1-2
+        _large = QRCodeGenerator.Create(BuildDeterministicText(2900), QREccLevel.L); // version 40
     }
 
     [Benchmark]

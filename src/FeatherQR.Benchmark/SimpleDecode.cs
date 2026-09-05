@@ -266,20 +266,20 @@ public class SimpleDecode
 
     private static (byte[] modules, int size) BuildModules(string content)
     {
-        var calculated = Sizing.Required(content.AsSpan(), ECCLevel.L, 0);
+        var calculated = Sizing.Required(content.AsSpan(), QREccLevel.L, 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content.AsSpan(), ECCLevel.L, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
-        return (buffer, calculated.QrSize);
+        QRCodeGenerator.Create(content.AsSpan(), QREccLevel.L, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        return (buffer, calculated.Size);
     }
 
     private static (SKBitmap bitmap, byte[] rgba, int size) RenderImage(string content)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), ECCLevel.L);
+        var qr = QRCodeGenerator.Create(content.AsSpan(), QREccLevel.L);
         var sizePx = qr.Size * PixelsPerModule;
         var bitmap = new SKBitmap(new SKImageInfo(sizePx, sizePx, SKColorType.Rgba8888, SKAlphaType.Opaque));
         using (var canvas = new SKCanvas(bitmap))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.Black, SKColors.White);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.Black, SKColors.White);
             canvas.Flush();
         }
 

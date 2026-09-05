@@ -54,7 +54,7 @@ public static class QRCodeImageDecoder
             if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
             {
                 text = string.Empty;
-                info = new QRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
+                info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
                 return false;
             }
 

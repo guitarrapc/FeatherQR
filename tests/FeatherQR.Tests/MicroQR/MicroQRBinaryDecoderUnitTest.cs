@@ -13,7 +13,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class MicroQRBinaryDecoderUnitTest
 {
-    private static (QRCodeDecodeStatus status, string text) Decode(byte[] data, int dataBitCount, MicroQRVersion version)
+    private static (DecodeStatus status, string text) Decode(byte[] data, int dataBitCount, MicroQRVersion version)
     {
         var destination = new char[64];
         var status = MicroQRBinaryDecoder.DecodeBitStream(data, dataBitCount, version, destination, out var charsWritten);
@@ -28,7 +28,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, text) = Decode(codewords, dataBitCount: 20, MicroQRVersion.M1);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo(expected);
     }
 
@@ -38,7 +38,7 @@ public class MicroQRBinaryDecoderUnitTest
         // ISO/IEC 18004 Micro QR encoding example: "01234567" in M2-L.
         var (status, text) = Decode([0x40, 0x18, 0xAC, 0xC3, 0x00], dataBitCount: 40, MicroQRVersion.M2);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("01234567");
     }
 
@@ -75,7 +75,7 @@ public class MicroQRBinaryDecoderUnitTest
 
         var (status, decoded) = Decode(codewords, MicroQRConstants.GetDataBitCapacity(version, ecc), version);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(decoded).IsEqualTo(text);
     }
 
@@ -114,7 +114,7 @@ public class MicroQRBinaryDecoderUnitTest
     /// rather than throwing. Two of these tests were written that way and passed
     /// against a decoder with the guard removed.
     /// </remarks>
-    private static (QRCodeDecodeStatus status, string text) DecodeAtCapacity(string stream, MicroQRVersion version)
+    private static (DecodeStatus status, string text) DecodeAtCapacity(string stream, MicroQRVersion version)
     {
         var clean = stream.Replace(" ", "");
         var data = Bits(clean);
@@ -131,7 +131,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, text) = DecodeAtCapacity("011" + "0010" + Kanji(0x93FA) + Kanji(0x967B), MicroQRVersion.M4);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("日本");
     }
 
@@ -141,7 +141,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, text) = DecodeAtCapacity("11" + "001" + Kanji(0x889F), MicroQRVersion.M3);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("亜");
     }
 
@@ -150,7 +150,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, _) = DecodeAtCapacity("011" + "0001" + Kanji(0x8740), MicroQRVersion.M4); // NEC row 13, CP932-only
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(status).IsEqualTo(DecodeStatus.UnmappedCharacter);
     }
 
     [Test]
@@ -162,7 +162,7 @@ public class MicroQRBinaryDecoderUnitTest
         var stream = modeBits + Convert.ToString(1, 2).PadLeft(countBits, '0') + Convert.ToString(0x3F, 2).PadLeft(13, '0');
         var (status, _) = DecodeAtCapacity(stream, version);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, _) = DecodeAtCapacity("011" + "1111" + Kanji(0x93FA), MicroQRVersion.M4); // count 15, one character present
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -195,7 +195,7 @@ public class MicroQRBinaryDecoderUnitTest
         const string Digits = "0000001100" + "0101011001" + "1010100110" + "1001";
         var (status, _) = DecodeAtCapacity("000" + "001010" + Digits + "011" + "01", MicroQRVersion.M4);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -214,7 +214,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, text) = DecodeAtCapacity("011" + "0001" + Kanji(0x93FA) + "000" + "000011" + "0001111011", MicroQRVersion.M4);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("日123");
     }
 
@@ -227,7 +227,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, text) = DecodeAtCapacity("011" + "0000" + "000" + "000011" + "0001111011", MicroQRVersion.M4);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("123");
     }
 
@@ -286,7 +286,7 @@ public class MicroQRBinaryDecoderUnitTest
     {
         var (status, _) = Decode(codewords, dataBitCount: 80, MicroQRVersion.M4);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -296,7 +296,7 @@ public class MicroQRBinaryDecoderUnitTest
         // Stream: 011 1111111111 -> 0111 1111 1111 1000 -> 0x7F 0xF8
         var (status, _) = Decode([0x7F, 0xF8, 0x00], dataBitCount: 20, MicroQRVersion.M1);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -306,7 +306,7 @@ public class MicroQRBinaryDecoderUnitTest
         // Stream: 1 010 11111111111 -> 1010 1111 1111 1110 -> 0xAF 0xFE
         var (status, _) = Decode([0xAF, 0xFE, 0x00, 0x00, 0x00], dataBitCount: 40, MicroQRVersion.M2);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -317,7 +317,7 @@ public class MicroQRBinaryDecoderUnitTest
         // Stream: 10 1001 ... -> 0b10_1001_00
         var (status, _) = Decode([0b10_1001_00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], dataBitCount: 68, MicroQRVersion.M3);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -327,7 +327,7 @@ public class MicroQRBinaryDecoderUnitTest
         // (the terminator is numeric-mode-with-zero-count); the stream then ends.
         var (status, text) = Decode([0b1_000_0000, 0x00, 0x00, 0x00, 0x00], dataBitCount: 40, MicroQRVersion.M2);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("");
     }
 
@@ -340,7 +340,7 @@ public class MicroQRBinaryDecoderUnitTest
         var destination = new char[4];
         var status = MicroQRBinaryDecoder.DecodeBitStream(codewords.AsSpan(0, 5), 40, MicroQRVersion.M2, destination, out _);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(status).IsEqualTo(DecodeStatus.DestinationTooSmall);
     }
 
     [Test]
@@ -356,7 +356,7 @@ public class MicroQRBinaryDecoderUnitTest
 
         var (status, text) = Decode(codewords, dataBitCount: 84, MicroQRVersion.M3);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("ABC");
     }
 }

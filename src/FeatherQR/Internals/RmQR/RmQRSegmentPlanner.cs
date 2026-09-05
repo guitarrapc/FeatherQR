@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// Mixed-mode segmentation for <see cref="RmQRSegmentation.Optimal"/>: the split of

@@ -103,7 +103,7 @@ public class QRCodeImageBuilderSvgTest
 
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithIcon(icon)
             .ToSvgString();
 
@@ -232,19 +232,19 @@ public class QRCodeImageBuilderSvgTest
     {
         var expected = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .ToSvgString();
 
-        await Assert.That(QRCodeImageBuilder.GetSvgString(TestContent, ECCLevel.H, size: 512)).IsEquivalentTo(expected);
+        await Assert.That(QRCodeImageBuilder.GetSvgString(TestContent, QREccLevel.H, size: 512)).IsEquivalentTo(expected);
     }
 
     [Test]
     public async Task WriteSvg_Content_MatchesGetSvgBytes()
     {
         var writer = new ArrayBufferWriter<byte>();
-        QRCodeImageBuilder.WriteSvg(TestContent, writer, ECCLevel.M, size: 256);
+        QRCodeImageBuilder.WriteSvg(TestContent, writer, QREccLevel.M, size: 256);
 
-        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(QRCodeImageBuilder.GetSvgBytes(TestContent, ECCLevel.M, size: 256));
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(QRCodeImageBuilder.GetSvgBytes(TestContent, QREccLevel.M, size: 256));
     }
 
     [Test]
@@ -294,7 +294,7 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task GetSvgBytes_Content_ProducesSvg()
     {
-        var bytes = QRCodeImageBuilder.GetSvgBytes(TestContent, ECCLevel.H, size: 300);
+        var bytes = QRCodeImageBuilder.GetSvgBytes(TestContent, QREccLevel.H, size: 300);
 
         var doc = ParseSvg(bytes);
         await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("300");
@@ -303,7 +303,7 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task GetSvgBytes_QrCodeData_ProducesSvg()
     {
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var bytes = QRCodeImageBuilder.GetSvgBytes(qr, size: 300);
 
         var doc = ParseSvg(bytes);
@@ -314,7 +314,7 @@ public class QRCodeImageBuilderSvgTest
     public async Task SaveSvg_Content_WritesToStream()
     {
         using var stream = new MemoryStream();
-        QRCodeImageBuilder.SaveSvg(TestContent, stream, ECCLevel.M, size: 256);
+        QRCodeImageBuilder.SaveSvg(TestContent, stream, QREccLevel.M, size: 256);
 
         var doc = ParseSvg(stream.ToArray());
         await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("256");
@@ -323,7 +323,7 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task SaveSvg_QrCodeData_WritesToStream()
     {
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         using var stream = new MemoryStream();
         QRCodeImageBuilder.SaveSvg(qr, stream, size: 256);
 
@@ -370,7 +370,7 @@ public class QRCodeImageBuilderSvgTest
 
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(256, 256)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithIcon(icon)
             .ToSvgString();
 
@@ -384,7 +384,7 @@ public class QRCodeImageBuilderSvgTest
     public async Task WithModulePixelSize_SetsViewportToMatrixTimesPixelSize()
     {
         const int modulePixelSize = 10;
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
 
         var svg = new QRCodeImageBuilder(qr)
             .WithModulePixelSize(modulePixelSize)
@@ -400,7 +400,7 @@ public class QRCodeImageBuilderSvgTest
     public async Task WithModulePixelSize_AndCanvas_PadsWithClearColor()
     {
         const int modulePixelSize = 4;
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var contentSide = qr.Size * modulePixelSize;
         var canvasSide = contentSide + 40;
 

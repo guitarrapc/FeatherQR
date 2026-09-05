@@ -1,4 +1,4 @@
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR version fit (ISO/IEC 23941 capacities, design record

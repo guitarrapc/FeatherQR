@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using FeatherQR.Internals.BinaryDecoders;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR matrix → payload (ISO/IEC 23941, the inverse of the encode pipeline): the
@@ -32,15 +32,15 @@ internal static partial class RmQRMatrixDecoder
     internal const int MaxDataCodewords = 152;   // R17x139-M
     internal const int MaxBlockCodewords = 74;  // R15x59-M: 48 data + 26 ECC in one block (pinned by RmQRCodeDecoderRoundTripTest)
 
-    public static QRCodeDecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
         // 1. Version from the physical dimensions
         if (!RmQRConstants.TryGetVersion(height, width, out var version) || modules.Length < width * height)
         {
-            info = new RmQRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, 0);
-            return QRCodeDecodeStatus.InvalidMatrix;
+            info = new RmQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, 0);
+            return DecodeStatus.InvalidMatrix;
         }
 
         // 2. Format information (both copies) → ECC; only copies that agree with the
@@ -49,8 +49,8 @@ internal static partial class RmQRMatrixDecoder
         ReadFormatCopies(modules, width, height, out var finderSideRaw, out var subFinderSideRaw);
         if (!RmQRFormatInformationDecoder.TryDecode(finderSideRaw, subFinderSideRaw, version, out var eccLevel, out _))
         {
-            info = new RmQRCodeDecodeInfo(QRCodeDecodeStatus.FormatInformationInvalid, version, default, 0);
-            return QRCodeDecodeStatus.FormatInformationInvalid;
+            info = new RmQRCodeDecodeInfo(DecodeStatus.FormatInformationInvalid, version, default, 0);
+            return DecodeStatus.FormatInformationInvalid;
         }
 
         var eccInfo = RmQRConstants.GetEccInfo(version, eccLevel);
@@ -95,8 +95,8 @@ internal static partial class RmQRMatrixDecoder
             if (!EccBinaryDecoder.TryCorrect(blockSpan, eccInfo.ECCPerBlock, out var blockErrors)
                 || blockErrors > correctionCapacity)
             {
-                info = new RmQRCodeDecodeInfo(QRCodeDecodeStatus.DataUncorrectable, version, eccLevel, errorsCorrected + blockErrors);
-                return QRCodeDecodeStatus.DataUncorrectable;
+                info = new RmQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, errorsCorrected + blockErrors);
+                return DecodeStatus.DataUncorrectable;
             }
             errorsCorrected += blockErrors;
 

@@ -36,18 +36,18 @@ public readonly record struct QRCodeGeneratorOptions
     /// <summary>
     /// Include a UTF-8 byte order mark. Ignored unless the content is written as UTF-8
     /// in Byte mode. When a BOM would be written,
-    /// <see cref="QRCodeSegmentation.Optimal"/> emits the single-mode stream instead
+    /// <see cref="QRSegmentation.Optimal"/> emits the single-mode stream instead
     /// of a split (the BOM is a stream-level prefix, and a split would relocate it
     /// into the middle of the decoded text).
     /// </summary>
-    public bool Utf8BOM { get; init; }
+    public bool Utf8Bom { get; init; }
 
     /// <summary>
     /// The versions the generator may choose from. Defaults to
-    /// <see cref="QRCodeVersionRange.Any"/>; an <c>int</c> or <c>int?</c> converts
+    /// <see cref="QRVersionRange.Any"/>; an <c>int</c> or <c>int?</c> converts
     /// implicitly, so <c>Version = 15</c> pins one and a <c>null</c> means automatic.
     /// </summary>
-    public QRCodeVersionRange Version { get; init; }
+    public QRVersionRange Version { get; init; }
 
     /// <summary>
     /// Quiet zone width in modules. Defaults to 4, the ISO/IEC 18004 value; 0 is valid.
@@ -99,12 +99,12 @@ public readonly record struct QRCodeGeneratorOptions
 
     /// <summary>
     /// How the content is split into encoding-mode segments
-    /// (see <see cref="QRCodeSegmentation"/>). Defaults to
-    /// <see cref="QRCodeSegmentation.Single"/>. <see cref="QRCodeSegmentation.Optimal"/>
+    /// (see <see cref="QRSegmentation"/>). Defaults to
+    /// <see cref="QRSegmentation.Single"/>. <see cref="QRSegmentation.Optimal"/>
     /// never selects a larger version, emits the identical bit stream when a split
     /// would not shrink the symbol, and defers to the single-mode stream when
-    /// <see cref="Utf8BOM"/> would actually write a byte order mark. Size a
+    /// <see cref="Utf8Bom"/> would actually write a byte order mark. Size a
     /// destination buffer with the same value you encode with.
     /// </summary>
-    public QRCodeSegmentation Segmentation { get; init; }
+    public QRSegmentation Segmentation { get; init; }
 }

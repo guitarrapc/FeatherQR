@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR;
 
@@ -38,20 +38,13 @@ public static class RmQRCodeGenerator
     /// <summary>
     /// Creates an rMQR code from the provided plain text.
     /// </summary>
-    /// <param name="plainText">The text to encode.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
     /// <param name="eccLevel">Error correction level (M or H).</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>An <see cref="RmQRCodeData"/> containing the generated matrix.</returns>
     /// <exception cref="ArgumentException">Thrown when the data does not fit or the options contradict each other.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for invalid version / ECC / strategy / height / quiet zone / segmentation / ECI values.</exception>
-    public static RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
-        => CreateRmQRCode(plainText.AsSpan(), eccLevel, in options);
-
-    /// <inheritdoc cref="CreateRmQRCode(string, RmQREccLevel, in RmQRCodeGeneratorOptions)"/>
-    /// <param name="textSpan">The text span to encode.</param>
-    /// <param name="eccLevel">Error correction level (M or H).</param>
-    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
-    public static RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
+    public static RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
     {
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
@@ -97,7 +90,7 @@ public static class RmQRCodeGenerator
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options, since they can select different versions.</param>
     /// <returns>The number of bytes written (width × height, quiet zone included).</returns>
     /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the options contradict each other.</exception>
-    public static int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default)
+    public static int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default)
     {
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);

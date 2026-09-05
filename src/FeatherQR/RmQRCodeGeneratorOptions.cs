@@ -1,11 +1,11 @@
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR;
 
 /// <summary>
 /// Optional settings for <see cref="RmQRCodeGenerator"/>. <c>default</c> is the complete
 /// default configuration and is what an omitted argument sends, so the shortest correct
-/// call is <c>CreateRmQRCode(text, eccLevel)</c>.
+/// call is <c>Create(text, eccLevel)</c>.
 /// </summary>
 /// <remarks>
 /// rMQR specific rather than shared: <see cref="Version"/> is a different type in each

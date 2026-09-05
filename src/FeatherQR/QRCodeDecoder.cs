@@ -1,5 +1,5 @@
 using System.Buffers;
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR;
 
@@ -14,9 +14,9 @@ namespace FeatherQR;
 /// Kanji mode is decoded as JIS X 0208; the generator never emits it, so Kanji is a
 /// read-only mode here. A Kanji cell outside the JIS X 0208 repertoire (most visibly
 /// the NEC row 13 characters CP932 adds, such as circled digits) fails the WHOLE
-/// symbol with <see cref="QRCodeDecodeStatus.UnmappedCharacter"/> rather than
+/// symbol with <see cref="DecodeStatus.UnmappedCharacter"/> rather than
 /// substituting a replacement character; that status is distinct from
-/// <see cref="QRCodeDecodeStatus.UnsupportedContent"/> so a caller can tell "a CP932
+/// <see cref="DecodeStatus.UnsupportedContent"/> so a caller can tell "a CP932
 /// reader would read this" from "this uses a feature we do not implement". FNC1 and
 /// Structured Append are the latter.
 /// </para>
@@ -69,7 +69,7 @@ public static class QRCodeDecoder
     /// </summary>
     /// <param name="modules">
     /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
-    /// order, the format produced by <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, in QRCodeGeneratorOptions)"/>.
+    /// order, the format produced by <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, in QRCodeGeneratorOptions)"/>.
     /// A light quiet zone border is detected and skipped automatically.
     /// </param>
     /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>
@@ -86,7 +86,7 @@ public static class QRCodeDecoder
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
         {
             text = string.Empty;
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            info = new QRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
             return false;
         }
 
@@ -129,19 +129,19 @@ public static class QRCodeDecoder
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
         {
             charsWritten = 0;
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            info = new QRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
             return false;
         }
 
         if (top == 0 && left == 0 && coreSize == size)
-            return QRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+            return QRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), coreSize, destination, out charsWritten, out info) == DecodeStatus.Success;
 
         var rented = ArrayPool<byte>.Shared.Rent(coreSize * coreSize);
         try
         {
             var core = rented.AsSpan(0, coreSize * coreSize);
             CopyCoreWindow(modules, size, top, left, coreSize, core);
-            return QRMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+            return QRMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == DecodeStatus.Success;
         }
         finally
         {
@@ -197,7 +197,7 @@ public static class QRCodeDecoder
         if (width < 1 || height < 1 || luminance.Length < (long)width * height)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
 
-        return QRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+        return QRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == DecodeStatus.Success;
     }
 
     /// <summary>
@@ -231,8 +231,8 @@ public static class QRCodeDecoder
                 : (rentedChars = ArrayPool<char>.Shared.Rent(maxChars)).AsSpan(0, maxChars);
 
             var status = QRMatrixDecoder.DecodeMatrix(core, coreSize, chars, out var charsWritten, out info);
-            text = status == QRCodeDecodeStatus.Success ? chars.Slice(0, charsWritten).ToString() : string.Empty;
-            return status == QRCodeDecodeStatus.Success;
+            text = status == DecodeStatus.Success ? chars.Slice(0, charsWritten).ToString() : string.Empty;
+            return status == DecodeStatus.Success;
         }
         finally
         {

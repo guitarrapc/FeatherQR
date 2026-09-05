@@ -5,7 +5,7 @@ using System.Text;
 
 using FeatherQR.Internals.BinaryEncoders;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 internal ref struct QRBinaryEncoder
 {
@@ -135,7 +135,7 @@ internal ref struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Writes a planned mixed-mode data stream (<see cref="QRCodeSegmentation.Optimal"/>):
+    /// Writes a planned mixed-mode data stream (<see cref="QRSegmentation.Optimal"/>):
     /// one optional ECI prefix, then per run a mode indicator, count indicator and
     /// payload. Same bit grammar as the single-segment path, repeated per planned run
     /// (a Standard QR decoder carries the declared charset across the runs that follow

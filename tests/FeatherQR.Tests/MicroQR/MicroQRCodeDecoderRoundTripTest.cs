@@ -31,13 +31,13 @@ public class MicroQRCodeDecoderRoundTripTest
     [MethodDataSource(nameof(RoundTripCases))]
     public async Task RoundTrip_MicroQRCodeData(string text, MicroQREccLevel ecc, MicroQRVersion version)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc);
+        var data = MicroQRCodeGenerator.Create(text, ecc);
 
         var success = MicroQRCodeDecoder.TryDecode(data, out var decoded, out var info);
 
         await Assert.That(success).IsTrue();
         await Assert.That(decoded).IsEqualTo(text);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(info.Version).IsEqualTo(version);
         await Assert.That(info.EccLevel).IsEqualTo(ecc);
         await Assert.That(info.MaskPattern).IsBetween(0, 3);
@@ -52,9 +52,9 @@ public class MicroQRCodeDecoderRoundTripTest
         {
             var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
-            var success = MicroQRCodeDecoder.TryDecode(modules, calculated.QrSize, out var decoded, out var info);
+            var success = MicroQRCodeDecoder.TryDecode(modules, calculated.Size, out var decoded, out var info);
 
             await Assert.That(success).IsTrue();
             await Assert.That(decoded).IsEqualTo(text);
@@ -72,10 +72,10 @@ public class MicroQRCodeDecoderRoundTripTest
         {
             var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
             var destination = new char[MicroQRCodeDecoder.GetMaxDecodedLength(version)];
-            var success = MicroQRCodeDecoder.TryDecode(modules, calculated.QrSize, destination, out var charsWritten, out var info);
+            var success = MicroQRCodeDecoder.TryDecode(modules, calculated.Size, destination, out var charsWritten, out var info);
 
             await Assert.That(success).IsTrue();
             await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo(text);
@@ -91,19 +91,19 @@ public class MicroQRCodeDecoderRoundTripTest
         // uniform quiet zone and must be rejected rather than misread.
         var calculated = Sizing.Required("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, quietZoneSize: 0);
         var core = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, core, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        MicroQRCodeGenerator.Create("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, core, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         const int size = 13;
         var modules = new byte[size * size];
-        for (var row = 0; row < calculated.QrSize; row++)
+        for (var row = 0; row < calculated.Size; row++)
         {
-            core.AsSpan(row * calculated.QrSize, calculated.QrSize).CopyTo(modules.AsSpan((row + 1) * size));
+            core.AsSpan(row * calculated.Size, calculated.Size).CopyTo(modules.AsSpan((row + 1) * size));
         }
 
         var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
     }
 
     [Test]
@@ -130,7 +130,7 @@ public class MicroQRCodeDecoderRoundTripTest
 
         await Assert.That(success).IsFalse();
         await Assert.That(text).IsEqualTo("");
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
     }
 
     [Test]
@@ -141,7 +141,7 @@ public class MicroQRCodeDecoderRoundTripTest
         var success = MicroQRCodeDecoder.TryDecode(modules, 11, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsNotEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.Success);
     }
 
     [Test]

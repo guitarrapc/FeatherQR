@@ -1,10 +1,10 @@
 using FeatherQR.Internals.BinaryEncoders;
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// <see cref="QRCodeDecodeStatus.UnmappedCharacter"/> reaches the caller through the
+/// <see cref="DecodeStatus.UnmappedCharacter"/> reaches the caller through the
 /// public decoder, not just the internal bitstream layer.
 /// </summary>
 /// <remarks>
@@ -36,7 +36,7 @@ public class KanjiUnmappedCharacterEndToEndTest
     /// <summary>Builds a real version 1-L symbol carrying one Kanji segment of one cell.</summary>
     private static byte[] BuildSymbol(int sjis)
     {
-        var eccInfo = QRCodeConstants.GetEccInfo(Version, ECCLevel.L);
+        var eccInfo = QRCodeConstants.GetEccInfo(Version, QREccLevel.L);
 
         var data = new byte[eccInfo.TotalDataCodewords];
         var writer = new BitWriter(data);
@@ -60,8 +60,8 @@ public class KanjiUnmappedCharacterEndToEndTest
         var modules = new byte[Size * Size];
         layout.Template.AsSpan().CopyTo(modules);
         ModulePlacer.PlaceDataWords(modules, layout, codewords);
-        var mask = ModulePlacer.MaskCode(modules, Size, Version, layout.BlockedMask, ECCLevel.L);
-        ModulePlacer.PlaceFormat(modules, Size, QRCodeConstants.GetFormatBits(ECCLevel.L, mask));
+        var mask = ModulePlacer.MaskCode(modules, Size, Version, layout.BlockedMask, QREccLevel.L);
+        ModulePlacer.PlaceFormat(modules, Size, QRCodeConstants.GetFormatBits(QREccLevel.L, mask));
 
         return modules;
     }
@@ -76,14 +76,14 @@ public class KanjiUnmappedCharacterEndToEndTest
 
         await Assert.That(ok).IsTrue();
         await Assert.That(text).IsEqualTo("亜");
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(info.ErrorsCorrected).IsEqualTo(0);
     }
 
     /// <summary>
     /// A CP932-only cell (NEC row 13) reaches the caller as
-    /// <see cref="QRCodeDecodeStatus.UnmappedCharacter"/>, distinct from the structural
-    /// <see cref="QRCodeDecodeStatus.UnsupportedContent"/>.
+    /// <see cref="DecodeStatus.UnmappedCharacter"/>, distinct from the structural
+    /// <see cref="DecodeStatus.UnsupportedContent"/>.
     /// </summary>
     [Test]
     [Arguments(0x8740)] // CP932 U+2460, circled digit one
@@ -96,11 +96,11 @@ public class KanjiUnmappedCharacterEndToEndTest
         var ok = QRCodeDecoder.TryDecode(modules, Size, out _, out var info);
 
         await Assert.That(ok).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
-        await Assert.That(info.Status).IsNotEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.UnsupportedContent);
         // The symbol itself was read cleanly; only the character could not be mapped.
         await Assert.That(info.Version).IsEqualTo(Version);
-        await Assert.That(info.EccLevel).IsEqualTo(ECCLevel.L);
+        await Assert.That(info.EccLevel).IsEqualTo(QREccLevel.L);
         await Assert.That(info.ErrorsCorrected).IsEqualTo(0);
     }
 
@@ -133,7 +133,7 @@ public class KanjiUnmappedCharacterEndToEndTest
         var ok = QRCodeDecoder.TryDecodeImage(luminance, side, side, out _, out var info);
 
         await Assert.That(ok).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
     }
 
     /// <summary>The span overload reports the same status, so neither path is special.</summary>
@@ -145,7 +145,7 @@ public class KanjiUnmappedCharacterEndToEndTest
         var ok = QRCodeDecoder.TryDecode(modules, Size, new char[64], out var charsWritten, out var info);
 
         await Assert.That(ok).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
         await Assert.That(charsWritten).IsEqualTo(0);
     }
 }

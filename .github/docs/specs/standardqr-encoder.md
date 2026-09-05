@@ -27,7 +27,7 @@ The encoder exposes two output models.
 
 #### `QRCodeData`
 
-`CreateQrCode(string|ReadOnlySpan<char>, ...)` returns a `QRCodeData` object.
+`Create(ReadOnlySpan<char>, ...)` returns a `QRCodeData` object (a `string` converts implicitly).
 
 - The core matrix is stored bit-packed, one bit per module.
 - The quiet zone is virtual: it changes the public coordinate space but consumes no payload storage.
@@ -36,7 +36,7 @@ The encoder exposes two output models.
 
 #### Caller-provided matrix buffer
 
-`CreateQrCode(string|ReadOnlySpan<char>, ..., Span<byte> destination, ...)` writes:
+`Create(ReadOnlySpan<char>, ..., Span<byte> destination, ...)` writes:
 
 - one byte per module;
 - `0` for light and `1` for dark;
@@ -57,7 +57,7 @@ The encoder exposes two output models.
 | UTF-8 BOM | Optional in UTF-8 Byte mode |
 | Version selection | Automatic minimum-fit, caller-requested version, or a version range (options overloads) |
 | ECC boost | Optional (options overloads): the requested level becomes the minimum and is raised as far as the chosen version's capacity allows, never changing the version |
-| Segmentation | One segment in one mode by default; opt-in mixed-mode segmentation (`QRCodeSegmentation.Optimal`) splits the content into the minimal-bit Numeric / Alphanumeric / Byte runs |
+| Segmentation | One segment in one mode by default; opt-in mixed-mode segmentation (`QRSegmentation.Optimal`) splits the content into the minimal-bit Numeric / Alphanumeric / Byte runs |
 | Quiet zone | Configurable non-negative size; span sizing/output rejects dimensions that cannot fit an `int`-sized matrix |
 | Output | Bit-packed `QRCodeData` or byte-per-module `Span<byte>` |
 
@@ -70,7 +70,7 @@ The encoder exposes two output models.
 - Arbitrary binary payload input
 - Micro QR and rMQR
 
-By default the encoder analyzes the complete input once and emits one data segment; `QRCodeSegmentation.Optimal` (options overloads) opts into the globally minimal mixed-mode split instead (see [Mixed-mode segmentation](#mixed-mode-segmentation-options-overloads)).
+By default the encoder analyzes the complete input once and emits one data segment; `QRSegmentation.Optimal` (options overloads) opts into the globally minimal mixed-mode split instead (see [Mixed-mode segmentation](#mixed-mode-segmentation-options-overloads)).
 
 ---
 
@@ -136,14 +136,14 @@ When `requestedVersion` is supplied, automatic selection is bypassed. It is inte
 
 #### Version ranges (options overloads)
 
-`QRCodeGeneratorOptions.Version` is a `QRCodeVersionRange` rather than a single version, and the scan runs over `[Min, Max]` instead of 1 to 40. A pinned version is the degenerate `Exactly(n)` case, so there is one concept rather than a requested version and a range that could contradict each other. The range's bounds are validated when it is constructed, before any generator is called, and both are **inclusive** — which is why this is a domain type and not C#'s `..`, whose end is exclusive and would make `1..40` mean 1 through 39.
+`QRCodeGeneratorOptions.Version` is a `QRVersionRange` rather than a single version, and the scan runs over `[Min, Max]` instead of 1 to 40. A pinned version is the degenerate `Exactly(n)` case, so there is one concept rather than a requested version and a range that could contradict each other. The range's bounds are validated when it is constructed, before any generator is called, and both are **inclusive** — which is why this is a domain type and not C#'s `..`, whose end is exclusive and would make `1..40` mean 1 through 39.
 
 Two behaviours differ from the `requestedVersion` parameter, and both are confined to the options overloads:
 
-- **A range narrower than 1-40 is checked for fit.** `Exactly(n)` reports content that does not fit version *n* as `false` from `TryGetRequiredBufferSize` (or an `ArgumentException` from `CreateQrCode`), where the parameter hands the version straight to the encoder and fails deep inside with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice. The parameter's behaviour is unchanged; only the new surface checks.
+- **A range narrower than 1-40 is checked for fit.** `Exactly(n)` reports content that does not fit version *n* as `false` from `TryGetRequiredBufferSize` (or an `ArgumentException` from `Create`), where the parameter hands the version straight to the encoder and fails deep inside with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice. The parameter's behaviour is unchanged; only the new surface checks.
 - **Sizing honours the version.** The released `GetRequiredBufferSize` has no `requestedVersion` parameter, so an ignored `Version` would have been a silent trap. `TryGetRequiredBufferSize` reports the version the range resolves to, matching what Micro QR and rMQR already do.
 
-`QRCodeVersionRange.Any` short-circuits to the same automatic path the parameter list overloads take, so the default costs nothing extra; only a constrained range pays for the additional text analysis its resolution needs.
+`QRVersionRange.Any` short-circuits to the same automatic path the parameter list overloads take, so the default costs nothing extra; only a constrained range pays for the additional text analysis its resolution needs.
 
 **The scan does not assume the fit predicate is monotone in the version**, even though it is. It could plausibly not be: the character-count indicator widens at versions 10 and 27, so a larger version costs more header bits. Scanning `[Min, Max]` is correct either way, and `VersionRangeTest.StandardQr_FitsIsMonotoneInVersion` sweeps 3 modes × 4 ECC levels × 3 ECI modes × 58 lengths × 40 versions to keep the monotonicity a checked fact rather than an assumption the code rests on.
 
@@ -160,7 +160,7 @@ Two behaviours differ from the `requestedVersion` parameter, and both are confin
 
 #### Mixed-mode segmentation (options overloads)
 
-**What.** `QRCodeSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a candidate version, and fits the version against that cost instead of the single-mode cost. `QRCodeSegmentation.Single` (the default) keeps one run in one mode.
+**What.** `QRSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a candidate version, and fits the version against that cost instead of the single-mode cost. `QRSegmentation.Single` (the default) keeps one run in one mode.
 
 **Why.** Mixed payloads pay the whole-content mode for every character under a single segment: a URL prefix followed by a long numeric identifier is all Byte, so the digits cost 8 bits each instead of 3⅓. Splitting the digits off routinely drops the symbol a version or more (`https://example.com/item?id=` + 30 digits: version 4-M as one Byte run, version 3-M split).
 
@@ -176,7 +176,7 @@ Two behaviours differ from the `requestedVersion` parameter, and both are confin
 
 **Bounds.** Content longer than the largest character count any version holds in any mode (7,089, Numeric at 40-L, an exact fit) is rejected before any cost run; the margin is 4 bits, and the derivation sits with the constant in `QRSegmentPlanner` so a capacity-table change re-derives rather than nudges it. The plan buffer is stack-allocated for content up to 64 characters and pooled at text length above that — a plan cannot hold more runs than the content has characters, so the pooled path can never fail for space. The reconstructed plan is re-costed from the byte counts the encoder will actually emit and rejected on disagreement, because the bit-stream writers store without per-flush bounds checks.
 
-**Composition with the other options.** The BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text, so `Utf8BOM` falls back to the single-mode stream exactly when a BOM would actually be written — a UTF-8 Byte-mode stream. Content whose single mode is Numeric or Alphanumeric never carries a BOM (even under an explicitly requested UTF-8 charset) and still splits; the first cut of the gate suppressed those too, and code review caught it costing a full version for nothing. A version range narrows the scan window; a pinned version that only a mixed plan fits succeeds where `Single` throws. ECC boost runs after the plan is fixed and compares the exact planned stream bits against the higher level's capacity, keeping the version-invariance contract. A pinned mask applies at the matrix stage, orthogonally. Argument validation keeps the quiet-zone-first precedence of the other surfaces, and an undefined segmentation value reports the same `segmentation` parameter name on the generators and the builder.
+**Composition with the other options.** The BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text, so `Utf8Bom` falls back to the single-mode stream exactly when a BOM would actually be written — a UTF-8 Byte-mode stream. Content whose single mode is Numeric or Alphanumeric never carries a BOM (even under an explicitly requested UTF-8 charset) and still splits; the first cut of the gate suppressed those too, and code review caught it costing a full version for nothing. A version range narrows the scan window; a pinned version that only a mixed plan fits succeeds where `Single` throws. ECC boost runs after the plan is fixed and compares the exact planned stream bits against the higher level's capacity, keeping the version-invariance contract. A pinned mask applies at the matrix stage, orthogonally. Argument validation keeps the quiet-zone-first precedence of the other surfaces, and an undefined segmentation value reports the same `segmentation` parameter name on the generators and the builder.
 
 **Plans the byte-segment decoder would misread are rejected.** The shared byte-segment decoder consumes a leading EF BB BF of every segment without an explicit ISO-8859-1 declaration — even behind an explicit UTF-8 ECI — so a split that relocates a mid-content U+FEFF to a Byte-run start would decode with the character silently dropped, where the single-mode stream keeps it interior and intact. All three planners reject such plans (`ModeSegmenter.HasBomRelocatedToARunStart`) and fall back to the single-mode stream; a run at offset 0 is exempt because the single-mode stream starts with the same bytes and loses it identically. Micro QR, which has no ECI to pin a charset, additionally rejects plans containing a non-ASCII Latin-1 Byte run whose narrowed bytes the decoder's unspecified-charset resolution would read as UTF-8 (`SegmentDecoders.ResolvesToUtf8WhenUnspecified`, kept beside the resolution it mirrors): isolating such a run from its disambiguating invalid neighbours would decode it as different text. Lesson: a mixed-mode plan is only as good as the decode it produces — cost optimality had to be constrained by the decoder's per-segment charset heuristics, which adversarial review caught by reproduction, not inspection. The consequence is accepted deliberately, with a known limitation: only the minimal-bit plan is checked, so content whose optimum is misread-prone reports "does not fit" when no single mode holds it, even though a slightly costlier safe split can exist (adversarial review demonstrated one: 3,000 digits + U+FEFF + 10 letters has a safe fitting plan the fallback never searches). Teaching the dynamic program itself to avoid opening a Byte run on a mid-content U+FEFF would make the cheapest safe plan the optimum and remove the gap; it is deferred until the input class matters, because it changes the DP's transition structure and every optimality oracle with it.
 
@@ -293,7 +293,7 @@ For span output:
 - with quiet zone 0, the core pipeline writes directly into the destination;
 - with a quiet zone, the contiguous core is built in a pooled temporary and copied row-by-row into the centered destination.
 
-The encoder produces a module matrix, not an image. Color, pixels-per-module, shapes, gradients, icons, PNG/SVG encoding, and other presentation concerns belong to `QRCodeRenderer` / `QRCodeImageBuilder`.
+The encoder produces a module matrix, not an image. Color, pixels-per-module, shapes, gradients, icons, PNG/SVG encoding, and other presentation concerns belong to `SymbolRenderer` / `QRCodeImageBuilder`.
 
 ---
 
@@ -310,7 +310,7 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 
 ## Decisions
 
-- **Single segment per input, by default.** It keeps the default path auditable and makes mode selection a single pass; the trade-off, non-minimal symbols for mixed-mode payloads, is answered by the opt-in `QRCodeSegmentation.Optimal`, which never changes the emitted stream unless it lowers the version.
+- **Single segment per input, by default.** It keeps the default path auditable and makes mode selection a single pass; the trade-off, non-minimal symbols for mixed-mode payloads, is answered by the opt-in `QRSegmentation.Optimal`, which never changes the emitted stream unless it lowers the version.
 - **No Kanji mode when encoding.** Unicode input is represented as UTF-8 Byte mode with ECI 26, at the cost of lower capacity for Japanese text. This originally also avoided shipping a Shift_JIS table; that argument lapsed when Kanji DECODING shipped and the assembly gained the 16 KB JIS X 0208 table, so the remaining reasons are output stability and not adding an encoding dependency.
 - **ASCII omits ECI by default.** This minimizes overhead and maximizes compatibility. Latin-1 and wider Unicode receive explicit ECI declarations under automatic selection.
 - **BOM is explicit and UTF-8-only.** `utf8BOM` affects the stream only when the selected data mode is Byte and the effective ECI is UTF-8.

@@ -34,8 +34,8 @@ public class RmQRImageEndToEnd
     [GlobalSetup]
     public void Setup()
     {
-        _small = RmQRCodeGenerator.CreateRmQRCode("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
-        _large = RmQRCodeGenerator.CreateRmQRCode(
+        _small = RmQRCodeGenerator.Create("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
+        _large = RmQRCodeGenerator.Create(
             string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150),
             RmQREccLevel.M,
             new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });

@@ -1,5 +1,5 @@
 using FeatherQR.Internals.BinaryEncoders;
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
@@ -79,7 +79,7 @@ public class KanjiCountIndicatorWidthTest
 
         var (status, text) = Decode(data, version);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success).Because($"version {version}");
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success).Because($"version {version}");
         await Assert.That(text).IsEqualTo("日本語");
     }
 
@@ -102,11 +102,11 @@ public class KanjiCountIndicatorWidthTest
 
         var (status, text) = Decode(data, readAtVersion);
 
-        await Assert.That(status == QRCodeDecodeStatus.Success && text == "日本語").IsFalse()
+        await Assert.That(status == DecodeStatus.Success && text == "日本語").IsFalse()
             .Because($"a stream written for version {writtenAtVersion} ({countBits}-bit count) must not read cleanly at version {readAtVersion}");
     }
 
-    private static (QRCodeDecodeStatus Status, string Text) Decode(byte[] data, int version)
+    private static (DecodeStatus Status, string Text) Decode(byte[] data, int version)
     {
         Span<char> destination = stackalloc char[64];
         var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out var charsWritten);

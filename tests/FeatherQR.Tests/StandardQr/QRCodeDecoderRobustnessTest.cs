@@ -1,4 +1,4 @@
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
@@ -49,9 +49,9 @@ public class QRCodeDecoderRobustnessTest
             out var charsWritten,
             out var info);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(status).IsEqualTo(DecodeStatus.NotDetected);
         await Assert.That(charsWritten).IsEqualTo(0);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -81,7 +81,7 @@ public class QRCodeDecoderRobustnessTest
         // decoder must either fail or return the exact original text, a wrong text
         // (misdecode) is never acceptable.
         var content = "fail closed";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         var size = qr.Size;
         var pristine = new byte[size * size];
         for (var y = 0; y < size; y++)

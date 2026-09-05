@@ -17,7 +17,7 @@ namespace FeatherQR.Tests;
 /// </remarks>
 internal static class Sizing
 {
-    public static QRCodeCalculatedSize Required(ReadOnlySpan<char> text, ECCLevel eccLevel, in QRCodeGeneratorOptions options = default)
+    public static QRCodeCalculatedSize Required(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         => QRCodeGenerator.TryGetRequiredBufferSize(text, eccLevel, out var size, options)
             ? size
             : throw DoesNotFit("Standard QR", text.Length, eccLevel);
@@ -35,7 +35,7 @@ internal static class Sizing
     private static InvalidOperationException DoesNotFit<TEcc>(string symbology, int length, TEcc eccLevel)
         => new($"Test precondition failed: {length} characters do not fit any {symbology} symbol at ECC level {eccLevel}.");
 
-    public static QRCodeCalculatedSize Required(ReadOnlySpan<char> text, ECCLevel eccLevel, int quietZoneSize)
+    public static QRCodeCalculatedSize Required(ReadOnlySpan<char> text, QREccLevel eccLevel, int quietZoneSize)
         => Required(text, eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
     public static MicroQRCodeCalculatedSize Required(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, int quietZoneSize)

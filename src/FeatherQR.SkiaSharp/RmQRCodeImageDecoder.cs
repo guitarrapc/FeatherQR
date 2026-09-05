@@ -52,7 +52,7 @@ public static class RmQRCodeImageDecoder
             if (width < 7 || height < 7 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
             {
                 text = string.Empty;
-                info = new RmQRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, default, default, 0);
+                info = new RmQRCodeDecodeInfo(DecodeStatus.NotDetected, default, default, 0);
                 return false;
             }
 

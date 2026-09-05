@@ -4,12 +4,12 @@ namespace FeatherQR;
 /// Diagnostic information produced by a Micro QR code decode attempt.
 /// </summary>
 /// <remarks>
-/// Statuses are shared with the Standard QR decoder (<see cref="QRCodeDecodeStatus"/>);
+/// Statuses are shared with the Standard QR decoder (<see cref="DecodeStatus"/>);
 /// version, ECC level and mask pattern use the Micro QR domains.
 /// </remarks>
 public readonly struct MicroQRCodeDecodeInfo
 {
-    internal MicroQRCodeDecodeInfo(QRCodeDecodeStatus status, MicroQRVersion version, MicroQREccLevel eccLevel, int maskPattern, int errorsCorrected)
+    internal MicroQRCodeDecodeInfo(DecodeStatus status, MicroQRVersion version, MicroQREccLevel eccLevel, int maskPattern, int errorsCorrected)
     {
         Status = status;
         Version = version;
@@ -18,8 +18,8 @@ public readonly struct MicroQRCodeDecodeInfo
         ErrorsCorrected = errorsCorrected;
     }
 
-    /// <summary>Decode result status. <see cref="QRCodeDecodeStatus.Success"/> when decoding succeeded.</summary>
-    public QRCodeDecodeStatus Status { get; }
+    /// <summary>Decode result status. <see cref="DecodeStatus.Success"/> when decoding succeeded.</summary>
+    public DecodeStatus Status { get; }
 
     /// <summary>Micro QR version (M1-M4), or <c>default</c> (0) when the matrix was invalid.</summary>
     public MicroQRVersion Version { get; }

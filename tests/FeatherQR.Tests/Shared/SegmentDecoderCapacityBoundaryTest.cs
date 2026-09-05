@@ -64,7 +64,7 @@ public class SegmentDecoderCapacityBoundaryTest
         yield return ("Kanji", Kanji(0x93FA) + Kanji(0x967B) + Kanji(0x8CEA) + Kanji(0x889F), 4, 52, "日本語亜");
     }
 
-    private static QRCodeDecodeStatus Decode(string mode, byte[] data, int totalBits, int count, Span<char> destination, out int charsWritten)
+    private static DecodeStatus Decode(string mode, byte[] data, int totalBits, int count, Span<char> destination, out int charsWritten)
     {
         var reader = new BitReader(data);
         charsWritten = 0;
@@ -87,7 +87,7 @@ public class SegmentDecoderCapacityBoundaryTest
         var destination = new char[64];
         var status = Decode(mode, Bits(stream), requiredBits, count, destination, out var charsWritten);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success).Because(mode);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success).Because(mode);
         await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo(text);
     }
 
@@ -103,7 +103,7 @@ public class SegmentDecoderCapacityBoundaryTest
         var destination = new char[64];
         var status = Decode(mode, Bits(stream), requiredBits - 1, count, destination, out _);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream).Because(mode);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream).Because(mode);
     }
 
     /// <summary>
@@ -125,7 +125,7 @@ public class SegmentDecoderCapacityBoundaryTest
         _ = text;
         var status = Decode(mode, Bits(stream), requiredBits - 1, count, Span<char>.Empty, out _);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream).Because(mode);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream).Because(mode);
     }
 
     // The remaining guards in SegmentDecoders that bound a read or a value. They are
@@ -147,7 +147,7 @@ public class SegmentDecoderCapacityBoundaryTest
 
         var status = SegmentDecoders.ReadEciDesignator(ref reader, totalBits, out _);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>The one-byte ECI form still needs its 8 bits.</summary>
@@ -158,7 +158,7 @@ public class SegmentDecoderCapacityBoundaryTest
 
         var status = SegmentDecoders.ReadEciDesignator(ref reader, totalBits: 7, out _);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -180,7 +180,7 @@ public class SegmentDecoderCapacityBoundaryTest
 
         var status = SegmentDecoders.DecodeNumericPayload(ref reader, stream.Length, count, destination, ref charsWritten);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -197,7 +197,7 @@ public class SegmentDecoderCapacityBoundaryTest
 
         var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits: 24, count: 3, ByteSegmentCharset.Unspecified, new byte[8], destination, ref charsWritten);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(charsWritten).IsEqualTo(0);
     }
 }

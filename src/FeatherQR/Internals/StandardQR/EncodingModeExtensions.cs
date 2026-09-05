@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Standard QR helpers for <see cref="EncodingMode"/>. The indicator widths encode

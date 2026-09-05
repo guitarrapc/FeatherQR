@@ -6,7 +6,7 @@ namespace FeatherQR;
 /// packs into fewer bits when each run is encoded in its densest mode, which can
 /// drop the symbol by one or more versions.
 /// </summary>
-public enum QRCodeSegmentation
+public enum QRSegmentation
 {
     /// <summary>
     /// One segment in the single mode that can represent the whole content
@@ -26,7 +26,7 @@ public enum QRCodeSegmentation
     /// <remarks>
     /// Opt-in because it searches candidate versions; the search itself allocates
     /// nothing for typical content and rents pooled buffers for long content.
-    /// When <see cref="QRCodeGeneratorOptions.Utf8BOM"/> would actually write a byte
+    /// When <see cref="QRCodeGeneratorOptions.Utf8Bom"/> would actually write a byte
     /// order mark (a UTF-8 Byte-mode stream), the split is disabled and the
     /// <see cref="Single"/> stream is emitted: the BOM is a stream-level prefix, and
     /// a split would relocate it into the middle of the decoded text. Content whose

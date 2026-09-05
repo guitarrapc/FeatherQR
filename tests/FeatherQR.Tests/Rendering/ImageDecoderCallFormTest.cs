@@ -35,7 +35,7 @@ public class ImageDecoderCallFormTest
         await Assert.That(b).IsEqualTo(QrContent);
         await Assert.That(c).IsEqualTo(QrContent);
         await Assert.That(d).IsEqualTo(QrContent);
-        await Assert.That(bInfo.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(bInfo.Status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(dInfo).IsEqualTo(bInfo);
     }
 
@@ -53,7 +53,7 @@ public class ImageDecoderCallFormTest
         await Assert.That(b).IsEqualTo(MicroContent);
         await Assert.That(c).IsEqualTo(MicroContent);
         await Assert.That(d).IsEqualTo(MicroContent);
-        await Assert.That(bInfo.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(bInfo.Status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(dInfo).IsEqualTo(bInfo);
     }
 
@@ -71,7 +71,7 @@ public class ImageDecoderCallFormTest
         await Assert.That(b).IsEqualTo(RmContent);
         await Assert.That(c).IsEqualTo(RmContent);
         await Assert.That(d).IsEqualTo(RmContent);
-        await Assert.That(bInfo.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(bInfo.Status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(dInfo).IsEqualTo(bInfo);
     }
 
@@ -83,7 +83,7 @@ public class ImageDecoderCallFormTest
 
         await Assert.That(QRCodeImageDecoder.TryDecode(micro, out var text, out var info)).IsFalse();
         await Assert.That(text).IsEmpty();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -104,10 +104,10 @@ public class ImageDecoderCallFormTest
         using var tiny = new SKBitmap(6, 6);
 
         await Assert.That(QRCodeImageDecoder.TryDecode(tiny, out _, out var qr)).IsFalse();
-        await Assert.That(qr.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(qr.Status).IsEqualTo(DecodeStatus.NotDetected);
         await Assert.That(MicroQRCodeImageDecoder.TryDecode(tiny, out _, out var micro)).IsFalse();
-        await Assert.That(micro.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(micro.Status).IsEqualTo(DecodeStatus.NotDetected);
         await Assert.That(RmQRCodeImageDecoder.TryDecode(tiny, out _, out var rm)).IsFalse();
-        await Assert.That(rm.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(rm.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 }

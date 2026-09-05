@@ -19,8 +19,8 @@ public class MicroQRImageEndToEnd
     [GlobalSetup]
     public void Setup()
     {
-        _m2 = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L); // M2, 13x13 core
-        _m4 = MicroQRCodeGenerator.CreateMicroQRCode("MICRO QR M4 BENCH", MicroQREccLevel.M); // M4, 17x17 core
+        _m2 = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L); // M2, 13x13 core
+        _m4 = MicroQRCodeGenerator.Create("MICRO QR M4 BENCH", MicroQREccLevel.M); // M4, 17x17 core
 
         // Grayscale of an 8px/module render for the image-decode scenario
         using var bitmap = new MicroQRCodeImageBuilder(_m4).WithModulePixelSize(8).ToBitmap();

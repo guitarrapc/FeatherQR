@@ -9,7 +9,7 @@ using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR module placement (ISO/IEC 23941 6.3, 7.7-7.9): function patterns, both

@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 

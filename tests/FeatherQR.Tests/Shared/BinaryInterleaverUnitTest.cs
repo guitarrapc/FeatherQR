@@ -1,6 +1,6 @@
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals;
-using static FeatherQR.Internals.StandardQr.QRCodeConstants;
+using static FeatherQR.Internals.StandardQR.QRCodeConstants;
 
 namespace FeatherQR.Tests;
 
@@ -12,7 +12,7 @@ public class BinaryInterleaverUnitTest
     {
         var version = 1;
         // Arrange
-        var eccInfo = new ECCInfo(version, ECCLevel.M, 6, 2, 2, 3, 0, 0);
+        var eccInfo = new ECCInfo(version, QREccLevel.M, 6, 2, 2, 3, 0, 0);
 
         // data: Block1 (D1,D2,D3) + Block2 (D4,D5,D6)
         byte[] allData = [0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6];
@@ -45,7 +45,7 @@ public class BinaryInterleaverUnitTest
     {
         var version = 5;
         // Arrange - Group 1 (3 bytes), Group 2 (4 bytes)
-        var eccInfo = new ECCInfo(version, ECCLevel.H, 7, 2, 1, 3, 1, 4);
+        var eccInfo = new ECCInfo(version, QREccLevel.H, 7, 2, 1, 3, 1, 4);
 
         // data: Group1 Block0 (3 bytes) + Group2 Block0 (4 bytes)
         byte[] allData = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
@@ -79,7 +79,7 @@ public class BinaryInterleaverUnitTest
     {
         var version = 1;
         // Arrange: 1 block (no interleaves)
-        var eccInfo = GetEccInfo(version, ECCLevel.L);
+        var eccInfo = GetEccInfo(version, QREccLevel.L);
 
         byte[] allData = new byte[19];
         for (int i = 0; i < 19; i++)
@@ -115,7 +115,7 @@ public class BinaryInterleaverUnitTest
     {
         var version = 40;
         // Arrange: Version 40 (maximum 30 blocks)
-        var eccInfo = GetEccInfo(version, ECCLevel.H);
+        var eccInfo = GetEccInfo(version, QREccLevel.H);
 
         byte[] allData = new byte[eccInfo.TotalDataCodewords];
         byte[] allEcc = new byte[(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock];
@@ -142,11 +142,11 @@ public class BinaryInterleaverUnitTest
     }
 
     [Test]
-    [Arguments(1, ECCLevel.L)]
-    [Arguments(10, ECCLevel.M)]
-    [Arguments(20, ECCLevel.Q)]
-    [Arguments(40, ECCLevel.H)]
-    public async Task CalculateInterleavedSize_AllVersions_CorrectSize(int version, ECCLevel level)
+    [Arguments(1, QREccLevel.L)]
+    [Arguments(10, QREccLevel.M)]
+    [Arguments(20, QREccLevel.Q)]
+    [Arguments(40, QREccLevel.H)]
+    public async Task CalculateInterleavedSize_AllVersions_CorrectSize(int version, QREccLevel level)
     {
         // Arrange
         var eccInfo = GetEccInfo(version, level);

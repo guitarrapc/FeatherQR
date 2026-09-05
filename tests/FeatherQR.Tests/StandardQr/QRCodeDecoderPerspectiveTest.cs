@@ -90,13 +90,13 @@ public class QRCodeDecoderPerspectiveTest
     /// </summary>
     private static SKBitmap RenderKeystone(string content, int version, float tilt, float rotateDegrees)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
         var qrPx = qr.Size * 8;
 
         using var flat = new SKBitmap(new SKImageInfo(qrPx, qrPx, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(flat))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, qrPx, qrPx), qr, SKColors.Black, SKColors.White);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, qrPx, qrPx), qr, SKColors.Black, SKColors.White);
             canvas.Flush();
         }
 

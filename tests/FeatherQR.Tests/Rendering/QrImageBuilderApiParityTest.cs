@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// builders: every public member of <see cref="QRCodeImageBuilder"/> must exist on
 /// <see cref="MicroQRCodeImageBuilder"/> and <see cref="RmQRCodeImageBuilder"/> with
 /// the symbology types swapped (QRCodeData ⇔ MicroQRCodeData ⇔ RmQRCodeData,
-/// ECCLevel ⇔ MicroQREccLevel ⇔ RmQREccLevel, int version ⇔ MicroQRVersion ⇔
+/// QREccLevel ⇔ MicroQREccLevel ⇔ RmQREccLevel, int version ⇔ MicroQRVersion ⇔
 /// RmQRVersion), and vice versa, except for the documented per-symbology options.
 /// Adding an output method or static helper to one builder without the others
 /// fails here.
@@ -139,7 +139,7 @@ public class QrImageBuilderApiParityTest
     {
         // The version constraint is one concept, so it is one method name with two
         // overloads rather than two names; rMQR has only the pinned one.
-        await Assert.That(HasVersionOverload(typeof(QRCodeImageBuilder), typeof(QRCodeVersionRange))).IsTrue();
+        await Assert.That(HasVersionOverload(typeof(QRCodeImageBuilder), typeof(QRVersionRange))).IsTrue();
         await Assert.That(HasVersionOverload(typeof(MicroQRCodeImageBuilder), typeof(MicroQRVersionRange))).IsTrue();
 
         await Assert.That(HasVersionOverload(typeof(QRCodeImageBuilder), typeof(int))).IsTrue();
@@ -206,7 +206,7 @@ public class QrImageBuilderApiParityTest
         {
             if (type == typeof(int) || type == typeof(MicroQRVersion) || type == typeof(RmQRVersion))
                 return "VERSION";
-            if (type == typeof(QRCodeVersionRange) || type == typeof(MicroQRVersionRange))
+            if (type == typeof(QRVersionRange) || type == typeof(MicroQRVersionRange))
                 return "VERSIONRANGE";
         }
         return Normalize(type);
@@ -216,9 +216,9 @@ public class QrImageBuilderApiParityTest
     {
         if (type == typeof(QRCodeData) || type == typeof(MicroQRCodeData) || type == typeof(RmQRCodeData))
             return "SYMBOL_DATA";
-        if (type == typeof(ECCLevel) || type == typeof(MicroQREccLevel) || type == typeof(RmQREccLevel))
+        if (type == typeof(QREccLevel) || type == typeof(MicroQREccLevel) || type == typeof(RmQREccLevel))
             return "ECC";
-        if (type == typeof(QRCodeSegmentation) || type == typeof(MicroQRSegmentation) || type == typeof(RmQRSegmentation))
+        if (type == typeof(QRSegmentation) || type == typeof(MicroQRSegmentation) || type == typeof(RmQRSegmentation))
             return "SEGMENTATION";
         if (type == typeof(QRCodeImageBuilder) || type == typeof(MicroQRCodeImageBuilder) || type == typeof(RmQRCodeImageBuilder))
             return "SELF";

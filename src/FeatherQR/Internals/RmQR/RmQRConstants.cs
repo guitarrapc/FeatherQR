@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR Code symbol tables and format information (ISO/IEC 23941).
@@ -259,7 +259,7 @@ internal static class RmQRConstants
     /// the shorter blocks, group 2 = blocks with one more data codeword; every block
     /// has the same ECC codeword count). <see cref="ECCInfo.Version"/> carries the
     /// <see cref="RmQRVersion"/> value and <see cref="ECCInfo.ErrorCorrectionLevel"/>
-    /// the corresponding <see cref="ECCLevel"/> (M or H).
+    /// the corresponding <see cref="QREccLevel"/> (M or H).
     /// </summary>
     public static ECCInfo GetEccInfo(RmQRVersion version, RmQREccLevel eccLevel)
     {
@@ -272,7 +272,7 @@ internal static class RmQRConstants
 
         return new ECCInfo(
             (int)version,
-            eccLevel == RmQREccLevel.M ? ECCLevel.M : ECCLevel.H,
+            eccLevel == RmQREccLevel.M ? QREccLevel.M : QREccLevel.H,
             data,
             eccPerBlock,
             shortBlocks,

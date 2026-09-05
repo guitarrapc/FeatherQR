@@ -2,7 +2,7 @@ namespace FeatherQR.Internals;
 
 /// <summary>
 /// Uniform read view over a symbol matrix (core modules + virtual quiet zone),
-/// letting the rendering loops in <c>QRCodeRenderer</c> (FeatherQR.SkiaSharp) serve every
+/// letting the rendering loops in <c>SymbolRenderer</c> (FeatherQR.SkiaSharp) serve every
 /// symbology through struct specialization (no virtual dispatch). Dimensions are
 /// width × height so rectangular symbols (rMQR) share the loops; square symbologies
 /// report the same value for both axes.

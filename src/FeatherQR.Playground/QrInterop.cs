@@ -265,7 +265,7 @@ public static partial class QrInterop
 
     private static QRCodeData CreateStandardData(QrRequest request)
     {
-        return QRCodeGenerator.CreateQrCode(request.Content.AsSpan(), ParseEcc(request.Ecc), new QRCodeGeneratorOptions
+        return QRCodeGenerator.Create(request.Content.AsSpan(), ParseEcc(request.Ecc), new QRCodeGeneratorOptions
         {
             Version = ParseVersionRange(request.Version),
             QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
@@ -275,7 +275,7 @@ public static partial class QrInterop
 
     private static RmQRCodeData CreateRmData(QrRequest request)
     {
-        return RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ParseRmEcc(request.Ecc), new RmQRCodeGeneratorOptions
+        return RmQRCodeGenerator.Create(request.Content.AsSpan(), ParseRmEcc(request.Ecc), new RmQRCodeGeneratorOptions
         {
             Version = ParseRmVersion(request.Version),
             FitStrategy = ParseRmFitStrategy(request.FitStrategy),
@@ -331,7 +331,7 @@ public static partial class QrInterop
 
     private static MicroQRCodeData CreateMicroData(QrRequest request)
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(
+        return MicroQRCodeGenerator.Create(
             request.Content.AsSpan(),
             ParseMicroEcc(request.Ecc),
             new MicroQRCodeGeneratorOptions
@@ -376,11 +376,11 @@ public static partial class QrInterop
 
     /// <summary>
     /// The request carries -1 for "pick the smallest version that fits", which
-    /// <see cref="QRCodeVersionRange"/> spells as <see cref="QRCodeVersionRange.Any"/>;
+    /// <see cref="QRVersionRange"/> spells as <see cref="QRVersionRange.Any"/>;
     /// it deliberately rejects -1 so a defaulted field cannot pass for automatic.
     /// </summary>
-    private static QRCodeVersionRange ParseVersionRange(int version)
-        => version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(version);
+    private static QRVersionRange ParseVersionRange(int version)
+        => version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(version);
 
     /// <summary>Builds the image builder from request options; shared by preview and benchmark rendering.</summary>
     private static QRCodeImageBuilder CreateBuilder(QrRequest request, QRCodeData data, byte[] customLogo)
@@ -405,7 +405,7 @@ public static partial class QrInterop
     /// <para>
     /// Content is made unique per iteration by appending <c>" #&lt;index+1&gt;"</c>.
     /// Mode <c>encode</c> exercises the allocation-free
-    /// <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>
+    /// <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, bool, EciMode, int, int)"/>
     /// overload only; mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode)
     /// with the current visual options.
     /// </para>
@@ -489,7 +489,7 @@ public static partial class QrInterop
             {
                 (startIndex + i + 1).TryFormat(textBuffer.AsSpan(prefixLength + 2), out var digits);
                 var text = textBuffer.AsSpan(0, prefixLength + 2 + digits);
-                written = QRCodeGenerator.CreateQrCode(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
+                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -520,7 +520,7 @@ public static partial class QrInterop
         for (var i = 0; i < count; i++)
         {
             var text = string.Create(CultureInfo.InvariantCulture, $"{request.Content} #{startIndex + i + 1}");
-            var data = QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
+            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
             qrVersion = data.Version;
             matrixSize = data.Size;
             bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
@@ -553,7 +553,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                written = MicroQRCodeGenerator.CreateMicroQRCode(request.Content.AsSpan(), ecc, moduleBuffer, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
+                written = MicroQRCodeGenerator.Create(request.Content.AsSpan(), ecc, moduleBuffer, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -593,7 +593,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                bytesTotal += RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ecc, moduleBuffer, rmOptions);
+                bytesTotal += RmQRCodeGenerator.Create(request.Content.AsSpan(), ecc, moduleBuffer, rmOptions);
             }
             stopwatch.Stop();
 
@@ -651,12 +651,12 @@ public static partial class QrInterop
             $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
     }
 
-    private static ECCLevel ParseEcc(string ecc) => ecc.ToUpperInvariant() switch
+    private static QREccLevel ParseEcc(string ecc) => ecc.ToUpperInvariant() switch
     {
-        "L" => ECCLevel.L,
-        "M" => ECCLevel.M,
-        "Q" => ECCLevel.Q,
-        "H" => ECCLevel.H,
+        "L" => QREccLevel.L,
+        "M" => QREccLevel.M,
+        "Q" => QREccLevel.Q,
+        "H" => QREccLevel.H,
         _ => throw new ArgumentException($"Unknown ECC level '{ecc}'. Use L, M, Q or H."),
     };
 

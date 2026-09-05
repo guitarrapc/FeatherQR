@@ -26,7 +26,7 @@ namespace FeatherQR.SkiaSharp;
 /// </para>
 /// </remarks>
 /// <typeparam name="TSelf">The concrete builder type (self-referential).</typeparam>
-public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBuilderBase<TSelf>
+public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBuilderBase<TSelf>
 {
     private Vector2Slim? _explicitSize;
     private SKEncodedImageFormat _format = SKEncodedImageFormat.Png;
@@ -41,7 +41,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     private protected float _moduleSizePercent = 1.0f;
     private protected GradientOptions? _gradientOptions;
 
-    private protected QRCodeImageBuilderBase(int defaultQuietZoneSize)
+    private protected SymbolImageBuilderBase(int defaultQuietZoneSize)
     {
         _quietZoneSize = defaultQuietZoneSize;
     }

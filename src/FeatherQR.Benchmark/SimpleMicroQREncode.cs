@@ -23,17 +23,17 @@ public class SimpleMicroQREncode
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Numeric_M2_Encode()
-        => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Numeric.AsSpan(), MicroQREccLevel.L);
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Numeric.AsSpan(), MicroQREccLevel.L);
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Alphanumeric_M3_Encode()
-        => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Alphanumeric.AsSpan(), MicroQREccLevel.L);
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Alphanumeric.AsSpan(), MicroQREccLevel.L);
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Byte_M4_Encode()
-        => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Byte.AsSpan(), MicroQREccLevel.M);
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Byte.AsSpan(), MicroQREccLevel.M);
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("CodeGlyphX")]

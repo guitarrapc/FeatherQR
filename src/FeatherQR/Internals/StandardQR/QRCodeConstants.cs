@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 internal static class QRCodeConstants
 {
@@ -530,7 +530,7 @@ internal static class QRCodeConstants
     /// <returns></returns>
     /// <exception cref="ArgumentException"></exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static ECCInfo GetEccInfo(int version, ECCLevel eccLevel)
+    internal static ECCInfo GetEccInfo(int version, QREccLevel eccLevel)
     {
         var table = CapacityECCTable;
         for (var i = 0; i < table.Count; i++)
@@ -563,7 +563,7 @@ internal static class QRCodeConstants
     /// <remarks>
     /// Based on ISO/IEC 18004 Section 7.8.2
     /// </remarks>
-    public static ushort GetFormatBits(ECCLevel level, int maskVersion)
+    public static ushort GetFormatBits(QREccLevel level, int maskVersion)
     {
         // BCH(15,5) error correction
         // BCH generator polynomial: x^10 + x^8 + x^5 + x^4 + x^2 + x + 1 (0b10100110111)
@@ -580,11 +580,11 @@ internal static class QRCodeConstants
         // ECC level bits (2bit)
         var formatBits = level switch
         {
-            ECCLevel.L => 0b01,
-            ECCLevel.M => 0b00,
-            ECCLevel.Q => 0b11,
-            ECCLevel.H => 0b10,
-            _ => throw new ArgumentOutOfRangeException(nameof(level), level, "ECCLevel was out of range"),
+            QREccLevel.L => 0b01,
+            QREccLevel.M => 0b00,
+            QREccLevel.Q => 0b11,
+            QREccLevel.H => 0b10,
+            _ => throw new ArgumentOutOfRangeException(nameof(level), level, "QREccLevel was out of range"),
         };
 
         // Add mask pattern bits (3bits)
@@ -712,7 +712,7 @@ internal static class QRCodeConstants
             table.AddRange([
                 new ECCInfo(
                     version: (i+24) / 24,
-                    errorCorrectionLevel: ECCLevel.L,
+                    errorCorrectionLevel: QREccLevel.L,
                     totalDataCodewords: CapacityECCBaseValues[i],
                     eccPerBlock: CapacityECCBaseValues[i+1],
                     blocksInGroup1: CapacityECCBaseValues[i+2],
@@ -722,7 +722,7 @@ internal static class QRCodeConstants
                 new ECCInfo
                 (
                     version: (i + 24) / 24,
-                    errorCorrectionLevel: ECCLevel.M,
+                    errorCorrectionLevel: QREccLevel.M,
                     totalDataCodewords: CapacityECCBaseValues[i+6],
                     eccPerBlock: CapacityECCBaseValues[i+7],
                     blocksInGroup1: CapacityECCBaseValues[i+8],
@@ -733,7 +733,7 @@ internal static class QRCodeConstants
                 new ECCInfo
                 (
                     version: (i + 24) / 24,
-                    errorCorrectionLevel: ECCLevel.Q,
+                    errorCorrectionLevel: QREccLevel.Q,
                     totalDataCodewords: CapacityECCBaseValues[i+12],
                     eccPerBlock: CapacityECCBaseValues[i+13],
                     blocksInGroup1: CapacityECCBaseValues[i+14],
@@ -744,7 +744,7 @@ internal static class QRCodeConstants
                 new ECCInfo
                 (
                     version: (i + 24) / 24,
-                    errorCorrectionLevel: ECCLevel.H,
+                    errorCorrectionLevel: QREccLevel.H,
                     totalDataCodewords: CapacityECCBaseValues[i+18],
                     eccPerBlock: CapacityECCBaseValues[i+19],
                     blocksInGroup1: CapacityECCBaseValues[i+20],
@@ -770,7 +770,7 @@ internal static class QRCodeConstants
                 (i + 16) / 16,
                 [
                     new VersionInfoDetails(
-                            ECCLevel.L,
+                            QREccLevel.L,
                             new (){
                                 { EncodingMode.Numeric, CapacityBaseValues[i] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+1] },
@@ -778,7 +778,7 @@ internal static class QRCodeConstants
                         }
                     ),
                     new VersionInfoDetails(
-                            ECCLevel.M,
+                            QREccLevel.M,
                             new (){
                                 { EncodingMode.Numeric, CapacityBaseValues[i+4] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+5] },
@@ -786,7 +786,7 @@ internal static class QRCodeConstants
                             }
                     ),
                     new VersionInfoDetails(
-                            ECCLevel.Q,
+                            QREccLevel.Q,
                             new (){
                                 { EncodingMode.Numeric, CapacityBaseValues[i+8] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+9] },
@@ -794,7 +794,7 @@ internal static class QRCodeConstants
                             }
                     ),
                     new VersionInfoDetails(
-                            ECCLevel.H,
+                            QREccLevel.H,
                             new (){
                                 { EncodingMode.Numeric, CapacityBaseValues[i+12] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+13] },
@@ -844,14 +844,14 @@ internal static class QRCodeConstants
     /// </summary>
     public struct VersionInfoDetails
     {
-        public VersionInfoDetails(ECCLevel errorCorrectionLevel, Dictionary<EncodingMode, int> capacityDict)
+        public VersionInfoDetails(QREccLevel errorCorrectionLevel, Dictionary<EncodingMode, int> capacityDict)
         {
             ErrorCorrectionLevel = errorCorrectionLevel;
             CapacityDict = capacityDict;
         }
 
         /// <summary>Error correction level.</summary>
-        public ECCLevel ErrorCorrectionLevel { get; }
+        public QREccLevel ErrorCorrectionLevel { get; }
 
         /// <summary>
         /// Maximum capacity for each encoding mode.

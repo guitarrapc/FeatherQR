@@ -102,10 +102,10 @@
                         <span class="field__label">Error correction</span>
                         <select title="Higher levels survive more damage or overlay, H is recommended with a logo"
                                 @bind="Options.Ecc" @bind:after="Regenerate">
-                            <option value="@ECCLevel.L">L, 7%</option>
-                            <option value="@ECCLevel.M">M, 15%</option>
-                            <option value="@ECCLevel.Q">Q, 25%</option>
-                            <option value="@ECCLevel.H">H, 30%</option>
+                            <option value="@QREccLevel.L">L, 7%</option>
+                            <option value="@QREccLevel.M">M, 15%</option>
+                            <option value="@QREccLevel.Q">Q, 25%</option>
+                            <option value="@QREccLevel.H">H, 30%</option>
                         </select>
                     </label>
                     <label class="field">
@@ -313,7 +313,7 @@
 
     /// <summary>
     /// Live preview: renders the QR code directly onto the SKCanvasView surface with
-    /// <see cref="QRCodeRenderer"/>. The canvas is sized by CSS; SKCanvasView tracks
+    /// <see cref="SymbolRenderer"/>. The canvas is sized by CSS; SKCanvasView tracks
     /// the element size and reports the pixel dimensions via <c>e.Info</c>.
     /// </summary>
     private void OnPaintSurface(SKPaintSurfaceEventArgs e)
@@ -326,7 +326,7 @@
             if (Options.Symbology == SymbologyKind.RmQR)
             {
                 var rmData = QrImageFactory.CreateRmQRData(Options);
-                QRCodeRenderer.Render(
+                SymbolRenderer.Render(
                     canvas,
                     SKRect.Create(e.Info.Width, e.Info.Height),
                     rmData,
@@ -342,7 +342,7 @@
             else if (Options.Symbology == SymbologyKind.MicroQR)
             {
                 var microData = QrImageFactory.CreateMicroQRData(Options);
-                QRCodeRenderer.Render(
+                SymbolRenderer.Render(
                     canvas,
                     SKRect.Create(e.Info.Width, e.Info.Height),
                     microData,
@@ -358,7 +358,7 @@
             else
             {
                 var data = QrImageFactory.CreateQrData(Options);
-                QRCodeRenderer.Render(
+                SymbolRenderer.Render(
                     canvas,
                     SKRect.Create(e.Info.Width, e.Info.Height),
                     data,

@@ -1,6 +1,6 @@
 using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryEncoders;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 

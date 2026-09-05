@@ -1,5 +1,5 @@
 /// <summary>
-/// What <c>QRCodeSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same
+/// What <c>QRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same
 /// content through the same zero-allocation span path.
 ///
 /// The Ratio column is the end-to-end multiplier a caller actually pays — but note it is
@@ -69,18 +69,18 @@ public class QRCodeSegmentationEncode
         _content = _contents[Shape];
 
         // Sized for the Single arm, which never selects a smaller version than Optimal.
-        _spanDestination = new byte[Sizing.Required(_content.AsSpan(), ECCLevel.M).BufferSize];
+        _spanDestination = new byte[Sizing.Required(_content.AsSpan(), QREccLevel.M).BufferSize];
     }
 
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return FeatherQR.QRCodeGenerator.CreateQrCode(_content.AsSpan(), ECCLevel.M, _spanDestination);
+        return FeatherQR.QRCodeGenerator.Create(_content.AsSpan(), QREccLevel.M, _spanDestination);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return FeatherQR.QRCodeGenerator.CreateQrCode(_content.AsSpan(), ECCLevel.M, _spanDestination, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+        return FeatherQR.QRCodeGenerator.Create(_content.AsSpan(), QREccLevel.M, _spanDestination, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
     }
 }

@@ -52,12 +52,12 @@ public class ModuleRectanglesTest
     // ---- Standard QR --------------------------------------------------------------
 
     [Test]
-    [Arguments("https://example.com/", ECCLevel.M)]
-    [Arguments("HELLO WORLD 123", ECCLevel.L)]
-    [Arguments("0123456789", ECCLevel.H)]
-    public async Task StandardQr_Rectangles_CoverExactlyTheDarkModules(string text, ECCLevel ecc)
+    [Arguments("https://example.com/", QREccLevel.M)]
+    [Arguments("HELLO WORLD 123", QREccLevel.L)]
+    [Arguments("0123456789", QREccLevel.H)]
+    public async Task StandardQr_Rectangles_CoverExactlyTheDarkModules(string text, QREccLevel ecc)
     {
-        var data = QRCodeGenerator.CreateQrCode(text, ecc);
+        var data = QRCodeGenerator.Create(text, ecc);
         var rects = data.GetModuleRectangles();
         await AssertCoversExactlyTheDarkModules(rects, data.Size, data.Size, (x, y) => data[y, x]);
     }
@@ -65,7 +65,7 @@ public class ModuleRectanglesTest
     [Test]
     public async Task StandardQr_Rectangles_AreMerged()
     {
-        var data = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M);
+        var data = QRCodeGenerator.Create("https://example.com/", QREccLevel.M);
         var rects = data.GetModuleRectangles();
 
         // Merging must actually reduce the element count below one-rect-per-module.
@@ -88,7 +88,7 @@ public class ModuleRectanglesTest
     public async Task StandardQr_NoQuietZone_RectanglesStartAtOrigin()
     {
         var options = new QRCodeGeneratorOptions { QuietZoneSize = 0 };
-        var data = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M, in options);
+        var data = QRCodeGenerator.Create("https://example.com/", QREccLevel.M, in options);
         var rects = data.GetModuleRectangles();
 
         // With no quiet zone the finder corner is the origin; shape-independent
@@ -105,7 +105,7 @@ public class ModuleRectanglesTest
     [Arguments("HELLO", MicroQREccLevel.L)]
     public async Task MicroQr_Rectangles_CoverExactlyTheDarkModules(string text, MicroQREccLevel ecc)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc);
+        var data = MicroQRCodeGenerator.Create(text, ecc);
         var rects = data.GetModuleRectangles();
         await AssertCoversExactlyTheDarkModules(rects, data.Size, data.Size, (x, y) => data[y, x]);
     }
@@ -117,7 +117,7 @@ public class ModuleRectanglesTest
     [Arguments("0123456789012345678901234567890123456789")]
     public async Task RmQr_Rectangles_CoverExactlyTheDarkModules(string text)
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M);
+        var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M);
         var rects = data.GetModuleRectangles();
         await AssertCoversExactlyTheDarkModules(rects, data.Width, data.Height, (x, y) => data[y, x]);
     }
@@ -127,13 +127,13 @@ public class ModuleRectanglesTest
     [Test]
     public async Task MaxCount_BoundsTheActualCount_AllSymbologies()
     {
-        var qr = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("https://example.com/", QREccLevel.M);
         await Assert.That(qr.GetModuleRectangles().Length).IsLessThanOrEqualTo(qr.GetModuleRectanglesMaxCount());
 
-        var micro = MicroQRCodeGenerator.CreateMicroQRCode("HELLO", MicroQREccLevel.L);
+        var micro = MicroQRCodeGenerator.Create("HELLO", MicroQREccLevel.L);
         await Assert.That(micro.GetModuleRectangles().Length).IsLessThanOrEqualTo(micro.GetModuleRectanglesMaxCount());
 
-        var rm = RmQRCodeGenerator.CreateRmQRCode("https://example.com/", RmQREccLevel.M);
+        var rm = RmQRCodeGenerator.Create("https://example.com/", RmQREccLevel.M);
         await Assert.That(rm.GetModuleRectangles().Length).IsLessThanOrEqualTo(rm.GetModuleRectanglesMaxCount());
     }
 
@@ -141,9 +141,9 @@ public class ModuleRectanglesTest
     public async Task MaxCount_IsIndependentOfQuietZone()
     {
         // The bound depends only on the core matrix; the quiet zone contributes no runs.
-        var withQz = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M);
+        var withQz = QRCodeGenerator.Create("https://example.com/", QREccLevel.M);
         var options = new QRCodeGeneratorOptions { QuietZoneSize = 0 };
-        var withoutQz = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M, in options);
+        var withoutQz = QRCodeGenerator.Create("https://example.com/", QREccLevel.M, in options);
         await Assert.That(withQz.GetModuleRectanglesMaxCount()).IsEqualTo(withoutQz.GetModuleRectanglesMaxCount());
     }
 
@@ -152,7 +152,7 @@ public class ModuleRectanglesTest
     [Test]
     public async Task TryGetModuleRectangles_DestinationTooSmall_ReturnsFalse()
     {
-        var data = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M);
+        var data = QRCodeGenerator.Create("https://example.com/", QREccLevel.M);
         var expected = data.GetModuleRectangles();
 
         var tooSmall = new ModuleRect[expected.Length - 1];
@@ -164,7 +164,7 @@ public class ModuleRectanglesTest
     [Test]
     public async Task TryGetModuleRectangles_ExactSizeBuffer_MatchesAllocatingOverload()
     {
-        var data = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M);
+        var data = QRCodeGenerator.Create("https://example.com/", QREccLevel.M);
         var expected = data.GetModuleRectangles();
 
         var buffer = new ModuleRect[expected.Length];
@@ -177,13 +177,13 @@ public class ModuleRectanglesTest
     [Test]
     public async Task TryGetModuleRectangles_MaxCountBuffer_AlwaysSucceeds_AllSymbologies()
     {
-        var qr = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("https://example.com/", QREccLevel.M);
         await Assert.That(qr.TryGetModuleRectangles(new ModuleRect[qr.GetModuleRectanglesMaxCount()], out _)).IsTrue();
 
-        var micro = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly);
+        var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
         await Assert.That(micro.TryGetModuleRectangles(new ModuleRect[micro.GetModuleRectanglesMaxCount()], out _)).IsTrue();
 
-        var rm = RmQRCodeGenerator.CreateRmQRCode("https://example.com/", RmQREccLevel.M);
+        var rm = RmQRCodeGenerator.Create("https://example.com/", RmQREccLevel.M);
         await Assert.That(rm.TryGetModuleRectangles(new ModuleRect[rm.GetModuleRectanglesMaxCount()], out _)).IsTrue();
     }
 }

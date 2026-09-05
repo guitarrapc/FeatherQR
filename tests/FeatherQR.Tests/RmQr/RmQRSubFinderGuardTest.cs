@@ -1,7 +1,7 @@
 using FeatherQR.SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
 using FeatherQR.Internals.ImageDecoders;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -24,7 +24,7 @@ public class RmQRSubFinderGuardTest
 
     private static (byte[] Luminance, int Width, int Height, byte Threshold, float ModuleSize) Render(RmQRVersion version, string content, int modulePixelSize)
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
         BitmapLuminanceConverter.Convert(bitmap, luminance);

@@ -6,7 +6,7 @@ using System.Runtime.Intrinsics;
 #endif
 using FeatherQR.Internals.ImageDecoders;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// Decodes an rMQR Code from a grayscale image: clean, well-lit, screen-rendered
@@ -65,13 +65,13 @@ internal static class RmQRImageDecoder
     /// (light modules on a dark background) are handled by one inverted retry when
     /// the normal attempt fails.
     /// </summary>
-    public static QRCodeDecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
         {
             charsWritten = 0;
             info = NotDetected();
-            return QRCodeDecodeStatus.NotDetected;
+            return DecodeStatus.NotDetected;
         }
 
         luminance = luminance.Slice(0, pixelCount);
@@ -105,7 +105,7 @@ internal static class RmQRImageDecoder
         }
     }
 
-    private static RmQRCodeDecodeInfo NotDetected() => new(QRCodeDecodeStatus.NotDetected, default, default, 0);
+    private static RmQRCodeDecodeInfo NotDetected() => new(DecodeStatus.NotDetected, default, default, 0);
 
     /// <summary>
     /// Strided finder scan first, then a full sweep when nothing decoded.
@@ -119,7 +119,7 @@ internal static class RmQRImageDecoder
     /// the detection envelope a superset of a full sweep's: the symbol is read if
     /// either pass reads it.
     /// </remarks>
-    private static QRCodeDecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
         // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
         // threshold is the single most expensive step of the whole failure path.
@@ -150,7 +150,7 @@ internal static class RmQRImageDecoder
         return status;
     }
 
-    private static QRCodeDecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep)
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep)
     {
         charsWritten = 0;
 
@@ -161,7 +161,7 @@ internal static class RmQRImageDecoder
         if (candidateCount == 0)
         {
             info = NotDetected();
-            return QRCodeDecodeStatus.NotDetected;
+            return DecodeStatus.NotDetected;
         }
 
         // Most-confirmed candidates first (insertion sort: tiny list, netstandard2.0 has no Span.Sort).
@@ -177,7 +177,7 @@ internal static class RmQRImageDecoder
             candidates[j + 1] = current;
         }
 
-        var bestStatus = QRCodeDecodeStatus.NotDetected;
+        var bestStatus = DecodeStatus.NotDetected;
         var bestInfo = NotDetected();
 
         // The module buffer is sized for the largest symbol; rented rather than
@@ -202,7 +202,7 @@ internal static class RmQRImageDecoder
                         horizontalModuleSize, 0f, 0f, verticalModuleSize,
                         modules, destination, out charsWritten, out info,
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (status == QRCodeDecodeStatus.Success)
+                    if (status == DecodeStatus.Success)
                         return status;
                     // Terminal for THIS finder (its symbol was read; no other frame can
                     // change that); another finder in the frame may still carry a symbol
@@ -221,7 +221,7 @@ internal static class RmQRImageDecoder
                         frame.UX, frame.UY, frame.VX, frame.VY,
                         modules, destination, out charsWritten, out info,
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (status == QRCodeDecodeStatus.Success)
+                    if (status == DecodeStatus.Success)
                         return status;
                     if (IsTerminal(status))
                         break;
@@ -243,7 +243,7 @@ internal static class RmQRImageDecoder
     /// each with and without the axes swapped (a mirrored capture keeps the finder
     /// geometry and transposes the grid).
     /// </summary>
-    private static QRCodeDecodeStatus TryFrames(
+    private static DecodeStatus TryFrames(
         ReadOnlySpan<byte> luminance,
         int width,
         int height,
@@ -257,7 +257,7 @@ internal static class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref QRCodeDecodeStatus bestStatus,
+        ref DecodeStatus bestStatus,
         ref RmQRCodeDecodeInfo bestInfo,
         ref int attemptsRemaining)
     {
@@ -297,7 +297,7 @@ internal static class RmQRImageDecoder
     /// <c>v</c> = row axis in pixels per module): read the finder-side format copy
     /// to learn the version, anchor the far end on the sub-finder, then decode.
     /// </summary>
-    private static QRCodeDecodeStatus TryFrame(
+    private static DecodeStatus TryFrame(
         ReadOnlySpan<byte> luminance,
         int width,
         int height,
@@ -311,7 +311,7 @@ internal static class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref QRCodeDecodeStatus bestStatus,
+        ref DecodeStatus bestStatus,
         ref RmQRCodeDecodeInfo bestInfo,
         ref int attemptsRemaining)
     {
@@ -324,14 +324,14 @@ internal static class RmQRImageDecoder
         if (!RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out var version, out _, out _))
         {
             info = bestInfo;
-            return QRCodeDecodeStatus.NotDetected;
+            return DecodeStatus.NotDetected;
         }
 
         var symbolWidth = RmQRConstants.GetWidth(version);
         var symbolHeight = RmQRConstants.GetHeight(version);
         var samplingSlack = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
 
-        var frameStatus = QRCodeDecodeStatus.NotDetected;
+        var frameStatus = DecodeStatus.NotDetected;
         var subFinderFound = TryLocateSubFinder(luminance, width, height, threshold, candidate, uX, uY, vX, vY, symbolWidth, symbolHeight, out var subX, out var subY);
         if (subFinderFound)
         {
@@ -417,7 +417,7 @@ internal static class RmQRImageDecoder
     /// both centers to the image line through both centers; only the scale along it
     /// depends on the coefficients).
     /// </summary>
-    private static QRCodeDecodeStatus TryPerspectiveVariants(
+    private static DecodeStatus TryPerspectiveVariants(
         ReadOnlySpan<byte> luminance,
         int width,
         int height,
@@ -439,7 +439,7 @@ internal static class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref QRCodeDecodeStatus bestStatus,
+        ref DecodeStatus bestStatus,
         ref RmQRCodeDecodeInfo bestInfo,
         ref int attemptsRemaining)
     {
@@ -545,7 +545,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>Samples the full grid through the transform and runs the matrix decoder.</summary>
-    private static QRCodeDecodeStatus Attempt(
+    private static DecodeStatus Attempt(
         ReadOnlySpan<byte> luminance,
         int width,
         int height,
@@ -558,7 +558,7 @@ internal static class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref QRCodeDecodeStatus bestStatus,
+        ref DecodeStatus bestStatus,
         ref RmQRCodeDecodeInfo bestInfo,
         ref int attemptsRemaining)
     {
@@ -566,14 +566,14 @@ internal static class RmQRImageDecoder
         if (attemptsRemaining <= 0 || !SymbolFitsImage(transform, symbolWidth, symbolHeight, width, height, samplingSlack))
         {
             info = bestInfo;
-            return QRCodeDecodeStatus.NotDetected;
+            return DecodeStatus.NotDetected;
         }
 
         attemptsRemaining--;
         var grid = modules.Slice(0, symbolWidth * symbolHeight);
         SampleGrid(luminance, width, height, threshold, transform, symbolWidth, symbolHeight, grid);
         var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
-        if (status == QRCodeDecodeStatus.Success)
+        if (status == DecodeStatus.Success)
             return status;
 
         TrackBestFailure(status, info, ref bestStatus, ref bestInfo);
@@ -1138,7 +1138,7 @@ internal static class RmQRImageDecoder
         ry = sin * x + cos * y;
     }
 
-    private static QRCodeDecodeStatus Deeper(QRCodeDecodeStatus current, QRCodeDecodeStatus candidate)
+    private static DecodeStatus Deeper(DecodeStatus current, DecodeStatus candidate)
         => Rank(candidate) > Rank(current) ? candidate : current;
 
     /// <summary>
@@ -1146,7 +1146,7 @@ internal static class RmQRImageDecoder
     /// Wrong-grid samples overwhelmingly die at format decoding, so anything past
     /// it almost certainly hit the real grid.
     /// </summary>
-    private static void TrackBestFailure(QRCodeDecodeStatus status, in RmQRCodeDecodeInfo attemptInfo, ref QRCodeDecodeStatus bestStatus, ref RmQRCodeDecodeInfo bestInfo)
+    private static void TrackBestFailure(DecodeStatus status, in RmQRCodeDecodeInfo attemptInfo, ref DecodeStatus bestStatus, ref RmQRCodeDecodeInfo bestInfo)
     {
         if (Rank(status) > Rank(bestStatus))
         {
@@ -1155,22 +1155,22 @@ internal static class RmQRImageDecoder
         }
     }
 
-    private static int Rank(QRCodeDecodeStatus s) => s switch
+    private static int Rank(DecodeStatus s) => s switch
     {
-        QRCodeDecodeStatus.NotDetected => 0,
-        QRCodeDecodeStatus.InvalidMatrix => 1,
-        QRCodeDecodeStatus.FormatInformationInvalid => 1,
+        DecodeStatus.NotDetected => 0,
+        DecodeStatus.InvalidMatrix => 1,
+        DecodeStatus.FormatInformationInvalid => 1,
         // The symbol was read (format + RS) and only the caller's buffer is short:
         // this outranks every other failure so an earlier same-finder RS failure
         // (the usual prelude to the perspective search) can never mask it.
-        QRCodeDecodeStatus.DestinationTooSmall => 3,
+        DecodeStatus.DestinationTooSmall => 3,
         _ => 2, // got past format decoding
     };
 
-    private static bool IsPlausibleRefinement(QRCodeDecodeStatus status)
-        => status is not QRCodeDecodeStatus.NotDetected
-            and not QRCodeDecodeStatus.InvalidMatrix
-            and not QRCodeDecodeStatus.FormatInformationInvalid;
+    private static bool IsPlausibleRefinement(DecodeStatus status)
+        => status is not DecodeStatus.NotDetected
+            and not DecodeStatus.InvalidMatrix
+            and not DecodeStatus.FormatInformationInvalid;
 
     /// <summary>
     /// Outcomes no further geometry around the SAME finder can change: success, and
@@ -1185,6 +1185,6 @@ internal static class RmQRImageDecoder
     /// status also outranks every other failure in <see cref="Rank"/>, so it reaches
     /// the caller even when an earlier attempt around the same finder failed at RS.
     /// </summary>
-    private static bool IsTerminal(QRCodeDecodeStatus status)
-        => status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall;
+    private static bool IsTerminal(DecodeStatus status)
+        => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 }

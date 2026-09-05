@@ -7,53 +7,53 @@ namespace FeatherQR.Tests;
 public class QRCodeDecoderRoundTripTest
 {
     [Test]
-    [Arguments("0123456789", ECCLevel.L)]
-    [Arguments("0123456789012345678901234567890123456789", ECCLevel.H)]
-    [Arguments("1", ECCLevel.M)]
-    [Arguments("12", ECCLevel.Q)]
-    public async Task RoundTrip_Numeric(string content, ECCLevel eccLevel)
+    [Arguments("0123456789", QREccLevel.L)]
+    [Arguments("0123456789012345678901234567890123456789", QREccLevel.H)]
+    [Arguments("1", QREccLevel.M)]
+    [Arguments("12", QREccLevel.Q)]
+    public async Task RoundTrip_Numeric(string content, QREccLevel eccLevel)
         => await AssertRoundTrip(content, eccLevel);
 
     [Test]
-    [Arguments("HELLO WORLD", ECCLevel.L)]
-    [Arguments("ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:", ECCLevel.M)]
-    [Arguments("A", ECCLevel.Q)]
-    [Arguments("AC-42", ECCLevel.H)]
-    public async Task RoundTrip_Alphanumeric(string content, ECCLevel eccLevel)
+    [Arguments("HELLO WORLD", QREccLevel.L)]
+    [Arguments("ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:", QREccLevel.M)]
+    [Arguments("A", QREccLevel.Q)]
+    [Arguments("AC-42", QREccLevel.H)]
+    public async Task RoundTrip_Alphanumeric(string content, QREccLevel eccLevel)
         => await AssertRoundTrip(content, eccLevel);
 
     [Test]
-    [Arguments("Hello, World!", ECCLevel.L)]
-    [Arguments("hello lowercase", ECCLevel.M)]
-    [Arguments("https://example.com/path?query=value&x=1", ECCLevel.Q)]
-    [Arguments("Café Zürich Résumé", ECCLevel.H)]
-    public async Task RoundTrip_Byte(string content, ECCLevel eccLevel)
+    [Arguments("Hello, World!", QREccLevel.L)]
+    [Arguments("hello lowercase", QREccLevel.M)]
+    [Arguments("https://example.com/path?query=value&x=1", QREccLevel.Q)]
+    [Arguments("Café Zürich Résumé", QREccLevel.H)]
+    public async Task RoundTrip_Byte(string content, QREccLevel eccLevel)
         => await AssertRoundTrip(content, eccLevel);
 
     [Test]
-    [Arguments("こんにちは世界", ECCLevel.L)]
-    [Arguments("你好世界", ECCLevel.M)]
-    [Arguments("Привет мир", ECCLevel.Q)]
-    [Arguments("🎉🎊🎈 emoji", ECCLevel.H)]
-    public async Task RoundTrip_Utf8(string content, ECCLevel eccLevel)
+    [Arguments("こんにちは世界", QREccLevel.L)]
+    [Arguments("你好世界", QREccLevel.M)]
+    [Arguments("Привет мир", QREccLevel.Q)]
+    [Arguments("🎉🎊🎈 emoji", QREccLevel.H)]
+    public async Task RoundTrip_Utf8(string content, QREccLevel eccLevel)
         => await AssertRoundTrip(content, eccLevel, EciMode.Utf8);
 
     [Test]
-    [Arguments("Café", ECCLevel.L)]
-    [Arguments("Zürich", ECCLevel.M)]
-    [Arguments("Naïve Résumé", ECCLevel.H)]
-    public async Task RoundTrip_Iso8859_1_Eci(string content, ECCLevel eccLevel)
+    [Arguments("Café", QREccLevel.L)]
+    [Arguments("Zürich", QREccLevel.M)]
+    [Arguments("Naïve Résumé", QREccLevel.H)]
+    public async Task RoundTrip_Iso8859_1_Eci(string content, QREccLevel eccLevel)
         => await AssertRoundTrip(content, eccLevel, EciMode.Iso8859_1);
 
     [Test]
     public async Task RoundTrip_Utf8WithBom()
     {
         var content = "BOM roundtrip 日本語";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Utf8BOM = true, EciMode = EciMode.Utf8 });
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = true, EciMode = EciMode.Utf8 });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEquivalentTo(content);
-        await Assert.That(info.Status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsEquivalentTo(DecodeStatus.Success);
     }
 
     [Test]
@@ -63,9 +63,9 @@ public class QRCodeDecoderRoundTripTest
         var content = "V17!";
         for (var version = 1; version <= 40; version++)
         {
-            foreach (var eccLevel in new[] { ECCLevel.L, ECCLevel.M, ECCLevel.Q, ECCLevel.H })
+            foreach (var eccLevel in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
             {
-                var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { Version = version });
+                var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { Version = version });
 
                 await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"version={version}, ecc={eccLevel}, status={info.Status}");
                 await Assert.That(decoded).IsEqualTo(content);
@@ -86,7 +86,7 @@ public class QRCodeDecoderRoundTripTest
         for (var i = 0; i < 64; i++)
         {
             var content = $"mask-coverage-{i}-{new string((char)('a' + i % 26), i % 7 + 1)}";
-            var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+            var qr = QRCodeGenerator.Create(content, QREccLevel.M);
 
             await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
             await Assert.That(decoded).IsEqualTo(content);
@@ -101,24 +101,24 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_SpanMatrix_WithQuietZone()
     {
         var content = "span with quiet zone";
-        var calculated = Sizing.Required(content, ECCLevel.M);
+        var calculated = Sizing.Required(content, QREccLevel.M);
         var buffer = new byte[calculated.BufferSize];
-        var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer);
+        var written = QRCodeGenerator.Create(content, QREccLevel.M, buffer);
 
-        await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), calculated.QrSize, out var decoded, out var info)).IsTrue();
+        await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), calculated.Size, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
     }
 
     [Test]
     public async Task RoundTrip_SpanMatrix_WithoutQuietZone()
     {
         var content = "span without quiet zone";
-        var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
+        var calculated = Sizing.Required(content, QREccLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
-        var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var written = QRCodeGenerator.Create(content, QREccLevel.M, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
 
-        await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), calculated.QrSize, out var decoded, out _)).IsTrue();
+        await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), calculated.Size, out var decoded, out _)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
     }
 
@@ -126,12 +126,12 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_CharSpanDestination_NoStringAllocation()
     {
         var content = "char span destination";
-        var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
+        var calculated = Sizing.Required(content, QREccLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        QRCodeGenerator.Create(content, QREccLevel.M, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         Span<char> destination = stackalloc char[QRCodeDecoder.GetMaxDecodedLength(calculated.Version)];
-        var ok = QRCodeDecoder.TryDecode(buffer.AsSpan(0, calculated.BufferSize), calculated.QrSize, destination, out var charsWritten, out _);
+        var ok = QRCodeDecoder.TryDecode(buffer.AsSpan(0, calculated.BufferSize), calculated.Size, destination, out var charsWritten, out _);
         var decodedString = destination.Slice(0, charsWritten).ToString();
         await Assert.That(ok).IsTrue();
         await Assert.That(decodedString).IsEqualTo(content);
@@ -145,21 +145,21 @@ public class QRCodeDecoderRoundTripTest
         // Debug builds heap-allocate stackalloc initializers (see repo notes), so
         // this assertion is Release-only.
         var content = "0123456789";
-        var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
+        var calculated = Sizing.Required(content, QREccLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, quietZoneSize: 0);
+        QRCodeGenerator.Create(content, QREccLevel.M, buffer, quietZoneSize: 0);
         var destination = new char[QRCodeDecoder.GetMaxDecodedLength(calculated.Version)];
 
         // Warm-up: blocked-mask cache, ArrayPool buckets, JIT
         for (var i = 0; i < 3; i++)
         {
-            QRCodeDecoder.TryDecode(buffer.AsSpan(0, calculated.BufferSize), calculated.QrSize, destination, out _, out _);
+            QRCodeDecoder.TryDecode(buffer.AsSpan(0, calculated.BufferSize), calculated.Size, destination, out _, out _);
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 16; i++)
         {
-            QRCodeDecoder.TryDecode(buffer.AsSpan(0, calculated.BufferSize), calculated.QrSize, destination, out _, out _);
+            QRCodeDecoder.TryDecode(buffer.AsSpan(0, calculated.BufferSize), calculated.Size, destination, out _, out _);
         }
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
@@ -174,7 +174,7 @@ public class QRCodeDecoderRoundTripTest
 
         await Assert.That(QRCodeDecoder.TryDecode(modules, 25, out var text, out var info)).IsFalse();
         await Assert.That(text).IsEqualTo(string.Empty);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
     }
 
     [Test]
@@ -185,13 +185,13 @@ public class QRCodeDecoderRoundTripTest
         modules.AsSpan().Fill(1);
 
         await Assert.That(QRCodeDecoder.TryDecode(modules, 20, out _, out var info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
     }
 
     [Test]
     public async Task Decode_CorruptedFormatInformation_ReturnsFormatInvalid()
     {
-        var qr = QRCodeGenerator.CreateQrCode("format corruption", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var qr = QRCodeGenerator.Create("format corruption", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         var size = qr.Size;
         var modules = new byte[size * size];
         for (var y = 0; y < size; y++)
@@ -209,7 +209,7 @@ public class QRCodeDecoderRoundTripTest
         WriteFormatPattern(modules, size, farPattern);
 
         await Assert.That(QRCodeDecoder.TryDecode(modules, size, out _, out var info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.FormatInformationInvalid);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.FormatInformationInvalid);
     }
 
     private static ushort FindPatternFarFromAllFormats()
@@ -221,7 +221,7 @@ public class QRCodeDecoderRoundTripTest
             {
                 for (var mask = 0; mask < 8; mask++)
                 {
-                    var candidate = Internals.StandardQr.QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
+                    var candidate = Internals.StandardQR.QRCodeConstants.GetFormatBits((QREccLevel)level, mask);
                     var distance = CountBits((ushort)(pattern ^ candidate));
                     if (distance < minDistance)
                         minDistance = distance;
@@ -280,7 +280,7 @@ public class QRCodeDecoderRoundTripTest
     {
         // Version 1-M has a single block with 10 ECC codewords 驕ｶ鄙ｫ繝ｻcorrects 5 codewords.
         var content = "ECCFIX";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
         var size = qr.Size;
         var modules = new byte[size * size];
         for (var y = 0; y < size; y++)
@@ -307,7 +307,7 @@ public class QRCodeDecoderRoundTripTest
     {
         // Version 1-L corrects only 3 codewords; flipping a large scattered set
         // of data modules must exceed capacity and fail (not misdecode).
-        var qr = QRCodeGenerator.CreateQrCode("FAIL", ECCLevel.L, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
+        var qr = QRCodeGenerator.Create("FAIL", QREccLevel.L, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
         var size = qr.Size;
         var modules = new byte[size * size];
         for (var y = 0; y < size; y++)
@@ -329,7 +329,7 @@ public class QRCodeDecoderRoundTripTest
         }
 
         await Assert.That(QRCodeDecoder.TryDecode(modules, size, out _, out var info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DataUncorrectable);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
     }
 
     [Test]
@@ -353,19 +353,19 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_QuietZoneSizes(int quietZoneSize)
     {
         var content = "quiet zone variations";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out _)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
     }
 
-    private static async Task AssertRoundTrip(string content, ECCLevel eccLevel, EciMode eciMode = EciMode.Default)
+    private static async Task AssertRoundTrip(string content, QREccLevel eccLevel, EciMode eciMode = EciMode.Default)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
+        var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"decode failed: status={info.Status}, version={info.Version}");
         await Assert.That(decoded).IsEqualTo(content);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(info.EccLevel).IsEqualTo(eccLevel);
     }
 }

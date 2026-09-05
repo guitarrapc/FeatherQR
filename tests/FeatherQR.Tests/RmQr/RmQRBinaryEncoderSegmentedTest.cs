@@ -1,5 +1,5 @@
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -44,7 +44,7 @@ public class RmQRBinaryEncoderSegmentedTest
     {
         var destination = new char[RmQRCodeDecoder.GetMaxDecodedLength(version)];
         var status = RmQRBinaryDecoder.DecodeBitStream(dataCodewords, dataCodewords.Length * 8, version, destination, out var written);
-        if (status != QRCodeDecodeStatus.Success)
+        if (status != DecodeStatus.Success)
             throw new InvalidOperationException($"decode failed: {status}");
         return new string(destination, 0, written);
     }

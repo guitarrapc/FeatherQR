@@ -20,7 +20,7 @@ var icon = IconData.FromImage(logo, iconSizePercent: 14, iconBorderWidth: 1);
 
 var autoVersionBuilder = new QRCodeImageBuilder(content)
     .WithSize(1024, 1024)
-    .WithErrorCorrection(ECCLevel.H)
+    .WithErrorCorrection(QREccLevel.H)
     .WithQuietZone(4)
     .WithColors(
         codeColor: SKColor.Parse("ff6000"),
@@ -33,7 +33,7 @@ var autoVersionBuilder = new QRCodeImageBuilder(content)
 
 var fixedVersionBuilder = new QRCodeImageBuilder(content)
     .WithSize(1024, 1024)
-    .WithErrorCorrection(ECCLevel.H)
+    .WithErrorCorrection(QREccLevel.H)
     .WithVersion(10)
     .WithQuietZone(4)
     .WithColors(
@@ -51,8 +51,8 @@ var fixedPngBytes = fixedVersionBuilder.ToByteArray();
 File.WriteAllBytes(autoOutputPath, autoPngBytes);
 File.WriteAllBytes(fixedOutputPath, fixedPngBytes);
 
-var autoData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H);
-var version10Data = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, requestedVersion: 10);
+var autoData = QRCodeGenerator.Create(content, QREccLevel.H);
+var version10Data = QRCodeGenerator.Create(content, QREccLevel.H, requestedVersion: 10);
 var autoCoreModules = autoData.Size - 8; // quiet zone = 4 on each side
 var version10CoreModules = version10Data.Size - 8; // quiet zone = 4 on each side
 

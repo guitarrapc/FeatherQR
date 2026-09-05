@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// Multi-segment data-codeword stream for <see cref="RmQRSegmentation.Optimal"/>.

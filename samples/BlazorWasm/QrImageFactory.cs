@@ -6,7 +6,7 @@ namespace BlazorWasm;
 
 /// <summary>
 /// Translates <see cref="QrOptions"/> into FeatherQR API calls, shared by the
-/// live <c>SKCanvasView</c> preview (<see cref="QRCodeRenderer"/>) and the PNG/SVG
+/// live <c>SKCanvasView</c> preview (<see cref="SymbolRenderer"/>) and the PNG/SVG
 /// exports (<see cref="QRCodeImageBuilder"/>).
 /// </summary>
 public static class QrImageFactory
@@ -19,12 +19,12 @@ public static class QrImageFactory
         if (string.IsNullOrWhiteSpace(options.Content))
             throw new ArgumentException("Content is empty.");
 
-        return QRCodeGenerator.CreateQrCode(
+        return QRCodeGenerator.Create(
             options.Content.AsSpan(),
             options.Ecc,
             new QRCodeGeneratorOptions
             {
-                Version = options.Version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(options.Version),
+                Version = options.Version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(options.Version),
                 QuietZoneSize = Math.Clamp(options.QuietZone, 0, 10),
             });
     }
@@ -35,7 +35,7 @@ public static class QrImageFactory
         if (string.IsNullOrWhiteSpace(options.Content))
             throw new ArgumentException("Content is empty.");
 
-        return MicroQRCodeGenerator.CreateMicroQRCode(
+        return MicroQRCodeGenerator.Create(
             options.Content.AsSpan(),
             options.MicroEcc,
             new MicroQRCodeGeneratorOptions
@@ -69,7 +69,7 @@ public static class QrImageFactory
         // A fixed version already pins the height; the fixed-height option applies to
         // automatic selection only (the library rejects a disagreeing pair).
         var fixedVersion = options.Version is >= 1 and <= 32 ? (RmQRVersion)options.Version : (RmQRVersion?)null;
-        return RmQRCodeGenerator.CreateRmQRCode(options.Content.AsSpan(), options.RmEcc, new RmQRCodeGeneratorOptions
+        return RmQRCodeGenerator.Create(options.Content.AsSpan(), options.RmEcc, new RmQRCodeGeneratorOptions
         {
             Version = fixedVersion,
             FitStrategy = options.RmFitStrategy,

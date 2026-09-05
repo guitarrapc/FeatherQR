@@ -2,7 +2,7 @@ using System.Buffers;
 using FeatherQR.Internals.BinaryDecoders;
 using FeatherQR.Internals.BinaryEncoders;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Decodes the QR data bitstream (mode segments) back into text.
@@ -12,7 +12,7 @@ namespace FeatherQR.Internals.StandardQr;
 /// produce, Numeric, Alphanumeric, Byte (ISO-8859-1 / UTF-8) and ECI headers, plus
 /// multi-segment streams from other encoders. Kanji mode is decoded as JIS X 0208
 /// (decode only: this library never emits it). FNC1 and Structured Append
-/// are recognized but reported as <see cref="QRCodeDecodeStatus.UnsupportedContent"/>.
+/// are recognized but reported as <see cref="DecodeStatus.UnsupportedContent"/>.
 /// <para>
 /// Byte segments without an ECI header have no declared charset (ISO/IEC 18004
 /// defaults to ISO-8859-1, but UTF-8 payloads are common in the wild). The decoder
@@ -53,7 +53,7 @@ internal static class QRBinaryDecoder
     /// <param name="version">QR code version (1-40), determines character count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    public static QRCodeDecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten)
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten)
     {
         charsWritten = 0;
         var reader = new BitReader(data);
@@ -79,10 +79,10 @@ internal static class QRBinaryDecoder
                         {
                             var countBits = EncodingMode.Numeric.GetCountIndicatorLength(version);
                             if (totalBits - reader.BitPosition < countBits)
-                                return QRCodeDecodeStatus.InvalidBitstream;
+                                return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
                             var status = SegmentDecoders.DecodeNumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
@@ -90,10 +90,10 @@ internal static class QRBinaryDecoder
                         {
                             var countBits = EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
                             if (totalBits - reader.BitPosition < countBits)
-                                return QRCodeDecodeStatus.InvalidBitstream;
+                                return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
                             var status = SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
@@ -101,21 +101,21 @@ internal static class QRBinaryDecoder
                         {
                             var countBits = EncodingMode.Byte.GetCountIndicatorLength(version);
                             if (totalBits - reader.BitPosition < countBits)
-                                return QRCodeDecodeStatus.InvalidBitstream;
+                                return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
 
                             // Segment payload bytes are staged in a rented buffer (reused
                             // across segments) so the charset conversion sees them whole.
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
                             var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, rentedBytes, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
                     case ModeEci:
                         {
                             var status = SegmentDecoders.ReadEciDesignator(ref reader, totalBits, out var eciValue);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             switch (eciValue)
                             {
@@ -128,7 +128,7 @@ internal static class QRBinaryDecoder
                                     charset = ByteSegmentCharset.Utf8;
                                     break;
                                 default:
-                                    return QRCodeDecodeStatus.UnsupportedContent;
+                                    return DecodeStatus.UnsupportedContent;
                             }
                             break;
                         }
@@ -136,23 +136,23 @@ internal static class QRBinaryDecoder
                         {
                             var countBits = EncodingModeExtensions.GetKanjiCountIndicatorLength(version);
                             if (totalBits - reader.BitPosition < countBits)
-                                return QRCodeDecodeStatus.InvalidBitstream;
+                                return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
                             var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
                     case ModeStructuredAppend:
                     case ModeFnc1First:
                     case ModeFnc1Second:
-                        return QRCodeDecodeStatus.UnsupportedContent;
+                        return DecodeStatus.UnsupportedContent;
                     default:
-                        return QRCodeDecodeStatus.InvalidBitstream;
+                        return DecodeStatus.InvalidBitstream;
                 }
             }
 
-            return QRCodeDecodeStatus.Success;
+            return DecodeStatus.Success;
         }
         finally
         {

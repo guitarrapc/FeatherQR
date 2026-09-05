@@ -2,7 +2,7 @@ namespace FeatherQR;
 
 /// <summary>
 /// The Micro QR versions a generator may choose from: the smallest one in the range that
-/// holds the content is used. The Micro QR counterpart of <see cref="QRCodeVersionRange"/>.
+/// holds the content is used. The Micro QR counterpart of <see cref="QRVersionRange"/>.
 /// </summary>
 /// <remarks>
 /// M1-M4 differ in the modes and ECC levels they offer, not only in capacity, so a range
@@ -18,7 +18,7 @@ public readonly record struct MicroQRVersionRange
     /// <summary>The highest Micro QR version, M4.</summary>
     public const MicroQRVersion MaxVersion = MicroQRVersion.M4;
 
-    // Normalised as in QRCodeVersionRange: 0 means "at the natural limit", so default(T),
+    // Normalised as in QRVersionRange: 0 means "at the natural limit", so default(T),
     // Any and Between(M1, M4) are one canonical value. MicroQRVersion starts at 1.
     private readonly byte _min;
     private readonly byte _max;

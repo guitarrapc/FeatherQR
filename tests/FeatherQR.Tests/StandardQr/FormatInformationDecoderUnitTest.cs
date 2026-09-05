@@ -1,4 +1,4 @@
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
@@ -16,10 +16,10 @@ public class FormatInformationDecoderUnitTest
         {
             for (var mask = 0; mask < 8; mask++)
             {
-                var bits = QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
+                var bits = QRCodeConstants.GetFormatBits((QREccLevel)level, mask);
 
                 await Assert.That(FormatInformationDecoder.TryDecode(bits, bits, out var eccLevel, out var maskPattern)).IsTrue();
-                await Assert.That(eccLevel).IsEquivalentTo((ECCLevel)level);
+                await Assert.That(eccLevel).IsEquivalentTo((QREccLevel)level);
                 await Assert.That(maskPattern).IsEquivalentTo(mask);
             }
         }
@@ -37,15 +37,15 @@ public class FormatInformationDecoderUnitTest
         {
             for (var mask = 0; mask < 8; mask++)
             {
-                var bits = QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
+                var bits = QRCodeConstants.GetFormatBits((QREccLevel)level, mask);
                 var corrupted = bits;
                 for (var b = 0; b < errorBits; b++)
                 {
                     corrupted ^= (ushort)(1 << (b * 5 % 15)); // distinct positions
                 }
 
-                await Assert.That(FormatInformationDecoder.TryDecode(corrupted, corrupted, out var eccLevel, out var maskPattern)).IsTrue().Because($"level={(ECCLevel)level}, mask={mask}, errors={errorBits}");
-                await Assert.That(eccLevel).IsEquivalentTo((ECCLevel)level);
+                await Assert.That(FormatInformationDecoder.TryDecode(corrupted, corrupted, out var eccLevel, out var maskPattern)).IsTrue().Because($"level={(QREccLevel)level}, mask={mask}, errors={errorBits}");
+                await Assert.That(eccLevel).IsEquivalentTo((QREccLevel)level);
                 await Assert.That(maskPattern).IsEquivalentTo(mask);
             }
         }
@@ -54,11 +54,11 @@ public class FormatInformationDecoderUnitTest
     [Test]
     public async Task CorruptedFirstCopy_IntactSecondCopy_DecodesViaSecond()
     {
-        var bits = QRCodeConstants.GetFormatBits(ECCLevel.Q, 5);
+        var bits = QRCodeConstants.GetFormatBits(QREccLevel.Q, 5);
         var destroyed = FindPatternFarFromAllFormats();
 
         await Assert.That(FormatInformationDecoder.TryDecode(destroyed, bits, out var eccLevel, out var maskPattern)).IsTrue();
-        await Assert.That(eccLevel).IsEquivalentTo(ECCLevel.Q);
+        await Assert.That(eccLevel).IsEquivalentTo(QREccLevel.Q);
         await Assert.That(maskPattern).IsEquivalentTo(5);
     }
 
@@ -84,7 +84,7 @@ public class FormatInformationDecoderUnitTest
             {
                 for (var mask = 0; mask < 8; mask++)
                 {
-                    var candidate = QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
+                    var candidate = QRCodeConstants.GetFormatBits((QREccLevel)level, mask);
                     var distance = CountBits((ushort)(pattern ^ candidate));
                     if (distance < minDistance)
                         minDistance = distance;

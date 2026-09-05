@@ -29,7 +29,7 @@ var scenarios = new (int Version, int QuietZone)[]
 
 foreach (var (version, quietZone) in scenarios)
 {
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, requestedVersion: version, quietZoneSize: quietZone);
+    var qrData = QRCodeGenerator.Create(content, QREccLevel.H, requestedVersion: version, quietZoneSize: quietZone);
     var contentSide = qrData.Size * modulePixelSize;
 
     using var fixedSizeBitmap = new QRCodeImageBuilder(qrData)

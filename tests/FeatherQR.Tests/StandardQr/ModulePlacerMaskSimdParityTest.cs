@@ -1,4 +1,4 @@
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals;
 
 namespace FeatherQR.Tests;
@@ -29,7 +29,7 @@ public class ModulePlacerMaskSimdParityTest
             return;
         }
 
-        ECCLevel[] eccLevels = [ECCLevel.L, ECCLevel.M, ECCLevel.Q, ECCLevel.H];
+        QREccLevel[] eccLevels = [QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H];
 
         foreach (var eccLevel in eccLevels)
         {
@@ -64,12 +64,12 @@ public class ModulePlacerMaskSimdParityTest
         // belong to the version (or a version outside the tier) must be rejected before
         // the cache is touched; a short buffer must be rejected before the wide row loads.
         var (buffer, blockedMask, size) = BuildFixture(1, seed: 0);
-        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, 25, 1, blockedMask, ECCLevel.M)).Throws<ArgumentException>();
-        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, size, 12, blockedMask, ECCLevel.M)).Throws<ArgumentException>();
-        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer.AsSpan(0, size * size - 1), size, 1, blockedMask, ECCLevel.M)).Throws<ArgumentException>();
-        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, size, 1, blockedMask, (ECCLevel)4)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, 25, 1, blockedMask, QREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, size, 12, blockedMask, QREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer.AsSpan(0, size * size - 1), size, 1, blockedMask, QREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, size, 1, blockedMask, (QREccLevel)4)).Throws<ArgumentOutOfRangeException>();
         // and a valid call afterwards still works (the failed calls did not poison the cache)
-        var ok = ModulePlacer.MaskCode64Simd((byte[])buffer.Clone(), size, 1, blockedMask, ECCLevel.M);
+        var ok = ModulePlacer.MaskCode64Simd((byte[])buffer.Clone(), size, 1, blockedMask, QREccLevel.M);
         await Assert.That(ok).IsBetween(0, 7);
     }
 
@@ -99,11 +99,11 @@ public class ModulePlacerMaskSimdParityTest
 
             var expectedBuffer = (byte[])buffer.Clone();
             var expectedBest = size <= 64
-                ? ModulePlacer.MaskCode64(expectedBuffer, size, version, blockedMask, ECCLevel.M)
-                : ModulePlacer.MaskCode192(expectedBuffer, size, version, blockedMask, ECCLevel.M);
+                ? ModulePlacer.MaskCode64(expectedBuffer, size, version, blockedMask, QREccLevel.M)
+                : ModulePlacer.MaskCode192(expectedBuffer, size, version, blockedMask, QREccLevel.M);
 
             var actualBuffer = (byte[])buffer.Clone();
-            var actualBest = ModulePlacer.MaskCodeSimd(actualBuffer, size, version, blockedMask, ECCLevel.M);
+            var actualBest = ModulePlacer.MaskCodeSimd(actualBuffer, size, version, blockedMask, QREccLevel.M);
 
             await Assert.That(actualBest).IsEquivalentTo(expectedBest);
             await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer);

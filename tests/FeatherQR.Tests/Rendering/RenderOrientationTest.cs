@@ -24,7 +24,7 @@ public class RenderOrientationTest
     [Arguments(true)]
     public async Task StandardQr_RenderedPixels_MatchMatrixOrientation(bool circleModules)
     {
-        var data = QRCodeGenerator.CreateQrCode("ORIENTATION 2026", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var data = QRCodeGenerator.Create("ORIENTATION 2026", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         var builder = new QRCodeImageBuilder(data);
         using var bitmap = Render(builder, circleModules);
 
@@ -36,7 +36,7 @@ public class RenderOrientationTest
     [Arguments(true)]
     public async Task MicroQr_RenderedPixels_MatchMatrixOrientation(bool circleModules)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("MICRO 26", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var data = MicroQRCodeGenerator.Create("MICRO 26", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         var builder = new MicroQRCodeImageBuilder(data);
         using var bitmap = Render(builder, circleModules);
 
@@ -48,15 +48,15 @@ public class RenderOrientationTest
     [Arguments(true)]
     public async Task RmQr_RenderedPixels_MatchMatrixOrientation(bool circleModules)
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("RMQR ORIENTATION", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var data = RmQRCodeGenerator.Create("RMQR ORIENTATION", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
         var builder = new RmQRCodeImageBuilder(data);
         using var bitmap = Render(builder, circleModules);
 
         await AssertOrientation(bitmap, data.Width, data.Height, (row, col) => data[row, col]);
     }
 
-    private static SKBitmap Render<TSelf>(QRCodeImageBuilderBase<TSelf> builder, bool circleModules)
-        where TSelf : QRCodeImageBuilderBase<TSelf>
+    private static SKBitmap Render<TSelf>(SymbolImageBuilderBase<TSelf> builder, bool circleModules)
+        where TSelf : SymbolImageBuilderBase<TSelf>
     {
         builder
             .WithModulePixelSize(PixelsPerModule)

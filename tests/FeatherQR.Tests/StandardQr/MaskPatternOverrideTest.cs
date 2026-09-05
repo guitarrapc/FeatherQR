@@ -29,7 +29,7 @@ public class MaskPatternOverrideTest
     [Arguments(7)]
     public async Task PinnedMask_IsWrittenToFormatInformation_AndRoundTrips(int maskPattern)
     {
-        var qr = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, new QRCodeGeneratorOptions { MaskPattern = maskPattern });
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { MaskPattern = maskPattern });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"mask={maskPattern}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(Content);
@@ -55,7 +55,7 @@ public class MaskPatternOverrideTest
     public async Task PinnedMask_AtPinnedVersion_RoundTrips(int version, int maskPattern)
     {
         var options = new QRCodeGeneratorOptions { Version = version, MaskPattern = maskPattern };
-        var qr = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, options);
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, options);
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"v={version}, mask={maskPattern}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(Content);
@@ -72,10 +72,10 @@ public class MaskPatternOverrideTest
         // Pinning the pattern the scorer would pick must reproduce the automatic
         // symbol exactly: the pinned application path and MaskCode's winner
         // application are the same transformation.
-        var auto = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, new QRCodeGeneratorOptions { Version = version });
+        var auto = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version });
         await Assert.That(QRCodeDecoder.TryDecode(auto, out _, out var autoInfo)).IsTrue();
 
-        var pinned = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, new QRCodeGeneratorOptions { Version = version, MaskPattern = autoInfo.MaskPattern });
+        var pinned = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, MaskPattern = autoInfo.MaskPattern });
 
         await Assert.That(pinned.GetRawData().AsSpan().SequenceEqual(auto.GetRawData())).IsTrue();
     }
@@ -83,11 +83,11 @@ public class MaskPatternOverrideTest
     [Test]
     public async Task PinnedMask_DifferingFromTheAutomaticWinner_ProducesADifferentButValidSymbol()
     {
-        var auto = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, QRCodeGeneratorOptions.Default);
+        var auto = QRCodeGenerator.Create(Content, QREccLevel.M, QRCodeGeneratorOptions.Default);
         await Assert.That(QRCodeDecoder.TryDecode(auto, out _, out var autoInfo)).IsTrue();
 
         var otherMask = (autoInfo.MaskPattern + 1) % 8;
-        var pinned = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, new QRCodeGeneratorOptions { MaskPattern = otherMask });
+        var pinned = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { MaskPattern = otherMask });
 
         await Assert.That(pinned.GetRawData().AsSpan().SequenceEqual(auto.GetRawData())).IsFalse();
         await Assert.That(QRCodeDecoder.TryDecode(pinned, out var decoded, out var pinnedInfo)).IsTrue();
@@ -100,9 +100,9 @@ public class MaskPatternOverrideTest
     [Test]
     public async Task UnsetMask_IsAutomatic_AndMatchesTheReleasedOverload()
     {
-        var released = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M);
-        var unset = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, QRCodeGeneratorOptions.Default);
-        var explicitNull = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, new QRCodeGeneratorOptions { MaskPattern = null });
+        var released = QRCodeGenerator.Create(Content, QREccLevel.M);
+        var unset = QRCodeGenerator.Create(Content, QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var explicitNull = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { MaskPattern = null });
 
         await Assert.That(unset.GetRawData().AsSpan().SequenceEqual(released.GetRawData())).IsTrue();
         await Assert.That(explicitNull.GetRawData().AsSpan().SequenceEqual(released.GetRawData())).IsTrue();
@@ -121,14 +121,14 @@ public class MaskPatternOverrideTest
     {
         var options = new QRCodeGeneratorOptions { MaskPattern = 5 };
 
-        var allocating = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, options);
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(Content.AsSpan(), ECCLevel.M, out var size, options)).IsTrue();
+        var allocating = QRCodeGenerator.Create(Content, QREccLevel.M, options);
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(Content.AsSpan(), QREccLevel.M, out var size, options)).IsTrue();
 
         var buffer = new byte[size.BufferSize];
-        var written = QRCodeGenerator.CreateQrCode(Content.AsSpan(), ECCLevel.M, buffer, options);
+        var written = QRCodeGenerator.Create(Content.AsSpan(), QREccLevel.M, buffer, options);
 
         await Assert.That(written).IsEqualTo(size.BufferSize);
-        await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), size.QrSize, out var decoded, out var info)).IsTrue();
+        await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), size.Size, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEqualTo(Content);
         await Assert.That(info.MaskPattern).IsEqualTo(5);
         await Assert.That(info.MaskPattern).IsEqualTo(GetDecodedMask(allocating));
@@ -141,11 +141,11 @@ public class MaskPatternOverrideTest
     {
         // "HELLO" at L boosts to H within version 1; the pinned mask must survive
         // the rewritten format information.
-        var qr = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.L, new QRCodeGeneratorOptions { BoostEccLevel = true, MaskPattern = 6 });
+        var qr = QRCodeGenerator.Create("HELLO", QREccLevel.L, new QRCodeGeneratorOptions { BoostEccLevel = true, MaskPattern = 6 });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEqualTo("HELLO");
-        await Assert.That(info.EccLevel).IsEqualTo(ECCLevel.H);
+        await Assert.That(info.EccLevel).IsEqualTo(QREccLevel.H);
         await Assert.That(info.MaskPattern).IsEqualTo(6);
     }
 
@@ -172,9 +172,9 @@ public class MaskPatternOverrideTest
         // Internal seam guard: without it, an out-of-range pattern silently
         // applies no mask (GetMaskBit's default arm) while the caller still
         // writes format information claiming that pattern.
-        var layout = FeatherQR.Internals.StandardQr.ModulePlacer.GetLayout(1);
+        var layout = FeatherQR.Internals.StandardQR.ModulePlacer.GetLayout(1);
         var buffer = new byte[21 * 21];
-        await Assert.That(() => FeatherQR.Internals.StandardQr.ModulePlacer.ApplyMaskPattern(buffer, 21, layout.BlockedMask, patternIndex))
+        await Assert.That(() => FeatherQR.Internals.StandardQR.ModulePlacer.ApplyMaskPattern(buffer, 21, layout.BlockedMask, patternIndex))
             .Throws<ArgumentOutOfRangeException>();
     }
 
@@ -204,7 +204,7 @@ public class MaskPatternOverrideTest
     [Test]
     public async Task Builder_WithMaskPattern_OnPrebuiltData_Throws()
     {
-        var qr = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M);
         await Assert.That(() => new QRCodeImageBuilder(qr).WithMaskPattern(3)).Throws<InvalidOperationException>();
     }
 
@@ -221,7 +221,7 @@ public class MaskPatternOverrideTest
     [Arguments(7)]
     public async Task PinnedMask_IsDecodableByZXing(int maskPattern)
     {
-        var qr = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, new QRCodeGeneratorOptions { MaskPattern = maskPattern });
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { MaskPattern = maskPattern });
 
         var reader = new BarcodeReader
         {

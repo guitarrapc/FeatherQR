@@ -24,17 +24,17 @@ public class SimpleRmQREncode
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("FeatherQR")]
     public RmQRCodeData SkiaSharpQrCode_Numeric_R7x43_Encode()
-        => RmQRCodeGenerator.CreateRmQRCode(RmQRPayloads.Numeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
+        => RmQRCodeGenerator.Create(RmQRPayloads.Numeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
     public RmQRCodeData SkiaSharpQrCode_Alphanumeric_R11x59_Encode()
-        => RmQRCodeGenerator.CreateRmQRCode(RmQRPayloads.Alphanumeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59 });
+        => RmQRCodeGenerator.Create(RmQRPayloads.Alphanumeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59 });
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
     public RmQRCodeData SkiaSharpQrCode_Byte_R17x139_Encode()
-        => RmQRCodeGenerator.CreateRmQRCode(RmQRPayloads.Byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+        => RmQRCodeGenerator.Create(RmQRPayloads.Byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("CodeGlyphX")]

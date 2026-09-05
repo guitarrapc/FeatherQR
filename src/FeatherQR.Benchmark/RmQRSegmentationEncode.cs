@@ -97,12 +97,12 @@ public class RmQRSegmentationEncode
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), RmQREccLevel.M, _spanDestination);
+        return RmQRCodeGenerator.Create(_content.AsSpan(), RmQREccLevel.M, _spanDestination);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        return RmQRCodeGenerator.Create(_content.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
     }
 }

@@ -13,7 +13,7 @@ namespace FeatherQR;
 /// UTF-8), all versions M1-M4 and all legal ECC levels, plus Kanji mode segments in
 /// M3 and M4 (decoded as JIS X 0208; this library never emits them). A Kanji cell
 /// outside the JIS X 0208 repertoire fails the whole symbol with
-/// <see cref="QRCodeDecodeStatus.UnmappedCharacter"/> rather than substituting a
+/// <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a
 /// replacement character. Micro QR has no
 /// ECI mode; byte segments use UTF-8 when the payload validates as UTF-8 and
 /// ISO-8859-1 otherwise (matching this library's encoder).
@@ -74,7 +74,7 @@ public static class MicroQRCodeDecoder
     /// </summary>
     /// <param name="modules">
     /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
-    /// order, the format produced by <see cref="MicroQRCodeGenerator.CreateMicroQRCode(ReadOnlySpan{char}, MicroQREccLevel, Span{byte}, in MicroQRCodeGeneratorOptions)"/>.
+    /// order, the format produced by <see cref="MicroQRCodeGenerator.Create(ReadOnlySpan{char}, MicroQREccLevel, Span{byte}, in MicroQRCodeGeneratorOptions)"/>.
     /// A uniform light quiet zone border is detected and skipped automatically.
     /// </param>
     /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>
@@ -91,7 +91,7 @@ public static class MicroQRCodeDecoder
         if (!TryLocateCore(modules, size, out var origin, out var coreSize))
         {
             text = string.Empty;
-            info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
             return false;
         }
 
@@ -134,17 +134,17 @@ public static class MicroQRCodeDecoder
         if (!TryLocateCore(modules, size, out var origin, out var coreSize))
         {
             charsWritten = 0;
-            info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
             return false;
         }
 
         if (origin == 0 && coreSize == size)
-            return MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+            return MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), coreSize, destination, out charsWritten, out info) == DecodeStatus.Success;
 
         // Micro QR cores are at most 17×17 = 289 modules, small enough for the stack.
         Span<byte> core = stackalloc byte[17 * 17].Slice(0, coreSize * coreSize);
         CopyCoreWindow(modules, size, origin, coreSize, core);
-        return MicroQRMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+        return MicroQRMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == DecodeStatus.Success;
     }
 
     /// <summary>
@@ -195,7 +195,7 @@ public static class MicroQRCodeDecoder
         if (width < 1 || height < 1 || luminance.Length < (long)width * height)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
 
-        return MicroQRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+        return MicroQRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == DecodeStatus.Success;
     }
 
     /// <summary>
@@ -226,8 +226,8 @@ public static class MicroQRCodeDecoder
                 : (rentedChars = ArrayPool<char>.Shared.Rent(maxChars)).AsSpan(0, maxChars);
 
             var status = MicroQRMatrixDecoder.DecodeMatrix(core, coreSize, chars, out var charsWritten, out info);
-            text = status == QRCodeDecodeStatus.Success ? chars.Slice(0, charsWritten).ToString() : string.Empty;
-            return status == QRCodeDecodeStatus.Success;
+            text = status == DecodeStatus.Success ? chars.Slice(0, charsWritten).ToString() : string.Empty;
+            return status == DecodeStatus.Success;
         }
         finally
         {

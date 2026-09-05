@@ -22,20 +22,20 @@ public class QRCodeGeneratorUnitTest
     [Arguments(41)]
     internal async Task CalculateMaxBitStringLength_InvalidVersionShouldFail(int version)
     {
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => CalculateMaxBitStringLength(version, ECCLevel.L, EncodingMode.Alphanumeric));
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => CalculateMaxBitStringLength(version, QREccLevel.L, EncodingMode.Alphanumeric));
         await Assert.That(ex.Message).Contains($"Version must be 1-40, but was {version}");
     }
 
     [Test]
-    [Arguments(1, ECCLevel.L, EncodingMode.Numeric, 152)]         // 19 繝ｻ繝ｻ繝ｻ8
-    [Arguments(1, ECCLevel.M, EncodingMode.Alphanumeric, 128)]    // 16 繝ｻ繝ｻ繝ｻ8
-    [Arguments(1, ECCLevel.Q, EncodingMode.Byte, 104)]            // 13 繝ｻ繝ｻ繝ｻ8
-    [Arguments(1, ECCLevel.H, EncodingMode.Byte, 72)]             // 9 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, ECCLevel.L, EncodingMode.Numeric, 23648)]      // 2956 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, ECCLevel.M, EncodingMode.Alphanumeric, 18672)] // 2334 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, ECCLevel.Q, EncodingMode.Byte, 13328)]         // 1666 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, ECCLevel.H, EncodingMode.Byte, 10208)]         // 1276 繝ｻ繝ｻ繝ｻ8
-    internal async Task CalculateMaxBitStringLength_ReturnsCapacityWithBuffer(int version, ECCLevel eccLevel, EncodingMode encoding, int expected)
+    [Arguments(1, QREccLevel.L, EncodingMode.Numeric, 152)]         // 19 繝ｻ繝ｻ繝ｻ8
+    [Arguments(1, QREccLevel.M, EncodingMode.Alphanumeric, 128)]    // 16 繝ｻ繝ｻ繝ｻ8
+    [Arguments(1, QREccLevel.Q, EncodingMode.Byte, 104)]            // 13 繝ｻ繝ｻ繝ｻ8
+    [Arguments(1, QREccLevel.H, EncodingMode.Byte, 72)]             // 9 繝ｻ繝ｻ繝ｻ8
+    [Arguments(40, QREccLevel.L, EncodingMode.Numeric, 23648)]      // 2956 繝ｻ繝ｻ繝ｻ8
+    [Arguments(40, QREccLevel.M, EncodingMode.Alphanumeric, 18672)] // 2334 繝ｻ繝ｻ繝ｻ8
+    [Arguments(40, QREccLevel.Q, EncodingMode.Byte, 13328)]         // 1666 繝ｻ繝ｻ繝ｻ8
+    [Arguments(40, QREccLevel.H, EncodingMode.Byte, 10208)]         // 1276 繝ｻ繝ｻ繝ｻ8
+    internal async Task CalculateMaxBitStringLength_ReturnsCapacityWithBuffer(int version, QREccLevel eccLevel, EncodingMode encoding, int expected)
     {
         var actual = CalculateMaxBitStringLength(version, eccLevel, encoding);
         await Assert.That(actual).IsEquivalentTo(expected);
@@ -45,8 +45,8 @@ public class QRCodeGeneratorUnitTest
     public async Task CalculateMaxBitStringLength_IsIndependentOfInputText()
     {
         // Capacity doesn't depend on input text (always padded to full capacity)
-        var capacity1 = CalculateMaxBitStringLength(1, ECCLevel.L, EncodingMode.Byte);
-        var capacity2 = CalculateMaxBitStringLength(1, ECCLevel.L, EncodingMode.Byte);
+        var capacity1 = CalculateMaxBitStringLength(1, QREccLevel.L, EncodingMode.Byte);
+        var capacity2 = CalculateMaxBitStringLength(1, QREccLevel.L, EncodingMode.Byte);
 
         await Assert.That(capacity2).IsEqualTo(capacity1);
     }
@@ -62,32 +62,32 @@ public class QRCodeGeneratorUnitTest
     // 髫ｨ荳翫・Total: 4 + 10 + 54 + 4 = 72 bits                        髫ｨ荳翫・    // 髫ｨ荵怜繭隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・
 
     [Test]
-    [Arguments("0123456789", ECCLevel.M)]
-    [Arguments("123456789012345678901234567890123", ECCLevel.M)]
-    public async Task CreateQrCode_Numeric_ProducesValidQr(string text, ECCLevel eccLevel)
+    [Arguments("0123456789", QREccLevel.M)]
+    [Arguments("123456789012345678901234567890123", QREccLevel.M)]
+    public async Task Create_Numeric_ProducesValidQr(string text, QREccLevel eccLevel)
     {
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel);
 
         await Assert.That(qr.Size >= 21).IsTrue(); // Min size = 21x21
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 41, 1)]   // V1-L max
-    [Arguments(ECCLevel.M, 34, 1)]   // V1-M max
-    [Arguments(ECCLevel.H, 17, 1)]   // V1-H max
-    [Arguments(ECCLevel.L, 42, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.M, 35, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.H, 18, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.L, 77, 2)]   // V2-L max
-    [Arguments(ECCLevel.M, 48, 2)]   // V2-M max
-    [Arguments(ECCLevel.H, 34, 2)]   // V2-H max
-    public async Task CreateQrCode_Numeric_Versions_MaxCapacity(ECCLevel eccLevel, int maxChars, int expectedVersion)
+    [Arguments(QREccLevel.L, 41, 1)]   // V1-L max
+    [Arguments(QREccLevel.M, 34, 1)]   // V1-M max
+    [Arguments(QREccLevel.H, 17, 1)]   // V1-H max
+    [Arguments(QREccLevel.L, 42, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.M, 35, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.H, 18, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.L, 77, 2)]   // V2-L max
+    [Arguments(QREccLevel.M, 48, 2)]   // V2-M max
+    [Arguments(QREccLevel.H, 34, 2)]   // V2-H max
+    public async Task Create_Numeric_Versions_MaxCapacity(QREccLevel eccLevel, int maxChars, int expectedVersion)
     {
         var expectedSize = CalculateSize(expectedVersion);
 
         var text = new string('1', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel);
         var version = CalculateVersion(qr.Size);
         var actualSize = qr.Size;
 
@@ -105,32 +105,32 @@ public class QRCodeGeneratorUnitTest
     // 髫ｨ荳翫・4. Terminator                                           髫ｨ荳翫・    // 髫ｨ荳翫・   = min(72 - 4 - 9 - 55, 4) = 4 bits (0000)            髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
     // 髫ｨ荳翫・Total: 4 + 9 + 55 + 4 = 72 bits                         髫ｨ荳翫・    // 髫ｨ荵怜繭隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・
     [Test]
-    [Arguments("HELLO WORLD", ECCLevel.M)]
-    [Arguments("ABC-123 $%*+-./:", ECCLevel.Q)]
-    public async Task CreateQrCode_Alphanumeric_ProducesValidQr(string text, ECCLevel eccLevel)
+    [Arguments("HELLO WORLD", QREccLevel.M)]
+    [Arguments("ABC-123 $%*+-./:", QREccLevel.Q)]
+    public async Task Create_Alphanumeric_ProducesValidQr(string text, QREccLevel eccLevel)
     {
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel);
 
         await Assert.That(qr.Size >= 21).IsTrue();
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 25, 1)]   // V1-L max
-    [Arguments(ECCLevel.M, 20, 1)]   // V1-M max
-    [Arguments(ECCLevel.H, 10, 1)]   // V1-H max
-    [Arguments(ECCLevel.L, 26, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.M, 21, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.H, 11, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.L, 47, 2)]   // V2-L max
-    [Arguments(ECCLevel.M, 38, 2)]   // V2-M max
-    [Arguments(ECCLevel.H, 20, 2)]   // V2-H max
-    public async Task CreateQrCode_Alphanumeric_Versions_MaxCapacity(ECCLevel eccLevel, int maxChars, int expectedVersion)
+    [Arguments(QREccLevel.L, 25, 1)]   // V1-L max
+    [Arguments(QREccLevel.M, 20, 1)]   // V1-M max
+    [Arguments(QREccLevel.H, 10, 1)]   // V1-H max
+    [Arguments(QREccLevel.L, 26, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.M, 21, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.H, 11, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.L, 47, 2)]   // V2-L max
+    [Arguments(QREccLevel.M, 38, 2)]   // V2-M max
+    [Arguments(QREccLevel.H, 20, 2)]   // V2-H max
+    public async Task Create_Alphanumeric_Versions_MaxCapacity(QREccLevel eccLevel, int maxChars, int expectedVersion)
     {
         var expectedSize = CalculateSize(expectedVersion);
 
         var text = new string('A', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel);
         var version = CalculateVersion(qr.Size);
         var actualSize = qr.Size;
 
@@ -152,30 +152,30 @@ public class QRCodeGeneratorUnitTest
     [Arguments("hello world", EciMode.Utf8)]
     [Arguments("こんにちは", EciMode.Utf8)]
     [Arguments("🎉", EciMode.Utf8)]
-    public async Task CreateQrCode_Utf8_ProducesValidQr(string text, EciMode eciMode)
+    public async Task Create_Utf8_ProducesValidQr(string text, EciMode eciMode)
     {
-        var qr = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode });
+        var qr = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode });
 
         await Assert.That(qr.Size >= 21).IsTrue();
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 16, 1)]   // V1-L: 16 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
-    [Arguments(ECCLevel.M, 13, 1)]   // V1-M: 13 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
-    [Arguments(ECCLevel.H, 6, 1)]    // V1-H: 6 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
-    [Arguments(ECCLevel.L, 17, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.M, 14, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.H, 7, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(ECCLevel.L, 31, 2)]   // V2-L max
-    [Arguments(ECCLevel.M, 25, 2)]   // V2-M max
-    [Arguments(ECCLevel.H, 13, 2)]   // V2-H max
-    public async Task CreateQrCode_Utf8_Version1MaxCapacity(ECCLevel eccLevel, int maxBytes, int expectedVersion)
+    [Arguments(QREccLevel.L, 16, 1)]   // V1-L: 16 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
+    [Arguments(QREccLevel.M, 13, 1)]   // V1-M: 13 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
+    [Arguments(QREccLevel.H, 6, 1)]    // V1-H: 6 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
+    [Arguments(QREccLevel.L, 17, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.M, 14, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.H, 7, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.L, 31, 2)]   // V2-L max
+    [Arguments(QREccLevel.M, 25, 2)]   // V2-M max
+    [Arguments(QREccLevel.H, 13, 2)]   // V2-H max
+    public async Task Create_Utf8_Version1MaxCapacity(QREccLevel eccLevel, int maxBytes, int expectedVersion)
     {
         var expectedSize = CalculateSize(expectedVersion);
 
         var text = new string('a', maxBytes); // ASCII = 1 byte each
 
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var qr = QRCodeGenerator.Create(text, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
         var version = CalculateVersion(qr.Size);
         var actualSize = qr.Size;
 
@@ -188,19 +188,19 @@ public class QRCodeGeneratorUnitTest
     [Test]
     [Arguments("Café", EciMode.Iso8859_1)]
     [Arguments("Café", EciMode.Utf8)]
-    public async Task CreateQrCode_DifferentEci_ProducesValidQr(string text, EciMode eciMode)
+    public async Task Create_DifferentEci_ProducesValidQr(string text, EciMode eciMode)
     {
-        var qr = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode });
+        var qr = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode });
 
         await Assert.That(qr.Size > 0).IsTrue();
     }
 
     [Test]
-    public async Task CreateQrCode_DifferentEci_ProducesDifferentQr()
+    public async Task Create_DifferentEci_ProducesDifferentQr()
     {
-        var qrDefault = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Default });
-        var qrIso = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
-        var qrUtf8 = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var qrDefault = QRCodeGenerator.Create("HELLO", QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Default });
+        var qrIso = QRCodeGenerator.Create("HELLO", QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
+        var qrUtf8 = QRCodeGenerator.Create("HELLO", QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
 
         // Different ECI headers 驕ｶ鄙ｫ繝ｻdifferent QR codes
         await Assert.That(SerializeMatrix(qrIso)).IsNotEqualTo(SerializeMatrix(qrDefault));
@@ -209,13 +209,13 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments("Zürich", ECCLevel.H, EciMode.Utf8, 2)]  // 髣厄ｽｫ繝ｻ・ｮ髮弱・・ｽ・｣髯溯ｼ斐・ Version 2
-    [Arguments("Zürich", ECCLevel.M, EciMode.Utf8, 1)]  // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
-    [Arguments("Zürich", ECCLevel.L, EciMode.Utf8, 1)]  // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
-    [Arguments("café", ECCLevel.H, EciMode.Utf8, 1)]    // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
-    public async Task CreateQrCode_VersionSelection_IsCorrect(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
+    [Arguments("Zürich", QREccLevel.H, EciMode.Utf8, 2)]  // 髣厄ｽｫ繝ｻ・ｮ髮弱・・ｽ・｣髯溯ｼ斐・ Version 2
+    [Arguments("Zürich", QREccLevel.M, EciMode.Utf8, 1)]  // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
+    [Arguments("Zürich", QREccLevel.L, EciMode.Utf8, 1)]  // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
+    [Arguments("café", QREccLevel.H, EciMode.Utf8, 1)]    // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
+    public async Task Create_VersionSelection_IsCorrect(string content, QREccLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
+        var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
 
         await Assert.That(qr.Version).IsEqualTo(expectedVersion);
     }
@@ -223,49 +223,49 @@ public class QRCodeGeneratorUnitTest
     // UTF-8 BOM Tests
 
     [Test]
-    [Arguments("hello", ECCLevel.H, true, 2)]   // With BOM: 24 bits (3-byte UTF-8 BOM: 0xEF, 0xBB, 0xBF) overhead 驕ｶ鄙ｫ繝ｻVersion 2
-    [Arguments("hello", ECCLevel.H, false, 1)]  // Without BOM 驕ｶ鄙ｫ繝ｻVersion 1
-    [Arguments("test", ECCLevel.M, true, 1)]    // With BOM but still fits in Version 1
-    [Arguments("test", ECCLevel.M, false, 1)]   // Without BOM 驕ｶ鄙ｫ繝ｻVersion 1
-    public async Task CreateQrCode_Utf8BOM_VersionSelection(string text, ECCLevel eccLevel, bool utf8BOM, int expectedVersion)
+    [Arguments("hello", QREccLevel.H, true, 2)]   // With BOM: 24 bits (3-byte UTF-8 BOM: 0xEF, 0xBB, 0xBF) overhead 驕ｶ鄙ｫ繝ｻVersion 2
+    [Arguments("hello", QREccLevel.H, false, 1)]  // Without BOM 驕ｶ鄙ｫ繝ｻVersion 1
+    [Arguments("test", QREccLevel.M, true, 1)]    // With BOM but still fits in Version 1
+    [Arguments("test", QREccLevel.M, false, 1)]   // Without BOM 驕ｶ鄙ｫ繝ｻVersion 1
+    public async Task Create_Utf8BOM_VersionSelection(string text, QREccLevel eccLevel, bool utf8BOM, int expectedVersion)
     {
-        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = EciMode.Utf8 });
+        var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = EciMode.Utf8 });
 
         await Assert.That(qr.Version).IsEqualTo(expectedVersion);
     }
 
     [Test]
-    public async Task CreateQrCode_Utf8BOM_ProducesDifferentQr()
+    public async Task Create_Utf8BOM_ProducesDifferentQr()
     {
-        var qrWithBOM = QRCodeGenerator.CreateQrCode("こんにちは".AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { Utf8BOM = true, EciMode = EciMode.Utf8 });
-        var qrWithoutBOM = QRCodeGenerator.CreateQrCode("こんにちは".AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { Utf8BOM = false, EciMode = EciMode.Utf8 });
+        var qrWithBOM = QRCodeGenerator.Create("こんにちは".AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = true, EciMode = EciMode.Utf8 });
+        var qrWithoutBOM = QRCodeGenerator.Create("こんにちは".AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = false, EciMode = EciMode.Utf8 });
 
         // UTF-8 BOM adds 24 bits 驕ｶ鄙ｫ繝ｻdifferent QR codes
         await Assert.That(SerializeMatrix(qrWithoutBOM)).IsNotEqualTo(SerializeMatrix(qrWithBOM));
     }
 
     [Test]
-    [Arguments(ECCLevel.H, 6, false, 1)]    // V1-H: 6 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(ECCLevel.H, 7, false, 2)]    // V1-H: 7 bytes without BOM 驕ｶ鄙ｫ繝ｻV2 (exceeds capacity)
-    [Arguments(ECCLevel.H, 3, true, 1)]    // V1-H: 3 bytes with BOM (3 + 3 BOM = 6 bytes) 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(ECCLevel.H, 4, true, 2)]    // V1-H: 4 bytes with BOM (4 + 3 BOM = 7 bytes) 驕ｶ鄙ｫ繝ｻV2
-    public async Task CreateQrCode_Utf8BOM_MaxCapacity(ECCLevel eccLevel, int textLength, bool utf8BOM, int expectedVersion)
+    [Arguments(QREccLevel.H, 6, false, 1)]    // V1-H: 6 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
+    [Arguments(QREccLevel.H, 7, false, 2)]    // V1-H: 7 bytes without BOM 驕ｶ鄙ｫ繝ｻV2 (exceeds capacity)
+    [Arguments(QREccLevel.H, 3, true, 1)]    // V1-H: 3 bytes with BOM (3 + 3 BOM = 6 bytes) 驕ｶ鄙ｫ繝ｻV1
+    [Arguments(QREccLevel.H, 4, true, 2)]    // V1-H: 4 bytes with BOM (4 + 3 BOM = 7 bytes) 驕ｶ鄙ｫ繝ｻV2
+    public async Task Create_Utf8BOM_MaxCapacity(QREccLevel eccLevel, int textLength, bool utf8BOM, int expectedVersion)
     {
         var text = new string('a', textLength);
 
-        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = EciMode.Utf8 });
+        var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = EciMode.Utf8 });
 
         await Assert.That(qr.Version).IsEqualTo(expectedVersion);
     }
 
     [Test]
-    [Arguments("HELLO", ECCLevel.M, true)]
-    [Arguments("こんにちは", ECCLevel.Q, true)]
-    [Arguments("🎉", ECCLevel.H, true)]
-    public async Task CreateQrCode_Span_Utf8BOM_MatchesStringImplementation(string text, ECCLevel level, bool utf8BOM)
+    [Arguments("HELLO", QREccLevel.M, true)]
+    [Arguments("こんにちは", QREccLevel.Q, true)]
+    [Arguments("🎉", QREccLevel.H, true)]
+    public async Task Create_Span_Utf8BOM_MatchesStringImplementation(string text, QREccLevel level, bool utf8BOM)
     {
-        var qrString = QRCodeGenerator.CreateQrCode(text, level, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = EciMode.Utf8, QuietZoneSize = 4 });
-        var qrSpan = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = EciMode.Utf8, QuietZoneSize = 4 });
+        var qrString = QRCodeGenerator.Create(text, level, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = EciMode.Utf8, QuietZoneSize = 4 });
+        var qrSpan = QRCodeGenerator.Create(text.AsSpan(), level, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = EciMode.Utf8, QuietZoneSize = 4 });
 
         // Compare sizes
         await Assert.That(qrSpan.Size).IsEqualTo(qrString.Size);
@@ -283,98 +283,98 @@ public class QRCodeGeneratorUnitTest
     // Maximum Capacity Tests
 
     [Test]
-    [Arguments(ECCLevel.L, 7089)]  // V40-L numeric max
-    [Arguments(ECCLevel.H, 3057)]  // V40-H numeric max
-    public async Task CreateQrCode_MaxNumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    [Arguments(QREccLevel.L, 7089)]  // V40-L numeric max
+    [Arguments(QREccLevel.H, 3057)]  // V40-H numeric max
+    public async Task Create_MaxNumeric_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
         var text = new string('1', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel);
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEqualTo(40);
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 7089)]  // V40-L numeric max
-    [Arguments(ECCLevel.H, 3057)]  // V40-H numeric max
-    public async Task CreateQrCode_Span_MaxNumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    [Arguments(QREccLevel.L, 7089)]  // V40-L numeric max
+    [Arguments(QREccLevel.H, 3057)]  // V40-H numeric max
+    public async Task Create_Span_MaxNumeric_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
         var text = new string('1', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel);
+        var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel);
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEqualTo(40);
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 4296)]  // V40-L alphanumeric max
-    [Arguments(ECCLevel.H, 1852)]  // V40-H alphanumeric max
-    public async Task CreateQrCode_MaxAlphanumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    [Arguments(QREccLevel.L, 4296)]  // V40-L alphanumeric max
+    [Arguments(QREccLevel.H, 1852)]  // V40-H alphanumeric max
+    public async Task Create_MaxAlphanumeric_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
         var text = new string('A', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel);
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEqualTo(40);
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 4296)]  // V40-L alphanumeric max
-    [Arguments(ECCLevel.H, 1852)]  // V40-H alphanumeric max
-    public async Task CreateQrCode_Span_MaxAlphanumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    [Arguments(QREccLevel.L, 4296)]  // V40-L alphanumeric max
+    [Arguments(QREccLevel.H, 1852)]  // V40-H alphanumeric max
+    public async Task Create_Span_MaxAlphanumeric_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
         var text = new string('A', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel);
+        var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel);
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEqualTo(40);
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 984)]  // V40-L byte max
-    [Arguments(ECCLevel.H, 424)]  // V40-H byte max
-    public async Task CreateQrCode_MaxByte_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    [Arguments(QREccLevel.L, 984)]  // V40-L byte max
+    [Arguments(QREccLevel.H, 424)]  // V40-H byte max
+    public async Task Create_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
         var text = new string('\u3042', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel);
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEquivalentTo(40);
     }
 
     [Test]
-    [Arguments(ECCLevel.L, 984)]  // V40-L byte max
-    [Arguments(ECCLevel.H, 424)]  // V40-H byte max
-    public async Task CreateQrCode_Span_MaxByte_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    [Arguments(QREccLevel.L, 984)]  // V40-L byte max
+    [Arguments(QREccLevel.H, 424)]  // V40-H byte max
+    public async Task Create_Span_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
         var text = new string('\u3042', maxChars);
 
-        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel);
+        var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel);
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEquivalentTo(40);
     }
 
     [Test]
-    public async Task CreateQrCode_ExceedsMaxCapacity_Throws()
+    public async Task Create_ExceedsMaxCapacity_Throws()
     {
         var tooLarge = new string('1', 7090); // V40-L max + 1
 
-        Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.CreateQrCode(tooLarge, ECCLevel.L));
+        Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(tooLarge, QREccLevel.L));
     }
 
     // Consistency Tests
 
     [Test]
-    public async Task CreateQrCode_SameInput_ProducesSameOutput()
+    public async Task Create_SameInput_ProducesSameOutput()
     {
-        var qr1 = QRCodeGenerator.CreateQrCode("HELLO WORLD", ECCLevel.M);
-        var qr2 = QRCodeGenerator.CreateQrCode("HELLO WORLD", ECCLevel.M);
+        var qr1 = QRCodeGenerator.Create("HELLO WORLD", QREccLevel.M);
+        var qr2 = QRCodeGenerator.Create("HELLO WORLD", QREccLevel.M);
 
         await Assert.That(SerializeMatrix(qr2)).IsEqualTo(SerializeMatrix(qr1));
     }
@@ -382,21 +382,21 @@ public class QRCodeGeneratorUnitTest
     // Text and Binary consistency
 
     [Test]
-    [Arguments("HELLO WORLD", ECCLevel.Q, 1)]
-    [Arguments("https://example.com", ECCLevel.M, -1)]
-    [Arguments("0123456789", ECCLevel.H, 5)]
-    public async Task CreateQrCodeBinary_MatchesTextImplementation(string text, ECCLevel level, int version)
+    [Arguments("HELLO WORLD", QREccLevel.Q, 1)]
+    [Arguments("https://example.com", QREccLevel.M, -1)]
+    [Arguments("0123456789", QREccLevel.H, 5)]
+    public async Task Create_Binary_MatchesTextImplementation(string text, QREccLevel level, int version)
     {
         // -1 was the released parameter list's "pick a version"; the range spells it Any
         // and rejects -1, so a defaulted field cannot pass for automatic selection.
         var options = new QRCodeGeneratorOptions
         {
-            Version = version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(version),
+            Version = version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(version),
             QuietZoneSize = 4,
         };
 
-        var qrText = QRCodeGenerator.CreateQrCode(text, level, options);
-        var qrBinary = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, options);
+        var qrText = QRCodeGenerator.Create(text, level, options);
+        var qrBinary = QRCodeGenerator.Create(text.AsSpan(), level, options);
 
         // Compare sizes
         await Assert.That(qrBinary.Size).IsEqualTo(qrText.Size);
@@ -421,14 +421,14 @@ public class QRCodeGeneratorUnitTest
     public async Task TryGetRequiredBufferSize_MatchesActualQrCodeGeneration()
     {
         var text = "https://example.com/foobar";
-        var eccLevel = ECCLevel.L;
+        var eccLevel = QREccLevel.L;
         var quietZoneSize = 4;
 
         // Calculate expected size
         var (expectedBufferSize, expectedQrSize, expectedVersion) = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
 
         // Generate actual QR code
-        var qrCode = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
+        var qrCode = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
         // Verify
         await Assert.That(qrCode.Version).IsEqualTo(expectedVersion);
@@ -437,11 +437,11 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments("HELLO WORLD", ECCLevel.L, 0, 21 * 21, 21, 1)]  // Version 1, no quiet zone
-    [Arguments("HELLO WORLD", ECCLevel.L, 4, 29 * 29, 29, 1)]  // Version 1, with quiet zone
-    [Arguments("https://example.com/foobar", ECCLevel.L, 0, 25 * 25, 25, 2)]  // Version 2
-    [Arguments("https://example.com/foobar", ECCLevel.L, 4, 33 * 33, 33, 2)]  // Version 2 with quiet zone
-    public async Task TryGetRequiredBufferSize_ReturnsCorrectSize(string text, ECCLevel eccLevel, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
+    [Arguments("HELLO WORLD", QREccLevel.L, 0, 21 * 21, 21, 1)]  // Version 1, no quiet zone
+    [Arguments("HELLO WORLD", QREccLevel.L, 4, 29 * 29, 29, 1)]  // Version 1, with quiet zone
+    [Arguments("https://example.com/foobar", QREccLevel.L, 0, 25 * 25, 25, 2)]  // Version 2
+    [Arguments("https://example.com/foobar", QREccLevel.L, 4, 33 * 33, 33, 2)]  // Version 2 with quiet zone
+    public async Task TryGetRequiredBufferSize_ReturnsCorrectSize(string text, QREccLevel eccLevel, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
         // Act
         var (bufferSize, qrSize, version) = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
@@ -453,22 +453,22 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments("hello", ECCLevel.L, false, EciMode.Default, 0, 21 * 21, 21, 1)]  // Default ECI, no BOM
-    [Arguments("hello", ECCLevel.L, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1, no BOM
-    [Arguments("hello", ECCLevel.L, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM
-    [Arguments("hello", ECCLevel.H, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM, ECC-H
-    [Arguments("hello", ECCLevel.H, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // UTF-8 ECI, with BOM 驕ｶ鄙ｫ繝ｻVersion 2 (BOM adds 3 bytes)
-    [Arguments("hello", ECCLevel.H, false, EciMode.Utf8, 4, 29 * 29, 29, 1)]  // UTF-8 ECI, no BOM, with quiet zone
-    [Arguments("hello", ECCLevel.H, true, EciMode.Utf8, 4, 33 * 33, 33, 2)]   // UTF-8 ECI, with BOM, with quiet zone 驕ｶ鄙ｫ繝ｻVersion 2
-    [Arguments("Café", ECCLevel.M, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1 encoding
-    [Arguments("こんにちは", ECCLevel.M, false, EciMode.Utf8, 0, 25 * 25, 25, 2)]  // Japanese UTF-8
-    [Arguments("こんにちは", ECCLevel.M, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // Japanese UTF-8 with BOM
-    [Arguments("🎉", ECCLevel.M, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]      // Emoji UTF-8
-    [Arguments("🎉", ECCLevel.M, true, EciMode.Utf8, 0, 21 * 21, 21, 1)]       // Emoji UTF-8 with BOM (still fits V1)
-    public async Task TryGetRequiredBufferSize_WithEciAndBOM_ReturnsCorrectSize(string text, ECCLevel eccLevel, bool utf8BOM, EciMode eciMode, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
+    [Arguments("hello", QREccLevel.L, false, EciMode.Default, 0, 21 * 21, 21, 1)]  // Default ECI, no BOM
+    [Arguments("hello", QREccLevel.L, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1, no BOM
+    [Arguments("hello", QREccLevel.L, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM
+    [Arguments("hello", QREccLevel.H, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM, ECC-H
+    [Arguments("hello", QREccLevel.H, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // UTF-8 ECI, with BOM 驕ｶ鄙ｫ繝ｻVersion 2 (BOM adds 3 bytes)
+    [Arguments("hello", QREccLevel.H, false, EciMode.Utf8, 4, 29 * 29, 29, 1)]  // UTF-8 ECI, no BOM, with quiet zone
+    [Arguments("hello", QREccLevel.H, true, EciMode.Utf8, 4, 33 * 33, 33, 2)]   // UTF-8 ECI, with BOM, with quiet zone 驕ｶ鄙ｫ繝ｻVersion 2
+    [Arguments("Café", QREccLevel.M, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1 encoding
+    [Arguments("こんにちは", QREccLevel.M, false, EciMode.Utf8, 0, 25 * 25, 25, 2)]  // Japanese UTF-8
+    [Arguments("こんにちは", QREccLevel.M, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // Japanese UTF-8 with BOM
+    [Arguments("🎉", QREccLevel.M, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]      // Emoji UTF-8
+    [Arguments("🎉", QREccLevel.M, true, EciMode.Utf8, 0, 21 * 21, 21, 1)]       // Emoji UTF-8 with BOM (still fits V1)
+    public async Task TryGetRequiredBufferSize_WithEciAndBOM_ReturnsCorrectSize(string text, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
         // Act
-        var (bufferSize, qrSize, version) = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = eciMode, QuietZoneSize = quietZoneSize });
+        var (bufferSize, qrSize, version) = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode, QuietZoneSize = quietZoneSize });
 
         // Assert
         await Assert.That(bufferSize).IsEqualTo(expectedBufferSize);
@@ -477,20 +477,20 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments(ECCLevel.H, 6, false, EciMode.Utf8, 1)]    // V1-H: 6 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(ECCLevel.H, 7, false, EciMode.Utf8, 2)]    // V1-H: 7 bytes without BOM 驕ｶ鄙ｫ繝ｻV2 (exceeds V1 capacity)
-    [Arguments(ECCLevel.H, 3, true, EciMode.Utf8, 1)]     // V1-H: 3 bytes + 3 BOM = 6 bytes 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(ECCLevel.H, 4, true, EciMode.Utf8, 2)]     // V1-H: 4 bytes + 3 BOM = 7 bytes 驕ｶ鄙ｫ繝ｻV2
-    [Arguments(ECCLevel.M, 13, false, EciMode.Utf8, 1)]   // V1-M: 13 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(ECCLevel.M, 14, false, EciMode.Utf8, 2)]   // V1-M: 14 bytes without BOM 驕ｶ鄙ｫ繝ｻV2
-    [Arguments(ECCLevel.M, 10, true, EciMode.Utf8, 1)]    // V1-M: 10 bytes + 3 BOM = 13 bytes 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(ECCLevel.M, 11, true, EciMode.Utf8, 2)]    // V1-M: 11 bytes + 3 BOM = 14 bytes 驕ｶ鄙ｫ繝ｻV2
-    public async Task TryGetRequiredBufferSize_Utf8BOM_AffectsVersionSelection(ECCLevel eccLevel, int textLength, bool utf8BOM, EciMode eciMode, int expectedVersion)
+    [Arguments(QREccLevel.H, 6, false, EciMode.Utf8, 1)]    // V1-H: 6 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
+    [Arguments(QREccLevel.H, 7, false, EciMode.Utf8, 2)]    // V1-H: 7 bytes without BOM 驕ｶ鄙ｫ繝ｻV2 (exceeds V1 capacity)
+    [Arguments(QREccLevel.H, 3, true, EciMode.Utf8, 1)]     // V1-H: 3 bytes + 3 BOM = 6 bytes 驕ｶ鄙ｫ繝ｻV1
+    [Arguments(QREccLevel.H, 4, true, EciMode.Utf8, 2)]     // V1-H: 4 bytes + 3 BOM = 7 bytes 驕ｶ鄙ｫ繝ｻV2
+    [Arguments(QREccLevel.M, 13, false, EciMode.Utf8, 1)]   // V1-M: 13 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
+    [Arguments(QREccLevel.M, 14, false, EciMode.Utf8, 2)]   // V1-M: 14 bytes without BOM 驕ｶ鄙ｫ繝ｻV2
+    [Arguments(QREccLevel.M, 10, true, EciMode.Utf8, 1)]    // V1-M: 10 bytes + 3 BOM = 13 bytes 驕ｶ鄙ｫ繝ｻV1
+    [Arguments(QREccLevel.M, 11, true, EciMode.Utf8, 2)]    // V1-M: 11 bytes + 3 BOM = 14 bytes 驕ｶ鄙ｫ繝ｻV2
+    public async Task TryGetRequiredBufferSize_Utf8BOM_AffectsVersionSelection(QREccLevel eccLevel, int textLength, bool utf8BOM, EciMode eciMode, int expectedVersion)
     {
         var text = new string('a', textLength); // ASCII = 1 byte each
 
         // Act
-        var (_, _, version) = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = eciMode });
+        var (_, _, version) = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode });
 
         // Assert
         await Assert.That(version).IsEqualTo(expectedVersion);
@@ -503,9 +503,9 @@ public class QRCodeGeneratorUnitTest
     public async Task TryGetRequiredBufferSize_DifferentEciModes_MayProduceDifferentVersions(string text, EciMode eciMode1, EciMode eciMode2)
     {
         // Act
-        var (bufferSize1, qrSize1, version1) = Sizing.Required(text.AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode1 });
+        var (bufferSize1, qrSize1, version1) = Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode1 });
 
-        var (bufferSize2, qrSize2, version2) = Sizing.Required(text.AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode2 });
+        var (bufferSize2, qrSize2, version2) = Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode2 });
 
         // Assert - Different ECI modes may produce different buffer sizes due to ECI header overhead
         // For short text like "HELLO", all should fit in Version 1, but buffer sizes differ based on final QR size
@@ -524,34 +524,34 @@ public class QRCodeGeneratorUnitTest
         }
     }
 
-    // CreateQrCode (Span destination) Tests
+    // Create (Span destination) Tests
 
     [Test]
-    [Arguments("HELLO WORLD", ECCLevel.L, 0)]
-    [Arguments("HELLO WORLD", ECCLevel.L, 4)]
-    [Arguments("https://example.com/foobar", ECCLevel.M, 4)]
-    [Arguments("0123456789012345678901234567890123456789", ECCLevel.Q, 4)]
-    [Arguments("こんにちは世界", ECCLevel.H, 4)]
-    [Arguments("", ECCLevel.L, 4)]
-    public async Task CreateQrCode_SpanDestination_MatchesQRCodeData(string text, ECCLevel eccLevel, int quietZoneSize)
+    [Arguments("HELLO WORLD", QREccLevel.L, 0)]
+    [Arguments("HELLO WORLD", QREccLevel.L, 4)]
+    [Arguments("https://example.com/foobar", QREccLevel.M, 4)]
+    [Arguments("0123456789012345678901234567890123456789", QREccLevel.Q, 4)]
+    [Arguments("こんにちは世界", QREccLevel.H, 4)]
+    [Arguments("", QREccLevel.L, 4)]
+    public async Task Create_SpanDestination_MatchesQRCodeData(string text, QREccLevel eccLevel, int quietZoneSize)
     {
         var calculated = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
         var buffer = new byte[calculated.BufferSize];
 
         // Act
-        var written = CreateQrCode(text.AsSpan(), eccLevel, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
+        var written = Create(text.AsSpan(), eccLevel, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
         // Assert - written bytes match the size calculation API
         await Assert.That(written).IsEqualTo(calculated.BufferSize);
 
         // Assert - every module matches the class-based API
-        var qrCode = CreateQrCode(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
-        await Assert.That(qrCode.Size).IsEqualTo(calculated.QrSize);
+        var qrCode = Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
+        await Assert.That(qrCode.Size).IsEqualTo(calculated.Size);
         for (var row = 0; row < qrCode.Size; row++)
         {
             for (var col = 0; col < qrCode.Size; col++)
             {
-                await Assert.That(buffer[row * calculated.QrSize + col] != 0).IsEqualTo(qrCode[row, col]);
+                await Assert.That(buffer[row * calculated.Size + col] != 0).IsEqualTo(qrCode[row, col]);
             }
         }
     }
@@ -560,15 +560,15 @@ public class QRCodeGeneratorUnitTest
     [Arguments(2)]
     [Arguments(7)]
     [Arguments(40)]
-    public async Task CreateQrCode_SpanDestination_RequestedVersion_MatchesQRCodeData(int requestedVersion)
+    public async Task Create_SpanDestination_RequestedVersion_MatchesQRCodeData(int requestedVersion)
     {
         var text = "https://example.com/foobar";
         var quietZoneSize = 4;
-        var qrCode = CreateQrCode(text.AsSpan(), ECCLevel.L, new QRCodeGeneratorOptions { Version = requestedVersion, QuietZoneSize = quietZoneSize });
+        var qrCode = Create(text.AsSpan(), QREccLevel.L, new QRCodeGeneratorOptions { Version = requestedVersion, QuietZoneSize = quietZoneSize });
         var buffer = new byte[qrCode.Size * qrCode.Size];
 
         // Act
-        var written = CreateQrCode(text.AsSpan(), ECCLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { Version = requestedVersion, QuietZoneSize = quietZoneSize });
+        var written = Create(text.AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { Version = requestedVersion, QuietZoneSize = quietZoneSize });
 
         // Assert
         await Assert.That(written).IsEqualTo(qrCode.Size * qrCode.Size);
@@ -582,33 +582,33 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    public async Task CreateQrCode_SpanDestination_BufferTooSmall_Throws()
+    public async Task Create_SpanDestination_BufferTooSmall_Throws()
     {
         var text = "https://example.com/foobar";
-        var calculated = Sizing.Required(text.AsSpan(), ECCLevel.L);
+        var calculated = Sizing.Required(text.AsSpan(), QREccLevel.L);
         var buffer = new byte[calculated.BufferSize - 1];
 
-        var ex = Assert.Throws<ArgumentException>(() => CreateQrCode(text.AsSpan(), ECCLevel.L, buffer.AsSpan()));
+        var ex = Assert.Throws<ArgumentException>(() => Create(text.AsSpan(), QREccLevel.L, buffer.AsSpan()));
         await Assert.That(ex.Message).Contains($"{calculated.BufferSize} bytes required");
     }
 
     [Test]
-    public async Task CreateQrCode_SpanDestination_DirtyOversizedBuffer_WritesCleanOutputAndLeavesTailUntouched()
+    public async Task Create_SpanDestination_DirtyOversizedBuffer_WritesCleanOutputAndLeavesTailUntouched()
     {
         var text = "HELLO WORLD";
         var quietZoneSize = 4;
-        var calculated = Sizing.Required(text.AsSpan(), ECCLevel.L, quietZoneSize);
+        var calculated = Sizing.Required(text.AsSpan(), QREccLevel.L, quietZoneSize);
 
         // Simulate a dirty pooled buffer, larger than required
         var buffer = new byte[calculated.BufferSize + 100];
         buffer.AsSpan().Fill(0xFF);
 
         // Act
-        var written = CreateQrCode(text.AsSpan(), ECCLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
+        var written = Create(text.AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
         // Assert - written region contains only 0/1 and the quiet zone is light
         await Assert.That(written).IsEqualTo(calculated.BufferSize);
-        var qrSize = calculated.QrSize;
+        var qrSize = calculated.Size;
         for (var row = 0; row < qrSize; row++)
         {
             for (var col = 0; col < qrSize; col++)
@@ -656,18 +656,18 @@ public class QRCodeGeneratorUnitTest
 
     [Test]
     [MethodDataSource(nameof(DirtyDestinationCases))]
-    public async Task CreateQrCode_SpanDestination_DirtyBuffer_MatchesCleanBuffer_AllQuietZones(string text, int quietZone)
+    public async Task Create_SpanDestination_DirtyBuffer_MatchesCleanBuffer_AllQuietZones(string text, int quietZone)
     {
-        var calculated = Sizing.Required(text.AsSpan(), ECCLevel.M, quietZone);
+        var calculated = Sizing.Required(text.AsSpan(), QREccLevel.M, quietZone);
         var clean = new byte[calculated.BufferSize];
-        var written = CreateQrCode(text.AsSpan(), ECCLevel.M, clean, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
+        var written = Create(text.AsSpan(), QREccLevel.M, clean, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
         await Assert.That(written).IsEqualTo(calculated.BufferSize);
 
         foreach (var fill in new byte[] { 0xFF, 0xA5, 0x01 })
         {
             var dirty = new byte[calculated.BufferSize + 7];
             dirty.AsSpan().Fill(fill);
-            var writtenDirty = CreateQrCode(text.AsSpan(), ECCLevel.M, dirty, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            var writtenDirty = Create(text.AsSpan(), QREccLevel.M, dirty, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
             await Assert.That(writtenDirty).IsEqualTo(written);
             await Assert.That(dirty.AsSpan(0, written).SequenceEqual(clean)).IsTrue()
                 .Because($"dirty fill 0x{fill:X2}, quiet zone {quietZone}, version {calculated.Version} must reproduce the clean matrix byte for byte");
@@ -679,13 +679,13 @@ public class QRCodeGeneratorUnitTest
         // agree with the span path module for module. Poison the pool bucket the generator
         // will rent (same length, returned dirty) so a fresh pool cannot hide an unwritten
         // module.
-        var coreSize = calculated.QrSize - 2 * quietZone;
+        var coreSize = calculated.Size - 2 * quietZone;
         var poison = System.Buffers.ArrayPool<byte>.Shared.Rent(coreSize * coreSize);
         poison.AsSpan().Fill(0xFF);
         System.Buffers.ArrayPool<byte>.Shared.Return(poison, clearArray: false);
-        var data = CreateQrCode(text.AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
+        var data = Create(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
         await Assert.That(data.Version).IsEqualTo(calculated.Version);
-        var side = calculated.QrSize;
+        var side = calculated.Size;
         for (var row = 0; row < side; row++)
             for (var col = 0; col < side; col++)
                 if (data[row, col] != (clean[row * side + col] != 0))
@@ -693,16 +693,16 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    public async Task CreateQrCode_SpanDestination_StringOverload_MatchesSpanOverload()
+    public async Task Create_SpanDestination_StringOverload_MatchesSpanOverload()
     {
         var text = "https://example.com/foobar";
-        var calculated = Sizing.Required(text.AsSpan(), ECCLevel.M);
+        var calculated = Sizing.Required(text.AsSpan(), QREccLevel.M);
         var bufferFromString = new byte[calculated.BufferSize];
         var bufferFromSpan = new byte[calculated.BufferSize];
 
         // Act
-        var writtenFromString = CreateQrCode(text, ECCLevel.M, bufferFromString.AsSpan());
-        var writtenFromSpan = CreateQrCode(text.AsSpan(), ECCLevel.M, bufferFromSpan.AsSpan());
+        var writtenFromString = Create(text, QREccLevel.M, bufferFromString.AsSpan());
+        var writtenFromSpan = Create(text.AsSpan(), QREccLevel.M, bufferFromSpan.AsSpan());
 
         // Assert
         await Assert.That(writtenFromString).IsEqualTo(writtenFromSpan);
@@ -714,21 +714,21 @@ public class QRCodeGeneratorUnitTest
     // SIMD ECC kernel that the optimizing JIT eliminates; the zero-allocation
     // guarantee applies to shipped (Release) binaries.
     [Test]
-    public async Task CreateQrCode_SpanDestination_DoesNotAllocate()
+    public async Task Create_SpanDestination_DoesNotAllocate()
     {
         var text = "https://example.com/foobar";
-        var buffer = new byte[Sizing.Required(text.AsSpan(), ECCLevel.M).BufferSize];
+        var buffer = new byte[Sizing.Required(text.AsSpan(), QREccLevel.M).BufferSize];
 
         // Warm up JIT, ArrayPool and lazily-built static tables
         for (var i = 0; i < 3; i++)
         {
-            Sizing.Required(text.AsSpan(), ECCLevel.M);
-            CreateQrCode(text.AsSpan(), ECCLevel.M, buffer.AsSpan());
+            Sizing.Required(text.AsSpan(), QREccLevel.M);
+            Create(text.AsSpan(), QREccLevel.M, buffer.AsSpan());
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
-        Sizing.Required(text.AsSpan(), ECCLevel.M);
-        CreateQrCode(text.AsSpan(), ECCLevel.M, buffer.AsSpan());
+        Sizing.Required(text.AsSpan(), QREccLevel.M);
+        Create(text.AsSpan(), QREccLevel.M, buffer.AsSpan());
         var after = GC.GetAllocatedBytesForCurrentThread();
 
         await Assert.That(after - before).IsEqualTo(0);
@@ -738,26 +738,26 @@ public class QRCodeGeneratorUnitTest
     [Test]
     [Arguments(0)]
     [Arguments(41)]
-    public async Task CreateQrCode_SpanDestination_InvalidVersion_Throws(int requestedVersion)
+    public async Task Create_SpanDestination_InvalidVersion_Throws(int requestedVersion)
     {
         var buffer = new byte[64 * 64];
-        Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { Version = requestedVersion }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Create("HELLO".AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { Version = requestedVersion }));
     }
 
     [Test]
-    public async Task CreateQrCode_SpanDestination_NegativeQuietZone_Throws()
+    public async Task Create_SpanDestination_NegativeQuietZone_Throws()
     {
         var buffer = new byte[64 * 64];
-        Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Create("HELLO".AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = -1 }));
     }
 
     [Test]
     [Arguments(40_000)]        // totalSize fits in int, but totalSize繝ｻ繧托ｽｽ・ｲ overflows
     [Arguments(int.MaxValue)]  // totalSize itself exceeds int.MaxValue
-    public async Task CreateQrCode_SpanDestination_OversizedQuietZone_Throws(int quietZoneSize)
+    public async Task Create_SpanDestination_OversizedQuietZone_Throws(int quietZoneSize)
     {
         var buffer = new byte[64 * 64];
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }));
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => Create("HELLO".AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }));
         await Assert.That(ex.ParamName).IsEqualTo("quietZoneSize");
     }
 
@@ -769,7 +769,7 @@ public class QRCodeGeneratorUnitTest
     {
         // An argument error, not a "does not fit": the Try shape reports the second as
         // false and keeps throwing for the first.
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.TryGetRequiredBufferSize("HELLO".AsSpan(), ECCLevel.L, out _, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }));
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.TryGetRequiredBufferSize("HELLO".AsSpan(), QREccLevel.L, out _, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }));
         await Assert.That(ex.ParamName).IsEqualTo("quietZoneSize");
     }
 

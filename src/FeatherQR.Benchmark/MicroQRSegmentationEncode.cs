@@ -53,12 +53,12 @@ public class MicroQRSegmentationEncode
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), MicroQREccLevel.L, _spanDestination);
+        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), MicroQREccLevel.L, _spanDestination, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
     }
 }

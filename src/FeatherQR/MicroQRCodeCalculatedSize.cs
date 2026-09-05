@@ -9,7 +9,7 @@ public readonly struct MicroQRCodeCalculatedSize
     internal MicroQRCodeCalculatedSize(int bufferSize, int qrSize, MicroQRVersion version)
     {
         BufferSize = bufferSize;
-        QrSize = qrSize;
+        Size = qrSize;
         Version = version;
     }
 
@@ -17,7 +17,7 @@ public readonly struct MicroQRCodeCalculatedSize
     public int BufferSize { get; }
 
     /// <summary>Matrix side length in modules, quiet zone included.</summary>
-    public int QrSize { get; }
+    public int Size { get; }
 
     /// <summary>The Micro QR version that will be produced.</summary>
     public MicroQRVersion Version { get; }

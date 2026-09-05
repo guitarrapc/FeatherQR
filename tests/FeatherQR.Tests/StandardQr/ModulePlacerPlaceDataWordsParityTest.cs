@@ -1,4 +1,4 @@
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals;
 
 namespace FeatherQR.Tests;

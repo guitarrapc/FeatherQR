@@ -2,7 +2,7 @@ namespace FeatherQR;
 
 /// <summary>
 /// Micro QR Code error correction level (ISO/IEC 18004). Micro QR levels differ
-/// from Standard QR <see cref="ECCLevel"/>: version M1 supports error detection
+/// from Standard QR <see cref="QREccLevel"/>: version M1 supports error detection
 /// only, and level H does not exist.
 /// </summary>
 public enum MicroQREccLevel

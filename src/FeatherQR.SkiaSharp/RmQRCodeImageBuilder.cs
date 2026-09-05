@@ -1,4 +1,5 @@
 using SkiaSharp;
+using FeatherQR.SkiaSharp.Internals;
 using System.Buffers;
 
 namespace FeatherQR.SkiaSharp;
@@ -15,8 +16,8 @@ namespace FeatherQR.SkiaSharp;
 /// is the 2 modules the specification requires.
 /// </para>
 /// <para>
-/// rMQR symbols are rectangular. With <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize"/>
-/// the image is exactly the matrix at that scale; with <see cref="QRCodeImageBuilderBase{TSelf}.WithSize"/>
+/// rMQR symbols are rectangular. With <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/>
+/// the image is exactly the matrix at that scale; with <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/>
 /// the symbol is fitted into the canvas with a uniform module scale and centered
 /// (letterbox, never stretched); with <see cref="WithWidth"/> (the static helpers'
 /// <c>size</c>, and the 512-pixel default when nothing is configured) the image is
@@ -33,8 +34,8 @@ namespace FeatherQR.SkiaSharp;
 /// </para>
 /// </remarks>
 /// <seealso cref="RmQRCodeGenerator"/>
-/// <seealso cref="QRCodeRenderer"/>
-public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
+/// <seealso cref="SymbolRenderer"/>
+public class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
 {
     private const int DefaultWidth = 512;
 
@@ -450,8 +451,8 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     /// ratio (rounded to whole pixels), the background covers the whole image and
     /// the symbol is drawn at a uniform module scale inside it. This is the static
     /// helpers' sizing rule and the default (512) when no size is configured.
-    /// <see cref="QRCodeImageBuilderBase{TSelf}.WithSize"/> (letterbox into an exact
-    /// canvas) or <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize"/>
+    /// <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> (letterbox into an exact
+    /// canvas) or <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/>
     /// (exact matrix) take precedence when also called.
     /// </summary>
     /// <param name="width">Image width in pixels (must be positive).</param>
@@ -470,7 +471,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), _eccLevel, new RmQRCodeGeneratorOptions
+        var data = _data ?? RmQRCodeGenerator.Create(_content.AsSpan(), _eccLevel, new RmQRCodeGeneratorOptions
         {
             EciMode = _eciMode,
             Version = _requestedVersion,
@@ -486,7 +487,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
 
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
-        QRCodeRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
+        SymbolRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
     }
 
     /// <summary>rMQR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>

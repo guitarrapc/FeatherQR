@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package. The `SkiaSharp.QrCode` install line keeps working. Previews are out; the type renames and the announced removals follow in the same major |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, and one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script). The `SkiaSharp.QrCode` install line keeps working |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -20,7 +20,7 @@ The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-f
 | Package | Contents | Depends on |
 |---|---|---|
 | `FeatherQR` | Generators, decoders, data types, options, `GetModuleRectangles` | nothing on .NET 8+; `System.Memory` / `System.Runtime.CompilerServices.Unsafe` on .NET Standard |
-| `FeatherQR.SkiaSharp` | Image builders, `QRCodeRenderer`, `SKCanvas` extensions, `IconData` and shapes, `SKBitmap` decoding | `FeatherQR`, `SkiaSharp` |
+| `FeatherQR.SkiaSharp` | Image builders, `SymbolRenderer`, `SKCanvas` extensions, `IconData` and shapes, `SKBitmap` decoding | `FeatherQR`, `SkiaSharp` |
 | `SkiaSharp.QrCode` | Nothing. A compatibility metapackage | `FeatherQR.SkiaSharp` |
 
 An existing `<PackageReference Include="SkiaSharp.QrCode" />` keeps working: it now resolves `FeatherQR.SkiaSharp` and `FeatherQR` transitively. Switch the reference to `FeatherQR.SkiaSharp` when convenient, or to `FeatherQR` alone if you never render images. All three ship at the same version from the same release.
@@ -34,7 +34,7 @@ The root namespace `SkiaSharp.QrCode` is gone from the assemblies, and `SkiaShar
 | `using SkiaSharp.QrCode;` | `using FeatherQR;` |
 | `using SkiaSharp.QrCode.Image;` | `using FeatherQR.SkiaSharp;` |
 
-Type names are unchanged in this step. Inside your own `namespace FeatherQR.Something` a bare `SkiaSharp` would bind to `FeatherQR.SkiaSharp`; put `using SkiaSharp;` above the namespace declaration, as usual, and nothing changes.
+Type names change too, under [Renames](#renames) below. Inside your own `namespace FeatherQR.Something` a bare `SkiaSharp` would bind to `FeatherQR.SkiaSharp`; put `using SkiaSharp;` above the namespace declaration, as usual, and nothing changes.
 
 ### `TryDecode(SKBitmap)` moved
 
@@ -63,14 +63,14 @@ The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width
 The members deprecated in 1.2.0 are gone, and so are the parameter list generator overloads that shipped in 1.1.1. Every generator now takes its configuration as one options struct, and that struct has a default, so the shortest call is unchanged:
 
 ```csharp
-// unchanged, and now the only shape
-var data = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
+// the only shape, and the shortest call is still two arguments
+var data = QRCodeGenerator.Create("content", QREccLevel.M);
 ```
 
 | Removed | Replacement |
 |---|---|
-| `CreateQrCode(text, ecc, utf8BOM, eciMode, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `CreateQrCode(text, ecc, in QRCodeGeneratorOptions)` |
-| `CreateMicroQRCode(text, ecc, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `CreateMicroQRCode(text, ecc, in MicroQRCodeGeneratorOptions)` |
+| `CreateQrCode(text, ecc, utf8BOM, eciMode, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `Create(text, ecc, in QRCodeGeneratorOptions)` |
+| `CreateMicroQRCode(text, ecc, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `Create(text, ecc, in MicroQRCodeGeneratorOptions)` |
 | `QRCodeGenerator.GetRequiredBufferSize`, `MicroQRCodeGenerator.GetRequiredBufferSize` | `TryGetRequiredBufferSize` on all three generators |
 | `Compression` | Nothing. No API ever accepted or returned it; compress the bytes from `GetRawData()` yourself |
 
@@ -80,10 +80,10 @@ Each argument becomes a property, and the mapping is mechanical:
 // before
 var data = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, utf8BOM: true, eciMode: EciMode.Utf8, requestedVersion: 5, quietZoneSize: 0);
 
-// after
-var data = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, new QRCodeGeneratorOptions
+// after (the renames below land in the same release)
+var data = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions
 {
-    Utf8BOM = true,
+    Utf8Bom = true,
     EciMode = EciMode.Utf8,
     Version = 5,
     QuietZoneSize = 0,
@@ -92,25 +92,75 @@ var data = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, new QRCodeGeneratorOpt
 
 | Argument | Property |
 |---|---|
-| `utf8BOM` | `Utf8BOM` |
+| `utf8BOM` | `Utf8Bom` |
 | `eciMode` | `EciMode` |
 | `quietZoneSize` | `QuietZoneSize` |
 | `requestedVersion` (Standard QR, `int`) | `Version` |
 | `requestedVersion` (Micro QR, `MicroQRVersion?`) | `Version` |
 
-**One trap: `requestedVersion: -1` is not `Version = -1`.** The parameter list spelled "pick the smallest version that fits" as `-1`; `QRCodeVersionRange` spells it `Any` and rejects `-1` deliberately, so that a defaulted or mistyped field cannot pass for automatic selection. A variable that may hold `-1` needs the branch:
+**One trap: `requestedVersion: -1` is not `Version = -1`.** The parameter list spelled "pick the smallest version that fits" as `-1`; `QRVersionRange` spells it `Any` and rejects `-1` deliberately, so that a defaulted or mistyped field cannot pass for automatic selection. A variable that may hold `-1` needs the branch:
 
 ```csharp
-Version = version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(version),
+Version = version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(version),
 ```
 
 Micro QR's `null` needs no branch: `MicroQRVersion?` converts implicitly, and `null` means `Any`.
 
 **A pinned version is checked against the content**, which the parameter list did not do: `Version = 1` with content that does not fit version 1 throws an `ArgumentException` naming the version, ECC level and mode, where `requestedVersion: 1` used to fail deeper inside the encoder with `ArgumentOutOfRangeException (Parameter 'length')`.
 
-### Not yet in the 2.0.0 previews
+### Renames
 
-The type renames (the `QR` casing rule, `ECCLevel` to `QREccLevel` and friends) land in the same major before 2.0.0 final, and will be documented in this section when they do.
+One rule decides every public name: **a prefix says which symbology (`QR`, `MicroQR`, `RmQR`), and no prefix means all three**. A noun that literally denotes *a code* keeps its `{Sym}Code` form, so `QRCodeData`, `QRCodeGenerator`, `QRCodeDecoder`, `QRCodeGeneratorOptions`, `QRCodeCalculatedSize`, `QRCodeDecodeInfo`, `QRCodeImageBuilder` and their Micro QR and rMQR siblings are unchanged. What moved is everything else.
+
+| 1.x | 2.0.0 |
+|---|---|
+| `ECCLevel` | `QREccLevel` |
+| `QRCodeSegmentation` | `QRSegmentation` |
+| `QRCodeVersionRange` | `QRVersionRange` |
+| `QRCodeDecodeStatus` | `DecodeStatus` |
+| `QRCodeGenerator.CreateQrCode` | `QRCodeGenerator.Create` |
+| `MicroQRCodeGenerator.CreateMicroQRCode` | `MicroQRCodeGenerator.Create` |
+| `RmQRCodeGenerator.CreateRmQRCode` | `RmQRCodeGenerator.Create` |
+| `QRCodeCalculatedSize.QrSize`, `MicroQRCodeCalculatedSize.QrSize` | `.Size` |
+| `QRCodeGeneratorOptions.Utf8BOM` | `.Utf8Bom` |
+| `QRCodeRenderer` | `SymbolRenderer` |
+| `QRCodeImageBuilderBase<TSelf>` | `SymbolImageBuilderBase<TSelf>` |
+| `QRCodeExtensions` | `SKCanvasExtensions` |
+| `Vector2Slim` | Removed from the public surface (it appeared in no public signature) |
+
+`DecodeStatus`, `SymbolRenderer` and `SymbolImageBuilderBase<TSelf>` lost their prefix because they serve all three symbologies; `QRCodeExtensions` is named after the type it extends, as the BCL does. The `Create` methods dropped the part that repeated the class name, which is also what removes the `Qr` / `QR` casing inconsistency they carried.
+
+Every rename is a whole-word replacement, in this order (the `Core` suffixes and the longer names must go first):
+
+```shell
+# bash, from your repository root; adjust the file glob to taste
+grep -rlZ --include='*.cs' -e ECCLevel -e QRCode -e CreateQrCode -e CreateMicroQRCode -e CreateRmQRCode -e QrSize -e Utf8BOM . \
+  | xargs -0 sed -i \
+    -e 's/\bCreateQrCode\b/Create/g' \
+    -e 's/\bCreateMicroQRCode\b/Create/g' \
+    -e 's/\bCreateRmQRCode\b/Create/g' \
+    -e 's/\bQRCodeSegmentation\b/QRSegmentation/g' \
+    -e 's/\bQRCodeVersionRange\b/QRVersionRange/g' \
+    -e 's/\bQRCodeDecodeStatus\b/DecodeStatus/g' \
+    -e 's/\bECCLevel\b/QREccLevel/g' \
+    -e 's/\bQrSize\b/Size/g' \
+    -e 's/\bUtf8BOM\b/Utf8Bom/g' \
+    -e 's/\bQRCodeRenderer\b/SymbolRenderer/g' \
+    -e 's/\bQRCodeImageBuilderBase\b/SymbolImageBuilderBase/g' \
+    -e 's/\bQRCodeExtensions\b/SKCanvasExtensions/g'
+```
+
+Two cautions if you run it as-is. It rewrites `ECCLevel` wherever it appears, so a file that also uses **QRCoder**'s `QRCodeGenerator.ECCLevel` needs that one put back. And it is a rename script, not a migration script: it does not perform the [announced removals](#the-announced-removals) above, which the compiler will point at.
+
+### The `string` overloads are gone
+
+`Create` takes `ReadOnlySpan<char>`. The `string` overloads were removed because `string` converts to `ReadOnlySpan<char>` implicitly on every target framework, so the calls that used them keep compiling:
+
+```csharp
+var data = QRCodeGenerator.Create("https://example.com", QREccLevel.M);   // unchanged
+```
+
+The one spelling that needs an edit is a named argument: `plainText:` becomes `textSpan:`. A null `string` behaves as it always did — the removed overload called `AsSpan()` on it, which is null-safe, so null encodes an empty symbol on both sides of the upgrade.
 
 ## 1.2.0
 

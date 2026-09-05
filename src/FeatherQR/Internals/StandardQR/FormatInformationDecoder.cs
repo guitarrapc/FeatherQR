@@ -1,4 +1,4 @@
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Decodes the 15-bit format information (ECC level + mask pattern).
@@ -25,7 +25,7 @@ internal static class FormatInformationDecoder
         {
             for (var mask = 0; mask < 8; mask++)
             {
-                table[level * 8 + mask] = QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
+                table[level * 8 + mask] = QRCodeConstants.GetFormatBits((QREccLevel)level, mask);
             }
         }
         return table;
@@ -39,7 +39,7 @@ internal static class FormatInformationDecoder
     /// <param name="eccLevel">Decoded error correction level.</param>
     /// <param name="maskPattern">Decoded mask pattern (0-7).</param>
     /// <returns>False when neither copy is within correction distance of a valid pattern.</returns>
-    public static bool TryDecode(ushort rawCopy1, ushort rawCopy2, out ECCLevel eccLevel, out int maskPattern)
+    public static bool TryDecode(ushort rawCopy1, ushort rawCopy2, out QREccLevel eccLevel, out int maskPattern)
     {
         // Prefer the copy with the smaller best-distance; each copy is an
         // independent BCH codeword, so distances must not be mixed across copies.
@@ -56,7 +56,7 @@ internal static class FormatInformationDecoder
             return false;
         }
 
-        eccLevel = (ECCLevel)(best >> 3);
+        eccLevel = (QREccLevel)(best >> 3);
         maskPattern = best & 7;
         return true;
     }

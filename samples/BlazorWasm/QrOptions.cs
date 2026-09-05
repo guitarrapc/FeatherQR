@@ -14,7 +14,7 @@ public sealed class QrOptions
     /// <summary>Symbology: Standard QR (versions 1-40), Micro QR (M1-M4) or rMQR (R7x43-R17x139).</summary>
     public SymbologyKind Symbology { get; set; } = SymbologyKind.QrCode;
     /// <summary>Error correction level. H is recommended when a logo overlays the code.</summary>
-    public ECCLevel Ecc { get; set; } = ECCLevel.H;
+    public QREccLevel Ecc { get; set; } = QREccLevel.H;
     /// <summary>Micro QR error correction level (M1 supports error detection only).</summary>
     public MicroQREccLevel MicroEcc { get; set; } = MicroQREccLevel.M;
     /// <summary>rMQR error correction level (M or H).</summary>

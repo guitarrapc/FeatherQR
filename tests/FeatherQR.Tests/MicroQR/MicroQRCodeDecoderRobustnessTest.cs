@@ -62,8 +62,8 @@ public class MicroQRCodeDecoderRobustnessTest
     {
         var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: 0);
         var modules = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
-        size = calculated.QrSize;
+        MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        size = calculated.Size;
         return modules;
     }
 
@@ -105,7 +105,7 @@ public class MicroQRCodeDecoderRobustnessTest
         var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DataUncorrectable);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
     }
 
     // errors > ⌊ecc/2⌋: Reed-Solomon decoding itself fails.
@@ -120,7 +120,7 @@ public class MicroQRCodeDecoderRobustnessTest
         var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DataUncorrectable);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
     }
 
     [Test]
@@ -134,7 +134,7 @@ public class MicroQRCodeDecoderRobustnessTest
         var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DataUncorrectable);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
     }
 
     [Test]
@@ -170,7 +170,7 @@ public class MicroQRCodeDecoderRobustnessTest
         var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.FormatInformationInvalid);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.FormatInformationInvalid);
     }
 
     [Test]
@@ -184,7 +184,7 @@ public class MicroQRCodeDecoderRobustnessTest
         var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.FormatInformationInvalid);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.FormatInformationInvalid);
     }
 
     [Test]
@@ -203,12 +203,12 @@ public class MicroQRCodeDecoderRobustnessTest
             {
                 var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
                 var modules = new byte[calculated.BufferSize];
-                MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
+                MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
-                var success = QRCodeDecoder.TryDecode(modules, calculated.QrSize, out _, out var info);
+                var success = QRCodeDecoder.TryDecode(modules, calculated.Size, out _, out var info);
 
                 await Assert.That(success).IsFalse();
-                await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+                await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
             }
         }
     }
@@ -219,7 +219,7 @@ public class MicroQRCodeDecoderRobustnessTest
         // Standard QR v1 (21×21) bare and with quiet zone; 21 is not a Micro QR size.
         foreach (var quietZone in (int[])[0, 4])
         {
-            var qr = QRCodeGenerator.CreateQrCode("HELLO WORLD", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            var qr = QRCodeGenerator.Create("HELLO WORLD", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
             var size = qr.GetCoreSize() + quietZone * 2;
             var modules = new byte[size * size];
             for (var row = 0; row < size; row++)
@@ -233,7 +233,7 @@ public class MicroQRCodeDecoderRobustnessTest
             var success = MicroQRCodeDecoder.TryDecode(modules, size, out _, out var info);
 
             await Assert.That(success).IsFalse();
-            await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+            await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
         }
     }
 

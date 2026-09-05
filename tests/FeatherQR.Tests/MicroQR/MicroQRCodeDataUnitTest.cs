@@ -5,7 +5,7 @@ public class MicroQRCodeDataUnitTest
     [Test]
     public async Task GetRawData_RoundTripsThroughConstructor()
     {
-        var original = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 2 });
+        var original = MicroQRCodeGenerator.Create("01234567", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 2 });
         var raw = original.GetRawData();
 
         var restored = new MicroQRCodeData(raw, quietZoneSize: 2);
@@ -27,7 +27,7 @@ public class MicroQRCodeDataUnitTest
     [Test]
     public async Task GetRawData_HeaderIsQrxWithSymbolTypeAndDimensions()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
         var raw = data.GetRawData();
 
         await Assert.That(raw.Length).IsEqualTo(data.GetRawDataSize());
@@ -44,7 +44,7 @@ public class MicroQRCodeDataUnitTest
     [Test]
     public async Task Constructor_RejectsInvalidHeader()
     {
-        var valid = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L).GetRawData();
+        var valid = MicroQRCodeGenerator.Create("123", MicroQREccLevel.L).GetRawData();
 
         var badMagic = (byte[])valid.Clone();
         badMagic[2] = (byte)'R';
@@ -75,7 +75,7 @@ public class MicroQRCodeDataUnitTest
     [Test]
     public async Task Constructor_Deserialize_RejectsInvalidQuietZone()
     {
-        var raw = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L).GetRawData();
+        var raw = MicroQRCodeGenerator.Create("123", MicroQREccLevel.L).GetRawData();
 
         await Assert.That(() => new MicroQRCodeData(raw, -1)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => new MicroQRCodeData(raw, 10_001)).Throws<ArgumentOutOfRangeException>();
@@ -108,7 +108,7 @@ public class MicroQRCodeDataUnitTest
     [Test]
     public async Task Indexer_QuietZoneReadsLightAndOutOfRangeThrows()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 3 });
+        var data = MicroQRCodeGenerator.Create("123", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 3 });
 
         await Assert.That(data.Size).IsEqualTo(13 + 6);
         await Assert.That(data[0, 0]).IsFalse();          // quiet zone

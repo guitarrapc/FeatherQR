@@ -92,7 +92,7 @@ public class ModuleBitPackerParityTest
     {
         foreach (var version in Enum.GetValues<RmQRVersion>())
         {
-            var n = Internals.RmQr.RmQRConstants.GetWidth(version) * Internals.RmQr.RmQRConstants.GetHeight(version);
+            var n = Internals.RmQR.RmQRConstants.GetWidth(version) * Internals.RmQR.RmQRConstants.GetHeight(version);
             var modules = PseudoRandom(n, (int)version, 0x01);
             var bits = new byte[(n + 7) / 8];
             ModuleBitPacker.Pack(modules, bits);

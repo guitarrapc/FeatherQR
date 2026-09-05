@@ -52,7 +52,7 @@ public static class RmQRCapacityProbe
                 var text = "R" + (int)version; // 2-3 alphanumeric chars: fits every version × ECC
                 var size = Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
                 var pristine = new byte[size.BufferSize];
-                RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, pristine, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
+                RmQRCodeGenerator.Create(text.AsSpan(), ecc, pristine, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
 
                 var damaged = (byte[])pristine.Clone();
                 var saturation = Saturate(damaged, size.Width, size.Height, text);

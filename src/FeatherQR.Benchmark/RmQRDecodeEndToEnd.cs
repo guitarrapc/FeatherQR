@@ -40,10 +40,10 @@ public class RmQRDecodeEndToEnd
         _numericDamagedModules = Damage(_numericModules, _numericSize, RmQRVersion.R7x43, flips: 2, seed: 17);
         _byteDamagedModules = Damage(_byteModules, _byteSize, RmQRVersion.R17x139, flips: 6, seed: 23);
 
-        var calculated = Sizing.Required("012345678901", ECCLevel.L, 0);
+        var calculated = Sizing.Required("012345678901", QREccLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
-        FeatherQR.QRCodeGenerator.CreateQrCode("012345678901", ECCLevel.L, _standardModules, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
-        _standardSize = calculated.QrSize;
+        FeatherQR.QRCodeGenerator.Create("012345678901", QREccLevel.L, _standardModules, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        _standardSize = calculated.Size;
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
 
@@ -176,7 +176,7 @@ public class RmQRDecodeEndToEnd
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         var buffer = new byte[calculated.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), eccLevel, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        RmQRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         return (buffer, (calculated.Width, calculated.Height));
     }
 }

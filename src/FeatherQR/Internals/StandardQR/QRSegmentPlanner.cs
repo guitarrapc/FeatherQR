@@ -1,10 +1,10 @@
 using System.Buffers;
 using System.Diagnostics;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Mixed-mode segmentation for <see cref="QRCodeSegmentation.Optimal"/>: the split of
+/// Mixed-mode segmentation for <see cref="QRSegmentation.Optimal"/>: the split of
 /// the content into Numeric / Alphanumeric / Byte runs whose total bit cost is
 /// minimal for a given version, and the version fit that follows from it.
 /// </summary>
@@ -55,7 +55,7 @@ internal static class QRSegmentPlanner
     /// <paramref name="minVersion"/> through <paramref name="maxVersion"/>. Returns
     /// the version to encode at and whether a mixed-mode plan is what makes it fit;
     /// when <paramref name="useSegments"/> is false the caller emits the ordinary
-    /// single-mode stream, bit-identical to <see cref="QRCodeSegmentation.Single"/>.
+    /// single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
     /// <c>false</c> means the content fits neither one mode nor a mixed plan in the
     /// window; the caller owns the error.
     /// </summary>
@@ -66,7 +66,7 @@ internal static class QRSegmentPlanner
     /// capacity grows monotonically inside a band, so the first version that holds
     /// the band cost is the smallest.
     /// </remarks>
-    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, ECCLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments)
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments)
     {
         useSegments = false;
         var charset = analysis.EciMode;
@@ -168,7 +168,7 @@ internal static class QRSegmentPlanner
     /// stream would not fit; the caller answers all four by falling back to the
     /// single-mode stream.
     /// </summary>
-    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, ECCLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
+    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
         segmentCount = 0;
         if (text.Length is 0 or > MaxPlannableChars)

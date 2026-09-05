@@ -1,6 +1,6 @@
 using System.Buffers;
 using FeatherQR.Internals.ImageDecoders;
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Internals.MicroQR;
 
@@ -45,13 +45,13 @@ internal static class MicroQRImageDecoder
     /// (light modules on a dark background) are handled by one inverted retry when
     /// the normal attempt fails.
     /// </summary>
-    public static QRCodeDecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
         {
             charsWritten = 0;
-            info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
-            return QRCodeDecodeStatus.NotDetected;
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+            return DecodeStatus.NotDetected;
         }
 
         luminance = luminance.Slice(0, pixelCount);
@@ -92,7 +92,7 @@ internal static class MicroQRImageDecoder
     /// about the symbol, and only the caller can ask it. See
     /// <see cref="FinderPatternFinder.FindCandidates"/>.
     /// </remarks>
-    private static QRCodeDecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
         // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
         // threshold is the single most expensive step of the whole failure path.
@@ -121,7 +121,7 @@ internal static class MicroQRImageDecoder
         return status;
     }
 
-    private static QRCodeDecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool fullSweep)
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool fullSweep)
     {
         charsWritten = 0;
 
@@ -131,8 +131,8 @@ internal static class MicroQRImageDecoder
             : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates);
         if (candidateCount == 0)
         {
-            info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
-            return QRCodeDecodeStatus.NotDetected;
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+            return DecodeStatus.NotDetected;
         }
 
         // Most-confirmed candidates first: repeated row hits separate real finder
@@ -152,8 +152,8 @@ internal static class MicroQRImageDecoder
 
         // The furthest-progressing failure is the most useful diagnostic: an attempt
         // that passed format decoding but failed RS says more than "not detected".
-        var bestStatus = QRCodeDecodeStatus.NotDetected;
-        var bestInfo = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
+        var bestStatus = DecodeStatus.NotDetected;
+        var bestInfo = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
 
         Span<byte> modules = stackalloc byte[17 * 17];
 
@@ -192,7 +192,7 @@ internal static class MicroQRImageDecoder
                     SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
 
                     var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
-                    if (status == QRCodeDecodeStatus.Success)
+                    if (status == DecodeStatus.Success)
                     {
                         info = attemptInfo;
                         return status;
@@ -203,7 +203,7 @@ internal static class MicroQRImageDecoder
                     // identical but the data grid is transposed.
                     TransposeInPlace(modules, size);
                     var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
-                    if (mirroredStatus == QRCodeDecodeStatus.Success)
+                    if (mirroredStatus == DecodeStatus.Success)
                     {
                         info = mirroredInfo;
                         return mirroredStatus;
@@ -229,7 +229,7 @@ internal static class MicroQRImageDecoder
                 out var rotatedInfo,
                 ref bestStatus,
                 ref bestInfo);
-            if (rotatedStatus == QRCodeDecodeStatus.Success)
+            if (rotatedStatus == DecodeStatus.Success)
             {
                 info = rotatedInfo;
                 return rotatedStatus;
@@ -248,7 +248,7 @@ internal static class MicroQRImageDecoder
     /// angular sweep therefore supplies the two grid-axis directions without the
     /// three finder centers available to Standard QR.
     /// </summary>
-    private static QRCodeDecodeStatus TryDecodeArbitraryOrientation(
+    private static DecodeStatus TryDecodeArbitraryOrientation(
         ReadOnlySpan<byte> luminance,
         int width,
         int height,
@@ -258,7 +258,7 @@ internal static class MicroQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out MicroQRCodeDecodeInfo info,
-        ref QRCodeDecodeStatus bestStatus,
+        ref DecodeStatus bestStatus,
         ref MicroQRCodeDecodeInfo bestInfo)
     {
         Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
@@ -297,7 +297,7 @@ internal static class MicroQRImageDecoder
                     SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
                     attemptsRemaining--;
                     var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
-                    if (status == QRCodeDecodeStatus.Success)
+                    if (status == DecodeStatus.Success)
                     {
                         info = attemptInfo;
                         return status;
@@ -310,7 +310,7 @@ internal static class MicroQRImageDecoder
                     TransposeInPlace(modules, size);
                     attemptsRemaining--;
                     var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
-                    if (mirroredStatus == QRCodeDecodeStatus.Success)
+                    if (mirroredStatus == DecodeStatus.Success)
                     {
                         info = mirroredInfo;
                         return mirroredStatus;
@@ -329,7 +329,7 @@ internal static class MicroQRImageDecoder
                         uX, uY, vX, vY, size, modules, destination,
                         out charsWritten, out var scaledInfo,
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (scaledStatus == QRCodeDecodeStatus.Success)
+                    if (scaledStatus == DecodeStatus.Success)
                     {
                         info = scaledInfo;
                         return scaledStatus;
@@ -354,7 +354,7 @@ internal static class MicroQRImageDecoder
                         ref bestStatus,
                         ref bestInfo,
                         ref attemptsRemaining);
-                    if (projectiveStatus == QRCodeDecodeStatus.Success)
+                    if (projectiveStatus == DecodeStatus.Success)
                     {
                         info = projectiveInfo;
                         return projectiveStatus;
@@ -372,7 +372,7 @@ internal static class MicroQRImageDecoder
     /// Refines the two local module scales independently around the pixel-quantized
     /// finder-run estimate while keeping the finder center fixed.
     /// </summary>
-    private static QRCodeDecodeStatus TryDecodeScaleVariants(
+    private static DecodeStatus TryDecodeScaleVariants(
         ReadOnlySpan<byte> luminance,
         int width,
         int height,
@@ -387,7 +387,7 @@ internal static class MicroQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out MicroQRCodeDecodeInfo info,
-        ref QRCodeDecodeStatus bestStatus,
+        ref DecodeStatus bestStatus,
         ref MicroQRCodeDecodeInfo bestInfo,
         ref int attemptsRemaining)
     {
@@ -428,7 +428,7 @@ internal static class MicroQRImageDecoder
                         SampleGrid(luminance, width, height, threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
                         attemptsRemaining--;
                         var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
-                        if (status == QRCodeDecodeStatus.Success)
+                        if (status == DecodeStatus.Success)
                         {
                             info = attemptInfo;
                             return status;
@@ -441,7 +441,7 @@ internal static class MicroQRImageDecoder
                         TransposeInPlace(modules, size);
                         attemptsRemaining--;
                         var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
-                        if (mirroredStatus == QRCodeDecodeStatus.Success)
+                        if (mirroredStatus == DecodeStatus.Success)
                         {
                             info = mirroredInfo;
                             return mirroredStatus;
@@ -463,7 +463,7 @@ internal static class MicroQRImageDecoder
     /// bounded Tier-2 range for those two values; matrix format and RS validation
     /// select the correct transform without image-specific heuristics.
     /// </summary>
-    private static QRCodeDecodeStatus TryDecodePerspectiveVariants(
+    private static DecodeStatus TryDecodePerspectiveVariants(
         ReadOnlySpan<byte> luminance,
         int width,
         int height,
@@ -479,7 +479,7 @@ internal static class MicroQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out MicroQRCodeDecodeInfo info,
-        ref QRCodeDecodeStatus bestStatus,
+        ref DecodeStatus bestStatus,
         ref MicroQRCodeDecodeInfo bestInfo,
         ref int attemptsRemaining)
     {
@@ -517,7 +517,7 @@ internal static class MicroQRImageDecoder
                 QRImageDecoder.SampleGrid(luminance, width, height, threshold, transform, size, modules);
                 attemptsRemaining--;
                 var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
-                if (status == QRCodeDecodeStatus.Success)
+                if (status == DecodeStatus.Success)
                 {
                     info = attemptInfo;
                     return status;
@@ -530,7 +530,7 @@ internal static class MicroQRImageDecoder
                 TransposeInPlace(modules, size);
                 attemptsRemaining--;
                 var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
-                if (mirroredStatus == QRCodeDecodeStatus.Success)
+                if (mirroredStatus == DecodeStatus.Success)
                 {
                     info = mirroredInfo;
                     return mirroredStatus;
@@ -549,7 +549,7 @@ internal static class MicroQRImageDecoder
     /// Wrong-grid samples overwhelmingly die at format decoding, so anything past
     /// it almost certainly hit the real grid.
     /// </summary>
-    private static void TrackBestFailure(QRCodeDecodeStatus status, in MicroQRCodeDecodeInfo attemptInfo, ref QRCodeDecodeStatus bestStatus, ref MicroQRCodeDecodeInfo bestInfo)
+    private static void TrackBestFailure(DecodeStatus status, in MicroQRCodeDecodeInfo attemptInfo, ref DecodeStatus bestStatus, ref MicroQRCodeDecodeInfo bestInfo)
     {
         if (Rank(status) > Rank(bestStatus))
         {
@@ -557,28 +557,28 @@ internal static class MicroQRImageDecoder
             bestInfo = attemptInfo;
         }
 
-        static int Rank(QRCodeDecodeStatus s) => s switch
+        static int Rank(DecodeStatus s) => s switch
         {
-            QRCodeDecodeStatus.NotDetected => 0,
-            QRCodeDecodeStatus.InvalidMatrix => 1,
-            QRCodeDecodeStatus.FormatInformationInvalid => 1,
+            DecodeStatus.NotDetected => 0,
+            DecodeStatus.InvalidMatrix => 1,
+            DecodeStatus.FormatInformationInvalid => 1,
             // The symbol was read (format + RS) and only the caller's buffer is short:
             // this outranks every other failure, so a wrong-size attempt that reaches RS
             // first — sizes are tried 17 down to 11 — cannot mask it. Matches the rMQR
             // decoder's ranking; without it M3-L reported DataUncorrectable for a short
             // buffer while every other version reported DestinationTooSmall.
-            QRCodeDecodeStatus.DestinationTooSmall => 3,
+            DecodeStatus.DestinationTooSmall => 3,
             _ => 2, // got past format decoding
         };
     }
 
-    private static bool IsPlausibleRefinement(QRCodeDecodeStatus status)
-        => status is not QRCodeDecodeStatus.NotDetected
-            and not QRCodeDecodeStatus.InvalidMatrix
-            and not QRCodeDecodeStatus.FormatInformationInvalid;
+    private static bool IsPlausibleRefinement(DecodeStatus status)
+        => status is not DecodeStatus.NotDetected
+            and not DecodeStatus.InvalidMatrix
+            and not DecodeStatus.FormatInformationInvalid;
 
-    private static bool IsTerminal(QRCodeDecodeStatus status)
-        => status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall;
+    private static bool IsTerminal(DecodeStatus status)
+        => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 
     /// <summary>
     /// All four grid corners must land inside the image (with one module of slack

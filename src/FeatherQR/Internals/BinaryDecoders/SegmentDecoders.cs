@@ -33,7 +33,7 @@ internal static class SegmentDecoders
     private const int KanjiBitsPerCharacter = 13;
 
     /// <summary>Decodes a numeric segment payload of <paramref name="count"/> digits.</summary>
-    public static QRCodeDecodeStatus DecodeNumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
+    public static DecodeStatus DecodeNumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
         // Bitstream sufficiency before destination sufficiency, as byte mode already
         // does. A count read off the wire can exceed what the remaining bits could
@@ -43,19 +43,19 @@ internal static class SegmentDecoders
         // read" — would stop the image decoder looking for the real symbol.
         // 3 digits per 10 bits, then 2 per 7 and 1 per 4: 10·(n/3) + the remainder's cost.
         if (totalBits - reader.BitPosition < 10 * (count / 3) + ((count % 3) switch { 2 => 7, 1 => 4, _ => 0 }))
-            return QRCodeDecodeStatus.InvalidBitstream;
+            return DecodeStatus.InvalidBitstream;
 
         if (destination.Length - charsWritten < count)
-            return QRCodeDecodeStatus.DestinationTooSmall;
+            return DecodeStatus.DestinationTooSmall;
 
         // Groups of 3 digits (10 bits), then 2 digits (7 bits) or 1 digit (4 bits)
         while (count >= 3)
         {
             if (totalBits - reader.BitPosition < 10)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(10);
             if (value > 999)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             destination[charsWritten++] = (char)('0' + value / 100);
             destination[charsWritten++] = (char)('0' + value / 10 % 10);
             destination[charsWritten++] = (char)('0' + value % 10);
@@ -64,45 +64,45 @@ internal static class SegmentDecoders
         if (count == 2)
         {
             if (totalBits - reader.BitPosition < 7)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(7);
             if (value > 99)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             destination[charsWritten++] = (char)('0' + value / 10);
             destination[charsWritten++] = (char)('0' + value % 10);
         }
         else if (count == 1)
         {
             if (totalBits - reader.BitPosition < 4)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(4);
             if (value > 9)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             destination[charsWritten++] = (char)('0' + value);
         }
 
-        return QRCodeDecodeStatus.Success;
+        return DecodeStatus.Success;
     }
 
     /// <summary>Decodes an alphanumeric segment payload of <paramref name="count"/> characters.</summary>
-    public static QRCodeDecodeStatus DecodeAlphanumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
+    public static DecodeStatus DecodeAlphanumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
         // Bitstream sufficiency first; see DecodeNumericPayload for why the order matters.
         // 2 characters per 11 bits, then 6 bits for an odd one.
         if (totalBits - reader.BitPosition < 11 * (count / 2) + (count % 2) * 6)
-            return QRCodeDecodeStatus.InvalidBitstream;
+            return DecodeStatus.InvalidBitstream;
 
         if (destination.Length - charsWritten < count)
-            return QRCodeDecodeStatus.DestinationTooSmall;
+            return DecodeStatus.DestinationTooSmall;
 
         // Pairs of characters (11 bits), then a single character (6 bits)
         while (count >= 2)
         {
             if (totalBits - reader.BitPosition < 11)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(11);
             if (value >= 45 * 45)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             destination[charsWritten++] = AlphanumericChars[value / 45];
             destination[charsWritten++] = AlphanumericChars[value % 45];
             count -= 2;
@@ -110,14 +110,14 @@ internal static class SegmentDecoders
         if (count == 1)
         {
             if (totalBits - reader.BitPosition < 6)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             var value = reader.Reads(6);
             if (value >= 45)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             destination[charsWritten++] = AlphanumericChars[value];
         }
 
-        return QRCodeDecodeStatus.Success;
+        return DecodeStatus.Success;
     }
 
     /// <summary>
@@ -131,14 +131,14 @@ internal static class SegmentDecoders
     /// replacement character, because a Kanji segment carries no redundancy of its
     /// own and a guessed character is indistinguishable from a correct one.
     /// </remarks>
-    public static QRCodeDecodeStatus DecodeKanjiPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
+    public static DecodeStatus DecodeKanjiPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
         // Bitstream sufficiency first; see DecodeNumericPayload for why the order matters.
         if (totalBits - reader.BitPosition < count * KanjiBitsPerCharacter)
-            return QRCodeDecodeStatus.InvalidBitstream;
+            return DecodeStatus.InvalidBitstream;
 
         if (destination.Length - charsWritten < count)
-            return QRCodeDecodeStatus.DestinationTooSmall;
+            return DecodeStatus.DestinationTooSmall;
 
         for (var i = 0; i < count; i++)
         {
@@ -151,14 +151,14 @@ internal static class SegmentDecoders
                 // The two get different statuses because they call for different things
                 // from the caller: discard the symbol, or hand it to a CP932 reader.
                 return ShiftJisKanjiTable.IsStructurallyValid(value)
-                    ? QRCodeDecodeStatus.UnmappedCharacter
-                    : QRCodeDecodeStatus.InvalidBitstream;
+                    ? DecodeStatus.UnmappedCharacter
+                    : DecodeStatus.InvalidBitstream;
             }
 
             destination[charsWritten++] = mapped;
         }
 
-        return QRCodeDecodeStatus.Success;
+        return DecodeStatus.Success;
     }
 
     /// <summary>
@@ -172,10 +172,10 @@ internal static class SegmentDecoders
     /// <param name="byteBuffer">Scratch buffer for the segment bytes; must hold at least <paramref name="count"/> bytes.</param>
     /// <param name="destination">Receives the decoded text.</param>
     /// <param name="charsWritten">How many characters <paramref name="destination"/> already holds. This call advances the count.</param>
-    public static QRCodeDecodeStatus DecodeBytePayload(ref BitReader reader, int totalBits, int count, ByteSegmentCharset charset, byte[] byteBuffer, Span<char> destination, ref int charsWritten)
+    public static DecodeStatus DecodeBytePayload(ref BitReader reader, int totalBits, int count, ByteSegmentCharset charset, byte[] byteBuffer, Span<char> destination, ref int charsWritten)
     {
         if (totalBits - reader.BitPosition < count * 8)
-            return QRCodeDecodeStatus.InvalidBitstream;
+            return DecodeStatus.InvalidBitstream;
         for (var i = 0; i < count; i++)
         {
             byteBuffer[i] = (byte)reader.Reads(8);
@@ -204,13 +204,13 @@ internal static class SegmentDecoders
         {
             // ISO-8859-1 → UTF-16 is a pure widening cast
             if (destination.Length - charsWritten < bytes.Length)
-                return QRCodeDecodeStatus.DestinationTooSmall;
+                return DecodeStatus.DestinationTooSmall;
             for (var i = 0; i < bytes.Length; i++)
             {
                 destination[charsWritten + i] = (char)bytes[i];
             }
             charsWritten += bytes.Length;
-            return QRCodeDecodeStatus.Success;
+            return DecodeStatus.Success;
         }
 
         return DecodeUtf8(byteBuffer, bytes.Length == count ? 0 : 3, bytes.Length, destination, ref charsWritten);
@@ -228,23 +228,23 @@ internal static class SegmentDecoders
         => IsValidUtf8(bytes)
             || (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
 
-    private static QRCodeDecodeStatus DecodeUtf8(byte[] byteBuffer, int offset, int byteCount, Span<char> destination, ref int charsWritten)
+    private static DecodeStatus DecodeUtf8(byte[] byteBuffer, int offset, int byteCount, Span<char> destination, ref int charsWritten)
     {
         if (byteCount == 0)
-            return QRCodeDecodeStatus.Success;
+            return DecodeStatus.Success;
 
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         var bytes = byteBuffer.AsSpan(offset, byteCount);
         if (destination.Length - charsWritten < Encoding.UTF8.GetCharCount(bytes))
-            return QRCodeDecodeStatus.DestinationTooSmall;
+            return DecodeStatus.DestinationTooSmall;
         charsWritten += Encoding.UTF8.GetChars(bytes, destination.Slice(charsWritten));
-        return QRCodeDecodeStatus.Success;
+        return DecodeStatus.Success;
 #else
         // netstandard2.0 has no span-based Encoding APIs; byteBuffer is already an
         // array, so only the char side needs a temporary rented array.
         var charCount = Encoding.UTF8.GetCharCount(byteBuffer, offset, byteCount);
         if (destination.Length - charsWritten < charCount)
-            return QRCodeDecodeStatus.DestinationTooSmall;
+            return DecodeStatus.DestinationTooSmall;
 
         var rentedChars = ArrayPool<char>.Shared.Rent(charCount);
         try
@@ -252,7 +252,7 @@ internal static class SegmentDecoders
             var written = Encoding.UTF8.GetChars(byteBuffer, offset, byteCount, rentedChars, 0);
             rentedChars.AsSpan(0, written).CopyTo(destination.Slice(charsWritten));
             charsWritten += written;
-            return QRCodeDecodeStatus.Success;
+            return DecodeStatus.Success;
         }
         finally
         {
@@ -331,11 +331,11 @@ internal static class SegmentDecoders
     /// 10xxxxxx = 16, 110xxxxx = 24). Lifted from the Standard QR bitstream decoder
     /// when rMQR became the second consumer.
     /// </summary>
-    public static QRCodeDecodeStatus ReadEciDesignator(ref BitReader reader, int totalBits, out int eciValue)
+    public static DecodeStatus ReadEciDesignator(ref BitReader reader, int totalBits, out int eciValue)
     {
         eciValue = 0;
         if (totalBits - reader.BitPosition < 8)
-            return QRCodeDecodeStatus.InvalidBitstream;
+            return DecodeStatus.InvalidBitstream;
 
         var first = reader.Reads(8);
         if ((first & 0x80) == 0)
@@ -345,20 +345,20 @@ internal static class SegmentDecoders
         else if ((first & 0xC0) == 0x80)
         {
             if (totalBits - reader.BitPosition < 8)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             eciValue = ((first & 0x3F) << 8) | reader.Reads(8);
         }
         else if ((first & 0xE0) == 0xC0)
         {
             if (totalBits - reader.BitPosition < 16)
-                return QRCodeDecodeStatus.InvalidBitstream;
+                return DecodeStatus.InvalidBitstream;
             eciValue = ((first & 0x1F) << 16) | reader.Reads(16);
         }
         else
         {
-            return QRCodeDecodeStatus.InvalidBitstream;
+            return DecodeStatus.InvalidBitstream;
         }
 
-        return QRCodeDecodeStatus.Success;
+        return DecodeStatus.Success;
     }
 }

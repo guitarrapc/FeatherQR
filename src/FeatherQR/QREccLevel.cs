@@ -5,7 +5,7 @@ namespace FeatherQR;
 /// while the code still scans. Higher levels leave less room for content, so the same
 /// text may need a larger symbol.
 /// </summary>
-public enum ECCLevel
+public enum QREccLevel
 {
     /// <summary>
     /// 7% may be lost before recovery is not possible

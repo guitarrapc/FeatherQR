@@ -8,7 +8,7 @@ namespace FeatherQR;
 /// </summary>
 public readonly struct RmQRCodeDecodeInfo
 {
-    internal RmQRCodeDecodeInfo(QRCodeDecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected)
+    internal RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected)
     {
         Status = status;
         Version = version;
@@ -16,8 +16,8 @@ public readonly struct RmQRCodeDecodeInfo
         ErrorsCorrected = errorsCorrected;
     }
 
-    /// <summary>Decode outcome; <see cref="QRCodeDecodeStatus.Success"/> when text was produced.</summary>
-    public QRCodeDecodeStatus Status { get; }
+    /// <summary>Decode outcome; <see cref="DecodeStatus.Success"/> when text was produced.</summary>
+    public DecodeStatus Status { get; }
 
     /// <summary>The symbol version (from the physical dimensions), or 0 when the input is not an rMQR matrix.</summary>
     public RmQRVersion Version { get; }

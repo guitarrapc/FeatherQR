@@ -42,7 +42,7 @@ public class GeneratorOptionsTest
         var options = default(QRCodeGeneratorOptions);
 
         await Assert.That(options.EciMode).IsEqualTo(EciMode.Default);
-        await Assert.That(options.Utf8BOM).IsFalse();
+        await Assert.That(options.Utf8Bom).IsFalse();
         await Assert.That(options.Version.IsAny).IsTrue();
         await Assert.That(options.QuietZoneSize).IsEqualTo(StandardQrQuietZone);
         await Assert.That(QRCodeGeneratorOptions.Default).IsEqualTo(options);
@@ -103,45 +103,45 @@ public class GeneratorOptionsTest
     // (string, span, destination) are still cross-checked on every row.
 
     public readonly record struct StandardQrCase(
-        string Text, ECCLevel Ecc, bool Utf8BOM, EciMode Eci, int RequestedVersion, int QuietZone,
-        int Version, int QrSize, string RawSha, string BufferSha)
+        string Text, QREccLevel Ecc, bool Utf8Bom, EciMode Eci, int RequestedVersion, int QuietZone,
+        int Version, int Size, string RawSha, string BufferSha)
     {
         public QRCodeGeneratorOptions Options => new()
         {
-            Utf8BOM = Utf8BOM,
+            Utf8Bom = Utf8Bom,
             EciMode = Eci,
-            Version = RequestedVersion == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(RequestedVersion),
+            Version = RequestedVersion == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(RequestedVersion),
             QuietZoneSize = QuietZone,
         };
     }
 
     public static IEnumerable<StandardQrCase> StandardQrConfigurations()
     {
-        yield return new(Ascii, ECCLevel.M, false, EciMode.Default, -1, 4, 1, 29, "DF3513E09689BEFE49C38DF1BAA0707331B7A9CA92051E0881577D45399EB0C2", "4F9FD23E7FCA32AFFE0501DBF0F53501121AD58C155FBBE36635474C94FE6F01");
-        yield return new(Ascii, ECCLevel.L, false, EciMode.Default, -1, 0, 1, 21, "FF5525B60FC0B9AB33AE35DD2E4D8EE07DE9C073646354B2B06737994FBEEBF7", "A3B3FADF5892440C88E68365D6917E46544BF61CA018C4EA57BC3577D8E180D6");
-        yield return new(Ascii, ECCLevel.Q, false, EciMode.Default, -1, 7, 1, 35, "4805298E52D3BC3001400129FE397B43FBF61411289699CBB2E29B1FD0D4A640", "E19CA367EEF7ADF638BE03D04AC99DB5B4140F4BDD90B3193A7AC9DFCA5CD1D9");
-        yield return new(Ascii, ECCLevel.H, false, EciMode.Default, 10, 4, 10, 65, "8582F27F9C01FE3B087624129D8B526E8E196103BD0C4423F69ECF59B89326D8", "5FF120D0E32BEFA10C8498C1A6A01EFCC392A57DA93C94958B0C166F267806E2");
-        yield return new(Digits, ECCLevel.M, false, EciMode.Default, 1, 4, 1, 29, "F69134B693DBC5CB51FF8B4129F922BF528E16284E8FF3FC05FB7FC8D42811F0", "EA5AEE3F4FB5BF3A33E69D5E858664CDBAD3770EBAC3C5CBE3F0F81370C427F9");
-        yield return new(Digits, ECCLevel.M, false, EciMode.Default, 40, 2, 40, 181, "B1B7DB1BE8E1AAA9121493ACB207614E8C2DB349677353B72122E291A05D6332", "57395DBD1E96294EEBC3B0C76C5A6D968BD79C9B784AE914D3BC0D1522B71DF9");
-        yield return new(Latin1, ECCLevel.M, false, EciMode.Default, -1, 4, 1, 29, "32CB9B35BE3ED7A0E0FE1B406D40C878BF7A0639DA911C42FFCF1938026232CD", "7E16CA26465E45B4261404FCB5A205E7048D930169164AC75BF828CBDA56C45C");
-        yield return new(Latin1, ECCLevel.M, false, EciMode.Iso8859_1, -1, 4, 1, 29, "32CB9B35BE3ED7A0E0FE1B406D40C878BF7A0639DA911C42FFCF1938026232CD", "7E16CA26465E45B4261404FCB5A205E7048D930169164AC75BF828CBDA56C45C");
-        yield return new(Latin1, ECCLevel.M, false, EciMode.Utf8, -1, 4, 2, 33, "F462B9E5DD8FD73F38B5CC9EA6D98234E2C8E8F19023432EE87B82519E3DA538", "AF4BEAD356645CFD2DEDE5170115090271AA6C90F691C0D872154583A6F2F1C6");
-        yield return new(Unicode, ECCLevel.M, false, EciMode.Default, -1, 4, 2, 33, "5A532AA6FC5B854162FC73366E67F054D9B7BC001E1C1ED43E0E52900AD72CE3", "52FC0E4364CA2885A62746136B6B78682280CCDA28C2F3B4FC246793C5776A3A");
-        yield return new(Unicode, ECCLevel.M, false, EciMode.Utf8, -1, 1, 2, 27, "5A532AA6FC5B854162FC73366E67F054D9B7BC001E1C1ED43E0E52900AD72CE3", "B2519103EF39CED7E0E018C232FEC391B381FC656CEB1181FA6A3327964CBA46");
-        yield return new(Unicode, ECCLevel.H, true, EciMode.Utf8, -1, 4, 4, 41, "7AD2CE76A220D86716F4B5D89410A8521BB556DE778C85476EBE4A53E5B568A5", "29047B9550A8C963E58BD2BCA046751FB8C7DC2A693100B247EBDFAEF33B1E5E");
-        yield return new(Ascii, ECCLevel.M, true, EciMode.Utf8, 12, 3, 12, 71, "A6355BAA48669761D513937555235945CF020E26A6F8475847DC4AF61F7C385C", "31A6A4B8C0A96D7620CA7C00DC2A3B357A06A502D7A18F2A9FC24FB0F3FA91BC");
-        yield return new("", ECCLevel.M, false, EciMode.Default, -1, 4, 1, 29, "B1E6AB2001B4E374C1AFD9CBA7C57FA0C0ACAEB22E871DF1C13DB686A8892EF9", "2409B6A5CC02DE7B49C526B19337725D15A816BD6CFA421128943E06260FC128");
+        yield return new(Ascii, QREccLevel.M, false, EciMode.Default, -1, 4, 1, 29, "DF3513E09689BEFE49C38DF1BAA0707331B7A9CA92051E0881577D45399EB0C2", "4F9FD23E7FCA32AFFE0501DBF0F53501121AD58C155FBBE36635474C94FE6F01");
+        yield return new(Ascii, QREccLevel.L, false, EciMode.Default, -1, 0, 1, 21, "FF5525B60FC0B9AB33AE35DD2E4D8EE07DE9C073646354B2B06737994FBEEBF7", "A3B3FADF5892440C88E68365D6917E46544BF61CA018C4EA57BC3577D8E180D6");
+        yield return new(Ascii, QREccLevel.Q, false, EciMode.Default, -1, 7, 1, 35, "4805298E52D3BC3001400129FE397B43FBF61411289699CBB2E29B1FD0D4A640", "E19CA367EEF7ADF638BE03D04AC99DB5B4140F4BDD90B3193A7AC9DFCA5CD1D9");
+        yield return new(Ascii, QREccLevel.H, false, EciMode.Default, 10, 4, 10, 65, "8582F27F9C01FE3B087624129D8B526E8E196103BD0C4423F69ECF59B89326D8", "5FF120D0E32BEFA10C8498C1A6A01EFCC392A57DA93C94958B0C166F267806E2");
+        yield return new(Digits, QREccLevel.M, false, EciMode.Default, 1, 4, 1, 29, "F69134B693DBC5CB51FF8B4129F922BF528E16284E8FF3FC05FB7FC8D42811F0", "EA5AEE3F4FB5BF3A33E69D5E858664CDBAD3770EBAC3C5CBE3F0F81370C427F9");
+        yield return new(Digits, QREccLevel.M, false, EciMode.Default, 40, 2, 40, 181, "B1B7DB1BE8E1AAA9121493ACB207614E8C2DB349677353B72122E291A05D6332", "57395DBD1E96294EEBC3B0C76C5A6D968BD79C9B784AE914D3BC0D1522B71DF9");
+        yield return new(Latin1, QREccLevel.M, false, EciMode.Default, -1, 4, 1, 29, "32CB9B35BE3ED7A0E0FE1B406D40C878BF7A0639DA911C42FFCF1938026232CD", "7E16CA26465E45B4261404FCB5A205E7048D930169164AC75BF828CBDA56C45C");
+        yield return new(Latin1, QREccLevel.M, false, EciMode.Iso8859_1, -1, 4, 1, 29, "32CB9B35BE3ED7A0E0FE1B406D40C878BF7A0639DA911C42FFCF1938026232CD", "7E16CA26465E45B4261404FCB5A205E7048D930169164AC75BF828CBDA56C45C");
+        yield return new(Latin1, QREccLevel.M, false, EciMode.Utf8, -1, 4, 2, 33, "F462B9E5DD8FD73F38B5CC9EA6D98234E2C8E8F19023432EE87B82519E3DA538", "AF4BEAD356645CFD2DEDE5170115090271AA6C90F691C0D872154583A6F2F1C6");
+        yield return new(Unicode, QREccLevel.M, false, EciMode.Default, -1, 4, 2, 33, "5A532AA6FC5B854162FC73366E67F054D9B7BC001E1C1ED43E0E52900AD72CE3", "52FC0E4364CA2885A62746136B6B78682280CCDA28C2F3B4FC246793C5776A3A");
+        yield return new(Unicode, QREccLevel.M, false, EciMode.Utf8, -1, 1, 2, 27, "5A532AA6FC5B854162FC73366E67F054D9B7BC001E1C1ED43E0E52900AD72CE3", "B2519103EF39CED7E0E018C232FEC391B381FC656CEB1181FA6A3327964CBA46");
+        yield return new(Unicode, QREccLevel.H, true, EciMode.Utf8, -1, 4, 4, 41, "7AD2CE76A220D86716F4B5D89410A8521BB556DE778C85476EBE4A53E5B568A5", "29047B9550A8C963E58BD2BCA046751FB8C7DC2A693100B247EBDFAEF33B1E5E");
+        yield return new(Ascii, QREccLevel.M, true, EciMode.Utf8, 12, 3, 12, 71, "A6355BAA48669761D513937555235945CF020E26A6F8475847DC4AF61F7C385C", "31A6A4B8C0A96D7620CA7C00DC2A3B357A06A502D7A18F2A9FC24FB0F3FA91BC");
+        yield return new("", QREccLevel.M, false, EciMode.Default, -1, 4, 1, 29, "B1E6AB2001B4E374C1AFD9CBA7C57FA0C0ACAEB22E871DF1C13DB686A8892EF9", "2409B6A5CC02DE7B49C526B19337725D15A816BD6CFA421128943E06260FC128");
     }
 
     [Test]
     [MethodDataSource(nameof(StandardQrConfigurations))]
     public async Task StandardQr_OptionsOverload_ReproducesTheReleasedOutput(StandardQrCase c)
     {
-        var viaOptions = QRCodeGenerator.CreateQrCode(c.Text, c.Ecc, c.Options);
-        var viaOptionsSpan = QRCodeGenerator.CreateQrCode(c.Text.AsSpan(), c.Ecc, c.Options);
+        var viaOptions = QRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
+        var viaOptionsSpan = QRCodeGenerator.Create(c.Text.AsSpan(), c.Ecc, c.Options);
 
         await Assert.That(viaOptions.Version).IsEqualTo(c.Version);
-        await Assert.That(viaOptions.Size).IsEqualTo(c.QrSize);
+        await Assert.That(viaOptions.Size).IsEqualTo(c.Size);
         await Assert.That(Sha(viaOptions.GetRawData())).IsEqualTo(c.RawSha);
         await Assert.That(viaOptionsSpan.GetRawData()).IsEquivalentTo(viaOptions.GetRawData());
     }
@@ -152,13 +152,13 @@ public class GeneratorOptionsTest
     {
         var size = Sizing.Required(c.Text.AsSpan(), c.Ecc, c.Options);
         await Assert.That(size.Version).IsEqualTo(c.Version);
-        await Assert.That(size.QrSize).IsEqualTo(c.QrSize);
-        await Assert.That(size.BufferSize).IsEqualTo(c.QrSize * c.QrSize);
+        await Assert.That(size.Size).IsEqualTo(c.Size);
+        await Assert.That(size.BufferSize).IsEqualTo(c.Size * c.Size);
 
         var fromOptions = new byte[size.BufferSize];
         var fromOptionsString = new byte[size.BufferSize];
-        var written = QRCodeGenerator.CreateQrCode(c.Text.AsSpan(), c.Ecc, fromOptions, c.Options);
-        var writtenString = QRCodeGenerator.CreateQrCode(c.Text, c.Ecc, fromOptionsString, c.Options);
+        var written = QRCodeGenerator.Create(c.Text.AsSpan(), c.Ecc, fromOptions, c.Options);
+        var writtenString = QRCodeGenerator.Create(c.Text, c.Ecc, fromOptionsString, c.Options);
 
         await Assert.That(written).IsEqualTo(size.BufferSize);
         await Assert.That(writtenString).IsEqualTo(written);
@@ -170,7 +170,7 @@ public class GeneratorOptionsTest
 
     public readonly record struct MicroQrCase(
         string Text, MicroQREccLevel Ecc, MicroQRVersion? RequestedVersion, int QuietZone,
-        MicroQRVersion Version, int QrSize, string RawSha, string BufferSha)
+        MicroQRVersion Version, int Size, string RawSha, string BufferSha)
     {
         public MicroQRCodeGeneratorOptions Options => new()
         {
@@ -195,11 +195,11 @@ public class GeneratorOptionsTest
     [MethodDataSource(nameof(MicroQrConfigurations))]
     public async Task MicroQr_OptionsOverload_ReproducesTheReleasedOutput(MicroQrCase c)
     {
-        var viaOptions = MicroQRCodeGenerator.CreateMicroQRCode(c.Text, c.Ecc, c.Options);
-        var viaOptionsSpan = MicroQRCodeGenerator.CreateMicroQRCode(c.Text.AsSpan(), c.Ecc, c.Options);
+        var viaOptions = MicroQRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
+        var viaOptionsSpan = MicroQRCodeGenerator.Create(c.Text.AsSpan(), c.Ecc, c.Options);
 
         await Assert.That(viaOptions.Version).IsEqualTo(c.Version);
-        await Assert.That(viaOptions.Size).IsEqualTo(c.QrSize);
+        await Assert.That(viaOptions.Size).IsEqualTo(c.Size);
         await Assert.That(Sha(viaOptions.GetRawData())).IsEqualTo(c.RawSha);
         await Assert.That(viaOptionsSpan.GetRawData()).IsEquivalentTo(viaOptions.GetRawData());
     }
@@ -210,11 +210,11 @@ public class GeneratorOptionsTest
     {
         var size = Sizing.Required(c.Text.AsSpan(), c.Ecc, c.Options);
         await Assert.That(size.Version).IsEqualTo(c.Version);
-        await Assert.That(size.QrSize).IsEqualTo(c.QrSize);
-        await Assert.That(size.BufferSize).IsEqualTo(c.QrSize * c.QrSize);
+        await Assert.That(size.Size).IsEqualTo(c.Size);
+        await Assert.That(size.BufferSize).IsEqualTo(c.Size * c.Size);
 
         var fromOptions = new byte[size.BufferSize];
-        var written = MicroQRCodeGenerator.CreateMicroQRCode(c.Text.AsSpan(), c.Ecc, fromOptions, c.Options);
+        var written = MicroQRCodeGenerator.Create(c.Text.AsSpan(), c.Ecc, fromOptions, c.Options);
 
         await Assert.That(written).IsEqualTo(size.BufferSize);
         await Assert.That(Sha(fromOptions)).IsEqualTo(c.BufferSha);
@@ -226,16 +226,16 @@ public class GeneratorOptionsTest
     [Test]
     public async Task StandardQrSizing_ExplicitVersion_ReportsThatVersion()
     {
-        var automatic = Sizing.Required(Digits.AsSpan(), ECCLevel.M, QRCodeGeneratorOptions.Default);
-        var pinned = Sizing.Required(Digits.AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(15) });
+        var automatic = Sizing.Required(Digits.AsSpan(), QREccLevel.M, QRCodeGeneratorOptions.Default);
+        var pinned = Sizing.Required(Digits.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(15) });
 
         await Assert.That(automatic.Version).IsEqualTo(1);
         await Assert.That(pinned.Version).IsEqualTo(15);
-        await Assert.That(pinned.QrSize).IsEqualTo(QRCodeData.SizeFromVersion(15) + 8);
+        await Assert.That(pinned.Size).IsEqualTo(QRCodeData.SizeFromVersion(15) + 8);
 
         // and the size it reports is the size the encode actually writes
         var buffer = new byte[pinned.BufferSize];
-        var written = QRCodeGenerator.CreateQrCode(Digits.AsSpan(), ECCLevel.M, buffer, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(15) });
+        var written = QRCodeGenerator.Create(Digits.AsSpan(), QREccLevel.M, buffer, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(15) });
         await Assert.That(written).IsEqualTo(pinned.BufferSize);
     }
 
@@ -244,11 +244,11 @@ public class GeneratorOptionsTest
     {
         var content = new string('A', 100);   // needs well above version 1
 
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content.AsSpan(), ECCLevel.M, out var size, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(1) })).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content.AsSpan(), QREccLevel.M, out var size, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1) })).IsFalse();
         await Assert.That(size).IsEqualTo(default(QRCodeCalculatedSize));
 
         // the same content at a version that does hold it is a fit
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content.AsSpan(), ECCLevel.M, out var ok, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(10) })).IsTrue();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content.AsSpan(), QREccLevel.M, out var ok, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(10) })).IsTrue();
         await Assert.That(ok.Version).IsEqualTo(10);
     }
 
@@ -262,7 +262,7 @@ public class GeneratorOptionsTest
         // is rejected when the range is constructed rather than when a generator reads it,
         // so an option set carrying an impossible version cannot be built at all. The
         // per-factory coverage lives in VersionRangeTest.
-        await Assert.That(() => new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(version) }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version) }).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
@@ -273,30 +273,30 @@ public class GeneratorOptionsTest
         // needs no optional-parameter substitution wins. Both readings mean "all defaults",
         // so the symbol must be unchanged. (Three sibling shapes did not compile at all
         // before, being ambiguous with the Span<byte> destination overload.)
-        var standardDefault = QRCodeGenerator.CreateQrCode("hello world", ECCLevel.M, default);
-        var standardOmitted = QRCodeGenerator.CreateQrCode("hello world", ECCLevel.M);
+        var standardDefault = QRCodeGenerator.Create("hello world", QREccLevel.M, default);
+        var standardOmitted = QRCodeGenerator.Create("hello world", QREccLevel.M);
         await Assert.That(standardDefault.Version).IsEqualTo(standardOmitted.Version);
         await Assert.That(standardDefault.GetRawData().AsSpan().SequenceEqual(standardOmitted.GetRawData())).IsTrue();
 
-        var microDefault = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L, default);
-        var microOmitted = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var microDefault = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L, default);
+        var microOmitted = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         await Assert.That(microDefault.Version).IsEqualTo(microOmitted.Version);
         await Assert.That(microDefault.GetRawData().AsSpan().SequenceEqual(microOmitted.GetRawData())).IsTrue();
 
         // the span spellings, which were ambiguous before the options overloads existed
-        await Assert.That(QRCodeGenerator.CreateQrCode("hello world".AsSpan(), ECCLevel.M, default).Version).IsEqualTo(standardOmitted.Version);
-        await Assert.That(MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.L, default).Version).IsEqualTo(microOmitted.Version);
+        await Assert.That(QRCodeGenerator.Create("hello world".AsSpan(), QREccLevel.M, default).Version).IsEqualTo(standardOmitted.Version);
+        await Assert.That(MicroQRCodeGenerator.Create("12345".AsSpan(), MicroQREccLevel.L, default).Version).IsEqualTo(microOmitted.Version);
     }
 
     [Test]
     public async Task Options_NegativeQuietZone_ThrowsFromEveryEntryPoint()
     {
         var standard = new QRCodeGeneratorOptions { QuietZoneSize = -1 };
-        await Assert.That(() => QRCodeGenerator.CreateQrCode(Digits, ECCLevel.M, standard)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize(Digits.AsSpan(), ECCLevel.M, out _, standard)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => QRCodeGenerator.Create(Digits, QREccLevel.M, standard)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize(Digits.AsSpan(), QREccLevel.M, out _, standard)).Throws<ArgumentOutOfRangeException>();
 
         var micro = new MicroQRCodeGeneratorOptions { QuietZoneSize = -1 };
-        await Assert.That(() => MicroQRCodeGenerator.CreateMicroQRCode(Digits, MicroQREccLevel.L, micro)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => MicroQRCodeGenerator.Create(Digits, MicroQREccLevel.L, micro)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize(Digits.AsSpan(), MicroQREccLevel.L, out _, micro)).Throws<ArgumentOutOfRangeException>();
     }
 }

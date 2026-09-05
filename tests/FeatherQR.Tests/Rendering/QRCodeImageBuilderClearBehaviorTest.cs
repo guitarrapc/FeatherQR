@@ -16,7 +16,7 @@ public class QRCodeImageBuilderClearBehaviorTest
     [Test]
     public async Task DefaultTransparentClear_FullCoverage_MatchesExtensionRender()
     {
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr).WithSize(300, 300));
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300), clearColor: null, backgroundColor: null);
@@ -28,7 +28,7 @@ public class QRCodeImageBuilderClearBehaviorTest
     public async Task OpaqueClearColor_WithPadding_KeepsClearColorInPad()
     {
         const int modulePixelSize = 4;
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var contentSide = qr.Size * modulePixelSize;
         var canvasSide = contentSide + 40;
         var origin = (canvasSide - contentSide) / 2;
@@ -55,7 +55,7 @@ public class QRCodeImageBuilderClearBehaviorTest
     {
         // A translucent QR background lets the clear color show through, so the
         // clear must still happen even when the content covers the whole canvas.
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var translucentWhite = new SKColor(0xFF, 0xFF, 0xFF, 0x80);
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr)
@@ -72,7 +72,7 @@ public class QRCodeImageBuilderClearBehaviorTest
     {
         // Opaque background covering the whole canvas: the clear is skipped, and
         // the output must be identical to the always-clear render.
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr)
             .WithSize(300, 300)

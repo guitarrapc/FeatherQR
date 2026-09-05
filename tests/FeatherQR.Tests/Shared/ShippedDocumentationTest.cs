@@ -23,7 +23,7 @@ public class ShippedDocumentationTest
     public static IEnumerable<Func<ShippedAssembly>> ShippedAssemblies()
     {
         yield return () => new ShippedAssembly("FeatherQR", typeof(QRCodeData));
-        yield return () => new ShippedAssembly("FeatherQR.SkiaSharp", typeof(QRCodeRenderer));
+        yield return () => new ShippedAssembly("FeatherQR.SkiaSharp", typeof(SymbolRenderer));
     }
 
     private static string DocumentationPath(string assemblyName) => Path.Combine(AppContext.BaseDirectory, assemblyName + ".xml");

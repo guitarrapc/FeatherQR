@@ -9,11 +9,11 @@ namespace FeatherQR.Tests;
 public class QRCodeDecoderImageTest
 {
     [Test]
-    [Arguments("Hello, World!", ECCLevel.M)]
-    [Arguments("0123456789", ECCLevel.L)]
-    [Arguments("HELLO WORLD $%*+-./:", ECCLevel.Q)]
-    [Arguments("https://example.com/path?query=value", ECCLevel.H)]
-    public async Task Decode_RenderedBitmap(string content, ECCLevel eccLevel)
+    [Arguments("Hello, World!", QREccLevel.M)]
+    [Arguments("0123456789", QREccLevel.L)]
+    [Arguments("HELLO WORLD $%*+-./:", QREccLevel.Q)]
+    [Arguments("https://example.com/path?query=value", QREccLevel.H)]
+    public async Task Decode_RenderedBitmap(string content, QREccLevel eccLevel)
     {
         using var bitmap = RenderQr(content, eccLevel, pixelsPerModule: 8);
 
@@ -27,7 +27,7 @@ public class QRCodeDecoderImageTest
     [Arguments("脂 emoji 至")]
     public async Task Decode_RenderedBitmap_Utf8(string content)
     {
-        using var bitmap = RenderQr(content, ECCLevel.M, pixelsPerModule: 8, eciMode: EciMode.Utf8);
+        using var bitmap = RenderQr(content, QREccLevel.M, pixelsPerModule: 8, eciMode: EciMode.Utf8);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
@@ -40,7 +40,7 @@ public class QRCodeDecoderImageTest
     public async Task Decode_VariousModuleSizes(int pixelsPerModule)
     {
         var content = "module size test";
-        using var bitmap = RenderQr(content, ECCLevel.M, pixelsPerModule);
+        using var bitmap = RenderQr(content, QREccLevel.M, pixelsPerModule);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"ppm={pixelsPerModule}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
@@ -63,11 +63,11 @@ public class QRCodeDecoderImageTest
         // estimate to a neighboring version (regression: v14/v17/v18/v20 read as
         // one version lower and failed with DataUncorrectable).
         var content = "https://github.com/guitarrapc/FeatherQR";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
+        var qr = QRCodeGenerator.Create(content, QREccLevel.H, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
         using var bitmap = new SKBitmap(new SKImageInfo(512, 512, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, 512, 512), qr, SKColors.Black, SKColors.White);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, 512, 512), qr, SKColors.Black, SKColors.White);
             canvas.Flush();
         }
 
@@ -80,7 +80,7 @@ public class QRCodeDecoderImageTest
     public async Task Decode_LargerVersion()
     {
         var content = string.Join(";", Enumerable.Range(0, 40).Select(i => $"item{i:D4}"));
-        using var bitmap = RenderQr(content, ECCLevel.M, pixelsPerModule: 6);
+        using var bitmap = RenderQr(content, QREccLevel.M, pixelsPerModule: 6);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
@@ -94,7 +94,7 @@ public class QRCodeDecoderImageTest
     public async Task Decode_RightAngleRotations(int degrees)
     {
         var content = $"rotation {degrees}";
-        using var bitmap = RenderRotatedQr(content, ECCLevel.M, pixelsPerModule: 8, degrees);
+        using var bitmap = RenderRotatedQr(content, QREccLevel.M, pixelsPerModule: 8, degrees);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"degrees={degrees}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
@@ -108,7 +108,7 @@ public class QRCodeDecoderImageTest
     public async Task Decode_ArbitraryRotations(int degrees)
     {
         var content = $"tilt {degrees}";
-        using var bitmap = RenderRotatedQr(content, ECCLevel.M, pixelsPerModule: 8, degrees);
+        using var bitmap = RenderRotatedQr(content, QREccLevel.M, pixelsPerModule: 8, degrees);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"degrees={degrees}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
@@ -119,12 +119,12 @@ public class QRCodeDecoderImageTest
     {
         // Reflectance-reversed rendering (dark-mode style): white modules on black
         var content = "inverted palette";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M);
         var sizePx = qr.Size * 8;
         using var bitmap = new SKBitmap(new SKImageInfo(sizePx, sizePx, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.White, SKColors.Black);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.White, SKColors.Black);
             canvas.Flush();
         }
 
@@ -136,7 +136,7 @@ public class QRCodeDecoderImageTest
     public async Task Decode_MirroredImage()
     {
         var content = "mirrored capture";
-        using var source = RenderQr(content, ECCLevel.M, pixelsPerModule: 8);
+        using var source = RenderQr(content, QREccLevel.M, pixelsPerModule: 8);
         using var mirrored = new SKBitmap(new SKImageInfo(source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(mirrored))
         {
@@ -153,7 +153,7 @@ public class QRCodeDecoderImageTest
     public async Task Decode_LuminanceSpan()
     {
         var content = "luminance span";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M);
         var size = qr.Size;
         const int Scale = 6;
         var width = size * Scale;
@@ -187,7 +187,7 @@ public class QRCodeDecoderImageTest
     public async Task Decode_GrayBitmap_ColorTypeVariants()
     {
         var content = "gray8 bitmap";
-        using var source = RenderQr(content, ECCLevel.M, pixelsPerModule: 8);
+        using var source = RenderQr(content, QREccLevel.M, pixelsPerModule: 8);
         using var gray = new SKBitmap(new SKImageInfo(source.Width, source.Height, SKColorType.Gray8));
         using (var canvas = new SKCanvas(gray))
         {
@@ -210,7 +210,7 @@ public class QRCodeDecoderImageTest
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var text, out var info)).IsFalse();
         await Assert.That(text).IsEqualTo(string.Empty);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -228,7 +228,7 @@ public class QRCodeDecoderImageTest
         }
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out _, out var info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -237,7 +237,7 @@ public class QRCodeDecoderImageTest
         using var bitmap = new SKBitmap(new SKImageInfo(10, 10, SKColorType.Bgra8888, SKAlphaType.Premul));
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out _, out var info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -246,20 +246,20 @@ public class QRCodeDecoderImageTest
         Assert.Throws<ArgumentNullException>(() => QRCodeDecoder.TryDecode((SKBitmap)null!, out _));
     }
 
-    private static SKBitmap RenderQr(string content, ECCLevel eccLevel, int pixelsPerModule, EciMode eciMode = EciMode.Default)
+    private static SKBitmap RenderQr(string content, QREccLevel eccLevel, int pixelsPerModule, EciMode eciMode = EciMode.Default)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
+        var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
         var sizePx = qr.Size * pixelsPerModule;
         var bitmap = new SKBitmap(new SKImageInfo(sizePx, sizePx, SKColorType.Bgra8888, SKAlphaType.Premul));
         using var canvas = new SKCanvas(bitmap);
-        QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.Black, SKColors.White);
+        SymbolRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.Black, SKColors.White);
         canvas.Flush();
         return bitmap;
     }
 
-    private static SKBitmap RenderRotatedQr(string content, ECCLevel eccLevel, int pixelsPerModule, float degrees)
+    private static SKBitmap RenderRotatedQr(string content, QREccLevel eccLevel, int pixelsPerModule, float degrees)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Default });
+        var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Default });
         var qrPx = qr.Size * pixelsPerModule;
         // Room for the rotated square plus margin
         var canvasPx = (int)(qrPx * 1.5f) + 16;
@@ -269,7 +269,7 @@ public class QRCodeDecoderImageTest
         canvas.Translate(canvasPx / 2f, canvasPx / 2f);
         canvas.RotateDegrees(degrees);
         canvas.Translate(-qrPx / 2f, -qrPx / 2f);
-        QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, qrPx, qrPx), qr, SKColors.Black, SKColors.White);
+        SymbolRenderer.Render(canvas, SKRect.Create(0, 0, qrPx, qrPx), qr, SKColors.Black, SKColors.White);
         canvas.Flush();
         return bitmap;
     }

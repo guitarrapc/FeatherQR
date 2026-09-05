@@ -20,9 +20,9 @@ namespace FeatherQR.SkiaSharp;
 /// </para>
 /// </remarks>
 /// <seealso cref="MicroQRCodeGenerator"/>
-/// <seealso cref="QRCodeRenderer"/>
+/// <seealso cref="SymbolRenderer"/>
 /// <seealso cref="QRCodeImageBuilder"/>
-public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBuilder>
+public class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
 {
     private readonly string? _content;
     private readonly MicroQRCodeData? _data;
@@ -421,14 +421,14 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize, MaskPattern = _maskPattern, Segmentation = _segmentation });
+        var data = _data ?? MicroQRCodeGenerator.Create(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize, MaskPattern = _maskPattern, Segmentation = _segmentation });
         matrixWidth = matrixHeight = data.Size;
         return data;
     }
 
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
-        QRCodeRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
+        SymbolRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
     }
 
     /// <summary>Micro QR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>

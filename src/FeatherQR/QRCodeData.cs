@@ -122,7 +122,7 @@ public class QRCodeData
     //
     // Why this layout (measured in the MatrixStorage kernel benchmark):
     // - 8.7x smaller per-instance allocation (34,225 -> 3,944 bytes at v40/qz4),
-    //   which was essentially 100% of CreateQrCode's allocation.
+    //   which was essentially 100% of Create's allocation.
     // - _bits IS the serialization payload, so GetRawData collapses to
     //   header + copy (~800x) and deserialization to the mirror copy, the
     //   previous implementation round-tripped through a byte-per-module

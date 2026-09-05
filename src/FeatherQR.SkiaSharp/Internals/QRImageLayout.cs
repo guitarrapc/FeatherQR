@@ -19,7 +19,7 @@ internal static class QRImageLayout
     /// non-uniformly. With neither, <paramref name="defaultSize"/> is the symbology's
     /// own aspect-derived canvas and the content rectangle is the whole canvas: the
     /// renderer paints the background over all of it and draws the symbol at a
-    /// uniform module scale inside (rMQR: <c>QRCodeRenderer.GetLetterboxedArea</c>),
+    /// uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>),
     /// so the height rounding costs at most a few pixels of background at the sides;
     /// letterboxing here again would only turn that background into a clear-colour
     /// band and a non-opaque image.

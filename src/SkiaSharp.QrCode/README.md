@@ -14,4 +14,4 @@ New projects should reference `FeatherQR.SkiaSharp` directly, or `FeatherQR` alo
 <PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
 ```
 
-The namespaces are `FeatherQR` (generators, decoders, data types) and `FeatherQR.SkiaSharp` (image builders, `QRCodeRenderer`, `SKCanvas` extensions, bitmap decoding). See the [migration notes](https://github.com/guitarrapc/FeatherQR/blob/main/docs/migration.md) for the 2.0.0 changes.
+The namespaces are `FeatherQR` (generators, decoders, data types) and `FeatherQR.SkiaSharp` (image builders, `SymbolRenderer`, `SKCanvas` extensions, bitmap decoding). See the [migration notes](https://github.com/guitarrapc/FeatherQR/blob/main/docs/migration.md) for the 2.0.0 changes.

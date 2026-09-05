@@ -2,7 +2,7 @@ using System.Buffers;
 using FeatherQR.Internals.BinaryDecoders;
 using FeatherQR.Internals.BinaryEncoders;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR bit-stream decoder (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version
@@ -26,7 +26,7 @@ internal static class RmQRBinaryDecoder
     private const int EciUtf8 = 26;
     private const int EciAscii = 27;
 
-    public static QRCodeDecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten)
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten)
     {
         charsWritten = 0;
         var reader = new BitReader(data);
@@ -60,12 +60,12 @@ internal static class RmQRBinaryDecoder
                             };
                             var countBits = RmQRConstants.GetCountIndicatorLength(version, mode);
                             if (totalBits - reader.BitPosition < countBits)
-                                return QRCodeDecodeStatus.InvalidBitstream;
+                                return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
                             if (count == 0)
                                 continue; // empty segment (the encoder emits one only for empty text)
 
-                            QRCodeDecodeStatus status;
+                            DecodeStatus status;
                             switch (mode)
                             {
                                 case EncodingMode.Numeric:
@@ -80,14 +80,14 @@ internal static class RmQRBinaryDecoder
                                     status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, charset, rentedBytes, destination, ref charsWritten);
                                     break;
                             }
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
                     case ModeEci:
                         {
                             var status = SegmentDecoders.ReadEciDesignator(ref reader, totalBits, out var eciValue);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             switch (eciValue)
                             {
@@ -100,7 +100,7 @@ internal static class RmQRBinaryDecoder
                                     charset = ByteSegmentCharset.Utf8;
                                     break;
                                 default:
-                                    return QRCodeDecodeStatus.UnsupportedContent;
+                                    return DecodeStatus.UnsupportedContent;
                             }
                             break;
                         }
@@ -108,19 +108,19 @@ internal static class RmQRBinaryDecoder
                         {
                             var countBits = RmQRConstants.GetKanjiCountIndicatorLength(version);
                             if (totalBits - reader.BitPosition < countBits)
-                                return QRCodeDecodeStatus.InvalidBitstream;
+                                return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
                             var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
                     default:
-                        return QRCodeDecodeStatus.InvalidBitstream; // 101, 110 are reserved
+                        return DecodeStatus.InvalidBitstream; // 101, 110 are reserved
                 }
             }
 
-            return QRCodeDecodeStatus.Success;
+            return DecodeStatus.Success;
         }
         finally
         {

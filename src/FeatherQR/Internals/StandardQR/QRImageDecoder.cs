@@ -6,7 +6,7 @@ using System.Runtime.Intrinsics;
 
 using FeatherQR.Internals.ImageDecoders;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Decodes a QR code from a grayscale image: clean, well-lit, screen-rendered or
@@ -41,13 +41,13 @@ internal static class QRImageDecoder
     /// <param name="destination">Destination buffer for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written.</param>
     /// <param name="info">Diagnostic information.</param>
-    public static QRCodeDecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
         {
             charsWritten = 0;
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
-            return QRCodeDecodeStatus.NotDetected;
+            info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+            return DecodeStatus.NotDetected;
         }
 
         luminance = luminance.Slice(0, pixelCount);
@@ -80,7 +80,7 @@ internal static class QRImageDecoder
         }
     }
 
-    private static QRCodeDecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
@@ -89,16 +89,16 @@ internal static class QRImageDecoder
         Span<FinderPattern> patterns = stackalloc FinderPattern[3];
         if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns))
         {
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
-            return QRCodeDecodeStatus.NotDetected;
+            info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+            return DecodeStatus.NotDetected;
         }
 
         OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
 
         if (!TryEstimateDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, out var dimension, out var secondaryDimension, out var moduleSize))
         {
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
-            return QRCodeDecodeStatus.NotDetected;
+            info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+            return DecodeStatus.NotDetected;
         }
 
         var status = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, destination, out charsWritten, out info);
@@ -132,7 +132,7 @@ internal static class QRImageDecoder
     /// FormatInformationInvalid. DestinationTooSmall is terminal because the
     /// non-mirrored symbol has already been read successfully through RS correction.
     /// </summary>
-    private static QRCodeDecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         var transform = BuildGridTransform(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize);
 
@@ -176,7 +176,7 @@ internal static class QRImageDecoder
     /// Decodes the sampled matrix, retrying once transposed (mirrored capture).
     /// On non-terminal failure reports the non-mirrored attempt's diagnostics.
     /// </summary>
-    private static QRCodeDecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
         if (IsTerminal(status))
@@ -193,8 +193,8 @@ internal static class QRImageDecoder
         return status;
     }
 
-    private static bool IsTerminal(QRCodeDecodeStatus status)
-        => status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall;
+    private static bool IsTerminal(DecodeStatus status)
+        => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 
     /// <summary>
     /// Assigns the three finder centers to their corners: the two farthest apart

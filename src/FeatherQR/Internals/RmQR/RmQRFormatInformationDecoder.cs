@@ -1,4 +1,4 @@
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR format information decoding (ISO/IEC 23941 7.9): each 18-bit copy is

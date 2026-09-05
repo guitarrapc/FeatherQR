@@ -1,4 +1,4 @@
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals;
 
 namespace FeatherQR.Tests;
@@ -23,7 +23,7 @@ public class ModulePlacerMaskPackedParityTest
     [MethodDataSource(nameof(Versions))]
     public async Task MaskCode_MatchesByteDomainReference(int version)
     {
-        ECCLevel[] eccLevels = [ECCLevel.L, ECCLevel.M, ECCLevel.Q, ECCLevel.H];
+        QREccLevel[] eccLevels = [QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H];
 
         foreach (var eccLevel in eccLevels)
         {
@@ -61,10 +61,10 @@ public class ModulePlacerMaskPackedParityTest
             }
 
             var expectedBuffer = (byte[])buffer.Clone();
-            var expectedBest = ReferenceMaskCode(expectedBuffer, size, version, blockedMask, ECCLevel.M);
+            var expectedBest = ReferenceMaskCode(expectedBuffer, size, version, blockedMask, QREccLevel.M);
 
             var actualBuffer = (byte[])buffer.Clone();
-            var actualBest = ModulePlacer.MaskCode(actualBuffer, size, version, blockedMask, ECCLevel.M);
+            var actualBest = ModulePlacer.MaskCode(actualBuffer, size, version, blockedMask, QREccLevel.M);
 
             await Assert.That(actualBest).IsEquivalentTo(expectedBest);
             await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer);
@@ -123,7 +123,7 @@ public class ModulePlacerMaskPackedParityTest
     // Naive byte-per-module reference
     // ---------------------------------
 
-    private static int ReferenceMaskCode(byte[] buffer, int size, int version, byte[] blockedMask, ECCLevel eccLevel)
+    private static int ReferenceMaskCode(byte[] buffer, int size, int version, byte[] blockedMask, QREccLevel eccLevel)
     {
         var temp = new byte[size * size];
         var bestPatternIndex = 0;

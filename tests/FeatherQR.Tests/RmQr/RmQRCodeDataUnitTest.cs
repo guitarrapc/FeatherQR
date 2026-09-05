@@ -1,5 +1,5 @@
 using System.Buffers;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -246,7 +246,7 @@ public class RmQRCodeDataUnitTest
     [Test]
     public async Task MicroQrContainer_IsRejected_ByRmqrReader_AndViceVersa()
     {
-        var micro = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L).GetRawData();
+        var micro = MicroQRCodeGenerator.Create("123", MicroQREccLevel.L).GetRawData();
         await Assert.That(() => new RmQRCodeData(micro, 0)).Throws<InvalidDataException>();
 
         var rmqr = new RmQRCodeData(RmQRVersion.R7x43, 0).GetRawData();

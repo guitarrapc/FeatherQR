@@ -29,9 +29,9 @@ foreach (var (name, text, generate) in scenarios)
     await File.WriteAllBytesAsync(outputPath, pngBytes);
 
     using var bitmap = SKBitmap.Decode(pngBytes);
-    var qr = QRCodeGenerator.CreateQrCode(text, ECCLevel.H);
+    var qr = QRCodeGenerator.Create(text, QREccLevel.H);
     var contentRect = SKRect.Create(0, 0, bitmap.Width, bitmap.Height);
-    var finderRect = QRCodeRenderer.GetFinderPatternRect(qr, 0, contentRect);
+    var finderRect = SymbolRenderer.GetFinderPatternRect(qr, 0, contentRect);
     var moduleSize = finderRect.Width / 7f;
     var ringSampleX = (int)MathF.Round(finderRect.Left + moduleSize * 1.5f);
     var ringSampleY = (int)MathF.Round(finderRect.Top + moduleSize * 3.5f);
@@ -56,7 +56,7 @@ static byte[] GenerateArtQrCodeAsync1(string text)
 
     var qrCode = new QRCodeImageBuilder(text)
         .WithSize(800, 800)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.Yellow, clearColor: SKColors.Transparent)
         .WithGradient(gradient)
         .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
@@ -75,7 +75,7 @@ static byte[] GenerateArtQrCodeAsync2(string text)
 
     var qrCode = new QRCodeImageBuilder(text)
         .WithSize(800, 800)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.Yellow, clearColor: SKColors.Transparent)
         .WithGradient(gradient)
         .WithFinderPatternShape(CircleFinderPatternShape.Default)
@@ -94,7 +94,7 @@ static byte[] GenerateArtQrCodeAsync3(string text)
 
     var qrCode = new QRCodeImageBuilder(text)
         .WithSize(800, 800)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.Yellow, clearColor: SKColors.Transparent)
         .WithGradient(gradient)
         .WithFinderPatternShape(RectangleFinderPatternShape.Default)
@@ -113,7 +113,7 @@ static byte[] GenerateArtQrCodeAsync4(string text)
 
     var qrCode = new QRCodeImageBuilder(text)
         .WithSize(800, 800)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.Yellow, clearColor: SKColors.Transparent)
         .WithGradient(gradient)
         .WithModuleShape(RectangleModuleShape.Default, sizePercent: 0.9f);

@@ -4,7 +4,7 @@ using FeatherQR;
 // so ILC analyzes every public and internal member regardless of what runs here.
 // This entry point is a minimal encode/decode smoke so the produced binary is still runnable.
 var content = "FeatherQR AOT analysis gate";
-var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+var qr = QRCodeGenerator.Create(content, QREccLevel.M);
 if (!QRCodeDecoder.TryDecode(qr, out var decoded) || decoded != content)
 {
     Console.Error.WriteLine("Round-trip failed.");

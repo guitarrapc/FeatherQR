@@ -10,9 +10,9 @@ namespace FeatherQR.SkiaSharp;
 /// Each method clears the whole canvas before drawing, so anything already on it is
 /// lost. To place a symbol inside a larger drawing, wrap the call in
 /// <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>,
-/// or call <see cref="QRCodeRenderer"/> directly, which draws only the symbol.
+/// or call <see cref="SymbolRenderer"/> directly, which draws only the symbol.
 /// </remarks>
-public static class QRCodeExtensions
+public static class SKCanvasExtensions
 {
     /// <summary>
     /// Renders a QR code on the canvas with default colors.
@@ -75,7 +75,7 @@ public static class QRCodeExtensions
         FinderPatternShape? finderPatternShape = null)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
@@ -139,7 +139,7 @@ public static class QRCodeExtensions
         GradientOptions? gradientOptions = null)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
     }
 
     /// <summary>
@@ -205,6 +205,6 @@ public static class QRCodeExtensions
         GradientOptions? gradientOptions = null)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
     }
 }

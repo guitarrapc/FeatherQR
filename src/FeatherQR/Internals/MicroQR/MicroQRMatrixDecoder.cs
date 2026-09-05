@@ -37,7 +37,7 @@ internal static class MicroQRMatrixDecoder
     /// <param name="destination">Destination buffer for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
-    public static QRCodeDecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
@@ -45,8 +45,8 @@ internal static class MicroQRMatrixDecoder
         var version = MicroQRConstants.VersionFromSize(size);
         if (version == 0 || modules.Length < size * size)
         {
-            info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
-            return QRCodeDecodeStatus.InvalidMatrix;
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            return DecodeStatus.InvalidMatrix;
         }
 
         // 2. Format information (symbol number → version/ECC, mask pattern)
@@ -56,8 +56,8 @@ internal static class MicroQRMatrixDecoder
         {
             // A decodable format word naming a different version than the physical
             // matrix size is corruption, not a smaller symbol.
-            info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.FormatInformationInvalid, version, default, -1, 0);
-            return QRCodeDecodeStatus.FormatInformationInvalid;
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.FormatInformationInvalid, version, default, -1, 0);
+            return DecodeStatus.FormatInformationInvalid;
         }
 
         var dataBitCount = MicroQRConstants.GetDataBitCapacity(version, eccLevel);
@@ -76,8 +76,8 @@ internal static class MicroQRMatrixDecoder
         if (!EccBinaryDecoder.TryCorrect(block, eccCodewords, out var errorsCorrected)
             || errorsCorrected > MicroQRConstants.GetErrorCorrectionCapacity(version, eccLevel))
         {
-            info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
-            return QRCodeDecodeStatus.DataUncorrectable;
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
+            return DecodeStatus.DataUncorrectable;
         }
 
         // 5. Bitstream → text

@@ -13,33 +13,33 @@ namespace FeatherQR.SkiaSharp;
 /// </para>
 /// <para>
 /// <b>Quick Generation (Static Methods):</b><br/>
-/// Use static methods like <see cref="GetPngBytes(string, ECCLevel, int)"/> for one-liner QR code creation with default settings.
+/// Use static methods like <see cref="GetPngBytes(string, QREccLevel, int)"/> for one-liner QR code creation with default settings.
 /// </para>
 /// <para>
 /// <b>Advanced Configuration (Fluent API):</b><br/>
-/// Chain the shared options (<see cref="QRCodeImageBuilderBase{TSelf}.WithSize(int, int)"/>,
-/// <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize(int)"/>,
-/// <see cref="QRCodeImageBuilderBase{TSelf}.WithColors(SKColor?, SKColor?, SKColor?)"/>,
-/// <see cref="QRCodeImageBuilderBase{TSelf}.WithModuleShape(ModuleShape?, float)"/>,
-/// <see cref="QRCodeImageBuilderBase{TSelf}.WithGradient(GradientOptions?)"/>)
-/// with the Standard QR-specific options (<see cref="WithErrorCorrection(ECCLevel)"/>,
+/// Chain the shared options (<see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/>,
+/// <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize(int)"/>,
+/// <see cref="SymbolImageBuilderBase{TSelf}.WithColors(SKColor?, SKColor?, SKColor?)"/>,
+/// <see cref="SymbolImageBuilderBase{TSelf}.WithModuleShape(ModuleShape?, float)"/>,
+/// <see cref="SymbolImageBuilderBase{TSelf}.WithGradient(GradientOptions?)"/>)
+/// with the Standard QR-specific options (<see cref="WithErrorCorrection(QREccLevel)"/>,
 /// <see cref="WithVersion(int)"/>, <see cref="WithIcon(IconData?)"/>,
 /// <see cref="WithFinderPatternShape(FinderPatternShape?)"/>) to customize appearance.
 /// </para>
 /// </remarks>
 /// <seealso cref="QRCodeGenerator"/>
-/// <seealso cref="QRCodeRenderer"/>
+/// <seealso cref="SymbolRenderer"/>
 /// <seealso cref="MicroQRCodeImageBuilder"/>
-public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
+public class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
 {
     private readonly string? _content;
     private readonly QRCodeData? _qrCodeData;
-    private ECCLevel _eccLevel = ECCLevel.M;
+    private QREccLevel _eccLevel = QREccLevel.M;
     private bool _boostEccLevel;
     private EciMode _eciMode = EciMode.Default;
-    private QRCodeVersionRange _versionRange;
+    private QRVersionRange _versionRange;
     private int? _maskPattern;
-    private QRCodeSegmentation _segmentation = QRCodeSegmentation.Single;
+    private QRSegmentation _segmentation = QRSegmentation.Single;
 
     // rendering (Standard QR-only options; Micro QR has a single finder pattern
     // and no ECC headroom for overlays)
@@ -86,7 +86,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <returns>PNG encoded byte array.</returns>
-    public static byte[] GetPngBytes(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static byte[] GetPngBytes(string content, QREccLevel eccLevel = QREccLevel.M, int size = 512)
     {
         return GetImageBytes(content, SKEncodedImageFormat.Png, eccLevel, size, 100);
     }
@@ -111,7 +111,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
     /// <returns>Encoded byte array.</returns>
-    public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, ECCLevel eccLevel = ECCLevel.M, int size = 512, int quality = 100)
+    public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, QREccLevel eccLevel = QREccLevel.M, int size = 512, int quality = 100)
     {
         return new QRCodeImageBuilder(content)
             .WithSize(size, size)
@@ -143,7 +143,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="output">The output stream.</param>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    public static void SavePng(string content, Stream output, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void SavePng(string content, Stream output, QREccLevel eccLevel = QREccLevel.M, int size = 512)
     {
         new QRCodeImageBuilder(content)
             .WithSize(size, size)
@@ -171,7 +171,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
     /// <returns>UTF-8 encoded SVG document.</returns>
-    public static byte[] GetSvgBytes(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static byte[] GetSvgBytes(string content, QREccLevel eccLevel = QREccLevel.M, int size = 512)
     {
         using var stream = new MemoryStream();
         new QRCodeImageBuilder(content)
@@ -203,7 +203,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="output">The output stream.</param>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    public static void SaveSvg(string content, Stream output, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void SaveSvg(string content, Stream output, QREccLevel eccLevel = QREccLevel.M, int size = 512)
     {
         new QRCodeImageBuilder(content)
             .WithSize(size, size)
@@ -231,7 +231,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
     /// <returns>SVG document.</returns>
-    public static string GetSvgString(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static string GetSvgString(string content, QREccLevel eccLevel = QREccLevel.M, int size = 512)
     {
         return new QRCodeImageBuilder(content)
             .WithSize(size, size)
@@ -259,7 +259,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="writer">The buffer writer to write to.</param>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    public static void WriteSvg(string content, IBufferWriter<byte> writer, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void WriteSvg(string content, IBufferWriter<byte> writer, QREccLevel eccLevel = QREccLevel.M, int size = 512)
     {
         new QRCodeImageBuilder(content)
             .WithSize(size, size)
@@ -287,7 +287,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="writer">The buffer writer to write to.</param>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    public static void WritePng(string content, IBufferWriter<byte> writer, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void WritePng(string content, IBufferWriter<byte> writer, QREccLevel eccLevel = QREccLevel.M, int size = 512)
     {
         WriteImage(content, writer, SKEncodedImageFormat.Png, eccLevel, size, quality: 100);
     }
@@ -312,7 +312,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
-    public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, ECCLevel eccLevel = ECCLevel.M, int size = 512, int quality = 100)
+    public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, QREccLevel eccLevel = QREccLevel.M, int size = 512, int quality = 100)
     {
         new QRCodeImageBuilder(content)
             .WithSize(size, size)
@@ -344,7 +344,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// </summary>
     /// <param name="eccLevel">Error correction level (L=7%, M=15%, Q=25%, H=30%). Level H is recommended when using icons or custom module shapes.</param>
     /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithErrorCorrection(ECCLevel eccLevel)
+    public QRCodeImageBuilder WithErrorCorrection(QREccLevel eccLevel)
     {
         _eccLevel = eccLevel;
         return this;
@@ -352,7 +352,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 
     /// <summary>
     /// Raise the error correction level above the one configured with
-    /// <see cref="WithErrorCorrection(ECCLevel)"/> when the chosen version's capacity
+    /// <see cref="WithErrorCorrection(QREccLevel)"/> when the chosen version's capacity
     /// allows it, without changing the version or the symbol size. Recommended together
     /// with <see cref="WithIcon(IconData?)"/>: the spare capacity absorbs the modules
     /// the icon covers.
@@ -387,7 +387,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
-    /// <remarks>The pinned case of <see cref="WithVersion(QRCodeVersionRange)"/>; -1 is <see cref="QRCodeVersionRange.Any"/>.</remarks>
+    /// <remarks>The pinned case of <see cref="WithVersion(QRVersionRange)"/>; -1 is <see cref="QRVersionRange.Any"/>.</remarks>
     public QRCodeImageBuilder WithVersion(int version)
     {
         if (_qrCodeData is not null)
@@ -395,7 +395,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
         if (version is not -1 and (< 1 or > 40))
             throw new ArgumentOutOfRangeException(nameof(version), "Version must be between 1 and 40, or -1 for automatic selection.");
 
-        _versionRange = version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(version);
+        _versionRange = version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(version);
         return this;
     }
 
@@ -406,7 +406,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="QRCodeData"/>.</exception>
     /// <remarks>For a symbol that must reach, or not exceed, a physical size. An <c>int?</c> converts implicitly, so an optional version needs no branch.</remarks>
-    public QRCodeImageBuilder WithVersion(QRCodeVersionRange versionRange)
+    public QRCodeImageBuilder WithVersion(QRVersionRange versionRange)
     {
         if (_qrCodeData is not null)
             throw new InvalidOperationException("WithVersion cannot be used when QRCodeData is provided directly.");
@@ -436,19 +436,19 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 
     /// <summary>
     /// Split the content into mixed-mode segments when that lowers the version
-    /// (see <see cref="QRCodeSegmentation"/>). Defaults to
-    /// <see cref="QRCodeSegmentation.Single"/>. Never selects a larger version, and
+    /// (see <see cref="QRSegmentation"/>). Defaults to
+    /// <see cref="QRSegmentation.Single"/>. Never selects a larger version, and
     /// produces the identical symbol when a split would not shrink it.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="segmentation"/> is not a defined value.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="QRCodeData"/>.</exception>
-    public QRCodeImageBuilder WithSegmentation(QRCodeSegmentation segmentation)
+    public QRCodeImageBuilder WithSegmentation(QRSegmentation segmentation)
     {
         if (_qrCodeData is not null)
             throw new InvalidOperationException("WithSegmentation cannot be used when QRCodeData is provided directly.");
-        if (segmentation is not (QRCodeSegmentation.Single or QRCodeSegmentation.Optimal))
+        if (segmentation is not (QRSegmentation.Single or QRSegmentation.Optimal))
             throw new ArgumentOutOfRangeException(nameof(segmentation), $"Invalid segmentation: {segmentation}");
 
         _segmentation = segmentation;
@@ -481,7 +481,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, new QRCodeGeneratorOptions
+        var qrCodeData = _qrCodeData ?? QRCodeGenerator.Create(_content.AsSpan(), _eccLevel, new QRCodeGeneratorOptions
         {
             EciMode = _eciMode,
             Version = _versionRange,
@@ -496,7 +496,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
-        QRCodeRenderer.Render(canvas, contentRect, (QRCodeData)symbol, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
+        SymbolRenderer.Render(canvas, contentRect, (QRCodeData)symbol, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
     /// <summary>

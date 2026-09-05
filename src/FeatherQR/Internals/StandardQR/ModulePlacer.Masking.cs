@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Bit-packed mask pattern selection.
@@ -41,7 +41,7 @@ internal static partial class ModulePlacer
     /// are pattern-invariant and packed once per call; only the 30 format-bit
     /// modules are re-poked per pattern.
     /// </remarks>
-    public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
 #if NET8_0_OR_GREATER
         // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion),
@@ -116,7 +116,7 @@ internal static partial class ModulePlacer
     // Single-word path (versions 1-11)
     // ---------------------------------
 
-    internal static int MaskCode64(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode64(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         Span<ulong> packed = stackalloc ulong[64];
         Span<ulong> allowed = stackalloc ulong[64];
@@ -406,7 +406,7 @@ internal static partial class ModulePlacer
     // Triple-word path (versions 12-40)
     // ---------------------------------
 
-    internal static int MaskCode192(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode192(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         // One rent, partitioned four ways (packed / allowed / masked / ~masked).
         var rent = ArrayPool<Row192>.Shared.Rent(4 * size);

@@ -45,7 +45,7 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithEciMode_ExplicitUtf8_UsesTheEciAwareGeneratorPath()
     {
-        var expected = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var expected = RmQRCodeGenerator.Create("a", RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
         using var bitmap = new RmQRCodeImageBuilder("a")
             .WithErrorCorrection(RmQREccLevel.H)
             .WithEciMode(EciMode.Utf8)
@@ -59,7 +59,7 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithEciMode_WhenDataWasProvided_ThrowsImmediately()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.M);
+        var data = RmQRCodeGenerator.Create("a", RmQREccLevel.M);
         await Assert.That(() => new RmQRCodeImageBuilder(data).WithEciMode(EciMode.Utf8)).Throws<InvalidOperationException>();
     }
 
@@ -72,7 +72,7 @@ public class RmQRCodeImageBuilderUnitTest
         foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
         {
             const int modulePixelSize = 4;
-            var data = RmQRCodeGenerator.CreateRmQRCode("RM" + (int)version, ecc, new RmQRCodeGeneratorOptions { Version = version });
+            var data = RmQRCodeGenerator.Create("RM" + (int)version, ecc, new RmQRCodeGeneratorOptions { Version = version });
             using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
 
             await Assert.That(bitmap.Width).IsEqualTo(data.Width * modulePixelSize);
@@ -93,7 +93,7 @@ public class RmQRCodeImageBuilderUnitTest
     public async Task ToBitmap_CustomColors_AndCircleShape_UseConfiguredColors()
     {
         const int modulePixelSize = 6;
-        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M);
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M);
         using var bitmap = new RmQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
             .WithColors(SKColors.DarkBlue, SKColors.LightYellow)
@@ -114,7 +114,7 @@ public class RmQRCodeImageBuilderUnitTest
     public async Task ContentBuilder_DefaultQuietZone_IsTwoModules()
     {
         using var bitmap = new RmQRCodeImageBuilder("0123456789").WithModulePixelSize(3).ToBitmap();
-        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M); // default quiet zone 2 → R11x27 → 31 × 15
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M); // default quiet zone 2 → R11x27 → 31 × 15
         await Assert.That(bitmap.Width).IsEqualTo(31 * 3);
         await Assert.That(bitmap.Height).IsEqualTo(15 * 3);
         await Assert.That(data.Width).IsEqualTo(31);
@@ -138,7 +138,7 @@ public class RmQRCodeImageBuilderUnitTest
         // Width-only sizing (the static helpers' rule and the no-size default) must give the
         // symbol at exactly that width: no letterbox band from the rounded height, and an
         // opaque image (the wide versions used to lose 1-3 columns to transparent pad).
-        var data = RmQRCodeGenerator.CreateRmQRCode("RM" + (int)version, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        var data = RmQRCodeGenerator.Create("RM" + (int)version, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         using var bitmap = new RmQRCodeImageBuilder(data).ToBitmap();
         await Assert.That(bitmap.Width).IsEqualTo(512);
         await Assert.That(bitmap.Height).IsEqualTo((int)Math.Round(512d * data.Height / data.Width));
@@ -170,7 +170,7 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithWidth_IsThePublicWidthOnlyRule_AndDefersToSizeAndModulePixelSize()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M); // 31 × 15
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M); // 31 × 15
         using var wide = new RmQRCodeImageBuilder(data).WithWidth(1024).ToBitmap();
         await Assert.That(wide.Width).IsEqualTo(1024);
         await Assert.That(wide.Height).IsEqualTo((int)Math.Round(1024d * 15 / 31));
@@ -197,7 +197,7 @@ public class RmQRCodeImageBuilderUnitTest
     {
         // 31 × 15 modules into a 400 × 400 canvas: scale = min(400/31, 400/15) = 12.9;
         // content = 400 × 193.5, centered vertically (pad top ≈ 103), pad keeps the clear color.
-        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M);
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M);
         using var bitmap = new RmQRCodeImageBuilder(data)
             .WithSize(400, 400)
             .WithColors(SKColors.Black, SKColors.White, SKColors.Red)
@@ -228,7 +228,7 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithModulePixelSize_AndLargerCanvas_PadsAndCentersOnWholePixels()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M); // 31 × 15
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M); // 31 × 15
         const int modulePixelSize = 4;
         using var bitmap = new RmQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
@@ -268,7 +268,7 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task SymbologyOptions_DataBuilder_ThrowInvalidOperationException()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M);
+        var data = RmQRCodeGenerator.Create("1", RmQREccLevel.M);
         await Assert.That(() => new RmQRCodeImageBuilder(data).WithErrorCorrection(RmQREccLevel.H)).Throws<InvalidOperationException>();
         await Assert.That(() => new RmQRCodeImageBuilder(data).WithVersion(RmQRVersion.R7x43)).Throws<InvalidOperationException>();
         await Assert.That(() => new RmQRCodeImageBuilder(data).WithFitStrategy(RmQRFitStrategy.MinimizeHeight)).Throws<InvalidOperationException>();
@@ -300,7 +300,7 @@ public class RmQRCodeImageBuilderUnitTest
         await Assert.That(bitmap.Width).IsEqualTo(310);
         await Assert.That(bitmap.Height).IsEqualTo(150); // 31 × 15 → 310 × 150
 
-        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M);
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M);
         using var fromData = SKBitmap.Decode(RmQRCodeImageBuilder.GetPngBytes(data, size: 62));
         await Assert.That((fromData.Width, fromData.Height)).IsEqualTo((62, 30));
     }
@@ -330,7 +330,7 @@ public class RmQRCodeImageBuilderUnitTest
         await Assert.That(decoded.Width).IsEqualTo(128);
 
         var writer2 = new ArrayBufferWriter<byte>();
-        RmQRCodeImageBuilder.WriteImage(RmQRCodeGenerator.CreateRmQRCode("Hello", RmQREccLevel.M), writer2, SKEncodedImageFormat.Webp, 128, 80);
+        RmQRCodeImageBuilder.WriteImage(RmQRCodeGenerator.Create("Hello", RmQREccLevel.M), writer2, SKEncodedImageFormat.Webp, 128, 80);
         await Assert.That(writer2.WrittenCount).IsGreaterThan(0);
     }
 
@@ -361,12 +361,12 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task Renderer_LetterboxesIntoArea_AndExtensionsAgree()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M); // 31 × 15
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M); // 31 × 15
         using var direct = new SKBitmap(200, 200);
         using (var canvas = new SKCanvas(direct))
         {
             canvas.Clear(SKColors.Red);
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, 200, 200), data, null, null);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, 200, 200), data, null, null);
         }
         // Background covers the whole area; symbol letterboxed vertically (200/31 = 6.45 per module → 96.8 px high).
         await Assert.That(direct.GetPixel(100, 5)).IsEqualTo(SKColors.White);
@@ -388,6 +388,6 @@ public class RmQRCodeImageBuilderUnitTest
             canvas.Render(data, SKRect.Create(0, 0, 200, 200), clearColor: SKColors.Red);
         await Assert.That(viaAreaExtension.GetPixel(100, 5)).IsEqualTo(SKColors.White);
 
-        await Assert.That(() => QRCodeRenderer.Render(null!, SKRect.Create(0, 0, 10, 10), (RmQRCodeData)null!, null, null)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolRenderer.Render(null!, SKRect.Create(0, 0, 10, 10), (RmQRCodeData)null!, null, null)).Throws<ArgumentNullException>();
     }
 }

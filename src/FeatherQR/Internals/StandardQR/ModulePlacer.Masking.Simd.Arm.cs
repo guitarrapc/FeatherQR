@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON). Selected at
@@ -41,7 +41,7 @@ namespace FeatherQR.Internals.StandardQr;
 internal static partial class ModulePlacer
 {
     /// <summary>Entry point for the NEON tiers. Caller guarantees AdvSimd.Arm64.IsSupported.</summary>
-    internal static int MaskCodeAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCodeAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         if (size <= 64)
         {
@@ -239,7 +239,7 @@ internal static partial class ModulePlacer
     // Single-word tier (versions 1-11)
     // ---------------------------------
 
-    internal static int MaskCode64AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode64AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         Span<ulong> packed = stackalloc ulong[64];
         Span<ulong> allowed = stackalloc ulong[64];
@@ -531,7 +531,7 @@ internal static partial class ModulePlacer
     // Two-word SoA tier (versions 12-29, size 65..128)
     // ---------------------------------
 
-    internal static int MaskCode128AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode128AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
         var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(8 * size);
@@ -836,7 +836,7 @@ internal static partial class ModulePlacer
     // Three-word SoA tier (versions 30-40, size > 128)
     // ---------------------------------
 
-    internal static int MaskCode192AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode192AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
         var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(12 * size);

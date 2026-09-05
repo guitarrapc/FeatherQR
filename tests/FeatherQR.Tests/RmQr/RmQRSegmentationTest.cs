@@ -1,7 +1,7 @@
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -106,8 +106,8 @@ public class RmQRSegmentationTest
         {
             foreach (var strategy in Strategies())
             {
-                var single = RmQRCodeGenerator.CreateRmQRCode(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy });
-                var optimal = RmQRCodeGenerator.CreateRmQRCode(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
+                var single = RmQRCodeGenerator.Create(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy });
+                var optimal = RmQRCodeGenerator.Create(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
 
                 await Assert.That(Area(optimal)).IsLessThanOrEqualTo(Area(single));
                 await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded, out var info)).IsTrue();
@@ -131,8 +131,8 @@ public class RmQRSegmentationTest
         {
             foreach (var strategy in Strategies())
             {
-                var single = RmQRCodeGenerator.CreateRmQRCode(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy });
-                var optimal = RmQRCodeGenerator.CreateRmQRCode(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
+                var single = RmQRCodeGenerator.Create(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy });
+                var optimal = RmQRCodeGenerator.Create(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
                 if (optimal.Version != single.Version)
                     continue;
 
@@ -155,7 +155,7 @@ public class RmQRSegmentationTest
         {
             foreach (var strategy in Strategies())
             {
-                var actual = RmQRCodeGenerator.CreateRmQRCode(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal }).Version;
+                var actual = RmQRCodeGenerator.Create(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal }).Version;
                 var expected = ExhaustiveBestVersion(content, ecc, strategy);
                 await Assert.That(actual).IsEqualTo(expected);
             }
@@ -174,13 +174,13 @@ public class RmQRSegmentationTest
     {
         foreach (var strategy in Strategies())
         {
-            var actual = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
+            var actual = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
             await Assert.That(actual.Version).IsEqualTo(ExhaustiveBestVersion(content, RmQREccLevel.M, strategy));
 
             await Assert.That(RmQRCodeDecoder.TryDecode(actual, out var decoded)).IsTrue();
             await Assert.That(decoded).IsEqualTo(content);
 
-            var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy });
+            var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy });
             await Assert.That(Area(actual)).IsLessThanOrEqualTo(Area(single));
         }
     }
@@ -237,8 +237,8 @@ public class RmQRSegmentationTest
     {
         const string content = "37~yhakdP$%F$SMQINKKTSHJ";
 
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.H);
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.H, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.H);
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.H, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(single.Version).IsEqualTo(RmQRVersion.R15x59);
         await Assert.That(optimal.Version).IsEqualTo(RmQRVersion.R11x77);
@@ -267,21 +267,21 @@ public class RmQRSegmentationTest
         await Assert.That(optimalSize.BufferSize).IsGreaterThan(singleSize.BufferSize);
 
         var undersized = new byte[singleSize.BufferSize];
-        var tooSmall = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, undersized, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }));
+        var tooSmall = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.H, undersized, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }));
         // Specifically the destination check, not some other capacity error.
         await Assert.That(tooSmall!.ParamName).IsEqualTo("destination");
 
         // Sizing with the same segmentation is what a caller must do, and it works.
         var sized = new byte[optimalSize.BufferSize];
-        await Assert.That(RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, sized, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal })).IsEqualTo(optimalSize.BufferSize);
+        await Assert.That(RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.H, sized, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal })).IsEqualTo(optimalSize.BufferSize);
     }
 
     [Test]
     public async Task Optimal_IsNotTheDefault()
     {
         const string content = "https://example.com/p/1234567890123456";
-        var implicitDefault = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
-        var explicitSingle = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single });
+        var implicitDefault = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var explicitSingle = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single });
 
         await Assert.That(implicitDefault.Version).IsEqualTo(explicitSingle.Version);
         await Assert.That(implicitDefault.GetRawData()).IsEquivalentTo(explicitSingle.GetRawData());
@@ -298,8 +298,8 @@ public class RmQRSegmentationTest
         // (R11x77), splitting into Byte + Numeric needs 249 (R15x43).
         const string content = "https://example.com/p/1234567890123456";
 
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(single.Version).IsEqualTo(RmQRVersion.R11x77);
         await Assert.That(optimal.Version).IsEqualTo(RmQRVersion.R15x43);
@@ -317,8 +317,8 @@ public class RmQRSegmentationTest
     [Arguments("éèê1234567890", RmQRVersion.R11x43, RmQRVersion.R13x27)]
     public async Task Optimal_MixedContent_ShrinksTheSymbol(string content, RmQRVersion expectedSingle, RmQRVersion expectedOptimal)
     {
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(single.Version).IsEqualTo(expectedSingle);
         await Assert.That(optimal.Version).IsEqualTo(expectedOptimal);
@@ -334,8 +334,8 @@ public class RmQRSegmentationTest
     [Arguments("$%*+-./: 0123456789")]
     public async Task Optimal_AlphanumericContent_KeepsTheSingleModeSymbol(string content)
     {
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
@@ -349,8 +349,8 @@ public class RmQRSegmentationTest
     [Arguments("こんにちは")]
     public async Task Optimal_SingleModeContent_KeepsTheSameVersion(string content)
     {
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
     }
 
@@ -366,9 +366,9 @@ public class RmQRSegmentationTest
         const string content = "abcdefghij1234567890abcdefghij";
         const RmQRVersion version = RmQRVersion.R7x99;
 
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version })).Throws<ArgumentException>();
 
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Version).IsEqualTo(version);
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -391,7 +391,7 @@ public class RmQRSegmentationTest
             Type? singleType = null;
             try
             {
-                RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+                RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
             }
             catch (ArgumentException ex)
             {
@@ -404,7 +404,7 @@ public class RmQRSegmentationTest
             Type? optimalType = null;
             try
             {
-                optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
+                optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
             }
             catch (ArgumentException ex)
             {
@@ -433,8 +433,8 @@ public class RmQRSegmentationTest
         const string content = "https://example.com/p/1234567890123456";
         const RmQRVersion version = RmQRVersion.R17x139;
 
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
     }
@@ -443,8 +443,8 @@ public class RmQRSegmentationTest
     public async Task Optimal_RequestedVersion_TooLongEvenSegmented_ThrowsLikeSingle()
     {
         var content = new string('a', 60) + "1234567890";
-        var single = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 }));
-        var optimal = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, Segmentation = RmQRSegmentation.Optimal }));
+        var single = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 }));
+        var optimal = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, Segmentation = RmQRSegmentation.Optimal }));
 
         await Assert.That(optimal!.Message).IsEqualTo(single!.Message);
     }
@@ -453,8 +453,8 @@ public class RmQRSegmentationTest
     public async Task Optimal_TooLongForEveryVersion_ThrowsLikeSingle()
     {
         var content = new string('a', 400);
-        var single = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M));
-        var optimal = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }));
+        var single = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M));
+        var optimal = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }));
 
         await Assert.That(optimal!.Message).IsEqualTo(single!.Message);
     }
@@ -471,9 +471,9 @@ public class RmQRSegmentationTest
         // but 811 + 346 = 1157 bits of the 1216 available once the digits split off.
         var content = new string('a', 100) + new string('7', 100);
 
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M)).Throws<ArgumentException>();
 
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Version).IsEqualTo(RmQRVersion.R17x139);
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -493,9 +493,9 @@ public class RmQRSegmentationTest
     {
         var content = new string('a', letters) + new string('7', digits);
 
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7 })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7 })).Throws<ArgumentException>();
 
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7, Segmentation = RmQRSegmentation.Optimal });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7, Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimal.Height - 4).IsEqualTo(7);
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -515,16 +515,16 @@ public class RmQRSegmentationTest
 
         foreach (var strategy in Strategies())
         {
-            await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(ascii, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy })).Throws<ArgumentException>();
-            var optimal = RmQRCodeGenerator.CreateRmQRCode(ascii, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
+            await Assert.That(() => RmQRCodeGenerator.Create(ascii, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy })).Throws<ArgumentException>();
+            var optimal = RmQRCodeGenerator.Create(ascii, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
             await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
             await Assert.That(decoded).IsEqualTo(ascii);
         }
 
         foreach (var (content, eci) in new[] { (latin1, EciMode.Iso8859_1), (utf8, EciMode.Utf8) })
         {
-            await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = eci })).Throws<ArgumentException>();
-            var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = eci, Segmentation = RmQRSegmentation.Optimal });
+            await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = eci })).Throws<ArgumentException>();
+            var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = eci, Segmentation = RmQRSegmentation.Optimal });
             await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
             await Assert.That(decoded).IsEqualTo(content);
         }
@@ -535,7 +535,7 @@ public class RmQRSegmentationTest
     {
         var content = new string('a', 100) + new string('7', 100);
         var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
-        var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(size.Version).IsEqualTo(data.Version);
         await Assert.That(size.BufferSize).IsEqualTo(data.Width * data.Height);
@@ -555,8 +555,8 @@ public class RmQRSegmentationTest
     public async Task Optimal_HeightConstraint_IsRespected(RmQRHeight height)
     {
         const string content = "https://example.com/p/1234567890123456";
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = height, Segmentation = RmQRSegmentation.Optimal });
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = height });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = height, Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = height });
 
         await Assert.That(optimal.Height - 4).IsEqualTo((int)height);
         await Assert.That(optimal.Width).IsLessThanOrEqualTo(single.Width);
@@ -568,8 +568,8 @@ public class RmQRSegmentationTest
     public async Task Optimal_MinimizeWidth_PicksANarrowerSymbolThanSingle()
     {
         const string content = "https://example.com/p/1234567890123456";
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeWidth });
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeWidth, Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeWidth });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeWidth, Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(optimal.Width).IsLessThanOrEqualTo(single.Width);
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
@@ -580,8 +580,8 @@ public class RmQRSegmentationTest
     public async Task Optimal_MinimizeHeight_PicksAFlatterOrEqualSymbolThanSingle()
     {
         const string content = "https://example.com/p/1234567890123456";
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight, Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight, Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(optimal.Height).IsLessThanOrEqualTo(single.Height);
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
@@ -602,8 +602,8 @@ public class RmQRSegmentationTest
         // exemption (which silently falls back to the identical single-mode
         // symbol) fails this test instead of passing it vacuously.
         var content = "\uFEFF" + new string('1', 30) + "a";
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(Area(optimal)).IsLessThan(Area(single));
         await Assert.That(RmQRCodeDecoder.TryDecode(single, out var singleDecoded)).IsTrue();
@@ -621,7 +621,7 @@ public class RmQRSegmentationTest
         var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
 
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, options)).IsFalse();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, options)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, options)).Throws<ArgumentException>();
 
         // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(new string('1', 300) + "a", RmQREccLevel.M, out _, options)).IsTrue();
@@ -635,8 +635,8 @@ public class RmQRSegmentationTest
         var options = new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)7, QuietZoneSize = -1 };
         var buffer = new byte[4096];
 
-        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, options));
-        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, options));
+        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, options));
+        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.Create("123".AsSpan(), RmQREccLevel.M, buffer, options));
         var fromSizing = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123", RmQREccLevel.M, out _, options));
 
         await Assert.That(fromCreate.ParamName).IsEqualTo("quietZoneSize");
@@ -644,7 +644,7 @@ public class RmQRSegmentationTest
         await Assert.That(fromSizing.ParamName).IsEqualTo("quietZoneSize");
 
         var segmentationOnly = new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)7 };
-        var fromSegmentation = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, segmentationOnly));
+        var fromSegmentation = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, segmentationOnly));
         await Assert.That(fromSegmentation.ParamName).IsEqualTo("segmentation");
     }
 
@@ -656,8 +656,8 @@ public class RmQRSegmentationTest
         // a mid-content U+FEFF to a run start would silently drop it, so the planner
         // must fall back to the single-mode stream, where it survives.
         var content = new string('1', 30) + "\uFEFF" + "a";
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
@@ -672,8 +672,8 @@ public class RmQRSegmentationTest
     [Arguments("é😀A1")]
     public async Task Optimal_Utf8_RoundTrips(string content)
     {
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
 
         await Assert.That(Area(optimal)).IsLessThanOrEqualTo(Area(single));
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
@@ -685,8 +685,8 @@ public class RmQRSegmentationTest
     [Arguments("Café 12345678901234")]
     public async Task Optimal_Iso88591_RoundTrips(string content)
     {
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Segmentation = RmQRSegmentation.Optimal });
-        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
 
         await Assert.That(Area(optimal)).IsLessThanOrEqualTo(Area(single));
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
@@ -698,7 +698,7 @@ public class RmQRSegmentationTest
     {
         // The ECI prefix is 11 bits the plan must pay for even though no Byte run needs it.
         const string content = "1234567890ABCDEFGH1234567890";
-        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
     }
@@ -707,8 +707,8 @@ public class RmQRSegmentationTest
     public async Task Optimal_Iso88591WithUnrepresentableContent_ThrowsLikeSingle()
     {
         const string content = "日本語";
-        var single = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 }));
-        var optimal = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Segmentation = RmQRSegmentation.Optimal }));
+        var single = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 }));
+        var optimal = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Segmentation = RmQRSegmentation.Optimal }));
 
         await Assert.That(optimal!.Message).IsEqualTo(single!.Message);
     }
@@ -725,11 +725,11 @@ public class RmQRSegmentationTest
         {
             var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
             var buffer = new byte[size.BufferSize];
-            var written = RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
+            var written = RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
 
             await Assert.That(written).IsEqualTo(size.BufferSize);
 
-            var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
+            var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
             await Assert.That(size.Version).IsEqualTo(data.Version);
             await Assert.That(size.Width).IsEqualTo(data.Width);
             await Assert.That(size.Height).IsEqualTo(data.Height);
@@ -748,9 +748,9 @@ public class RmQRSegmentationTest
     {
         var size = Sizing.Required(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
         var buffer = new byte[size.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
+        RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
 
-        var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
+        var data = RmQRCodeGenerator.Create(content, RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(size.Version).IsEqualTo(data.Version);
 
         for (var row = 0; row < data.Height; row++)
@@ -774,14 +774,14 @@ public class RmQRSegmentationTest
         const RmQRSegmentation invalid = (RmQRSegmentation)7;
         var buffer = new byte[4096];
 
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
 
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
     }
 
@@ -792,9 +792,9 @@ public class RmQRSegmentationTest
         var buffer = new byte[4096];
         const EciMode unsupported = (EciMode)4;
 
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
     }
 
@@ -824,17 +824,17 @@ public class RmQRSegmentationTest
 
         for (var i = 0; i < 3; i++)
         {
-            RmQRCodeGenerator.CreateRmQRCode(url.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
-            RmQRCodeGenerator.CreateRmQRCode(longMixed.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
-            RmQRCodeGenerator.CreateRmQRCode(utf8.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
+            RmQRCodeGenerator.Create(url.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+            RmQRCodeGenerator.Create(longMixed.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+            RmQRCodeGenerator.Create(utf8.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 16; i++)
         {
-            RmQRCodeGenerator.CreateRmQRCode(url.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
-            RmQRCodeGenerator.CreateRmQRCode(longMixed.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
-            RmQRCodeGenerator.CreateRmQRCode(utf8.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
+            RmQRCodeGenerator.Create(url.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+            RmQRCodeGenerator.Create(longMixed.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+            RmQRCodeGenerator.Create(utf8.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
         }
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
@@ -845,19 +845,19 @@ public class RmQRSegmentationTest
     [Test]
     public async Task Optimal_InvalidArguments_ThrowLikeSingle()
     {
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", (RmQREccLevel)9, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = (RmQRFitStrategy)9, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = (RmQRHeight)8, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = (RmQRVersion)99, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, Height = RmQRHeight.H11, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = -1, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", (RmQREccLevel)9, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = (RmQRFitStrategy)9, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = (RmQRHeight)8, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = (RmQRVersion)99, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, Height = RmQRHeight.H11, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = -1, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
     public async Task Optimal_DestinationTooSmall_Throws()
     {
         var buffer = new byte[4];
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("https://example.com/p/1234567890123456".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.Create("https://example.com/p/1234567890123456".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentException>();
     }
 
     // -----------------------------------------------------------------
@@ -885,7 +885,7 @@ public class RmQRSegmentationTest
     {
         await Assert.That(() => new RmQRCodeImageBuilder("123").WithSegmentation((RmQRSegmentation)7)).Throws<ArgumentOutOfRangeException>();
 
-        var data = RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M);
+        var data = RmQRCodeGenerator.Create("123", RmQREccLevel.M);
         await Assert.That(() => new RmQRCodeImageBuilder(data).WithSegmentation(RmQRSegmentation.Optimal)).Throws<InvalidOperationException>();
     }
 }

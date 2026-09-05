@@ -43,7 +43,7 @@ Micro QR and rMQR were built after the rule was implicit and already follow it. 
 | `RmQRCodeGenerator.CreateRmQRCode` | `RmQRCodeGenerator.Create` | Same |
 | `QRCodeCalculatedSize.QrSize`, `MicroQRCodeCalculatedSize.QrSize` | `Size` | Matches `QRCodeData.Size`; rMQR's `Width`/`Height` stay |
 | `QRCodeGeneratorOptions.Utf8BOM` | `Utf8Bom` | Acronym rule |
-| `Internals.StandardQr`, `Internals.RmQr` | `Internals.StandardQR`, `Internals.RmQR` | Internal, but the same rule; test namespaces follow |
+| `Internals.StandardQr`, `Internals.RmQr` (namespaces) | `Internals.StandardQR`, `Internals.RmQR` | Internal, but the same rule. The `Internals/RmQr` folder is renamed with the namespace, so folder and namespace agree the way `MicroQR` and `StandardQR` already did |
 
 ### Rendering (`FeatherQR.SkiaSharp`)
 
@@ -167,3 +167,13 @@ Entries are appended per phase: what was done, what was learned, and the benchma
 **Playground verified by hand**, since `QrInterop` changed: published Debug WASM, served it, and encoded through all four paths the change touches — Standard QR automatic (v5), Standard QR pinned (v10, 65×65), Micro QR automatic (M2, 17×17) and Micro QR pinned (M4, 21×21). Decode was not re-checked; no decode call site changed.
 
 **Not done here, by design.** `QRCodeCalculatedSize`'s public constructor and `IsValid` are listed under the removals table but belong to Phase 3's value-kind unification, and D1 (the `string` convenience overloads) stays with Phase 2 where the rest of the shape decisions are.
+
+### Phase 2, renames (2026-09-06)
+
+**Done.** Both rename tables applied, plus D1: the four `string` convenience overloads are gone, so every generator is two `Create` methods (span, span-plus-destination) and `TryGetRequiredBufferSize`. `Vector2Slim` is internal and moved under `FeatherQR.SkiaSharp.Internals`; the `Internals/RmQr` folder is `Internals/RmQR`, matching its namespace and its `MicroQR` / `StandardQR` siblings. Core stays at 33 exported types, the rendering package drops to 25 (`Vector2Slim`), 58 across both. 215 files touched; full suite green (17,609 tests, both target frameworks), and the golden-pixel tests passing is what proves the mechanical rewrite changed names and nothing else. Playground re-verified in WASM (QR v5 automatic, QR pinned v10, Micro QR M2, rMQR R9x139) and its committed API page regenerated. `docs/migration.md` gains the rename table and a runnable replacement script; the naming rule itself is now recorded in [qrcode-symbologies.md](../specs/qrcode-symbologies.md) under "Public API direction", since this plan is deleted at the end.
+
+**Test names followed the API.** `CreateQrCode_*` / `CreateMicroQRCode_*` test methods became `Create_*`, `QRCodeRendererRunMergeParityTest` became `SymbolRendererRunMergeParityTest`, and `QRCodeSegmentationTest` became `QRSegmentationTest`. Benchmark class names were left alone on purpose: they are the identity of historical BenchmarkDotNet reports, and `QRCodeSegmentationEncode` reads as English rather than as a type reference.
+
+**Lessons.** Two are worth carrying (both recorded in the spec): PowerShell's `-ne` is case-insensitive, so a case-only rename silently writes nothing; and a blanket identifier rewrite reaches third-party API with the same spelling — `QRCoder.QRCodeGenerator.ECCLevel` in the comparator benchmarks was renamed along with ours and only the compiler caught it. A third is process rather than code: `@(@('a','b'))` collapses to a two-element array in PowerShell, so `$pair[0]` became a *character* and `String.Replace(char, char)` corrupted three test files. They were restored from HEAD (Phase 1 was committed) and the rules re-applied; the lesson is to build replacement pairs as `[pscustomobject]` or ordered dictionaries, never as nested arrays.
+
+**Benchmarks: not run, no hot path moved.** Renames only; the two call sites that changed shape (`string` overload callers) now bind to the span overload the string one forwarded to.

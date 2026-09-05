@@ -1,6 +1,6 @@
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals;
-using static FeatherQR.Internals.StandardQr.QRCodeConstants;
+using static FeatherQR.Internals.StandardQR.QRCodeConstants;
 
 namespace FeatherQR.Tests;
 
@@ -14,11 +14,11 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class BinaryInterleaverParityTest
 {
-    public static IEnumerable<(int Version, ECCLevel Level)> AllVersionLevelCombinations()
+    public static IEnumerable<(int Version, QREccLevel Level)> AllVersionLevelCombinations()
     {
         for (var version = 1; version <= 40; version++)
         {
-            foreach (var level in new[] { ECCLevel.L, ECCLevel.M, ECCLevel.Q, ECCLevel.H })
+            foreach (var level in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
             {
                 yield return (version, level);
             }
@@ -27,7 +27,7 @@ public class BinaryInterleaverParityTest
 
     [Test]
     [MethodDataSource(nameof(AllVersionLevelCombinations))]
-    public async Task InterleaveCodewords_MatchesReference_AllVersionsAndLevels(int version, ECCLevel level)
+    public async Task InterleaveCodewords_MatchesReference_AllVersionsAndLevels(int version, QREccLevel level)
     {
         var eccInfo = GetEccInfo(version, level);
         await AssertMatchesReference(version, eccInfo);
@@ -41,10 +41,10 @@ public class BinaryInterleaverParityTest
         // group, group 2 only.
         (int Version, ECCInfo EccInfo)[] patterns =
         [
-            (1, new ECCInfo(1, ECCLevel.M, 6, 2, 2, 3, 0, 0)),   // group 1 only, 2 blocks
-            (5, new ECCInfo(5, ECCLevel.H, 7, 2, 1, 3, 1, 4)),   // 1+1 blocks, cw2 = cw1 + 1
-            (5, new ECCInfo(5, ECCLevel.H, 12, 2, 2, 3, 2, 3)),  // cw2 == cw1 (no tail row)
-            (5, new ECCInfo(5, ECCLevel.H, 8, 2, 0, 0, 2, 4)),   // group 2 only
+            (1, new ECCInfo(1, QREccLevel.M, 6, 2, 2, 3, 0, 0)),   // group 1 only, 2 blocks
+            (5, new ECCInfo(5, QREccLevel.H, 7, 2, 1, 3, 1, 4)),   // 1+1 blocks, cw2 = cw1 + 1
+            (5, new ECCInfo(5, QREccLevel.H, 12, 2, 2, 3, 2, 3)),  // cw2 == cw1 (no tail row)
+            (5, new ECCInfo(5, QREccLevel.H, 8, 2, 0, 0, 2, 4)),   // group 2 only
         ];
 
         foreach (var (version, eccInfo) in patterns)
@@ -54,10 +54,10 @@ public class BinaryInterleaverParityTest
     }
 
     [Test]
-    [Arguments(5, ECCLevel.Q)]  // multi-block (2+2), version with 7 remainder bits
-    [Arguments(5, ECCLevel.L)]  // single-block fast path, 7 remainder bits
-    [Arguments(1, ECCLevel.L)]  // single-block fast path, 0 remainder bits (no tail)
-    public async Task InterleaveCodewords_DirtyOutputBuffer_RemainderTailIsZeroed(int version, ECCLevel level)
+    [Arguments(5, QREccLevel.Q)]  // multi-block (2+2), version with 7 remainder bits
+    [Arguments(5, QREccLevel.L)]  // single-block fast path, 7 remainder bits
+    [Arguments(1, QREccLevel.L)]  // single-block fast path, 0 remainder bits (no tail)
+    public async Task InterleaveCodewords_DirtyOutputBuffer_RemainderTailIsZeroed(int version, QREccLevel level)
     {
         // The remainder-bits byte is placed into the matrix by PlaceDataWords and must
         // be 0 per ISO/IEC 18004 窶・the function must not rely on the caller handing
@@ -86,7 +86,7 @@ public class BinaryInterleaverParityTest
     [Test]
     public async Task InterleaveCodewords_UndersizedDataBuffer_Throws()
     {
-        var eccInfo = GetEccInfo(5, ECCLevel.Q);
+        var eccInfo = GetEccInfo(5, QREccLevel.Q);
         Assert.Throws<ArgumentException>(() =>
         {
             var data = new byte[eccInfo.TotalDataCodewords - 1];
@@ -99,7 +99,7 @@ public class BinaryInterleaverParityTest
     [Test]
     public async Task InterleaveCodewords_UndersizedEccBuffer_Throws()
     {
-        var eccInfo = GetEccInfo(5, ECCLevel.Q);
+        var eccInfo = GetEccInfo(5, QREccLevel.Q);
         Assert.Throws<ArgumentException>(() =>
         {
             var data = new byte[eccInfo.TotalDataCodewords];
@@ -112,7 +112,7 @@ public class BinaryInterleaverParityTest
     [Test]
     public async Task InterleaveCodewords_UndersizedOutputBuffer_Throws()
     {
-        var eccInfo = GetEccInfo(5, ECCLevel.Q);
+        var eccInfo = GetEccInfo(5, QREccLevel.Q);
         Assert.Throws<ArgumentException>(() =>
         {
             var data = new byte[eccInfo.TotalDataCodewords];

@@ -45,11 +45,11 @@ public class QRCodeImageBuilderTest
     }
 
     [Test]
-    [Arguments(ECCLevel.L)]
-    [Arguments(ECCLevel.M)]
-    [Arguments(ECCLevel.Q)]
-    [Arguments(ECCLevel.H)]
-    public async Task GetPngBytes_DifferentEccLevels_ReturnsValidPngBytes(ECCLevel eccLevel)
+    [Arguments(QREccLevel.L)]
+    [Arguments(QREccLevel.M)]
+    [Arguments(QREccLevel.Q)]
+    [Arguments(QREccLevel.H)]
+    public async Task GetPngBytes_DifferentEccLevels_ReturnsValidPngBytes(QREccLevel eccLevel)
     {
         var bytes = QRCodeImageBuilder.GetPngBytes(TestContent, eccLevel);
 
@@ -213,7 +213,7 @@ public class QRCodeImageBuilderTest
     public async Task WithModulePixelSize_CustomSize_GeneratesCorrectSize()
     {
         const int modulePixelSize = 10;
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qrCodeData = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var expectedSide = qrCodeData.Size * modulePixelSize;
 
         using var bitmap = new QRCodeImageBuilder(TestContent)
@@ -228,7 +228,7 @@ public class QRCodeImageBuilderTest
     public async Task WithModulePixelSize_QRCodeDataBuilder_GeneratesCorrectSize()
     {
         const int modulePixelSize = 8;
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 10 });
+        var qrCodeData = QRCodeGenerator.Create(TestContent, QREccLevel.H, new QRCodeGeneratorOptions { Version = 10 });
         var expectedSide = qrCodeData.Size * modulePixelSize;
 
         using var bitmap = new QRCodeImageBuilder(qrCodeData)
@@ -243,7 +243,7 @@ public class QRCodeImageBuilderTest
     public async Task WithModulePixelSize_AndLargerCanvas_PadsAndCentersContent()
     {
         const int modulePixelSize = 6;
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qrCodeData = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var contentSide = qrCodeData.Size * modulePixelSize;
         const int canvasWidth = 400;
         const int canvasHeight = 500;
@@ -275,7 +275,7 @@ public class QRCodeImageBuilderTest
     public async Task WithModulePixelSize_AndTooSmallCanvas_ThrowsInvalidOperationException()
     {
         const int modulePixelSize = 10;
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qrCodeData = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var contentSide = qrCodeData.Size * modulePixelSize;
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
@@ -291,7 +291,7 @@ public class QRCodeImageBuilderTest
     public async Task WithModulePixelSize_AndExactCanvas_MatchesContentSize()
     {
         const int modulePixelSize = 8;
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qrCodeData = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var contentSide = qrCodeData.Size * modulePixelSize;
 
         using var bitmap = new QRCodeImageBuilder(TestContent)
@@ -307,7 +307,7 @@ public class QRCodeImageBuilderTest
     public async Task WithModulePixelSize_AndOddPadding_UsesIntegerOrigin()
     {
         const int modulePixelSize = 6;
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qrCodeData = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var contentSide = qrCodeData.Size * modulePixelSize;
         var canvasSide = contentSide + 1; // odd padding: 0 left/top, 1 right/bottom with integer division
 
@@ -356,11 +356,11 @@ public class QRCodeImageBuilderTest
     #region Fluent API Tests - WithErrorCorrection
 
     [Test]
-    [Arguments(ECCLevel.L)]
-    [Arguments(ECCLevel.M)]
-    [Arguments(ECCLevel.Q)]
-    [Arguments(ECCLevel.H)]
-    public async Task WithErrorCorrection_AllLevels_ReturnsBuilder(ECCLevel eccLevel)
+    [Arguments(QREccLevel.L)]
+    [Arguments(QREccLevel.M)]
+    [Arguments(QREccLevel.Q)]
+    [Arguments(QREccLevel.H)]
+    public async Task WithErrorCorrection_AllLevels_ReturnsBuilder(QREccLevel eccLevel)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithErrorCorrection(eccLevel);
@@ -415,7 +415,7 @@ public class QRCodeImageBuilderTest
     [Test]
     public async Task WithVersion_QRCodeDataBuilder_ThrowsInvalidOperationException()
     {
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H);
+        var qrCodeData = QRCodeGenerator.Create(TestContent, QREccLevel.H);
         var builder = new QRCodeImageBuilder(qrCodeData);
 
         Assert.Throws<InvalidOperationException>(() => builder.WithVersion(10));
@@ -425,12 +425,12 @@ public class QRCodeImageBuilderTest
     public async Task WithVersion_FixedVersion_MatchesQRCodeDataRendering()
     {
         const int fixedVersion = 10;
-        using var expectedBitmap = new QRCodeImageBuilder(QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = fixedVersion }))
+        using var expectedBitmap = new QRCodeImageBuilder(QRCodeGenerator.Create(TestContent, QREccLevel.H, new QRCodeGeneratorOptions { Version = fixedVersion }))
             .WithSize(256, 256)
             .ToBitmap();
 
         using var actualBitmap = new QRCodeImageBuilder(TestContent)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithVersion(fixedVersion)
             .WithSize(256, 256)
             .ToBitmap();
@@ -652,7 +652,7 @@ public class QRCodeImageBuilderTest
     {
         var builder = new QRCodeImageBuilder(TestContent)
             .WithSize(400, 400)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithQuietZone(2)
             .WithColors(SKColors.DarkBlue, SKColors.LightYellow)
             .WithFormat(SKEncodedImageFormat.Png, 95);
@@ -669,7 +669,7 @@ public class QRCodeImageBuilderTest
         var gradientOptions = new GradientOptions([SKColors.Purple, SKColors.Pink], GradientDirection.TopLeftToBottomRight);
         var builder = new QRCodeImageBuilder(TestContent)
             .WithSize(600, 600)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithEciMode(EciMode.Utf8)
             .WithQuietZone(3)
             .WithColors(SKColors.Navy, SKColors.Beige, SKColors.Transparent)

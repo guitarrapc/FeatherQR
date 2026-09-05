@@ -141,8 +141,8 @@ public class RmQRCodeGeneratorOptionsTest
     [Test]
     public async Task Generator_OmittedOptions_MatchesAnExplicitlyDefaultedOptions()
     {
-        var omitted = RmQRCodeGenerator.CreateRmQRCode("123456", RmQREccLevel.M);
-        var explicitly = RmQRCodeGenerator.CreateRmQRCode("123456", RmQREccLevel.M, RmQRCodeGeneratorOptions.Default);
+        var omitted = RmQRCodeGenerator.Create("123456", RmQREccLevel.M);
+        var explicitly = RmQRCodeGenerator.Create("123456", RmQREccLevel.M, RmQRCodeGeneratorOptions.Default);
 
         await Assert.That(omitted.Version).IsEqualTo(explicitly.Version);
         await Assert.That(omitted.GetRawData().AsSpan().SequenceEqual(explicitly.GetRawData())).IsTrue();

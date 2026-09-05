@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// remainder bits. Shared across symbologies: the layout depends only on the
 /// <see cref="ECCInfo"/> block structure, never on a symbology-specific version
 /// (Standard QR and rMQR interleave identically; Micro QR has one block and no
-/// interleaving stage). Lifted from Internals.StandardQr when rMQR became the
+/// interleaving stage). Lifted from Internals.StandardQR when rMQR became the
 /// second consumer.
 /// </summary>
 internal static class BinaryInterleaver

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Vectorized mask pattern selection for x86/x64 with AVX2. Selected at runtime
@@ -45,7 +45,7 @@ namespace FeatherQR.Internals.StandardQr;
 internal static partial class ModulePlacer
 {
     /// <summary>Entry point for the vectorized tiers. Caller guarantees Avx2.IsSupported.</summary>
-    internal static int MaskCodeSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCodeSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         if (size <= 64)
         {
@@ -353,7 +353,7 @@ internal static partial class ModulePlacer
                 for (var lane = 0; lane < 4; lane++)
                 {
                     var rowsOverlay = new ulong[size];
-                    var bits = QRCodeConstants.GetFormatBits((ECCLevel)e, 4 * g + lane);
+                    var bits = QRCodeConstants.GetFormatBits((QREccLevel)e, 4 * g + lane);
                     for (var i = 0; i < 15; i++)
                     {
                         if ((bits & (1 << i)) == 0) continue;
@@ -373,7 +373,7 @@ internal static partial class ModulePlacer
         return new MaskLayout64(pre, fmt, preScalar);
     }
 
-    internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         // The per-version tables are derived from the version's canonical blocked mask,
         // not from the parameter (kept for signature parity with the scalar and ARM
@@ -387,7 +387,7 @@ internal static partial class ModulePlacer
         if (buffer.Length < size * size)
             throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
         if ((uint)eccLevel > 3)
-            throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "ECCLevel was out of range");
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "QREccLevel was out of range");
 
         Span<ulong> packed = stackalloc ulong[64];
         packed = packed[..size];
@@ -579,7 +579,7 @@ internal static partial class ModulePlacer
     // Two-word SoA tier (versions 12-29, size 65..128)
     // ---------------------------------
 
-    internal static int MaskCode128Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode128Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
         var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(8 * size);
@@ -926,7 +926,7 @@ internal static partial class ModulePlacer
     // Three-word SoA tier (versions 30-40, size > 128)
     // ---------------------------------
 
-    internal static int MaskCode192Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode192Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
         var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(12 * size);

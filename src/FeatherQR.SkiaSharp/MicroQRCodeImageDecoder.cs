@@ -52,7 +52,7 @@ public static class MicroQRCodeImageDecoder
             if (width < 11 || height < 11 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
             {
                 text = string.Empty;
-                info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
+                info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
                 return false;
             }
 

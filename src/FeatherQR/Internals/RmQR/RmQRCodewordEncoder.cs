@@ -1,6 +1,6 @@
 using FeatherQR.Internals.BinaryEncoders;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR final message (ISO/IEC 23941 7.5-7.6): Reed-Solomon ECC per block over the

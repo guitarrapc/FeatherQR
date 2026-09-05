@@ -9,7 +9,7 @@ using SkiaSharp.QrCode.Image;
 
 var backgroundColor = new SKColor(0xEA, 0xFB, 0x00, 0xFF);
 var codeColor = SKColors.Green;
-var qr = QRCodeGenerator.CreateQrCode("finder-shape-background-test", ECCLevel.M);
+var qr = QRCodeGenerator.Create("finder-shape-background-test", QREccLevel.M);
 
 var imageSize = qr.Size * 10;
 var area = SKRect.Create(0, 0, imageSize, imageSize);
@@ -29,9 +29,9 @@ foreach (var finderPatternShape in finderPatternShapes)
     using var bitmap = new SKBitmap(imageSize, imageSize);
     using var canvas = new SKCanvas(bitmap);
 
-    QRCodeRenderer.Render(canvas, area, qr, codeColor, backgroundColor, finderPatternShape: finderPatternShape);
+    SymbolRenderer.Render(canvas, area, qr, codeColor, backgroundColor, finderPatternShape: finderPatternShape);
 
-    var finderRect = QRCodeRenderer.GetFinderPatternRect(qr, 0, area);
+    var finderRect = SymbolRenderer.GetFinderPatternRect(qr, 0, area);
     var moduleSize = finderRect.Width / 7f;
     var ringSampleX = (int)MathF.Round(finderRect.Left + moduleSize * 1.5f);
     var ringSampleY = (int)MathF.Round(finderRect.Top + moduleSize * 3.5f);

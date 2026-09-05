@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace FeatherQR.SkiaSharp;
+namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
 /// int version of Vector2, slim implementation
@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// <remarks>
 /// ref: https://github.com/dotnet/corefx/blob/v3.1.32/src/System.Numerics.Vectors/src/System/Numerics/Vector2_Intrinsics.cs
 /// </remarks>
-public readonly record struct Vector2Slim
+internal readonly record struct Vector2Slim
 {
     /// <summary>
     /// The X component of the vector.

@@ -23,11 +23,11 @@ public class ImageBuilderVersionRangeTest
     [Test]
     public async Task StandardQr_WithVersionOverload_MatchesTheGeneratorForTheSameRange()
     {
-        var range = QRCodeVersionRange.AtLeast(15);
+        var range = QRVersionRange.AtLeast(15);
         var options = new QRCodeGeneratorOptions { Version = range };
 
         var viaBuilder = new QRCodeImageBuilder(Content).WithVersion(range).ToByteArray();
-        var viaData = new QRCodeImageBuilder(QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, options)).ToByteArray();
+        var viaData = new QRCodeImageBuilder(QRCodeGenerator.Create(Content, QREccLevel.M, options)).ToByteArray();
 
         await Assert.That(viaBuilder).IsEquivalentTo(viaData);
     }
@@ -37,12 +37,12 @@ public class ImageBuilderVersionRangeTest
     {
         // The smallest version that holds the content, plus both count-indicator
         // boundaries and the top of the range.
-        var smallest = Sizing.Required(Content.AsSpan(), ECCLevel.M).Version;
+        var smallest = Sizing.Required(Content.AsSpan(), QREccLevel.M).Version;
 
         foreach (var version in new[] { smallest, 10, 27, 40 })
         {
             var pinned = new QRCodeImageBuilder(Content).WithVersion(version).ToByteArray();
-            var ranged = new QRCodeImageBuilder(Content).WithVersion(QRCodeVersionRange.Exactly(version)).ToByteArray();
+            var ranged = new QRCodeImageBuilder(Content).WithVersion(QRVersionRange.Exactly(version)).ToByteArray();
 
             if (!ranged.AsSpan().SequenceEqual(pinned))
                 Assert.Fail($"version {version}: WithVersion(int) and WithVersion(Exactly) rendered differently");
@@ -57,7 +57,7 @@ public class ImageBuilderVersionRangeTest
         int? absent = null;
         var untouched = new QRCodeImageBuilder(Content).ToByteArray();
         var minusOne = new QRCodeImageBuilder(Content).WithVersion(-1).ToByteArray();
-        var any = new QRCodeImageBuilder(Content).WithVersion(QRCodeVersionRange.Any).ToByteArray();
+        var any = new QRCodeImageBuilder(Content).WithVersion(QRVersionRange.Any).ToByteArray();
         var nullable = new QRCodeImageBuilder(Content).WithVersion(absent).ToByteArray();
 
         await Assert.That(minusOne).IsEquivalentTo(untouched);
@@ -88,9 +88,9 @@ public class ImageBuilderVersionRangeTest
     [Test]
     public async Task StandardQr_WithVersionOverload_RejectsAPreBuiltSymbol()
     {
-        var data = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M);
+        var data = QRCodeGenerator.Create(Content, QREccLevel.M);
 
-        await Assert.That(() => new QRCodeImageBuilder(data).WithVersion(QRCodeVersionRange.AtLeast(15))).Throws<InvalidOperationException>();
+        await Assert.That(() => new QRCodeImageBuilder(data).WithVersion(QRVersionRange.AtLeast(15))).Throws<InvalidOperationException>();
         await Assert.That(() => new QRCodeImageBuilder(data).WithVersion(15)).Throws<InvalidOperationException>();
     }
 
@@ -115,7 +115,7 @@ public class ImageBuilderVersionRangeTest
         var options = new MicroQRCodeGeneratorOptions { Version = range };
 
         var viaBuilder = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(range).ToByteArray();
-        var viaData = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.CreateMicroQRCode(MicroContent, MicroQREccLevel.L, options)).ToByteArray();
+        var viaData = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.Create(MicroContent, MicroQREccLevel.L, options)).ToByteArray();
 
         await Assert.That(viaBuilder).IsEquivalentTo(viaData);
     }
@@ -143,7 +143,7 @@ public class ImageBuilderVersionRangeTest
     [Test]
     public async Task MicroQr_WithVersionOverload_RejectsAPreBuiltSymbol()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(MicroContent, MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create(MicroContent, MicroQREccLevel.L);
 
         await Assert.That(() => new MicroQRCodeImageBuilder(data).WithVersion(MicroQRVersionRange.AtLeast(MicroQRVersion.M4))).Throws<InvalidOperationException>();
     }

@@ -5,7 +5,7 @@ namespace FeatherQR.Internals;
 /// </summary>
 internal readonly struct ECCInfo
 {
-    public ECCInfo(int version, ECCLevel errorCorrectionLevel, int totalDataCodewords, int eccPerBlock, int blocksInGroup1,
+    public ECCInfo(int version, QREccLevel errorCorrectionLevel, int totalDataCodewords, int eccPerBlock, int blocksInGroup1,
         int codewordsInGroup1, int blocksInGroup2, int codewordsInGroup2)
     {
         Version = version;
@@ -18,7 +18,7 @@ internal readonly struct ECCInfo
         CodewordsInGroup2 = codewordsInGroup2;
     }
     public int Version { get; }
-    public ECCLevel ErrorCorrectionLevel { get; }
+    public QREccLevel ErrorCorrectionLevel { get; }
     public int TotalDataCodewords { get; }
     public int ECCPerBlock { get; }
     public int BlocksInGroup1 { get; }
