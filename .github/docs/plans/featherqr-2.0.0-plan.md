@@ -118,8 +118,8 @@ Two decisions inside the phase. **D5:** whether single-mode selection picks Kanj
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Drop the `string` convenience overloads once the parameter-list overloads are gone? | Drop. The spec already schedules this re-evaluation: `string` converts implicitly to `ReadOnlySpan<char>` on all four target frameworks, so they contribute a parameter name and nothing else, and they double the entry-point count in IntelliSense |
-| D2 | `SymbolRenderer` / `SymbolImageBuilderBase<TSelf>` as the shared-renderer names | Confirm at the start of Phase 2; renaming twice is the only expensive outcome |
+| D1 | Drop the `string` convenience overloads once the parameter-list overloads are gone? | **Decided 2026-09-06: drop.** All four (`QRCodeGenerator` ×2, `MicroQRCodeGenerator` ×1, `RmQRCodeGenerator` ×1). `string` converts implicitly to `ReadOnlySpan<char>` on all four target frameworks, so `Create("text", ecc)` keeps compiling and the overloads contribute a parameter name and nothing else. `Create` becomes two methods per symbology, span and span-plus-destination, which also removes the asymmetry where only Standard QR had `(string, ecc, destination)` |
+| D2 | `SymbolRenderer` / `SymbolImageBuilderBase<TSelf>` as the shared-renderer names | **Decided 2026-09-06: adopt**, together with `QRCodeExtensions` → `SKCanvasExtensions`. "Symbol" is the word both standards and these specs already use for the thing all three symbologies produce; the per-symbology `*ImageDecoder` / `*ImageBuilder` types keep their prefixes |
 | D3 | Geometry contract: which corners, which space, which order, matrix-level behaviour | As described above; write it into the XML docs and a test before the implementation |
 | D4 | Structured Append encode API shape and whether a combine helper ships | Auto-balanced split, no combine helper in 2.0.0 |
 | D5 | Does `Segmentation.Single` choose Kanji mode automatically? | Yes, with a migration note; explicit `Utf8Bom` / `EciMode` settings keep Byte mode |
@@ -133,7 +133,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | # | Phase | Contents | Exit |
 |---|---|---|---|
 | 1 | Announced removals | The removals table; retire `SizingExceptionContractTest`; default the `options` parameter on all three generators | Surface shrinks, no rename yet |
-| 2 | Renames | Both rename tables; internal namespaces and test namespaces follow; D1 and D2 answered | One reviewable `PublicAPI.approved.txt` diff |
+| 2 | Renames | Both rename tables; the `string` overload removal from D1; internal namespaces and test namespaces follow | One reviewable `PublicAPI.approved.txt` diff |
 | 3 | Shape unification | `*CalculatedSize`, `*DecodeInfo` member order, `GradientOptions`, `IconData`, sealing, `Vector2Slim` | **API-final for the cleanup.** Tag `2.0.0-preview.3` |
 | 4 | Symbol geometry | D3, the geometry members on all three `*DecodeInfo`, all three image decode paths | Matrix-level decode behaviour documented and tested |
 | 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over original input bytes | Round-trip plus oracle cross-check |
