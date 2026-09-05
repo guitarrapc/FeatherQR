@@ -24,7 +24,7 @@ public class RenderOrientationTest
     [Arguments(true)]
     public async Task StandardQr_RenderedPixels_MatchMatrixOrientation(bool circleModules)
     {
-        var data = QRCodeGenerator.CreateQrCode("ORIENTATION 2026", ECCLevel.M, quietZoneSize: 0);
+        var data = QRCodeGenerator.CreateQrCode("ORIENTATION 2026", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         var builder = new QRCodeImageBuilder(data);
         using var bitmap = Render(builder, circleModules);
 
@@ -36,7 +36,7 @@ public class RenderOrientationTest
     [Arguments(true)]
     public async Task MicroQr_RenderedPixels_MatchMatrixOrientation(bool circleModules)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("MICRO 26", MicroQREccLevel.L, quietZoneSize: 0);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode("MICRO 26", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         var builder = new MicroQRCodeImageBuilder(data);
         using var bitmap = Render(builder, circleModules);
 

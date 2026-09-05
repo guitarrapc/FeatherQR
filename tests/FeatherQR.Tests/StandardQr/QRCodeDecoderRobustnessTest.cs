@@ -81,7 +81,7 @@ public class QRCodeDecoderRobustnessTest
         // decoder must either fail or return the exact original text, a wrong text
         // (misdecode) is never acceptable.
         var content = "fail closed";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: 0);
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         var size = qr.Size;
         var pristine = new byte[size * size];
         for (var y = 0; y < size; y++)

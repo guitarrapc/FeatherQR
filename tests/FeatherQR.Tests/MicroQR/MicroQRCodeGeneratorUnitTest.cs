@@ -60,7 +60,7 @@ public class MicroQRCodeGeneratorUnitTest
     [Arguments("123456789012345678901234", MicroQREccLevel.L, MicroQRVersion.M3)] // over requested version capacity
     public async Task CreateMicroQRCode_RequestedVersion_ThrowsOnIllegalCombination(string text, MicroQREccLevel ecc, MicroQRVersion version)
     {
-        await Assert.That(() => MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, version)).Throws<ArgumentException>();
+        await Assert.That(() => MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, new MicroQRCodeGeneratorOptions { Version = version })).Throws<ArgumentException>();
     }
 
     // ---------------------------------------------------------------
@@ -99,7 +99,7 @@ public class MicroQRCodeGeneratorUnitTest
     public async Task CreateMicroQRCode_RequestedVersion_TooLong_MessageStatesVersionMaximum()
     {
         // 11 digits on M2-L (numeric capacity 10)
-        var ex = Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode("12345678901", MicroQREccLevel.L, MicroQRVersion.M2));
+        var ex = Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode("12345678901", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M2 }));
 
         await Assert.That(ex.Message).Contains("too long for Micro QR M2");
         await Assert.That(ex.Message).Contains("11 digits");
@@ -121,7 +121,7 @@ public class MicroQRCodeGeneratorUnitTest
     [Test]
     public async Task CreateMicroQRCode_RequestedVersion_UsesRequestedVersion()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L, MicroQRVersion.M4);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 });
         await Assert.That(data.Version).IsEqualTo(MicroQRVersion.M4);
         await Assert.That(data.Size).IsEqualTo(17 + 2 * 2); // core 17 + default quiet zone 2 each side
     }
@@ -133,7 +133,7 @@ public class MicroQRCodeGeneratorUnitTest
     [Test]
     public async Task CreateMicroQRCode_M2_MatrixStructure()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L, quietZoneSize: 0);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         await Assert.That(data.Version).IsEqualTo(MicroQRVersion.M2);
         await Assert.That(data.Size).IsEqualTo(13);
@@ -169,7 +169,7 @@ public class MicroQRCodeGeneratorUnitTest
     [Arguments("bytes!!!!", MicroQREccLevel.Q)]
     public async Task CreateMicroQRCode_FormatInfo_RoundTripsFromMatrix(string text, MicroQREccLevel ecc)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, quietZoneSize: 0);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         // Read the 15 placed format modules back (ISO order: bit14..bit8 along
         // row 8 cols 1..7, bit7 at (8,8), bits 6..0 down col 8 rows 7..1) and
@@ -199,7 +199,7 @@ public class MicroQRCodeGeneratorUnitTest
     [Test]
     public async Task CreateMicroQRCode_QuietZone_IsLightAndSizedCorrectly()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly, quietZoneSize: 2);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly, new MicroQRCodeGeneratorOptions { QuietZoneSize = 2 });
 
         await Assert.That(data.Size).IsEqualTo(11 + 4);
         for (var i = 0; i < data.Size; i++)
@@ -222,13 +222,13 @@ public class MicroQRCodeGeneratorUnitTest
     [Arguments("byte data", MicroQREccLevel.M, 4)]
     public async Task CreateMicroQRCode_SpanApi_MatchesClassApi(string text, MicroQREccLevel ecc, int quietZone)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, quietZoneSize: quietZone);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
         var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
         await Assert.That(calculated.QrSize).IsEqualTo(data.Size);
 
         var buffer = new byte[calculated.BufferSize];
-        var written = MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, buffer, quietZoneSize: quietZone);
+        var written = MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, buffer, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
         await Assert.That(written).IsEqualTo(calculated.BufferSize);
 
         for (var row = 0; row < data.Size; row++)

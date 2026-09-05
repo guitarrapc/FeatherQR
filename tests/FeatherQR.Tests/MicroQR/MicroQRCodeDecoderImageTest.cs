@@ -39,7 +39,7 @@ public class MicroQRCodeDecoderImageTest
     [MethodDataSource(nameof(AllVersionEccCombinations))]
     public async Task Decode_CleanRender_AllVersionsAndEccLevels(MicroQRVersion version, MicroQREccLevel eccLevel, string content)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, version);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
@@ -129,7 +129,7 @@ public class MicroQRCodeDecoderImageTest
     public async Task Decode_QuietZoneVariants(int quietZoneModules)
     {
         const string content = "12345";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, quietZoneSize: quietZoneModules);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZoneModules });
         using var bitmap = RenderBitmap(data, modulePixelSize: 8);
 
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out _);
@@ -206,7 +206,7 @@ public class MicroQRCodeDecoderImageTest
 
     private static SKBitmap RenderRotated(string content, MicroQRVersion version, MicroQREccLevel eccLevel, float degrees)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, version);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
         var qrPx = data.Size * 8;
         var canvasPx = (int)(qrPx * 1.5f) + 16;
         var bitmap = new SKBitmap(new SKImageInfo(canvasPx, canvasPx, SKColorType.Bgra8888, SKAlphaType.Premul));

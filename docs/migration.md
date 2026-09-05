@@ -58,14 +58,59 @@ The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeIma
 
 The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, are unchanged and remain in the core; they are the way to decode from any image library other than SkiaSharp. Composite transparent pixels against white before converting.
 
+### The announced removals
+
+The members deprecated in 1.2.0 are gone, and so are the parameter list generator overloads that shipped in 1.1.1. Every generator now takes its configuration as one options struct, and that struct has a default, so the shortest call is unchanged:
+
+```csharp
+// unchanged, and now the only shape
+var data = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
+```
+
+| Removed | Replacement |
+|---|---|
+| `CreateQrCode(text, ecc, utf8BOM, eciMode, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `CreateQrCode(text, ecc, in QRCodeGeneratorOptions)` |
+| `CreateMicroQRCode(text, ecc, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `CreateMicroQRCode(text, ecc, in MicroQRCodeGeneratorOptions)` |
+| `QRCodeGenerator.GetRequiredBufferSize`, `MicroQRCodeGenerator.GetRequiredBufferSize` | `TryGetRequiredBufferSize` on all three generators |
+| `Compression` | Nothing. No API ever accepted or returned it; compress the bytes from `GetRawData()` yourself |
+
+Each argument becomes a property, and the mapping is mechanical:
+
+```csharp
+// before
+var data = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, utf8BOM: true, eciMode: EciMode.Utf8, requestedVersion: 5, quietZoneSize: 0);
+
+// after
+var data = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, new QRCodeGeneratorOptions
+{
+    Utf8BOM = true,
+    EciMode = EciMode.Utf8,
+    Version = 5,
+    QuietZoneSize = 0,
+});
+```
+
+| Argument | Property |
+|---|---|
+| `utf8BOM` | `Utf8BOM` |
+| `eciMode` | `EciMode` |
+| `quietZoneSize` | `QuietZoneSize` |
+| `requestedVersion` (Standard QR, `int`) | `Version` |
+| `requestedVersion` (Micro QR, `MicroQRVersion?`) | `Version` |
+
+**One trap: `requestedVersion: -1` is not `Version = -1`.** The parameter list spelled "pick the smallest version that fits" as `-1`; `QRCodeVersionRange` spells it `Any` and rejects `-1` deliberately, so that a defaulted or mistyped field cannot pass for automatic selection. A variable that may hold `-1` needs the branch:
+
+```csharp
+Version = version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(version),
+```
+
+Micro QR's `null` needs no branch: `MicroQRVersion?` converts implicitly, and `null` means `Any`.
+
+**A pinned version is checked against the content**, which the parameter list did not do: `Version = 1` with content that does not fit version 1 throws an `ArgumentException` naming the version, ECC level and mode, where `requestedVersion: 1` used to fail deeper inside the encoder with `ArgumentOutOfRangeException (Parameter 'length')`.
+
 ### Not yet in the 2.0.0 previews
 
-Two more changes land in the same major before 2.0.0 final and will be documented in this section when they do:
-
-- The removals announced in [1.2.0](#120): `GetRequiredBufferSize` on `QRCodeGenerator` and `MicroQRCodeGenerator` (use `TryGetRequiredBufferSize`), and the `Compression` enum.
-- The type renames (the `QR` casing rule, `ECCLevel` to `QREccLevel` and friends).
-
-Until then the previews carry the 1.2.0 surface under the new names, with the `[Obsolete]` members still present.
+The type renames (the `QR` casing rule, `ECCLevel` to `QREccLevel` and friends) land in the same major before 2.0.0 final, and will be documented in this section when they do.
 
 ## 1.2.0
 

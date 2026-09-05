@@ -56,7 +56,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task ToBitmap_ModulePixelSize_EveryModuleMatchesMatrix(MicroQRVersion version, MicroQREccLevel eccLevel, string content)
     {
         const int modulePixelSize = 4;
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, version);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
 
         using var bitmap = new MicroQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
@@ -152,7 +152,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task ContentBuilder_WithQuietZone_OverridesDefault()
     {
         const int modulePixelSize = 4;
-        var zeroQuietData = MicroQRCodeGenerator.CreateMicroQRCode(TestContent, MicroQREccLevel.M, quietZoneSize: 0);
+        var zeroQuietData = MicroQRCodeGenerator.CreateMicroQRCode(TestContent, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         using var bitmap = new MicroQRCodeImageBuilder(TestContent)
             .WithQuietZone(0)
@@ -178,7 +178,7 @@ public class MicroQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithVersion_FixedVersion_MatchesDataRendering()
     {
-        using var expectedBitmap = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.M, MicroQRVersion.M4))
+        using var expectedBitmap = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 }))
             .WithSize(256, 256)
             .ToBitmap();
 

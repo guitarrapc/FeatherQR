@@ -63,7 +63,7 @@ public class QRCodeDecoderImageTest
         // estimate to a neighboring version (regression: v14/v17/v18/v20 read as
         // one version lower and failed with DataUncorrectable).
         var content = "https://github.com/guitarrapc/FeatherQR";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, requestedVersion: version, quietZoneSize: 4);
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
         using var bitmap = new SKBitmap(new SKImageInfo(512, 512, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))
         {
@@ -248,7 +248,7 @@ public class QRCodeDecoderImageTest
 
     private static SKBitmap RenderQr(string content, ECCLevel eccLevel, int pixelsPerModule, EciMode eciMode = EciMode.Default)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
         var sizePx = qr.Size * pixelsPerModule;
         var bitmap = new SKBitmap(new SKImageInfo(sizePx, sizePx, SKColorType.Bgra8888, SKAlphaType.Premul));
         using var canvas = new SKCanvas(bitmap);
@@ -259,7 +259,7 @@ public class QRCodeDecoderImageTest
 
     private static SKBitmap RenderRotatedQr(string content, ECCLevel eccLevel, int pixelsPerModule, float degrees)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, eciMode: EciMode.Default);
+        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Default });
         var qrPx = qr.Size * pixelsPerModule;
         // Room for the rotated square plus margin
         var canvasPx = (int)(qrPx * 1.5f) + 16;

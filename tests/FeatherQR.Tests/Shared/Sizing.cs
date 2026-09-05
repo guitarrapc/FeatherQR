@@ -43,17 +43,4 @@ internal static class Sizing
 
     public static RmQRCodeCalculatedSize Required(ReadOnlySpan<char> text, RmQREccLevel eccLevel, int quietZoneSize)
         => Required(text, eccLevel, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
-
-    // The parameter list sizing overloads are [Obsolete] until 2.0.0. Parity tests still
-    // have to call them — comparing the replacement against the thing it replaces is the
-    // whole point — so the suppression lives here once instead of in every such test.
-#pragma warning disable CS0618 // GetRequiredBufferSize (parameter list)
-
-    public static QRCodeCalculatedSize ReleasedRequired(ReadOnlySpan<char> text, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int quietZoneSize = 4)
-        => QRCodeGenerator.GetRequiredBufferSize(text, eccLevel, utf8BOM, eciMode, quietZoneSize);
-
-    public static MicroQRCodeCalculatedSize ReleasedRequired(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = 2)
-        => MicroQRCodeGenerator.GetRequiredBufferSize(text, eccLevel, requestedVersion, quietZoneSize);
-
-#pragma warning restore CS0618 // GetRequiredBufferSize (parameter list)
 }

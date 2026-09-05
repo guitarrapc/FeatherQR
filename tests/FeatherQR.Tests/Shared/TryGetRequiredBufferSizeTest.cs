@@ -282,7 +282,7 @@ public class TryGetRequiredBufferSizeTest
         await Assert.That(ok).IsTrue();
 
         var buffer = new byte[size.BufferSize];
-        var written = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L, buffer, requestedVersion: size.Version);
+        var written = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L, buffer, new MicroQRCodeGeneratorOptions { Version = size.Version });
         await Assert.That(written).IsEqualTo(size.BufferSize);
     }
 
@@ -298,18 +298,6 @@ public class TryGetRequiredBufferSizeTest
     }
 
     // ---- Micro QR ------------------------------------------------------------------
-
-    [Test]
-    public async Task MicroQR_Fits_ReturnsTrue_AndMatchesThrowingOverload()
-    {
-        var ok = MicroQRCodeGenerator.TryGetRequiredBufferSize("12345", MicroQREccLevel.ErrorDetectionOnly, out var size);
-        var expected = Sizing.ReleasedRequired("12345", MicroQREccLevel.ErrorDetectionOnly);
-
-        await Assert.That(ok).IsTrue();
-        await Assert.That(size.Version).IsEqualTo(expected.Version);
-        await Assert.That(size.BufferSize).IsEqualTo(expected.BufferSize);
-        await Assert.That(size.QrSize).IsEqualTo(expected.QrSize);
-    }
 
     [Test]
     public async Task MicroQR_TooLong_ReturnsFalse_AndLeavesSizeDefault()
@@ -351,36 +339,42 @@ public class TryGetRequiredBufferSizeTest
                     yield return (content, ecc, version);
     }
 
+    /// <summary>
+    /// Sizing and encoding have to answer the same question. Until 2.0.0 this swept the
+    /// throwing overload against the <c>Try</c> one; with the throwing overload removed,
+    /// the encode itself is the reference, which is the comparison that actually matters
+    /// to a caller: a buffer sized here has to be the buffer the encode fills.
+    /// </summary>
     [Test]
     [MethodDataSource(nameof(MicroAgreementCases))]
-    public async Task MicroQR_Agrees_WithThrowingOverload(string content, MicroQREccLevel ecc, MicroQRVersion? version)
+    public async Task MicroQR_Sizing_AgreesWithEncoding(string content, MicroQREccLevel ecc, MicroQRVersion? version)
     {
-        MicroQRCodeCalculatedSize thrown = default;
-        var threw = false;
-        try
-        {
-            thrown = Sizing.ReleasedRequired(content, ecc, version);
-        }
-        catch (ArgumentException)
-        {
-            threw = true;
-        }
+        var options = new MicroQRCodeGeneratorOptions { Version = version };
 
-        // A version/ECC contradiction is an argument error on both surfaces, so it is
-        // excluded from the "throws ⟺ returns false" equivalence.
-        if (threw && version is { } v && !IsValidMicroCombination(v, ecc))
+        // A version/ECC contradiction is an argument error rather than a fit question, and
+        // both surfaces report it that way.
+        if (version is { } v && !IsValidMicroCombination(v, ecc))
         {
-            await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out _, new MicroQRCodeGeneratorOptions { Version = version })).Throws<ArgumentException>();
+            await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out _, options)).Throws<ArgumentException>();
+            await Assert.That(() => MicroQRCodeGenerator.CreateMicroQRCode(content, ecc, options)).Throws<ArgumentException>();
             return;
         }
 
-        var ok = MicroQRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, new MicroQRCodeGeneratorOptions { Version = version });
+        var ok = MicroQRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, options);
 
-        await Assert.That(ok).IsEqualTo(!threw);
         if (ok)
         {
-            await Assert.That(size.Version).IsEqualTo(thrown.Version);
-            await Assert.That(size.BufferSize).IsEqualTo(thrown.BufferSize);
+            var data = MicroQRCodeGenerator.CreateMicroQRCode(content, ecc, options);
+            await Assert.That(data.Version).IsEqualTo(size.Version);
+            await Assert.That(data.Size).IsEqualTo(size.QrSize);
+
+            var buffer = new byte[size.BufferSize];
+            await Assert.That(MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), ecc, buffer, options)).IsEqualTo(size.BufferSize);
+        }
+        else
+        {
+            await Assert.That(() => MicroQRCodeGenerator.CreateMicroQRCode(content, ecc, options)).Throws<ArgumentException>()
+                .Because("content that does not fit must not encode either");
         }
     }
 
@@ -392,16 +386,6 @@ public class TryGetRequiredBufferSizeTest
     };
 
     // ---- Standard QR ---------------------------------------------------------------
-
-    [Test]
-    public async Task StandardQR_Fits_ReturnsTrue_AndMatchesThrowingOverload()
-    {
-        var ok = QRCodeGenerator.TryGetRequiredBufferSize("hello world", ECCLevel.M, out var size);
-        var expected = Sizing.ReleasedRequired("hello world", ECCLevel.M);
-
-        await Assert.That(ok).IsTrue();
-        await Assert.That(size).IsEqualTo(expected);
-    }
 
     [Test]
     public async Task StandardQR_TooLong_ReturnsFalse_AndLeavesSizeDefault()
@@ -442,25 +426,36 @@ public class TryGetRequiredBufferSizeTest
                         yield return (content, ecc, utf8BOM, eciMode);
     }
 
+    /// <inheritdoc cref="MicroQR_Sizing_AgreesWithEncoding"/>
     [Test]
     [MethodDataSource(nameof(StandardAgreementCases))]
-    public async Task StandardQR_Agrees_WithThrowingOverload(string content, ECCLevel ecc, bool utf8BOM, EciMode eciMode)
+    public async Task StandardQR_Sizing_AgreesWithEncoding(string content, ECCLevel ecc, bool utf8BOM, EciMode eciMode)
     {
-        QRCodeCalculatedSize thrown = default;
-        var threw = false;
-        try
-        {
-            thrown = Sizing.ReleasedRequired(content, ecc, utf8BOM, eciMode);
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
-        {
-            threw = true;
-        }
+        var options = new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = eciMode };
+        var ok = QRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, options);
 
-        var ok = QRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = eciMode });
-
-        await Assert.That(ok).IsEqualTo(!threw);
         if (ok)
-            await Assert.That(size).IsEqualTo(thrown);
+        {
+            var data = QRCodeGenerator.CreateQrCode(content, ecc, options);
+            await Assert.That(data.Version).IsEqualTo(size.Version);
+            await Assert.That(data.Size).IsEqualTo(size.QrSize);
+
+            var buffer = new byte[size.BufferSize];
+            await Assert.That(QRCodeGenerator.CreateQrCode(content.AsSpan(), ecc, buffer, options)).IsEqualTo(size.BufferSize);
+        }
+        else
+        {
+            var threw = false;
+            try
+            {
+                QRCodeGenerator.CreateQrCode(content, ecc, options);
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+            {
+                threw = true;
+            }
+
+            await Assert.That(threw).IsTrue().Because("content that does not fit must not encode either");
+        }
     }
 }

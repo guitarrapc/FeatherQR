@@ -90,7 +90,7 @@ public class QRCodeDecoderPerspectiveTest
     /// </summary>
     private static SKBitmap RenderKeystone(string content, int version, float tilt, float rotateDegrees)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, requestedVersion: version, quietZoneSize: 4);
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
         var qrPx = qr.Size * 8;
 
         using var flat = new SKBitmap(new SKImageInfo(qrPx, qrPx, SKColorType.Bgra8888, SKAlphaType.Premul));

@@ -32,7 +32,7 @@ public class MicroQRDecodeEndToEnd
 
         var calculated = Sizing.Required("0123456789", ECCLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
-        FeatherQR.QRCodeGenerator.CreateQrCode("0123456789", ECCLevel.L, _standardModules, quietZoneSize: 0);
+        FeatherQR.QRCodeGenerator.CreateQrCode("0123456789", ECCLevel.L, _standardModules, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         _standardSize = calculated.QrSize;
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
@@ -96,7 +96,7 @@ public class MicroQRDecodeEndToEnd
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
+        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         return (buffer, calculated.QrSize);
     }
 }

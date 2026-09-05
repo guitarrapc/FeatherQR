@@ -228,7 +228,7 @@ public class QRCodeImageBuilderTest
     public async Task WithModulePixelSize_QRCodeDataBuilder_GeneratesCorrectSize()
     {
         const int modulePixelSize = 8;
-        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 10);
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 10 });
         var expectedSide = qrCodeData.Size * modulePixelSize;
 
         using var bitmap = new QRCodeImageBuilder(qrCodeData)
@@ -425,7 +425,7 @@ public class QRCodeImageBuilderTest
     public async Task WithVersion_FixedVersion_MatchesQRCodeDataRendering()
     {
         const int fixedVersion = 10;
-        using var expectedBitmap = new QRCodeImageBuilder(QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: fixedVersion))
+        using var expectedBitmap = new QRCodeImageBuilder(QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = fixedVersion }))
             .WithSize(256, 256)
             .ToBitmap();
 

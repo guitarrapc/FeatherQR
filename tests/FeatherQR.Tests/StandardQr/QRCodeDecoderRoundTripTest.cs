@@ -49,7 +49,7 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_Utf8WithBom()
     {
         var content = "BOM roundtrip 日本語";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, utf8BOM: true, eciMode: EciMode.Utf8);
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Utf8BOM = true, EciMode = EciMode.Utf8 });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEquivalentTo(content);
@@ -65,7 +65,7 @@ public class QRCodeDecoderRoundTripTest
         {
             foreach (var eccLevel in new[] { ECCLevel.L, ECCLevel.M, ECCLevel.Q, ECCLevel.H })
             {
-                var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, requestedVersion: version);
+                var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { Version = version });
 
                 await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"version={version}, ecc={eccLevel}, status={info.Status}");
                 await Assert.That(decoded).IsEqualTo(content);
@@ -116,7 +116,7 @@ public class QRCodeDecoderRoundTripTest
         var content = "span without quiet zone";
         var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
-        var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, quietZoneSize: 0);
+        var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), calculated.QrSize, out var decoded, out _)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -128,7 +128,7 @@ public class QRCodeDecoderRoundTripTest
         var content = "char span destination";
         var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, quietZoneSize: 0);
+        QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         Span<char> destination = stackalloc char[QRCodeDecoder.GetMaxDecodedLength(calculated.Version)];
         var ok = QRCodeDecoder.TryDecode(buffer.AsSpan(0, calculated.BufferSize), calculated.QrSize, destination, out var charsWritten, out _);
@@ -191,7 +191,7 @@ public class QRCodeDecoderRoundTripTest
     [Test]
     public async Task Decode_CorruptedFormatInformation_ReturnsFormatInvalid()
     {
-        var qr = QRCodeGenerator.CreateQrCode("format corruption", ECCLevel.M, quietZoneSize: 0);
+        var qr = QRCodeGenerator.CreateQrCode("format corruption", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         var size = qr.Size;
         var modules = new byte[size * size];
         for (var y = 0; y < size; y++)
@@ -280,7 +280,7 @@ public class QRCodeDecoderRoundTripTest
     {
         // Version 1-M has a single block with 10 ECC codewords 驕ｶ鄙ｫ繝ｻcorrects 5 codewords.
         var content = "ECCFIX";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, requestedVersion: 1, quietZoneSize: 0);
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
         var size = qr.Size;
         var modules = new byte[size * size];
         for (var y = 0; y < size; y++)
@@ -307,7 +307,7 @@ public class QRCodeDecoderRoundTripTest
     {
         // Version 1-L corrects only 3 codewords; flipping a large scattered set
         // of data modules must exceed capacity and fail (not misdecode).
-        var qr = QRCodeGenerator.CreateQrCode("FAIL", ECCLevel.L, requestedVersion: 1, quietZoneSize: 0);
+        var qr = QRCodeGenerator.CreateQrCode("FAIL", ECCLevel.L, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
         var size = qr.Size;
         var modules = new byte[size * size];
         for (var y = 0; y < size; y++)
@@ -353,7 +353,7 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_QuietZoneSizes(int quietZoneSize)
     {
         var content = "quiet zone variations";
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: quietZoneSize);
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out _)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -361,7 +361,7 @@ public class QRCodeDecoderRoundTripTest
 
     private static async Task AssertRoundTrip(string content, ECCLevel eccLevel, EciMode eciMode = EciMode.Default)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"decode failed: status={info.Status}, version={info.Version}");
         await Assert.That(decoded).IsEqualTo(content);

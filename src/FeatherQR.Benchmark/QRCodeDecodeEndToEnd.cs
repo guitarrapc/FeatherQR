@@ -159,7 +159,7 @@ public class QRCodeDecodeEndToEnd
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
+        QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         return (buffer, calculated.QrSize);
     }
 
@@ -167,7 +167,7 @@ public class QRCodeDecodeEndToEnd
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
+        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         return (buffer, calculated.QrSize);
     }
 

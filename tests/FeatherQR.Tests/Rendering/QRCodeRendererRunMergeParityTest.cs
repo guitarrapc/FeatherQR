@@ -26,7 +26,7 @@ public class QRCodeRendererRunMergeParityTest
     [Arguments("https://github.com/guitarrapc/FeatherQR/blob/main/README.md?foo=sample&bar=dummy", 4, 512)] // v~5
     public async Task MergedRuns_MatchPerModuleRendering(string content, int quietZone, int imageSize)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: quietZone);
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
         var merged = RenderPixels(qr, imageSize, moduleShape: null);
         var perModule = RenderPixels(qr, imageSize, moduleShape: new PerModuleRectangleShape());

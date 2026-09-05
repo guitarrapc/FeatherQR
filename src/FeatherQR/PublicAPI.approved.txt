@@ -1,17 +1,9 @@
 // FeatherQR
-// 34 exported types
+// 33 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
 {
-
-    [Obsolete]
-    public enum Compression : int
-    {
-        Uncompressed = 0,
-        Deflate = 1,
-        GZip = 2,
-    }
 
     public enum ECCLevel : int
     {
@@ -73,14 +65,10 @@ namespace FeatherQR
 
     public static class MicroQRCodeGenerator
     {
-        [Obsolete] public static MicroQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = 2);
-        public static MicroQRCodeData CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = 2);
-        public static MicroQRCodeData CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options);
-        public static MicroQRCodeData CreateMicroQRCode(string plainText, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = 2);
-        public static MicroQRCodeData CreateMicroQRCode(string plainText, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options);
+        public static MicroQRCodeData CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = null);
+        public static MicroQRCodeData CreateMicroQRCode(string plainText, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = null);
         public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options = null);
-        public static int CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, MicroQRVersion? requestedVersion = null, int quietZoneSize = 2);
-        public static int CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options);
+        public static int CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options = null);
     }
 
     public readonly struct MicroQRCodeGeneratorOptions : IEquatable<MicroQRCodeGeneratorOptions>
@@ -205,16 +193,11 @@ namespace FeatherQR
 
     public static class QRCodeGenerator
     {
-        [Obsolete] public static QRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = 0, int quietZoneSize = 4);
-        public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = 0, int requestedVersion = -1, int quietZoneSize = 4);
-        public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options);
-        public static QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = 0, int requestedVersion = -1, int quietZoneSize = 4);
-        public static QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, in QRCodeGeneratorOptions options);
+        public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options = null);
+        public static QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, in QRCodeGeneratorOptions options = null);
         public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null);
-        public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, bool utf8BOM = false, EciMode eciMode = 0, int requestedVersion = -1, int quietZoneSize = 4);
-        public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options);
-        public static int CreateQrCode(string plainText, ECCLevel eccLevel, Span<byte> destination, bool utf8BOM = false, EciMode eciMode = 0, int requestedVersion = -1, int quietZoneSize = 4);
-        public static int CreateQrCode(string plainText, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options);
+        public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null);
+        public static int CreateQrCode(string plainText, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null);
     }
 
     public readonly struct QRCodeGeneratorOptions : IEquatable<QRCodeGeneratorOptions>

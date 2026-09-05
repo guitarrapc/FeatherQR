@@ -134,12 +134,12 @@ public class RmQRCodeDecoderRoundTripTest
     {
         // Standard QR v1 (21×21) and Micro QR M2 (13×13) matrices are square, not an rMQR size.
         var standard = new byte[21 * 21];
-        QRCodeGenerator.CreateQrCode("hello".AsSpan(), ECCLevel.M, standard, quietZoneSize: 0);
+        QRCodeGenerator.CreateQrCode("hello".AsSpan(), ECCLevel.M, standard, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         await Assert.That(RmQRCodeDecoder.TryDecode(standard, 21, 21, out _, out var info)).IsFalse();
         await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
 
         var micro = new byte[13 * 13];
-        MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.L, micro, quietZoneSize: 0);
+        MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.L, micro, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         await Assert.That(RmQRCodeDecoder.TryDecode(micro, 13, 13, out _, out info)).IsFalse();
         await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
 

@@ -22,8 +22,11 @@ public static class QrImageFactory
         return QRCodeGenerator.CreateQrCode(
             options.Content.AsSpan(),
             options.Ecc,
-            requestedVersion: options.Version,
-            quietZoneSize: Math.Clamp(options.QuietZone, 0, 10));
+            new QRCodeGeneratorOptions
+            {
+                Version = options.Version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(options.Version),
+                QuietZoneSize = Math.Clamp(options.QuietZone, 0, 10),
+            });
     }
 
     /// <summary>Encodes the content into a Micro QR module matrix.</summary>
@@ -35,8 +38,11 @@ public static class QrImageFactory
         return MicroQRCodeGenerator.CreateMicroQRCode(
             options.Content.AsSpan(),
             options.MicroEcc,
-            options.Version is >= 1 and <= 4 ? (MicroQRVersion)options.Version : null,
-            Math.Clamp(options.QuietZone, 0, 10));
+            new MicroQRCodeGeneratorOptions
+            {
+                Version = options.Version is >= 1 and <= 4 ? (MicroQRVersion)options.Version : null,
+                QuietZoneSize = Math.Clamp(options.QuietZone, 0, 10),
+            });
     }
 
     /// <summary>

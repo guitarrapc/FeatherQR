@@ -12,7 +12,7 @@ It fixes WHAT changes, in WHICH order, and WHY. HOW each piece is verified follo
 
 | In | Out |
 |---|---|
-| The announced removals (`Compression`, `GetRequiredBufferSize` ×2, parameter-list generator overloads, `IconData()`) | `CancellationToken` / time-budget decode overloads (additive, 2.1.0) |
+| The announced removals (`Compression`, `GetRequiredBufferSize` ×2, parameter-list generator overloads) | `CancellationToken` / time-budget decode overloads (additive, 2.1.0) |
 | Type and method renames under one naming rule | Payload helpers (deferred by the maintainer; unchanged) |
 | Value-kind, immutability and sealing unification | GS1 / FNC1 (unchanged) |
 | Symbol geometry in the decode result | A pure-BCL SVG / 1-bit PNG writer (waits for a concrete request) |
@@ -65,8 +65,9 @@ Micro QR and rMQR were built after the rule was implicit and already follow it. 
 | `Compression` | 1.2.0 `[Obsolete]` | No API accepts or returns it |
 | `QRCodeGenerator.GetRequiredBufferSize`, `MicroQRCodeGenerator.GetRequiredBufferSize` | 1.2.0 `[Obsolete]` | `TryGetRequiredBufferSize` is the whole sizing surface afterwards |
 | Parameter-list `CreateQrCode` / `CreateMicroQRCode` overloads | Spec, "frozen, removed at 2.0.0" | rMQR never had them and is the shape the other two converge on |
-| `IconData()` | `[Obsolete]` ctor | `FromImage` / `FromImageByModules` remain |
-| `QRCodeCalculatedSize` public constructor and `IsValid` | Not previously announced | Part of the value-kind unification below; `IsValid` duplicates the `bool` that `TryGetRequiredBufferSize` already returns |
+| `QRCodeCalculatedSize` public constructor and `IsValid` | Not previously announced | Part of the value-kind unification below, not of the removals phase; `IsValid` duplicates the `bool` that `TryGetRequiredBufferSize` already returns |
+
+`IconData()` is **not** on this list, though the approved API listing shows it as `[Obsolete]`. The type has a `required` member, and that marker is what the compiler emits on the implicit constructor to stop a pre-C#-11 consumer from bypassing the required-member check.
 
 Two consequences to handle inside the phase rather than discover later:
 
@@ -153,4 +154,16 @@ Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last
 
 ## Progress log
 
-Nothing implemented yet. Entries are appended per phase: what was done, what was learned, and the benchmark delta or an explicit statement that no hot path moved.
+Entries are appended per phase: what was done, what was learned, and the benchmark delta or an explicit statement that no hot path moved.
+
+### Phase 1, announced removals (2026-09-06)
+
+**Done.** `Compression`, both throwing `GetRequiredBufferSize` methods and all seven parameter list `Create*` overloads are gone; the six surviving `Create*` entry points and `TryGetRequiredBufferSize` all take `in {Sym}CodeGeneratorOptions options = default`, so `CreateQrCode(text, ecc)` still compiles and now resolves to the options path. Core drops from 34 exported types to 33, `QRCodeGenerator` from 11 public methods to 6, `MicroQRCodeGenerator` from 8 to 4; both `PublicAPI.approved.txt` files regenerated, and the renderer listing is unchanged. 119 call sites migrated across tests, benchmarks, Playground, samples and `tools/QRInteropFixtures`. `docs/migration.md` gains an "announced removals" section with the argument-to-property table and the `-1` trap; the spec's API-direction paragraphs move to past tense and its exception-disagreement record becomes a lesson. Full suite green: 17,609 tests, 0 failures, both target frameworks.
+
+**Lessons.** Recorded in [qrcode-symbologies.md](../specs/qrcode-symbologies.md): differential tests die with their reference and had to be converted to frozen values *before* the deletion; `required` members make the implicit constructor `[Obsolete]`, which read as an announced removal in the approved listing and is not one (`IconData()` was on this plan's removal list in error); and the one break the compiler could not find, `requestedVersion: -1` against a `QRCodeVersionRange` that rejects `-1` on purpose.
+
+**Benchmarks: not run, no hot path moved.** The removed overloads were forwarding wrappers; the surviving options path and the private `Create*Core` methods are byte-identical. The only benchmark files touched are decode-fixture builders (`BuildModules` and friends), outside any measured method.
+
+**Playground verified by hand**, since `QrInterop` changed: published Debug WASM, served it, and encoded through all four paths the change touches — Standard QR automatic (v5), Standard QR pinned (v10, 65×65), Micro QR automatic (M2, 17×17) and Micro QR pinned (M4, 21×21). Decode was not re-checked; no decode call site changed.
+
+**Not done here, by design.** `QRCodeCalculatedSize`'s public constructor and `IsValid` are listed under the removals table but belong to Phase 3's value-kind unification, and D1 (the `string` convenience overloads) stays with Phase 2 where the rest of the shape decisions are.

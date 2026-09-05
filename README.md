@@ -228,7 +228,7 @@ Generators create module matrices without rendering them. Use them for custom ou
 ```csharp
 using FeatherQR;
 
-var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
+var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 var isDark = qrData[row, col];
 ```
 

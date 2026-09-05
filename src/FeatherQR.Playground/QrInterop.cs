@@ -267,7 +267,7 @@ public static partial class QrInterop
     {
         return QRCodeGenerator.CreateQrCode(request.Content.AsSpan(), ParseEcc(request.Ecc), new QRCodeGeneratorOptions
         {
-            Version = request.Version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(request.Version),
+            Version = ParseVersionRange(request.Version),
             QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
             BoostEccLevel = request.EccBoost,
         });
@@ -334,8 +334,11 @@ public static partial class QrInterop
         return MicroQRCodeGenerator.CreateMicroQRCode(
             request.Content.AsSpan(),
             ParseMicroEcc(request.Ecc),
-            ParseMicroVersion(request.Version),
-            Math.Clamp(request.QuietZone, 0, 10));
+            new MicroQRCodeGeneratorOptions
+            {
+                Version = ParseMicroVersion(request.Version),
+                QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+            });
     }
 
     /// <summary>
@@ -370,6 +373,14 @@ public static partial class QrInterop
         >= 1 and <= 4 => (MicroQRVersion)version,
         _ => throw new ArgumentException($"Unknown Micro QR version '{version}'. Use 1-4 (M1-M4) or -1 for automatic selection."),
     };
+
+    /// <summary>
+    /// The request carries -1 for "pick the smallest version that fits", which
+    /// <see cref="QRCodeVersionRange"/> spells as <see cref="QRCodeVersionRange.Any"/>;
+    /// it deliberately rejects -1 so a defaulted field cannot pass for automatic.
+    /// </summary>
+    private static QRCodeVersionRange ParseVersionRange(int version)
+        => version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(version);
 
     /// <summary>Builds the image builder from request options; shared by preview and benchmark rendering.</summary>
     private static QRCodeImageBuilder CreateBuilder(QrRequest request, QRCodeData data, byte[] customLogo)
@@ -478,7 +489,7 @@ public static partial class QrInterop
             {
                 (startIndex + i + 1).TryFormat(textBuffer.AsSpan(prefixLength + 2), out var digits);
                 var text = textBuffer.AsSpan(0, prefixLength + 2 + digits);
-                written = QRCodeGenerator.CreateQrCode(text, ecc, moduleBuffer, requestedVersion: request.Version, quietZoneSize: quietZone);
+                written = QRCodeGenerator.CreateQrCode(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -509,7 +520,7 @@ public static partial class QrInterop
         for (var i = 0; i < count; i++)
         {
             var text = string.Create(CultureInfo.InvariantCulture, $"{request.Content} #{startIndex + i + 1}");
-            var data = QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, requestedVersion: request.Version, quietZoneSize: quietZone);
+            var data = QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
             qrVersion = data.Version;
             matrixSize = data.Size;
             bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
@@ -542,7 +553,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                written = MicroQRCodeGenerator.CreateMicroQRCode(request.Content.AsSpan(), ecc, moduleBuffer, version, quietZone);
+                written = MicroQRCodeGenerator.CreateMicroQRCode(request.Content.AsSpan(), ecc, moduleBuffer, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
                 bytesTotal += written;
             }
             stopwatch.Stop();

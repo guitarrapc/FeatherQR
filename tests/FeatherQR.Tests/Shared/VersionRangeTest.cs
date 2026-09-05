@@ -289,7 +289,7 @@ public class VersionRangeTest
 
         for (var version = smallest; version <= 40; version++)
         {
-            var released = QRCodeGenerator.CreateQrCode(text, ecc, requestedVersion: version);
+            var released = QRCodeGenerator.CreateQrCode(text, ecc, new QRCodeGeneratorOptions { Version = version });
             var ranged = QRCodeGenerator.CreateQrCode(text, ecc, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(version) });
 
             await Assert.That(ranged.Version).IsEqualTo(version);
@@ -307,7 +307,7 @@ public class VersionRangeTest
         await Assert.That(rangedAuto.Version).IsEqualTo(releasedAuto.Version);
         await Assert.That(rangedAuto.GetRawData().AsSpan().SequenceEqual(releasedAuto.GetRawData())).IsTrue();
 
-        var releasedPinned = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, version);
+        var releasedPinned = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, new MicroQRCodeGeneratorOptions { Version = version });
         var rangedPinned = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly(version) });
         await Assert.That(rangedPinned.Version).IsEqualTo(version);
         await Assert.That(rangedPinned.GetRawData().AsSpan().SequenceEqual(releasedPinned.GetRawData())).IsTrue();

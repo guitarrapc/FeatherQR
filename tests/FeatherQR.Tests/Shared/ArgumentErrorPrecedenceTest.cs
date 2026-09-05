@@ -61,7 +61,7 @@ public class ArgumentErrorPrecedenceTest
         // The contract is not merely "an argument error" but the same one, so a caller
         // moving between the two spellings debugs the same problem.
         var viaParameters = Assert.Throws<ArgumentOutOfRangeException>(
-            () => QRCodeGenerator.CreateQrCode(TooLongForVersion1, ECCLevel.M, requestedVersion: 1, quietZoneSize: -1));
+            () => QRCodeGenerator.CreateQrCode(TooLongForVersion1, ECCLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = -1 }));
         var viaOptions = Assert.Throws<ArgumentOutOfRangeException>(
             () => QRCodeGenerator.CreateQrCode(TooLongForVersion1, ECCLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = -1 }));
 

@@ -67,13 +67,13 @@ public class EccBoostTest
         var fromReleased = new byte[size.BufferSize];
 
         var optionsWritten = QRCodeGenerator.CreateQrCode(text.AsSpan(), requested, fromOptions, options);
-        var releasedWritten = QRCodeGenerator.CreateQrCode(text.AsSpan(), expectedBoosted, fromReleased, requestedVersion: expectedVersion);
+        var releasedWritten = QRCodeGenerator.CreateQrCode(text.AsSpan(), expectedBoosted, fromReleased, new QRCodeGeneratorOptions { Version = expectedVersion });
 
         await Assert.That(optionsWritten).IsEqualTo(releasedWritten);
         await Assert.That(fromOptions).IsEquivalentTo(fromReleased);
 
         await Assert.That(boosted.GetRawData().AsSpan().SequenceEqual(
-            QRCodeGenerator.CreateQrCode(text, expectedBoosted, requestedVersion: expectedVersion).GetRawData())).IsTrue();
+            QRCodeGenerator.CreateQrCode(text, expectedBoosted, new QRCodeGeneratorOptions { Version = expectedVersion }).GetRawData())).IsTrue();
     }
 
     // ---- interaction with the version range ------------------------------------------

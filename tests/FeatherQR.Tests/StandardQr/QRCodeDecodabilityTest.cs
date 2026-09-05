@@ -90,9 +90,9 @@ public class QRCodeDecodabilityTest
         var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(content);
         var byteCount = utf8Bytes.Length;
 
-        var qrH = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, eciMode: EciMode.Utf8);
-        var qrM = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, eciMode: EciMode.Utf8);
-        var qrL = QRCodeGenerator.CreateQrCode(content, ECCLevel.L, eciMode: EciMode.Utf8);
+        var qrH = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var qrM = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var qrL = QRCodeGenerator.CreateQrCode(content, ECCLevel.L, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
 
         // debug output
         Console.WriteLine($"Content: \"{content}\"");
@@ -263,7 +263,7 @@ public class QRCodeDecodabilityTest
 
     private async Task AssertQrCodeIsDecodableBinary(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
-        var qr = QRCodeGenerator.CreateQrCode(expectedContent.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: 4);
+        var qr = QRCodeGenerator.CreateQrCode(expectedContent.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = eciMode, QuietZoneSize = 4 });
 
         // Convert QRCodeData to SKBitmap
         using var bitmap = QrCodeToSKBitmap(qr);
@@ -293,7 +293,7 @@ public class QRCodeDecodabilityTest
 
     private async Task AssertQrCodeIsDecodableString(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
-        var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: 4);
+        var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = eciMode, QuietZoneSize = 4 });
 
         // Convert QRCodeData to SKBitmap
         using var bitmap = QrCodeToSKBitmap(qr);

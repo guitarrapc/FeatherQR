@@ -199,7 +199,7 @@ public class QRCodeGeneratorVersionBoundaryTest
         var plainText = "TEST";
 
         // Act
-        var qrCode = QRCodeGenerator.CreateQrCode(plainText, ECCLevel.L, requestedVersion: requestedVersion);
+        var qrCode = QRCodeGenerator.CreateQrCode(plainText, ECCLevel.L, new QRCodeGeneratorOptions { Version = requestedVersion });
 
         // Assert
         await Assert.That(qrCode.Version).IsEquivalentTo(requestedVersion);
@@ -217,7 +217,7 @@ public class QRCodeGeneratorVersionBoundaryTest
         for (int version = 1; version <= 40; version++)
         {
             var plainText = "1";
-            var qrCode = QRCodeGenerator.CreateQrCode(plainText, ECCLevel.L, requestedVersion: version);
+            var qrCode = QRCodeGenerator.CreateQrCode(plainText, ECCLevel.L, new QRCodeGeneratorOptions { Version = version });
 
             await Assert.That(qrCode.Version).IsEquivalentTo(version);
             var expectedSize = 21 + (version - 1) * 4 + 8;

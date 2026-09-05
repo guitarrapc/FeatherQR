@@ -113,7 +113,7 @@ public class SimpleMicroQRDecode
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
+        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         return (buffer, calculated.QrSize);
     }
 }

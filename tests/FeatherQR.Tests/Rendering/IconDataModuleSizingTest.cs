@@ -41,7 +41,7 @@ public class IconDataModuleSizingTest
         const int iconSizeModules = 5;
         const int iconBorderModules = 1;
 
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 1, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 4 });
         var imageSide = qrData.Size * modulePixelSize;
         var area = SKRect.Create(0, 0, imageSide, imageSide);
 
@@ -69,7 +69,7 @@ public class IconDataModuleSizingTest
         const int iconSizeModules = 6; // even: cannot be geometrically centered on odd matrix
         const int iconBorderModules = 1;
 
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 5, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 5, QuietZoneSize = 4 });
         var imageSide = qrData.Size * modulePixelSize;
         var area = SKRect.Create(0, 0, imageSide, imageSide);
 
@@ -92,7 +92,7 @@ public class IconDataModuleSizingTest
     [Arguments(101)]
     public void GetIconRects_PercentSizing_InvalidPercent_ThrowsArgumentOutOfRangeException(int iconSizePercent)
     {
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 4 });
         var area = SKRect.Create(0, 0, 500, 500);
         using var logo = CreateLogo(16);
         var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: 2);
@@ -104,7 +104,7 @@ public class IconDataModuleSizingTest
     [Test]
     public void GetIconRects_PercentSizing_NegativeBorder_ThrowsArgumentOutOfRangeException()
     {
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 4 });
         var area = SKRect.Create(0, 0, 500, 500);
         using var logo = CreateLogo(16);
         var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: 2);
@@ -117,7 +117,7 @@ public class IconDataModuleSizingTest
     public async Task GetIconRects_ModuleSizing_IgnoresPercentAndPixelBorder()
     {
         const int modulePixelSize = 8;
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 5, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 5, QuietZoneSize = 4 });
         var imageSide = qrData.Size * modulePixelSize;
         var area = SKRect.Create(0, 0, imageSide, imageSide);
 
@@ -136,7 +136,7 @@ public class IconDataModuleSizingTest
     public async Task GetIconRects_ModuleSizing_NullBorderModules_DefaultsToOne()
     {
         const int modulePixelSize = 10;
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 5, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 5, QuietZoneSize = 4 });
         var imageSide = qrData.Size * modulePixelSize;
         var area = SKRect.Create(0, 0, imageSide, imageSide);
 
@@ -157,7 +157,7 @@ public class IconDataModuleSizingTest
     [Test]
     public async Task GetIconRects_ModuleSizing_ExceedsMatrixSize_ThrowsInvalidOperationException()
     {
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 1, quietZoneSize: 0);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
         // Version 1 core/matrix size = 21
         var area = SKRect.Create(0, 0, 210, 210);
 
@@ -171,7 +171,7 @@ public class IconDataModuleSizingTest
     [Test]
     public async Task GetIconRects_ModuleSizing_ExceedsCoreOccupancy_ThrowsInvalidOperationException()
     {
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 1, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 4 });
         // coreSize=21, 30% => max 6 modules
         var area = SKRect.Create(0, 0, qrData.Size * 10, qrData.Size * 10);
 
@@ -204,7 +204,7 @@ public class IconDataModuleSizingTest
     [Test]
     public async Task GetIconRects_PercentSizing_StillWorks()
     {
-        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 4 });
         var area = SKRect.Create(0, 0, 500, 500);
 
         using var logo = CreateLogo(16);

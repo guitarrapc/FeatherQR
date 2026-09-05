@@ -52,7 +52,7 @@ public class MicroQRCodeDecoderRoundTripTest
         {
             var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: quietZone);
+            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
             var success = MicroQRCodeDecoder.TryDecode(modules, calculated.QrSize, out var decoded, out var info);
 
@@ -72,7 +72,7 @@ public class MicroQRCodeDecoderRoundTripTest
         {
             var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: quietZone);
+            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
             var destination = new char[MicroQRCodeDecoder.GetMaxDecodedLength(version)];
             var success = MicroQRCodeDecoder.TryDecode(modules, calculated.QrSize, destination, out var charsWritten, out var info);
@@ -91,7 +91,7 @@ public class MicroQRCodeDecoderRoundTripTest
         // uniform quiet zone and must be rejected rather than misread.
         var calculated = Sizing.Required("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, quietZoneSize: 0);
         var core = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, core, quietZoneSize: 0);
+        MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, core, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         const int size = 13;
         var modules = new byte[size * size];

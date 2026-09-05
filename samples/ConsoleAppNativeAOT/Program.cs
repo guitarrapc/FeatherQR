@@ -55,7 +55,7 @@ var canvas = surface.Canvas;
 
 // Generate QR data
 {
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, quietZoneSize: 2);
+    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 2 });
 
     // Instagram gradient
     var instagramGradient = new GradientOptions(

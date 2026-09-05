@@ -65,7 +65,7 @@ public class MicroQRCodeDecoderPerspectiveTest
         float tilt,
         float rotateDegrees)
     {
-        var qr = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, version, quietZoneSize: 2);
+        var qr = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = 2 });
         var qrPx = qr.Size * 8;
 
         using var flat = new SKBitmap(new SKImageInfo(qrPx, qrPx, SKColorType.Bgra8888, SKAlphaType.Premul));

@@ -5,7 +5,7 @@ public class MicroQRCodeDataUnitTest
     [Test]
     public async Task GetRawData_RoundTripsThroughConstructor()
     {
-        var original = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L, quietZoneSize: 2);
+        var original = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 2 });
         var raw = original.GetRawData();
 
         var restored = new MicroQRCodeData(raw, quietZoneSize: 2);
@@ -108,7 +108,7 @@ public class MicroQRCodeDataUnitTest
     [Test]
     public async Task Indexer_QuietZoneReadsLightAndOutOfRangeThrows()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L, quietZoneSize: 3);
+        var data = MicroQRCodeGenerator.CreateMicroQRCode("123", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { QuietZoneSize = 3 });
 
         await Assert.That(data.Size).IsEqualTo(13 + 6);
         await Assert.That(data[0, 0]).IsFalse();          // quiet zone

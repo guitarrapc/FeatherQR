@@ -41,7 +41,7 @@ public static class MicroQRSpotCheck
         {
             var calculated = Sizing.Required(text.AsSpan(), ecc, QuietZoneModules);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: QuietZoneModules);
+            MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = QuietZoneModules });
 
             var luminance = RenderLuminance(modules, calculated.QrSize, PixelsPerModule);
             var widthPixels = calculated.QrSize * PixelsPerModule;

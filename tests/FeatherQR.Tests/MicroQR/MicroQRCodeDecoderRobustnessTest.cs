@@ -62,7 +62,7 @@ public class MicroQRCodeDecoderRobustnessTest
     {
         var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: 0);
         var modules = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: 0);
+        MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         size = calculated.QrSize;
         return modules;
     }
@@ -203,7 +203,7 @@ public class MicroQRCodeDecoderRobustnessTest
             {
                 var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
                 var modules = new byte[calculated.BufferSize];
-                MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: quietZone);
+                MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
                 var success = QRCodeDecoder.TryDecode(modules, calculated.QrSize, out _, out var info);
 
@@ -219,7 +219,7 @@ public class MicroQRCodeDecoderRobustnessTest
         // Standard QR v1 (21×21) bare and with quiet zone; 21 is not a Micro QR size.
         foreach (var quietZone in (int[])[0, 4])
         {
-            var qr = QRCodeGenerator.CreateQrCode("HELLO WORLD", ECCLevel.M, quietZoneSize: quietZone);
+            var qr = QRCodeGenerator.CreateQrCode("HELLO WORLD", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
             var size = qr.GetCoreSize() + quietZone * 2;
             var modules = new byte[size * size];
             for (var row = 0; row < size; row++)

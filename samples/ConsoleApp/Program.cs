@@ -295,7 +295,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern9_renderer.png");
 
     // Generate QR data
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, quietZoneSize: 4);
+    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
 
     // Create canvas
     var info = new SKImageInfo(800, 800);
@@ -338,7 +338,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern10_canvas_direct.png");
 
     // Generate QR data
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: 4);
+    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
 
     // Create canvas
     var info = new SKImageInfo(600, 600);
@@ -548,7 +548,7 @@ Console.WriteLine("""
 
     // Generate QR data
     {
-        var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, quietZoneSize: 2);
+        var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 2 });
 
         // Instagram gradient
         var instagramGradient = new GradientOptions([
@@ -664,7 +664,7 @@ Console.WriteLine("""
       - API: QRCodeGenerator.CreateQrCode() + Console.Write()
     """);
 {
-    var qrCodeData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: 4);
+    var qrCodeData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
     for (var row = 0; row < qrCodeData.Size; row++)
     {
         for (var col = 0; col < qrCodeData.Size; col++)
@@ -954,7 +954,7 @@ Console.WriteLine("""
     }
 
     // 23d. Error correction at work: flip modules, Reed-Solomon repairs them
-    var damaged = QRCodeGenerator.CreateQrCode("error correction demo", ECCLevel.M, quietZoneSize: 0);
+    var damaged = QRCodeGenerator.CreateQrCode("error correction demo", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
     var size = damaged.Size;
     var modules = new byte[size * size];
     for (var y = 0; y < size; y++)

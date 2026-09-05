@@ -69,7 +69,7 @@ public static class QRCodeDecoder
     /// </summary>
     /// <param name="modules">
     /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
-    /// order, the format produced by <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>.
+    /// order, the format produced by <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, in QRCodeGeneratorOptions)"/>.
     /// A light quiet zone border is detected and skipped automatically.
     /// </param>
     /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>

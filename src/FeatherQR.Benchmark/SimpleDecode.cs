@@ -268,7 +268,7 @@ public class SimpleDecode
     {
         var calculated = Sizing.Required(content.AsSpan(), ECCLevel.L, 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content.AsSpan(), ECCLevel.L, buffer, quietZoneSize: 0);
+        QRCodeGenerator.CreateQrCode(content.AsSpan(), ECCLevel.L, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         return (buffer, calculated.QrSize);
     }
 

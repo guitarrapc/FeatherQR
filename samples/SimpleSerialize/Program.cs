@@ -4,7 +4,7 @@ using System.Text;
 
 Console.OutputEncoding = Encoding.UTF8;
 
-var qrCode = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.M, quietZoneSize: 4);
+var qrCode = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
 
 // serialized
 var serialized = qrCode.GetRawData();

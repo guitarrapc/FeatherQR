@@ -124,7 +124,7 @@ public class QRCodeVisualCompatibilityTest
     [MethodDataSource(nameof(GetVersionBoundaryTestCases))]
     public async Task CreateQrCode_VersionBoundaries_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
 
         // Verify version is as expected
         await Assert.That(qr.Version).IsEqualTo(expectedVersion);
@@ -202,7 +202,7 @@ public class QRCodeVisualCompatibilityTest
     /// </summary>
     private async Task AssertPixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
 
         // Render to pixel array
         var actualPixels = RenderToPixelArray(qr);

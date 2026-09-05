@@ -42,7 +42,7 @@ public class RmQRDecodeEndToEnd
 
         var calculated = Sizing.Required("012345678901", ECCLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
-        FeatherQR.QRCodeGenerator.CreateQrCode("012345678901", ECCLevel.L, _standardModules, quietZoneSize: 0);
+        FeatherQR.QRCodeGenerator.CreateQrCode("012345678901", ECCLevel.L, _standardModules, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         _standardSize = calculated.QrSize;
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
