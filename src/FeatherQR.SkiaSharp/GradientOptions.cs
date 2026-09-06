@@ -81,12 +81,14 @@ public sealed record class GradientOptions
     /// At least 2 colors. The gradient flows from the first color to the last in the
     /// direction given by <see cref="Direction"/>.
     /// </remarks>
-    // The remarks on the type say "immutable through its API" rather than "immutable",
-    // and the qualifier is load-bearing: MemoryMarshal.GetReference takes a writable ref
-    // out of any ReadOnlySpan, and reflection reaches the field directly. Neither is
-    // stoppable and neither is worth warning a caller about — the point of the wording is
-    // that a future change here cannot lean on "nothing can reach it" as a reason to skip
-    // the defensive copy or to hand the array out.
+    // "Immutable through its API", not "immutable": MemoryMarshal and reflection both
+    // reach the array. Not worth warning callers about, but do not treat it as
+    // unreachable here.
+    //
+    // System.Text.Json also cannot serialize a span getter. Accepted: SKColor serializes
+    // as {Alpha,Red,Green,Blue}, so anyone persisting a gradient wants their own DTO with
+    // #RRGGBB strings (the Playground has one), and a converter would add a
+    // System.Text.Json dependency to the netstandard builds.
     public ReadOnlySpan<SKColor> Colors => _colors;
 
     /// <summary>
@@ -107,16 +109,10 @@ public sealed record class GradientOptions
     /// </remarks>
     public ReadOnlySpan<float> ColorPositions => _colorPositions;
 
-    // No WithColors / WithColorPositions wither here, deliberately. One was written and
-    // dropped: the only thing it bought over `new GradientOptions(colors, o.Direction,
-    // o.ColorPositions)` was carrying those two arguments for the caller, since a colour
-    // count the stops cannot match throws either way. Nothing in this repository — the
-    // Playground, the samples, the tests — ever recolours an existing gradient; they all
-    // build one from scratch. The need came from explaining what replaced
-    // `with { Colors = … }` in the migration guide, and that guide now shows the
-    // constructor, which reads in one line. Add the wither when someone asks for it, with
-    // a use case attached.
-    //
+    // No WithColors wither: `new GradientOptions(colors, o.Direction, o.ColorPositions)`
+    // says the same thing, and a colour count the stops cannot match throws either way.
+    // Add one when a caller asks.
+
     // The Skia shader factory takes arrays, and these are the copies nobody else holds.
     internal SKColor[] ColorArray => _colors;
     internal float[]? ColorPositionArray => _colorPositions.Length == 0 ? null : _colorPositions;
