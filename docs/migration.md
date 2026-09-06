@@ -216,7 +216,9 @@ var evenly = options.ColorPositions.IsEmpty;
 var recolored = new GradientOptions([SKColors.Red, SKColors.Blue], options.Direction, options.ColorPositions);
 ```
 
-The constructor takes the same shapes the properties hand back — `ReadOnlySpan<SKColor>` and `ReadOnlySpan<float>`, with an empty span meaning "distribute evenly" — so rebuilding a gradient with one member changed translates nothing. Arrays convert implicitly, so `new GradientOptions(myColors, direction)` is unchanged.
+**Why `with` varies the direction but not the colours.** `Colors` and `ColorPositions` have to agree in length, and `with` sets one member at a time; making them `init` would let a caller build a gradient whose stops no longer match its colours and only find out when it is drawn. `Direction` carries no such pairing, so it stays `init`, and the pair is set together through the constructor, which refuses a mismatch on the spot.
+
+The constructor takes the same shapes the properties hand back — `ReadOnlySpan<SKColor>` and `ReadOnlySpan<float>`, with an empty span meaning "distribute evenly" — so building one gradient from another translates nothing either. Arrays convert implicitly, so `new GradientOptions(myColors, direction)` is unchanged.
 
 Two details if you passed the stops explicitly before: `null` is no longer a value you can pass (omit the argument, or pass `default` or `[]`), and an empty array now means "evenly distributed" where it used to be an `ArgumentException`. Stops are one per colour, so when the new colour count differs from the old, supply new stops or omit them — a non-empty span of a different length is still an `ArgumentException`.
 

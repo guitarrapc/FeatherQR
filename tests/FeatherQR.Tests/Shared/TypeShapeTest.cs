@@ -244,6 +244,24 @@ public class TypeShapeTest
     }
 
     /// <summary>
+    /// A colour count the stops cannot match is refused where the pair is set: at
+    /// construction, not at draw time. This is the invariant that keeps
+    /// <see cref="GradientOptions.Colors"/> out of a <c>with</c> expression.
+    /// </summary>
+    [Test]
+    public async Task GradientOptions_RefusesAColorCountItsStopsCannotMatch()
+    {
+        var error = Assert.Throws<ArgumentException>(
+            () => new GradientOptions([SKColors.Black, SKColors.White], GradientDirection.TopToBottom, [0f, 0.2f, 1f]));
+        await Assert.That(error.Message).Contains("Color positions length must match colors length");
+
+        // No stops attached: any colour count is fine.
+        var evenly = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.LeftToRight);
+        var wider = new GradientOptions([SKColors.Black, SKColors.White, SKColors.Gray], evenly.Direction, evenly.ColorPositions);
+        await Assert.That(wider.Colors.Length).IsEqualTo(3);
+    }
+
+    /// <summary>
     /// Equality compares the colours, not the array references. The generated
     /// <c>record</c> equality it replaces reported two identical gradients as different,
     /// because arrays compare by reference.

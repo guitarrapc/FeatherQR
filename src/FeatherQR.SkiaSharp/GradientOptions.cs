@@ -28,6 +28,14 @@ namespace FeatherQR.SkiaSharp;
 /// and the copy shares the colour array with the original, which is safe for the same
 /// reason: neither instance exposes it.
 /// </para>
+/// <para>
+/// <see cref="Direction"/> is the only <c>init</c> member, which is a rule rather than an
+/// omission: <see cref="Colors"/> and <see cref="ColorPositions"/> have to agree in
+/// length, and <c>with</c> sets one member at a time, so allowing
+/// <c>with { Colors = … }</c> would let a caller build a gradient whose stops no longer
+/// match its colours and only find out when it is drawn. The pair is therefore set
+/// together, through the constructor, where the mismatch is refused immediately.
+/// </para>
 /// </remarks>
 public sealed record class GradientOptions
 {
@@ -96,6 +104,16 @@ public sealed record class GradientOptions
     /// </remarks>
     public ReadOnlySpan<float> ColorPositions => _colorPositions;
 
+    // No WithColors / WithColorPositions wither here, deliberately. One was written and
+    // dropped: the only thing it bought over `new GradientOptions(colors, o.Direction,
+    // o.ColorPositions)` was carrying those two arguments for the caller, since a colour
+    // count the stops cannot match throws either way. Nothing in this repository — the
+    // Playground, the samples, the tests — ever recolours an existing gradient; they all
+    // build one from scratch. The need came from explaining what replaced
+    // `with { Colors = … }` in the migration guide, and that guide now shows the
+    // constructor, which reads in one line. Add the wither when someone asks for it, with
+    // a use case attached.
+    //
     // The Skia shader factory takes arrays, and these are the copies nobody else holds.
     internal SKColor[] ColorArray => _colors;
     internal float[]? ColorPositionArray => _colorPositions.Length == 0 ? null : _colorPositions;
