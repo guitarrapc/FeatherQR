@@ -21,6 +21,37 @@ namespace FeatherQR;
 /// </remarks>
 public static class MicroQRCodeGenerator
 {
+    // -----------------------------------------------------
+    // Micro QR Data Structure
+    // -----------------------------------------------------
+    //
+    // Micro QR has no ECI mode, so there is no charset header, and every field
+    // width shrinks with the version rather than being fixed as in Standard QR.
+    //
+    // 1. Header
+    // ┌────────────────────┬────────────────────────┐
+    // │ Mode (0-3b)        │ Count (3-6b)           │
+    // │ = version - 1      │ Numeric:    version + 2│
+    // │ M1:0 M2:1 M3:2 M4:3│ Alnum/Byte: version + 1│
+    // └────────────────────┴────────────────────────┘
+    //   A 0-bit mode indicator on M1 is not an omission: M1 is Numeric-only,
+    //   so the mode is implied and costs nothing.
+    // 2. Data
+    // ┌──────────────────────────────────────────────────┐
+    // │ Encoded data (variable length)                   │
+    // └──────────────────────────────────────────────────┘
+    // 3. Padding
+    // ┌──────────────┬────────┬──────────────────────────┐
+    // │ Term         │ Align  │ Pad bytes (0xEC, 0x11...)│
+    // │ = 2*ver + 1  │ (0-7b) │ (until dataCapacityBits) │
+    // │ M1:3 M2:5    │        │                          │
+    // │ M3:7 M4:9    │        │                          │
+    // └──────────────┴────────┴──────────────────────────┘
+    //
+    // M1 and M3 end on a HALF codeword: the last 4 data bits sit in the high
+    // nibble of a byte with a forced-zero low nibble, and a trailing 4-bit pad
+    // is 0000 rather than part of the 0xEC/0x11 cycle.
+
     private const int MaxCoreSize = 17;
     internal const int DefaultQuietZone = 2; // ISO/IEC 18004: Micro QR requires a 2-module quiet zone
 
@@ -29,6 +60,30 @@ public static class MicroQRCodeGenerator
 
     private static MicroQRCodeData CreateCore(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion, int quietZoneSize, int maskPattern)
     {
+        // Micro QR generation process:
+        // ------------------------------------------------
+        // 1. Validate input parameters (quiet zone size)
+        // 2. Prepare configuration:
+        //    - Analyze text to determine the encoding mode (Numeric/Alphanumeric/Byte)
+        //    - Select the version that holds the content, within a pinned version or range
+        //    - Reject combinations the version does not offer (M1 is Numeric at
+        //      ErrorDetectionOnly only; level Q needs M4)
+        // 3. Encode data codewords:
+        //    - Write mode indicator (version - 1 bits) and character count indicator
+        //    - Write the data bits
+        //    - Add padding (terminator, byte alignment, 0xEC/0x11 pattern)
+        // 4. Calculate error correction codewords using Reed-Solomon
+        //    - ONE block: Micro QR never interleaves, where Standard QR does
+        // 5. Place the symbol (one fused pass over bit-packed rows):
+        //    - Place fixed patterns (a single finder top-left, separators, timing
+        //      along row 0 and column 0)
+        //    - Place data and ECC codewords in the two-column zigzag
+        //    - Apply a mask (4 patterns, 0-3, chosen by edge score rather than
+        //      Standard QR's 8 patterns and penalty score)
+        //    - Place format information (a single 15-bit copy; Standard QR has two)
+        //    - No version information block: the size alone identifies M1-M4
+        // 6. Return MicroQRCodeData (quiet zone handled by MicroQRCodeData class)
+
         ValidateQuietZone(quietZoneSize);
         var config = PrepareConfiguration(textSpan, eccLevel, requestedVersion);
         var size = MicroQRConstants.SizeFromVersion(config.Version);

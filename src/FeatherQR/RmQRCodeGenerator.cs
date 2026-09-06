@@ -19,6 +19,30 @@ namespace FeatherQR;
 /// </remarks>
 public static class RmQRCodeGenerator
 {
+    // -----------------------------------------------------
+    // rMQR Data Structure
+    // -----------------------------------------------------
+    //
+    // 1. Header
+    // ┌─────────────────┬───────────────┬────────────────┐
+    // │ ECI (0 or 11b)  │ Mode (3b)     │ Count (per ver)│
+    // └─────────────────┴───────────────┴────────────────┘
+    //   The ECI header is 11 bits, not Standard QR's 12: the rMQR mode
+    //   indicator is 3 bits wide, so it is 3 + 8 designator bits.
+    // 2. Data
+    // ┌──────────────────────────────────────────────────┐
+    // │ Encoded data (variable length)                   │
+    // └──────────────────────────────────────────────────┘
+    // 3. Padding
+    // ┌──────┬────────┬──────────────────────────────────┐
+    // │ Term │ Align  │ Pad bytes (0xEC, 0x11...)        │
+    // │ (3b) │ (0-7b) │ (until dataCapacityBits reached) │
+    // └──────┴────────┴──────────────────────────────────┘
+    // 4. Final message (what actually reaches the matrix)
+    // ┌────────────────────────────────┬─────────────────┐
+    // │ Interleaved data + ECC blocks  │ Remainder bits  │
+    // └────────────────────────────────┴─────────────────┘
+
     private const int MaxDataCodewords = 152;   // R17x139-M
     private const int MaxFinalMessageBytes = 233; // R17x139: 232 codewords + remainder byte
 
@@ -33,6 +57,32 @@ public static class RmQRCodeGenerator
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
     {
+        // rMQR generation process:
+        // ------------------------------------------------
+        // 1. Validate input parameters (quiet zone size, version/height agreement)
+        // 2. Prepare configuration:
+        //    - Analyze text to determine the encoding mode and the ECI to declare
+        //    - Select the version: a pinned RmQRVersion, or the best fit among those
+        //      that hold the content by RmQRFitStrategy, optionally within one RmQRHeight
+        // 3. Encode data codewords:
+        //    - Write the ECI header (11 bits) when a charset is declared
+        //    - Write mode indicator (3 bits) and character count indicator
+        //    - Write the data bits
+        //    - Add padding (terminator, byte alignment, 0xEC/0x11 pattern)
+        // 4. Assemble the final message:
+        //    - Reed-Solomon per block, then interleave data and ECC codewords
+        //    - Append the version's remainder bits
+        // 5. Place the symbol:
+        //    - Place fixed patterns (finder 7x7 top-left, sub-finder 5x5 bottom-right,
+        //      timing on all four edges, corner patterns, vertical timing columns with
+        //      their 3x3 alignment patterns)
+        //    - Place the final message in the two-column zigzag, walking column pairs
+        //      leftward from the right edge
+        //    - Apply THE mask: rMQR defines one fixed pattern, dark where
+        //      ((row / 2) + (col / 3)) is even, so there is nothing to score or select
+        //    - Place both format information copies (finder side and sub-finder side)
+        // 6. Return RmQRCodeData (quiet zone handled by RmQRCodeData class)
+
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
         // One compare on the default path; validation of the value itself lives in the
