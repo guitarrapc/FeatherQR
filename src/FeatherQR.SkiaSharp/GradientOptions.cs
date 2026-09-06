@@ -16,11 +16,8 @@ namespace FeatherQR.SkiaSharp;
 /// </para>
 /// <para>
 /// An instance is immutable through its API: the constructor copies the arrays it is
-/// given and no member hands one back, so ordinary code cannot repaint a shared instance
-/// such as <see cref="Default"/> for everyone else. The colours are reachable through
-/// <see cref="System.Runtime.InteropServices.MemoryMarshal"/>, which takes a writable
-/// reference out of any span; that is a deliberate escape hatch of the runtime, not a
-/// supported way to edit these options.
+/// given and no member hands one back, so a shared instance such as <see cref="Default"/>
+/// cannot be repainted by one caller for everyone else.
 /// </para>
 /// <para>
 /// A <c>with</c> expression varies the direction of an existing gradient —
@@ -84,6 +81,12 @@ public sealed record class GradientOptions
     /// At least 2 colors. The gradient flows from the first color to the last in the
     /// direction given by <see cref="Direction"/>.
     /// </remarks>
+    // The remarks on the type say "immutable through its API" rather than "immutable",
+    // and the qualifier is load-bearing: MemoryMarshal.GetReference takes a writable ref
+    // out of any ReadOnlySpan, and reflection reaches the field directly. Neither is
+    // stoppable and neither is worth warning a caller about — the point of the wording is
+    // that a future change here cannot lean on "nothing can reach it" as a reason to skip
+    // the defensive copy or to hand the array out.
     public ReadOnlySpan<SKColor> Colors => _colors;
 
     /// <summary>
