@@ -3,20 +3,37 @@ using SkiaSharp;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Defines gradient configuration for QR code rendering.
+/// Gradient configuration for symbol rendering.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This record configures linear gradients that are applied across the entire QR code.
-/// Gradients can flow in various directions (horizontal, vertical, diagonal).
+/// Configures a linear gradient applied across the whole symbol, flowing in one of the
+/// directions of <see cref="GradientDirection"/>.
 /// </para>
 /// <para>
-/// For simple two-color gradients, specify two colors in <see cref="Colors"/>.
-/// For multi-color gradients, provide additional colors and optionally specify <see cref="ColorPositions"/>.
+/// For a simple two-colour gradient pass two colours; for more, add colours and
+/// optionally the stops they sit at.
+/// </para>
+/// <para>
+/// An instance is immutable through its API: the constructor copies the arrays it is
+/// given and no member hands one back, so ordinary code cannot repaint a shared instance
+/// such as <see cref="Default"/> for everyone else. The colours are reachable through
+/// <see cref="System.Runtime.InteropServices.MemoryMarshal"/>, which takes a writable
+/// reference out of any span; that is a deliberate escape hatch of the runtime, not a
+/// supported way to edit these options.
+/// </para>
+/// <para>
+/// A <c>with</c> expression varies the direction of an existing gradient —
+/// <c>GradientOptions.Default with { Direction = GradientDirection.BottomToTop }</c> —
+/// and the copy shares the colour array with the original, which is safe for the same
+/// reason: neither instance exposes it.
 /// </para>
 /// </remarks>
-public record class GradientOptions
+public sealed record class GradientOptions
 {
+    private readonly SKColor[] _colors;
+    private readonly float[] _colorPositions;
+
     /// <summary>
     /// A ready-made gradient: dark orange to firebrick, running from the top-left corner
     /// to the bottom-right. Use it when you want a gradient without choosing colors.
@@ -24,66 +41,114 @@ public record class GradientOptions
     public static readonly GradientOptions Default = new([SKColors.DarkOrange, SKColors.Firebrick], GradientDirection.TopLeftToBottomRight);
 
     /// <summary>
-    /// Initializes a new instance of the GradientOptions record.
+    /// Initializes a new instance of <see cref="GradientOptions"/>. Both spans are copied,
+    /// so the caller keeps ownership of whatever it passed.
     /// </summary>
-    /// <param name="colors">Gradient colors. At least 2 colors are required.</param>
+    /// <remarks>
+    /// The parameters take the same shapes <see cref="Colors"/> and
+    /// <see cref="ColorPositions"/> hand back, so an existing gradient can be rebuilt with
+    /// one change and nothing else translated:
+    /// <code>
+    /// var recolored = new GradientOptions([SKColors.Red, SKColors.Blue], options.Direction, options.ColorPositions);
+    /// </code>
+    /// An array converts implicitly, so <c>new GradientOptions(myColors)</c> still works.
+    /// </remarks>
+    /// <param name="colors">Gradient colors. At least 2 are required.</param>
     /// <param name="direction">Gradient direction.</param>
-    /// <param name="colorPositions">Optional color stop positions (0.0 to 1.0). If null, colors are evenly distributed.</param>
-    /// <exception cref="ArgumentNullException">Thrown when colors is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when colors has fewer than 2 elements.</exception>
-    public GradientOptions(SKColor[] colors, GradientDirection direction = GradientDirection.LeftToRight, float[]? colorPositions = null)
+    /// <param name="colorPositions">Color stop positions (0.0 to 1.0); leave it empty to distribute the colors evenly.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="colors"/> has fewer than 2 elements, or when <paramref name="colorPositions"/> is non-empty and of a different length.</exception>
+    public GradientOptions(ReadOnlySpan<SKColor> colors, GradientDirection direction = GradientDirection.LeftToRight, ReadOnlySpan<float> colorPositions = default)
     {
-        if (colors is null)
-            throw new ArgumentNullException(nameof(colors));
         if (colors.Length < 2)
             throw new ArgumentException("At least 2 colors are required for gradient", nameof(colors));
-        if (colorPositions is not null && colorPositions.Length != colors.Length)
+        if (!colorPositions.IsEmpty && colorPositions.Length != colors.Length)
             throw new ArgumentException("Color positions length must match colors length", nameof(colorPositions));
 
-        Colors = colors;
+        _colors = colors.ToArray();
+        _colorPositions = colorPositions.IsEmpty ? [] : colorPositions.ToArray();
         Direction = direction;
-        ColorPositions = colorPositions;
     }
 
     /// <summary>
-    /// Gradient colors for multi-color gradients.
+    /// Gradient colors, in flow order.
     /// </summary>
     /// <remarks>
-    /// At least 2 colors are required. The gradient flows from the first color to the last color
-    /// in the direction specified by <see cref="Direction"/>.
+    /// At least 2 colors. The gradient flows from the first color to the last in the
+    /// direction given by <see cref="Direction"/>.
     /// </remarks>
-    public SKColor[] Colors { get; init; }
+    public ReadOnlySpan<SKColor> Colors => _colors;
 
     /// <summary>
     /// The gradient direction.
     /// </summary>
     /// <remarks>
-    /// Determines the start and end points of the gradient across the QR code area.
+    /// Determines the start and end points of the gradient across the symbol area. This is
+    /// the member a <c>with</c> expression varies; the colours are chosen at construction.
     /// </remarks>
     public GradientDirection Direction { get; init; }
 
     /// <summary>
-    /// Optional color stops (0.0 to 1.0) for the gradient.
+    /// Color stops (0.0 to 1.0), or empty when the colors are evenly distributed.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// If null, colors are evenly distributed across the gradient.
-    /// If specified, the array length must match <see cref="Colors"/> length.
-    /// </para>
-    /// <para>
-    /// Values must be in ascending order from 0.0 (start) to 1.0 (end).
-    /// For example: [0.0f, 0.3f, 1.0f] for three colors.
-    /// </para>
+    /// When non-empty the length matches <see cref="Colors"/>, and the values ascend from
+    /// 0.0 (start) to 1.0 (end): <c>[0.0f, 0.3f, 1.0f]</c> for three colors.
     /// </remarks>
-    public float[]? ColorPositions { get; init; }
+    public ReadOnlySpan<float> ColorPositions => _colorPositions;
+
+    // The Skia shader factory takes arrays, and these are the copies nobody else holds.
+    internal SKColor[] ColorArray => _colors;
+    internal float[]? ColorPositionArray => _colorPositions.Length == 0 ? null : _colorPositions;
+
+    /// <inheritdoc/>
+    public bool Equals(GradientOptions? other)
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        return Direction == other.Direction
+            && _colors.AsSpan().SequenceEqual(other._colors)
+            && _colorPositions.AsSpan().SequenceEqual(other._colorPositions);
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        // Arrays hash by reference, so the elements are folded in by hand; two gradients
+        // that compare equal have to hash equal. FNV-1a, because System.HashCode is not
+        // available on every target framework here.
+        unchecked
+        {
+            var hash = (int)2166136261;
+            hash = (hash ^ (int)Direction) * 16777619;
+            foreach (var color in _colors)
+                hash = (hash ^ (int)(uint)color) * 16777619;
+            foreach (var position in _colorPositions)
+                hash = (hash ^ position.GetHashCode()) * 16777619;
+            return hash;
+        }
+    }
+
+    /// <summary>
+    /// The record printer, written by hand: the generated one would print a
+    /// <see cref="ReadOnlySpan{T}"/> member as its type name, and would have to compile
+    /// against a ref struct on every target framework.
+    /// </summary>
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        builder.Append(_colors.Length).Append(" colors, Direction = ").Append(Direction);
+        if (_colorPositions.Length != 0)
+            builder.Append(", ").Append(_colorPositions.Length).Append(" stops");
+        return true;
+    }
 }
 
 /// <summary>
-/// Defines the direction of gradient flow for QR code rendering.
+/// Defines the direction of gradient flow for symbol rendering.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Linear gradients flow in a straight line across the entire QR code area.
+/// Linear gradients flow in a straight line across the entire symbol area.
 /// The direction determines the start and end points of the gradient.
 /// </para>
 /// <para>
@@ -98,7 +163,7 @@ public record class GradientOptions
 public enum GradientDirection
 {
     /// <summary>
-    /// No gradient. Use solid color specified in QR code rendering options.
+    /// No gradient. Use solid color specified in symbol rendering options.
     /// However, if solid is required, it's better to omit gradient options entirely.
     /// </summary>
     None = 0,
@@ -135,4 +200,3 @@ public enum GradientDirection
     /// </summary>
     BottomRightToTopLeft,
 }
-

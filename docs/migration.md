@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, and one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script). The `SkiaSharp.QrCode` install line keeps working |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -161,6 +161,66 @@ var data = QRCodeGenerator.Create("https://example.com", QREccLevel.M);   // unc
 ```
 
 The one spelling that needs an edit is a named argument: `plainText:` becomes `textSpan:`. A null `string` behaves as it always did — the removed overload called `AsSpan()` on it, which is null-safe, so null encodes an empty symbol on both sides of the upgrade.
+
+### Results, options and sealing
+
+The three symbologies now describe their results the same way, and the option objects are immutable.
+
+**The sizing and decode results are the same kind of value on all three symbologies**: a `readonly record struct` the library builds. They keep `ToString()`, `==` and `IEquatable<T>`, so logging and comparing them is unchanged. `QRCodeCalculatedSize` is the one that moves, and it loses two things a caller may have used:
+
+| Gone | Instead |
+|---|---|
+| The public constructor | The library builds it; you receive it from `TryGetRequiredBufferSize` |
+| `IsValid` | The `bool` that `TryGetRequiredBufferSize` already returned |
+
+Deconstruction goes with the positional record, so read the three members by name:
+
+```csharp
+// before
+var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text, ECCLevel.M);
+
+// after
+if (!QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size))
+    return;
+var (bufferSize, qrSize, version) = (size.BufferSize, size.Size, size.Version);
+```
+
+**`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself:
+
+```csharp
+// before
+var icon = IconData.FromImage(logo);
+icon.IconSizePercent = 20;
+
+// after
+var icon = IconData.FromImage(logo) with { IconSizePercent = 20 };
+```
+
+**`GradientOptions` is immutable and compares by value.** The constructor now copies the arrays it is given, `Colors` and `ColorPositions` are read back as `ReadOnlySpan<T>`, and two gradients with the same colours are equal — the generated record equality it replaces compared the arrays by reference, so identical gradients reported as different. `ColorPositions` is an empty span rather than `null` when the colours are evenly distributed. Constructing is unchanged, and it is still a record, so `with` still varies the direction:
+
+```csharp
+var rotated = GradientOptions.Default with { Direction = GradientDirection.BottomToTop };
+```
+
+What changes is code that *read* `Colors` / `ColorPositions` as arrays, or replaced them through `with`. The colours are chosen at construction now; `with { Colors = ... }` no longer compiles, and reading gives you a span:
+
+```csharp
+// before
+var colors = options.Colors;                      // SKColor[], and the instance's own array
+var evenly = options.ColorPositions is null;
+var recolored = options with { Colors = [SKColors.Red, SKColors.Blue] };
+
+// after
+SKColor[] colors = options.Colors.ToArray();      // a copy, because the original is not yours
+var evenly = options.ColorPositions.IsEmpty;
+var recolored = new GradientOptions([SKColors.Red, SKColors.Blue], options.Direction, options.ColorPositions);
+```
+
+The constructor takes the same shapes the properties hand back — `ReadOnlySpan<SKColor>` and `ReadOnlySpan<float>`, with an empty span meaning "distribute evenly" — so rebuilding a gradient with one member changed translates nothing. Arrays convert implicitly, so `new GradientOptions(myColors, direction)` is unchanged.
+
+Two details if you passed the stops explicitly before: `null` is no longer a value you can pass (omit the argument, or pass `default` or `[]`), and an empty array now means "evenly distributed" where it used to be an `ArgumentException`. Stops are one per colour, so when the new colour count differs from the old, supply new stops or omit them — a non-empty span of a different length is still an `ArgumentException`.
+
+**Sealed:** `QRCodeData`, `MicroQRCodeData`, `RmQRCodeData`, the three image builders, `IconData` and `GradientOptions`. None had a designed extension point. The shape hierarchies (`ModuleShape`, `FinderPatternShape`, `IconShape`) are still open and are the supported way to change how a symbol is drawn.
 
 ## 1.2.0
 

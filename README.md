@@ -423,7 +423,7 @@ finally
 
 `false` means one thing: the content does not fit. Invalid arguments (an undefined ECC level, a `Version` and `Height` that disagree, a negative quiet zone) still throw, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
 
-> **`GetRequiredBufferSize` is obsolete.** Standard QR and Micro QR still carry the throwing sizing method released in v1.1.1, marked `[Obsolete]` and scheduled for removal in 2.0.0. rMQR never shipped one. Replace `GetRequiredBufferSize(text, ecc, …)` with `TryGetRequiredBufferSize(text, ecc, out var size, …)`; see [docs/migration.md](docs/migration.md).
+> **Upgrading from 1.x:** `GetRequiredBufferSize` is gone. It was the throwing sizing method Standard QR and Micro QR released in v1.1.1, deprecated in 1.2.0 and removed in 2.0.0; rMQR never shipped one. Replace `GetRequiredBufferSize(text, ecc, …)` with `TryGetRequiredBufferSize(text, ecc, out var size, …)`; see [docs/migration.md](docs/migration.md).
 
 ### Decoders
 

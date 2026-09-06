@@ -6,7 +6,7 @@ namespace FeatherQR;
 /// level plus the number of Reed-Solomon codeword corrections applied. rMQR has a
 /// single data mask, so there is no mask pattern to report.
 /// </summary>
-public readonly struct RmQRCodeDecodeInfo
+public readonly record struct RmQRCodeDecodeInfo
 {
     internal RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected)
     {

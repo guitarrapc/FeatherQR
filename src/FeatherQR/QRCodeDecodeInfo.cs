@@ -3,7 +3,7 @@ namespace FeatherQR;
 /// <summary>
 /// Diagnostic information produced by a QR code decode attempt.
 /// </summary>
-public readonly struct QRCodeDecodeInfo
+public readonly record struct QRCodeDecodeInfo
 {
     internal QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected)
     {

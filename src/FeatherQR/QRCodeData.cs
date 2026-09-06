@@ -14,7 +14,7 @@ namespace FeatherQR;
 /// - Module matrix: 2D array of boolean values (dark/light)<br/>
 /// - Serialization format: "QRR" header + size + bit-packed data<br/>
 /// </remarks>
-public class QRCodeData
+public sealed class QRCodeData
 {
     // =====================================================================
     // Memory Layout

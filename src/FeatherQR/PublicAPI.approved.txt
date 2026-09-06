@@ -25,14 +25,14 @@ namespace FeatherQR
         Utf8 = 26,
     }
 
-    public readonly struct MicroQRCodeCalculatedSize
+    public readonly struct MicroQRCodeCalculatedSize : IEquatable<MicroQRCodeCalculatedSize>
     {
         public MicroQRVersion Version { get; }
         public int BufferSize { get; }
         public int Size { get; }
     }
 
-    public class MicroQRCodeData
+    public sealed class MicroQRCodeData
     {
         public MicroQRCodeData(MicroQRVersion version, int quietZoneSize);
         public MicroQRCodeData(ReadOnlySpan<byte> rawData, int quietZoneSize);
@@ -48,7 +48,7 @@ namespace FeatherQR
         public int GetRawDataSize();
     }
 
-    public readonly struct MicroQRCodeDecodeInfo
+    public readonly struct MicroQRCodeDecodeInfo : IEquatable<MicroQRCodeDecodeInfo>
     {
         public DecodeStatus Status { get; }
         public MicroQREccLevel EccLevel { get; }
@@ -137,14 +137,12 @@ namespace FeatherQR
 
     public readonly struct QRCodeCalculatedSize : IEquatable<QRCodeCalculatedSize>
     {
-        public QRCodeCalculatedSize(int BufferSize, int Size, int Version);
-        public bool IsValid { get; }
-        public int BufferSize { get; init; }
-        public int Size { get; init; }
-        public int Version { get; init; }
+        public int BufferSize { get; }
+        public int Size { get; }
+        public int Version { get; }
     }
 
-    public class QRCodeData
+    public sealed class QRCodeData
     {
         public QRCodeData(ReadOnlySpan<byte> rawDataSpan, int quietZoneSize);
         public QRCodeData(byte[] rawData, int quietZoneSize);
@@ -162,7 +160,7 @@ namespace FeatherQR
         public int GetRawDataSize();
     }
 
-    public readonly struct QRCodeDecodeInfo
+    public readonly struct QRCodeDecodeInfo : IEquatable<QRCodeDecodeInfo>
     {
         public DecodeStatus Status { get; }
         public QREccLevel EccLevel { get; }
@@ -235,7 +233,7 @@ namespace FeatherQR
         public static QRVersionRange op_Implicit(int? version);
     }
 
-    public readonly struct RmQRCodeCalculatedSize
+    public readonly struct RmQRCodeCalculatedSize : IEquatable<RmQRCodeCalculatedSize>
     {
         public RmQRVersion Version { get; }
         public int BufferSize { get; }
@@ -243,7 +241,7 @@ namespace FeatherQR
         public int Width { get; }
     }
 
-    public class RmQRCodeData
+    public sealed class RmQRCodeData
     {
         public RmQRCodeData(ReadOnlySpan<byte> rawData, int quietZoneSize);
         public RmQRCodeData(RmQRVersion version, int quietZoneSize);
@@ -260,7 +258,7 @@ namespace FeatherQR
         public int GetRawDataSize();
     }
 
-    public readonly struct RmQRCodeDecodeInfo
+    public readonly struct RmQRCodeDecodeInfo : IEquatable<RmQRCodeDecodeInfo>
     {
         public DecodeStatus Status { get; }
         public RmQREccLevel EccLevel { get; }

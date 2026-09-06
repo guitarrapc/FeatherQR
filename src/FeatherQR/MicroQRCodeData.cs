@@ -16,7 +16,7 @@ namespace FeatherQR;
 /// <c>"QRX" + symbol type (1 byte) + width (1 byte) + height (1 byte) + packed core bits</c>.
 /// The legacy "QRR" format remains exclusive to Standard QR.
 /// </remarks>
-public class MicroQRCodeData
+public sealed class MicroQRCodeData
 {
     private readonly byte[] _bits;
     private readonly int _baseSize;

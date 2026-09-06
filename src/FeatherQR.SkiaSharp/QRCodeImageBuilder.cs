@@ -30,7 +30,7 @@ namespace FeatherQR.SkiaSharp;
 /// <seealso cref="QRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
 /// <seealso cref="MicroQRCodeImageBuilder"/>
-public class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
+public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
 {
     private readonly string? _content;
     private readonly QRCodeData? _qrCodeData;

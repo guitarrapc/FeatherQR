@@ -22,7 +22,7 @@ namespace FeatherQR.SkiaSharp;
 /// <seealso cref="MicroQRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
 /// <seealso cref="QRCodeImageBuilder"/>
-public class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
+public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
 {
     private readonly string? _content;
     private readonly MicroQRCodeData? _data;

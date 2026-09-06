@@ -1,15 +1,24 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Calculated QR code size information.
+/// Result of <see cref="QRCodeGenerator.TryGetRequiredBufferSize"/>: buffer size, matrix
+/// side length and selected version for a pending QR code encode.
 /// </summary>
-/// <param name="BufferSize">Required buffer size for the QR code matrix data (in bytes). Calculated as Size × Size.</param>
-/// <param name="Size">QR code size in modules per side (including quiet zone if specified)</param>
-/// <param name="Version">QR code version (1-40) determined by data capacity requirements</param>
-public readonly record struct QRCodeCalculatedSize(int BufferSize, int Size, int Version)
+public readonly record struct QRCodeCalculatedSize
 {
-    /// <summary>
-    /// Validates that the calculated size values are within acceptable ranges.
-    /// </summary>
-    public bool IsValid => Version is >= 1 and <= 40 && Size > 0 && BufferSize > 0;
+    internal QRCodeCalculatedSize(int bufferSize, int size, int version)
+    {
+        BufferSize = bufferSize;
+        Size = size;
+        Version = version;
+    }
+
+    /// <summary>Required destination buffer size in bytes (one byte per module, quiet zone included).</summary>
+    public int BufferSize { get; }
+
+    /// <summary>Matrix side length in modules, quiet zone included.</summary>
+    public int Size { get; }
+
+    /// <summary>The QR code version (1-40) that will be produced.</summary>
+    public int Version { get; }
 }

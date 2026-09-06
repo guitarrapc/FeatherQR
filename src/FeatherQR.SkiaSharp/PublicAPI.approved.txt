@@ -43,24 +43,26 @@ namespace FeatherQR.SkiaSharp
         BottomRightToTopLeft = 8,
     }
 
-    public class GradientOptions : IEquatable<GradientOptions>
+    public sealed class GradientOptions : IEquatable<GradientOptions>
     {
         public static readonly GradientOptions Default;
-        public GradientOptions(SKColor[] colors, GradientDirection direction = 1, float[]? colorPositions = null);
+        public GradientOptions(ReadOnlySpan<SKColor> colors, GradientDirection direction = 1, ReadOnlySpan<float> colorPositions = null);
         public GradientDirection Direction { get; init; }
-        public SKColor[] Colors { get; init; }
-        public float[]? ColorPositions { get; init; }
+        public ReadOnlySpan<SKColor> Colors { get; }
+        public ReadOnlySpan<float> ColorPositions { get; }
+        public bool Equals(GradientOptions? other);
+        public override int GetHashCode();
     }
 
-    public class IconData
+    public sealed class IconData : IEquatable<IconData>
     {
         [Obsolete] public IconData();
-        public IconShape Icon { get; set; }
-        public int IconBorderWidth { get; set; }
-        public int IconSizePercent { get; set; }
-        public int MaxCoreOccupancyPercent { get; set; }
-        public int? IconBorderModules { get; set; }
-        public int? IconSizeModules { get; set; }
+        public IconShape Icon { get; init; }
+        public int IconBorderWidth { get; init; }
+        public int IconSizePercent { get; init; }
+        public int MaxCoreOccupancyPercent { get; init; }
+        public int? IconBorderModules { get; init; }
+        public int? IconSizeModules { get; init; }
         public static IconData FromImage(SKBitmap image, int iconSizePercent = 10, int iconBorderWidth = 2);
         public static IconData FromImageByModules(SKBitmap image, int iconSizeModules, int iconBorderModules = 1, int maxCoreOccupancyPercent = 30);
     }
@@ -83,7 +85,7 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor);
     }
 
-    public class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
+    public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
     {
         public MicroQRCodeImageBuilder(MicroQRCodeData microQrCodeData);
         public MicroQRCodeImageBuilder(string content);
@@ -125,7 +127,7 @@ namespace FeatherQR.SkiaSharp
         public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
-    public class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
+    public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
     {
         public QRCodeImageBuilder(QRCodeData qrCodeData);
         public QRCodeImageBuilder(string content);
@@ -180,7 +182,7 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
-    public class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
+    public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
     {
         public RmQRCodeImageBuilder(RmQRCodeData rmQrCodeData);
         public RmQRCodeImageBuilder(string content);

@@ -16,7 +16,7 @@ namespace FeatherQR;
 /// <c>"QRX" + symbol type (1 byte, 2 = rMQR) + width (1 byte) + height (1 byte) + packed core bits</c>.
 /// Micro QR (symbol type 1) and the legacy Standard QR "QRR" streams are rejected.
 /// </remarks>
-public class RmQRCodeData
+public sealed class RmQRCodeData
 {
     private readonly byte[] _bits;
     private readonly int _coreWidth;

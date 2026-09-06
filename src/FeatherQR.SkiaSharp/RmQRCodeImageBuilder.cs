@@ -35,7 +35,7 @@ namespace FeatherQR.SkiaSharp;
 /// </remarks>
 /// <seealso cref="RmQRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
-public class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
+public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
 {
     private const int DefaultWidth = 512;
 

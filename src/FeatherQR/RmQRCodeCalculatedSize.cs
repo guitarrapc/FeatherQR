@@ -5,7 +5,7 @@ namespace FeatherQR;
 /// the byte-per-module matrix, its dimensions (quiet zone included) and the version
 /// that will be used.
 /// </summary>
-public readonly struct RmQRCodeCalculatedSize
+public readonly record struct RmQRCodeCalculatedSize
 {
     internal RmQRCodeCalculatedSize(int bufferSize, int width, int height, RmQRVersion version)
     {

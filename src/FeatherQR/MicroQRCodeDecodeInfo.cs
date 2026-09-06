@@ -7,7 +7,7 @@ namespace FeatherQR;
 /// Statuses are shared with the Standard QR decoder (<see cref="DecodeStatus"/>);
 /// version, ECC level and mask pattern use the Micro QR domains.
 /// </remarks>
-public readonly struct MicroQRCodeDecodeInfo
+public readonly record struct MicroQRCodeDecodeInfo
 {
     internal MicroQRCodeDecodeInfo(DecodeStatus status, MicroQRVersion version, MicroQREccLevel eccLevel, int maskPattern, int errorsCorrected)
     {

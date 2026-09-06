@@ -425,15 +425,15 @@ public class QRCodeGeneratorUnitTest
         var quietZoneSize = 4;
 
         // Calculate expected size
-        var (expectedBufferSize, expectedQrSize, expectedVersion) = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
+        var expected = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
 
         // Generate actual QR code
         var qrCode = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
         // Verify
-        await Assert.That(qrCode.Version).IsEqualTo(expectedVersion);
-        await Assert.That(qrCode.Size).IsEqualTo(expectedQrSize);
-        await Assert.That(qrCode.Size * qrCode.Size).IsEqualTo(expectedBufferSize);
+        await Assert.That(qrCode.Version).IsEqualTo(expected.Version);
+        await Assert.That(qrCode.Size).IsEqualTo(expected.Size);
+        await Assert.That(qrCode.Size * qrCode.Size).IsEqualTo(expected.BufferSize);
     }
 
     [Test]
@@ -444,7 +444,7 @@ public class QRCodeGeneratorUnitTest
     public async Task TryGetRequiredBufferSize_ReturnsCorrectSize(string text, QREccLevel eccLevel, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
         // Act
-        var (bufferSize, qrSize, version) = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
+        var (bufferSize, qrSize, version) = Read(Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize));
 
         // Assert
         await Assert.That(bufferSize).IsEqualTo(expectedBufferSize);
@@ -468,7 +468,7 @@ public class QRCodeGeneratorUnitTest
     public async Task TryGetRequiredBufferSize_WithEciAndBOM_ReturnsCorrectSize(string text, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
         // Act
-        var (bufferSize, qrSize, version) = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode, QuietZoneSize = quietZoneSize });
+        var (bufferSize, qrSize, version) = Read(Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode, QuietZoneSize = quietZoneSize }));
 
         // Assert
         await Assert.That(bufferSize).IsEqualTo(expectedBufferSize);
@@ -490,7 +490,7 @@ public class QRCodeGeneratorUnitTest
         var text = new string('a', textLength); // ASCII = 1 byte each
 
         // Act
-        var (_, _, version) = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode });
+        var version = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode }).Version;
 
         // Assert
         await Assert.That(version).IsEqualTo(expectedVersion);
@@ -503,9 +503,9 @@ public class QRCodeGeneratorUnitTest
     public async Task TryGetRequiredBufferSize_DifferentEciModes_MayProduceDifferentVersions(string text, EciMode eciMode1, EciMode eciMode2)
     {
         // Act
-        var (bufferSize1, qrSize1, version1) = Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode1 });
+        var (bufferSize1, qrSize1, version1) = Read(Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode1 }));
 
-        var (bufferSize2, qrSize2, version2) = Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode2 });
+        var (bufferSize2, qrSize2, version2) = Read(Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode2 }));
 
         // Assert - Different ECI modes may produce different buffer sizes due to ECI header overhead
         // For short text like "HELLO", all should fit in Version 1, but buffer sizes differ based on final QR size
@@ -774,6 +774,14 @@ public class QRCodeGeneratorUnitTest
     }
 
     // Helpers
+
+    /// <summary>
+    /// The three sizing numbers as a tuple. <see cref="QRCodeCalculatedSize"/> is a plain
+    /// readonly struct since 2.0.0 (one value kind across the three symbologies), so it no
+    /// longer deconstructs; these tests read all three at once and say so once here.
+    /// </summary>
+    private static (int BufferSize, int Size, int Version) Read(QRCodeCalculatedSize size)
+        => (size.BufferSize, size.Size, size.Version);
 
     /// <summary>
     /// Calculates QR code version from module matrix size.

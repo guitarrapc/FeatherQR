@@ -521,7 +521,7 @@ public static class SymbolRenderer
             return null;
 
         var (start, end) = GetLinearGradientPoints(area, gradientOptions.Direction);
-        return SKShader.CreateLinearGradient(start, end, gradientOptions.Colors, gradientOptions.ColorPositions, SKShaderTileMode.Clamp);
+        return SKShader.CreateLinearGradient(start, end, gradientOptions.ColorArray, gradientOptions.ColorPositionArray, SKShaderTileMode.Clamp);
     }
 
     private static (SKPoint start, SKPoint end) GetLinearGradientPoints(SKRect area, GradientDirection direction)

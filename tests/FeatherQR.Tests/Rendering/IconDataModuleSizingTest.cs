@@ -95,8 +95,7 @@ public class IconDataModuleSizingTest
         var qrData = QRCodeGenerator.Create(TestContent, QREccLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 4 });
         var area = SKRect.Create(0, 0, 500, 500);
         using var logo = CreateLogo(16);
-        var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: 2);
-        icon.IconSizePercent = iconSizePercent;
+        var icon = IconData.FromImage(logo, iconSizePercent: iconSizePercent, iconBorderWidth: 2);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => SymbolRenderer.GetIconRects(qrData, area, icon));
     }
@@ -107,8 +106,7 @@ public class IconDataModuleSizingTest
         var qrData = QRCodeGenerator.Create(TestContent, QREccLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 4 });
         var area = SKRect.Create(0, 0, 500, 500);
         using var logo = CreateLogo(16);
-        var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: 2);
-        icon.IconBorderWidth = -1;
+        var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: -1);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => SymbolRenderer.GetIconRects(qrData, area, icon));
     }
@@ -122,9 +120,8 @@ public class IconDataModuleSizingTest
         var area = SKRect.Create(0, 0, imageSide, imageSide);
 
         using var logo = CreateLogo(32);
-        var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 1);
-        icon.IconSizePercent = 50;
-        icon.IconBorderWidth = 99;
+        // Percent and pixel border are set too, and module sizing has to ignore both.
+        var icon = new IconData { Icon = new ImageIconShape(logo), IconSizeModules = 7, IconBorderModules = 1, IconSizePercent = 50, IconBorderWidth = 99 };
 
         var (iconRect, borderRect) = SymbolRenderer.GetIconRects(qrData, area, icon);
 

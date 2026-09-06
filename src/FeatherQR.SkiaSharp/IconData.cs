@@ -12,42 +12,42 @@ namespace FeatherQR.SkiaSharp;
 /// span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes
 /// given as a percentage of the image are not checked against the symbol at all.
 /// </remarks>
-public class IconData
+public sealed record class IconData
 {
     /// <summary>
     /// The icon shape to overlay on the QR code.
     /// </summary>
-    public required IconShape Icon { get; set; }
+    public required IconShape Icon { get; init; }
 
     /// <summary>
     /// The size of the icon as a percentage of the QR code size (1-100).
     /// Ignored when <see cref="IconSizeModules"/> is set.
     /// </summary>
-    public int IconSizePercent { get; set; } = 10;
+    public int IconSizePercent { get; init; } = 10;
 
     /// <summary>
     /// The border width around the icon in pixels. Creates a background-colored padding around the icon.
     /// Ignored when <see cref="IconSizeModules"/> is set.
     /// </summary>
-    public int IconBorderWidth { get; set; } = 2;
+    public int IconBorderWidth { get; init; } = 2;
 
     /// <summary>
     /// The size of the icon body in QR modules.
     /// When set, module-based sizing is used and <see cref="IconSizePercent"/> / <see cref="IconBorderWidth"/> are ignored.
     /// </summary>
-    public int? IconSizeModules { get; set; }
+    public int? IconSizeModules { get; init; }
 
     /// <summary>
     /// The border width around the icon in QR modules.
     /// When <see cref="IconSizeModules"/> is set and this is null, defaults to 1.
     /// </summary>
-    public int? IconBorderModules { get; set; }
+    public int? IconBorderModules { get; init; }
 
     /// <summary>
     /// Maximum allowed icon occupancy of the QR core area, as a percentage (1-100).
     /// Used only for module-based sizing. Default is 30.
     /// </summary>
-    public int MaxCoreOccupancyPercent { get; set; } = 30;
+    public int MaxCoreOccupancyPercent { get; init; } = 30;
 
     /// <summary>
     /// Create IconData from a bitmap image using percent/pixel sizing.
