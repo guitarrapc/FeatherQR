@@ -14,6 +14,98 @@ namespace FeatherQR;
 /// </remarks>
 public sealed class MicroQRCodeData
 {
+    // =====================================================================
+    // Memory Layout
+    // =====================================================================
+    //
+    // MicroQRCodeData stores CORE modules only (no quiet zone), bit-packed
+    // MSB-first in flat row-major order, zero-padded to a whole byte, and the
+    // packed bits ARE the serialization payload. See QRCodeData for the
+    // measurements that motivate the layout.
+    //
+    //   bitIndex = coreRow * _baseSize + coreCol
+    //   dark(coreRow, coreCol) = (_bits[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1
+    //
+    // Micro QR is square, so _baseSize is both the extent and the row stride.
+    // Sizes are M1 = 11, M2 = 13, M3 = 15, M4 = 17 modules per side, and the
+    // specification asks for a 2-module quiet zone (Standard QR uses 4).
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Example (M2, QuietZone = 2)                             │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ _baseSize: 13 (core modules, no quiet zone)             │
+    // │ _quietZoneSize: 2 (border width)                        │
+    // │ _size: 17 (13 + 2*2, including quiet zone)              │
+    // │ _bits.Length: 22 bytes (ceil(13 * 13 / 8))              │
+    // │   (byte-per-module over the same 17×17: 289 bytes)      │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // The quiet zone is VIRTUAL: it is all-light by definition, so the public
+    // indexer answers false outside the core area instead of storing border
+    // modules. _size/_quietZoneSize only affect coordinate translation.
+    //
+    // Visual Representation (17×17 with QuietZone=2):
+    //
+    //     0   1   2   3 ... 13  14  15  16
+    //   ┌───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    // 0 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ ← QuietZone (row 0-1)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 1 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 2 │ Q │ Q │ C │ C │...│ C │ C │ Q │ Q │ ← Core starts (row/col 2-14)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    //   │...│...│...│...│...│...│...│...│...│
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 14│ Q │ Q │ C │ C │...│ C │ C │ Q │ Q │ ← Core ends
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 15│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ ← QuietZone (row 15-16)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 16│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │
+    //   └───┴───┴───┴───┴───┴───┴───┴───┴───┘
+    //
+    // Q = QuietZone (VIRTUAL — not stored, indexer returns false)
+    // C = Core modules (stored bit-packed in _bits)
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Bit Mapping (core only, row-major, MSB-first)           │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ coreRow  = row - _quietZoneSize                         │
+    // │ coreCol  = col - _quietZoneSize                         │
+    // │   (outside 0.._baseSize-1 → quiet zone → false)         │
+    // │ bitIndex = coreRow × _baseSize + coreCol                │
+    // │                                                         │
+    // │ Example: Access (row=4, col=5) at M2 with QuietZone=2   │
+    // │   → coreRow = 2, coreCol = 3                            │
+    // │   → bitIndex = 2 × 13 + 3 = 29                          │
+    // │   → _bits[3], bit 2 (= 7 - (29 & 7))                    │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // =====================================================================
+    // Serialization / Deserialization
+    // =====================================================================
+    //
+    // The "QRX" container names the symbology and both dimensions, so one
+    // reader can tell a Micro QR payload from an rMQR one. Standard QR keeps
+    // its own 4-byte "QRR" header, which carries a single size byte.
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Serialization (GetRawData)                               │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ _bits (already the packed payload)                       │
+    // │   ↓ copy                                                 │
+    // │ rawData ("QRX" + type + width + height + _bits)          │
+    // │           3B     1B      1B       1B                     │
+    // │ width == height == _baseSize, Micro QR being square      │
+    // └──────────────────────────────────────────────────────────┘
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Deserialization (Constructor)                            │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ rawData ("QRX" + type + width + height + packed bits)    │
+    // │   ↓ copy (padding bits masked to zero)                   │
+    // │ _bits                                                    │
+    // └──────────────────────────────────────────────────────────┘
+
     private readonly byte[] _bits;
     private readonly int _baseSize;
     private readonly int _quietZoneSize;

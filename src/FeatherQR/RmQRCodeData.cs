@@ -14,6 +14,105 @@ namespace FeatherQR;
 /// </remarks>
 public sealed class RmQRCodeData
 {
+    // =====================================================================
+    // Memory Layout
+    // =====================================================================
+    //
+    // RmQRCodeData stores CORE modules only (no quiet zone), bit-packed
+    // MSB-first in flat row-major order, zero-padded to a whole byte, and the
+    // packed bits ARE the serialization payload. See QRCodeData for the
+    // measurements that motivate the layout.
+    //
+    // The difference that matters here is that rMQR is RECTANGULAR, so there is
+    // no single "size": the row stride is _coreWidth, and width and height are
+    // tracked separately everywhere.
+    //
+    //   bitIndex = coreRow * _coreWidth + coreCol        // stride is the WIDTH
+    //   dark(coreRow, coreCol) = (_bits[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1
+    //
+    // The bounds check is asymmetric for the same reason: rows are compared
+    // against _height / _coreHeight and columns against _width / _coreWidth.
+    // Versions run R7x43 to R17x139, 7-17 modules high and 27-139 wide, and the
+    // specification asks for a 2-module quiet zone (Standard QR uses 4).
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Example (R7x43, QuietZone = 2)                          │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ _coreWidth: 43, _coreHeight: 7 (no quiet zone)          │
+    // │ _quietZoneSize: 2 (border width)                        │
+    // │ _width: 47, _height: 11 (including quiet zone)          │
+    // │ _bits.Length: 38 bytes (ceil(43 * 7 / 8))               │
+    // │   (byte-per-module over the same 47×11: 517 bytes)      │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // The quiet zone is VIRTUAL: it is all-light by definition, so the public
+    // indexer answers false outside the core area instead of storing border
+    // modules. _width/_height/_quietZoneSize only affect coordinate translation.
+    //
+    // Visual Representation (47×11 with QuietZone=2), showing the whole height:
+    //
+    //     0   1   2   3 ... 44  45  46
+    //   ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    // 0 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ ← QuietZone (row 0-1)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 1 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 2 │ Q │ Q │ C │ C │...│ C │ Q │ Q │ ← Core starts (row 2-8, col 2-44)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 3 │ Q │ Q │ C │ C │...│ C │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    //   │...│...│...│...│...│...│...│...│
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 8 │ Q │ Q │ C │ C │...│ C │ Q │ Q │ ← Core ends
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 9 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ ← QuietZone (row 9-10)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 10│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │
+    //   └───┴───┴───┴───┴───┴───┴───┴───┘
+    //
+    // Q = QuietZone (VIRTUAL — not stored, indexer returns false)
+    // C = Core modules (stored bit-packed in _bits)
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Bit Mapping (core only, row-major, MSB-first)           │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ coreRow  = row - _quietZoneSize                         │
+    // │ coreCol  = col - _quietZoneSize                         │
+    // │   (outside the core extents → quiet zone → false)       │
+    // │ bitIndex = coreRow × _coreWidth + coreCol               │
+    // │                                                         │
+    // │ Example: Access (row=3, col=5) at R7x43, QuietZone=2    │
+    // │   → coreRow = 1, coreCol = 3                            │
+    // │   → bitIndex = 1 × 43 + 3 = 46                          │
+    // │   → _bits[5], bit 1 (= 7 - (46 & 7))                    │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // =====================================================================
+    // Serialization / Deserialization
+    // =====================================================================
+    //
+    // The "QRX" container names the symbology and both dimensions, so one
+    // reader can tell an rMQR payload from a Micro QR one. Here the width and
+    // height bytes genuinely differ, which is what lets a reader recover the
+    // rectangle; Standard QR keeps its own 4-byte "QRR" header with one size.
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Serialization (GetRawData)                               │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ _bits (already the packed payload)                       │
+    // │   ↓ copy                                                 │
+    // │ rawData ("QRX" + type + width + height + _bits)          │
+    // │           3B     1B      1B       1B                     │
+    // └──────────────────────────────────────────────────────────┘
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Deserialization (Constructor)                            │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ rawData ("QRX" + type + width + height + packed bits)    │
+    // │   ↓ copy (padding bits masked to zero)                   │
+    // │ _bits                                                    │
+    // └──────────────────────────────────────────────────────────┘
+
     private readonly byte[] _bits;
     private readonly int _coreWidth;
     private readonly int _coreHeight;
