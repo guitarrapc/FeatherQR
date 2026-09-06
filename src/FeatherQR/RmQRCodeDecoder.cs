@@ -4,43 +4,35 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR;
 
 /// <summary>
-/// rMQR Code (ISO/IEC 23941) decoder: module matrix → text. Sibling of
-/// <see cref="QRCodeDecoder"/> and <see cref="MicroQRCodeDecoder"/>; explicitly
-/// typed so Standard QR scanning stays unaffected. Matrix-level and image-level
-/// decoding (<see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/>).
+/// Decodes an rMQR code (ISO/IEC 23941) back into text, correcting errors as it goes.
 /// </summary>
 /// <remarks>
-/// Every overload accepts an rMQR matrix with or without a light quiet zone: the
-/// dark bounding box (finder corner top-left, sub-finder corner bottom-right, timing
-/// patterns on all four edges) locates the core, so uniform and asymmetric borders
-/// are stripped automatically. Reed-Solomon corrections are applied at full block
-/// strength (⌊ecc/2⌋ per block) and reported in <see cref="RmQRCodeDecodeInfo.ErrorsCorrected"/>.
-/// Numeric, Alphanumeric and Byte segments (ISO-8859-1 / UTF-8, with or without ECI)
-/// are supported, plus Kanji segments decoded as JIS X 0208; the generator never emits
-/// Kanji, so it is a read-only mode here. A Kanji cell outside the JIS X 0208
-/// repertoire fails the whole symbol with
-/// <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a
-/// replacement character.
+/// Reads Numeric, Alphanumeric, Byte and Kanji mode across all 32 versions and both error correction levels.
+/// A Byte segment with no ECI header is read as UTF-8 when the bytes are valid UTF-8, and as ISO-8859-1 otherwise.
+/// Kanji is mapped through JIS X 0208, so a cell outside that repertoire fails the whole rMQR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
+/// Reed-Solomon runs at full block strength, correcting up to ⌊ecc/2⌋ codewords per block, and reports the count in <see cref="RmQRCodeDecodeInfo.ErrorsCorrected"/>.
+/// Both a plain matrix and one with a quiet zone are accepted; the border is located and stripped automatically.
+/// Image scanning is a separate entry point, and <see cref="QRCodeDecoder"/> keeps scanning Standard QR only.
 /// </remarks>
 public static class RmQRCodeDecoder
 {
     /// <summary>
-    /// Decodes the text content of an <see cref="RmQRCodeData"/> matrix.
+    /// Decodes the text from an rMQR code.
     /// </summary>
-    /// <param name="data">The rMQR code data.</param>
+    /// <param name="data">The rMQR code to decode.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentNullException"></exception>
+    /// <returns><c>true</c> when the rMQR code decoded.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecode(RmQRCodeData data, out string text) => TryDecode(data, out text, out _);
 
     /// <summary>
-    /// Decodes the text content of an <see cref="RmQRCodeData"/> matrix with diagnostics.
+    /// Decodes the text from an rMQR code and reports what it found.
     /// </summary>
-    /// <param name="data">The rMQR code data.</param>
+    /// <param name="data">The rMQR code to decode.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentNullException"></exception>
+    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <returns><c>true</c> when the rMQR code decoded.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info)
     {
         if (data is null)
@@ -62,20 +54,15 @@ public static class RmQRCodeDecoder
     }
 
     /// <summary>
-    /// Decodes the text content from a module matrix.
+    /// Decodes the text from a module matrix.
     /// </summary>
-    /// <param name="modules">
-    /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
-    /// order over <paramref name="width"/>, the format produced by
-    /// <see cref="RmQRCodeGenerator.Create(ReadOnlySpan{char}, RmQREccLevel, Span{byte}, in RmQRCodeGeneratorOptions)"/>.
-    /// A light quiet zone border (uniform or not) is detected and skipped automatically.
-    /// </param>
-    /// <param name="width">Matrix width in modules (including any quiet zone).</param>
-    /// <param name="height">Matrix height in modules (including any quiet zone).</param>
+    /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
+    /// <param name="width">Width in modules, quiet zone included.</param>
+    /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <returns><c>true</c> when the rMQR code decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info)
     {
         ValidateMatrix(modules, width, height);
@@ -103,17 +90,16 @@ public static class RmQRCodeDecoder
     }
 
     /// <summary>
-    /// Decodes the text content from a module matrix into a caller-provided buffer
-    /// without per-call heap allocation.
+    /// Decodes the text into the buffer you provide, without allocating.
     /// </summary>
-    /// <param name="modules">Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major order over <paramref name="width"/>; a light quiet zone border is detected and skipped automatically.</param>
-    /// <param name="width">Matrix width in modules (including any quiet zone).</param>
-    /// <param name="height">Matrix height in modules (including any quiet zone).</param>
+    /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
+    /// <param name="width">Width in modules, quiet zone included.</param>
+    /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="charsWritten">How many characters were written.</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <returns><c>true</c> when the rMQR code decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
         ValidateMatrix(modules, width, height);
@@ -142,15 +128,15 @@ public static class RmQRCodeDecoder
     }
 
     /// <summary>
-    /// Detects and decodes an rMQR Code from grayscale image pixels.
+    /// Finds and decodes an rMQR code in a grayscale image.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and an rMQR code composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
-    /// <returns>True when an rMQR Code was detected and decoded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info)
     {
         char[]? rentedChars = null;
@@ -172,17 +158,16 @@ public static class RmQRCodeDecoder
     }
 
     /// <summary>
-    /// Detects and decodes an rMQR Code from grayscale image pixels into a
-    /// caller-provided buffer without per-call heap allocation.
+    /// Finds and decodes an rMQR code in a grayscale image, writing into the buffer you provide without allocating.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and an rMQR code composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> (with <see cref="RmQRVersion.R17x139"/> when the version is unknown) to size it.</param>
-    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
-    /// <returns>True when an rMQR Code was detected and decoded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="charsWritten">How many characters were written.</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
         // long arithmetic: dimensions are caller-controlled and width·height can overflow int
@@ -193,12 +178,11 @@ public static class RmQRCodeDecoder
     }
 
     /// <summary>
-    /// Calculates the maximum possible decoded character count for an rMQR version,
-    /// across ECC levels and encoding modes. Use to size the destination buffer for
-    /// the allocation-free <see cref="TryDecode(ReadOnlySpan{byte}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/> overload.
+    /// The most characters an rMQR code of this version can decode to, across every error correction level and mode.
+    /// Use it to size the destination of the allocation-free overloads.
     /// </summary>
-    /// <param name="version">rMQR version.</param>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="version">The version to measure.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not a defined value.</exception>
     public static int GetMaxDecodedLength(RmQRVersion version)
     {
         if (!RmQRConstants.IsValidVersion(version))
@@ -236,11 +220,8 @@ public static class RmQRCodeDecoder
     }
 
     /// <summary>
-    /// Locates the core inside an input that may carry a light border. rMQR has
-    /// dark modules at all four core corners (finder top-left, corner pattern
-    /// top-right and bottom-left, sub-finder bottom-right) and timing patterns on
-    /// every edge, so the dark bounding box IS the core; the border need not be
-    /// uniform. The box must be an rMQR size.
+    /// Locates the core inside an input that may carry a light border. rMQR has dark modules at all four core corners (finder top-left, corner pattern top-right and bottom-left, sub-finder bottom-right) and timing patterns on every edge, so the dark bounding box IS the core; the border need not be uniform.
+    /// The box must be an rMQR size.
     /// </summary>
     private static bool TryLocateCore(ReadOnlySpan<byte> modules, int width, int height, out int left, out int top, out int coreWidth, out int coreHeight)
     {

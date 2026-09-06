@@ -16,10 +16,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// 5. Reed-Solomon error correction per block
 /// 6. Bitstream decoding (mode segments → text)
 /// </code>
-/// The function-pattern layout comes from the encoder's own per-version placement
-/// tables (<see cref="ModulePlacer.GetLayout"/>, built by
-/// <see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>), so the decoder can
-/// never disagree with the encoder about which modules carry data.
+/// The function-pattern layout comes from the encoder's own per-version placement tables (<see cref="ModulePlacer.GetLayout"/>, built by <see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>), so the decoder can never disagree with the encoder about which modules carry data.
 /// </remarks>
 internal static class QRMatrixDecoder
 {
@@ -120,8 +117,7 @@ internal static class QRMatrixDecoder
     /// Upper bound of decoded characters for a version, across all ECC levels and modes.
     /// </summary>
     /// <remarks>
-    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword
-    /// (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
+    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
     /// </remarks>
     public static int GetMaxCharCount(int version)
         => QRCodeConstants.GetEccInfo(version, QREccLevel.L).TotalDataCodewords * 3;
@@ -164,9 +160,7 @@ internal static class QRMatrixDecoder
     }
 
     /// <summary>
-    /// Reads data/ECC codeword bits from the matrix in placement order (inverse of
-    /// <see cref="ModulePlacer.PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>),
-    /// unmasking each module on the fly.
+    /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="ModulePlacer.PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>), unmasking each module on the fly.
     /// Remainder bits beyond the output capacity are ignored.
     /// </summary>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int size, ReadOnlySpan<byte> blockedMask, int maskPattern, Span<byte> output)
@@ -229,8 +223,7 @@ internal static class QRMatrixDecoder
     };
 
     /// <summary>
-    /// Distributes interleaved codewords into per-block contiguous [data | ecc]
-    /// layout, the exact inverse of <see cref="BinaryEncoders.BinaryInterleaver.InterleaveCodewords"/>.
+    /// Distributes interleaved codewords into per-block contiguous [data | ecc] layout, the exact inverse of <see cref="BinaryEncoders.BinaryInterleaver.InterleaveCodewords"/>.
     /// </summary>
     private static void DeinterleaveCodewords(ReadOnlySpan<byte> interleaved, Span<byte> blocks, in ECCInfo eccInfo)
     {
@@ -278,9 +271,7 @@ internal static class QRMatrixDecoder
     }
 
     /// <summary>
-    /// Gets the blocked-module bitmask for a version: the encoder's cached placement
-    /// tables (<see cref="ModulePlacer.GetLayout"/>), built by its own function-pattern
-    /// placement, so the decoder can never disagree with the encoder.
+    /// Gets the blocked-module bitmask for a version: the encoder's cached placement tables (<see cref="ModulePlacer.GetLayout"/>), built by its own function-pattern placement, so the decoder can never disagree with the encoder.
     /// </summary>
     private static byte[] GetBlockedMask(int version, int size)
     {

@@ -1,8 +1,7 @@
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// One local grid frame recovered around a finder pattern: the column axis (U)
-/// and row axis (V) in pixels per module, plus their lengths.
+/// One local grid frame recovered around a finder pattern: the column axis (U) and row axis (V) in pixels per module, plus their lengths.
 /// </summary>
 internal readonly struct OrientationCandidate(
     float uX,
@@ -21,11 +20,8 @@ internal readonly struct OrientationCandidate(
 }
 
 /// <summary>
-/// Local module-scale and axis recovery around a single 7×7 finder pattern, for
-/// symbologies whose orientation cannot be derived from three finder centers
-/// (Micro QR, rMQR). Measures dark-light-dark runs from the finder center: the
-/// center square (3) + light ring (1) + dark ring (1) on each side spans exactly
-/// 7 modules of the 1:1:3:1:1 structure.
+/// Local module-scale and axis recovery around a single 7×7 finder pattern, for symbologies whose orientation cannot be derived from three finder centers (Micro QR, rMQR).
+/// Measures dark-light-dark runs from the finder center: the center square (3) + light ring (1) + dark ring (1) on each side spans exactly 7 modules of the 1:1:3:1:1 structure.
 /// </summary>
 internal static class FinderAxisEstimator
 {
@@ -34,16 +30,14 @@ internal static class FinderAxisEstimator
 
     /// <summary>
     /// Maximum angular-sweep ray length relative to the row-scan module estimate.
-    /// A finder center-to-edge ray is at most 3.5√2 modules; the extra margin
-    /// tolerates pixel quantization and mild perspective.
+    /// A finder center-to-edge ray is at most 3.5√2 modules; the extra margin tolerates pixel quantization and mild perspective.
     /// </summary>
     private const float MaxAngularSweepRunModules = 8f;
 
     /// <summary>
-    /// Refines the horizontal and vertical module sizes independently by walking
-    /// dark-light-dark runs from the finder center. Keeping both estimates lets the
-    /// decoder read symbols rendered into a non-square rectangle. A clipped axis
-    /// falls back to the other axis, then to the row-scan estimate when both clip.
+    /// Refines the horizontal and vertical module sizes independently by walking dark-light-dark runs from the finder center.
+    /// Keeping both estimates lets the decoder read symbols rendered into a non-square rectangle.
+    /// A clipped axis falls back to the other axis, then to the row-scan estimate when both clip.
     /// </summary>
     public static void RefineModuleSize(
         ReadOnlySpan<byte> luminance,
@@ -64,12 +58,9 @@ internal static class FinderAxisEstimator
     }
 
     /// <summary>
-    /// Sweeps one quadrant because finder axes repeat every 90 degrees, retaining
-    /// separated low-score directions. For a concentric square finder, a center ray
-    /// crosses the shortest dark-light-dark span when it follows one of the square's
-    /// local axes. Pixel quantization can shift the shortest measured run several
-    /// degrees away from the true finder axis, so adjacent samples of one minimum
-    /// must not consume every candidate slot.
+    /// Sweeps one quadrant because finder axes repeat every 90 degrees, retaining separated low-score directions.
+    /// For a concentric square finder, a center ray crosses the shortest dark-light-dark span when it follows one of the square's local axes.
+    /// Pixel quantization can shift the shortest measured run several degrees away from the true finder axis, so adjacent samples of one minimum must not consume every candidate slot.
     /// </summary>
     public static int FindOrientationCandidates(
         ReadOnlySpan<byte> luminance,
@@ -148,8 +139,8 @@ internal static class FinderAxisEstimator
     }
 
     /// <summary>
-    /// Module size along one axis through the finder center: forward and backward
-    /// dark-light-dark runs together span 7 modules. NaN when either run clips.
+    /// Module size along one axis through the finder center: forward and backward dark-light-dark runs together span 7 modules.
+    /// NaN when either run clips.
     /// </summary>
     public static float MeasureAxis(
         ReadOnlySpan<byte> luminance,
@@ -171,12 +162,9 @@ internal static class FinderAxisEstimator
     }
 
     /// <summary>
-    /// Walks from the finder center along a direction until the dark-light-dark
-    /// sequence completes (center square → light ring → dark ring → out), returning
-    /// the traveled distance (≈ 3.5 modules). NaN when the image edge or the
-    /// caller's maximum run length interrupts the sequence.
-    /// Returning step − 0.5 centers the one-pixel overshoot of the integer-step
-    /// walk (same correction as the Standard QR measurement).
+    /// Walks from the finder center along a direction until the dark-light-dark sequence completes (center square → light ring → dark ring → out), returning the traveled distance (≈ 3.5 modules).
+    /// NaN when the image edge or the caller's maximum run length interrupts the sequence.
+    /// Returning step − 0.5 centers the one-pixel overshoot of the integer-step walk (same correction as the Standard QR measurement).
     /// </summary>
     public static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY, float maxRunLength)
     {

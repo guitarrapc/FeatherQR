@@ -8,24 +8,20 @@ namespace FeatherQR.Internals.MicroQR;
 /// Decodes the Micro QR data bitstream (mode segments) back into text.
 /// </summary>
 /// <remarks>
-/// Inverse of <see cref="MicroQRBinaryEncoder"/>. Micro QR framing differs from
-/// Standard QR (ISO/IEC 18004 Table 2/3):
+/// Inverse of <see cref="MicroQRBinaryEncoder"/>.
+/// Micro QR framing differs from Standard QR (ISO/IEC 18004 Table 2/3):
 /// <list type="bullet">
 /// <item>Mode indicator is version − 1 bits wide (M1 has none; Numeric is implied).
-/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (decoded as JIS X 0208
-/// via the shared <see cref="ShiftJisKanjiTable"/>, M3 and M4 only since narrower mode
-/// indicators cannot express it); M4 values 4-7 are undefined.</item>
+/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>, M3 and M4 only since narrower mode indicators cannot express it); M4 values 4-7 are undefined.</item>
 /// <item>Character count indicator is 3-6 bits (Numeric = version + 2, others = version + 1).</item>
 /// <item>The terminator (2·version + 1 zero bits) is exactly a Numeric mode
-/// indicator followed by an all-zero count, a zero-count Numeric segment ends the
-/// stream. It may be truncated when the data fills the capacity.</item>
+/// indicator followed by an all-zero count, a zero-count Numeric segment ends the stream.
+/// It may be truncated when the data fills the capacity.</item>
 /// <item>No ECI: byte segments always use the UTF-8-validates heuristic.</item>
 /// <item>The bit capacity is not a whole number of bytes for M1/M3: the final data
-/// codeword carries 4 bits in its high nibble, so decoding is bounded by
-/// <c>dataBitCount</c>, not by the codeword byte length.</item>
+/// codeword carries 4 bits in its high nibble, so decoding is bounded by <c>dataBitCount</c>, not by the codeword byte length.</item>
 /// </list>
-/// Segment payload decoding is shared with the other symbology decoders via
-/// <see cref="SegmentDecoders"/>.
+/// Segment payload decoding is shared with the other symbology decoders via <see cref="SegmentDecoders"/>.
 /// </remarks>
 internal static class MicroQRBinaryDecoder
 {

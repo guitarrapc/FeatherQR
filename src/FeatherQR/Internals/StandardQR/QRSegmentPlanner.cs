@@ -4,40 +4,28 @@ using System.Diagnostics;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Mixed-mode segmentation for <see cref="QRSegmentation.Optimal"/>: the split of
-/// the content into Numeric / Alphanumeric / Byte runs whose total bit cost is
-/// minimal for a given version, and the version fit that follows from it.
+/// Mixed-mode segmentation for <see cref="QRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
-/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared
-/// with the Micro QR and rMQR planners; what lives here is Standard QR's version scan. That scan is
-/// cheap by construction: character count indicator widths are constant within the
-/// three ISO/IEC 18004 version bands (1-9 / 10-26 / 27-40), so the optimal cost is
-/// computed at most once per band, and the single-mode fit caps the scan so a plan is
-/// produced only when it lowers the version. Design rationale, bounds and
-/// measurements: specs/standardqr-encoder.md, "Mixed-mode segmentation".
+/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Micro QR and rMQR planners; what lives here is Standard QR's version scan.
+/// That scan is cheap by construction: character count indicator widths are constant within the three ISO/IEC 18004 version bands (1-9 / 10-26 / 27-40), so the optimal cost is computed at most once per band, and the single-mode fit caps the scan so a plan is produced only when it lowers the version.
+/// Design rationale, bounds and measurements: specs/standardqr-encoder.md, "Mixed-mode segmentation".
 /// </remarks>
 internal static class QRSegmentPlanner
 {
     /// <summary>
-    /// Content length up to which a plan buffer fits the stack
-    /// (<see cref="MaxStackSegments"/> runs, 512 bytes); longer content rents a
-    /// text-length buffer, which no plan can outgrow because every run holds at
-    /// least one character.
+    /// Content length up to which a plan buffer fits the stack (<see cref="MaxStackSegments"/> runs, 512 bytes); longer content rents a text-length buffer, which no plan can outgrow because every run holds at least one character.
     /// </summary>
     public const int MaxStackSegments = 64;
 
     /// <summary>
-    /// Longest content any Standard QR symbol can hold, in characters (7089 digits
-    /// at version 40-L, an exact fit: 2363 groups × 10 bits + 4 + 14 = 23,648 bits).
-    /// No mixed plan can beat it: mixing only adds headers to a denser-per-character
-    /// mode that does not exist.
+    /// Longest content any Standard QR symbol can hold, in characters (7089 digits at version 40-L, an exact fit: 2363 groups × 10 bits + 4 + 14 = 23,648 bits).
+    /// No mixed plan can beat it: mixing only adds headers to a denser-per-character mode that does not exist.
     /// </summary>
     /// <remarks>
-    /// A rejection rule, not only a work cap: a mixed plan can encode content no single
-    /// mode holds, so this is what declares longer content impossible. The margin is
-    /// 4 bits (7090 digits cost 23,652 against 23,648), so re-derive it rather than
-    /// nudge it if the capacity tables change. Pinned by <c>QRSegmentPlannerUnitTest</c>.
+    /// A rejection rule, not only a work cap: a mixed plan can encode content no single mode holds, so this is what declares longer content impossible.
+    /// The margin is 4 bits (7090 digits cost 23,652 against 23,648), so re-derive it rather than nudge it if the capacity tables change.
+    /// Pinned by <c>QRSegmentPlannerUnitTest</c>.
     /// </remarks>
     public const int MaxPlannableChars = 7089;
 
@@ -51,20 +39,12 @@ internal static class QRSegmentPlanner
     private const int MinCountBitsAny = 8;
 
     /// <summary>
-    /// Version fit for mixed-mode segmentation, restricted to
-    /// <paramref name="minVersion"/> through <paramref name="maxVersion"/>. Returns
-    /// the version to encode at and whether a mixed-mode plan is what makes it fit;
-    /// when <paramref name="useSegments"/> is false the caller emits the ordinary
-    /// single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
-    /// <c>false</c> means the content fits neither one mode nor a mixed plan in the
-    /// window; the caller owns the error.
+    /// Version fit for mixed-mode segmentation, restricted to <paramref name="minVersion"/> through <paramref name="maxVersion"/>.
+    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
+    /// <c>false</c> means the content fits neither one mode nor a mixed plan in the window; the caller owns the error.
     /// </summary>
     /// <remarks>
-    /// The scan needs no floor/ceiling machinery: count indicator widths are constant
-    /// within the three version bands, so the optimal cost is computed at most once
-    /// per band (three O(n) runs in the worst case, no reconstruction table), and
-    /// capacity grows monotonically inside a band, so the first version that holds
-    /// the band cost is the smallest.
+    /// The scan needs no floor/ceiling machinery: count indicator widths are constant within the three version bands, so the optimal cost is computed at most once per band (three O(n) runs in the worst case, no reconstruction table), and capacity grows monotonically inside a band, so the first version that holds the band cost is the smallest.
     /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments)
     {
@@ -146,27 +126,19 @@ internal static class QRSegmentPlanner
     }
 
     /// <summary>
-    /// A lower bound on any plan at any version, in payload bits, computed in one O(n)
-    /// pass with no dynamic programming table: each character priced at the cheapest
-    /// rate any mode could give it, plus the cheapest possible single segment header.
+    /// A lower bound on any plan at any version, in payload bits, computed in one O(n) pass with no dynamic programming table: each character priced at the cheapest rate any mode could give it, plus the cheapest possible single segment header.
     /// </summary>
     /// <remarks>
-    /// Deliberately crude: it answers "could a split reach a better version at all"
-    /// before any cost run. Loose where a split is worth searching, tight where it is
-    /// not. Its blind spot is finely alternating content, which looks far cheaper than
-    /// it is because seeing that switching modes every character never pays requires
-    /// modelling the switch cost — that is the dynamic program itself.
+    /// Deliberately crude: it answers "could a split reach a better version at all" before any cost run.
+    /// Loose where a split is worth searching, tight where it is not.
+    /// Its blind spot is finely alternating content, which looks far cheaper than it is because seeing that switching modes every character never pays requires modelling the switch cost — that is the dynamic program itself.
     /// </remarks>
     public static int TrivialLowerBoundBits(ReadOnlySpan<char> text, EciMode charset)
         => (ModeSegmenter.CheapestSixths(text, charset) + 5) / 6 + ModeIndicatorBits + MinCountBitsAny;
 
     /// <summary>
-    /// Builds the minimal-cost plan for <paramref name="version"/> into
-    /// <paramref name="segments"/>. Returns false when the content is unplannable,
-    /// the plan needs more runs than the caller lent room for, the plan would be
-    /// misread on decode (a relocated byte order mark), or the exact re-costed
-    /// stream would not fit; the caller answers all four by falling back to the
-    /// single-mode stream.
+    /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
+    /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a relocated byte order mark), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -244,9 +216,7 @@ internal static class QRSegmentPlanner
     }
 
     /// <summary>
-    /// Named entry point for <c>QRSegmentPlannerUnitTest</c>: the minimal payload
-    /// bits (no ECI prefix) at explicit count indicator widths, which is the value
-    /// the version scan compares against a data capacity.
+    /// Named entry point for <c>QRSegmentPlannerUnitTest</c>: the minimal payload bits (no ECI prefix) at explicit count indicator widths, which is the value the version scan compares against a data capacity.
     /// </summary>
     public static int MinimumPayloadBits(ReadOnlySpan<char> text, EciMode charset, int cciNumeric, int cciAlnum, int cciByte)
         => ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, default, out _);

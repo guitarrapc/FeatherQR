@@ -6,8 +6,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// Decodes a Micro QR module matrix (one byte per module, no quiet zone) back into text.
 /// </summary>
 /// <remarks>
-/// Inverse of <see cref="MicroQRCodeGenerator"/>'s matrix writing pipeline, the
-/// same internal boundary as the Standard QR <c>QRMatrixDecoder</c>:
+/// Inverse of <see cref="MicroQRCodeGenerator"/>'s matrix writing pipeline, the same internal boundary as the Standard QR <c>QRMatrixDecoder</c>:
 /// <code>
 /// 1. Version from matrix size (11/13/15/17 → M1-M4)
 /// 2. Format information → version cross-check + ECC level + mask pattern
@@ -20,9 +19,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// 5. Bitstream decoding (mode segments → text), bounded by the bit capacity
 ///    (M1/M3 end on a 4-bit half codeword)
 /// </code>
-/// The function-module predicate and mask conditions are the encoder's own
-/// (<see cref="MicroQRModulePlacer"/>), so the decoder can never disagree with
-/// the encoder about which modules carry data.
+/// The function-module predicate and mask conditions are the encoder's own (<see cref="MicroQRModulePlacer"/>), so the decoder can never disagree with the encoder about which modules carry data.
 /// </remarks>
 internal static class MicroQRMatrixDecoder
 {
@@ -90,9 +87,8 @@ internal static class MicroQRMatrixDecoder
     /// Upper bound of decoded characters for a version, across all ECC levels and modes.
     /// </summary>
     /// <remarks>
-    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword
-    /// (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound. The
-    /// L (or detection-only) level has the most data codewords per version.
+    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
+    /// The L (or detection-only) level has the most data codewords per version.
     /// </remarks>
     public static int GetMaxCharCount(MicroQRVersion version)
     {
@@ -101,9 +97,8 @@ internal static class MicroQRMatrixDecoder
     }
 
     /// <summary>
-    /// Reads the 15 format information bits. Positions mirror
-    /// <see cref="MicroQRModulePlacer.PlaceFormat"/> exactly: bits 14…7 along
-    /// row 8 columns 1-8, bits 6…0 down column 8 rows 7-1.
+    /// Reads the 15 format information bits.
+    /// Positions mirror <see cref="MicroQRModulePlacer.PlaceFormat"/> exactly: bits 14…7 along row 8 columns 1-8, bits 6…0 down column 8 rows 7-1.
     /// </summary>
     private static ushort ReadFormatBits(ReadOnlySpan<byte> modules, int size)
     {
@@ -125,12 +120,8 @@ internal static class MicroQRMatrixDecoder
     }
 
     /// <summary>
-    /// Reads data/ECC codeword bits from the matrix in placement order (inverse of
-    /// <see cref="MicroQRModulePlacer.PlaceDataCodewords"/>), unmasking each module
-    /// on the fly. Data bits fill <paramref name="block"/> from byte 0 (the M1/M3
-    /// half codeword naturally ends as a high nibble because the stream stops at
-    /// <paramref name="dataBitCount"/>); ECC bits fill full bytes from
-    /// <paramref name="dataCodewords"/> on.
+    /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="MicroQRModulePlacer.PlaceDataCodewords"/>), unmasking each module on the fly.
+    /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword naturally ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>); ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
     /// </summary>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int size, int maskPattern, int dataBitCount, int dataCodewords, Span<byte> block)
     {

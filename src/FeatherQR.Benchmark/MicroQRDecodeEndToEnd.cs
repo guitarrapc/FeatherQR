@@ -1,7 +1,6 @@
 /// <summary>
 /// End-to-end Micro QR matrix decoding through the public API (MicroQRCodeDecoder).
-/// Payloads mirror MicroQREncode so encode and decode costs are directly comparable;
-/// a Standard QR v1 decode of the same numeric payload gives the scale reference.
+/// Payloads mirror MicroQREncode so encode and decode costs are directly comparable; a Standard QR v1 decode of the same numeric payload gives the scale reference.
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
 ///
 /// Scenarios:

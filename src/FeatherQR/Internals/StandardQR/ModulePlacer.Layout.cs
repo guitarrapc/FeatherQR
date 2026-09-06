@@ -10,21 +10,11 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Table-driven placement for Standard QR: everything the placer derives from the
-/// version alone is built once per version by the reference painters and cached
-/// (<see cref="PlacementLayout"/>): the painted function-module template, the
-/// blocked-module bitmask, the zigzag walk over free modules as core indices, and
-/// the walk segmented into runs of rows where both strip columns are free.
+/// Table-driven placement for Standard QR: everything the placer derives from the version alone is built once per version by the reference painters and cached (<see cref="PlacementLayout"/>): the painted function-module template, the blocked-module bitmask, the zigzag walk over free modules as core indices, and the walk segmented into runs of rows where both strip columns are free.
 /// </summary>
 /// <remarks>
-/// Benchmark-driven (kernel 4.5-9x over the per-call painters + acc64 walk at v40..v1,
-/// see the Performance section of specs/standardqr-encoder.md); the reference implementations
-/// (<see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>,
-/// <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>)
-/// remain the source of truth: they build the tables and the parity tests hold the
-/// fast paths to them byte for byte. Memory per version used: size² template +
-/// size²/8 mask + 2 B per free module + a few hundred ops (≤ 95 KB at v40, ~1.3 MB if
-/// all 40 versions were ever used).
+/// Benchmark-driven (kernel 4.5-9x over the per-call painters + acc64 walk at v40..v1, see the Performance section of specs/standardqr-encoder.md); the reference implementations (<see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>, <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>) remain the source of truth: they build the tables and the parity tests hold the fast paths to them byte for byte.
+/// Memory per version used: size² template + size²/8 mask + 2 B per free module + a few hundred ops (≤ 95 KB at v40, ~1.3 MB if all 40 versions were ever used).
 /// </remarks>
 internal static partial class ModulePlacer
 {
@@ -150,13 +140,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Fast data placement (same result as
-    /// <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>
-    /// with the version's canonical blocked mask): the stream is expanded to one byte
-    /// per bit (AVX2 / SSSE3, scalar otherwise), runs of both-free rows are written as
-    /// one byte-swapped 16-bit store per row, the remaining free modules through the
-    /// index table. Modules beyond the stream end are not written (the caller's
-    /// buffer already holds the template zeros there).
+    /// Fast data placement (same result as <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/> with the version's canonical blocked mask): the stream is expanded to one byte per bit (AVX2 / SSSE3, scalar otherwise), runs of both-free rows are written as one byte-swapped 16-bit store per row, the remaining free modules through the index table.
+    /// Modules beyond the stream end are not written (the caller's buffer already holds the template zeros there).
     /// </summary>
     /// <param name="buffer">Core matrix (size × size bytes) with the function template in place.</param>
     /// <param name="layout">The version's placement tables.</param>

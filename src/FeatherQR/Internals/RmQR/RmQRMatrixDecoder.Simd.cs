@@ -8,31 +8,21 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// Bit-plane extraction kernel: the byte grid is transposed once into per-column bit
-/// planes, then each column pair of the zigzag walk is emitted with one PEXT + PDEP
-/// per column, so no module byte is touched more than once and no output bit is
-/// handled individually.
+/// Bit-plane extraction kernel: the byte grid is transposed once into per-column bit planes, then each column pair of the zigzag walk is emitted with one PEXT + PDEP per column, so no module byte is touched more than once and no output bit is handled individually.
 /// </summary>
 /// <remarks>
-/// A column of a symbol spans at most height − 2 = 15 data rows, so it fits in a
-/// <see cref="ushort"/> and the transpose covers 16 columns per 256-bit vector.
-/// Two planes are produced in the same pass: one in walk order for upward pairs and
-/// a row-reversed one for downward pairs, which lets a single pair of PEXT/PDEP
-/// masks serve both directions (see <c>BuildExtractLayout</c> for why the orders
-/// line up).
+/// A column of a symbol spans at most height − 2 = 15 data rows, so it fits in a <see cref="ushort"/> and the transpose covers 16 columns per 256-bit vector.
+/// Two planes are produced in the same pass: one in walk order for upward pairs and a row-reversed one for downward pairs, which lets a single pair of PEXT/PDEP masks serve both directions (see <c>BuildExtractLayout</c> for why the orders line up).
 /// <para>
-/// Requires fast PDEP/PEXT (see <see cref="HardwareCapabilities.HasFastPext"/>);
-/// pre-Zen 3 AMD parts and every non-x64 target take the portable tier instead.
-/// Measured 16-64x over the per-module reference walk across R7x43..R17x139, versus
-/// 8-12x for the portable tier; AVX-512 (32 columns per step) measured inside noise
-/// of AVX2 on Zen 4, so there is no 512-bit tier.
+/// Requires fast PDEP/PEXT (see <see cref="HardwareCapabilities.HasFastPext"/>); pre-Zen 3 AMD parts and every non-x64 target take the portable tier instead.
+/// Measured 16-64x over the per-module reference walk across R7x43..R17x139, versus 8-12x for the portable tier; AVX-512 (32 columns per step) measured inside noise of AVX2 on Zen 4, so there is no 512-bit tier.
 /// </para>
 /// </remarks>
 internal static partial class RmQRMatrixDecoder
 {
     /// <summary>
-    /// Extracts the codeword stream through the column bit planes. Writes every byte
-    /// of <paramref name="stream"/>.
+    /// Extracts the codeword stream through the column bit planes.
+    /// Writes every byte of <paramref name="stream"/>.
     /// </summary>
     private static void ExtractCodewordsBitPlanes(ReadOnlySpan<byte> modules, int width, int height, uint[] pairs, Span<byte> stream)
     {
@@ -45,20 +35,12 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Transposes rows 1..h−2 (rows 0 and h−1 are timing patterns and never carry
-    /// data) into column bit planes: <c>plane[c]</c> bit <c>r−1</c> is row <c>r</c>,
-    /// and <c>plane[PlaneStride + c]</c> bit <c>h−2−r</c> is the same module in
-    /// reversed row order.
+    /// Transposes rows 1..h−2 (rows 0 and h−1 are timing patterns and never carry data) into column bit planes: <c>plane[c]</c> bit <c>r−1</c> is row <c>r</c>, and <c>plane[PlaneStride + c]</c> bit <c>h−2−r</c> is the same module in reversed row order.
     /// </summary>
     /// <remarks>
-    /// The vector step reads 16 bytes at a time and runs past the end of a row rather
-    /// than peeling a scalar tail: rows 1..h−2 always have at least one row below
-    /// them, so the read stays inside the width × height grid for every rMQR width
-    /// (the narrowest is 27, and the bound is width ≥ 15). The lanes past the width
-    /// hold whatever follows in the next row, and no column pair ever reads column
-    /// w−1 or beyond, so they are never observed. The dark test is
-    /// <c>min(value, 1)</c>, not a compare: modules are "0 = light, non-zero = dark",
-    /// and on x64 a compare would round-trip through a mask register.
+    /// The vector step reads 16 bytes at a time and runs past the end of a row rather than peeling a scalar tail: rows 1..h−2 always have at least one row below them, so the read stays inside the width × height grid for every rMQR width (the narrowest is 27, and the bound is width ≥ 15).
+    /// The lanes past the width hold whatever follows in the next row, and no column pair ever reads column w−1 or beyond, so they are never observed.
+    /// The dark test is <c>min(value, 1)</c>, not a compare: modules are "0 = light, non-zero = dark", and on x64 a compare would round-trip through a mask register.
     /// </remarks>
     private static void BuildColumnPlanes(ref byte src, int width, int height, ref ushort plane)
     {
@@ -95,11 +77,9 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Emits the codeword stream one column pair at a time. PEXT selects the rows of
-    /// a column that carry data, PDEP scatters them into the pair's MSB-first bit
-    /// field, and the pair's precomputed data mask is applied with one XOR. Pairs
-    /// interrupted by function patterns are handled by the same two instructions as
-    /// clean ones, so there is no per-bit fallback path.
+    /// Emits the codeword stream one column pair at a time.
+    /// PEXT selects the rows of a column that carry data, PDEP scatters them into the pair's MSB-first bit field, and the pair's precomputed data mask is applied with one XOR.
+    /// Pairs interrupted by function patterns are handled by the same two instructions as clean ones, so there is no per-bit fallback path.
     /// </summary>
     private static void EmitColumnPairs(ref byte dst, ref ushort plane, uint[] pairs, int codewords)
     {

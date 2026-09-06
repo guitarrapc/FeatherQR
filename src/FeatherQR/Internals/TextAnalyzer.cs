@@ -22,8 +22,7 @@ internal static class TextAnalyzer
     private static readonly Encoding Iso88591Encoding = Encoding.GetEncoding("ISO-8859-1");
 
     /// <summary>
-    /// Analyzes the input text to determine the most efficient encoding mode (Numeric, Alphanumeric, Byte)
-    /// If SIMD is supported, uses SIMD instructions for faster analysis.
+    /// Analyzes the input text to determine the most efficient encoding mode (Numeric, Alphanumeric, Byte) If SIMD is supported, uses SIMD instructions for faster analysis.
     /// </summary>
     /// <param name="text"></param>
     /// <param name="requestedEciMode"></param>
@@ -402,11 +401,8 @@ internal static class TextAnalyzer
 #if NET8_0_OR_GREATER
     /// <summary>
     /// ARM64 NEON optimized analysis (16 chars per step, vector remainder blocks).
-    /// Two ushort loads saturate-narrow (UQXTN/UQXTN2) into one byte vector per
-    /// step: chars above 0xFF clamp to 0xFF, which classifies identically
-    /// (non-numeric, non-alphanumeric), so byte-domain checks stay exact.
-    /// ASCII/ISO detection keeps 16-bit precision via one UMAXV of the raw block,
-    /// whose max answers both the &gt;127 and &gt;255 thresholds at once.
+    /// Two ushort loads saturate-narrow (UQXTN/UQXTN2) into one byte vector per step: chars above 0xFF clamp to 0xFF, which classifies identically (non-numeric, non-alphanumeric), so byte-domain checks stay exact.
+    /// ASCII/ISO detection keeps 16-bit precision via one UMAXV of the raw block, whose max answers both the &gt;127 and &gt;255 thresholds at once.
     /// </summary>
     /// <param name="text">The text to inspect.</param>
     /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>

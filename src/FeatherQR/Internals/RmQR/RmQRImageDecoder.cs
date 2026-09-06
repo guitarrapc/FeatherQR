@@ -9,8 +9,7 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// Decodes an rMQR Code from a grayscale image: clean, well-lit, screen-rendered
-/// or scanned inputs.
+/// Decodes an rMQR Code from a grayscale image: clean, well-lit, screen-rendered or scanned inputs.
 /// </summary>
 /// <remarks>
 /// Pipeline:
@@ -44,9 +43,7 @@ internal static class RmQRImageDecoder
     internal const int MaxModules = 17 * 139;
 
     /// <summary>
-    /// Sub-finder search radius around the predicted center, in half modules: a fixed
-    /// part plus a width-proportional part, since the finder-local scale estimate
-    /// (±2 %) and a mild keystone both displace the far corner in proportion to the width.
+    /// Sub-finder search radius around the predicted center, in half modules: a fixed part plus a width-proportional part, since the finder-local scale estimate (±2 %) and a mild keystone both displace the far corner in proportion to the width.
     /// </summary>
     private const int SubFinderSearchRadiusHalfModulesBase = 12;
     private const int SubFinderSearchRadiusHalfModulesPerTenModules = 1;
@@ -61,9 +58,8 @@ internal static class RmQRImageDecoder
     private const float FinderCenter = 3.5f;
 
     /// <summary>
-    /// Decodes an rMQR Code from grayscale pixels. Reflectance-reversed symbols
-    /// (light modules on a dark background) are handled by one inverted retry when
-    /// the normal attempt fails.
+    /// Decodes an rMQR Code from grayscale pixels.
+    /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails.
     /// </summary>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
@@ -111,13 +107,9 @@ internal static class RmQRImageDecoder
     /// Strided finder scan first, then a full sweep when nothing decoded.
     /// </summary>
     /// <remarks>
-    /// The widening trigger has to be a question about the symbol, and "did anything
-    /// decode" is the only one available. The scan itself cannot ask it: every signal
-    /// inside a flat candidate list is a statement about the image, so a second QR
-    /// code or a noise artefact would answer it in the real symbol's place and
-    /// suppress the sweep the symbol needed. Paid only on images that fail, and it makes
-    /// the detection envelope a superset of a full sweep's: the symbol is read if
-    /// either pass reads it.
+    /// The widening trigger has to be a question about the symbol, and "did anything decode" is the only one available.
+    /// The scan itself cannot ask it: every signal inside a flat candidate list is a statement about the image, so a second QR code or a noise artefact would answer it in the real symbol's place and suppress the sweep the symbol needed.
+    /// Paid only on images that fail, and it makes the detection envelope a superset of a full sweep's: the symbol is read if either pass reads it.
     /// </remarks>
     private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
@@ -239,9 +231,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Tries the eight frames one axis pair generates: four right-angle rotations,
-    /// each with and without the axes swapped (a mirrored capture keeps the finder
-    /// geometry and transposes the grid).
+    /// Tries the eight frames one axis pair generates: four right-angle rotations, each with and without the axes swapped (a mirrored capture keeps the finder geometry and transposes the grid).
     /// </summary>
     private static DecodeStatus TryFrames(
         ReadOnlySpan<byte> luminance,
@@ -293,9 +283,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// One local frame (finder center at grid (3.5, 3.5), <c>u</c> = column axis,
-    /// <c>v</c> = row axis in pixels per module): read the finder-side format copy
-    /// to learn the version, anchor the far end on the sub-finder, then decode.
+    /// One local frame (finder center at grid (3.5, 3.5), <c>u</c> = column axis, <c>v</c> = row axis in pixels per module): read the finder-side format copy to learn the version, anchor the far end on the sub-finder, then decode.
     /// </summary>
     private static DecodeStatus TryFrame(
         ReadOnlySpan<byte> luminance,
@@ -411,11 +399,8 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Bounded search over the projective denominator coefficients. For every pair,
-    /// the finder→sub-finder correspondence determines the finder-local Jacobian
-    /// scale and rotation in closed form (a homography maps the grid line through
-    /// both centers to the image line through both centers; only the scale along it
-    /// depends on the coefficients).
+    /// Bounded search over the projective denominator coefficients.
+    /// For every pair, the finder→sub-finder correspondence determines the finder-local Jacobian scale and rotation in closed form (a homography maps the grid line through both centers to the image line through both centers; only the scale along it depends on the coefficients).
     /// </summary>
     private static DecodeStatus TryPerspectiveVariants(
         ReadOnlySpan<byte> luminance,
@@ -581,10 +566,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Locates the 5×5 sub-finder (dark ring, light ring, dark center) around its
-    /// predicted position (center at grid (w − 2.5, h − 2.5)) by template matching
-    /// on a half-module lattice, then refines the center to the middle of the
-    /// center dark module along both axes.
+    /// Locates the 5×5 sub-finder (dark ring, light ring, dark center) around its predicted position (center at grid (w − 2.5, h − 2.5)) by template matching on a half-module lattice, then refines the center to the middle of the center dark module along both axes.
     /// </summary>
     internal static bool TryLocateSubFinder(
         ReadOnlySpan<byte> luminance,
@@ -729,8 +711,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Moves the point to the midpoint of the dark run it sits in, along a unit
-    /// direction; left unchanged when the run is not a plausible single module.
+    /// Moves the point to the midpoint of the dark run it sits in, along a unit direction; left unchanged when the run is not a plausible single module.
     /// </summary>
     private static void RefineAlongAxis(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ref float x, ref float y, float dirX, float dirY, float moduleLength)
     {
@@ -760,11 +741,8 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Cheap far-from-anchor consistency check: the edge timing patterns (rows 0 and
-    /// h−1, dark at even columns) sampled between the finder and the sub-finder,
-    /// skipping the alignment patterns. A grid that is right at both anchors but bent
-    /// in between (wrong projective coefficient or shear) fails here long before a
-    /// full sample and RS decode would reject it.
+    /// Cheap far-from-anchor consistency check: the edge timing patterns (rows 0 and h−1, dark at even columns) sampled between the finder and the sub-finder, skipping the alignment patterns.
+    /// A grid that is right at both anchors but bent in between (wrong projective coefficient or shear) fails here long before a full sample and RS decode would reject it.
     /// </summary>
     internal static bool TimingRowsAgree(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, RmQRVersion version, int symbolWidth, int symbolHeight)
     {
@@ -798,9 +776,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Reads one 18-bit format copy through the transform: finder side (rows 1-5 ×
-    /// cols 8-10 column-major, then col 11 rows 1-3) or sub-finder side (rows h−6..h−2
-    /// × cols w−8..w−6, then row h−6 cols w−5..w−3), same bit order as the matrix decoder.
+    /// Reads one 18-bit format copy through the transform: finder side (rows 1-5 × cols 8-10 column-major, then col 11 rows 1-3) or sub-finder side (rows h−6..h−2 × cols w−8..w−6, then row h−6 cols w−5..w−3), same bit order as the matrix decoder.
     /// </summary>
     internal static int ReadFormatCopy(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, bool subFinderSide, int symbolWidth, int symbolHeight)
     {
@@ -844,10 +820,8 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Narrowest column count the Vector128 samplers accept: one whole lane group. No
-    /// rMQR width comes near it (the narrowest symbol is 27 columns wide), and
-    /// RmQRSampleGridParityTest asserts that, so this is the one place the threshold
-    /// lives — a test that repeated the literal would pin nothing.
+    /// Narrowest column count the Vector128 samplers accept: one whole lane group.
+    /// No rMQR width comes near it (the narrowest symbol is 27 columns wide), and RmQRSampleGridParityTest asserts that, so this is the one place the threshold lives — a test that repeated the literal would pin nothing.
     /// </summary>
     internal const int Simd128MinColumns = 8;
 
@@ -856,19 +830,11 @@ internal static class RmQRImageDecoder
     /// Out-of-range positions clamp to the nearest edge pixel.
     /// </summary>
     /// <remarks>
-    /// The Vector128 kernel samples the exact same pixels as the scalar loop, so the
-    /// two tiers are interchangeable (pinned by RmQRSampleGridParityTest). That is
-    /// stricter than it looks: rMQR's scalar form divides each numerator by the
-    /// denominator, and Standard QR's row kernel — which multiplies by one reciprocal
-    /// instead — is NOT bit-equivalent to it, which is why this kernel is its own
-    /// implementation rather than a shared one.
+    /// The Vector128 kernel samples the exact same pixels as the scalar loop, so the two tiers are interchangeable (pinned by RmQRSampleGridParityTest).
+    /// That is stricter than it looks: rMQR's scalar form divides each numerator by the denominator, and Standard QR's row kernel — which multiplies by one reciprocal instead — is NOT bit-equivalent to it, which is why this kernel is its own implementation rather than a shared one.
     ///
-    /// Measured on Apple M2 (RmQrSampleArm findings log), 2.4-3.8x over the scalar
-    /// loop. Two thirds of that comes from vectorizing the convert/clamp/gather; the
-    /// rest from the affine special case, which is not a heuristic — every first
-    /// attempt at a clean capture goes through a frame built with
-    /// perspectiveX = perspectiveY = 0, and there the denominator is exactly 1f, so
-    /// both divisions can be skipped without changing a sampled byte.
+    /// Measured on Apple M2 (RmQrSampleArm findings log), 2.4-3.8x over the scalar loop.
+    /// Two thirds of that comes from vectorizing the convert/clamp/gather; the rest from the affine special case, which is not a heuristic — every first attempt at a clean capture goes through a frame built with perspectiveX = perspectiveY = 0, and there the denominator is exactly 1f, so both divisions can be skipped without changing a sampled byte.
     /// </remarks>
     internal static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
@@ -887,9 +853,8 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Scalar reference sampler: one <see cref="PerspectiveTransform.Transform"/> per
-    /// module. Kept as the parity reference for the vector tier as well as the
-    /// fallback for platforms without Vector128.
+    /// Scalar reference sampler: one <see cref="PerspectiveTransform.Transform"/> per module.
+    /// Kept as the parity reference for the vector tier as well as the fallback for platforms without Vector128.
     /// </summary>
     internal static void SampleGridScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
@@ -917,24 +882,16 @@ internal static class RmQRImageDecoder
 
 #if NET8_0_OR_GREATER
     /// <summary>
-    /// Vector128 grid sampler: 8 module centres per step, with a projective and an
-    /// affine variant. Byte-identical to <see cref="SampleGridScalar"/>.
+    /// Vector128 grid sampler: 8 module centres per step, with a projective and an affine variant.
+    /// Byte-identical to <see cref="SampleGridScalar"/>.
     /// </summary>
     /// <remarks>
-    /// Exactness is by construction, and each step is chosen to preserve it: lanes keep
-    /// the scalar's own association <c>((a1x*gridX) + a2x*gridY) + a3x</c> (folding the
-    /// last two into a row constant would re-associate), there is no FMA contraction and
-    /// no reciprocal multiply, and the affine variant only skips a division by exactly
-    /// <c>1f</c>. That is also why this is a separate implementation from the Standard QR
-    /// row kernel, which computes <c>1/d</c> once and multiplies twice: it rounds
-    /// differently. The overlapping tail block re-samples up to three already-written
-    /// modules; it reads the same inputs and writes the same values.
+    /// Exactness is by construction, and each step is chosen to preserve it: lanes keep the scalar's own association <c>((a1x*gridX) + a2x*gridY) + a3x</c> (folding the last two into a row constant would re-associate), there is no FMA contraction and no reciprocal multiply, and the affine variant only skips a division by exactly <c>1f</c>.
+    /// That is also why this is a separate implementation from the Standard QR row kernel, which computes <c>1/d</c> once and multiplies twice: it rounds differently.
+    /// The overlapping tail block re-samples up to three already-written modules; it reads the same inputs and writes the same values.
     /// <para>
-    /// The clamp is what makes the unchecked gather safe: px and py are pinned to
-    /// [0, width-1] and [0, height-1]. That relies on the caller having sliced
-    /// <paramref name="luminance"/> to exactly width * height, as DecodeLuminance does —
-    /// this method skips the bounds checks the scalar loop keeps, so a short span reads
-    /// out of bounds here where it would throw there.
+    /// The clamp is what makes the unchecked gather safe: px and py are pinned to [0, width-1] and [0, height-1].
+    /// That relies on the caller having sliced <paramref name="luminance"/> to exactly width * height, as DecodeLuminance does — this method skips the bounds checks the scalar loop keeps, so a short span reads out of bounds here where it would throw there.
     /// </para>
     /// </remarks>
     internal static void SampleGridSimd128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
@@ -1033,15 +990,11 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Affine tier of <see cref="SampleGridSimd128"/>: the denominator is exactly 1f,
-    /// so x / 1f == x and both divisions are dropped. Everything else — the hoisted
-    /// products, the clamp, the overlapping tail — matches the projective kernel, and
-    /// the sampled bytes match <see cref="SampleGridScalar"/>.
+    /// Affine tier of <see cref="SampleGridSimd128"/>: the denominator is exactly 1f, so x / 1f == x and both divisions are dropped.
+    /// Everything else — the hoisted products, the clamp, the overlapping tail — matches the projective kernel, and the sampled bytes match <see cref="SampleGridScalar"/>.
     /// </summary>
     /// <remarks>
-    /// A separate method rather than a branch inside the shared loop: this is the shape
-    /// that was measured, and it keeps the projective kernel's constants out of the
-    /// affine loop's register budget.
+    /// A separate method rather than a branch inside the shared loop: this is the shape that was measured, and it keeps the projective kernel's constants out of the affine loop's register budget.
     /// </remarks>
     private static void SampleGridSimd128Affine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
@@ -1143,8 +1096,7 @@ internal static class RmQRImageDecoder
 
     /// <summary>
     /// Ranks decode failures by how far the attempt progressed; keeps the deepest.
-    /// Wrong-grid samples overwhelmingly die at format decoding, so anything past
-    /// it almost certainly hit the real grid.
+    /// Wrong-grid samples overwhelmingly die at format decoding, so anything past it almost certainly hit the real grid.
     /// </summary>
     private static void TrackBestFailure(DecodeStatus status, in RmQRCodeDecodeInfo attemptInfo, ref DecodeStatus bestStatus, ref RmQRCodeDecodeInfo bestInfo)
     {
@@ -1173,17 +1125,9 @@ internal static class RmQRImageDecoder
             and not DecodeStatus.FormatInformationInvalid;
 
     /// <summary>
-    /// Outcomes no further geometry around the SAME finder can change: success, and
-    /// a caller destination too small for the payload (the symbol was already read
-    /// through format decode and RS on every block, the same evidence a success rests
-    /// on; the perspective search, the remaining frames of that finder and the
-    /// inverted retry would only rediscover the same symbol at hundreds of times the
-    /// cost). Other finder candidates of the same polarity are still tried, so a
-    /// second symbol in the frame that does fit the destination is found regardless
-    /// of candidate order; a fitting symbol of the OPPOSITE polarity next to a
-    /// too-large one is the accepted trade-off of skipping the inverted retry. The
-    /// status also outranks every other failure in <see cref="Rank"/>, so it reaches
-    /// the caller even when an earlier attempt around the same finder failed at RS.
+    /// Outcomes no further geometry around the SAME finder can change: success, and a caller destination too small for the payload (the symbol was already read through format decode and RS on every block, the same evidence a success rests on; the perspective search, the remaining frames of that finder and the inverted retry would only rediscover the same symbol at hundreds of times the cost).
+    /// Other finder candidates of the same polarity are still tried, so a second symbol in the frame that does fit the destination is found regardless of candidate order; a fitting symbol of the OPPOSITE polarity next to a too-large one is the accepted trade-off of skipping the inverted retry.
+    /// The status also outranks every other failure in <see cref="Rank"/>, so it reaches the caller even when an earlier attempt around the same finder failed at RS.
     /// </summary>
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;

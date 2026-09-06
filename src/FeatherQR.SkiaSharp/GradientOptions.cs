@@ -7,31 +7,20 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Configures a linear gradient applied across the whole symbol, flowing in one of the
-/// directions of <see cref="GradientDirection"/>.
+/// Configures a linear gradient applied across the whole symbol, flowing in one of the directions of <see cref="GradientDirection"/>.
 /// </para>
 /// <para>
-/// For a simple two-colour gradient pass two colours; for more, add colours and
-/// optionally the stops they sit at.
+/// For a simple two-colour gradient pass two colours; for more, add colours and optionally the stops they sit at.
 /// </para>
 /// <para>
-/// An instance is immutable through its API: the constructor copies the arrays it is
-/// given and no member hands one back, so a shared instance such as <see cref="Default"/>
-/// cannot be repainted by one caller for everyone else.
+/// An instance is immutable through its API: the constructor copies the arrays it is given and no member hands one back, so a shared instance such as <see cref="Default"/> cannot be repainted by one caller for everyone else.
 /// </para>
 /// <para>
-/// A <c>with</c> expression varies the direction of an existing gradient —
-/// <c>GradientOptions.Default with { Direction = GradientDirection.BottomToTop }</c> —
-/// and the copy shares the colour array with the original, which is safe for the same
-/// reason: neither instance exposes it.
+/// A <c>with</c> expression varies the direction of an existing gradient — <c>GradientOptions.Default with { Direction = GradientDirection.BottomToTop }</c> — and the copy shares the colour array with the original, which is safe for the same reason: neither instance exposes it.
 /// </para>
 /// <para>
-/// <see cref="Direction"/> is the only <c>init</c> member, which is a rule rather than an
-/// omission: <see cref="Colors"/> and <see cref="ColorPositions"/> have to agree in
-/// length, and <c>with</c> sets one member at a time, so allowing
-/// <c>with { Colors = … }</c> would let a caller build a gradient whose stops no longer
-/// match its colours and only find out when it is drawn. The pair is therefore set
-/// together, through the constructor, where the mismatch is refused immediately.
+/// <see cref="Direction"/> is the only <c>init</c> member, which is a rule rather than an omission: <see cref="Colors"/> and <see cref="ColorPositions"/> have to agree in length, and <c>with</c> sets one member at a time, so allowing <c>with { Colors = … }</c> would let a caller build a gradient whose stops no longer match its colours and only find out when it is drawn.
+/// The pair is therefore set together, through the constructor, where the mismatch is refused immediately.
 /// </para>
 /// </remarks>
 public sealed record class GradientOptions
@@ -40,19 +29,17 @@ public sealed record class GradientOptions
     private readonly float[] _colorPositions;
 
     /// <summary>
-    /// A ready-made gradient: dark orange to firebrick, running from the top-left corner
-    /// to the bottom-right. Use it when you want a gradient without choosing colors.
+    /// A ready-made gradient: dark orange to firebrick, running from the top-left corner to the bottom-right.
+    /// Use it when you want a gradient without choosing colors.
     /// </summary>
     public static readonly GradientOptions Default = new([SKColors.DarkOrange, SKColors.Firebrick], GradientDirection.TopLeftToBottomRight);
 
     /// <summary>
-    /// Initializes a new instance of <see cref="GradientOptions"/>. Both spans are copied,
-    /// so the caller keeps ownership of whatever it passed.
+    /// Initializes a new instance of <see cref="GradientOptions"/>.
+    /// Both spans are copied, so the caller keeps ownership of whatever it passed.
     /// </summary>
     /// <remarks>
-    /// The parameters take the same shapes <see cref="Colors"/> and
-    /// <see cref="ColorPositions"/> hand back, so an existing gradient can be rebuilt with
-    /// one change and nothing else translated:
+    /// The parameters take the same shapes <see cref="Colors"/> and <see cref="ColorPositions"/> hand back, so an existing gradient can be rebuilt with one change and nothing else translated:
     /// <code>
     /// var recolored = new GradientOptions([SKColors.Red, SKColors.Blue], options.Direction, options.ColorPositions);
     /// </code>
@@ -78,8 +65,8 @@ public sealed record class GradientOptions
     /// Gradient colors, in flow order.
     /// </summary>
     /// <remarks>
-    /// At least 2 colors. The gradient flows from the first color to the last in the
-    /// direction given by <see cref="Direction"/>.
+    /// At least 2 colors.
+    /// The gradient flows from the first color to the last in the direction given by <see cref="Direction"/>.
     /// </remarks>
     // "Immutable through its API", not "immutable": MemoryMarshal and reflection both
     // reach the array. Not worth warning callers about, but do not treat it as
@@ -95,8 +82,8 @@ public sealed record class GradientOptions
     /// The gradient direction.
     /// </summary>
     /// <remarks>
-    /// Determines the start and end points of the gradient across the symbol area. This is
-    /// the member a <c>with</c> expression varies; the colours are chosen at construction.
+    /// Determines the start and end points of the gradient across the symbol area.
+    /// This is the member a <c>with</c> expression varies; the colours are chosen at construction.
     /// </remarks>
     public GradientDirection Direction { get; init; }
 
@@ -104,8 +91,7 @@ public sealed record class GradientOptions
     /// Color stops (0.0 to 1.0), or empty when the colors are evenly distributed.
     /// </summary>
     /// <remarks>
-    /// When non-empty the length matches <see cref="Colors"/>, and the values ascend from
-    /// 0.0 (start) to 1.0 (end): <c>[0.0f, 0.3f, 1.0f]</c> for three colors.
+    /// When non-empty the length matches <see cref="Colors"/>, and the values ascend from 0.0 (start) to 1.0 (end): <c>[0.0f, 0.3f, 1.0f]</c> for three colors.
     /// </remarks>
     public ReadOnlySpan<float> ColorPositions => _colorPositions;
 
@@ -147,9 +133,7 @@ public sealed record class GradientOptions
     }
 
     /// <summary>
-    /// The record printer, written by hand: the generated one would print a
-    /// <see cref="ReadOnlySpan{T}"/> member as its type name, and would have to compile
-    /// against a ref struct on every target framework.
+    /// The record printer, written by hand: the generated one would print a <see cref="ReadOnlySpan{T}"/> member as its type name, and would have to compile against a ref struct on every target framework.
     /// </summary>
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
@@ -180,7 +164,8 @@ public sealed record class GradientOptions
 public enum GradientDirection
 {
     /// <summary>
-    /// No gradient. Use solid color specified in symbol rendering options.
+    /// No gradient.
+    /// Use solid color specified in symbol rendering options.
     /// However, if solid is required, it's better to omit gradient options entirely.
     /// </summary>
     None = 0,

@@ -1,7 +1,6 @@
 /// <summary>
-/// End-to-end rMQR matrix decoding through the public API (RmQRCodeDecoder):
-/// module matrix (no quiet zone) → text. Baseline for the reference-shaped decoder;
-/// span-destination variants must stay allocation-free.
+/// End-to-end rMQR matrix decoding through the public API (RmQRCodeDecoder): module matrix (no quiet zone) → text.
+/// Baseline for the reference-shaped decoder; span-destination variants must stay allocation-free.
 ///
 /// Scenarios (same payloads as RmQREncodeEndToEnd):
 ///   Numeric_R7x43_M      : smallest symbol, single RS block
@@ -133,16 +132,12 @@ public class RmQRDecodeEndToEnd
     }
 
     /// <summary>
-    /// Flips <paramref name="flips"/> distinct modules and keeps the draw only when the
-    /// decoder reports exactly that many corrected errors, so the scenario measures the
-    /// correction path at its stated strength rather than the failure path.
+    /// Flips <paramref name="flips"/> distinct modules and keeps the draw only when the decoder reports exactly that many corrected errors, so the scenario measures the correction path at its stated strength rather than the failure path.
     /// </summary>
     /// <remarks>
-    /// The ErrorsCorrected check is what makes the count honest. Drawing from the whole
-    /// matrix spends flips on function patterns, which carry no codeword, and two flips
-    /// can land in one codeword byte: either way a nominal 2-flip case injects one actual
-    /// error and measures a shorter correction than its name promises. Rejecting those
-    /// draws is conservative — every excluded sample is easier than the one kept.
+    /// The ErrorsCorrected check is what makes the count honest.
+    /// Drawing from the whole matrix spends flips on function patterns, which carry no codeword, and two flips can land in one codeword byte: either way a nominal 2-flip case injects one actual error and measures a shorter correction than its name promises.
+    /// Rejecting those draws is conservative — every excluded sample is easier than the one kept.
     /// </remarks>
     private static byte[] Damage(byte[] modules, (int Width, int Height) size, RmQRVersion version, int flips, int seed)
     {

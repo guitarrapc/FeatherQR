@@ -4,9 +4,8 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// Reed-Solomon error correction decoder for QR code decoding.
 /// </summary>
 /// <remarks>
-/// Inverse of <see cref="BinaryEncoders.EccBinaryEncoder"/>. The encoder builds its
-/// generator polynomial as G(x) = (x-α^0)(x-α^1)...(x-α^(n-1)), so the decoder
-/// evaluates syndromes at the same consecutive roots starting at α^0 (b = 0).
+/// Inverse of <see cref="BinaryEncoders.EccBinaryEncoder"/>.
+/// The encoder builds its generator polynomial as G(x) = (x-α^0)(x-α^1)...(x-α^(n-1)), so the decoder evaluates syndromes at the same consecutive roots starting at α^0 (b = 0).
 /// Implements the classical pipeline over GF(256) with primitive polynomial 0x11D:
 /// <code>
 /// 1. Syndromes:        S_i = R(α^i) for i = 0..eccCount-1 (all zero → no errors)
@@ -16,13 +15,9 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// </code>
 /// Corrects up to ⌊eccCount/2⌋ byte errors per block, in place.
 /// <para>
-/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the
-/// verification pass) has three tiers: a GFNI kernel on net10.0+ x64 (see
-/// EccBinaryDecoder.Simd.cs), an AdvSimd kernel on ARM64 (see
-/// EccBinaryDecoder.Simd.Arm.cs), and a scalar log-domain path with four interleaved
-/// Horner chains everywhere else. All three produce byte-identical output; see the
-/// decoder kernel parity tests. Berlekamp-Massey, Chien and Forney stay scalar on
-/// every target.
+/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has three tiers: a GFNI kernel on net10.0+ x64 (see EccBinaryDecoder.Simd.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Simd.Arm.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
+/// All three produce byte-identical output; see the decoder kernel parity tests.
+/// Berlekamp-Massey, Chien and Forney stay scalar on every target.
 /// </para>
 /// </remarks>
 internal static partial class EccBinaryDecoder
@@ -33,11 +28,9 @@ internal static partial class EccBinaryDecoder
     private const int MaxErrors = MaxEccPerBlock / 2;
 
     /// <summary>
-    /// Syndrome buffer length. One Vector256 group (GFNI) or two Vector128 groups
-    /// (AdvSimd) cover every QR/rMQR ECC count, and both kernels store their
-    /// accumulators whole rather than copying eccCount bytes, so the buffer is padded
-    /// to the vector width. Lanes at or past eccCount hold syndromes of roots the code
-    /// does not use and are never read.
+    /// Syndrome buffer length.
+    /// One Vector256 group (GFNI) or two Vector128 groups (AdvSimd) cover every QR/rMQR ECC count, and both kernels store their accumulators whole rather than copying eccCount bytes, so the buffer is padded to the vector width.
+    /// Lanes at or past eccCount hold syndromes of roots the code does not use and are never read.
     /// </summary>
     internal const int SyndromeLanes = 32;
 
@@ -47,10 +40,7 @@ internal static partial class EccBinaryDecoder
     /// <param name="codeword">Block codewords (data followed by ECC). Corrected in place.</param>
     /// <param name="eccCount">Number of ECC codewords at the tail of <paramref name="codeword"/> (1-30).</param>
     /// <param name="errorsCorrected">Number of byte errors corrected (0 when the block was clean).</param>
-    /// <returns>
-    /// True when the block is clean or was fully corrected; false when the block
-    /// contains more errors than the code can correct.
-    /// </returns>
+    /// <returns>True when the block is clean or was fully corrected; false when the block contains more errors than the code can correct.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="ArgumentException"></exception>
     public static bool TryCorrect(Span<byte> codeword, int eccCount, out int errorsCorrected)
@@ -222,34 +212,19 @@ internal static partial class EccBinaryDecoder
     }
 
     /// <summary>
-    /// Computes the syndromes S_i = R(α^i) for i = 0..eccCount-1 via Horner
-    /// evaluation: v = (((c_0·x + c_1)·x + c_2)·x + ...) at x = α^i.
+    /// Computes the syndromes S_i = R(α^i) for i = 0..eccCount-1 via Horner evaluation: v = (((c_0·x + c_1)·x + c_2)·x + ...) at x = α^i.
     /// Returns true when any syndrome is non-zero (the block has errors).
     /// </summary>
     /// <remarks>
-    /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes
-    /// long, not <paramref name="eccCount"/>: both vector kernels store their
-    /// accumulator registers whole and only the first <paramref name="eccCount"/> lanes
-    /// are meaningful. A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-
-    /// checks the destination) but silently corrupts the caller's stack on ARM64, so x64
-    /// CI cannot see the ARM failure mode;
-    /// EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes and
-    /// .AdvSimdKernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
+    /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes long, not <paramref name="eccCount"/>: both vector kernels store their accumulator registers whole and only the first <paramref name="eccCount"/> lanes are meaningful.
+    /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds- checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode; EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes and .AdvSimdKernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
     /// <para>
-    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register,
-    /// one multiply per data byte for every syndrome at once) or the AdvSimd kernel on
-    /// ARM64 (see EccBinaryDecoder.Simd.Arm.cs); both keep every syndrome in vector
-    /// lanes rather than walking the codeword once per syndrome.
+    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once) or the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Simd.Arm.cs); both keep every syndrome in vector lanes rather than walking the codeword once per syndrome.
     /// </para>
     /// <para>
-    /// The scalar path keeps the Horner multiply in log domain — the multiplier's log
-    /// is the constant i, so each step is one zero-check + one log load + one exp load
-    /// (measured 0.84-0.90x of the GaloisField.Multiply form) — and runs four
-    /// syndromes per pass over the codeword. That interleaving is not cosmetic: the
-    /// per-syndrome walk is bound by the dependent log → exp load chain rather than by
-    /// throughput, so four independent accumulators measured 2.2-2.9x the single walk
-    /// on large blocks. This is the tier netstandard2.0/2.1 and any CPU without GFNI
-    /// or AdvSimd runs.
+    /// The scalar path keeps the Horner multiply in log domain — the multiplier's log is the constant i, so each step is one zero-check + one log load + one exp load (measured 0.84-0.90x of the GaloisField.Multiply form) — and runs four syndromes per pass over the codeword.
+    /// That interleaving is not cosmetic: the per-syndrome walk is bound by the dependent log → exp load chain rather than by throughput, so four independent accumulators measured 2.2-2.9x the single walk on large blocks.
+    /// This is the tier netstandard2.0/2.1 and any CPU without GFNI or AdvSimd runs.
     /// </para>
     /// </remarks>
     private static bool ComputeSyndromes(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)

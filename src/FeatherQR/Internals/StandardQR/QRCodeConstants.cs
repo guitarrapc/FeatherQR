@@ -551,8 +551,7 @@ internal static class QRCodeConstants
     /// </summary>
     /// <param name="level">Error correction level</param>
     /// <param name="maskVersion">Mask pattern version (0-7)</param>
-    /// <returns>
-    /// 15-bit format information:
+    /// <returns>15-bit format information:
     /// <code>
     /// Bit layout: [ECC(2) | Mask(3) | BCH(10)] XOR 0b101010000010010
     /// - Bits 14-13: ECC level (L=01, M=00, Q=11, H=10)
@@ -609,8 +608,7 @@ internal static class QRCodeConstants
     /// Contains version number with error correction.
     /// </summary>
     /// <param name="version">QR code version (7-40).</param>
-    /// <returns>
-    /// 18-bit version information:
+    /// <returns>18-bit version information:
     /// <code>
     /// Bit layout: [Version(6) | BCH(12)]
     /// - Bits 17-12: Version number (7-40)

@@ -1,7 +1,6 @@
 /// <summary>
 /// End-to-end Micro QR matrix encoding through the public API (MicroQRCodeGenerator).
-/// Used to measure the user-visible impact of internal kernel changes such as the
-/// Reed-Solomon ECC encoder optimization.
+/// Used to measure the user-visible impact of internal kernel changes such as the Reed-Solomon ECC encoder optimization.
 ///
 /// Scenarios:
 ///   Numeric_M2_L : M2-L (numeric capacity boundary)

@@ -5,8 +5,8 @@ using FeatherQR.Internals.BinaryEncoders;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// Effective charset of a Byte mode segment. Standard QR can pin it via an ECI
-/// header; Micro QR has no ECI, so it is always <see cref="Unspecified"/> there.
+/// Effective charset of a Byte mode segment.
+/// Standard QR can pin it via an ECI header; Micro QR has no ECI, so it is always <see cref="Unspecified"/> there.
 /// </summary>
 internal enum ByteSegmentCharset
 {
@@ -17,11 +17,8 @@ internal enum ByteSegmentCharset
 }
 
 /// <summary>
-/// Segment payload decoders shared by the symbology bitstream decoders
-/// (Standard QR, Micro QR, rMQR). The mode/count indicator layout differs per
-/// symbology and stays in the caller; the payload bit groups (ISO/IEC 18004
-/// 7.4.3-7.4.5: numeric 10/7/4, alphanumeric 11/6, byte 8·count) and the byte
-/// charset heuristics are identical.
+/// Segment payload decoders shared by the symbology bitstream decoders (Standard QR, Micro QR, rMQR).
+/// The mode/count indicator layout differs per symbology and stays in the caller; the payload bit groups (ISO/IEC 18004 7.4.3-7.4.5: numeric 10/7/4, alphanumeric 11/6, byte 8·count) and the byte charset heuristics are identical.
 /// </summary>
 internal static class SegmentDecoders
 {
@@ -121,15 +118,11 @@ internal static class SegmentDecoders
     }
 
     /// <summary>
-    /// Decodes a Kanji segment payload of <paramref name="count"/> characters
-    /// (ISO/IEC 18004 8.4.5): 13 bits per character, JIS X 0208 via
-    /// <see cref="ShiftJisKanjiTable"/>.
+    /// Decodes a Kanji segment payload of <paramref name="count"/> characters (ISO/IEC 18004 8.4.5): 13 bits per character, JIS X 0208 via <see cref="ShiftJisKanjiTable"/>.
     /// </summary>
     /// <remarks>
-    /// Decode only: no symbology emits Kanji mode, so this reads symbols other
-    /// encoders produced. Unmapped cells fail the segment rather than yielding a
-    /// replacement character, because a Kanji segment carries no redundancy of its
-    /// own and a guessed character is indistinguishable from a correct one.
+    /// Decode only: no symbology emits Kanji mode, so this reads symbols other encoders produced.
+    /// Unmapped cells fail the segment rather than yielding a replacement character, because a Kanji segment carries no redundancy of its own and a guessed character is indistinguishable from a correct one.
     /// </remarks>
     public static DecodeStatus DecodeKanjiPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
@@ -162,8 +155,7 @@ internal static class SegmentDecoders
     }
 
     /// <summary>
-    /// Decodes a byte segment payload of <paramref name="count"/> bytes, resolving
-    /// the effective charset (UTF-8 heuristic / BOM handling / ISO-8859-1 widening).
+    /// Decodes a byte segment payload of <paramref name="count"/> bytes, resolving the effective charset (UTF-8 heuristic / BOM handling / ISO-8859-1 widening).
     /// </summary>
     /// <param name="reader">Reader positioned at the first byte of the segment. It is advanced past the segment.</param>
     /// <param name="totalBits">Length of the whole bitstream, in bits; used to reject a segment that runs past the end.</param>
@@ -217,12 +209,8 @@ internal static class SegmentDecoders
     }
 
     /// <summary>
-    /// Whether the charset resolution above would read a byte segment as UTF-8 when
-    /// no charset is declared: the validity heuristic, or a leading BOM (which is
-    /// consumed). The mixed-mode planners ask this to refuse plans whose Latin-1
-    /// runs would be misread once a split isolates them from their disambiguating
-    /// neighbours; it must mirror <see cref="DecodeBytePayload"/> exactly, which is
-    /// why it lives here rather than beside a planner.
+    /// Whether the charset resolution above would read a byte segment as UTF-8 when no charset is declared: the validity heuristic, or a leading BOM (which is consumed).
+    /// The mixed-mode planners ask this to refuse plans whose Latin-1 runs would be misread once a split isolates them from their disambiguating neighbours; it must mirror <see cref="DecodeBytePayload"/> exactly, which is why it lives here rather than beside a planner.
     /// </summary>
     public static bool ResolvesToUtf8WhenUnspecified(ReadOnlySpan<byte> bytes)
         => IsValidUtf8(bytes)
@@ -262,9 +250,7 @@ internal static class SegmentDecoders
     }
 
     /// <summary>
-    /// Strict UTF-8 validation (RFC 3629): rejects overlongs, surrogates and
-    /// values above U+10FFFF, so ISO-8859-1 payloads with high bytes fall through
-    /// to the Latin-1 path instead of being mangled.
+    /// Strict UTF-8 validation (RFC 3629): rejects overlongs, surrogates and values above U+10FFFF, so ISO-8859-1 payloads with high bytes fall through to the Latin-1 path instead of being mangled.
     /// </summary>
     private static bool IsValidUtf8(ReadOnlySpan<byte> bytes)
     {
@@ -326,10 +312,8 @@ internal static class SegmentDecoders
     }
 
     /// <summary>
-    /// Reads an ECI assignment number (ISO/IEC 18004 7.4.2, identical in ISO/IEC 23941):
-    /// 1-3 bytes, length signaled by the leading bits (0xxxxxxx = 8 bits,
-    /// 10xxxxxx = 16, 110xxxxx = 24). Lifted from the Standard QR bitstream decoder
-    /// when rMQR became the second consumer.
+    /// Reads an ECI assignment number (ISO/IEC 18004 7.4.2, identical in ISO/IEC 23941): 1-3 bytes, length signaled by the leading bits (0xxxxxxx = 8 bits, 10xxxxxx = 16, 110xxxxx = 24).
+    /// Lifted from the Standard QR bitstream decoder when rMQR became the second consumer.
     /// </summary>
     public static DecodeStatus ReadEciDesignator(ref BitReader reader, int totalBits, out int eciValue)
     {

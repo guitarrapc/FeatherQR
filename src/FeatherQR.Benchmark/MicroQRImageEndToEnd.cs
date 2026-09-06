@@ -1,12 +1,8 @@
 /// <summary>
-/// End-to-end PNG image generation through the public Micro QR API
-/// (MicroQRCodeImageBuilder.GetPngBytes). MicroQRCodeData is pre-generated in
-/// setup so the measurement covers the Skia render + PNG encode path only, not
-/// the Micro QR encoding itself.
+/// End-to-end PNG image generation through the public Micro QR API (MicroQRCodeImageBuilder.GetPngBytes).
+/// MicroQRCodeData is pre-generated in setup so the measurement covers the Skia render + PNG encode path only, not the Micro QR encoding itself.
 ///
-/// Micro QR matrices are tiny (11-17 core modules), so per-image overhead
-/// dominates; scenarios cover the smallest and largest versions at the default
-/// 512px output plus a small 128px output typical for inline display.
+/// Micro QR matrices are tiny (11-17 core modules), so per-image overhead dominates; scenarios cover the smallest and largest versions at the default 512px output plus a small 128px output typical for inline display.
 /// </summary>
 public class MicroQRImageEndToEnd
 {

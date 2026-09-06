@@ -4,13 +4,9 @@ using System.Runtime.InteropServices;
 namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
-/// Reed-Solomon block interleaving (ISO/IEC 18004 7.6, ISO/IEC 23941 7.6): data
-/// codewords round-robin across blocks, then ECC codewords round-robin, then zero
-/// remainder bits. Shared across symbologies: the layout depends only on the
-/// <see cref="ECCInfo"/> block structure, never on a symbology-specific version
-/// (Standard QR and rMQR interleave identically; Micro QR has one block and no
-/// interleaving stage). Lifted from Internals.StandardQR when rMQR became the
-/// second consumer.
+/// Reed-Solomon block interleaving (ISO/IEC 18004 7.6, ISO/IEC 23941 7.6): data codewords round-robin across blocks, then ECC codewords round-robin, then zero remainder bits.
+/// Shared across symbologies: the layout depends only on the <see cref="ECCInfo"/> block structure, never on a symbology-specific version (Standard QR and rMQR interleave identically; Micro QR has one block and no interleaving stage).
+/// Lifted from Internals.StandardQR when rMQR became the second consumer.
 /// </summary>
 internal static class BinaryInterleaver
 {

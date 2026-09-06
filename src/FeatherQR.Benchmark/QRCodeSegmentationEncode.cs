@@ -1,16 +1,11 @@
 /// <summary>
-/// What <c>QRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same
-/// content through the same zero-allocation span path.
+/// What <c>QRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same content through the same zero-allocation span path.
 ///
-/// The Ratio column is the end-to-end multiplier a caller actually pays — but note it is
-/// not the planning cost in isolation. On the rows where the split wins, the Optimal arm
-/// lands on a smaller version and therefore also does less ECC, placement and module
-/// writing, so the ratio nets planning against a cheaper encode.
+/// The Ratio column is the end-to-end multiplier a caller actually pays — but note it is not the planning cost in isolation.
+/// On the rows where the split wins, the Optimal arm lands on a smaller version and therefore also does less ECC, placement and module writing, so the ratio nets planning against a cheaper encode.
 ///
-/// Count indicator widths are constant within the three version bands (1-9 / 10-26 /
-/// 27-40), so the planner runs at most three O(n) cost passes plus one reconstruction
-/// pass, and a trivial single-pass bound rejects candidates no split could fit before
-/// any cost pass runs. The shapes separate the paths the scan can take:
+/// Count indicator widths are constant within the three version bands (1-9 / 10-26 / 27-40), so the planner runs at most three O(n) cost passes plus one reconstruction pass, and a trivial single-pass bound rejects candidates no split could fit before any cost pass runs.
+/// The shapes separate the paths the scan can take:
 ///
 ///   numeric-*  : all digits, one mode is provably optimal, no cost run at all
 ///   alnum-120  : single-mode content the trivial bound rules out without a cost run

@@ -1,9 +1,8 @@
 namespace FeatherQR;
 
 /// <summary>
-/// The Standard QR versions a generator may choose from: the smallest one in the range
-/// that holds the content is used. A fixed version is <see cref="Exactly"/>, the
-/// degenerate case, rather than a separate setting.
+/// The Standard QR versions a generator may choose from: the smallest one in the range that holds the content is used.
+/// A fixed version is <see cref="Exactly"/>, the degenerate case, rather than a separate setting.
 /// </summary>
 /// <remarks>
 /// Both bounds are inclusive, unlike <see cref="System.Range"/> whose end is exclusive.
@@ -74,9 +73,7 @@ public readonly record struct QRVersionRange
     /// <summary>A single version, or <see cref="Any"/> when there is none.</summary>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="version"/> has a value outside 1-40.</exception>
     /// <remarks>
-    /// Lets a caller whose version is optional pass it through without branching. -1 is not
-    /// accepted as a second spelling of <see cref="Any"/>: a mistyped or defaulted value
-    /// must fail rather than silently produce an automatically sized symbol.
+    /// Lets a caller whose version is optional pass it through without branching. -1 is not accepted as a second spelling of <see cref="Any"/>: a mistyped or defaulted value must fail rather than silently produce an automatically sized symbol.
     /// </remarks>
     public static implicit operator QRVersionRange(int? version) => version.HasValue ? Exactly(version.GetValueOrDefault()) : Any;
 

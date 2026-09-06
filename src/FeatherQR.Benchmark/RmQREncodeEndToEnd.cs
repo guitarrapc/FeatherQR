@@ -1,7 +1,6 @@
 /// <summary>
 /// End-to-end rMQR matrix encoding through the public API (RmQRCodeGenerator).
-/// Baseline for the future placement / bit-stream fast paths, and the guard that
-/// the reference-shaped pipeline stays allocation-free on the span path.
+/// Baseline for the future placement / bit-stream fast paths, and the guard that the reference-shaped pipeline stays allocation-free on the span path.
 ///
 /// Scenarios (requested versions pin the size so the fit search is not what is measured):
 ///   Numeric_R7x43_M      : smallest symbol, 12 digits (capacity boundary)
@@ -11,9 +10,7 @@
 ///   Utf8_Eci_R17x139_M   : explicit ECI 26 Byte segment
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
 ///
-/// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>):
-/// it varies content shape rather than version, and every row needs a same-run Single
-/// pair, which does not belong in this table.
+/// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>): it varies content shape rather than version, and every row needs a same-run Single pair, which does not belong in this table.
 /// </summary>
 public class RmQREncodeEndToEnd
 {

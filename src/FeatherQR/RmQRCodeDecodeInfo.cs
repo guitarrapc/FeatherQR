@@ -1,10 +1,7 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Diagnostic information from an rMQR decode attempt (<see cref="RmQRCodeDecoder"/>):
-/// status, and when the format information could be read, the version and ECC
-/// level plus the number of Reed-Solomon codeword corrections applied. rMQR has a
-/// single data mask, so there is no mask pattern to report.
+/// Diagnostic information from an rMQR decode attempt (<see cref="RmQRCodeDecoder"/>): status, and when the format information could be read, the version and ECC level plus the number of Reed-Solomon codeword corrections applied. rMQR has a single data mask, so there is no mask pattern to report.
 /// </summary>
 public readonly record struct RmQRCodeDecodeInfo
 {

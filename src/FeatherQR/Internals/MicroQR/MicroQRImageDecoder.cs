@@ -5,8 +5,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Decodes a Micro QR code from a grayscale image: clean, well-lit,
-/// screen-rendered or scanned inputs.
+/// Decodes a Micro QR code from a grayscale image: clean, well-lit, screen-rendered or scanned inputs.
 /// </summary>
 /// <remarks>
 /// Pipeline:
@@ -20,11 +19,9 @@ namespace FeatherQR.Internals.MicroQR;
 /// 6. Matrix decoding arbitrates: format info is cross-checked against the matrix
 ///    size and RS + the ISO Table 9 capacity cap reject wrong-grid samples
 /// </code>
-/// A Micro QR symbol has a single finder pattern, so orientation cannot be derived
-/// from finder geometry the way three finders allow for Standard QR. The detector
-/// therefore recovers the finder's local axes from angular dark-light-dark runs and
-/// searches the two projective coefficients that remain unknown. This supports
-/// arbitrary rotation and mild perspective; strong perspective remains out of scope.
+/// A Micro QR symbol has a single finder pattern, so orientation cannot be derived from finder geometry the way three finders allow for Standard QR.
+/// The detector therefore recovers the finder's local axes from angular dark-light-dark runs and searches the two projective coefficients that remain unknown.
+/// This supports arbitrary rotation and mild perspective; strong perspective remains out of scope.
 /// </remarks>
 internal static class MicroQRImageDecoder
 {
@@ -32,18 +29,14 @@ internal static class MicroQRImageDecoder
     private const int MaxCandidatesToTry = 8;
 
     /// <summary>
-    /// Maximum matrix decode attempts in the arbitrary-orientation failure path
-    /// for one finder candidate. This bounds the multiplicative frame, orientation,
-    /// size, scale and perspective searches while leaving enough for one complete
-    /// orientation frame (all four axis assignments and four symbol sizes), and
-    /// without making the result CPU-speed dependent.
+    /// Maximum matrix decode attempts in the arbitrary-orientation failure path for one finder candidate.
+    /// This bounds the multiplicative frame, orientation, size, scale and perspective searches while leaving enough for one complete orientation frame (all four axis assignments and four symbol sizes), and without making the result CPU-speed dependent.
     /// </summary>
     private const int MaxArbitraryOrientationDecodeAttempts = 10_000;
 
     /// <summary>
-    /// Decodes a Micro QR code from grayscale pixels. Reflectance-reversed symbols
-    /// (light modules on a dark background) are handled by one inverted retry when
-    /// the normal attempt fails.
+    /// Decodes a Micro QR code from grayscale pixels.
+    /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails.
     /// </summary>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
@@ -88,9 +81,8 @@ internal static class MicroQRImageDecoder
     /// Strided finder scan first, then a full sweep when nothing decoded.
     /// </summary>
     /// <remarks>
-    /// Mirrors the rMQR image decoder: the widening trigger has to be a question
-    /// about the symbol, and only the caller can ask it. See
-    /// <see cref="FinderPatternFinder.FindCandidates"/>.
+    /// Mirrors the rMQR image decoder: the widening trigger has to be a question about the symbol, and only the caller can ask it.
+    /// See <see cref="FinderPatternFinder.FindCandidates"/>.
     /// </remarks>
     private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
@@ -242,11 +234,9 @@ internal static class MicroQRImageDecoder
     }
 
     /// <summary>
-    /// Recovers arbitrary image rotation from the single finder pattern. For a
-    /// concentric square finder, a center ray crosses the shortest
-    /// dark-light-dark span when it follows one of the square's local axes. An
-    /// angular sweep therefore supplies the two grid-axis directions without the
-    /// three finder centers available to Standard QR.
+    /// Recovers arbitrary image rotation from the single finder pattern.
+    /// For a concentric square finder, a center ray crosses the shortest dark-light-dark span when it follows one of the square's local axes.
+    /// An angular sweep therefore supplies the two grid-axis directions without the three finder centers available to Standard QR.
     /// </summary>
     private static DecodeStatus TryDecodeArbitraryOrientation(
         ReadOnlySpan<byte> luminance,
@@ -369,8 +359,7 @@ internal static class MicroQRImageDecoder
     }
 
     /// <summary>
-    /// Refines the two local module scales independently around the pixel-quantized
-    /// finder-run estimate while keeping the finder center fixed.
+    /// Refines the two local module scales independently around the pixel-quantized finder-run estimate while keeping the finder center fixed.
     /// </summary>
     private static DecodeStatus TryDecodeScaleVariants(
         ReadOnlySpan<byte> luminance,
@@ -458,10 +447,8 @@ internal static class MicroQRImageDecoder
     }
 
     /// <summary>
-    /// A single finder determines a homography's image point and local Jacobian,
-    /// leaving only the two projective denominator coefficients unknown. Search a
-    /// bounded Tier-2 range for those two values; matrix format and RS validation
-    /// select the correct transform without image-specific heuristics.
+    /// A single finder determines a homography's image point and local Jacobian, leaving only the two projective denominator coefficients unknown.
+    /// Search a bounded Tier-2 range for those two values; matrix format and RS validation select the correct transform without image-specific heuristics.
     /// </summary>
     private static DecodeStatus TryDecodePerspectiveVariants(
         ReadOnlySpan<byte> luminance,
@@ -546,8 +533,7 @@ internal static class MicroQRImageDecoder
 
     /// <summary>
     /// Ranks decode failures by how far the attempt progressed; keeps the deepest.
-    /// Wrong-grid samples overwhelmingly die at format decoding, so anything past
-    /// it almost certainly hit the real grid.
+    /// Wrong-grid samples overwhelmingly die at format decoding, so anything past it almost certainly hit the real grid.
     /// </summary>
     private static void TrackBestFailure(DecodeStatus status, in MicroQRCodeDecodeInfo attemptInfo, ref DecodeStatus bestStatus, ref MicroQRCodeDecodeInfo bestInfo)
     {
@@ -581,9 +567,7 @@ internal static class MicroQRImageDecoder
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 
     /// <summary>
-    /// All four grid corners must land inside the image (with one module of slack
-    /// for sampling clamp tolerance); orientations pointing off the image cannot
-    /// contain the symbol and are skipped before sampling.
+    /// All four grid corners must land inside the image (with one module of slack for sampling clamp tolerance); orientations pointing off the image cannot contain the symbol and are skipped before sampling.
     /// </summary>
     private static bool SymbolFitsImage(float originX, float originY, float uX, float uY, float vX, float vY, int size, int width, int height, float moduleSize)
     {
@@ -620,8 +604,7 @@ internal static class MicroQRImageDecoder
 
     /// <summary>
     /// Samples every module center on the axis-aligned (per orientation) grid.
-    /// Out-of-range positions clamp to the nearest edge pixel, mild inaccuracy at
-    /// the outermost modules must not read out of bounds.
+    /// Out-of-range positions clamp to the nearest edge pixel, mild inaccuracy at the outermost modules must not read out of bounds.
     /// </summary>
     private static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float originX, float originY, float uX, float uY, float vX, float vY, int size, Span<byte> modules)
     {

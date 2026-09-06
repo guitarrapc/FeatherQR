@@ -1,8 +1,7 @@
 namespace FeatherQR;
 
 /// <summary>
-/// rMQR Code error correction level (ISO/IEC 23941). rMQR defines only two levels;
-/// the numeric value is the ECC bit carried in the format information.
+/// rMQR Code error correction level (ISO/IEC 23941). rMQR defines only two levels; the numeric value is the ECC bit carried in the format information.
 /// </summary>
 public enum RmQREccLevel
 {

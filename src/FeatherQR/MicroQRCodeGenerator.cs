@@ -6,25 +6,18 @@ using FeatherQR.Internals.MicroQR;
 namespace FeatherQR;
 
 /// <summary>
-/// Micro QR code generator based on ISO/IEC 18004 (versions M1-M4).
+/// Encodes text into a Micro QR code (ISO/IEC 18004), versions M1 to M4.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Micro QR constraints enforced by this generator (they differ per version, so
-/// invalid combinations throw instead of silently degrading):
-/// </para>
+/// What each version accepts differs, and a combination it does not offer throws rather than quietly falling back:
 /// <list type="bullet">
-/// <item>M1: Numeric mode only, <see cref="MicroQREccLevel.ErrorDetectionOnly"/> only.</item>
-/// <item>M2: Numeric/Alphanumeric, ECC L or M.</item>
-/// <item>M3: Numeric/Alphanumeric/Byte, ECC L or M.</item>
-/// <item>M4: Numeric/Alphanumeric/Byte, ECC L, M or Q.</item>
+/// <item>M1: Numeric only, at <see cref="MicroQREccLevel.ErrorDetectionOnly"/>.</item>
+/// <item>M2: Numeric and Alphanumeric, at L or M.</item>
+/// <item>M3: adds Byte, at L or M.</item>
+/// <item>M4: adds level Q.</item>
 /// </list>
-/// <para>
-/// Micro QR has no ECI mode; text that is not ISO-8859-1-representable is encoded
-/// as raw UTF-8 bytes in Byte mode. Kanji mode is not written;
-/// <see cref="MicroQRCodeDecoder"/> does read the Kanji segments (M3 and M4) that
-/// other encoders produce, so the two directions are deliberately asymmetric.
-/// </para>
+/// Micro QR has no ECI, so text outside ISO-8859-1 goes out as raw UTF-8 in Byte mode.
+/// Kanji mode is never written; <see cref="MicroQRCodeDecoder"/> does read Kanji that other encoders produce.
 /// </remarks>
 public static class MicroQRCodeGenerator
 {
@@ -113,14 +106,14 @@ public static class MicroQRCodeGenerator
     // "does not fit" is a data-dependent answer rather than a defect.
 
     /// <summary>
-    /// Creates a Micro QR code from the provided plain text.
+    /// Encodes text into a Micro QR code.
     /// </summary>
     /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
-    /// <param name="eccLevel">How much damage the symbol can survive. M1 accepts <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, and Q is available on M4 alone.</param>
-    /// <param name="options">Version, quiet zone and segmentation settings. Omit it, or pass <see cref="MicroQRCodeGeneratorOptions.Default"/>, for the defaults.</param>
-    /// <returns>A <see cref="MicroQRCodeData"/> containing the generated matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the data does not fit or the version/ECC/mode combination is invalid.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="MicroQRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
+    /// <param name="eccLevel">How much damage the Micro QR code can survive. M1 accepts <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, and Q is available on M4 alone.</param>
+    /// <param name="options">Version, quiet zone and segmentation settings. Omit for the defaults.</param>
+    /// <returns>The module matrix.</returns>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit, or when the version, level and mode cannot be combined.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static MicroQRCodeData Create(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options = default)
     {
         // One compare on the default path; validation of the value itself lives in
@@ -132,21 +125,18 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// Creates a Micro QR code and writes the module matrix into the caller-provided
-    /// buffer without per-call heap allocation.
+    /// Encodes text into the buffer you provide, without allocating.
     /// </summary>
     /// <remarks>
-    /// Output format matches <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, in QRCodeGeneratorOptions)"/>:
-    /// one byte per module (0 = light, 1 = dark), flat row-major, quiet zone included.
-    /// Use <see cref="TryGetRequiredBufferSize"/> to size the destination.
+    /// One byte per module, 0 light and 1 dark, row-major with the quiet zone included, so the module at (row, col) is <c>destination[row * size + col]</c>.
     /// </remarks>
-    /// <param name="textSpan">The text span to encode.</param>
-    /// <param name="eccLevel">Error correction level; must be valid for the (selected) version.</param>
-    /// <param name="destination">Destination buffer; at least <see cref="MicroQRCodeCalculatedSize.BufferSize"/> bytes.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
+    /// <param name="eccLevel">How much damage the Micro QR code should survive. M1 takes <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, and Q needs M4.</param>
+    /// <param name="destination">Where to write the matrix. Needs <see cref="MicroQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
-    /// <returns>The number of bytes written (always qrSize × qrSize).</returns>
-    /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the combination is invalid.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="MicroQRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
+    /// <returns>The number of bytes written.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, or when the version, level and mode cannot be combined.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options = default)
     {
         if (options.Segmentation != MicroQRSegmentation.Single)
@@ -156,32 +146,24 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// Calculates the required buffer size, matrix size and version for encoding the
-    /// specified text as a Micro QR code, reporting content that does not fit as
-    /// <c>false</c> rather than as an exception.
+    /// Reports how large the Micro QR code will be, or <c>false</c> when the content does not fit.
     /// </summary>
     /// <param name="text">The text to encode.</param>
-    /// <param name="eccLevel">Error correction level.</param>
-    /// <param name="size">Matrix size and version on success; <c>default</c> when the content does not fit.</param>
+    /// <param name="eccLevel">How much damage the Micro QR code should survive.</param>
+    /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Version, quiet zone and segmentation settings.</param>
     /// <returns><c>true</c> when the content fits.</returns>
     /// <remarks>
     /// <para>
-    /// <c>false</c> means the content does not fit, which here includes an encoding mode
-    /// the version or ECC level does not offer, since the text is what picks the mode.
-    /// Argument errors throw (rationale: specs/rmqr-encoder.md), and so does a
-    /// <see cref="MicroQRCodeGeneratorOptions.Version"/> range that offers
-    /// <paramref name="eccLevel"/> on no version at all, which no content could satisfy.
-    /// Micro QR M1 holds 5 digits, so an overflow is an ordinary answer here.
+    /// <c>false</c> means that and only that; bad arguments still throw.
+    /// Since the text picks the mode, it also covers a mode the version or level does not offer, and M1 holds 5 digits, so not fitting is an ordinary answer here.
     /// </para>
     /// <para>
-    /// Pass the same <paramref name="options"/> you will encode with:
-    /// <see cref="MicroQRCodeGeneratorOptions.Segmentation"/> can select a different
-    /// version, so a buffer sized for one can be too small for the other.
+    /// Pass the options you will encode with, since segmentation can pick a different version and a buffer sized for one can be too small for the other.
     /// </para>
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="MicroQRCodeGeneratorOptions.QuietZoneSize"/> is outside 0-10000, or <paramref name="eccLevel"/> or the version range bound is not a defined value, or when <see cref="MicroQRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
-    /// <exception cref="ArgumentException">Thrown when the version range and <paramref name="eccLevel"/> cannot be combined at all (M1 offers ErrorDetectionOnly only). Content that does not fit is <em>not</em> an exception here; it is <c>false</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when no version in the range offers <paramref name="eccLevel"/> at all, which no content could satisfy.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, or an undefined level, version bound or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options = default)
     {
         if (options.Segmentation != MicroQRSegmentation.Single)
@@ -214,8 +196,8 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// The version fit without the "does not fit" throw. Argument errors still throw:
-    /// those hold of the arguments alone, independently of the text.
+    /// The version fit without the "does not fit" throw.
+    /// Argument errors still throw: those hold of the arguments alone, independently of the text.
     /// </summary>
     internal static bool TrySelectVersion(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion, out MicroQRVersion selected)
     {
@@ -256,10 +238,8 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// The smallest version inside <paramref name="range"/> that holds the content, or
-    /// <c>false</c> when none does. A range offering <paramref name="eccLevel"/> nowhere is
-    /// a contradiction and throws; one whose versions cannot carry the required mode, or are
-    /// too short, is an ordinary "does not fit".
+    /// The smallest version inside <paramref name="range"/> that holds the content, or <c>false</c> when none does.
+    /// A range offering <paramref name="eccLevel"/> nowhere is a contradiction and throws; one whose versions cannot carry the required mode, or are too short, is an ordinary "does not fit".
     /// </summary>
     internal static bool TrySelectVersionInRange(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected)
     {
@@ -328,8 +308,7 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// The actionable "does not fit" error, built off the success path: which constraint
-    /// binds (mode availability versus length) and what the applicable maximum is.
+    /// The actionable "does not fit" error, built off the success path: which constraint binds (mode availability versus length) and what the applicable maximum is.
     /// </summary>
     private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion)
     {
@@ -385,9 +364,8 @@ public static class MicroQRCodeGenerator
     };
 
     /// <summary>
-    /// Largest data length that fits a version/ECC/mode combination, the inverse of
-    /// <see cref="GetRequiredBits"/> against the ISO Table 7 bit capacity. Error-path
-    /// only (capacity-exceeded messages).
+    /// Largest data length that fits a version/ECC/mode combination, the inverse of <see cref="GetRequiredBits"/> against the ISO Table 7 bit capacity.
+    /// Error-path only (capacity-exceeded messages).
     /// </summary>
     private static int GetMaxDataLength(MicroQRVersion version, MicroQREccLevel eccLevel, EncodingMode mode)
     {
@@ -418,15 +396,12 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// Total bit count for the header plus data (ISO/IEC 18004 Micro QR segment
-    /// sizes). The character count indicator range never binds below the bit
-    /// capacity for any version/mode, so no separate range check is needed.
+    /// Total bit count for the header plus data (ISO/IEC 18004 Micro QR segment sizes).
+    /// The character count indicator range never binds below the bit capacity for any version/mode, so no separate range check is needed.
     /// </summary>
     /// <remarks>
-    /// Returns <see cref="long"/>: Byte mode costs <c>8 × dataLength</c>, which wraps
-    /// <see cref="int"/> for a span past ~268M bytes and would read as a fit. Widening
-    /// keeps the comparison honest without an early return that would skip the argument
-    /// validation around it.
+    /// Returns <see cref="long"/>: Byte mode costs <c>8 × dataLength</c>, which wraps <see cref="int"/> for a span past ~268M bytes and would read as a fit.
+    /// Widening keeps the comparison honest without an early return that would skip the argument validation around it.
     /// </remarks>
     private static long GetRequiredBits(MicroQRVersion version, EncodingMode mode, int dataLength)
     {
@@ -538,10 +513,8 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// Everything the mixed-mode entry points must reject, gathered off the default
-    /// path so <see cref="MicroQRSegmentation.Single"/> pays only one compare. The
-    /// parameter name matches the other symbologies, so every surface reports the
-    /// same argument for the same mistake.
+    /// Everything the mixed-mode entry points must reject, gathered off the default path so <see cref="MicroQRSegmentation.Single"/> pays only one compare.
+    /// The parameter name matches the other symbologies, so every surface reports the same argument for the same mistake.
     /// </summary>
     private static void ValidateOptimalEntry(MicroQRSegmentation segmentation)
     {
@@ -550,8 +523,8 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// The encode path's planning without the throw: the version an Optimal encode
-    /// would use, for buffer sizing. The two must agree, fallback included.
+    /// The encode path's planning without the throw: the version an Optimal encode would use, for buffer sizing.
+    /// The two must agree, fallback included.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool TryGetRequiredBufferSizeOptimal(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
@@ -580,8 +553,7 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// <see cref="WriteCoreModules"/> for a planned mixed-mode split: identical
-    /// pipeline, with the segmented data stream in place of the single-mode one.
+    /// <see cref="WriteCoreModules"/> for a planned mixed-mode split: identical pipeline, with the segmented data stream in place of the single-mode one.
     /// </summary>
     private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, MicroQRVersion version, MicroQREccLevel eccLevel, EciMode charset, ReadOnlySpan<ModeSegment> segments, Span<byte> core, int size, int maskPattern)
     {
@@ -598,8 +570,8 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// Runs the encode → ECC → placement → masking → format pipeline into a zeroed
-    /// byte-per-module core buffer. Allocation-free: all intermediates are stackalloc.
+    /// Runs the encode → ECC → placement → masking → format pipeline into a zeroed byte-per-module core buffer.
+    /// Allocation-free: all intermediates are stackalloc.
     /// </summary>
     private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> core, int size, int maskPattern)
     {

@@ -4,35 +4,31 @@ using FeatherQR.Internals;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Provides low-level rendering capabilities for QR codes to SkiaSharp canvases.
-/// Offers fine-grained control over appearance, including colors, shapes, gradients, and icon overlays.
+/// Draws a QR, Micro QR or rMQR code onto a SkiaSharp canvas, with full control over colors, shapes, gradients and icon overlays.
+/// Use it when the image builders do not give you the control you need.
 /// </summary>
 public static class SymbolRenderer
 {
     /// <summary>
-    /// Render the specified data into the given area of the target canvas.
+    /// Draws a QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// With the default rectangle shape at <paramref name="moduleSizePercent"/> 1.0,
-    /// horizontal runs of dark modules are drawn as single merged rectangles
-    /// (fewer native draw calls). Merged and per-module rendering are
-    /// pixel-identical under axis-preserving canvas transforms (translation/scale);
-    /// under rotation, shared-edge rounding may differ at sub-pixel level.
-    /// Any custom module shape or a module size below 1.0 falls back to
-    /// per-module drawing.
+    /// With the default rectangle shape at <paramref name="moduleSizePercent"/> 1.0, horizontal runs of dark modules are drawn as single merged rectangles (fewer native draw calls).
+    /// Merged and per-module rendering are pixel-identical under axis-preserving canvas transforms (translation/scale); under rotation, shared-edge rounding may differ at sub-pixel level.
+    /// Any custom module shape or a module size below 1.0 falls back to per-module drawing.
     /// </remarks>
     /// <param name="canvas">The canvas to render the QR code on.</param>
-    /// <param name="area">The rectangular area where the QR code will be rendered.</param>
-    /// <param name="data">The QR code data to render.</param>
-    /// <param name="codeColor">The color of the QR code modules. If null, black is used.</param>
-    /// <param name="backgroundColor">The background color. If null, white is used.</param>
-    /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
-    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
-    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
-    /// <param name="gradientOptions">Optional gradient options for the QR code modules.</param>
-    /// <param name="finderPatternShape">The shape to use for drawing finder patterns. If null, finder patterns are drawn using the same shape as regular modules. Set to a custom shape to differentiate finder patterns from data modules.</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="area">Where to draw it.</param>
+    /// <param name="data">The QR code to draw.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
+    /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder patterns as. When omitted they follow the module shape.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
         SKCanvas canvas,
         SKRect area,
@@ -141,24 +137,22 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Render the specified Micro QR data into the given area of the target canvas.
+    /// Draws a Micro QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// Micro QR has a single finder pattern and no error-correction headroom for
-    /// overlays, so the Standard QR options for icons and custom finder pattern
-    /// shapes are intentionally not available. See <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/>
-    /// for the module-run merge behavior shared with Standard QR.
+    /// Micro QR has a single finder pattern and no error-correction headroom for overlays, so the Standard QR options for icons and custom finder pattern shapes are intentionally not available.
+    /// See <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/> for the module-run merge behavior shared with Standard QR.
     /// </remarks>
     /// <param name="canvas">The canvas to render the Micro QR code on.</param>
-    /// <param name="area">The rectangular area where the Micro QR code will be rendered.</param>
-    /// <param name="data">The Micro QR code data to render.</param>
-    /// <param name="codeColor">The color of the modules. If null, black is used.</param>
-    /// <param name="backgroundColor">The background color. If null, white is used.</param>
-    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
-    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
-    /// <param name="gradientOptions">Optional gradient options for the modules.</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="area">Where to draw it.</param>
+    /// <param name="data">The Micro QR code to draw.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
         SKCanvas canvas,
         SKRect area,
@@ -208,25 +202,22 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Renders an rMQR code onto the canvas. The rectangular symbol (quiet zone
-    /// included) is drawn with a uniform module scale and centered in
-    /// <paramref name="area"/> (letterbox); the whole area receives the background.
+    /// Draws a rectangular rMQR code into an area of the canvas, at a uniform module scale and centered, never stretched.
     /// </summary>
     /// <remarks>
-    /// rMQR has one finder pattern and no error-correction headroom for overlays, so
-    /// there are no icon or finder-shape options. Module runs are merged as for the
-    /// other symbologies (see <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/>).
+    /// The whole area gets the background color, not just the code itself. rMQR has one finder pattern and no error correction headroom to spare, so there are no icon or finder shape options.
+    /// Modules are merged as for Standard QR.
     /// </remarks>
-    /// <param name="canvas">The canvas to render the rMQR code on.</param>
-    /// <param name="area">The rectangular area where the rMQR code will be rendered.</param>
-    /// <param name="data">The rMQR code data to render.</param>
-    /// <param name="codeColor">The color of the modules. If null, black is used.</param>
-    /// <param name="backgroundColor">The background color. If null, white is used.</param>
-    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
-    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
-    /// <param name="gradientOptions">Optional gradient options for the modules.</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="canvas">The canvas to draw on.</param>
+    /// <param name="area">Where to draw it.</param>
+    /// <param name="data">The rMQR code to draw.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
         SKCanvas canvas,
         SKRect area,
@@ -277,8 +268,7 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// The largest rectangle with the matrix aspect ratio that fits inside
-    /// <paramref name="area"/>, centered (uniform module scale, no stretch).
+    /// The largest rectangle with the matrix aspect ratio that fits inside <paramref name="area"/>, centered (uniform module scale, no stretch).
     /// </summary>
     internal static SKRect GetLetterboxedArea(SKRect area, int matrixWidth, int matrixHeight)
     {
@@ -291,15 +281,15 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Calculates icon and border rectangles for the given QR code area.
+    /// Works out where an icon and its border land inside a QR code.
     /// </summary>
     /// <remarks>
     /// When <see cref="IconData.IconSizeModules"/> is set, sizing is module-based and percent/pixel values are ignored.
     /// Module-based icons are validated against QR size and core occupancy at render time.
     /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code.</exception>
     public static (SKRect iconRect, SKRect borderRect) GetIconRects(QRCodeData data, SKRect area, IconData iconData)
     {
         if (data is null)
@@ -396,19 +386,18 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Gets the rectangle area for a specified finder pattern in the rendered QR code area.
+    /// Where one of the three finder patterns lands inside a rendered QR code, so you can draw over or around it.
     /// </summary>
     /// <remarks>
     /// The finder patterns are the large squares typically located at three corners of a QR code.
-    /// This method calculates their positions based on the QR code's size and quiet zone, ensuring accurate placement
-    /// within the specified rendering area.
+    /// This method calculates their positions based on the QR code's size and quiet zone, ensuring accurate placement within the specified rendering area.
     /// </remarks>
-    /// <param name="data">The QR code data containing module and layout information. Cannot be null.</param>
-    /// <param name="patternIndex">Finder pattern index (0=top-left, 1=top-right, 2=bottom-left).</param>
-    /// <param name="renderArea">The area within which the QR code is rendered. The finder pattern rectangle is calculated relative to this area.</param>
+    /// <param name="data">The QR code the finder patterns belong to.</param>
+    /// <param name="patternIndex">Which pattern: 0 top-left, 1 top-right, 2 bottom-left.</param>
+    /// <param name="renderArea">The area the QR code was drawn into.</param>
     /// <returns>An SKRect representing the position and size of the specified finder pattern within the rendering area.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if <paramref name="data"/> is null.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="patternIndex"/> is less than 0 or greater than 2.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="patternIndex"/> is not 0, 1 or 2.</exception>
     public static SKRect GetFinderPatternRect(QRCodeData data, int patternIndex, SKRect renderArea)
     {
         if (data is null)
@@ -448,14 +437,8 @@ public static class SymbolRenderer
 
     /// <summary>
     /// Draws dark modules as merged horizontal runs of full-cell rectangles.
-    /// Only valid for <see cref="RectangleModuleShape"/> at 100% module size, where
-    /// adjacent modules share edges, antialiasing is always off
-    /// (<see cref="RectangleModuleShape.RequiresAntialiasing"/> is false), and
-    /// merging is pixel-identical to per-module drawing. The parity holds under
-    /// axis-preserving canvas transforms (translation/scale); rotated canvases may
-    /// rasterize shared edges hairline-differently at sub-pixel level, inherent to
-    /// non-axis-aligned rasterization, which affects per-module drawing between
-    /// adjacent modules just the same.
+    /// Only valid for <see cref="RectangleModuleShape"/> at 100% module size, where adjacent modules share edges, antialiasing is always off (<see cref="RectangleModuleShape.RequiresAntialiasing"/> is false), and merging is pixel-identical to per-module drawing.
+    /// The parity holds under axis-preserving canvas transforms (translation/scale); rotated canvases may rasterize shared edges hairline-differently at sub-pixel level, inherent to non-axis-aligned rasterization, which affects per-module drawing between adjacent modules just the same.
     /// </summary>
     private static void DrawModuleRuns<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, bool skipFinderPatterns)
         where TView : struct, IModuleMatrixView

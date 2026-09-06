@@ -3,12 +3,9 @@ using FeatherQR.Internals.BinaryEncoders;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR final message (ISO/IEC 23941 7.5-7.6): Reed-Solomon ECC per block over the
-/// data codewords, then Standard-QR-style block interleaving (data round-robin,
-/// ECC round-robin, zero remainder bits). Composes the shared kernels only
-/// (<see cref="EccBinaryEncoder"/>, <see cref="BinaryInterleaver"/>); the block
-/// structure comes from <see cref="RmQRConstants.GetEccInfo"/>. Allocation-free:
-/// the per-block ECC scratch is a fixed stack budget.
+/// rMQR final message (ISO/IEC 23941 7.5-7.6): Reed-Solomon ECC per block over the data codewords, then Standard-QR-style block interleaving (data round-robin, ECC round-robin, zero remainder bits).
+/// Composes the shared kernels only (<see cref="EccBinaryEncoder"/>, <see cref="BinaryInterleaver"/>); the block structure comes from <see cref="RmQRConstants.GetEccInfo"/>.
+/// Allocation-free: the per-block ECC scratch is a fixed stack budget.
 /// </summary>
 internal static class RmQRCodewordEncoder
 {
@@ -16,17 +13,13 @@ internal static class RmQRCodewordEncoder
     public const int MaxEccCodewords = 156;
 
     /// <summary>
-    /// Bytes of the interleaved final message: total codewords plus one byte when
-    /// the version has remainder bits (they are always zero).
+    /// Bytes of the interleaved final message: total codewords plus one byte when the version has remainder bits (they are always zero).
     /// </summary>
     public static int GetFinalMessageSize(RmQRVersion version)
         => BinaryInterleaver.CalculateInterleavedSize(RmQRConstants.GetEccInfo(version, RmQREccLevel.M), RmQRConstants.GetRemainderBitCount(version));
 
     /// <summary>
-    /// Computes per-block ECC for <paramref name="dataCodewords"/> (exactly the
-    /// version × ECC data codeword count) and writes the interleaved final message
-    /// (data, ECC, zeroed remainder tail) into <paramref name="output"/> of at least
-    /// <see cref="GetFinalMessageSize"/> bytes.
+    /// Computes per-block ECC for <paramref name="dataCodewords"/> (exactly the version × ECC data codeword count) and writes the interleaved final message (data, ECC, zeroed remainder tail) into <paramref name="output"/> of at least <see cref="GetFinalMessageSize"/> bytes.
     /// </summary>
     public static void AssembleFinalMessage(ReadOnlySpan<byte> dataCodewords, RmQRVersion version, RmQREccLevel eccLevel, Span<byte> output)
     {

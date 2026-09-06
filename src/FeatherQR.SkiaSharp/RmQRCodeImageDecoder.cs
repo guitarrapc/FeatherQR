@@ -6,41 +6,38 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Decodes rMQR Codes from SkiaSharp bitmaps. Extends <see cref="RmQRCodeDecoder"/>,
-/// so with C# 14 the overloads are also reachable as <c>RmQRCodeDecoder.TryDecode(bitmap, ...)</c>;
-/// on older language versions call them on this class.
+/// Decodes rMQR Codes from SkiaSharp bitmaps.
+/// Extends <see cref="RmQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>RmQRCodeDecoder.TryDecode(bitmap, ...)</c>; on older language versions call them on this class.
 /// </summary>
 public static class RmQRCodeImageDecoder
 {
     extension(RmQRCodeDecoder)
     {
         /// <summary>
-        /// Detects and decodes an rMQR Code from a bitmap image.
+        /// Finds and decodes an rMQR code in a bitmap.
         /// </summary>
         /// <remarks>
-        /// Targets clean, well-lit images such as screenshots, rendered symbols and
-        /// scans: arbitrary rotation, mirroring, reflectance reversal (light-on-dark),
-        /// uniform or non-uniform scaling, translation and mild perspective distortion
-        /// are handled. Strong perspective, uneven lighting and blur are out of scope.
+        /// Made for clean, well-lit images: screenshots, rendered rMQR codes and scans, at any rotation, mirrored, inverted, scaled, or mildly skewed.
+        /// Photos with strong perspective, uneven lighting or blur are out of scope.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-        /// <returns>True when an rMQR Code was detected and decoded.</returns>
-        /// <exception cref="ArgumentNullException"></exception>
+        /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text)
             => TryDecode(bitmap, out text, out _);
 
         /// <summary>
-        /// Detects and decodes an rMQR Code from a bitmap image, with diagnostic information.
+        /// Finds and decodes an rMQR code in a bitmap, and reports what it found.
         /// </summary>
         /// <remarks>
         /// See <see cref="TryDecode(SKBitmap, out string)"/> for the supported image envelope.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-        /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
-        /// <returns>True when an rMQR Code was detected and decoded.</returns>
-        /// <exception cref="ArgumentNullException"></exception>
+        /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+        /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info)
         {
             if (bitmap is null)

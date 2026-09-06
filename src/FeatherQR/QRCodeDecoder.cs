@@ -4,47 +4,34 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR;
 
 /// <summary>
-/// QR code decoder based on ISO/IEC 18004 standard.
-/// Decodes QR module matrices back into text, including Reed-Solomon error correction.
+/// Decodes a Standard QR code (ISO/IEC 18004) back into text, correcting errors as it goes.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Supported content: Numeric, Alphanumeric and Byte mode segments (ISO-8859-1 and
-/// UTF-8, with or without ECI headers), the full version range 1-40 and all ECC levels.
-/// Kanji mode is decoded as JIS X 0208; the generator never emits it, so Kanji is a
-/// read-only mode here. A Kanji cell outside the JIS X 0208 repertoire (most visibly
-/// the NEC row 13 characters CP932 adds, such as circled digits) fails the WHOLE
-/// symbol with <see cref="DecodeStatus.UnmappedCharacter"/> rather than
-/// substituting a replacement character; that status is distinct from
-/// <see cref="DecodeStatus.UnsupportedContent"/> so a caller can tell "a CP932
-/// reader would read this" from "this uses a feature we do not implement". FNC1 and
-/// Structured Append are the latter.
-/// </para>
-/// <para>
-/// Byte segments without an ECI header have no declared charset. The decoder uses
-/// UTF-8 when the payload is valid UTF-8 (or carries a BOM) and ISO-8859-1 otherwise.
-/// </para>
+/// Reads Numeric, Alphanumeric, Byte and Kanji mode across all versions and error correction levels.
+/// A Byte segment with no ECI header is read as UTF-8 when the bytes are valid UTF-8 (or carry a BOM), and as ISO-8859-1 otherwise.
+/// Kanji is mapped through JIS X 0208, so a cell outside that repertoire, such as the circled digits CP932 adds, fails the whole QR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
+/// That status is distinct from <see cref="DecodeStatus.UnsupportedContent"/>, which marks a feature this library does not implement, such as FNC1 or Structured Append.
 /// </remarks>
 public static class QRCodeDecoder
 {
     /// <summary>
-    /// Decodes the text content from QR code data.
+    /// Decodes the text from a QR code.
     /// </summary>
-    /// <param name="data">The QR code data to decode.</param>
+    /// <param name="data">The QR code to decode.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentNullException"></exception>
+    /// <returns><c>true</c> when the QR code decoded.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecode(QRCodeData data, out string text)
         => TryDecode(data, out text, out _);
 
     /// <summary>
-    /// Decodes the text content from QR code data, with diagnostic information.
+    /// Decodes the text from a QR code and reports what it found.
     /// </summary>
-    /// <param name="data">The QR code data to decode.</param>
+    /// <param name="data">The QR code to decode.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentNullException"></exception>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <returns><c>true</c> when the QR code decoded.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecode(QRCodeData data, out string text, out QRCodeDecodeInfo info)
     {
         if (data is null)
@@ -65,18 +52,14 @@ public static class QRCodeDecoder
     }
 
     /// <summary>
-    /// Decodes the text content from a module matrix.
+    /// Decodes the text from a module matrix.
     /// </summary>
-    /// <param name="modules">
-    /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
-    /// order, the format produced by <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, in QRCodeGeneratorOptions)"/>.
-    /// A light quiet zone border is detected and skipped automatically.
-    /// </param>
-    /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>
+    /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
+    /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <returns><c>true</c> when the QR code decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out QRCodeDecodeInfo info)
     {
         // long arithmetic: size is caller-controlled and size² overflows int at 46341
@@ -107,19 +90,15 @@ public static class QRCodeDecoder
     }
 
     /// <summary>
-    /// Decodes the text content from a module matrix into a caller-provided buffer
-    /// without per-call heap allocation.
+    /// Decodes the text into the buffer you provide, without allocating.
     /// </summary>
-    /// <param name="modules">
-    /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major order.
-    /// A light quiet zone border is detected and skipped automatically.
-    /// </param>
-    /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>
+    /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
+    /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
-    /// <returns>True when decoding succeeded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="charsWritten">How many characters were written.</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <returns><c>true</c> when the QR code decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         // long arithmetic: size is caller-controlled and size² overflows int at 46341
@@ -150,15 +129,15 @@ public static class QRCodeDecoder
     }
 
     /// <summary>
-    /// Detects and decodes a QR code from grayscale image pixels.
+    /// Finds and decodes a QR code in a grayscale image.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a QR code composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
-    /// <returns>True when a QR code was detected and decoded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <returns><c>true</c> when a QR code was found and decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out QRCodeDecodeInfo info)
     {
         char[]? rentedChars = null;
@@ -180,17 +159,16 @@ public static class QRCodeDecoder
     }
 
     /// <summary>
-    /// Detects and decodes a QR code from grayscale image pixels into a
-    /// caller-provided buffer without per-call heap allocation.
+    /// Finds and decodes a QR code in a grayscale image, writing into the buffer you provide without allocating.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a QR code composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
-    /// <returns>True when a QR code was detected and decoded.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="charsWritten">How many characters were written.</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <returns><c>true</c> when a QR code was found and decoded.</returns>
+    /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         // long arithmetic: dimensions are caller-controlled and width·height can overflow int
@@ -201,12 +179,11 @@ public static class QRCodeDecoder
     }
 
     /// <summary>
-    /// Calculates the maximum possible decoded character count for a QR code version,
-    /// across all ECC levels and encoding modes. Use to size the destination buffer
-    /// for the allocation-free <see cref="TryDecode(ReadOnlySpan{byte}, int, Span{char}, out int, out QRCodeDecodeInfo)"/> overload.
+    /// The most characters a QR code of this version can decode to, across every error correction level and mode.
+    /// Use it to size the destination of the allocation-free overloads.
     /// </summary>
-    /// <param name="version">QR code version (1-40).</param>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="version">The version to measure.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not a defined value.</exception>
     public static int GetMaxDecodedLength(int version)
     {
         if (version is < 1 or > 40)
@@ -242,9 +219,8 @@ public static class QRCodeDecoder
     }
 
     /// <summary>
-    /// Locates the core matrix inside an input that may carry a light quiet zone
-    /// border. A valid QR code has dark finder-pattern corners, so the bounding box
-    /// of dark modules is exactly the core area.
+    /// Locates the core matrix inside an input that may carry a light quiet zone border.
+    /// A valid QR code has dark finder-pattern corners, so the bounding box of dark modules is exactly the core area.
     /// </summary>
     private static bool TryLocateCore(ReadOnlySpan<byte> modules, int size, out int top, out int left, out int coreSize)
     {
@@ -303,8 +279,7 @@ public static class QRCodeDecoder
     }
 
     /// <summary>
-    /// Copies the core window (rows are not contiguous inside the bordered input)
-    /// into a contiguous buffer the matrix decoder can walk.
+    /// Copies the core window (rows are not contiguous inside the bordered input) into a contiguous buffer the matrix decoder can walk.
     /// </summary>
     private static void CopyCoreWindow(ReadOnlySpan<byte> modules, int size, int top, int left, int coreSize, Span<byte> destination)
     {

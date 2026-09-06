@@ -9,20 +9,13 @@ namespace FeatherQR.Internals.ImageDecoders;
 internal static class Binarizer
 {
     /// <summary>
-    /// Otsu's method: picks the threshold that maximizes between-class variance
-    /// of the luminance histogram. Suits Tier-1 inputs with clear bimodal contrast.
+    /// Otsu's method: picks the threshold that maximizes between-class variance of the luminance histogram.
+    /// Suits Tier-1 inputs with clear bimodal contrast.
     /// </summary>
     /// <remarks>
-    /// The histogram fill aggregates runs: a per-pixel `histogram[value]++` walk
-    /// serializes on store-forwarding whenever consecutive pixels hit the same
-    /// bin, and QR-like images (long runs of two dominant values) are the worst
-    /// case. Reading 8 pixels as one ulong and testing uniformity with a byte
-    /// rotation turns a whole uniform group into a single `+= 8`; non-uniform
-    /// groups (module boundaries, photos) fall back to 8 increments, measured
-    /// ~8-10x on QR-like inputs, break-even to modestly slower on uniform random
-    /// noise. The result
-    /// is byte-identical either way, and bin order is irrelevant to a histogram,
-    /// so the walk is endian-safe.
+    /// The histogram fill aggregates runs: a per-pixel `histogram[value]++` walk serializes on store-forwarding whenever consecutive pixels hit the same bin, and QR-like images (long runs of two dominant values) are the worst case.
+    /// Reading 8 pixels as one ulong and testing uniformity with a byte rotation turns a whole uniform group into a single `+= 8`; non-uniform groups (module boundaries, photos) fall back to 8 increments, measured ~8-10x on QR-like inputs, break-even to modestly slower on uniform random noise.
+    /// The result is byte-identical either way, and bin order is irrelevant to a histogram, so the walk is endian-safe.
     /// </remarks>
     internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance)
     {

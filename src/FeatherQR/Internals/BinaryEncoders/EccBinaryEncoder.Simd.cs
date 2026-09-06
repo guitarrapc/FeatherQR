@@ -7,17 +7,16 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
-/// Vectorized Reed-Solomon kernels for x86/x64. Selected at runtime by
-/// <see cref="EccBinaryEncoder.CalculateECC"/>; every kernel produces byte-identical
-/// output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
+/// Vectorized Reed-Solomon kernels for x86/x64.
+/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>; every kernel produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
 /// </summary>
 /// <remarks>
-/// Shared architecture of both kernels (result of a measured 13-round optimization
-/// loop)
+/// Shared architecture of both kernels (result of a measured 13-round optimization loop)
 ///
 /// - The ≤32-byte remainder register lives in one (eccCount ≤ 16) or two vector
 ///   registers for the whole block, no message buffer, no store/load round-trips.
-/// - Four data bytes are consumed per iteration. Their division factors are a
+/// - Four data bytes are consumed per iteration.
+/// Their division factors are a
 ///   GF(2)-linear function of the four input bytes, so they come from four parallel
 ///   256-entry uint table lookups (T) instead of a serial per-byte recurrence.
 /// - Iterations are software-pipelined: the next quad's factors are derived from the
@@ -27,17 +26,14 @@ namespace FeatherQR.Internals.BinaryEncoders;
 ///   GFNI does this in one gf2p8affineqb per factor; the SSSE3 kernel uses the
 ///   classic PSHUFB nibble-split multiply (2 shuffles per factor) instead.
 ///
-/// Table cost: 2 KB of GFNI matrices baked into the assembly as constant data
-/// (no runtime build), ~8 KB SSSE3 nibble-split table, plus ~8-18 KB per distinct
-/// eccCount actually used (QR uses at most 13 values; a typical app touches one
-/// or two). All runtime-built tables build lazily on first use, so GFNI machines
-/// never pay for the SSSE3 table.
+/// Table cost: 2 KB of GFNI matrices baked into the assembly as constant data (no runtime build), ~8 KB SSSE3 nibble-split table, plus ~8-18 KB per distinct eccCount actually used (QR uses at most 13 values; a typical app touches one or two).
+/// All runtime-built tables build lazily on first use, so GFNI machines never pay for the SSSE3 table.
 /// </remarks>
 internal static partial class EccBinaryEncoder
 {
     /// <summary>
-    /// Entry point for vectorized kernels. Caller guarantees Ssse3.IsSupported and
-    /// eccCount ≤ 32 (QR maximum is 30).
+    /// Entry point for vectorized kernels.
+    /// Caller guarantees Ssse3.IsSupported and eccCount ≤ 32 (QR maximum is 30).
     /// </summary>
     internal static void CalculateEccSimd(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
@@ -439,8 +435,7 @@ internal static partial class EccBinaryEncoder
     // ---------------------------------------------------------------------------
 
     /// <summary>
-    /// XOR of the four per-byte-position table entries for the packed input
-    /// <paramref name="x"/>: T0[x0] ^ T1[x1] ^ T2[x2] ^ T3[x3].
+    /// XOR of the four per-byte-position table entries for the packed input <paramref name="x"/>: T0[x0] ^ T1[x1] ^ T2[x2] ^ T3[x3].
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint QuadLookup(ref uint table, uint x)

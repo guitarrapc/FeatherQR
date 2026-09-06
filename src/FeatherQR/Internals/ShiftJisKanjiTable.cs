@@ -10,28 +10,17 @@ using System.Runtime.CompilerServices;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// JIS X 0208 to Unicode for ISO/IEC 18004 Kanji mode, shared by all three
-/// symbologies. Indexed by the 13-bit compacted value (8.4.5), so a lookup is a
-/// single load with no arithmetic.
+/// JIS X 0208 to Unicode for ISO/IEC 18004 Kanji mode, shared by all three symbologies.
+/// Indexed by the 13-bit compacted value (8.4.5), so a lookup is a single load with no arithmetic.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the
-/// cells CP932 adds stay unmapped here, so a symbol carrying them is reported
-/// as DecodeStatus.UnmappedCharacter rather than silently rewritten. The
-/// canonical statement of
-/// the divergence set and the reasoning is the scope decision in
-/// .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file
-/// so a regeneration cannot reintroduce a stale copy (they were wrong in four
-/// places once already).
+/// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the cells CP932 adds stay unmapped here, so a symbol carrying them is reported as DecodeStatus.UnmappedCharacter rather than silently rewritten.
+/// The canonical statement of the divergence set and the reasoning is the scope decision in .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file so a regeneration cannot reintroduce a stale copy (they were wrong in four places once already).
 /// </para>
 /// <para>
-/// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping. The
-/// caller separates the two reasons a cell can be unmapped with
-/// <see cref="IsStructurallyValid"/>: a value no Shift_JIS pair can express is a
-/// corrupt bitstream (DecodeStatus.InvalidBitstream), a well-formed value
-/// outside the repertoire is a character this mapping has no reading for
-/// (DecodeStatus.UnmappedCharacter).
+/// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping.
+/// The caller separates the two reasons a cell can be unmapped with <see cref="IsStructurallyValid"/>: a value no Shift_JIS pair can express is a corrupt bitstream (DecodeStatus.InvalidBitstream), a well-formed value outside the repertoire is a character this mapping has no reading for (DecodeStatus.UnmappedCharacter).
 /// </para>
 /// </remarks>
 internal static class ShiftJisKanjiTable
@@ -49,17 +38,15 @@ internal static class ShiftJisKanjiTable
     private const int ReservedLowByte = 0x3F;
 
     /// <summary>
-    /// Maps a 13-bit Kanji-mode value to its JIS X 0208 character, or
-    /// <c>'\0'</c> when the cell is not in the repertoire.
+    /// Maps a 13-bit Kanji-mode value to its JIS X 0208 character, or <c>'\0'</c> when the cell is not in the repertoire.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static char Lookup(int index13)
         => (char)BinaryPrimitives.ReadUInt16LittleEndian(Table.Slice(index13 * 2, 2));
 
     /// <summary>
-    /// True when some Shift_JIS pair in the Kanji-mode ranges can produce this
-    /// value. False means the bitstream is corrupt, not merely unmapped: the two
-    /// get different statuses, InvalidBitstream and UnmappedCharacter.
+    /// True when some Shift_JIS pair in the Kanji-mode ranges can produce this value.
+    /// False means the bitstream is corrupt, not merely unmapped: the two get different statuses, InvalidBitstream and UnmappedCharacter.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsStructurallyValid(int index13)

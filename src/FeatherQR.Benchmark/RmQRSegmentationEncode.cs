@@ -1,28 +1,20 @@
 /// <summary>
-/// What <c>RmQRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same
-/// content through the same zero-allocation span path.
+/// What <c>RmQRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same content through the same zero-allocation span path.
 ///
-/// The Ratio column is the end-to-end multiplier a caller actually pays, which is the
-/// number worth quoting — but note it is not the planning cost in isolation. On the
-/// rows where the split wins, the Optimal arm lands on a smaller version and therefore
-/// also does less ECC, placement and module writing, so the ratio nets planning against
-/// a cheaper encode and understates the planning overhead. Six of the twelve shapes
-/// below change version between the two arms.
+/// The Ratio column is the end-to-end multiplier a caller actually pays, which is the number worth quoting — but note it is not the planning cost in isolation.
+/// On the rows where the split wins, the Optimal arm lands on a smaller version and therefore also does less ECC, placement and module writing, so the ratio nets planning against a cheaper encode and understates the planning overhead.
+/// Six of the twelve shapes below change version between the two arms.
 ///
-/// This is a separate class from <see cref="RmQREncodeEndToEnd"/> on purpose. That one
-/// varies version and mode with the version pinned, and ranks everything against one
-/// baseline row; this one varies content shape with the version free, and every row is
-/// meaningless without its same-run partner. Mixing them would make both tables harder
-/// to read and both filters slower to run.
+/// This is a separate class from <see cref="RmQREncodeEndToEnd"/> on purpose.
+/// That one varies version and mode with the version pinned, and ranks everything against one baseline row; this one varies content shape with the version free, and every row is meaningless without its same-run partner.
+/// Mixing them would make both tables harder to read and both filters slower to run.
 ///
 /// The shapes are chosen to separate the two things that drive planning cost:
 ///
 ///   Length, shape held fixed   : mixed-20 / -60 / -120 / -150 (half letters, half digits)
 ///   Shape, length held at 120  : numeric / alnum / byte / mixed / alt1 / alt10
 ///
-/// and to cover every filter the scan can terminate in (measured DP passes per encode
-/// in brackets — the scan is bounded before it is priced, so most shapes never build a
-/// table at all):
+/// and to cover every filter the scan can terminate in (measured DP passes per encode in brackets — the scan is bounded before it is priced, so most shapes never build a table at all):
 ///
 ///   numeric-*  : all digits, so one mode is provably optimal and the short-circuit
 ///                returns before any bound is computed [0 passes]

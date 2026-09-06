@@ -3,8 +3,7 @@ using System.Text;
 
 /// <summary>
 /// End-to-end QR matrix decoding through the public API (QRCodeDecoder).
-/// Payloads mirror QRCodeEncodeEndToEnd so encode and decode costs are directly comparable;
-/// a Micro QR M2-L decode of the same numeric payload gives the scale reference.
+/// Payloads mirror QRCodeEncodeEndToEnd so encode and decode costs are directly comparable; a Micro QR M2-L decode of the same numeric payload gives the scale reference.
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
 ///
 /// Scenarios:

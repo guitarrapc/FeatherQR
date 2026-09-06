@@ -9,13 +9,9 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// Used for QR code data encoding.
 /// </summary>
 /// <remarks>
-/// Bits are staged in a 64-bit accumulator and stored as 32-bit big-endian words
-/// once available, so up to 31 bits stay pending between writes. Buffer contents
-/// are only guaranteed after <see cref="Flush"/> (called by <see cref="GetData"/>
-/// and <see cref="WritePadBytes"/>); <see cref="BitPosition"/> and
-/// <see cref="ByteCount"/> are always valid.
-/// The caller guarantees the buffer is large enough for all writes; exceeding it
-/// surfaces as an out-of-range exception from the underlying span access.
+/// Bits are staged in a 64-bit accumulator and stored as 32-bit big-endian words once available, so up to 31 bits stay pending between writes.
+/// Buffer contents are only guaranteed after <see cref="Flush"/> (called by <see cref="GetData"/> and <see cref="WritePadBytes"/>); <see cref="BitPosition"/> and <see cref="ByteCount"/> are always valid.
+/// The caller guarantees the buffer is large enough for all writes; exceeding it surfaces as an out-of-range exception from the underlying span access.
 /// </remarks>
 internal ref struct BitWriter
 {
@@ -104,8 +100,8 @@ internal ref struct BitWriter
     }
 
     /// <summary>
-    /// Stores all pending bits to the buffer. Full bytes advance the position;
-    /// a trailing partial byte is stored (low bits zero) without advancing.
+    /// Stores all pending bits to the buffer.
+    /// Full bytes advance the position; a trailing partial byte is stored (low bits zero) without advancing.
     /// Idempotent; writing may continue afterwards.
     /// </summary>
     public void Flush()

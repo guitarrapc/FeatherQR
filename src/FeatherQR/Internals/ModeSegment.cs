@@ -3,12 +3,9 @@ using System.Diagnostics;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// One encoding-mode run of a planned mixed-mode bit stream: a contiguous slice of
-/// the source text plus the value its character count indicator carries. Shared by
-/// the Standard QR, Micro QR and rMQR planners, whose plans differ in header widths
-/// and (Micro QR) mode availability, not in run structure. Packed small and
-/// reference-free on purpose — plans live in a caller-lent <see cref="Span{T}"/>
-/// (stack for short content, pooled for long), so a run must never own storage.
+/// One encoding-mode run of a planned mixed-mode bit stream: a contiguous slice of the source text plus the value its character count indicator carries.
+/// Shared by the Standard QR, Micro QR and rMQR planners, whose plans differ in header widths and (Micro QR) mode availability, not in run structure.
+/// Packed small and reference-free on purpose — plans live in a caller-lent <see cref="Span{T}"/> (stack for short content, pooled for long), so a run must never own storage.
 /// </summary>
 internal readonly struct ModeSegment
 {
@@ -19,9 +16,8 @@ internal readonly struct ModeSegment
     public readonly ushort Length;
 
     /// <summary>
-    /// Character count indicator value: digits for Numeric, characters for
-    /// Alphanumeric, encoded byte count for Byte. Kept alongside <see cref="Length"/>
-    /// so the planner and the encoder agree on the bit budget.
+    /// Character count indicator value: digits for Numeric, characters for Alphanumeric, encoded byte count for Byte.
+    /// Kept alongside <see cref="Length"/> so the planner and the encoder agree on the bit budget.
     /// </summary>
     public readonly ushort UnitCount;
 

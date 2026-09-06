@@ -1,9 +1,8 @@
 using BenchmarkDotNet.Configs;
 
 /// <summary>
-/// Cross-library rMQR decoding, over the same three symbols as
-/// <see cref="SimpleRmQREncode"/>. CodeGlyphX is the only other library compared in this
-/// project that reads rMQR at all.
+/// Cross-library rMQR decoding, over the same three symbols as <see cref="SimpleRmQREncode"/>.
+/// CodeGlyphX is the only other library compared in this project that reads rMQR at all.
 ///
 /// Comparability notes:
 ///

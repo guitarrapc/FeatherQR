@@ -2,8 +2,7 @@ using System.Text;
 
 /// <summary>
 /// End-to-end QR matrix encoding through the public API (QRCodeGenerator).
-/// Used to measure the user-visible impact of internal kernel changes such as the
-/// Reed-Solomon ECC encoder optimization.
+/// Used to measure the user-visible impact of internal kernel changes such as the Reed-Solomon ECC encoder optimization.
 ///
 /// Scenarios:
 ///   Numeric_V1_L : version 1, numeric mode (digits only)

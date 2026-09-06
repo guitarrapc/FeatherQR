@@ -4,22 +4,16 @@ namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
 /// Multi-segment data-codeword stream for <see cref="MicroQRSegmentation.Optimal"/>.
-/// Same bit grammar as the single-segment writer, repeated per planned run: mode
-/// indicator (version − 1 bits; M1 never reaches here, plans need mode switches),
-/// count indicator, payload, then the shared terminator / padding tail.
+/// Same bit grammar as the single-segment writer, repeated per planned run: mode indicator (version − 1 bits; M1 never reaches here, plans need mode switches), count indicator, payload, then the shared terminator / padding tail.
 /// </summary>
 /// <remarks>
-/// The cold half of the encoder, reusing the hot path's 128-bit accumulator and
-/// <c>FinishAndStore</c> so the tail (terminator, alignment, 0xEC/0x11 padding, the
-/// M1/M3 half codeword) is bit-identical to the single-segment writer. It re-derives
-/// the planned bit cost up front because the accumulator asserts rather than bounds-
-/// checks: a plan that does not fit must be rejected before the first append.
+/// The cold half of the encoder, reusing the hot path's 128-bit accumulator and <c>FinishAndStore</c> so the tail (terminator, alignment, 0xEC/0x11 padding, the M1/M3 half codeword) is bit-identical to the single-segment writer.
+/// It re-derives the planned bit cost up front because the accumulator asserts rather than bounds- checks: a plan that does not fit must be rejected before the first append.
 /// </remarks>
 internal static partial class MicroQRBinaryEncoder
 {
     /// <summary>
-    /// Writes the data codewords for a planned mixed-mode split and returns the
-    /// number of codewords written (always the version and ECC data codeword count).
+    /// Writes the data codewords for a planned mixed-mode split and returns the number of codewords written (always the version and ECC data codeword count).
     /// </summary>
     /// <param name="text">Content the plan indexes into.</param>
     /// <param name="version">Target version (M2-M4; decides indicator widths and available modes).</param>

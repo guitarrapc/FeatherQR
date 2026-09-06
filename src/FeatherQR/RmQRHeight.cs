@@ -1,10 +1,8 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Fixed rMQR symbol height in modules for automatic width selection ("fixed
-/// height, automatic width"): the generator only considers the versions of this
-/// height and picks among them by <see cref="RmQRFitStrategy"/>. Values are the
-/// module heights themselves.
+/// Fixed rMQR symbol height in modules for automatic width selection ("fixed height, automatic width"): the generator only considers the versions of this height and picks among them by <see cref="RmQRFitStrategy"/>.
+/// Values are the module heights themselves.
 /// </summary>
 public enum RmQRHeight
 {

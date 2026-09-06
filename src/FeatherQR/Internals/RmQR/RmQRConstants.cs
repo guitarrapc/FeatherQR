@@ -6,12 +6,8 @@ namespace FeatherQR.Internals.RmQR;
 /// rMQR Code symbol tables and format information (ISO/IEC 23941).
 /// </summary>
 /// <remarks>
-/// All per-version tables are indexed by the ISO version index
-/// <c>(int)version - 1</c> (0-31, height-major: all widths of height 7, then 9,
-/// 11, 13, 15, 17); per-version × ECC tables by <c>index * 2 + (int)eccLevel</c>
-/// (M = 0, H = 1). Every value was verified against external oracle symbols before
-/// implementation (see specs/rmqr-encoder.md, "Verification record"); the
-/// structural and oracle tests in tests/RmQr pin them permanently.
+/// All per-version tables are indexed by the ISO version index <c>(int)version - 1</c> (0-31, height-major: all widths of height 7, then 9, 11, 13, 15, 17); per-version × ECC tables by <c>index * 2 + (int)eccLevel</c> (M = 0, H = 1).
+/// Every value was verified against external oracle symbols before implementation (see specs/rmqr-encoder.md, "Verification record"); the structural and oracle tests in tests/RmQr pin them permanently.
 /// </remarks>
 internal static class RmQRConstants
 {
@@ -247,19 +243,15 @@ internal static class RmQRConstants
     public static int GetBlockCount(RmQRVersion version, RmQREccLevel eccLevel) => blockCounts[Index(version, eccLevel)];
 
     /// <summary>
-    /// Maximum number of codeword errors a decoder may correct in one Reed-Solomon
-    /// block; see the <c>errorCorrectionCapacities</c> table for its provenance.
+    /// Maximum number of codeword errors a decoder may correct in one Reed-Solomon block; see the <c>errorCorrectionCapacities</c> table for its provenance.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetErrorCorrectionCapacity(RmQRVersion version, RmQREccLevel eccLevel)
         => errorCorrectionCapacities[Index(version, eccLevel)];
 
     /// <summary>
-    /// Reed-Solomon block structure as the shared <see cref="ECCInfo"/> (group 1 =
-    /// the shorter blocks, group 2 = blocks with one more data codeword; every block
-    /// has the same ECC codeword count). <see cref="ECCInfo.Version"/> carries the
-    /// <see cref="RmQRVersion"/> value and <see cref="ECCInfo.ErrorCorrectionLevel"/>
-    /// the corresponding <see cref="QREccLevel"/> (M or H).
+    /// Reed-Solomon block structure as the shared <see cref="ECCInfo"/> (group 1 = the shorter blocks, group 2 = blocks with one more data codeword; every block has the same ECC codeword count).
+    /// <see cref="ECCInfo.Version"/> carries the <see cref="RmQRVersion"/> value and <see cref="ECCInfo.ErrorCorrectionLevel"/> the corresponding <see cref="QREccLevel"/> (M or H).
     /// </summary>
     public static ECCInfo GetEccInfo(RmQRVersion version, RmQREccLevel eccLevel)
     {
@@ -293,9 +285,7 @@ internal static class RmQRConstants
     };
 
     /// <summary>
-    /// Dense index of the encodable modes (Numeric 0, Alphanumeric 1, Byte 2) for
-    /// per-mode tables; <see cref="EncodingMode"/> values themselves are the Standard QR
-    /// mode-indicator bits (1, 2, 4) and are not contiguous.
+    /// Dense index of the encodable modes (Numeric 0, Alphanumeric 1, Byte 2) for per-mode tables; <see cref="EncodingMode"/> values themselves are the Standard QR mode-indicator bits (1, 2, 4) and are not contiguous.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetModeIndex(EncodingMode mode) => mode switch
@@ -319,19 +309,14 @@ internal static class RmQRConstants
     }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
     /// <summary>
-    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field
-    /// derivation and read for real by the qrtool Kanji fixtures, which cover widths
-    /// 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139); 2, 3 and 6 rest on the derivation.
+    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation and read for real by the qrtool Kanji fixtures, which cover widths 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139); 2, 3 and 6 rest on the derivation.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(RmQRVersion version) => kanjiCountBits[Index(version)];
 
     /// <summary>
-    /// Computes the 18 format information bits of one copy: 6 data bits (ECC level
-    /// bit above the 5-bit version index) protected by BCH(18,6) with generator
-    /// polynomial 0x1F25, XOR-masked with the copy's constant (finder side 0x1FAB2,
-    /// sub-finder side 0x20A7B). Bit i of the result is module i of the region in
-    /// placement order (see the placer).
+    /// Computes the 18 format information bits of one copy: 6 data bits (ECC level bit above the 5-bit version index) protected by BCH(18,6) with generator polynomial 0x1F25, XOR-masked with the copy's constant (finder side 0x1FAB2, sub-finder side 0x20A7B).
+    /// Bit i of the result is module i of the region in placement order (see the placer).
     /// </summary>
     public static int GetFormatBits(RmQRVersion version, RmQREccLevel eccLevel, bool subFinderSide)
     {

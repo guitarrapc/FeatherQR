@@ -4,8 +4,7 @@ namespace FeatherQR;
 /// Diagnostic information produced by a Micro QR code decode attempt.
 /// </summary>
 /// <remarks>
-/// Statuses are shared with the Standard QR decoder (<see cref="DecodeStatus"/>);
-/// version, ECC level and mask pattern use the Micro QR domains.
+/// Statuses are shared with the Standard QR decoder (<see cref="DecodeStatus"/>); version, ECC level and mask pattern use the Micro QR domains.
 /// </remarks>
 public readonly record struct MicroQRCodeDecodeInfo
 {

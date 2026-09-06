@@ -135,12 +135,9 @@ internal ref struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Writes a planned mixed-mode data stream (<see cref="QRSegmentation.Optimal"/>):
-    /// one optional ECI prefix, then per run a mode indicator, count indicator and
-    /// payload. Same bit grammar as the single-segment path, repeated per planned run
-    /// (a Standard QR decoder carries the declared charset across the runs that follow
-    /// the ECI header). Never writes a UTF-8 BOM: the BOM is a stream-level prefix,
-    /// and the planner falls back to the single-mode stream when one is requested.
+    /// Writes a planned mixed-mode data stream (<see cref="QRSegmentation.Optimal"/>): one optional ECI prefix, then per run a mode indicator, count indicator and payload.
+    /// Same bit grammar as the single-segment path, repeated per planned run (a Standard QR decoder carries the declared charset across the runs that follow the ECI header).
+    /// Never writes a UTF-8 BOM: the BOM is a stream-level prefix, and the planner falls back to the single-mode stream when one is requested.
     /// </summary>
     /// <param name="text">Content the plan indexes into.</param>
     /// <param name="segments">Planned runs, in order, covering the whole content.</param>
@@ -207,9 +204,8 @@ internal ref struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Transcodes one Byte-mode run and writes it. <paramref name="expectedBytes"/>
-    /// is what the plan budgeted; a mismatch means the plan and the transcoder
-    /// disagree, which would silently produce an unreadable symbol.
+    /// Transcodes one Byte-mode run and writes it.
+    /// <paramref name="expectedBytes"/> is what the plan budgeted; a mismatch means the plan and the transcoder disagree, which would silently produce an unreadable symbol.
     /// </summary>
     private void WriteUtf8Segment(ReadOnlySpan<char> chars, int expectedBytes)
     {

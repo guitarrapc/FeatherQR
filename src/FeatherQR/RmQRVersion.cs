@@ -1,10 +1,8 @@
 namespace FeatherQR;
 
 /// <summary>
-/// rMQR Code symbol version (ISO/IEC 23941): 32 rectangular sizes named
-/// R{height}x{width}. Values follow the ISO version index (height-major order)
-/// plus one, so <c>(int)version - 1</c> is the 5-bit version index carried in the
-/// format information and <c>(int)version</c> is libzint's rMQR version number.
+/// rMQR Code symbol version (ISO/IEC 23941): 32 rectangular sizes named R{height}x{width}.
+/// Values follow the ISO version index (height-major order) plus one, so <c>(int)version - 1</c> is the 5-bit version index carried in the format information and <c>(int)version</c> is libzint's rMQR version number.
 /// </summary>
 public enum RmQRVersion
 {

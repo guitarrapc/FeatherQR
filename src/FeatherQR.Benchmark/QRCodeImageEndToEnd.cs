@@ -1,10 +1,8 @@
 using System.Text;
 
 /// <summary>
-/// End-to-end PNG image generation through the public API
-/// (QRCodeImageBuilder.GetPngBytes). QRCodeData is pre-generated in setup so
-/// the measurement covers the Skia render + PNG encode path only, not the QR
-/// encoding itself.
+/// End-to-end PNG image generation through the public API (QRCodeImageBuilder.GetPngBytes).
+/// QRCodeData is pre-generated in setup so the measurement covers the Skia render + PNG encode path only, not the QR encoding itself.
 ///
 /// Scenarios cover the version/pixel spread:
 ///   Small : version 1 matrix (few modules, per-image overhead dominated)

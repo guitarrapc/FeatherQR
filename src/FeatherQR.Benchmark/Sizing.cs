@@ -1,11 +1,9 @@
 /// <summary>
-/// Buffer sizing for benchmark setup, where the content is chosen by the benchmark and
-/// therefore known to fit.
+/// Buffer sizing for benchmark setup, where the content is chosen by the benchmark and therefore known to fit.
 /// </summary>
 /// <remarks>
-/// The generators answer sizing only as a <c>Try</c>: for a caller handling arbitrary
-/// content, "does not fit" is an ordinary answer rather than a defect. A benchmark picks
-/// its own payloads, so a miss is a broken benchmark and should stop the run loudly.
+/// The generators answer sizing only as a <c>Try</c>: for a caller handling arbitrary content, "does not fit" is an ordinary answer rather than a defect.
+/// A benchmark picks its own payloads, so a miss is a broken benchmark and should stop the run loudly.
 /// </remarks>
 internal static class Sizing
 {

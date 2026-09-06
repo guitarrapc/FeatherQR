@@ -8,51 +8,34 @@ using System.Threading;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit
-/// registers, so every group of four data bytes updates every syndrome with one
-/// PMULL pair plus three table reads (measured 11-61x the scalar log-domain kernel).
+/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, so every group of four data bytes updates every syndrome with one PMULL pair plus three table reads (measured 11-61x the scalar log-domain kernel).
 /// </summary>
 /// <remarks>
-/// This is deliberately NOT a transliteration of the GFNI kernel in
-/// EccBinaryDecoder.Simd.cs. GF2P8MULB multiplies every lane by a per-lane constant
-/// in one instruction but is hardwired to the AES polynomial, so the x64 kernel
-/// spends its design on a field isomorphism to borrow it. NEON has no such
-/// instruction, but PMULL/PMUL carry no fixed modulus — so ARM needs no isomorphism
-/// at all and instead pays for the reduction mod 0x11D itself. The force applies at
-/// the opposite end, and the resulting kernel shape is different:
+/// This is deliberately NOT a transliteration of the GFNI kernel in EccBinaryDecoder.Simd.cs.
+/// GF2P8MULB multiplies every lane by a per-lane constant in one instruction but is hardwired to the AES polynomial, so the x64 kernel spends its design on a field isomorphism to borrow it.
+/// NEON has no such instruction, but PMULL/PMUL carry no fixed modulus — so ARM needs no isomorphism at all and instead pays for the reduction mod 0x11D itself.
+/// The force applies at the opposite end, and the resulting kernel shape is different:
 /// <code>
 /// acc' = Reduce(PMULL(acc, α^4i)) ^ T3[c0] ^ T2[c1] ^ T1[c2] ^ broadcast(c3)
 /// </code>
 /// <para>
-/// Three design points, each of which was measured against its alternative rather
-/// than assumed; the number that decided each one is quoted with it:
+/// Three design points, each of which was measured against its alternative rather than assumed; the number that decided each one is quoted with it:
 /// </para>
 /// <para>
-/// <b>Table reads, not multiplies, for the data terms.</b> <c>c·α^(k·i)</c> depends
-/// only on the byte c and the step k, so <see cref="AlphaTables"/> holds it as a
-/// ready-made 32-byte vector: three loads + three XORs replace six PMULL + six EOR.
-/// The tables cost 24 KB. A 3 KB nibble-split alternative was measured and lost by
-/// 20-78%, so the footprint is buying real work — but that verdict is from a core
-/// with a 128 KB L1D, which is also why the scalar fallback is kept fast.
+/// <b>Table reads, not multiplies, for the data terms.</b> <c>c·α^(k·i)</c> depends only on the byte c and the step k, so <see cref="AlphaTables"/> holds it as a ready-made 32-byte vector: three loads + three XORs replace six PMULL + six EOR.
+/// The tables cost 24 KB.
+/// A 3 KB nibble-split alternative was measured and lost by 20-78%, so the footprint is buying real work — but that verdict is from a core with a 128 KB L1D, which is also why the scalar fallback is kept fast.
 /// </para>
 /// <para>
-/// <b>Reduction by table lookup.</b> The high half of a PMULL product has degree ≤ 6,
-/// so splitting it into nibbles indexes two 16-entry tables holding the already
-/// reduced contribution: <c>UZP → AND → TBL → EOR</c> instead of
-/// <c>UZP → PMULL → UZP → PMUL → EOR</c>. The reduction sits on the carried
-/// dependency chain, and every change that shortened that chain won.
+/// <b>Reduction by table lookup.</b> The high half of a PMULL product has degree ≤ 6, so splitting it into nibbles indexes two 16-entry tables holding the already reduced contribution: <c>UZP → AND → TBL → EOR</c> instead of <c>UZP → PMULL → UZP → PMUL → EOR</c>.
+/// The reduction sits on the carried dependency chain, and every change that shortened that chain won.
 /// </para>
 /// <para>
-/// <b>The reduction tables are hoisted into locals.</b> This is load-bearing, not
-/// style: the JIT does not CSE <c>Vector128.Create</c> over a static array across the
-/// loop body, so leaving them inline makes every reduction pay two extra loads —
-/// worth up to 20% of the kernel.
+/// <b>The reduction tables are hoisted into locals.</b> This is load-bearing, not style: the JIT does not CSE <c>Vector128.Create</c> over a static array across the loop body, so leaving them inline makes every reduction pay two extra loads — worth up to 20% of the kernel.
 /// </para>
 /// <para>
-/// Blocks needing ≤ 16 syndromes drive only the first accumulator group. Halving the
-/// vector work buys only about 20% of the time, which is the clearest evidence that
-/// this loop is bound by the acc → PMULL → reduce → EOR chain rather than by
-/// throughput: the second group was running mostly in the first group's stall slots.
+/// Blocks needing ≤ 16 syndromes drive only the first accumulator group.
+/// Halving the vector work buys only about 20% of the time, which is the clearest evidence that this loop is bound by the acc → PMULL → reduce → EOR chain rather than by throughput: the second group was running mostly in the first group's stall slots.
 /// </para>
 /// </remarks>
 internal static partial class EccBinaryDecoder
@@ -90,8 +73,7 @@ internal static partial class EccBinaryDecoder
     ];
 
     /// <summary>
-    /// Lazily built step tables, one 24 KB array holding three 256-entry tables of
-    /// 32-byte vectors: entry (k-1, c) is lane i → c·α^(k·i) for k = 1..3.
+    /// Lazily built step tables, one 24 KB array holding three 256-entry tables of 32-byte vectors: entry (k-1, c) is lane i → c·α^(k·i) for k = 1..3.
     /// Only the AdvSimd tier reads it, so nothing is allocated on other targets.
     /// </summary>
     private static byte[]? alphaStepTables;
@@ -157,9 +139,8 @@ internal static partial class EccBinaryDecoder
     }
 
     /// <summary>
-    /// Computes the syndromes for one block. <paramref name="syndromes"/> must have
-    /// room for <see cref="SyndromeLanes"/> bytes; lanes past <paramref name="eccCount"/>
-    /// receive syndromes of roots the code does not use and must not be read.
+    /// Computes the syndromes for one block.
+    /// <paramref name="syndromes"/> must have room for <see cref="SyndromeLanes"/> bytes; lanes past <paramref name="eccCount"/> receive syndromes of roots the code does not use and must not be read.
     /// </summary>
     internal static bool ComputeSyndromesAdvSimd(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
     {
@@ -229,9 +210,8 @@ internal static partial class EccBinaryDecoder
     }
 
     /// <summary>
-    /// Stores both accumulator groups and reports whether any live syndrome is
-    /// non-zero. Lanes at or past eccCount are masked out of the test: they hold
-    /// syndromes of unused roots and are non-zero even for a clean block.
+    /// Stores both accumulator groups and reports whether any live syndrome is non-zero.
+    /// Lanes at or past eccCount are masked out of the test: they hold syndromes of unused roots and are non-zero even for a clean block.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool StoreSyndromes(Vector128<byte> low, Vector128<byte> high, int eccCount, Span<byte> syndromes)

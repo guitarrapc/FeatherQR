@@ -6,56 +6,53 @@ namespace FeatherQR.SkiaSharp;
 /// The logo or image drawn at the center of a QR code, and its size.
 /// </summary>
 /// <remarks>
-/// The icon covers modules, so the symbol relies on error correction to stay readable.
-/// Use the highest error correction level (<see cref="QREccLevel.H"/>) and keep the icon
-/// small. When the size is given in modules, rendering throws if the icon and its border
-/// span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes
-/// given as a percentage of the image are not checked against the symbol at all.
+/// The icon covers modules, so the QR code relies on error correction to stay readable.
+/// Use the highest error correction level (<see cref="QREccLevel.H"/>) and keep the icon small.
+/// When the size is given in modules, rendering throws if the icon and its border span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes given as a percentage of the image are not checked against the QR code at all.
 /// </remarks>
 public sealed record class IconData
 {
     /// <summary>
-    /// The icon shape to overlay on the QR code.
+    /// What to draw at the center.
     /// </summary>
     public required IconShape Icon { get; init; }
 
     /// <summary>
-    /// The size of the icon as a percentage of the QR code size (1-100).
-    /// Ignored when <see cref="IconSizeModules"/> is set.
+    /// Icon size as a percentage of the image, 1 to 100. Ignored once <see cref="IconSizeModules"/> is set.
     /// </summary>
     public int IconSizePercent { get; init; } = 10;
 
     /// <summary>
-    /// The border width around the icon in pixels. Creates a background-colored padding around the icon.
-    /// Ignored when <see cref="IconSizeModules"/> is set.
+    /// Width of the background-colored padding around the icon, in pixels.
+    /// Ignored once <see cref="IconSizeModules"/> is set.
     /// </summary>
     public int IconBorderWidth { get; init; } = 2;
 
     /// <summary>
-    /// The size of the icon body in QR modules.
-    /// When set, module-based sizing is used and <see cref="IconSizePercent"/> / <see cref="IconBorderWidth"/> are ignored.
+    /// Icon size in modules, which keeps the icon aligned to the grid.
+    /// Setting it switches sizing to modules, and <see cref="IconSizePercent"/> and <see cref="IconBorderWidth"/> stop applying.
     /// </summary>
     public int? IconSizeModules { get; init; }
 
     /// <summary>
-    /// The border width around the icon in QR modules.
-    /// When <see cref="IconSizeModules"/> is set and this is null, defaults to 1.
+    /// Width of the padding around the icon, in modules.
+    /// 1 when omitted.
     /// </summary>
     public int? IconBorderModules { get; init; }
 
     /// <summary>
-    /// Maximum allowed icon occupancy of the QR core area, as a percentage (1-100).
-    /// Used only for module-based sizing. Default is 30.
+    /// How much of the QR code the icon and its border may cover, as a percentage.
+    /// 30 by default.
+    /// Only checked when the size is given in modules; rendering throws when the icon exceeds it.
     /// </summary>
     public int MaxCoreOccupancyPercent { get; init; } = 30;
 
     /// <summary>
-    /// Create IconData from a bitmap image using percent/pixel sizing.
+    /// Creates an icon sized as a percentage of the image.
     /// </summary>
-    /// <param name="image">The bitmap image to display as the icon.</param>
-    /// <param name="iconSizePercent">The size of the icon as a percentage of the QR code size (1-100). Default is 10.</param>
-    /// <param name="iconBorderWidth">The border width around the icon in pixels. Default is 2.</param>
-    /// <returns>A new <see cref="IconData"/> instance configured with the specified image, size, and border width.</returns>
+    /// <param name="image">The image to draw. The caller keeps ownership of it.</param>
+    /// <param name="iconSizePercent">Icon size as a percentage of the image, 1 to 100.</param>
+    /// <param name="iconBorderWidth">Width of the padding around the icon, in pixels.</param>
     public static IconData FromImage(SKBitmap image, int iconSizePercent = 10, int iconBorderWidth = 2)
     {
         return new IconData
@@ -67,23 +64,21 @@ public sealed record class IconData
     }
 
     /// <summary>
-    /// Create IconData from a bitmap image using module-based sizing.
+    /// Creates an icon sized in modules, so it lines up with the QR code grid.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Prefer combining this with <c>WithModulePixelSize</c> so each module maps to an integer pixel size.
-    /// Optional <c>WithSize</c> can then set a larger canvas; content is centered and padded.
+    /// Pair it with <c>WithModulePixelSize</c> so every module lands on a whole number of pixels; <c>WithSize</c> can then give a larger canvas, with the QR code centered and padded.
     /// </para>
     /// <para>
-    /// Validation against QR size/core occupancy happens at render time.
+    /// The size is checked against the QR code when it is drawn, not here.
     /// </para>
     /// </remarks>
-    /// <param name="image">The bitmap image to display as the icon.</param>
-    /// <param name="iconSizeModules">Icon body size in modules (must be &gt;= 1).</param>
-    /// <param name="iconBorderModules">Border size in modules (must be &gt;= 0). Default is 1.</param>
-    /// <param name="maxCoreOccupancyPercent">Maximum core occupancy percent (1-100). Default is 30.</param>
-    /// <returns>A new <see cref="IconData"/> instance configured with module-based sizing.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="image">The image to draw. The caller keeps ownership of it.</param>
+    /// <param name="iconSizeModules">Icon size in modules, at least 1.</param>
+    /// <param name="iconBorderModules">Width of the padding around the icon, in modules.</param>
+    /// <param name="maxCoreOccupancyPercent">How much of the QR code the icon may cover, as a percentage.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static IconData FromImageByModules(
         SKBitmap image,
         int iconSizeModules,

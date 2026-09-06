@@ -6,13 +6,11 @@ using System.Runtime.InteropServices;
 namespace FeatherQR;
 
 /// <summary>
-/// Represents QR code data as a 2D boolean matrix.
+/// A Standard QR code as a module matrix, ready to render, serialize or decode.
 /// </summary>
 /// <remarks>
-/// QR code structure:<br/>
-/// - Version: 1-40 (determines size: 21×21 to 177×177)<br/>
-/// - Module matrix: 2D array of boolean values (dark/light)<br/>
-/// - Serialization format: "QRR" header + size + bit-packed data<br/>
+/// The matrix is bit-packed and sized by version, from 21 × 21 at version 1 to 177 × 177 at version 40, plus the quiet zone.
+/// Serialization writes a "QRR" header, the size, then the packed modules.
 /// </remarks>
 public sealed class QRCodeData
 {
@@ -158,25 +156,23 @@ public sealed class QRCodeData
     private int _quietZoneSize; // quiet zone size in modules
 
     /// <summary>
-    /// Gets the size of the QR code matrix (modules per side).
+    /// Side length in modules, quiet zone included.
     /// </summary>
     public int Size => _size;
 
     /// <summary>
-    /// Get the QR code version (1-40)
+    /// The QR code version, 1 to 40.
     /// </summary>
     public int Version { get; private set; }
 
     /// <summary>
-    /// Gets or sets the module state at the specified position.
+    /// The module at the given position.
     /// </summary>
-    /// <param name="row">Row index (0-based, including quiet zone if present).</param>
-    /// <param name="col">Column index (0-based, including quiet zone if present).</param>
-    /// <returns>True if module is dark/black, false if light/white.</returns>
+    /// <param name="row">Row, counted from the outer edge of the quiet zone.</param>
+    /// <param name="col">Column, counted from the outer edge of the quiet zone.</param>
+    /// <returns><c>true</c> when the module is dark.</returns>
     /// <remarks>
-    /// Quiet zone positions always read false (the quiet zone is light by
-    /// definition and is not stored). The internal setter only accepts core
-    /// positions, quiet zone modules cannot be modified.
+    /// Quiet zone positions always read <c>false</c>: the quiet zone is light by definition and is not stored.
     /// </remarks>
     public bool this[int row, int col]
     {
@@ -215,16 +211,10 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Initializes with the specified version.
+    /// Creates an empty matrix sized for the given version.
     /// </summary>
-    /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
-    /// <param name="quietZoneSize">
-    /// The size of the quiet zone (white border) around the QR code matrix, in modules.
-    /// <para>
-    /// <strong>Note:</strong> Using 0 (no quiet zone) is not recommended as QR code specifications require a quiet zone for reliable scanning.
-    /// The standard recommends a quiet zone of 4 modules for optimal readability.
-    /// </para>
-    /// </param>
+    /// <param name="version">The QR code version, 1 to 40.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules. The standard asks for 4; 0 leaves the QR code hard to scan.</param>
     public QRCodeData(int version, int quietZoneSize)
     {
         Version = version;
@@ -235,60 +225,31 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="QRCodeData"/> class from serialized raw data.
+    /// Restores a QR code from bytes written by <see cref="GetRawData()"/>.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData()"/>.
-    /// The raw data contains only the core QR code modules (excluding quiet zone).
-    /// </para>
-    /// <para>
-    /// Data format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
-    /// </para>
-    /// <para>
-    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter.
-    /// </para>
+    /// The serialized form is a "QRR" header (3 bytes), the base size (1 byte), then the bit-packed modules.
+    /// It holds the core modules only, so the quiet zone is chosen again here and need not match the one the code was serialized with.
     /// </remarks>
-    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData()"/>.</param>
-    /// <param name="quietZoneSize">
-    /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
-    /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
-    /// Use 0 for no quiet zone, or typically 4 for standard QR codes.
-    /// </param>
-    /// <exception cref="InvalidDataException">Thrown if the data is invalid.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if the data does not contain enough bits to fully populate the QR code matrix.</exception>
+    /// <param name="rawData">The serialized QR code.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules. 4 is the standard width.</param>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     public QRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="QRCodeData"/> class from serialized raw data.
+    /// Restores a QR code from bytes written by <see cref="GetRawData()"/>, without copying them into an array first.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData()"/>.
-    /// The raw data contains only the core QR code modules (excluding quiet zone).
-    /// </para>
-    /// <para>
-    /// Data format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
-    /// </para>
-    /// <para>
-    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter.
-    /// </para>
-    /// <para>
-    /// This overload is useful for high-performance scenarios where you want to deserialize from
-    /// existing memory buffers (e.g., <see cref="Memory{T}"/>, <see cref="ArraySegment{T}"/>, or stack-allocated arrays)
-    /// without allocating a new byte array.
-    /// </para>
+    /// The serialized form is a "QRR" header (3 bytes), the base size (1 byte), then the bit-packed modules.
+    /// It holds the core modules only, so the quiet zone is chosen again here and need not match the one the code was serialized with.
     /// </remarks>
-    /// <param name="rawDataSpan">The serialized QR code data span. This data should be obtained from <see cref="GetRawData()"/>.</param>
-    /// <param name="quietZoneSize">
-    /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
-    /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
-    /// Use 0 for no quiet zone, or typically 4 for standard QR codes.
-    /// </param>
-    /// <exception cref="InvalidDataException">Thrown if the data is invalid.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if the data does not contain enough bits to fully populate the QR code matrix.</exception>
+    /// <param name="rawDataSpan">The serialized QR code.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules. 4 is the standard width.</param>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     public QRCodeData(ReadOnlySpan<byte> rawDataSpan, int quietZoneSize)
     {
         // Validate minimum size
@@ -330,9 +291,8 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Calculates the required buffer size for serialization.
+    /// How many bytes <see cref="GetRawData()"/> produces for this QR code.
     /// </summary>
-    /// <returns></returns>
     public int GetRawDataSize()
     {
         var totalBits = _baseSize * _baseSize; // only core data without quiet zone
@@ -344,21 +304,12 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Serializes the QR code data to a byte array.
+    /// Serializes the QR code so it can be stored, sent or cached.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The serialized data contains only the core QR code modules (excluding quiet zone).
-    /// The quiet zone can be added when deserializing via the <see cref="QRCodeData(byte[], int)"/> constructor.
-    /// </para>
-    /// <para>
-    /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
-    /// </para>
+    /// Writes a "QRR" header (3 bytes), the base size (1 byte), then the bit-packed modules.
+    /// The quiet zone is not written; pick its width again when restoring through <see cref="QRCodeData(byte[], int)"/>.
     /// </remarks>
-    /// <returns>
-    /// A byte array containing the serialized QR code data. This data can be stored to a file,
-    /// transmitted over a network, or cached for later use.
-    /// </returns>
     public byte[] GetRawData()
     {
         var result = new byte[GetRawDataSize()];
@@ -367,21 +318,12 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Writes the serialized QR code data to the specified buffer writer.
+    /// Serializes the QR code into a buffer writer, without allocating a byte array.
     /// </summary>
-    /// <param name="writer">The buffer writer to write the serialized data to.</param>
-    /// <returns>The number of bytes written to the serialized data to.</returns>
+    /// <param name="writer">Where to write the bytes.</param>
+    /// <returns>The number of bytes written.</returns>
     /// <remarks>
-    /// <para>
-    /// This method writes only the core QR mode modules (excluding quiet zone).
-    /// The quiet zone can be added when deserializing via the <see cref="QRCodeData(byte[], int)"/> constructor.
-    /// </para>
-    /// <para>
-    /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
-    /// </para>
-    /// <para>
-    /// This overload is useful for high-performance scenarios where memory allocations need to be minimized, such as response writing or streaming.
-    /// </para>
+    /// The quiet zone is not written; pick its width again when restoring.
     /// </remarks>
     public int GetRawData(IBufferWriter<byte> writer)
     {
@@ -393,8 +335,8 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Writes the "QRR" header and the payload. The internal representation is
-    /// already the serialized payload, so this is a header write plus one copy.
+    /// Writes the "QRR" header and the payload.
+    /// The internal representation is already the serialized payload, so this is a header write plus one copy.
     /// </summary>
     private void WriteRawData(Span<byte> destination)
     {
@@ -406,11 +348,11 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Checks if the specified module position (excluding quiet zone) is part of a finder pattern.
+    /// Tells whether a module belongs to one of the three finder patterns, so a renderer can style them apart.
     /// </summary>
-    /// <param name="row">Row index in core data (0-based, excluding quiet zone)</param>
-    /// <param name="col">Column index in core data (0-based, excluding quiet zone)</param>
-    /// <returns>True if the module is part of any finder pattern, false otherwise.</returns>
+    /// <param name="row">Row, within the code itself, with the quiet zone excluded.</param>
+    /// <param name="col">Column, within the code itself, with the quiet zone excluded.</param>
+    /// <returns><c>true</c> when the module is inside a finder pattern.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsFinderPattern(int row, int col)
     {
@@ -433,11 +375,11 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Gets the finder pattern index for the specified module position (excluding quiet zone).
+    /// Tells which finder pattern a module belongs to, so each corner can be styled separately.
     /// </summary>
-    /// <param name="row">Row index in core data (0-based, excluding quiet zone)</param>
-    /// <param name="col">Column index in core data (0-based, excluding quiet zone)</param>
-    /// <returns>Finder pattern index (0=Top-left, 1=Top-right, 2=Bottom-left), or -1 if not part of any finder pattern.</returns>
+    /// <param name="row">Row, within the code itself, with the quiet zone excluded.</param>
+    /// <param name="col">Column, within the code itself, with the quiet zone excluded.</param>
+    /// <returns>0 for top-left, 1 for top-right, 2 for bottom-left, or -1 when the module is outside all three.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int GetFinderPatternIndex(int row, int col)
     {
@@ -456,29 +398,24 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Gets an upper bound on the number of rectangles <see cref="GetModuleRectangles"/>
-    /// can return, suitable for sizing a pooled buffer for
-    /// <see cref="TryGetModuleRectangles"/>. O(1), no matrix scan.
+    /// Gets an upper bound on the number of rectangles <see cref="GetModuleRectangles"/> can return, suitable for sizing a pooled buffer for <see cref="TryGetModuleRectangles"/>.
+    /// O(1), no matrix scan.
     /// </summary>
     public int GetModuleRectanglesMaxCount() => Internals.ModuleRunScanner.GetMaxRunCount(_baseSize, _baseSize);
 
     /// <summary>
-    /// Gets the dark modules as merged rectangles in module coordinates, for rendering
-    /// with any graphics API without SkiaSharp (SVG path data, draw calls, vector output).
+    /// The dark modules as merged rectangles, for drawing the QR code with any graphics API: SVG paths, draw calls, vector output.
     /// </summary>
     /// <returns>Rectangles that are disjoint and cover exactly the dark modules.</returns>
     /// <remarks>
     /// <para>
-    /// Coordinates use the same space as the indexer (<c>this[row, col]</c>): one unit is
-    /// one module, origin at the top-left including the quiet zone, <see cref="ModuleRect.X"/>
-    /// is the column and <see cref="ModuleRect.Y"/> is the row. Consumers scale by the pixel
-    /// size of one module; <see cref="Size"/> gives the total extent in modules.
+    /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
+    /// Scale by the pixel size of one module.
+    /// Consumers scale by the pixel size of one module; <see cref="Size"/> gives the total extent in modules.
     /// </para>
     /// <para>
-    /// Three properties are contractual: rectangles never overlap, cover only dark modules,
-    /// and cover every dark module. The decomposition shape and ordering are unspecified and
-    /// may change between versions (currently maximal horizontal runs in row-major order,
-    /// the same merge the built-in renderer draws).
+    /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
+    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws).
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()
@@ -488,12 +425,11 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Writes the dark modules as merged rectangles into a caller-provided buffer.
-    /// Same contract as <see cref="GetModuleRectangles"/> without allocations.
+    /// Writes the rectangles of <see cref="GetModuleRectangles"/> into the buffer you provide, without allocating.
     /// </summary>
     /// <param name="destination">Buffer to receive the rectangles. Size it with <see cref="GetModuleRectanglesMaxCount"/>.</param>
     /// <param name="written">The number of rectangles written, or 0 when the buffer is too small.</param>
-    /// <returns>True on success; false only when <paramref name="destination"/> cannot hold every rectangle.</returns>
+    /// <returns><c>false</c> only when <paramref name="destination"/> cannot hold every rectangle.</returns>
     public bool TryGetModuleRectangles(Span<ModuleRect> destination, out int written)
     {
         var view = new Internals.StandardQrMatrixView(this);
@@ -507,8 +443,7 @@ public sealed class QRCodeData
     internal int GetCoreSize() => _baseSize;
 
     /// <summary>
-    /// Gets the module state at the specified core position (excluding quiet zone),
-    /// skipping the quiet-zone coordinate translation of the public indexer.
+    /// Gets the module state at the specified core position (excluding quiet zone), skipping the quiet-zone coordinate translation of the public indexer.
     /// Caller must guarantee 0 &lt;= coreRow/coreCol &lt; core size.
     /// </summary>
     /// <param name="coreRow">Row index in core data (0-based, excluding quiet zone)</param>
@@ -521,8 +456,7 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Copies core data (without quiet zone) to the destination buffer as one
-    /// byte (0/1) per module.
+    /// Copies core data (without quiet zone) to the destination buffer as one byte (0/1) per module.
     /// </summary>
     /// <param name="destination">Destination buffer (must be at least baseSize * baseSize bytes)</param>
     /// <exception cref="ArgumentException"></exception>
@@ -560,8 +494,7 @@ public sealed class QRCodeData
     }
 
     /// <summary>
-    /// Sets the core data (without quiet zone) from a one-byte-per-module
-    /// (0/1) source buffer.
+    /// Sets the core data (without quiet zone) from a one-byte-per-module (0/1) source buffer.
     /// </summary>
     /// <param name="source">Source buffer (must be exactly baseSize * baseSize bytes)</param>
     /// <exception cref="ArgumentException"></exception>
@@ -617,9 +550,7 @@ public sealed class QRCodeData
     internal static int SizeFromVersion(int version) => 21 + (version - 1) * 4;
 
     /// <summary>
-    /// Calculate version from size (without quiet zone)
-    /// Formula: size = 21 + (version - 1) * 4
-    /// Inverse: version = (size - 21) / 4 + 1
+    /// Calculate version from size (without quiet zone) Formula: size = 21 + (version - 1) * 4 Inverse: version = (size - 21) / 4 + 1
     /// </summary>
     /// <param name="sizeWithoutQuietZone"></param>
     /// <returns></returns>

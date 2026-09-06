@@ -1,8 +1,7 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Result of <see cref="QRCodeGenerator.TryGetRequiredBufferSize"/>: buffer size, matrix
-/// side length and selected version for a pending QR code encode.
+/// Result of <see cref="QRCodeGenerator.TryGetRequiredBufferSize"/>: buffer size, matrix side length and selected version for a pending QR code encode.
 /// </summary>
 public readonly record struct QRCodeCalculatedSize
 {

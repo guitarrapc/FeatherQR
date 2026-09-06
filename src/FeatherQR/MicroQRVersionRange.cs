@@ -1,14 +1,12 @@
 namespace FeatherQR;
 
 /// <summary>
-/// The Micro QR versions a generator may choose from: the smallest one in the range that
-/// holds the content is used. The Micro QR counterpart of <see cref="QRVersionRange"/>.
+/// The Micro QR versions a generator may choose from: the smallest one in the range that holds the content is used.
+/// The Micro QR counterpart of <see cref="QRVersionRange"/>.
 /// </summary>
 /// <remarks>
-/// M1-M4 differ in the modes and ECC levels they offer, not only in capacity, so a range
-/// can leave nothing usable for two reasons. No version offering the requested ECC level
-/// is a contradiction and throws; none carrying the mode the text needs is a poor fit and
-/// returns <c>false</c>, since the text is what picks the mode.
+/// M1-M4 differ in the modes and ECC levels they offer, not only in capacity, so a range can leave nothing usable for two reasons.
+/// No version offering the requested ECC level is a contradiction and throws; none carrying the mode the text needs is a poor fit and returns <c>false</c>, since the text is what picks the mode.
 /// </remarks>
 public readonly record struct MicroQRVersionRange
 {

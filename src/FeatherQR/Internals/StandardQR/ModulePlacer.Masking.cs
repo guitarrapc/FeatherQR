@@ -8,19 +8,11 @@ namespace FeatherQR.Internals.StandardQR;
 /// <summary>
 /// Bit-packed mask pattern selection.
 ///
-/// QR modules are 1-bit values, so the whole evaluation pipeline operates on
-/// rows packed into ulongs instead of one byte per module: a row is 1 word for
-/// matrices up to 64 modules (versions 1-11) or 3 words (a <see cref="Row192"/>)
-/// for larger ones. Per pattern, applying the mask is a handful of XOR/AND word
-/// operations per row and all four ISO/IEC 18004 penalty rules are computed
-/// bit-parallel with shifts and popcounts.
+/// QR modules are 1-bit values, so the whole evaluation pipeline operates on rows packed into ulongs instead of one byte per module: a row is 1 word for matrices up to 64 modules (versions 1-11) or 3 words (a <see cref="Row192"/>) for larger ones.
+/// Per pattern, applying the mask is a handful of XOR/AND word operations per row and all four ISO/IEC 18004 penalty rules are computed bit-parallel with shifts and popcounts.
 ///
-/// Measured against the previous byte-per-module implementation (see the
-/// micro-optimization findings log): version 1 ~8x, version 10 ~44x,
-/// version 40 ~30-40x, zero allocations. Bit-packing beat both Parallel.For
-/// over the 8 patterns (which allocates and still loses at every size) and
-/// early-terminating the score (5-15%): the serial 8-pattern loop was never
-/// the problem, the per-pattern representation was.
+/// Measured against the previous byte-per-module implementation (see the micro-optimization findings log): version 1 ~8x, version 10 ~44x, version 40 ~30-40x, zero allocations.
+/// Bit-packing beat both Parallel.For over the 8 patterns (which allocates and still loses at every size) and early-terminating the score (5-15%): the serial 8-pattern loop was never the problem, the per-pattern representation was.
 /// </summary>
 internal static partial class ModulePlacer
 {
@@ -35,11 +27,8 @@ internal static partial class ModulePlacer
     /// <param name="eccLevel">Error correction level.</param>
     /// <returns>Index of the best mask pattern number (0-7).</returns>
     /// <remarks>
-    /// Scoring evaluates each candidate exactly as a decoder would see it:
-    /// mask XOR over the data area, format bits for (eccLevel, pattern), and
-    /// version bits (version 7+). Version bits live in blocked areas, so they
-    /// are pattern-invariant and packed once per call; only the 30 format-bit
-    /// modules are re-poked per pattern.
+    /// Scoring evaluates each candidate exactly as a decoder would see it: mask XOR over the data area, format bits for (eccLevel, pattern), and version bits (version 7+).
+    /// Version bits live in blocked areas, so they are pattern-invariant and packed once per call; only the 30 format-bit modules are re-poked per pattern.
     /// </remarks>
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
@@ -67,10 +56,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Applies one specific mask pattern to the data area, for a caller-pinned
-    /// pattern (<see cref="QRCodeGeneratorOptions.MaskPattern"/>). No scoring:
-    /// the whole 8-pattern evaluation is skipped, so a plain per-module loop is
-    /// already far cheaper than the selection path it replaces.
+    /// Applies one specific mask pattern to the data area, for a caller-pinned pattern (<see cref="QRCodeGeneratorOptions.MaskPattern"/>).
+    /// No scoring: the whole 8-pattern evaluation is skipped, so a plain per-module loop is already far cheaper than the selection path it replaces.
     /// </summary>
     /// <param name="buffer">QR matrix with data placed and no mask applied; masked in place.</param>
     /// <param name="size">QR code size in modules.</param>
@@ -96,8 +83,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Mask predicates (ISO/IEC 18004 7.8.2), row = y, col = x. Must agree with
-    /// the packed mask templates below and with QRMatrixDecoder.GetMaskBit.
+    /// Mask predicates (ISO/IEC 18004 7.8.2), row = y, col = x.
+    /// Must agree with the packed mask templates below and with QRMatrixDecoder.GetMaskBit.
     /// </summary>
     private static bool GetMaskBit(int pattern, int row, int col) => pattern switch
     {
@@ -203,12 +190,8 @@ internal static partial class ModulePlacer
     /// See <see cref="CalculateScorePacked"/> for the rule derivations.
     /// </summary>
     /// <remarks>
-    /// Terminates early (returning int.MaxValue) once the running sum of rules
-    /// 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever
-    /// accumulate, so a pattern whose partial sum already exceeds the best total
-    /// can never be selected, the result is provably identical. Measured ~5-10%
-    /// on this single-word path; the triple-word scorer intentionally has no
-    /// abort because no win was measurable there (see the findings log).
+    /// Terminates early (returning int.MaxValue) once the running sum of rules 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever accumulate, so a pattern whose partial sum already exceeds the best total can never be selected, the result is provably identical.
+    /// Measured ~5-10% on this single-word path; the triple-word scorer intentionally has no abort because no win was measurable there (see the findings log).
     /// </remarks>
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -300,11 +283,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Penalty-1 contribution of one color for a single row: sum over runs of
-    /// length L >= 5 of (3 + (L - 5)).
-    /// y5 marks every position where 5 consecutive set bits start, so a run of
-    /// length L contributes popcount L-4 plus 2 per run (isolated via the run's
-    /// lowest y5 bit), totalling the required L-2.
+    /// Penalty-1 contribution of one color for a single row: sum over runs of length L >= 5 of (3 + (L - 5)). y5 marks every position where 5 consecutive set bits start, so a run of length L contributes popcount L-4 plus 2 per run (isolated via the run's lowest y5 bit), totalling the required L-2.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int ScoreRuns64(ulong x)
@@ -317,12 +296,9 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Format-bit module coordinates around the top-left finder (copy 1), same
-    /// positions as PlaceFormat. Static data spans: no per-call table build, and
-    /// no temporary array in unoptimized builds (stackalloc initializers allocate
-    /// a heap copy there). Copy 2 coordinates are size-relative and computed
-    /// inline: bit i &lt; 8 sits at (x = size-1-i, y = 8), bit i &gt;= 8 at
-    /// (x = 8, y = size-15+i).
+    /// Format-bit module coordinates around the top-left finder (copy 1), same positions as PlaceFormat.
+    /// Static data spans: no per-call table build, and no temporary array in unoptimized builds (stackalloc initializers allocate a heap copy there).
+    /// Copy 2 coordinates are size-relative and computed inline: bit i &lt; 8 sits at (x = size-1-i, y = 8), bit i &gt;= 8 at (x = 8, y = size-15+i).
     /// </summary>
     private static ReadOnlySpan<byte> FormatXs1 => new byte[15] { 8, 8, 8, 8, 8, 8, 8, 8, 7, 5, 4, 3, 2, 1, 0 };
     private static ReadOnlySpan<byte> FormatYs1 => new byte[15] { 0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8 };
@@ -347,10 +323,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Packs a row of 0/1 module bytes into bits (bit c = row[c]) using the
-    /// multiply-gather trick: for a ulong holding eight 0/1 bytes,
-    /// u * 0x0102040810204080 collects byte k into bit 56+k, so one multiply
-    /// plus a shift packs 8 modules.
+    /// Packs a row of 0/1 module bytes into bits (bit c = row[c]) using the multiply-gather trick: for a ulong holding eight 0/1 bytes, u * 0x0102040810204080 collects byte k into bit 56+k, so one multiply plus a shift packs 8 modules.
     /// </summary>
     private static ulong PackRowBits64(ReadOnlySpan<byte> row)
     {
@@ -372,9 +345,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// XORs a packed 0/1 delta into a byte row, 8 modules per step: the delta
-    /// byte is spread so bit k lands in byte k (multiply-replicate, mask to the
-    /// per-byte diagonal, then OR-cascade down to bit 0 of each byte).
+    /// XORs a packed 0/1 delta into a byte row, 8 modules per step: the delta byte is spread so bit k lands in byte k (multiply-replicate, mask to the per-byte diagonal, then OR-cascade down to bit 0 of each byte).
     /// </summary>
     private static void XorUnpackRow64(Span<byte> row, ulong delta)
     {
@@ -613,10 +584,8 @@ internal static partial class ModulePlacer
     // score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
 
     /// <summary>
-    /// Bit-parallel implementation of all four ISO/IEC 18004 Section 8.8.2
-    /// penalty rules over packed rows. Produces scores identical to the plain
-    /// byte-per-module formulation (see the reference block above and
-    /// ModulePlacerMaskPackedParityTest).
+    /// Bit-parallel implementation of all four ISO/IEC 18004 Section 8.8.2 penalty rules over packed rows.
+    /// Produces scores identical to the plain byte-per-module formulation (see the reference block above and ModulePlacerMaskPackedParityTest).
     ///
     /// Rule 1 (runs >= 5, rows): y5 = x &amp; (x>>1) &amp; ... &amp; (x>>4) marks every
     ///   position where 5 consecutive equal bits start; a run of length L
@@ -776,8 +745,7 @@ internal static partial class ModulePlacer
     // ---------------------------------
 
     /// <summary>
-    /// Rule 4: deviation of the dark-module share from 50%, rounded to the
-    /// closest multiple of 5 (ISO/IEC 18004:2015 Section 8.8.2).
+    /// Rule 4: deviation of the dark-module share from 50%, rounded to the closest multiple of 5 (ISO/IEC 18004:2015 Section 8.8.2).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateBalanceScore(int blackModules, int size)
@@ -791,10 +759,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Maps between machine byte order and the logical little-endian order the
-    /// SWAR pack/unpack constants assume (memory offset k = ulong byte k).
-    /// The same swap works for both reads and writes; BitConverter.IsLittleEndian
-    /// is a JIT-time constant, so little-endian codegen is unaffected.
+    /// Maps between machine byte order and the logical little-endian order the SWAR pack/unpack constants assume (memory offset k = ulong byte k).
+    /// The same swap works for both reads and writes; BitConverter.IsLittleEndian is a JIT-time constant, so little-endian codegen is unaffected.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong NormalizeEndianness(ulong value)
@@ -815,11 +781,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Packed mask template rows: [pattern * 12 + (row % 12)]. Every mask formula
-    /// depends on the row only via row%2, row%3 or (row/2)%2, periodic in
-    /// lcm(2,3,4) = 12, and on the column with period 6, so 12 rows of 192 bits
-    /// per pattern cover every matrix size (bits beyond a row's length are removed
-    /// by ANDing with the allowed mask).
+    /// Packed mask template rows: [pattern * 12 + (row % 12)].
+    /// Every mask formula depends on the row only via row%2, row%3 or (row/2)%2, periodic in lcm(2,3,4) = 12, and on the column with period 6, so 12 rows of 192 bits per pattern cover every matrix size (bits beyond a row's length are removed by ANDing with the allowed mask).
     /// </summary>
     private static readonly Row192[] _maskTemplates = BuildMaskTemplates();
 
@@ -879,9 +842,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// 192-bit row register (3 ulongs, LSB = column 0). Sized for the largest QR
-    /// matrix (version 40, 177 modules); the fixed width keeps every operation
-    /// branch-free regardless of the actual size.
+    /// 192-bit row register (3 ulongs, LSB = column 0).
+    /// Sized for the largest QR matrix (version 40, 177 modules); the fixed width keeps every operation branch-free regardless of the actual size.
     /// </summary>
     private readonly struct Row192
     {
@@ -987,9 +949,8 @@ internal static partial class ModulePlacer
         }
 
         /// <summary>
-        /// Reads 192 bits starting at an arbitrary bit offset of a byte buffer
-        /// (LSB-first within bytes). The buffer must have at least 32 readable
-        /// bytes from the offset's byte position (callers pad).
+        /// Reads 192 bits starting at an arbitrary bit offset of a byte buffer (LSB-first within bytes).
+        /// The buffer must have at least 32 readable bytes from the offset's byte position (callers pad).
         /// </summary>
         public static Row192 FromBitSlice(ReadOnlySpan<byte> data, int bitOffset)
         {

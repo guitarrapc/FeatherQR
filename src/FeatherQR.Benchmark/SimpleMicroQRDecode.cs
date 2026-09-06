@@ -1,9 +1,8 @@
 using BenchmarkDotNet.Configs;
 
 /// <summary>
-/// Cross-library Micro QR decoding, over the same three symbols as
-/// <see cref="SimpleMicroQREncode"/>. CodeGlyphX is the only other library compared in
-/// this project that decodes Micro QR at all: QRCoder encodes it but does not read it.
+/// Cross-library Micro QR decoding, over the same three symbols as <see cref="SimpleMicroQREncode"/>.
+/// CodeGlyphX is the only other library compared in this project that decodes Micro QR at all: QRCoder encodes it but does not read it.
 ///
 /// Comparability notes:
 ///

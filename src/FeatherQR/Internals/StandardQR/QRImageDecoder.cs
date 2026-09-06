@@ -9,9 +9,7 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Decodes a QR code from a grayscale image: clean, well-lit, screen-rendered or
-/// scanned inputs, including arbitrary rotation, mirroring, reflectance reversal
-/// and mild perspective distortion (Tier 2).
+/// Decodes a QR code from a grayscale image: clean, well-lit, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal and mild perspective distortion (Tier 2).
 /// </summary>
 /// <remarks>
 /// Pipeline:
@@ -24,16 +22,13 @@ namespace FeatherQR.Internals.StandardQR;
 /// 6. Perspective grid sampling into a module matrix (4-point projective transform)
 /// 7. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
 /// </code>
-/// Out of scope (documented, by design): strong perspective where the four-point
-/// transform no longer models the surface, uneven lighting (global threshold only),
-/// blur, and multiple QR codes per image.
+/// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, uneven lighting (global threshold only), blur, and multiple QR codes per image.
 /// </remarks>
 internal static class QRImageDecoder
 {
     /// <summary>
-    /// Decodes a QR code from grayscale pixels. Reflectance-reversed codes
-    /// (light modules on a dark background, common in dark-mode UIs) are handled
-    /// by one inverted retry when the normal attempt fails.
+    /// Decodes a QR code from grayscale pixels.
+    /// Reflectance-reversed codes (light modules on a dark background, common in dark-mode UIs) are handled by one inverted retry when the normal attempt fails.
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -124,13 +119,9 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Samples the module grid at the given dimension and decodes it, retrying once
-    /// transposed for mirrored images (e.g. front-camera captures): finder geometry
-    /// is identical but data is transposed. The mirror retry triggers on any
-    /// non-terminal decode failure; a permuted format pattern may fall within BCH
-    /// distance of a wrong candidate and surface as DataUncorrectable instead of
-    /// FormatInformationInvalid. DestinationTooSmall is terminal because the
-    /// non-mirrored symbol has already been read successfully through RS correction.
+    /// Samples the module grid at the given dimension and decodes it, retrying once transposed for mirrored images (e.g. front-camera captures): finder geometry is identical but data is transposed.
+    /// The mirror retry triggers on any non-terminal decode failure; a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
+    /// DestinationTooSmall is terminal because the non-mirrored symbol has already been read successfully through RS correction.
     /// </summary>
     private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
@@ -197,9 +188,7 @@ internal static class QRImageDecoder
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 
     /// <summary>
-    /// Assigns the three finder centers to their corners: the two farthest apart
-    /// span the diagonal (top-right / bottom-left), the remaining one is top-left;
-    /// the cross product resolves which diagonal end is which.
+    /// Assigns the three finder centers to their corners: the two farthest apart span the diagonal (top-right / bottom-left), the remaining one is top-left; the cross product resolves which diagonal end is which.
     /// </summary>
     internal static void OrderFinderPatterns(ReadOnlySpan<FinderPattern> patterns, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
     {
@@ -243,14 +232,11 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Estimates the matrix dimension from finder center distances and the module
-    /// size, snapped to the nearest valid QR dimension (17 + 4·version).
+    /// Estimates the matrix dimension from finder center distances and the module size, snapped to the nearest valid QR dimension (17 + 4·version).
     /// </summary>
     /// <remarks>
-    /// The module size must NOT come from the horizontal-scan run widths: those are
-    /// measured along image rows and grow by up to √2 under rotation (at 45° a row
-    /// cuts the rotated rings diagonally). Instead it is measured along the actual
-    /// finder-to-finder lines, which is rotation-invariant.
+    /// The module size must NOT come from the horizontal-scan run widths: those are measured along image rows and grow by up to √2 under rotation (at 45° a row cuts the rotated rings diagonally).
+    /// Instead it is measured along the actual finder-to-finder lines, which is rotation-invariant.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -260,10 +246,7 @@ internal static class QRImageDecoder
     /// <param name="topRight">The finder pattern at the top-right corner of the symbol.</param>
     /// <param name="bottomLeft">The finder pattern at the bottom-left corner of the symbol.</param>
     /// <param name="dimension">Nearest valid dimension to the estimate.</param>
-    /// <param name="secondaryDimension">
-    /// Second-nearest valid dimension when the estimate is also within one version
-    /// step of it (retry candidate for estimates near a snap boundary), else 0.
-    /// </param>
+    /// <param name="secondaryDimension">Second-nearest valid dimension when the estimate is also within one version step of it (retry candidate for estimates near a snap boundary), else 0.</param>
     /// <param name="moduleSize">Measured module size in pixels (for the alignment pattern search).</param>
     private static bool TryEstimateDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, out int dimension, out int secondaryDimension, out float moduleSize)
     {
@@ -305,9 +288,7 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Measures the module size along the finder-to-finder axes: from each pattern
-    /// center, a dark-light-dark run toward (and away from) its neighbor spans
-    /// exactly 7 modules of the 1:1:3:1:1 structure, independent of rotation.
+    /// Measures the module size along the finder-to-finder axes: from each pattern center, a dark-light-dark run toward (and away from) its neighbor spans exactly 7 modules of the 1:1:3:1:1 structure, independent of rotation.
     /// </summary>
     private static float MeasureModuleSize(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
     {
@@ -337,9 +318,7 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Dark-light-dark run through <paramref name="from"/>'s center along the line
-    /// toward <paramref name="towards"/>, walked in both directions: 3 center modules
-    /// plus 1 light and 1 dark ring on each side = 7 modules total.
+    /// Dark-light-dark run through <paramref name="from"/>'s center along the line toward <paramref name="towards"/>, walked in both directions: 3 center modules plus 1 light and 1 dark ring on each side = 7 modules total.
     /// Returns the module size, or NaN when the run leaves the image.
     /// </summary>
     private static float MeasureBothWays(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern from, in FinderPattern towards)
@@ -361,17 +340,12 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Walks from a finder center along a direction until the dark-light-dark
-    /// sequence completes (center square → light ring → dark ring → out), returning
-    /// the traveled distance (≈ 3.5 modules). NaN when the image edge interrupts.
+    /// Walks from a finder center along a direction until the dark-light-dark sequence completes (center square → light ring → dark ring → out), returning the traveled distance (≈ 3.5 modules).
+    /// NaN when the image edge interrupts.
     /// </summary>
     /// <remarks>
-    /// The walk samples at integer pixel steps, so the first light pixel after the
-    /// dark ring overshoots the true boundary by up to one pixel. Returning
-    /// step − 0.5 centers that error: without the correction the module size is
-    /// systematically overestimated (~+0.07..+0.25 px measured), which at small
-    /// pixels-per-module snaps the dimension estimate one whole version low
-    /// (e.g. a 512 px version 14 render read as version 13).
+    /// The walk samples at integer pixel steps, so the first light pixel after the dark ring overshoots the true boundary by up to one pixel.
+    /// Returning step − 0.5 centers that error: without the correction the module size is systematically overestimated (~+0.07..+0.25 px measured), which at small pixels-per-module snaps the dimension estimate one whole version low (e.g. a 512 px version 14 render read as version 13).
     /// </remarks>
     private static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY)
     {
@@ -406,19 +380,10 @@ internal static class QRImageDecoder
     private const int MaxMeshNodes = 7;
 
     /// <summary>
-    /// Builds the piecewise sampling mesh for version 7+ symbols: nodes at every
-    /// alignment lattice position (grid coordinate c + 0.5 for each Annex E center
-    /// coordinate c), located by the alignment finder around the global-transform
-    /// prediction. Unfound nodes keep the prediction; the three finder corners have
-    /// no alignment pattern and always keep it (the prediction is anchored by the
-    /// finder itself there).
+    /// Builds the piecewise sampling mesh for version 7+ symbols: nodes at every alignment lattice position (grid coordinate c + 0.5 for each Annex E center coordinate c), located by the alignment finder around the global-transform prediction.
+    /// Unfound nodes keep the prediction; the three finder corners have no alignment pattern and always keep it (the prediction is anchored by the finder itself there).
     /// </summary>
-    /// <returns>
-    /// True when the mesh should be used: at least half of the searched nodes were
-    /// actually detected. With mostly-predicted nodes the mesh is merely a bilinear
-    /// approximation of the global homography, strictly worse, so the caller keeps
-    /// the global transform instead.
-    /// </returns>
+    /// <returns>True when the mesh should be used: at least half of the searched nodes were actually detected. With mostly-predicted nodes the mesh is merely a bilinear approximation of the global homography, strictly worse, so the caller keeps the global transform instead.</returns>
     internal static bool TryBuildSampleMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<float> gridCoords, Span<float> nodeXs, Span<float> nodeYs, out int meshSize, out int searchedNodes, out int foundNodes)
     {
         meshSize = 0;
@@ -658,12 +623,9 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Samples every module center through the piecewise-bilinear mesh. Bilinear
-    /// interpolation is exact at the nodes, continuous across cell edges (adjacent
-    /// cells share the same edge interpolation, unlike per-cell homographies), and
-    /// division-free; within ~20-module cells its deviation from the true projective
-    /// map is second-order small. Modules outside the lattice (borders, ≤ 6 modules)
-    /// extrapolate the nearest cell.
+    /// Samples every module center through the piecewise-bilinear mesh.
+    /// Bilinear interpolation is exact at the nodes, continuous across cell edges (adjacent cells share the same edge interpolation, unlike per-cell homographies), and division-free; within ~20-module cells its deviation from the true projective map is second-order small.
+    /// Modules outside the lattice (borders, ≤ 6 modules) extrapolate the nearest cell.
     /// </summary>
     internal static void SampleGridPiecewise(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
@@ -716,12 +678,8 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Builds the grid-to-pixel projective transform from the three finder centers
-    /// plus a fourth correspondence point: the bottom-right alignment pattern when
-    /// one exists and is found, otherwise the parallelogram corner estimate (which
-    /// degrades the transform to affine, exact for flat, on-axis captures).
-    /// Grid coordinates put module (u, v)'s center at (u+0.5, v+0.5), so finder
-    /// centers sit at 3.5 and the alignment center at dimension−6.5.
+    /// Builds the grid-to-pixel projective transform from the three finder centers plus a fourth correspondence point: the bottom-right alignment pattern when one exists and is found, otherwise the parallelogram corner estimate (which degrades the transform to affine, exact for flat, on-axis captures).
+    /// Grid coordinates put module (u, v)'s center at (u+0.5, v+0.5), so finder centers sit at 3.5 and the alignment center at dimension−6.5.
     /// </summary>
     internal static PerspectiveTransform BuildGridTransform(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize)
     {
@@ -779,15 +737,8 @@ internal static class QRImageDecoder
     /// Handles rotation, scale, shear and mild perspective.
     /// </summary>
     /// <remarks>
-    /// The loop is bound by scalar conversion/clamp/branch overhead, not by the
-    /// divisions (module computations are independent, so out-of-order execution
-    /// hides division latency, halving the division count measured no gain).
-    /// The SIMD paths process 8 module centers per iteration with the exact scalar
-    /// op sequence (no FMA), so lane results are bit-identical to the scalar path:
-    /// one Vector256 on AVX2 (measured 2.7x at version 40; PerspectiveSample
-    /// findings log), two independent Vector128 chains plus a 4-lane cleanup on
-    /// NEON/WASM (measured 1.9x at version 40 on Apple M2; PerspectiveSampleArm
-    /// findings log).
+    /// The loop is bound by scalar conversion/clamp/branch overhead, not by the divisions (module computations are independent, so out-of-order execution hides division latency, halving the division count measured no gain).
+    /// The SIMD paths process 8 module centers per iteration with the exact scalar op sequence (no FMA), so lane results are bit-identical to the scalar path: one Vector256 on AVX2 (measured 2.7x at version 40; PerspectiveSample findings log), two independent Vector128 chains plus a 4-lane cleanup on NEON/WASM (measured 1.9x at version 40 on Apple M2; PerspectiveSampleArm findings log).
     /// </remarks>
     internal static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int dimension, Span<byte> modules)
     {

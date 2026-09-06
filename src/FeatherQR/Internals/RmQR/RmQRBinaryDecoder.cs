@@ -5,10 +5,7 @@ using FeatherQR.Internals.BinaryEncoders;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR bit-stream decoder (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version
-/// character count indicator widths, terminator <c>000</c> (possibly shortened at
-/// capacity), ECI segments (parsed, mapped to the charsets the shared byte decoder
-/// knows), Kanji decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>.
+/// rMQR bit-stream decoder (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version character count indicator widths, terminator <c>000</c> (possibly shortened at capacity), ECI segments (parsed, mapped to the charsets the shared byte decoder knows), Kanji decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>.
 /// Segment payloads decode through the shared <see cref="SegmentDecoders"/>.
 /// </summary>
 internal static class RmQRBinaryDecoder

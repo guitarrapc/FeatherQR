@@ -3,26 +3,15 @@ using SkiaSharp;
 namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
-/// Shared canvas layout math for the image builders: resolves the output image
-/// info and the content rectangle from explicit size and/or module pixel size, for
-/// square (Standard / Micro QR) and rectangular (rMQR) matrices.
+/// Shared canvas layout math for the image builders: resolves the output image info and the content rectangle from explicit size and/or module pixel size, for square (Standard / Micro QR) and rectangular (rMQR) matrices.
 /// </summary>
 internal static class QRImageLayout
 {
     /// <summary>
-    /// Rectangular-aware layout. With a module pixel size the content is exactly
-    /// <c>matrixWidth × matrixHeight</c> modules at that size (centered in an explicit
-    /// canvas on whole pixels). With only an explicit canvas size: when
-    /// <paramref name="preserveAspectRatio"/> is false the content fills the canvas
-    /// (square symbologies); when true the symbol is fitted with a uniform module
-    /// scale and centered on whole pixels (letterbox, rMQR), never stretched
-    /// non-uniformly. With neither, <paramref name="defaultSize"/> is the symbology's
-    /// own aspect-derived canvas and the content rectangle is the whole canvas: the
-    /// renderer paints the background over all of it and draws the symbol at a
-    /// uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>),
-    /// so the height rounding costs at most a few pixels of background at the sides;
-    /// letterboxing here again would only turn that background into a clear-colour
-    /// band and a non-opaque image.
+    /// Rectangular-aware layout.
+    /// With a module pixel size the content is exactly <c>matrixWidth × matrixHeight</c> modules at that size (centered in an explicit canvas on whole pixels).
+    /// With only an explicit canvas size: when <paramref name="preserveAspectRatio"/> is false the content fills the canvas (square symbologies); when true the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox, rMQR), never stretched non-uniformly.
+    /// With neither, <paramref name="defaultSize"/> is the symbology's own aspect-derived canvas and the content rectangle is the whole canvas: the renderer paints the background over all of it and draws the symbol at a uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>), so the height rounding costs at most a few pixels of background at the sides; letterboxing here again would only turn that background into a clear-colour band and a non-opaque image.
     /// </summary>
     internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixWidth, int matrixHeight, Vector2Slim? explicitSize, int? modulePixelSize, bool preserveAspectRatio, Vector2Slim defaultSize)
     {

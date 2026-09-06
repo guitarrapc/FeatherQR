@@ -3,8 +3,7 @@ using SkiaSharp;
 
 /// <summary>
 /// Cross-library Standard QR decoding over the same five payloads as <see cref="SimpleEncode"/>.
-/// Only three of the compared libraries decode at all: QRCoder and
-/// Net.Codecrete.QrCodeGenerator are encoders only.
+/// Only three of the compared libraries decode at all: QRCoder and Net.Codecrete.QrCodeGenerator are encoders only.
 ///
 /// Two entry points are measured, because the libraries differ in what they accept:
 ///
@@ -240,8 +239,8 @@ public class SimpleDecode
     }
 
     /// <summary>
-    /// Fails the run if any library cannot decode any payload. A decoder that bails out
-    /// early would otherwise post the fastest time in its category.
+    /// Fails the run if any library cannot decode any payload.
+    /// A decoder that bails out early would otherwise post the fastest time in its category.
     /// </summary>
     private void VerifyEveryDecoderSucceeds()
     {

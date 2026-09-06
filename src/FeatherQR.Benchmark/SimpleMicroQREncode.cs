@@ -1,12 +1,10 @@
 using BenchmarkDotNet.Configs;
 
 /// <summary>
-/// Cross-library Micro QR encoding. Micro QR narrows the field sharply: of the libraries
-/// compared elsewhere in this project only QRCoder and CodeGlyphX support it at all.
+/// Cross-library Micro QR encoding.
+/// Micro QR narrows the field sharply: of the libraries compared elsewhere in this project only QRCoder and CodeGlyphX support it at all.
 ///
-/// Payloads sit on the capacity boundary of three versions, and every library selects the
-/// same version for each (M2-L numeric, M3-L alphanumeric, M4-M byte), so the rows encode
-/// the same symbol.
+/// Payloads sit on the capacity boundary of three versions, and every library selects the same version for each (M2-L numeric, M3-L alphanumeric, M4-M byte), so the rows encode the same symbol.
 ///
 /// Comparability notes:
 ///

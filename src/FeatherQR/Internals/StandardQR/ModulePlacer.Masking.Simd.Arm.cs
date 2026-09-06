@@ -7,17 +7,11 @@ using System.Runtime.Intrinsics.Arm;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON). Selected at
-/// runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical
-/// matrices and identical pattern selections to the scalar bit-packed
-/// implementation in ModulePlacer.Masking.cs (verified by
-/// ModulePlacerMaskAdvSimdParityTest).
+/// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON).
+/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
 ///
-/// Port of the AVX2 architecture in ModulePlacer.Masking.Simd.cs to 128-bit
-/// vectors: the scorer runs lane-per-row (Vector128&lt;ulong&gt; = 2 rows per
-/// iteration) and the same three width tiers apply (1 ulong per row for
-/// versions 1-11, 2-word SoA for 12-29, 3-word SoA for 30-40). NEON-specific
-/// choices:
+/// Port of the AVX2 architecture in ModulePlacer.Masking.Simd.cs to 128-bit vectors: the scorer runs lane-per-row (Vector128&lt;ulong&gt; = 2 rows per iteration) and the same three width tiers apply (1 ulong per row for versions 1-11, 2-word SoA for 12-29, 3-word SoA for 30-40).
+/// NEON-specific choices:
 /// - Popcount is native (cnt.16b); one uaddlp widens the per-byte counts to
 ///   ushort lanes, which accumulate directly in Vector128&lt;ushort&gt;
 ///   accumulators (2 instructions per popcount vs 3 for a full per-qword
@@ -28,15 +22,10 @@ namespace FeatherQR.Internals.StandardQR;
 ///   the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same
 ///   sequence as MicroQRModulePlacer.Unpack16).
 ///
-/// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is
-/// always little-endian and the SWAR tail reads skip endianness normalization.
+/// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
 ///
-/// Measured on Apple M2 vs the scalar bit-packed paths (MaskCodeArm findings
-/// log): v1 2.4x, v10 3.0x, v20 1.20x, v40 1.14x, zero allocations. The ushort
-/// accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD
-/// edges beat the SWAR edges by ~5-11%; the scalar scorer's early-exit is
-/// intentionally absent (structurally incompatible with vector accumulators,
-/// and the vector throughput win dwarfs it, same conclusion as the x64 loop).
+/// Measured on Apple M2 vs the scalar bit-packed paths (MaskCodeArm findings log): v1 2.4x, v10 3.0x, v20 1.20x, v40 1.14x, zero allocations.
+/// The ushort accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD edges beat the SWAR edges by ~5-11%; the scalar scorer's early-exit is intentionally absent (structurally incompatible with vector accumulators, and the vector throughput win dwarfs it, same conclusion as the x64 loop).
 /// </summary>
 internal static partial class ModulePlacer
 {
@@ -60,9 +49,8 @@ internal static partial class ModulePlacer
     // the JIT emits bic. Every AndNot in this file is the cross-platform helper.
 
     /// <summary>
-    /// Per-byte-pair popcount of a 128-bit vector as 8 ushort lanes
-    /// (cnt.16b + uaddlp). Lanes accumulate across calls and reduce once per
-    /// score via <see cref="SumAcc"/>; only the total is meaningful.
+    /// Per-byte-pair popcount of a 128-bit vector as 8 ushort lanes (cnt.16b + uaddlp).
+    /// Lanes accumulate across calls and reduce once per score via <see cref="SumAcc"/>; only the total is meaningful.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<ushort> Pop16(Vector128<ulong> v)
@@ -82,9 +70,7 @@ internal static partial class ModulePlacer
         (byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
 
     /// <summary>
-    /// Packs 16 module bytes (0/1) into 16 bits: non-zero bytes select their bit
-    /// weight (cmeq+bic), then a uaddlp chain sums each 8-byte half into the low
-    /// and high result bytes.
+    /// Packs 16 module bytes (0/1) into 16 bits: non-zero bytes select their bit weight (cmeq+bic), then a uaddlp chain sums each 8-byte half into the low and high result bytes.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong Pack16(Vector128<byte> v)
@@ -96,9 +82,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Packs a row of 0/1 module bytes into bits, 16 modules per SIMD step, then
-    /// an 8-module SWAR step and a scalar tail. Bit c = row[c], same contract as
-    /// PackRowBits64.
+    /// Packs a row of 0/1 module bytes into bits, 16 modules per SIMD step, then an 8-module SWAR step and a scalar tail.
+    /// Bit c = row[c], same contract as PackRowBits64.
     /// </summary>
     internal static ulong PackRowBits64AdvSimd(ReadOnlySpan<byte> row)
     {
@@ -126,9 +111,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Triple-word NEON row packer. The 16-module chunks are 16-aligned so they
-    /// never straddle a word boundary; the 8-module SWAR steps stay within a
-    /// word for the same reason.
+    /// Triple-word NEON row packer.
+    /// The 16-module chunks are 16-aligned so they never straddle a word boundary; the 8-module SWAR steps stay within a word for the same reason.
     /// </summary>
     private static Row192 PackRowBits192AdvSimd(ReadOnlySpan<byte> row)
     {
@@ -324,14 +308,10 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Lane-per-row Vector128 penalty scorer for single-word rows (structure
-    /// mirrors the AVX2 tier's row-lane scorer, 2 rows per iteration). Row-direction
-    /// rules run with per-lane shifts and native popcount; column-direction rules
-    /// materialize eq (vertical run continuation) and v5 (4-deep AND window)
-    /// arrays with vector passes, then score them with offset loads. Scalar tails
-    /// reuse the scalar expressions. Popcounts accumulate in weight-grouped
-    /// ushort accumulators (rule-1 ones / twos, rule-2 x3, rule-3 x40, balance)
-    /// and reduce once per score.
+    /// Lane-per-row Vector128 penalty scorer for single-word rows (structure mirrors the AVX2 tier's row-lane scorer, 2 rows per iteration).
+    /// Row-direction rules run with per-lane shifts and native popcount; column-direction rules materialize eq (vertical run continuation) and v5 (4-deep AND window) arrays with vector passes, then score them with offset loads.
+    /// Scalar tails reuse the scalar expressions.
+    /// Popcounts accumulate in weight-grouped ushort accumulators (rule-1 ones / twos, rule-2 x3, rule-3 x40, balance) and reduce once per score.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int CalculateScore64AdvSimd(ReadOnlySpan<ulong> rows, Span<ulong> nrows, Span<ulong> eqArr, Span<ulong> v5Arr, int size)

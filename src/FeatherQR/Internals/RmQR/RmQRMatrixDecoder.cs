@@ -5,26 +5,13 @@ using FeatherQR.Internals.BinaryDecoders;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR matrix → payload (ISO/IEC 23941, the inverse of the encode pipeline): the
-/// version comes from the physical width × height, the two format-information
-/// copies name the ECC level (only copies naming that version count, the closer
-/// wins), then inverse zigzag + fixed unmask (reusing
-/// the placer's own predicate and mask so both sides always agree), block
-/// deinterleave, per-block Reed-Solomon correction capped at the block's correction
-/// capacity, and the bit-stream decode. Allocation-free: fixed stack budgets sized by
-/// the largest version.
+/// rMQR matrix → payload (ISO/IEC 23941, the inverse of the encode pipeline): the version comes from the physical width × height, the two format-information copies name the ECC level (only copies naming that version count, the closer wins), then inverse zigzag + fixed unmask (reusing the placer's own predicate and mask so both sides always agree), block deinterleave, per-block Reed-Solomon correction capped at the block's correction capacity, and the bit-stream decode.
+/// Allocation-free: fixed stack budgets sized by the largest version.
 /// </summary>
 /// <remarks>
-/// The capacity cap is the same post-correction shape as
-/// <see cref="MicroQR.MicroQRMatrixDecoder"/>, but on rMQR it can never fire: every
-/// <see cref="RmQRConstants.GetErrorCorrectionCapacity"/> entry equals the full
-/// Reed-Solomon strength ⌊ecc/2⌋, and <see cref="EccBinaryDecoder.TryCorrect"/> only
-/// reports a success at or below that. It is applied anyway so both symbologies read
-/// the rule from their constants table at the same point in the pipeline, and so a
-/// future ISO/IEC 23941 Table 8 that reserves misdecode-protection codewords p on some
-/// row (as ISO/IEC 18004 Table 9 does for Micro QR) is a table edit alone. Micro QR
-/// has a false-positive damage class for its cap; rMQR's is empty by construction,
-/// which is why no test exercises this branch.
+/// The capacity cap is the same post-correction shape as <see cref="MicroQR.MicroQRMatrixDecoder"/>, but on rMQR it can never fire: every <see cref="RmQRConstants.GetErrorCorrectionCapacity"/> entry equals the full Reed-Solomon strength ⌊ecc/2⌋, and <see cref="EccBinaryDecoder.TryCorrect"/> only reports a success at or below that.
+/// It is applied anyway so both symbologies read the rule from their constants table at the same point in the pipeline, and so a future ISO/IEC 23941 Table 8 that reserves misdecode-protection codewords p on some row (as ISO/IEC 18004 Table 9 does for Micro QR) is a table edit alone.
+/// Micro QR has a false-positive damage class for its cap; rMQR's is empty by construction, which is why no test exercises this branch.
 /// </remarks>
 internal static partial class RmQRMatrixDecoder
 {
@@ -111,9 +98,7 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Upper bound on decoded characters for a version across ECC levels and modes:
-    /// numeric packs 3 digits into 10 bits, so one data codeword (8 bits) yields at
-    /// most 2.4 characters; 3× the M-level data codewords is a safe bound.
+    /// Upper bound on decoded characters for a version across ECC levels and modes: numeric packs 3 digits into 10 bits, so one data codeword (8 bits) yields at most 2.4 characters; 3× the M-level data codewords is a safe bound.
     /// </summary>
     public static int GetMaxCharCount(RmQRVersion version)
         => RmQRConstants.GetDataCodewordCount(version, RmQREccLevel.M) * 3;
@@ -144,20 +129,14 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Inverse of <see cref="RmQRModulePlacer.PlaceData"/>: the same walk, unmasked
-    /// on the fly. Every byte of <paramref name="stream"/> is written; modules past
-    /// the codeword stream (remainder) are ignored.
+    /// Inverse of <see cref="RmQRModulePlacer.PlaceData"/>: the same walk, unmasked on the fly.
+    /// Every byte of <paramref name="stream"/> is written; modules past the codeword stream (remainder) are ignored.
     /// </summary>
     /// <remarks>
-    /// Everything the walk derives from the version alone (which modules are function
-    /// modules, their order, the mask bit at each one) is hoisted into lazily built
-    /// per-version tables, exactly as the placer does for the encode direction. Two
-    /// tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2
-    /// (see RmQRMatrixDecoder.Simd.cs) and a portable table walk everywhere else.
-    /// Measured 16-64x and 8-12x respectively over the per-module reference walk
-    /// across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
-    /// ARM64 has a third tier (RmQRMatrixDecoder.Simd.Arm.cs) built on pair-interleaved
-    /// planes instead, because NEON has no PEXT/PDEP; it is 1.1-3.3x the portable tier.
+    /// Everything the walk derives from the version alone (which modules are function modules, their order, the mask bit at each one) is hoisted into lazily built per-version tables, exactly as the placer does for the encode direction.
+    /// Two tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2 (see RmQRMatrixDecoder.Simd.cs) and a portable table walk everywhere else.
+    /// Measured 16-64x and 8-12x respectively over the per-module reference walk across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
+    /// ARM64 has a third tier (RmQRMatrixDecoder.Simd.Arm.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP; it is 1.1-3.3x the portable tier.
     /// </remarks>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream)
         => ExtractCodewords(modules, width, height, version, stream, ExtractKernel.Auto);
@@ -193,9 +172,7 @@ internal static partial class RmQRMatrixDecoder
 
     /// <summary>
     /// Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.
-    /// Pinning a tier that cannot run here throws rather than falling through to the
-    /// portable walk: a parity test that silently compares the portable kernel against
-    /// itself stays green while the tier it names goes unexercised.
+    /// Pinning a tier that cannot run here throws rather than falling through to the portable walk: a parity test that silently compares the portable kernel against itself stays green while the tier it names goes unexercised.
     /// </summary>
     internal static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream, ExtractKernel kernel)
     {
@@ -235,8 +212,7 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Portable tier: one gather per stream bit through the walk-order table, the
-    /// output byte accumulated in a register so each is stored once.
+    /// Portable tier: one gather per stream bit through the walk-order table, the output byte accumulated in a register so each is stored once.
     /// </summary>
     private static void ExtractCodewordsScalar(ReadOnlySpan<byte> modules, ushort[] order, Span<byte> stream)
     {
@@ -283,21 +259,15 @@ internal static partial class RmQRMatrixDecoder
     private const int MaskBitShift = 15;
 
     /// <summary>
-    /// Column stride between the two bit planes. The widest symbol is 139 columns and the
-    /// transpose stores 16 at a time, so the last store ends at 128 + 16 = 144; rounded
-    /// to 160 so writing the last column group cannot run past the first plane into the
-    /// second, with margin.
+    /// Column stride between the two bit planes.
+    /// The widest symbol is 139 columns and the transpose stores 16 at a time, so the last store ends at 128 + 16 = 144; rounded to 160 so writing the last column group cannot run past the first plane into the second, with margin.
     /// </summary>
     private const int PlaneStride = 160;
 
     /// <summary>
-    /// Everything the ARM64 pair-plane kernel derives from the version alone. Unlike the
-    /// x64 form, a lane here is a whole column PAIR: the transpose interleaves the two
-    /// columns as it goes, so the plane word already is the pair's output field with the
-    /// function modules still in it, and the kernel only has to compress it. The
-    /// compression is described as runs of consecutive data bits, because function
-    /// modules come from rectangular blocks and not from scattered modules (a pair
-    /// averages 1.0-2.3 runs, worst case 5-11).
+    /// Everything the ARM64 pair-plane kernel derives from the version alone.
+    /// Unlike the x64 form, a lane here is a whole column PAIR: the transpose interleaves the two columns as it goes, so the plane word already is the pair's output field with the function modules still in it, and the kernel only has to compress it.
+    /// The compression is described as runs of consecutive data bits, because function modules come from rectangular blocks and not from scattered modules (a pair averages 1.0-2.3 runs, worst case 5-11).
     /// </summary>
     internal sealed class PairPlaneLayout
     {
@@ -311,8 +281,7 @@ internal static partial class RmQRMatrixDecoder
         public readonly uint[] PlaneXor;
 
         /// <summary>
-        /// Every run of every pair in walk order, 3 words each: the lane the pair occupies
-        /// in its block, the run's bits in place, and source shift | length &lt;&lt; 16.
+        /// Every run of every pair in walk order, 3 words each: the lane the pair occupies in its block, the run's bits in place, and source shift | length &lt;&lt; 16.
         /// </summary>
         public readonly uint[] Runs;
 
@@ -334,13 +303,9 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Replays the same walk in the pair-plane shape. Plane word for the pair whose right
-    /// column is <c>col</c> holds, for every data row, bit <c>2j+1</c> = module(row, col)
-    /// and <c>2j</c> = module(row, col-1), where j counts rows in WALK order from the
-    /// FIRST row the pair visits (row height-2 walking up, row 1 walking down), so the
-    /// pair's earliest bits sit in the word's high bits and the run extraction reads it
-    /// from bit 31 down. The walk alternates between the two columns of a pair on every
-    /// row, so those bits are already in stream order.
+    /// Replays the same walk in the pair-plane shape.
+    /// Plane word for the pair whose right column is <c>col</c> holds, for every data row, bit <c>2j+1</c> = module(row, col) and <c>2j</c> = module(row, col-1), where j counts rows in WALK order from the FIRST row the pair visits (row height-2 walking up, row 1 walking down), so the pair's earliest bits sit in the word's high bits and the run extraction reads it from bit 31 down.
+    /// The walk alternates between the two columns of a pair on every row, so those bits are already in stream order.
     /// </summary>
     private static PairPlaneLayout BuildPairPlaneLayout(RmQRVersion version, int width, int height, int bitCount)
     {
@@ -431,9 +396,7 @@ internal static partial class RmQRMatrixDecoder
         public readonly ushort[] Order;
 
         /// <summary>
-        /// Column-pair descriptors for the bit-plane kernel, 6 words per pair:
-        /// plane index | count &lt;&lt; 16, then extract/deposit for column <c>col</c>,
-        /// extract/deposit for column <c>col-1</c>, then the data mask of the pair.
+        /// Column-pair descriptors for the bit-plane kernel, 6 words per pair: plane index | count &lt;&lt; 16, then extract/deposit for column <c>col</c>, extract/deposit for column <c>col-1</c>, then the data mask of the pair.
         /// </summary>
         public readonly uint[] Pairs;
 
@@ -463,13 +426,9 @@ internal static partial class RmQRMatrixDecoder
     /// <summary>
     /// Replays the reference walk once per version and records it two ways.
     /// <para>
-    /// The bit-plane form needs the column planes to be readable by PEXT: plane bit
-    /// <c>row-1</c> holds row <c>row</c> for an upward pair, and plane bit
-    /// <c>height-2-row</c> for a downward one (the row-reversed copy). With that
-    /// layout the plane bit index and the deposit position both fall as the walk
-    /// advances, so PEXT's packing order matches PDEP's scatter order and one pair of
-    /// masks serves both walk directions. The walk is truncated to the codeword
-    /// stream here, so neither kernel needs a remainder check.
+    /// The bit-plane form needs the column planes to be readable by PEXT: plane bit <c>row-1</c> holds row <c>row</c> for an upward pair, and plane bit <c>height-2-row</c> for a downward one (the row-reversed copy).
+    /// With that layout the plane bit index and the deposit position both fall as the walk advances, so PEXT's packing order matches PDEP's scatter order and one pair of masks serves both walk directions.
+    /// The walk is truncated to the codeword stream here, so neither kernel needs a remainder check.
     /// </para>
     /// </summary>
     private static ExtractLayout BuildExtractLayout(RmQRVersion version)
