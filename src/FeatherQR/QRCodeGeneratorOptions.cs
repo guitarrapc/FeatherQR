@@ -10,7 +10,7 @@ namespace FeatherQR;
 /// </remarks>
 public readonly record struct QRCodeGeneratorOptions
 {
-    /// <summary>ISO/IEC 18004 quiet zone for Standard QR, and the parameter list default.</summary>
+    /// <summary>ISO/IEC 18004 quiet zone for Standard QR, and the default the 1.1.1 parameter lists applied.</summary>
     internal const int DefaultQuietZone = 4;
 
     // Offset from the specified default, so default(T) carries 4 rather than 0 (a legitimate
@@ -20,6 +20,44 @@ public readonly record struct QRCodeGeneratorOptions
     private readonly int _quietZoneSizeOffset;
 
     private readonly int? _maskPattern;
+
+    /// <summary>
+    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
+    /// </summary>
+    /// <remarks>
+    /// Prefer the object initializer (<c>new QRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order.
+    /// This exists because <c>init</c> accessors are unassignable before C# 9, and .NET Framework and netstandard2.0 projects default to C# 7.3 while netstandard2.1 defaults to C# 8.0; the parameter list generator overloads that used to serve those consumers were removed in 2.0.0.
+    /// <strong>Pass arguments by name.</strong> Three consecutive parameters accept a bare <c>int</c> (<paramref name="version"/> converts from one, and <paramref name="quietZoneSize"/> and <paramref name="maskPattern"/> are integers), so a positional call can transpose two of them and still compile.
+    /// Every parameter is optional, and each default is the value <c>default</c> carries for that property, so omitting one leaves it exactly as the default configuration has it.
+    /// Values are assigned through the same <c>init</c> accessors, so validation is identical either way.
+    /// The three option structs list their shared settings in the same relative order (version, quiet zone, mask pattern, segmentation) so that a caller moving between symbologies does not meet a different one. <see cref="MaskPattern"/> is validated on assignment either way; the other members carry no constructor-time check, exactly as the object initializer does not.
+    /// </remarks>
+    /// <param name="eciMode">See <see cref="EciMode"/>.</param>
+    /// <param name="utf8Bom">See <see cref="Utf8Bom"/>.</param>
+    /// <param name="version">See <see cref="Version"/>.</param>
+    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
+    /// <param name="maskPattern">See <see cref="MaskPattern"/>.</param>
+    /// <param name="boostEccLevel">See <see cref="BoostEccLevel"/>.</param>
+    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-7 or <c>null</c>.</exception>
+    public QRCodeGeneratorOptions(
+        EciMode eciMode = EciMode.Default,
+        bool utf8Bom = false,
+        QRVersionRange version = default,
+        int quietZoneSize = DefaultQuietZone,
+        int? maskPattern = null,
+        bool boostEccLevel = false,
+        QRSegmentation segmentation = QRSegmentation.Single)
+        : this()
+    {
+        EciMode = eciMode;
+        Utf8Bom = utf8Bom;
+        Version = version;
+        QuietZoneSize = quietZoneSize;
+        MaskPattern = maskPattern;
+        BoostEccLevel = boostEccLevel;
+        Segmentation = segmentation;
+    }
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static QRCodeGeneratorOptions Default => default;

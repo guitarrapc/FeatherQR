@@ -311,7 +311,7 @@ Standard QR and Micro QR take a *range* of acceptable versions rather than a sin
 ```csharp
 new QRCodeGeneratorOptions { Version = 15 }                              // exactly version 15
 new QRCodeGeneratorOptions { Version = new(10, 20) }                     // 10 to 20, both inclusive
-new QRCodeGeneratorOptions { Version = QRVersionRange.AtLeast(10) }  // 10 or larger
+new QRCodeGeneratorOptions { Version = QRVersionRange.AtLeast(10) }      // 10 or larger
 new QRCodeGeneratorOptions { Version = configuredVersion }               // an int?; null means automatic
 new QRCodeGeneratorOptions { }                                           // automatic
 ```
@@ -443,7 +443,7 @@ if (QRCodeDecoder.TryDecode(qrData, out var text))
 }
 
 using var bitmap = SKBitmap.Decode("qr.png");
-if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
+if (QRCodeImageDecoder.TryDecode(bitmap, out text, out var info))
 {
     Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 }
@@ -470,7 +470,7 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
@@ -479,7 +479,7 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -505,21 +505,21 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 #### Windows
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 

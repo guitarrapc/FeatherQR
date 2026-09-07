@@ -57,6 +57,7 @@ namespace FeatherQR.SkiaSharp
     public sealed class IconData : IEquatable<IconData>
     {
         [Obsolete] public IconData();
+        public IconData(IconShape icon, int iconSizePercent = 10, int iconBorderWidth = 2, int? iconSizeModules = null, int? iconBorderModules = null, int maxCoreOccupancyPercent = 30);
         public IconShape Icon { get; init; }
         public int IconBorderWidth { get; init; }
         public int IconSizePercent { get; init; }

@@ -27,7 +27,7 @@ The encoder exposes two output models.
 
 #### `QRCodeData`
 
-`Create(ReadOnlySpan<char>, ...)` returns a `QRCodeData` object (a `string` converts implicitly).
+`Create(ReadOnlySpan<char>, ...)` returns a `QRCodeData` object (a `string` converts implicitly, except on the netstandard2.0 asset below C# 14).
 
 - The core matrix is stored bit-packed, one bit per module.
 - The quiet zone is virtual: it changes the public coordinate space but consumes no payload storage.
@@ -43,7 +43,7 @@ The encoder exposes two output models.
 - flat row-major order;
 - quiet zone included.
 
-`TryGetRequiredBufferSize` returns the required matrix side, byte count, and selected version, and returns `false` when the content exceeds the capacity of every version in range; argument errors (a negative or overflowing quiet zone) still throw, so `false` means "does not fit" and nothing else. It is the only sizing method on the current surface: the released `GetRequiredBufferSize` is `[Obsolete]` and goes in 2.0.0. The rationale for that split, and why it is a `Try` rather than a dedicated exception type, is recorded once in [rmqr-encoder.md](rmqr-encoder.md) — Standard QR follows the same rule so the three symbologies present one surface. The encoder overwrites every byte of the written region (the core comes from a per-version template copy; only a non-zero quiet zone is cleared), accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
+`TryGetRequiredBufferSize` returns the required matrix side, byte count, and selected version, and returns `false` when the content exceeds the capacity of every version in range; argument errors (a negative or overflowing quiet zone) still throw, so `false` means "does not fit" and nothing else. It is the only sizing method on the surface; the throwing `GetRequiredBufferSize` that 1.1.1 released was deprecated in 1.2.0 and removed in 2.0.0. The rationale for that split, and why it is a `Try` rather than a dedicated exception type, is recorded once in [rmqr-encoder.md](rmqr-encoder.md) — Standard QR follows the same rule so the three symbologies present one surface. The encoder overwrites every byte of the written region (the core comes from a per-version template copy; only a non-zero quiet zone is cleared), accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
 
 ### Supported
 
@@ -55,8 +55,8 @@ The encoder exposes two output models.
 | Data modes | Numeric, Alphanumeric, Byte |
 | ECI | Default/no header, ISO-8859-1 (assignment 3), UTF-8 (assignment 26) |
 | UTF-8 BOM | Optional in UTF-8 Byte mode |
-| Version selection | Automatic minimum-fit, caller-requested version, or a version range (options overloads) |
-| ECC boost | Optional (options overloads): the requested level becomes the minimum and is raised as far as the chosen version's capacity allows, never changing the version |
+| Version selection | Automatic minimum-fit, caller-requested version, or a version range |
+| ECC boost | Optional: the requested level becomes the minimum and is raised as far as the chosen version's capacity allows, never changing the version |
 | Segmentation | One segment in one mode by default; opt-in mixed-mode segmentation (`QRSegmentation.Optimal`) splits the content into the minimal-bit Numeric / Alphanumeric / Byte runs |
 | Quiet zone | Configurable non-negative size; span sizing/output rejects dimensions that cannot fit an `int`-sized matrix |
 | Output | Bit-packed `QRCodeData` or byte-per-module `Span<byte>` |
@@ -70,7 +70,7 @@ The encoder exposes two output models.
 - Arbitrary binary payload input
 - Micro QR and rMQR
 
-By default the encoder analyzes the complete input once and emits one data segment; `QRSegmentation.Optimal` (options overloads) opts into the globally minimal mixed-mode split instead (see [Mixed-mode segmentation](#mixed-mode-segmentation-options-overloads)).
+By default the encoder analyzes the complete input once and emits one data segment; `QRSegmentation.Optimal` opts into the globally minimal mixed-mode split instead (see [Mixed-mode segmentation](#mixed-mode-segmentation)).
 
 ---
 
@@ -132,22 +132,22 @@ Byte-mode capacity is calculated from encoded byte count, not UTF-16 `char` coun
 
 The version calculation does not reserve four mandatory terminator bits: the terminator is allowed to shrink to the remaining capacity, including zero bits for an exact fit. If no version can hold the required header and payload bits, generation fails instead of truncating.
 
-When `requestedVersion` is supplied, automatic selection is bypassed. It is intended for callers that need a fixed symbol size and already know the payload fits.
+When `QRCodeGeneratorOptions.Version` pins a version, automatic selection is bypassed. It is intended for callers that need a fixed symbol size and already know the payload fits.
 
-#### Version ranges (options overloads)
+#### Version ranges
 
 `QRCodeGeneratorOptions.Version` is a `QRVersionRange` rather than a single version, and the scan runs over `[Min, Max]` instead of 1 to 40. A pinned version is the degenerate `Exactly(n)` case, so there is one concept rather than a requested version and a range that could contradict each other. The range's bounds are validated when it is constructed, before any generator is called, and both are **inclusive** — which is why this is a domain type and not C#'s `..`, whose end is exclusive and would make `1..40` mean 1 through 39.
 
-Two behaviours differ from the `requestedVersion` parameter, and both are confined to the options overloads:
+Two behaviours were introduced with the range and are now unconditional. Both differed from the 1.1.1 `requestedVersion` parameter, which was removed in 2.0.0:
 
-- **A range narrower than 1-40 is checked for fit.** `Exactly(n)` reports content that does not fit version *n* as `false` from `TryGetRequiredBufferSize` (or an `ArgumentException` from `Create`), where the parameter hands the version straight to the encoder and fails deep inside with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice. The parameter's behaviour is unchanged; only the new surface checks.
-- **Sizing honours the version.** The released `GetRequiredBufferSize` has no `requestedVersion` parameter, so an ignored `Version` would have been a silent trap. `TryGetRequiredBufferSize` reports the version the range resolves to, matching what Micro QR and rMQR already do.
+- **A range narrower than 1-40 is checked for fit.** `Exactly(n)` reports content that does not fit version *n* as `false` from `TryGetRequiredBufferSize` (or an `ArgumentException` from `Create`). The removed parameter handed the version straight to the encoder and failed deep inside with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice.
+- **Sizing honours the version.** The released `GetRequiredBufferSize` had no `requestedVersion` parameter, so an ignored `Version` would have been a silent trap. `TryGetRequiredBufferSize` reports the version the range resolves to, matching what Micro QR and rMQR already do.
 
-`QRVersionRange.Any` short-circuits to the same automatic path the parameter list overloads take, so the default costs nothing extra; only a constrained range pays for the additional text analysis its resolution needs.
+`QRVersionRange.Any` short-circuits to the automatic path before any range resolution runs, so the default costs nothing extra; a constrained range or an ECC boost pays for the additional text analysis its resolution needs, since a boost has to know the version before it can raise the level.
 
 **The scan does not assume the fit predicate is monotone in the version**, even though it is. It could plausibly not be: the character-count indicator widens at versions 10 and 27, so a larger version costs more header bits. Scanning `[Min, Max]` is correct either way, and `VersionRangeTest.StandardQr_FitsIsMonotoneInVersion` sweeps 3 modes × 4 ECC levels × 3 ECI modes × 58 lengths × 40 versions to keep the monotonicity a checked fact rather than an assumption the code rests on.
 
-#### ECC boost (options overloads)
+#### ECC boost
 
 `QRCodeGeneratorOptions.BoostEccLevel` reinterprets the requested ECC level as a minimum: the version is chosen for that level exactly as above, then the level is raised while the next one still fits the chosen version. Because the version is fixed before the boost starts, boosting **never grows the symbol** — it converts padding the symbol would carry anyway into error-correction capacity. The main audience is symbols with an icon overlay, where the spare capacity absorbs the covered modules.
 
@@ -158,7 +158,7 @@ Two behaviours differ from the `requestedVersion` parameter, and both are confin
 
 `EccBoostTest` pins the headroom classes (boost to H, stop at an intermediate level, no headroom, already at H), the version invariance, the sizing indifference and the error parity.
 
-#### Mixed-mode segmentation (options overloads)
+#### Mixed-mode segmentation
 
 **What.** `QRSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a candidate version, and fits the version against that cost instead of the single-mode cost. `QRSegmentation.Single` (the default) keeps one run in one mode.
 
@@ -313,8 +313,8 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 - **Single segment per input, by default.** It keeps the default path auditable and makes mode selection a single pass; the trade-off, non-minimal symbols for mixed-mode payloads, is answered by the opt-in `QRSegmentation.Optimal`, which never changes the emitted stream unless it lowers the version.
 - **No Kanji mode when encoding.** Unicode input is represented as UTF-8 Byte mode with ECI 26, at the cost of lower capacity for Japanese text. This originally also avoided shipping a Shift_JIS table; that argument lapsed when Kanji DECODING shipped and the assembly gained the 16 KB JIS X 0208 table, so the remaining reasons are output stability and not adding an encoding dependency.
 - **ASCII omits ECI by default.** This minimizes overhead and maximizes compatibility. Latin-1 and wider Unicode receive explicit ECI declarations under automatic selection.
-- **BOM is explicit and UTF-8-only.** `utf8BOM` affects the stream only when the selected data mode is Byte and the effective ECI is UTF-8.
-- **Version can be forced.** Fixed-size applications need control over symbol dimensions, so `requestedVersion` bypasses minimum-fit selection rather than acting as a lower bound.
+- **BOM is explicit and UTF-8-only.** `QRCodeGeneratorOptions.Utf8Bom` affects the stream only when the selected data mode is Byte and the effective ECI is UTF-8.
+- **Version can be forced.** Fixed-size applications need control over symbol dimensions, so a pinned `QRCodeGeneratorOptions.Version` bypasses minimum-fit selection rather than acting as a lower bound.
 - **Quiet zone is output policy, not core symbol data.** Core encoding is always performed on the `21 + 4 * (version - 1)` matrix. Quiet-zone storage differs by output model without changing encoded modules.
 - **Mask scoring includes final metadata.** Scoring a data-only candidate can choose a different winner from scoring the actual final matrix, so format and version information are part of candidate evaluation.
 

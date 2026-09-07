@@ -163,7 +163,7 @@ public static class MicroQRCodeGenerator
     /// <summary>
     /// Encodes text into a Micro QR code.
     /// </summary>
-    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the Micro QR code can survive. M1 accepts <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, and Q is available on M4 alone.</param>
     /// <param name="options">Version, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
@@ -185,7 +185,7 @@ public static class MicroQRCodeGenerator
     /// <remarks>
     /// One byte per module, 0 light and 1 dark, row-major with the quiet zone included, so the module at (row, col) is <c>destination[row * size + col]</c>.
     /// </remarks>
-    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the Micro QR code should survive. M1 takes <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, and Q needs M4.</param>
     /// <param name="destination">Where to write the matrix. Needs <see cref="MicroQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
@@ -203,7 +203,7 @@ public static class MicroQRCodeGenerator
     /// <summary>
     /// Reports how large the Micro QR code will be, or <c>false</c> when the content does not fit.
     /// </summary>
-    /// <param name="text">The text to encode.</param>
+    /// <param name="text">The text to size for. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the Micro QR code should survive.</param>
     /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Version, quiet zone and segmentation settings.</param>

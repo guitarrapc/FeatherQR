@@ -114,28 +114,12 @@ public class QRCodeEncodeEndToEnd
         return MicroQRCodeGenerator.Create(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
     }
 
-    // The options overloads against the parameter list overloads they forward to. They are
-    // single-expression forwarders, so these pairs should sit on top of each other; the
-    // point is to keep that a measured fact, since the options overloads are the path new
-    // options are added to and callers will be pointed at.
-
-    [Benchmark(Description = "QR_Byte_V40_L_Encode (Span, options)")]
-    public int QR_Byte_V40_L_EncodeSpanOptions()
-    {
-        return QRCodeGenerator.Create(_byteLongL.AsSpan(), QREccLevel.L, _spanDestination, QRCodeGeneratorOptions.Default);
-    }
-
-    [Benchmark(Description = "QR_Numeric_V1_L_Encode (options)")]
-    public QRCodeData QR_Numeric_V1_L_EncodeOptions()
-    {
-        return QRCodeGenerator.Create(_numeric, QREccLevel.L, QRCodeGeneratorOptions.Default);
-    }
-
-    [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span, options)")]
-    public int MicroQR_Numeric_M2_EncodeSpanOptions()
-    {
-        return MicroQRCodeGenerator.Create(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination, MicroQRCodeGeneratorOptions.Default);
-    }
+    // Three "(options)" benchmarks stood here until 2.0.0, pairing each options overload
+    // against the parameter list overload it forwarded to so that "the forwarder costs
+    // nothing" stayed a measured fact. The parameter list overloads were removed, and
+    // `QRCodeGeneratorOptions.Default` is `default`, so each pair collapsed into two
+    // spellings of one call and the pairs were dropped rather than left measuring
+    // themselves. The options path is now the only path, and the benchmarks above are on it.
 
     private static string BuildDeterministicText(int length)
     {

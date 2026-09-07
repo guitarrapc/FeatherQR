@@ -1,9 +1,9 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
-#:project ../../src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj
+#:project ../../src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // fix confirmation for: https://github.com/guitarrapc/SkiaSharp.QrCode/issues/299
 

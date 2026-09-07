@@ -20,14 +20,232 @@ public class TypeShapeTest
 {
     private const BindingFlags Instance = BindingFlags.Public | BindingFlags.Instance;
 
-    public static IEnumerable<Type> ResultValues()
+    // Func<Type> rather than Type: TUnit asks for a factory when a data source yields a
+    // reference type, so each case builds its own value and cannot share state with another.
+    public static IEnumerable<Func<Type>> GeneratorOptionTypes()
     {
-        yield return typeof(QRCodeCalculatedSize);
-        yield return typeof(MicroQRCodeCalculatedSize);
-        yield return typeof(RmQRCodeCalculatedSize);
-        yield return typeof(QRCodeDecodeInfo);
-        yield return typeof(MicroQRCodeDecodeInfo);
-        yield return typeof(RmQRCodeDecodeInfo);
+        yield return () => typeof(QRCodeGeneratorOptions);
+        yield return () => typeof(MicroQRCodeGeneratorOptions);
+        yield return () => typeof(RmQRCodeGeneratorOptions);
+        // Not a generator option, but the same rule: it is a settings object a caller builds,
+        // and its members are init-only for the same reason.
+        yield return () => typeof(IconData);
+    }
+
+    // CanWrite is true for a private setter too, and an indexer is not a setting, so
+    // neither belongs in a rule about what a caller can configure: QRCodeData.Version is
+    // `{ get; private set; }` and would otherwise demand a constructor parameter it has
+    // no business exposing.
+    private static PropertyInfo[] SettableProperties(Type type) => type.GetProperties(Instance)
+        .Where(p => p.SetMethod is { IsPublic: true } && p.GetIndexParameters().Length == 0)
+        .ToArray();
+
+    /// <summary>
+    /// Every settable property on every exported type is reachable without an <c>init</c>
+    /// setter. A consumer whose compiler predates C# 9 cannot assign one, and the parameter
+    /// list generator overloads that used to serve those consumers were removed in 2.0.0,
+    /// so a constructor parameter is the only remaining route.
+    /// </summary>
+    /// <remarks>
+    /// A sweep, not a list. The rule was first written over a hand-listed set of option
+    /// structs and <see cref="IconData"/> was found missing from it a review round later,
+    /// with its two factories both hardcoding <see cref="ImageIconShape"/> — so every other
+    /// shape was unreachable below C# 9. A list only states the rule for the types someone
+    /// remembered; the sweep states it for the next type too.
+    /// </remarks>
+    [Test]
+    public async Task EverySettableProperty_IsReachableWithoutAnInitSetter()
+    {
+        var offenders = new List<string>();
+
+        foreach (var type in new[] { typeof(QRCodeData).Assembly, typeof(IconData).Assembly }
+            .SelectMany(a => a.GetExportedTypes())
+            .Where(t => SettableProperties(t).Length > 0)
+            .OrderBy(t => t.FullName, StringComparer.Ordinal))
+        {
+            // One constructor has to cover everything. Pooling parameters across all of
+            // them would pass a type whose settings are split between two constructors,
+            // where a caller picking either one still cannot set the rest.
+            //
+            // Match on name AND type: a parameter named `maskPattern` typed `int` rather
+            // than `int?` would satisfy a name-only rule while making `null`, the real
+            // default, unreachable, and would quietly change the default configuration.
+            var settable = SettableProperties(type);
+            var covered = type.GetConstructors().Any(c =>
+                settable.All(p => c.GetParameters().Any(a =>
+                    string.Equals(a.Name, p.Name, StringComparison.OrdinalIgnoreCase) && a.ParameterType == p.PropertyType)));
+
+            if (!covered)
+            {
+                offenders.Add($"{type.FullName}: no single constructor sets [{string.Join(", ", settable.Select(p => p.Name))}]");
+            }
+        }
+
+        await Assert.That(offenders).IsEmpty()
+            .Because("a property no constructor can set is unreachable below C# 9");
+    }
+
+    /// <summary>
+    /// A settings object a caller configures takes one constructor whose parameters are all
+    /// optional, so setting one option never means restating the rest. Only a
+    /// <c>required</c> member may be mandatory, because it alone has no default to fall
+    /// back on.
+    /// </summary>
+    /// <remarks>
+    /// Listed rather than swept, because it is an ergonomic rule about settings objects and
+    /// not every constructible type is one: <see cref="ModuleRect"/> is a positional value
+    /// whose four components are all meaningful, and <see cref="GradientOptions"/> cannot
+    /// default its colours or express them as a property at all (they are read back as a
+    /// <see cref="ReadOnlySpan{T}"/>). Reachability, the rule that actually protects the
+    /// pre-C#-9 audience, is swept over both assemblies above and covers those two.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(GeneratorOptionTypes))]
+    public async Task SettingsObject_TakesOneConstructorOfOptionalParameters(Type type)
+    {
+        var constructors = type.GetConstructors()
+            .Where(c => c.GetParameters().Length > 0)
+            .ToArray();
+        await Assert.That(constructors.Length).IsEqualTo(1)
+            .Because($"{type.Name} needs exactly one init-free way to set every option");
+
+        var requiredNames = SettableProperties(type)
+            .Where(p => p.GetCustomAttributes().Any(a => a.GetType().Name == "RequiredMemberAttribute"))
+            .Select(p => p.Name)
+            .ToArray();
+        var wronglyMandatory = constructors[0].GetParameters()
+            .Where(p => !p.IsOptional && !requiredNames.Contains(p.Name!, StringComparer.OrdinalIgnoreCase))
+            .Select(p => p.Name!)
+            .ToArray();
+        await Assert.That(wronglyMandatory).IsEmpty()
+            .Because("only a required member may be a mandatory constructor parameter");
+    }
+
+    /// <summary>
+    /// The constructor is a second spelling of the object initializer, not a second
+    /// behaviour: it produces equal values, and where an accessor validates (only
+    /// <c>MaskPattern</c>, on two of these types) it validates identically, because it
+    /// assigns through the same <c>init</c> accessors.
+    /// </summary>
+    [Test]
+    public async Task GeneratorOptions_ConstructorAgreesWithTheObjectInitializer()
+    {
+        // Every parameter is given a value that differs from its default, so a dropped or
+        // crossed assignment in the constructor body shows up. Setting only a few would
+        // leave the rest verified by name in the test above and by nothing at all here.
+        await Assert.That(new QRCodeGeneratorOptions(
+                eciMode: EciMode.Utf8,
+                utf8Bom: true,
+                version: 5,
+                quietZoneSize: 0,
+                maskPattern: 3,
+                boostEccLevel: true,
+                segmentation: QRSegmentation.Optimal))
+            .IsEqualTo(new QRCodeGeneratorOptions
+            {
+                EciMode = EciMode.Utf8,
+                Utf8Bom = true,
+                Version = 5,
+                QuietZoneSize = 0,
+                MaskPattern = 3,
+                BoostEccLevel = true,
+                Segmentation = QRSegmentation.Optimal,
+            });
+        await Assert.That(new MicroQRCodeGeneratorOptions(
+                version: MicroQRVersion.M3,
+                quietZoneSize: 0,
+                maskPattern: 2,
+                segmentation: MicroQRSegmentation.Optimal))
+            .IsEqualTo(new MicroQRCodeGeneratorOptions
+            {
+                Version = MicroQRVersion.M3,
+                QuietZoneSize = 0,
+                MaskPattern = 2,
+                Segmentation = MicroQRSegmentation.Optimal,
+            });
+        await Assert.That(new RmQRCodeGeneratorOptions(
+                eciMode: EciMode.Utf8,
+                version: RmQRVersion.R7x43,
+                fitStrategy: RmQRFitStrategy.MinimizeWidth,
+                height: RmQRHeight.H7,
+                quietZoneSize: 0,
+                segmentation: RmQRSegmentation.Optimal))
+            .IsEqualTo(new RmQRCodeGeneratorOptions
+            {
+                EciMode = EciMode.Utf8,
+                Version = RmQRVersion.R7x43,
+                FitStrategy = RmQRFitStrategy.MinimizeWidth,
+                Height = RmQRHeight.H7,
+                QuietZoneSize = 0,
+                Segmentation = RmQRSegmentation.Optimal,
+            });
+
+        // An omitted parameter has to reproduce what `default` carries for that property.
+        // The quiet zone is the one that can silently disagree: each struct stores it as an
+        // offset from its specified default so that `default` means 4 / 2 / 2 rather than 0,
+        // and a constructor default of 0 would look right and encode a different symbol.
+        // `new T()` cannot show this — on a struct it binds to the synthesized parameterless
+        // constructor and emits initobj, never the all-optional one — so each call below
+        // sets some other option and leaves the quiet zone to the parameter default.
+        await Assert.That(new QRCodeGeneratorOptions(maskPattern: 3))
+            .IsEqualTo(new QRCodeGeneratorOptions { MaskPattern = 3 });
+        await Assert.That(new QRCodeGeneratorOptions(maskPattern: 3).QuietZoneSize).IsEqualTo(4);
+        await Assert.That(new MicroQRCodeGeneratorOptions(maskPattern: 3))
+            .IsEqualTo(new MicroQRCodeGeneratorOptions { MaskPattern = 3 });
+        await Assert.That(new MicroQRCodeGeneratorOptions(maskPattern: 3).QuietZoneSize).IsEqualTo(2);
+        await Assert.That(new RmQRCodeGeneratorOptions(eciMode: EciMode.Utf8))
+            .IsEqualTo(new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        await Assert.That(new RmQRCodeGeneratorOptions(eciMode: EciMode.Utf8).QuietZoneSize).IsEqualTo(2);
+
+        // Same-typed parameters given the same value hide a crossed assignment, and the
+        // call above gives both bools `true`. One call per bool separates them; the other
+        // parameter pairs are all distinctly typed, so a crossing there cannot compile.
+        await Assert.That(new QRCodeGeneratorOptions(utf8Bom: true).BoostEccLevel).IsFalse();
+        await Assert.That(new QRCodeGeneratorOptions(boostEccLevel: true).Utf8Bom).IsFalse();
+
+        // IconData carries three `int` and two `int?` parameters, so every value here is
+        // distinct and a crossing shows up as a wrong property rather than a wrong count.
+        var shape = new ImageIconShape(new SKBitmap(8, 8));
+        await Assert.That(new IconData(
+                icon: shape,
+                iconSizePercent: 15,
+                iconBorderWidth: 3,
+                iconSizeModules: 5,
+                iconBorderModules: 1,
+                maxCoreOccupancyPercent: 40))
+            .IsEqualTo(new IconData
+            {
+                Icon = shape,
+                IconSizePercent = 15,
+                IconBorderWidth = 3,
+                IconSizeModules = 5,
+                IconBorderModules = 1,
+                MaxCoreOccupancyPercent = 40,
+            });
+        // Omitted parameters have to match what the object initializer leaves behind.
+        await Assert.That(new IconData(icon: shape)).IsEqualTo(new IconData { Icon = shape });
+
+        // The init accessors validate; routing through them means the constructor does too.
+        await Assert.That(() => new QRCodeGeneratorOptions(maskPattern: 8)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new MicroQRCodeGeneratorOptions(maskPattern: 4)).Throws<ArgumentOutOfRangeException>();
+
+        // IconData's guard is the one place the two routes deliberately differ. The
+        // constructor is reached from language versions with no nullable analysis, where
+        // a null compiles silently, so it throws; the initializer needs `null!` to get
+        // there at all and keeps its existing behaviour of drawing no icon.
+        await Assert.That(() => new IconData(null!)).Throws<ArgumentNullException>();
+        await Assert.That(new IconData { Icon = null! }.Icon).IsNull();
+    }
+
+    // Func<Type>, for the reason on GeneratorOptionTypes.
+    public static IEnumerable<Func<Type>> ResultValues()
+    {
+        yield return () => typeof(QRCodeCalculatedSize);
+        yield return () => typeof(MicroQRCodeCalculatedSize);
+        yield return () => typeof(RmQRCodeCalculatedSize);
+        yield return () => typeof(QRCodeDecodeInfo);
+        yield return () => typeof(MicroQRCodeDecodeInfo);
+        yield return () => typeof(RmQRCodeDecodeInfo);
     }
 
     /// <summary>
@@ -137,30 +355,39 @@ public class TypeShapeTest
             .Because("whether the content fits is the bool TryGetRequiredBufferSize already returned");
     }
 
-    public static IEnumerable<Type> SealedTypes()
-    {
-        yield return typeof(QRCodeData);
-        yield return typeof(MicroQRCodeData);
-        yield return typeof(RmQRCodeData);
-        yield return typeof(QRCodeImageBuilder);
-        yield return typeof(MicroQRCodeImageBuilder);
-        yield return typeof(RmQRCodeImageBuilder);
-        yield return typeof(IconData);
-        yield return typeof(GradientOptions);
-    }
-
     /// <summary>
-    /// A public class with no designed extension point is sealed. The three shape
-    /// hierarchies (<see cref="ModuleShape"/>, <see cref="FinderPatternShape"/>,
-    /// <see cref="IconShape"/>) are the extension points, and
-    /// <see cref="SymbolImageBuilderBase{TSelf}"/> is open only to this assembly through
-    /// its <c>private protected</c> constructor.
+    /// A public class with no designed extension point is sealed. This sweeps both shipped
+    /// assemblies rather than listing the types it knows about, so a new unsealed class is
+    /// caught by the rule instead of slipping past a list nobody remembered to extend.
+    /// The extension points are the three shape hierarchies (<see cref="ModuleShape"/>,
+    /// <see cref="FinderPatternShape"/>, <see cref="IconShape"/>) and
+    /// <see cref="SymbolImageBuilderBase{TSelf}"/>, which is open only to this package
+    /// through its <c>private protected</c> constructor; the set is pinned here too, so
+    /// adding a fifth is also a decision rather than an accident. Static classes read as
+    /// sealed in metadata, so they need no carve-out.
     /// </summary>
     [Test]
-    [MethodDataSource(nameof(SealedTypes))]
-    public async Task TypeWithNoExtensionPoint_IsSealed(Type type)
+    public async Task EveryExportedClass_IsSealedOrADeclaredExtensionPoint()
     {
-        await Assert.That(type.IsSealed).IsTrue().Because($"{type.Name} has no designed extension point");
+        string[] extensionPoints =
+        [
+            "FeatherQR.SkiaSharp.FinderPatternShape",
+            "FeatherQR.SkiaSharp.IconShape",
+            "FeatherQR.SkiaSharp.ModuleShape",
+            "FeatherQR.SkiaSharp.SymbolImageBuilderBase`1",
+        ];
+
+        var open = new[] { typeof(QRCodeData).Assembly, typeof(QRCodeImageBuilder).Assembly }
+            .SelectMany(a => a.GetExportedTypes())
+            .Where(t => t.IsClass && !t.IsSealed)
+            .Select(t => t.FullName!)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        await Assert.That(open.Where(n => !extensionPoints.Contains(n))).IsEmpty()
+            .Because("a public class with no designed extension point is sealed");
+        await Assert.That(open).IsEquivalentTo(extensionPoints)
+            .Because("a new extension point is a design decision, so it is declared here");
     }
 
     /// <summary>
@@ -274,12 +501,28 @@ public class TypeShapeTest
         var differentColor = new GradientOptions([SKColors.Red, SKColors.Lime], GradientDirection.TopToBottom);
         var differentDirection = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.LeftToRight);
         var withPositions = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.TopToBottom, [0f, 0.25f]);
+        var samePositions = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.TopToBottom, [0f, 0.25f]);
+        // Same stop count, different stop values: the pair that a length-only comparison
+        // would call equal. It renders visibly differently, so it must not be.
+        var movedStop = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.TopToBottom, [0f, 0.75f]);
+        var thirdColor = new GradientOptions([SKColors.Red, SKColors.Blue, SKColors.Lime], GradientDirection.TopToBottom);
 
         await Assert.That(a).IsEqualTo(b);
         await Assert.That(a.GetHashCode()).IsEqualTo(b.GetHashCode());
         await Assert.That(a).IsNotEqualTo(differentColor);
         await Assert.That(a).IsNotEqualTo(differentDirection);
         await Assert.That(a).IsNotEqualTo(withPositions);
+        await Assert.That(a).IsNotEqualTo(thirdColor);
+        await Assert.That(withPositions).IsNotEqualTo(movedStop);
+
+        // Equal-with-stops is the only pair that exercises the stop fold in GetHashCode,
+        // and equal values have to hash equal or a Dictionary lookup misses its own key.
+        await Assert.That(withPositions).IsEqualTo(samePositions);
+        await Assert.That(withPositions.GetHashCode()).IsEqualTo(samePositions.GetHashCode());
+        // Not a contract — unequal values may legally collide — but this hash is a
+        // hand-written FNV-1a with no randomized seed, so it is deterministic, and the
+        // assertion is what catches a GetHashCode that stops folding the stops in at all.
+        await Assert.That(withPositions.GetHashCode()).IsNotEqualTo(movedStop.GetHashCode());
     }
 
     /// <summary>
@@ -311,6 +554,13 @@ public class TypeShapeTest
 
         await Assert.That(text).Contains("2 colors");
         await Assert.That(text).Contains("TopToBottom");
+        // Stops are printed only when there are some, so evenly distributed gradients do
+        // not carry a misleading "0 stops"; both halves of that branch are printed here.
+        await Assert.That(text).DoesNotContain("stops");
+
+        var withStops = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.TopToBottom, [0f, 0.25f]).ToString();
+
+        await Assert.That(withStops).Contains("2 stops");
     }
 
     /// <summary>
@@ -327,14 +577,21 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// An option object a caller holds can be varied with <c>with</c>, on every option
-    /// type: the generator options, <see cref="GradientOptions"/> and
-    /// <see cref="IconData"/>. Without it, changing one field of an instance you did not
-    /// construct means retyping every other field and silently taking the defaults for
-    /// any you forget.
+    /// An option object a caller holds can be varied with <c>with</c>: the three generator
+    /// options and <see cref="IconData"/> here, <see cref="GradientOptions"/> in its own
+    /// case above. Without it, changing one field of an instance you did not construct
+    /// means retyping every other field and silently taking the defaults for any you forget.
     /// </summary>
+    /// <remarks>
+    /// Only <see cref="IconData"/> can fail the "keeps the other members" half: it is a
+    /// record <em>class</em>, so <c>with</c> runs a real copy constructor that a future
+    /// edit could get wrong. The three option types are record <em>structs</em>, where the
+    /// copy is memberwise and not user-overridable, so their cases pin the API shape —
+    /// that <c>with</c> compiles and reaches an <c>init</c> accessor — rather than guarding
+    /// a copy step that cannot break.
+    /// </remarks>
     [Test]
-    public async Task IconData_CanBeVariedWithWith()
+    public async Task OptionTypes_CanBeVariedWithWith()
     {
         using var logo = new SKBitmap(8, 8);
         var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: 2);
@@ -346,6 +603,20 @@ public class TypeShapeTest
         await Assert.That(bigger.IconBorderWidth).IsEqualTo(icon.IconBorderWidth);
         await Assert.That(bigger.Icon).IsSameReferenceAs(icon.Icon);
         await Assert.That(bigger).IsNotEqualTo(icon);
+
+        // The summary names every option type, so every option type is exercised here.
+        // GradientOptions has its own case above; these three had none.
+        var qr = new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = 5 } with { QuietZoneSize = 2 };
+        await Assert.That(qr.QuietZoneSize).IsEqualTo(2);
+        await Assert.That(qr.Version).IsEqualTo(QRVersionRange.Exactly(5));
+
+        var micro = new MicroQRCodeGeneratorOptions { QuietZoneSize = 0, MaskPattern = 1 } with { QuietZoneSize = 2 };
+        await Assert.That(micro.QuietZoneSize).IsEqualTo(2);
+        await Assert.That(micro.MaskPattern).IsEqualTo(1);
+
+        var rm = new RmQRCodeGeneratorOptions { QuietZoneSize = 0, FitStrategy = RmQRFitStrategy.MinimizeWidth } with { QuietZoneSize = 2 };
+        await Assert.That(rm.QuietZoneSize).IsEqualTo(2);
+        await Assert.That(rm.FitStrategy).IsEqualTo(RmQRFitStrategy.MinimizeWidth);
     }
 
     /// <summary>

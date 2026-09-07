@@ -23,7 +23,7 @@ public static class RmQRCodeImageDecoder
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
         /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text)
             => TryDecode(bitmap, out text, out _);
 
@@ -37,7 +37,7 @@ public static class RmQRCodeImageDecoder
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
         /// <param name="info">What the attempt found: status, version, level and corrections.</param>
         /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info)
         {
             if (bitmap is null)

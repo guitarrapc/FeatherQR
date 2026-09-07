@@ -307,6 +307,7 @@ public class TryGetRequiredBufferSizeTest
         await Assert.That(ok).IsFalse();
         await Assert.That(size.BufferSize).IsEqualTo(0);
         await Assert.That(size.Size).IsEqualTo(0);
+        await Assert.That(size.Version).IsEqualTo(default(MicroQRVersion));
     }
 
     [Test]
@@ -326,6 +327,9 @@ public class TryGetRequiredBufferSizeTest
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly((MicroQRVersion)0) })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly((MicroQRVersion)5) })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = -1 })).Throws<ArgumentOutOfRangeException>();
+        // The quiet zone is bounded above as well as below; the upper half of that guard
+        // lost its only test with the throwing sizing overloads.
+        await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = 10_001 })).Throws<ArgumentOutOfRangeException>();
         // M1 accepts ErrorDetectionOnly only: a version/ECC contradiction, text-independent.
         await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("1", MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M1) })).Throws<ArgumentException>();
     }
@@ -404,6 +408,12 @@ public class TryGetRequiredBufferSizeTest
     {
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize("1", QREccLevel.M, out _, new QRCodeGeneratorOptions { QuietZoneSize = -1 })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize("1", QREccLevel.M, out _, new QRCodeGeneratorOptions { QuietZoneSize = int.MaxValue })).Throws<ArgumentOutOfRangeException>();
+        // Standard QR reports an undefined ECC level as ArgumentException where Micro QR and
+        // rMQR report ArgumentOutOfRangeException. The disagreement is frozen and documented
+        // on the method; the test that pinned it retired with the throwing sizing overloads,
+        // so it is pinned here instead, on the surface that survived.
+        await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize("1", (QREccLevel)9, out _)).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => QRCodeGenerator.Create("1", (QREccLevel)9)).ThrowsExactly<ArgumentException>();
     }
 
     public static IEnumerable<(string content, QREccLevel ecc, bool utf8BOM, EciMode eciMode)> StandardAgreementCases()
