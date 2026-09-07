@@ -2,7 +2,7 @@
 
 Design record for the rMQR Code (ISO/IEC 23941) encode feature (`RmQRCodeGenerator`): what it does, the symbol parameters it is built on, why the pipeline is structured this way, and the decisions made up front so implementation phases share one understanding. Normative details and implementation locations are indexed in the [spec-to-code map](rmqr-spec-map.md); the implementation order was the rMQR implementation plan, now retired into this record and the [spec-to-code map](rmqr-spec-map.md). The decoder design record is [rMQR Decoder](rmqr-decoder.md).
 
-Status: **shipped (Phase 5, 2026-08-15; adversarial review 2026-08-16)**. Written spec-first on 2026-08-15 before any `src/` code existed; the tables live in `Internals/RmQr/RmQRConstants` (Phase 5.1b), the data model in `RmQRCodeData` (5.2), the bit stream in `RmQRBinaryEncoder` and the fit logic in `RmQRVersionSelector` (5.3), RS + interleave in `RmQRCodewordEncoder` (5.4), placement in `RmQRModulePlacer` (5.5) and the public `RmQRCodeGenerator` (5.6, encoder MVT met: 256/256 symbols read by zxing-cpp) and rendering in `RmQRCodeImageBuilder` / `QRCodeRenderer` (5.7); Phase 5 is complete and every parameter below is pinned by `RmQRConstantsUnitTest` (structural invariants) and `RmQRConstantsOracleTest` (the committed two-lineage corpus), see the [Verification record](#verification-record). Measured performance and lessons learned are consolidated below.
+Status: **shipped (Phase 5, 2026-08-15; adversarial review 2026-08-16)**. Written spec-first on 2026-08-15 before any `src/` code existed; the tables live in `Internals/RmQR/RmQRConstants` (Phase 5.1b), the data model in `RmQRCodeData` (5.2), the bit stream in `RmQRBinaryEncoder` and the fit logic in `RmQRVersionSelector` (5.3), RS + interleave in `RmQRCodewordEncoder` (5.4), placement in `RmQRModulePlacer` (5.5) and the public `RmQRCodeGenerator` (5.6, encoder MVT met: 256/256 symbols read by zxing-cpp) and rendering in `RmQRCodeImageBuilder` / `SymbolRenderer` (5.7); Phase 5 is complete and every parameter below is pinned by `RmQRConstantsUnitTest` (structural invariants) and `RmQRConstantsOracleTest` (the committed two-lineage corpus), see the [Verification record](#verification-record). Measured performance and lessons learned are consolidated below.
 
 ---
 
@@ -29,7 +29,7 @@ Names and overload sets mirror the shipped `MicroQR*` family member for member (
 
 **Options are carried by `RmQRCodeGeneratorOptions`, not by a parameter list.** The original shape put every option in the signature, which failed twice before it shipped: `EciMode` could not be positioned without disturbing the existing order, so it escaped into method names (`CreateRmQRCodeWithEci` and two siblings, doubling the method count), and `RmQRSegmentation` had to be appended to four signatures because trailing is the only source-compatible position. The surface went from 10 methods with up to 9 parameters to 5 with up to 4. Because no rMQR API had ever been released, the old shape was deleted outright rather than obsoleted.
 
-`options` carries a `= default` here and not on Standard QR or Micro QR: those two keep their released parameter list overloads, so a defaulted options parameter would make `CreateQrCode(text, ecc)` ambiguous between the two sets. rMQR has no such collision.
+`options` carried a `= default` here from the start, and could not on Standard QR or Micro QR until 2.0.0: while those two still had their released parameter list overloads, a defaulted options parameter would have made `Create(text, ecc)` ambiguous between the two sets. rMQR never had that collision, and since the 2.0.0 removal neither do the other two.
 
 Enumerations:
 
@@ -54,11 +54,10 @@ public readonly record struct RmQRCodeGeneratorOptions
     RmQRSegmentation Segmentation { get; init; }            // Single
 }
 
-RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);
-RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);
-int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default);   // byte per module, row-major, quiet zone included, returns bytes written
+RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);
+int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default);   // byte per module, row-major, quiet zone included, returns bytes written
 bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default);
-public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
+public readonly record struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
 ```
 
 `Version` and `Height` together are accepted only when they agree (else `ArgumentException`); `FitStrategy` is ignored when `Version` is given.
@@ -71,17 +70,17 @@ public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int H
 
 **What.** `TryGetRequiredBufferSize` is the *only* way to ask how big a symbol will be. It returns `false` when the content does not fit, and `false` means that and nothing else: argument errors throw, with the same type, message and precedence the `Create` overloads use.
 
-**Why there is no throwing twin.** There was one, and it was deleted before release (2026-08-29). Pairing `Get` with `Try` copies the `Parse` / `TryParse` shape, which is the precedent for *parsing*, not for sizing a caller-supplied buffer. Where the BCL sizes or formats into a caller buffer it is `Try`-first and usually has no throwing twin at all: `Utf8Formatter.TryFormat`, `Utf8Parser.TryParse`, `IUtf8SpanFormattable.TryFormat`, `Base64.EncodeToUtf8` (which returns `OperationStatus`). Offering both would also make the shorter, worse-behaved name the one a hurried caller reaches for. Standard QR and Micro QR keep an `[Obsolete]` throwing overload only because 1.1.1 released one; rMQR never did.
+**Why there is no throwing twin.** There was one, and it was deleted before release (2026-08-29). Pairing `Get` with `Try` copies the `Parse` / `TryParse` shape, which is the precedent for *parsing*, not for sizing a caller-supplied buffer. Where the BCL sizes or formats into a caller buffer it is `Try`-first and usually has no throwing twin at all: `Utf8Formatter.TryFormat`, `Utf8Parser.TryParse`, `IUtf8SpanFormattable.TryFormat`, `Base64.EncodeToUtf8` (which returns `OperationStatus`). Offering both would also make the shorter, worse-behaved name the one a hurried caller reaches for. Standard QR and Micro QR carried an `[Obsolete]` throwing overload through 1.2.0 because 1.1.1 released one, and lost it in 2.0.0; rMQR never had one.
 
 **Why a `Try` and not a dedicated exception type.** rMQR holds 5 to 150 Byte-mode characters, so for user-supplied content overflow is an ordinary branch rather than a defect, and .NET exceptions cost one to two orders of magnitude more than the encode itself. A dedicated exception type would only narrow the `catch`; it would not remove the throw, and the two are alternatives rather than complements. The decoder already treats its failure path as a first-class outcome (`TryDecode`), so this is the encoder side of the same rule.
 
 **Why argument errors still throw.** The split follows what the BCL does with its own configurable `Try` overloads: `int.TryParse(s, NumberStyles, ...)` throws `ArgumentException` for an undefined `NumberStyles` value or for `AllowHexSpecifier` combined with other flags, `Dictionary.TryGetValue` throws for a null key, and `Uri.TryCreate` throws for an undefined `UriKind` — `false` is reserved for the input failing, not for the options being malformed. Folding an invalid ECC level into `false` would make the caller report "content too long" for content that is nothing of the sort, and would silently change behaviour for anyone moving from `Get` to `Try`. Declaring `EciMode.Iso8859_1` for content that is not Latin-1 throws for the same reason: it is a broken promise about the text, not a capacity outcome.
 
-**What it does not promise.** Only that no *length-related* exception follows. Passing the returned `Version` back through the options struct removes the fit from the subsequent `CreateRmQRCode`, but a destination buffer that is too small still throws.
+**What it does not promise.** Only that no *length-related* exception follows. Passing the returned `Version` back through the options struct removes the fit from the subsequent `Create`, but a destination buffer that is too small still throws.
 
 **Where the fit lives.** `RmQRVersionSelector.TrySelect` (single mode) and `RmQRSegmentPlanner.TrySelectVersion` (mixed mode) are the non-throwing cores; the throwing `Select` / `SelectVersion` are wrappers that add the message. One selection path, and it is the same one the encode takes, so the reported version cannot disagree with the version an encode produces — the property `TryGetRequiredBufferSizeTest.RmQR_ReportedSize_MatchesTheEncodeItDescribes` asserts exactly that (reported buffer filled exactly, reported version chosen, `false` implies the encode throws) over content × ECC × strategy × height × segmentation.
 
-Data model (`public class RmQRCodeData`):
+Data model (`public sealed class RmQRCodeData`):
 
 ```csharp
 RmQRCodeData(RmQRVersion version, int quietZoneSize);
@@ -99,24 +98,24 @@ bool TryDecode(RmQRCodeData data, out string text);
 bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info);
 bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info);                          // byte per module, any light border (uniform or not: the dark bounding box is the core)
 bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
-bool TryDecode(SKBitmap bitmap, out string text);
-bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
 bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info);
 bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
 int GetMaxDecodedLength(RmQRVersion version);
-public readonly struct RmQRCodeDecodeInfo { QRCodeDecodeStatus Status; RmQRVersion Version; RmQREccLevel EccLevel; int ErrorsCorrected; }   // no MaskPattern: rMQR has one mask
+public readonly record struct RmQRCodeDecodeInfo { DecodeStatus Status; RmQRVersion Version; RmQREccLevel EccLevel; int ErrorsCorrected; }   // no MaskPattern: rMQR has one mask
 ```
+
+The `SKBitmap` overloads are not here. `RmQRCodeDecoder` lives in the dependency-free core; bitmap decoding is `RmQRCodeImageDecoder` in the rendering package, reachable as `RmQRCodeDecoder.TryDecode(bitmap, …)` only through C# 14 extension members.
 
 Rendering:
 
 ```csharp
-public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
+public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
   RmQRCodeImageBuilder(string content);  RmQRCodeImageBuilder(RmQRCodeData data);          // default quiet zone 2
   RmQRCodeImageBuilder WithErrorCorrection(RmQREccLevel eccLevel);  WithVersion(RmQRVersion version);
   RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy);  WithHeight(RmQRHeight height);  WithWidth(int width);   // rMQR-only, listed in the parity test's allowed differences (WithWidth: image width in pixels, height from the aspect ratio, background over the whole image)
   // static helpers exactly as MicroQRCodeImageBuilder (GetPngBytes / GetImageBytes / SavePng / GetSvgBytes / SaveSvg / GetSvgString / WriteSvg / WritePng / WriteImage,
   // string + RmQREccLevel eccLevel = RmQREccLevel.M and RmQRCodeData overloads); their `int size = 512` is the image WIDTH, height follows the symbol aspect ratio
-QRCodeRenderer.Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1.0f, GradientOptions? gradientOptions = null);
+SymbolRenderer.Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1.0f, GradientOptions? gradientOptions = null);
 SKCanvas.Render(this SKCanvas canvas, RmQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1.0f, GradientOptions? gradientOptions = null);
 SKCanvas.Render(this SKCanvas canvas, RmQRCodeData data, SKRect area, …same tail…);
 ```
@@ -312,13 +311,13 @@ The single mask is applied to data modules while placing. Both format copies com
 
 ## Rendering
 
-`RmQRCodeImageBuilder` derives from `QRCodeImageBuilderBase<TSelf>` and adds `WithErrorCorrection(RmQREccLevel)`, `WithEciMode(EciMode)`, `WithVersion(RmQRVersion)`, `WithFitStrategy(RmQRFitStrategy)`, `WithHeight(RmQRHeight)`; quiet zone default 2; no icon overlay or finder styling (one finder, no ECC headroom to spend). Canvas layout is rectangular: with a module pixel size the content is `width × height` modules at that size; with only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly. Standard and Micro QR layout is unchanged. Shipped in Phase 5.7 exactly so; additionally, `WithWidth(int)` (public since the 2026-08-16 review; the static helpers use it with their `size`, and 512 is the default when no size option is given) makes the image that wide with the height following the symbol aspect ratio rounded to whole pixels, the background covering the whole image and the symbol drawn at a uniform module scale inside it (no clear-colour pad, so the image is opaque with an opaque background; the review found that letterboxing this aspect-derived canvas again left 1-3 transparent columns on 12 of the 32 versions), and the low-level `QRCodeRenderer.Render(canvas, area, RmQRCodeData, …)` / `SKCanvas.Render` overloads letterbox into the given area with the background covering the whole area.
+`RmQRCodeImageBuilder` derives from `SymbolImageBuilderBase<TSelf>` and adds `WithErrorCorrection(RmQREccLevel)`, `WithEciMode(EciMode)`, `WithVersion(RmQRVersion)`, `WithFitStrategy(RmQRFitStrategy)`, `WithHeight(RmQRHeight)`; quiet zone default 2; no icon overlay or finder styling (one finder, no ECC headroom to spend). Canvas layout is rectangular: with a module pixel size the content is `width × height` modules at that size; with only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly. Standard and Micro QR layout is unchanged. Shipped in Phase 5.7 exactly so; additionally, `WithWidth(int)` (public since the 2026-08-16 review; the static helpers use it with their `size`, and 512 is the default when no size option is given) makes the image that wide with the height following the symbol aspect ratio rounded to whole pixels, the background covering the whole image and the symbol drawn at a uniform module scale inside it (no clear-colour pad, so the image is opaque with an opaque background; the review found that letterboxing this aspect-derived canvas again left 1-3 transparent columns on 12 of the 32 versions), and the low-level `SymbolRenderer.Render(canvas, area, RmQRCodeData, …)` / `SKCanvas.Render` overloads letterbox into the given area with the background covering the whole area.
 
 ---
 
 ## Why
 
-- Separate `RmQR*` entry points, not `CreateQrCode` overloads: version, ECC and fit semantics differ per symbology; see [QR Symbology Architecture](qrcode-symbologies.md).
+- Separate `RmQR*` entry points, not `Create` overloads: version, ECC and fit semantics differ per symbology; see [QR Symbology Architecture](qrcode-symbologies.md).
 - Two-dimensional fit exposed as strategy + optional height constraint: rMQR exists to fit narrow print lanes; "fixed height, auto width" is the dominant real-world request (libzint's `R<h>xauto`), and area/width/height minimization covers the rest without a free-form size search that would mostly select non-existent sizes.
 - Letterbox instead of stretch for explicit canvas sizes: a rectangular symbol drawn into an arbitrary rectangle at non-uniform scale is not the same symbol; module aspect ratio must survive.
 - Fixed mask means the placer is a static permutation per version; no mask scoring machinery is designed in.

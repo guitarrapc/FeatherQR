@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package. The `SkiaSharp.QrCode` install line keeps working. Previews are out; the type renames and the announced removals follow in the same major |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -20,7 +20,7 @@ The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-f
 | Package | Contents | Depends on |
 |---|---|---|
 | `FeatherQR` | Generators, decoders, data types, options, `GetModuleRectangles` | nothing on .NET 8+; `System.Memory` / `System.Runtime.CompilerServices.Unsafe` on .NET Standard |
-| `FeatherQR.SkiaSharp` | Image builders, `QRCodeRenderer`, `SKCanvas` extensions, `IconData` and shapes, `SKBitmap` decoding | `FeatherQR`, `SkiaSharp` |
+| `FeatherQR.SkiaSharp` | Image builders, `SymbolRenderer`, `SKCanvas` extensions, `IconData` and shapes, `SKBitmap` decoding | `FeatherQR`, `SkiaSharp` |
 | `SkiaSharp.QrCode` | Nothing. A compatibility metapackage | `FeatherQR.SkiaSharp` |
 
 An existing `<PackageReference Include="SkiaSharp.QrCode" />` keeps working: it now resolves `FeatherQR.SkiaSharp` and `FeatherQR` transitively. Switch the reference to `FeatherQR.SkiaSharp` when convenient, or to `FeatherQR` alone if you never render images. All three ship at the same version from the same release.
@@ -34,7 +34,7 @@ The root namespace `SkiaSharp.QrCode` is gone from the assemblies, and `SkiaShar
 | `using SkiaSharp.QrCode;` | `using FeatherQR;` |
 | `using SkiaSharp.QrCode.Image;` | `using FeatherQR.SkiaSharp;` |
 
-Type names are unchanged in this step. Inside your own `namespace FeatherQR.Something` a bare `SkiaSharp` would bind to `FeatherQR.SkiaSharp`; put `using SkiaSharp;` above the namespace declaration, as usual, and nothing changes.
+Type names change too, under [Renames](#renames) below. Inside your own `namespace FeatherQR.Something` a bare `SkiaSharp` would bind to `FeatherQR.SkiaSharp`; put `using SkiaSharp;` above the namespace declaration, as usual, and nothing changes.
 
 ### `TryDecode(SKBitmap)` moved
 
@@ -58,14 +58,221 @@ The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeIma
 
 The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, are unchanged and remain in the core; they are the way to decode from any image library other than SkiaSharp. Composite transparent pixels against white before converting.
 
-### Not yet in the 2.0.0 previews
+### The announced removals
 
-Two more changes land in the same major before 2.0.0 final and will be documented in this section when they do:
+The members deprecated in 1.2.0 are gone, and so are the parameter list generator overloads that shipped in 1.1.1. Every generator now takes its configuration as one options struct, and that struct has a default, so the shortest call is unchanged:
 
-- The removals announced in [1.2.0](#120): `GetRequiredBufferSize` on `QRCodeGenerator` and `MicroQRCodeGenerator` (use `TryGetRequiredBufferSize`), and the `Compression` enum.
-- The type renames (the `QR` casing rule, `ECCLevel` to `QREccLevel` and friends).
+```csharp
+// the only shape, and the shortest call is still two arguments
+var data = QRCodeGenerator.Create("content", QREccLevel.M);
+```
 
-Until then the previews carry the 1.2.0 surface under the new names, with the `[Obsolete]` members still present.
+| Removed | Replacement |
+|---|---|
+| `CreateQrCode(text, ecc, utf8BOM, eciMode, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `Create(text, ecc, in QRCodeGeneratorOptions)` |
+| `CreateMicroQRCode(text, ecc, requestedVersion, quietZoneSize)` and its `string` / destination siblings | `Create(text, ecc, in MicroQRCodeGeneratorOptions)` |
+| `QRCodeGenerator.GetRequiredBufferSize`, `MicroQRCodeGenerator.GetRequiredBufferSize` | `TryGetRequiredBufferSize` on all three generators |
+| `Compression` | Nothing. No API ever accepted or returned it; compress the bytes from `GetRawData()` yourself |
+
+Each argument becomes a property, and the mapping is mechanical:
+
+```csharp
+// before
+var data = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, utf8BOM: true, eciMode: EciMode.Utf8, requestedVersion: 5, quietZoneSize: 0);
+
+// after (the renames below land in the same release)
+var data = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions
+{
+    Utf8Bom = true,
+    EciMode = EciMode.Utf8,
+    Version = 5,
+    QuietZoneSize = 0,
+});
+```
+
+| Argument | Property |
+|---|---|
+| `utf8BOM` | `Utf8Bom` |
+| `eciMode` | `EciMode` |
+| `quietZoneSize` | `QuietZoneSize` |
+| `requestedVersion` (Standard QR, `int`) | `Version` |
+| `requestedVersion` (Micro QR, `MicroQRVersion?`) | `Version` |
+
+**One trap: `requestedVersion: -1` is not `Version = -1`.** The parameter list spelled "pick the smallest version that fits" as `-1`; `QRVersionRange` spells it `Any` and rejects `-1` deliberately, so that a defaulted or mistyped field cannot pass for automatic selection. A variable that may hold `-1` needs the branch:
+
+```csharp
+Version = version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(version),
+```
+
+Micro QR's `null` needs no branch: `MicroQRVersion?` converts implicitly, and `null` means `Any`.
+
+**A pinned version is checked against the content**, which the parameter list did not do: `Version = 1` with content that does not fit version 1 throws an `ArgumentException` naming the version, ECC level and mode, where `requestedVersion: 1` used to fail deeper inside the encoder with `ArgumentOutOfRangeException (Parameter 'length')`.
+
+### Renames
+
+One rule decides every public name: **a prefix says which symbology (`QR`, `MicroQR`, `RmQR`), and no prefix means all three**. A noun that literally denotes *a code* keeps its `{Sym}Code` form, so `QRCodeData`, `QRCodeGenerator`, `QRCodeDecoder`, `QRCodeGeneratorOptions`, `QRCodeCalculatedSize`, `QRCodeDecodeInfo`, `QRCodeImageBuilder` and their Micro QR and rMQR siblings are unchanged. What moved is everything else.
+
+| 1.x | 2.0.0 |
+|---|---|
+| `ECCLevel` | `QREccLevel` |
+| `QRCodeSegmentation` | `QRSegmentation` |
+| `QRCodeVersionRange` | `QRVersionRange` |
+| `QRCodeDecodeStatus` | `DecodeStatus` |
+| `QRCodeGenerator.CreateQrCode` | `QRCodeGenerator.Create` |
+| `MicroQRCodeGenerator.CreateMicroQRCode` | `MicroQRCodeGenerator.Create` |
+| `RmQRCodeGenerator.CreateRmQRCode` | `RmQRCodeGenerator.Create` |
+| `QRCodeCalculatedSize.QrSize`, `MicroQRCodeCalculatedSize.QrSize` | `.Size` |
+| `QRCodeGeneratorOptions.Utf8BOM` | `.Utf8Bom` |
+| `QRCodeRenderer` | `SymbolRenderer` |
+| `QRCodeImageBuilderBase<TSelf>` | `SymbolImageBuilderBase<TSelf>` |
+| `QRCodeExtensions` | `SKCanvasExtensions` |
+| `Vector2Slim` | Removed from the public surface (it appeared in no public signature) |
+
+`DecodeStatus`, `SymbolRenderer` and `SymbolImageBuilderBase<TSelf>` lost their prefix because they serve all three symbologies; `QRCodeExtensions` is named after the type it extends, as the BCL does. The `Create` methods dropped the part that repeated the class name, which is also what removes the `Qr` / `QR` casing inconsistency they carried.
+
+Every rename is a whole-word replacement. Order does not matter as written, because every pattern is `\b`-anchored and none is a prefix of another; put the longer name first if you add rules of your own.
+
+```shell
+# bash, from your repository root; adjust the file glob to taste
+grep -rlZ --include='*.cs' -e ECCLevel -e QRCode -e CreateQrCode -e CreateMicroQRCode -e CreateRmQRCode -e QrSize -e Utf8BOM . \
+  | xargs -0 sed -i \
+    -e 's/\bCreateQrCode\b/Create/g' \
+    -e 's/\bCreateMicroQRCode\b/Create/g' \
+    -e 's/\bCreateRmQRCode\b/Create/g' \
+    -e 's/\bQRCodeSegmentation\b/QRSegmentation/g' \
+    -e 's/\bQRCodeVersionRange\b/QRVersionRange/g' \
+    -e 's/\bQRCodeDecodeStatus\b/DecodeStatus/g' \
+    -e 's/\bECCLevel\b/QREccLevel/g' \
+    -e 's/\bQrSize\b/Size/g' \
+    -e 's/\bUtf8BOM\b/Utf8Bom/g' \
+    -e 's/\bQRCodeRenderer\b/SymbolRenderer/g' \
+    -e 's/\bQRCodeImageBuilderBase\b/SymbolImageBuilderBase/g' \
+    -e 's/\bQRCodeExtensions\b/SKCanvasExtensions/g'
+```
+
+Four cautions if you run it as-is.
+
+- **It rewrites names other libraries also use.** `ECCLevel` and `CreateQrCode` are spelled the same in **QRCoder** (`QRCodeGenerator.ECCLevel`, and four `CreateQrCode` overloads), and `QrSize` and `Utf8BOM` are generic enough to collide with your own code; those hits need putting back. Review the diff rather than committing the run.
+- **`sed -i` as written is GNU sed.** On macOS and BSD, write `sed -i ''` instead, or run it through `gsed`.
+- **It does not move namespaces.** The `using SkiaSharp.QrCode;` → `using FeatherQR;` change from the [namespace change](#namespaces) is the other mechanical edit, and it is not in the script.
+- **It is a rename script, not a migration script.** It does not perform the [announced removals](#the-announced-removals) above, which the compiler will point at.
+
+### The `string` overloads are gone
+
+`Create` takes `ReadOnlySpan<char>`. The `string` overloads were removed because `string` converts to `ReadOnlySpan<char>` implicitly, so the calls that used them keep compiling:
+
+```csharp
+var data = QRCodeGenerator.Create("https://example.com", QREccLevel.M);   // unchanged
+```
+
+The one spelling that needs an edit is a named argument: `plainText:` becomes `textSpan:`. A null `string` behaves as it always did — the removed overload called `AsSpan()` on it, which is null-safe, so null encodes an empty symbol on both sides of the upgrade.
+
+**Except on .NET Framework and other netstandard2.0 consumers.** See [Older language versions](#older-language-versions) below; that conversion is not available there before C# 14.
+
+### Older language versions
+
+Some 2.0.0 spellings need C# features your project may not have enabled. They affect the `netstandard2.0` asset, which is what .NET Framework 4.6.2+ binds, and the `init` ones affect `netstandard2.1` as well. Neither is about the runtime — the compiled library works fine on both; it is about what your compiler will let you write.
+
+| Your project targets | Default language version | A `string` where a `ReadOnlySpan<char>` is expected (`Create`, `TryGetRequiredBufferSize`) | Any `{ … }` initializer (`QRCodeGeneratorOptions`, `IconData`) |
+|---|---|---|---|
+| net472 / net48 / netstandard2.0 | 7.3 | needs C# 14 | needs C# 9 |
+| netstandard2.1 | 8.0 | works | needs C# 9 |
+| net8.0 | 12.0 | works | works |
+| net10.0 | 14.0 | works | works |
+
+`string` converts to `ReadOnlySpan<char>` through a conversion the compiler synthesizes, and on netstandard2.0 the span comes from the `System.Memory` package rather than the framework, where only C# 14 synthesizes it. Every version through C# 13 reports `CS1503`. `init` accessors are a C# 9 feature, so an object initializer that assigns one reports `CS8370` or `CS8400` below that.
+
+`IconData` carries one constraint the table cannot express, because it is about your *compiler* rather than your language version. `Icon` is a `required` member, and the compiler marks every constructor of such a type that is not annotated `[SetsRequiredMembers]` as unusable to compilers that do not understand required members, so a compiler older than Roslyn 4.3 (before VS 2022 17.3 / .NET SDK 6.0.4xx) reports `CS0619: 'IconData.IconData()' is obsolete: 'Constructors of types with required members are not supported in this version of your compiler.'` Raising `<LangVersion>` does not help there — only a newer SDK does, and the boundary is not the C# 11 line: Roslyn 4.3 caps out at C# 10 and already consumes required members. On any compiler from 4.3 onward the table applies as written, and `<LangVersion>9</LangVersion>` is enough. The `IconData` constructor below carries that annotation, so it stays usable even on the older compilers.
+
+You have two ways forward.
+
+**Raise the language version.** One line, and every example in this guide then compiles as written. C# 14 needs the .NET 10 SDK; C# 9 does not.
+
+```xml
+<LangVersion>14</LangVersion>
+```
+
+**Or keep your language version** and use the spellings that work everywhere. Each option struct has a constructor taking the same settings as optional parameters, and `IconData` has one taking the icon plus the rest as optional parameters, so nothing is out of reach:
+
+```csharp
+using System;                       // for AsSpan
+using SkiaSharp;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
+
+var data = QRCodeGenerator.Create("https://example.com".AsSpan(), QREccLevel.M,
+    new QRCodeGeneratorOptions(quietZoneSize: 2, version: 5));
+
+// IconData too. Below C# 9 this is the only way to reach a shape the FromImage
+// factories cannot build, since both of them hardcode ImageIconShape.
+var icon = new IconData(new ImageTextIconShape(logo, "FooBar", SKColors.Black, font), iconSizePercent: 15);
+```
+
+The constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order.
+
+### Results, options and sealing
+
+The three symbologies now describe their results the same way, and the option objects are immutable.
+
+**The sizing and decode results are the same kind of value on all three symbologies**: a `readonly record struct` the library builds. They keep `ToString()`, `==` and `IEquatable<T>`, so logging and comparing them is unchanged. `QRCodeCalculatedSize` is the one that moves, and it loses two things a caller may have used:
+
+| Gone | Instead |
+|---|---|
+| The public constructor | The library builds it; you receive it from `TryGetRequiredBufferSize` |
+| `IsValid` | The `bool` that `TryGetRequiredBufferSize` already returned |
+
+Deconstruction goes with the positional record, so read the three members by name:
+
+```csharp
+// before
+var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text, ECCLevel.M);
+
+// after
+if (!QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size))
+    return;
+var (bufferSize, qrSize, version) = (size.BufferSize, size.Size, size.Version);
+```
+
+**`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself (below C# 9, use the constructor described under [Older language versions](#older-language-versions)):
+
+```csharp
+// before
+var icon = IconData.FromImage(logo);
+icon.IconSizePercent = 20;
+
+// after
+var icon = IconData.FromImage(logo) with { IconSizePercent = 20 };
+```
+
+**`GradientOptions` is immutable and compares by value.** The constructor now copies the arrays it is given, `Colors` and `ColorPositions` are read back as `ReadOnlySpan<T>`, and two gradients with the same colours are equal — the generated record equality it replaces compared the arrays by reference, so identical gradients reported as different. `ColorPositions` is an empty span rather than `null` when the colours are evenly distributed. Constructing is unchanged, and it is still a record, so `with` still varies the direction:
+
+```csharp
+var rotated = GradientOptions.Default with { Direction = GradientDirection.BottomToTop };
+```
+
+What changes is code that *read* `Colors` / `ColorPositions` as arrays, or replaced them through `with`. The colours are chosen at construction now; `with { Colors = ... }` no longer compiles, and reading gives you a span:
+
+```csharp
+// before
+var colors = options.Colors;                      // SKColor[], and the instance's own array
+var evenly = options.ColorPositions is null;
+var recolored = options with { Colors = [SKColors.Red, SKColors.Blue] };
+
+// after
+SKColor[] colors = options.Colors.ToArray();      // a copy, because the original is not yours
+var evenly = options.ColorPositions.IsEmpty;
+var recolored = new GradientOptions([SKColors.Red, SKColors.Blue], options.Direction, options.ColorPositions);
+```
+
+**Why `with` varies the direction but not the colours.** `Colors` and `ColorPositions` have to agree in length, and `with` sets one member at a time; making them `init` would let a caller build a gradient whose stops no longer match its colours and only find out when it is drawn. `Direction` carries no such pairing, so it stays `init`, and the pair is set together through the constructor, which refuses a mismatch on the spot.
+
+The constructor takes the same shapes the properties hand back — `ReadOnlySpan<SKColor>` and `ReadOnlySpan<float>`, with an empty span meaning "distribute evenly" — so building one gradient from another translates nothing either. Arrays convert implicitly, so `new GradientOptions(myColors, direction)` is unchanged.
+
+Two details if you passed the stops explicitly before: `null` is no longer a value you can pass (omit the argument, or pass `default` or `[]`), and an empty array now means "evenly distributed" where it used to be an `ArgumentException`. Stops are one per colour, so when the new colour count differs from the old, supply new stops or omit them — a non-empty span of a different length is still an `ArgumentException`.
+
+A `null` colour array is the one case whose *exception type* moved. It used to be an `ArgumentNullException`; a null array converts to an empty span, so it is now the same `ArgumentException` as any other array too short to make a gradient. Code that catches `ArgumentNullException` specifically has to widen to `ArgumentException`.
+
+**Sealed:** `QRCodeData`, `MicroQRCodeData`, `RmQRCodeData`, the three image builders, `IconData` and `GradientOptions`. None had a designed extension point. The shape hierarchies (`ModuleShape`, `FinderPatternShape`, `IconShape`) are still open and are the supported way to change how a symbol is drawn.
 
 ## 1.2.0
 

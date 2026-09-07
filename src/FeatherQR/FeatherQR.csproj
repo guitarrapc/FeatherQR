@@ -15,7 +15,10 @@
     <Description>QR Code, Micro QR and rMQR encoder and decoder for .NET. Zero dependencies, zero allocations on the hot paths, trim and NativeAOT safe. Rendering lives in FeatherQR.SkiaSharp.</Description>
 
     <!-- API compatibility. Runs at Pack: compares this package against the last released one and reports
-         any breaking change. No baseline until 2.0.0 ships; set PackageValidationBaselineVersion then. -->
+         any breaking change. No baseline until 2.0.0 ships; set PackageValidationBaselineVersion then, to
+         2.0.0 and never to a 1.x. 2.0.0 removes Compression, both GetRequiredBufferSize methods, the
+         parameter list and string Create overloads, and QRCodeCalculatedSize's public constructor and
+         IsValid, so a 1.x baseline reports every one of them and fails pack. -->
     <EnablePackageValidation>true</EnablePackageValidation>
 
     <!-- Trimming/NativeAOT. IsAotCompatible turns on the trim/AOT/single-file analyzers and stamps the

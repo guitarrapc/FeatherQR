@@ -5,23 +5,17 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 #endif
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Locates the bottom-right alignment pattern (5×5: dark ring, light ring, dark
-/// center) near its predicted position, providing the fourth correspondence point
-/// for perspective sampling.
+/// Locates the bottom-right alignment pattern (5×5: dark ring, light ring, dark center) near its predicted position, providing the fourth correspondence point for perspective sampling.
 /// </summary>
 /// <remarks>
-/// The scan matches the light-dark-light run triple through the pattern center
-/// (inner ring, center module, inner ring, one module each). Unlike the outer dark
-/// ring, those three runs are fully owned by the pattern: adjacent dark data
-/// modules can merge with the border ring and stretch its runs, but never touch the
-/// inner ones. Candidates are cross-checked vertically with the same signature.
-/// The search stays inside a small window around the prediction, 1-module runs
-/// are everywhere in QR data, so an unconstrained search would drown in false
-/// positives. Version 1 symbols have no alignment pattern and callers fall back to
-/// the parallelogram corner estimate.
+/// The scan matches the light-dark-light run triple through the pattern center (inner ring, center module, inner ring, one module each).
+/// Unlike the outer dark ring, those three runs are fully owned by the pattern: adjacent dark data modules can merge with the border ring and stretch its runs, but never touch the inner ones.
+/// Candidates are cross-checked vertically with the same signature.
+/// The search stays inside a small window around the prediction, 1-module runs are everywhere in QR data, so an unconstrained search would drown in false positives.
+/// Version 1 symbols have no alignment pattern and callers fall back to the parallelogram corner estimate.
 /// </remarks>
 internal static class AlignmentPatternFinder
 {
@@ -169,10 +163,7 @@ internal static class AlignmentPatternFinder
         (byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
 
     /// <summary>
-    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px
-    /// otherwise) produce a dark bitmask; runs are walked via trailing-zero
-    /// counts, evaluating the same (light, dark, light) triple at every
-    /// light→dark transition as the scalar walk.
+    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask; runs are walked via trailing-zero counts, evaluating the same (light, dark, light) triple at every light→dark transition as the scalar walk.
     /// </summary>
     private static bool TryScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, ref float centerX, ref float centerY)
     {
@@ -306,8 +297,7 @@ internal static class AlignmentPatternFinder
     }
 
     /// <summary>
-    /// Confirms the light-dark-light signature vertically through the candidate
-    /// center and refines the center's y coordinate.
+    /// Confirms the light-dark-light signature vertically through the candidate center and refines the center's y coordinate.
     /// </summary>
     private static bool TryCrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float candidateX, int candidateY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, out float centerX, out float centerY)
     {

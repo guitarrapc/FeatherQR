@@ -4,25 +4,16 @@ using System.Buffers;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// High-level builder for creating Micro QR code images with fluent configuration and static methods.
+/// Turns text into a Micro QR image, as PNG, JPEG, WebP or SVG.
 /// </summary>
 /// <remarks>
-/// <para>
-/// This builder mirrors <see cref="QRCodeImageBuilder"/> for the Micro QR symbology
-/// (ISO/IEC 18004, versions M1-M4). Version and error correction use the Micro
-/// QR-typed <see cref="MicroQRVersion"/> / <see cref="MicroQREccLevel"/>, and the
-/// default quiet zone is the 2 modules the specification requires (Standard QR uses 4).
-/// </para>
-/// <para>
-/// Micro QR has a single finder pattern and no high error-correction headroom,
-/// so the Standard QR styling options that depend on those (icon overlays and
-/// custom finder pattern shapes) are intentionally not offered.
-/// </para>
+/// The same shape as <see cref="QRCodeImageBuilder"/>, with Micro QR versions and levels and the 2-module quiet zone the specification asks for.
+/// Icons and custom finder shapes are not offered here: Micro QR has one finder pattern and no error correction headroom to spare.
 /// </remarks>
 /// <seealso cref="MicroQRCodeGenerator"/>
-/// <seealso cref="QRCodeRenderer"/>
+/// <seealso cref="SymbolRenderer"/>
 /// <seealso cref="QRCodeImageBuilder"/>
-public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBuilder>
+public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
 {
     private readonly string? _content;
     private readonly MicroQRCodeData? _data;
@@ -46,9 +37,8 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Starts a builder that draws a Micro QR code you have already generated. The symbol is
-    /// used exactly as given, so only the appearance options apply. Every encoding option
-    /// throws <see cref="InvalidOperationException"/> on a builder created this way.
+    /// Starts a builder that draws a Micro QR code you have already generated.
+    /// The Micro QR code is drawn exactly as given, so only the appearance options apply and the encoding options throw <see cref="InvalidOperationException"/>.
     /// </summary>
     /// <param name="microQrCodeData">The Micro QR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="microQrCodeData"/> is null.</exception>
@@ -63,37 +53,34 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     // static methods for quick generation
 
     /// <summary>
-    /// Generate a Micro QR code as PNG byte array with default settings.
+    /// Encodes the content and returns a PNG image.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
+    /// <param name="content">The text or URL to encode.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    /// <returns>PNG encoded byte array.</returns>
+    /// <param name="size">Image side length in pixels.</param>
     public static byte[] GetPngBytes(string content, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512)
     {
         return GetImageBytes(content, SKEncodedImageFormat.Png, eccLevel, size, 100);
     }
 
     /// <summary>
-    /// Generate a Micro QR code as PNG byte array with default settings.
+    /// Renders the Micro QR code and returns a PNG image.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    /// <returns>PNG encoded byte array.</returns>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="size">Image side length in pixels.</param>
     public static byte[] GetPngBytes(MicroQRCodeData microQrCodeData, int size = 512)
     {
         return GetImageBytes(microQrCodeData, SKEncodedImageFormat.Png, size, 100);
     }
 
     /// <summary>
-    /// Generate a Micro QR code as image byte array with specified format.
+    /// Encodes the content and returns an image in the format you choose.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
-    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="format">The format to encode as.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
-    /// <returns>Encoded byte array.</returns>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
     public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512, int quality = 100)
     {
         return new MicroQRCodeImageBuilder(content)
@@ -104,13 +91,12 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code as image byte array with specified format.
+    /// Renders the Micro QR code and returns an image in the format you choose.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
-    /// <returns>Encoded byte array.</returns>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="format">The format to encode as.</param>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
     public static byte[] GetImageBytes(MicroQRCodeData microQrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
         return new MicroQRCodeImageBuilder(microQrCodeData)
@@ -120,12 +106,12 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and save to stream with default PNG settings.
+    /// Encodes the content and writes a PNG to a stream.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
-    /// <param name="output">The output stream.</param>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    /// <param name="size">Image side length in pixels.</param>
     public static void SavePng(string content, Stream output, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512)
     {
         new MicroQRCodeImageBuilder(content)
@@ -135,11 +121,11 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and save to stream with default PNG settings.
+    /// Renders the Micro QR code and writes a PNG to a stream.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="output">The output stream.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Image side length in pixels.</param>
     public static void SavePng(MicroQRCodeData microQrCodeData, Stream output, int size = 512)
     {
         new MicroQRCodeImageBuilder(microQrCodeData)
@@ -148,12 +134,11 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code as SVG (UTF-8 encoded) byte array with default settings.
+    /// Encodes the content and returns an SVG document as UTF-8 bytes.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
+    /// <param name="content">The text or URL to encode.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    /// <returns>UTF-8 encoded SVG document.</returns>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static byte[] GetSvgBytes(string content, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512)
     {
         using var stream = new MemoryStream();
@@ -165,11 +150,10 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code as SVG (UTF-8 encoded) byte array with default settings.
+    /// Renders the Micro QR code and returns an SVG document as UTF-8 bytes.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    /// <returns>UTF-8 encoded SVG document.</returns>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static byte[] GetSvgBytes(MicroQRCodeData microQrCodeData, int size = 512)
     {
         using var stream = new MemoryStream();
@@ -180,12 +164,12 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and save as SVG to stream with default settings.
+    /// Encodes the content and writes an SVG document to a stream.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
-    /// <param name="output">The output stream.</param>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static void SaveSvg(string content, Stream output, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512)
     {
         new MicroQRCodeImageBuilder(content)
@@ -195,11 +179,11 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and save as SVG to stream with default settings.
+    /// Renders the Micro QR code and writes an SVG document to a stream.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="output">The output stream.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static void SaveSvg(MicroQRCodeData microQrCodeData, Stream output, int size = 512)
     {
         new MicroQRCodeImageBuilder(microQrCodeData)
@@ -208,12 +192,11 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code as SVG document string with default settings.
+    /// Encodes the content and returns an SVG document as a string.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
+    /// <param name="content">The text or URL to encode.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    /// <returns>SVG document.</returns>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static string GetSvgString(string content, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512)
     {
         return new MicroQRCodeImageBuilder(content)
@@ -223,11 +206,10 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code as SVG document string with default settings.
+    /// Renders the Micro QR code and returns an SVG document as a string.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    /// <returns>SVG document.</returns>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static string GetSvgString(MicroQRCodeData microQrCodeData, int size = 512)
     {
         return new MicroQRCodeImageBuilder(microQrCodeData)
@@ -236,12 +218,12 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
+    /// Encodes the content and writes an SVG document to a buffer writer.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
-    /// <param name="writer">The buffer writer to write to.</param>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="writer">Where to write.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static void WriteSvg(string content, IBufferWriter<byte> writer, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512)
     {
         new MicroQRCodeImageBuilder(content)
@@ -251,11 +233,11 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
+    /// Renders the Micro QR code and writes an SVG document to a buffer writer.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="writer">The buffer writer to write to.</param>
-    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="writer">Where to write.</param>
+    /// <param name="size">Viewport side length in SVG units.</param>
     public static void WriteSvg(MicroQRCodeData microQrCodeData, IBufferWriter<byte> writer, int size = 512)
     {
         new MicroQRCodeImageBuilder(microQrCodeData)
@@ -264,37 +246,37 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and write to an IBufferWriter with default PNG settings.
+    /// Encodes the content and writes a PNG to a buffer writer.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
-    /// <param name="writer">The buffer writer to write to.</param>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="writer">Where to write.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    /// <param name="size">Image side length in pixels.</param>
     public static void WritePng(string content, IBufferWriter<byte> writer, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512)
     {
         WriteImage(content, writer, SKEncodedImageFormat.Png, eccLevel, size, quality: 100);
     }
 
     /// <summary>
-    /// Generate a Micro QR code and write to an IBufferWriter with default PNG settings.
+    /// Renders the Micro QR code and writes a PNG to a buffer writer.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="writer">The buffer writer to write to.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="writer">Where to write.</param>
+    /// <param name="size">Image side length in pixels.</param>
     public static void WritePng(MicroQRCodeData microQrCodeData, IBufferWriter<byte> writer, int size = 512)
     {
         WriteImage(microQrCodeData, writer, SKEncodedImageFormat.Png, size, quality: 100);
     }
 
     /// <summary>
-    /// Generate a Micro QR code and write to an IBufferWriter with specified format.
+    /// Encodes the content and writes an image in the format you choose to a buffer writer.
     /// </summary>
-    /// <param name="content">The content to encode.</param>
-    /// <param name="writer">The buffer writer to write to.</param>
-    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="content">The text or URL to encode.</param>
+    /// <param name="writer">Where to write.</param>
+    /// <param name="format">The format to encode as.</param>
     /// <param name="eccLevel">Error correction level. Default is M.</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
     public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, MicroQREccLevel eccLevel = MicroQREccLevel.M, int size = 512, int quality = 100)
     {
         new MicroQRCodeImageBuilder(content)
@@ -305,13 +287,13 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Generate a Micro QR code and write to an IBufferWriter with specified format.
+    /// Renders the Micro QR code and writes an image in the format you choose to a buffer writer.
     /// </summary>
-    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
-    /// <param name="writer">The buffer writer to write to.</param>
-    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
-    /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <param name="writer">Where to write.</param>
+    /// <param name="format">The format to encode as.</param>
+    /// <param name="size">Image side length in pixels.</param>
+    /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
     public static void WriteImage(MicroQRCodeData microQrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
         new MicroQRCodeImageBuilder(microQrCodeData)
@@ -323,16 +305,14 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     // Micro QR-specific builder methods
 
     /// <summary>
-    /// Configure the error correction level for the Micro QR code.
+    /// Sets how much damage the Micro QR code should survive.
     /// </summary>
     /// <remarks>
-    /// Legal combinations are version-dependent: M1 supports
-    /// <see cref="MicroQREccLevel.ErrorDetectionOnly"/> only, M2/M3 support L and M,
-    /// M4 supports L, M, and Q. Illegal combinations throw when the symbol is generated.
+    /// What is available depends on the version: M1 takes <see cref="MicroQREccLevel.ErrorDetectionOnly"/> alone, M2 and M3 take L and M, and M4 adds Q.
+    /// A combination that does not exist throws when the Micro QR code is generated.
     /// </remarks>
-    /// <param name="eccLevel">Error correction level.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="InvalidOperationException"></exception>
+    /// <param name="eccLevel">The level to encode at.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made Micro QR code.</exception>
     public MicroQRCodeImageBuilder WithErrorCorrection(MicroQREccLevel eccLevel)
     {
         if (_data is not null)
@@ -343,13 +323,14 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Configure the Micro QR version to generate.
+    /// Pins the version instead of letting the content choose it.
     /// </summary>
-    /// <param name="version">Version to use (M1-M4). When not called, the smallest version that fits the content is selected.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    /// <exception cref="InvalidOperationException"></exception>
-    /// <remarks>The pinned-version case of the <see cref="WithVersion(MicroQRVersionRange)"/> overload.</remarks>
+    /// <remarks>
+    /// The pinned case of <see cref="WithVersion(MicroQRVersionRange)"/>.
+    /// </remarks>
+    /// <param name="version">The version, M1 to M4. Left alone, the smallest that holds the content wins.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not M1-M4.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made Micro QR code.</exception>
     public MicroQRCodeImageBuilder WithVersion(MicroQRVersion version)
     {
         if (_data is not null)
@@ -362,12 +343,10 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Configure the versions the generator may choose from, rather than a single one.
+    /// Narrows the versions the generator may choose from, for a Micro QR code that has to reach or stay under a physical size.
     /// </summary>
-    /// <param name="versionRange">The permitted versions; the smallest one that holds the content is used.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="MicroQRCodeData"/>.</exception>
-    /// <remarks>See <see cref="MicroQRVersionRange"/> for which empty ranges throw and which are a poor fit.</remarks>
+    /// <param name="versionRange">The versions to choose from; the smallest that holds the content wins.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made Micro QR code.</exception>
     public MicroQRCodeImageBuilder WithVersion(MicroQRVersionRange versionRange)
     {
         if (_data is not null)
@@ -378,13 +357,11 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Pin one of the four Micro QR data mask patterns (0-3) instead of the automatic
-    /// edge-score selection; see <see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>.
+    /// Pin one of the four Micro QR data mask patterns (0-3) instead of the automatic edge-score selection; see <see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>.
     /// </summary>
     /// <param name="maskPattern">Mask pattern (0-3), or null for automatic selection.</param>
-    /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-3 or null.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="MicroQRCodeData"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made Micro QR code.</exception>
     public MicroQRCodeImageBuilder WithMaskPattern(int? maskPattern)
     {
         if (_data is not null)
@@ -397,15 +374,13 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     }
 
     /// <summary>
-    /// Split the content into mixed-mode segments when that lowers the version
-    /// (see <see cref="MicroQRSegmentation"/>). Defaults to
-    /// <see cref="MicroQRSegmentation.Single"/>. Never selects a larger version, and
-    /// produces the identical symbol when a split would not shrink it.
+    /// Split the content into mixed-mode segments when that lowers the version (see <see cref="MicroQRSegmentation"/>).
+    /// Defaults to <see cref="MicroQRSegmentation.Single"/>.
+    /// Never selects a larger version, and produces the identical Micro QR code when a split would not shrink it.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>
-    /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="segmentation"/> is not a defined value.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="MicroQRCodeData"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a ready-made Micro QR code.</exception>
     public MicroQRCodeImageBuilder WithSegmentation(MicroQRSegmentation segmentation)
     {
         if (_data is not null)
@@ -421,14 +396,14 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize, MaskPattern = _maskPattern, Segmentation = _segmentation });
+        var data = _data ?? MicroQRCodeGenerator.Create(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize, MaskPattern = _maskPattern, Segmentation = _segmentation });
         matrixWidth = matrixHeight = data.Size;
         return data;
     }
 
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
-        QRCodeRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
+        SymbolRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
     }
 
     /// <summary>Micro QR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>

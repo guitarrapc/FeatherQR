@@ -4,9 +4,8 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// Channel order and depth of a pixel buffer handed to <see cref="LuminanceConverter"/>.
 /// </summary>
 /// <remarks>
-/// These are the layouts QR sources actually use: 8-bit gray, the two 32-bit
-/// orders that SkiaSharp, ImageSharp, WPF and GDI+ produce, and 32-bit RGB with a
-/// padding byte. Three-byte RGB and 16-bit formats are converted by the adapter first.
+/// These are the layouts QR sources actually use: 8-bit gray, the two 32-bit orders that SkiaSharp, ImageSharp, WPF and GDI+ produce, and 32-bit RGB with a padding byte.
+/// Three-byte RGB and 16-bit formats are converted by the adapter first.
 /// </remarks>
 internal enum PixelLayout
 {

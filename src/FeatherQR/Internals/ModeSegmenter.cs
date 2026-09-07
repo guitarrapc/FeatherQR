@@ -5,17 +5,12 @@ using System.Text;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Splits content into the minimal-bit Numeric / Alphanumeric / Byte runs and
-/// reconstructs them as a <see cref="ModeSegment"/> plan. Shared by the Standard QR,
-/// Micro QR and rMQR planners, which differ in the header widths passed in and
-/// (Micro QR) mode availability; version scans and bounds stay in those planners.
+/// Splits content into the minimal-bit Numeric / Alphanumeric / Byte runs and reconstructs them as a <see cref="ModeSegment"/> plan.
+/// Shared by the Standard QR, Micro QR and rMQR planners, which differ in the header widths passed in and (Micro QR) mode availability; version scans and bounds stay in those planners.
 /// </summary>
 /// <remarks>
-/// A run's cost is not a per-character constant, so the dynamic program carries the
-/// packing-group remainder in its state. Micro QR restricts modes per version (M1
-/// is Numeric-only, M2 has no Byte mode); its planner disables the missing
-/// transitions via <c>allowAlnum</c>/<c>allowByte</c>, and a character no allowed
-/// mode encodes leaves the cost at <see cref="Unreachable"/>.
+/// A run's cost is not a per-character constant, so the dynamic program carries the packing-group remainder in its state.
+/// Micro QR restricts modes per version (M1 is Numeric-only, M2 has no Byte mode); its planner disables the missing transitions via <c>allowAlnum</c>/<c>allowByte</c>, and a character no allowed mode encodes leaves the cost at <see cref="Unreachable"/>.
 /// </remarks>
 internal static class ModeSegmenter
 {
@@ -26,8 +21,7 @@ internal static class ModeSegmenter
     public const int MaxStackParents = 512;
 
     /// <summary>
-    /// Cost returned by <see cref="ComputeCosts"/> when no allowed mode set encodes
-    /// the content; small enough that adding a transition cost cannot overflow.
+    /// Cost returned by <see cref="ComputeCosts"/> when no allowed mode set encodes the content; small enough that adding a transition cost cannot overflow.
     /// </summary>
     public const int Unreachable = int.MaxValue / 4;
 
@@ -51,11 +45,8 @@ internal static class ModeSegmenter
     private const int SixthsPerByte = 48;
 
     /// <summary>
-    /// Minimal payload bits (excluding any ECI prefix) for the content at the given
-    /// mode indicator and count indicator widths, or a value at or above
-    /// <see cref="Unreachable"/> when a character has no allowed mode. When
-    /// <paramref name="parents"/> is non-empty it receives one predecessor state per
-    /// (character, state) pair for reconstruction.
+    /// Minimal payload bits (excluding any ECI prefix) for the content at the given mode indicator and count indicator widths, or a value at or above <see cref="Unreachable"/> when a character has no allowed mode.
+    /// When <paramref name="parents"/> is non-empty it receives one predecessor state per (character, state) pair for reconstruction.
     /// </summary>
     public static int ComputeCosts(ReadOnlySpan<char> text, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, Span<byte> parents, out int finalState, bool allowAlnum = true, bool allowByte = true)
     {
@@ -159,8 +150,8 @@ internal static class ModeSegmenter
     }
 
     /// <summary>
-    /// Walks the predecessor table back into runs, oldest first. Returns false when
-    /// the plan needs more runs than the caller lent room for.
+    /// Walks the predecessor table back into runs, oldest first.
+    /// Returns false when the plan needs more runs than the caller lent room for.
     /// </summary>
     public static bool Reconstruct(ReadOnlySpan<char> text, ReadOnlySpan<byte> parents, int finalState, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -214,12 +205,9 @@ internal static class ModeSegmenter
 
     /// <summary>
     /// Whether the plan relocates a mid-content U+FEFF to the start of a Byte run.
-    /// The shared byte-segment decoder consumes a leading BOM of every segment
-    /// without an explicit ISO-8859-1 declaration, so such a plan would decode with
-    /// the character silently dropped — where the single-mode stream, which keeps it
-    /// interior, round-trips. Planners reject these plans and fall back to Single.
-    /// (A run at offset 0 is exempt: there the single-mode stream starts with the
-    /// same bytes and behaves identically.)
+    /// The shared byte-segment decoder consumes a leading BOM of every segment without an explicit ISO-8859-1 declaration, so such a plan would decode with the character silently dropped — where the single-mode stream, which keeps it interior, round-trips.
+    /// Planners reject these plans and fall back to Single.
+    /// (A run at offset 0 is exempt: there the single-mode stream starts with the same bytes and behaves identically.)
     /// </summary>
     public static bool HasBomRelocatedToARunStart(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)
     {
@@ -255,9 +243,7 @@ internal static class ModeSegmenter
 
     /// <summary>Encoded byte count of a Byte-mode run, i.e. the value its count indicator carries.</summary>
     /// <remarks>
-    /// Deliberately asks <see cref="Encoding.UTF8"/> rather than reusing the dynamic
-    /// program's own per-character model: comparing the two is what would catch an
-    /// error in that model, so they have to stay independent computations.
+    /// Deliberately asks <see cref="Encoding.UTF8"/> rather than reusing the dynamic program's own per-character model: comparing the two is what would catch an error in that model, so they have to stay independent computations.
     /// </remarks>
     public static int ByteUnitCount(ReadOnlySpan<char> text, EciMode charset)
     {
@@ -283,10 +269,8 @@ internal static class ModeSegmenter
     }
 
     /// <summary>
-    /// The sixths sum of pricing each character at the cheapest rate any mode could
-    /// give it: one O(n) pass, no table. Rounded up and topped with the cheapest
-    /// possible header by the caller, it is a lower bound on any plan at any version,
-    /// so it may only reject.
+    /// The sixths sum of pricing each character at the cheapest rate any mode could give it: one O(n) pass, no table.
+    /// Rounded up and topped with the cheapest possible header by the caller, it is a lower bound on any plan at any version, so it may only reject.
     /// </summary>
     public static int CheapestSixths(ReadOnlySpan<char> text, EciMode charset)
     {
@@ -314,11 +298,8 @@ internal static class ModeSegmenter
     };
 
     /// <summary>
-    /// Encoded byte length of one character in Byte mode. Latin-1 charsets are one
-    /// byte per character; UTF-8 mirrors what <see cref="Encoding.UTF8"/> emits,
-    /// including its greedy surrogate pairing (a paired high surrogate carries all
-    /// four bytes and its low surrogate none, an unpaired surrogate costs the three
-    /// bytes of the replacement character).
+    /// Encoded byte length of one character in Byte mode.
+    /// Latin-1 charsets are one byte per character; UTF-8 mirrors what <see cref="Encoding.UTF8"/> emits, including its greedy surrogate pairing (a paired high surrogate carries all four bytes and its low surrogate none, an unpaired surrogate costs the three bytes of the replacement character).
     /// </summary>
     private static int ByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
     {

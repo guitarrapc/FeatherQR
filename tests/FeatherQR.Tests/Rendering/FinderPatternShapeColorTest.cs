@@ -9,13 +9,13 @@ public class FinderPatternShapeColorTest
     public async Task CustomFinderPatternShape_ReceivesConfiguredBackgroundPaint()
     {
         var backgroundColor = SKColors.Yellow;
-        var qr = QRCodeGenerator.CreateQrCode("finder-background-paint-test", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("finder-background-paint-test", QREccLevel.M);
         var imageSize = qr.Size * 10;
         using var bitmap = new SKBitmap(imageSize, imageSize);
         using var canvas = new SKCanvas(bitmap);
         var finderPatternShape = new BackgroundPaintFinderPatternShape();
 
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             SKRect.Create(0, 0, imageSize, imageSize),
             qr,
@@ -32,12 +32,12 @@ public class FinderPatternShapeColorTest
     public async Task LegacyCustomFinderPatternShape_ColorOverloadRemainsCompatible()
     {
         var backgroundColor = SKColors.Yellow;
-        var qr = QRCodeGenerator.CreateQrCode("legacy-finder-shape-test", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("legacy-finder-shape-test", QREccLevel.M);
         using var bitmap = new SKBitmap(qr.Size * 10, qr.Size * 10);
         using var canvas = new SKCanvas(bitmap);
         var finderPatternShape = new LegacyBackgroundColorFinderPatternShape();
 
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             SKRect.Create(0, 0, bitmap.Width, bitmap.Height),
             qr,
@@ -55,14 +55,14 @@ public class FinderPatternShapeColorTest
     {
         var backgroundColor = new SKColor(0xEA, 0xFB, 0x00, 0xFF);
         var codeColor = SKColors.Green;
-        var qr = QRCodeGenerator.CreateQrCode("finder-shape-background-test", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("finder-shape-background-test", QREccLevel.M);
 
         var imageSize = qr.Size * 10;
         var area = SKRect.Create(0, 0, imageSize, imageSize);
         using var bitmap = new SKBitmap(imageSize, imageSize);
         using var canvas = new SKCanvas(bitmap);
 
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             area,
             qr,
@@ -70,7 +70,7 @@ public class FinderPatternShapeColorTest
             backgroundColor,
             finderPatternShape: finderPatternShape);
 
-        var finderRect = QRCodeRenderer.GetFinderPatternRect(qr, 0, area);
+        var finderRect = SymbolRenderer.GetFinderPatternRect(qr, 0, area);
         var moduleSize = finderRect.Width / 7f;
         var ringSampleX = (int)MathF.Round(finderRect.Left + moduleSize * 1.5f);
         var ringSampleY = (int)MathF.Round(finderRect.Top + moduleSize * 3.5f);
@@ -92,14 +92,14 @@ public class FinderPatternShapeColorTest
         // finder pattern light areas must still use the configured background color.
         var backgroundColor = new SKColor(0xEA, 0xFB, 0x00, 0xFF);
         var codeColor = SKColors.Green;
-        var qr = QRCodeGenerator.CreateQrCode("finder-shape-antialias-test", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("finder-shape-antialias-test", QREccLevel.M);
 
         var imageSize = qr.Size * 10;
         var area = SKRect.Create(0, 0, imageSize, imageSize);
         using var bitmap = new SKBitmap(imageSize, imageSize);
         using var canvas = new SKCanvas(bitmap);
 
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             area,
             qr,
@@ -109,7 +109,7 @@ public class FinderPatternShapeColorTest
             moduleSizePercent: 0.9f,
             finderPatternShape: finderPatternShape);
 
-        var finderRect = QRCodeRenderer.GetFinderPatternRect(qr, 0, area);
+        var finderRect = SymbolRenderer.GetFinderPatternRect(qr, 0, area);
         var moduleSize = finderRect.Width / 7f;
         var ringSampleX = (int)MathF.Round(finderRect.Left + moduleSize * 1.5f);
         var ringSampleY = (int)MathF.Round(finderRect.Top + moduleSize * 3.5f);
@@ -126,7 +126,7 @@ public class FinderPatternShapeColorTest
         var backgroundColor = SKColors.Yellow;
         var pngBytes = new QRCodeImageBuilder(content)
             .WithSize(800, 800)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
             .WithGradient(new GradientOptions(
                 [SKColors.Blue, SKColors.Purple, SKColors.Pink],
@@ -137,8 +137,8 @@ public class FinderPatternShapeColorTest
             .ToByteArray();
 
         using var bitmap = SKBitmap.Decode(pngBytes) ?? throw new InvalidOperationException("Failed to decode generated PNG.");
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H);
-        var finderRect = QRCodeRenderer.GetFinderPatternRect(
+        var qr = QRCodeGenerator.Create(content, QREccLevel.H);
+        var finderRect = SymbolRenderer.GetFinderPatternRect(
             qr,
             0,
             SKRect.Create(0, 0, bitmap.Width, bitmap.Height));
@@ -157,7 +157,7 @@ public class FinderPatternShapeColorTest
         const string content = "transparent-finder-background-test";
         var pngBytes = new QRCodeImageBuilder(content)
             .WithSize(800, 800)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithColors(SKColors.Black, new SKColor(0xFF, 0xFF, 0x00, 0x00), SKColors.Transparent)
             .WithGradient(new GradientOptions(
                 [SKColors.Blue, SKColors.Purple, SKColors.Pink],
@@ -168,8 +168,8 @@ public class FinderPatternShapeColorTest
             .ToByteArray();
 
         using var bitmap = SKBitmap.Decode(pngBytes) ?? throw new InvalidOperationException("Failed to decode generated PNG.");
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H);
-        var finderRect = QRCodeRenderer.GetFinderPatternRect(
+        var qr = QRCodeGenerator.Create(content, QREccLevel.H);
+        var finderRect = SymbolRenderer.GetFinderPatternRect(
             qr,
             0,
             SKRect.Create(0, 0, bitmap.Width, bitmap.Height));
@@ -190,14 +190,14 @@ public class FinderPatternShapeColorTest
     public async Task TranslucentBackground_FinderPatternInnerRingMatchesRenderedBackground(FinderPatternShape finderPatternShape)
     {
         var backgroundColor = new SKColor(0xFF, 0xFF, 0xFF, 0x80);
-        var qr = QRCodeGenerator.CreateQrCode("translucent-finder-background-test", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("translucent-finder-background-test", QREccLevel.M);
         var imageSize = qr.Size * 10;
         var area = SKRect.Create(0, 0, imageSize, imageSize);
         using var bitmap = new SKBitmap(imageSize, imageSize);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Red);
 
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             area,
             qr,
@@ -205,7 +205,7 @@ public class FinderPatternShapeColorTest
             backgroundColor,
             finderPatternShape: finderPatternShape);
 
-        var finderRect = QRCodeRenderer.GetFinderPatternRect(qr, 0, area);
+        var finderRect = SymbolRenderer.GetFinderPatternRect(qr, 0, area);
         var moduleSize = finderRect.Width / 7f;
         var ringPixel = bitmap.GetPixel(
             (int)MathF.Round(finderRect.Left + moduleSize * 1.5f),

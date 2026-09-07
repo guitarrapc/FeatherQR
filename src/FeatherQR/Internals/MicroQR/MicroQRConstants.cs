@@ -7,10 +7,8 @@ namespace FeatherQR.Internals.MicroQR;
 /// Micro QR symbol tables and format information (ISO/IEC 18004).
 /// </summary>
 /// <remarks>
-/// All tables are flat arrays indexed by <c>(version - 1) * 4 + eccLevel</c> where
-/// eccLevel follows <see cref="MicroQREccLevel"/> ordering (ErrorDetectionOnly, L, M, Q).
-/// A zero (or negative symbol number) marks an invalid version/ECC combination —
-/// the valid set is: M1 detection-only, M2/M3 L+M, M4 L+M+Q.
+/// All tables are flat arrays indexed by <c>(version - 1) * 4 + eccLevel</c> where eccLevel follows <see cref="MicroQREccLevel"/> ordering (ErrorDetectionOnly, L, M, Q).
+/// A zero (or negative symbol number) marks an invalid version/ECC combination — the valid set is: M1 detection-only, M2/M3 L+M, M4 L+M+Q.
 /// </remarks>
 internal static class MicroQRConstants
 {
@@ -92,16 +90,14 @@ internal static class MicroQRConstants
         => eccCodewordCounts[TableIndex(version, eccLevel)];
 
     /// <summary>
-    /// Maximum number of codeword errors a decoder may correct (ISO/IEC 18004
-    /// Table 9); 0 for M1 (error detection only).
+    /// Maximum number of codeword errors a decoder may correct (ISO/IEC 18004 Table 9); 0 for M1 (error detection only).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetErrorCorrectionCapacity(MicroQRVersion version, MicroQREccLevel eccLevel)
         => errorCorrectionCapacities[TableIndex(version, eccLevel)];
 
     /// <summary>
-    /// Inverse of <see cref="GetSymbolNumber"/>: maps the 3-bit format information
-    /// symbol number (0-7) back to its version/ECC combination.
+    /// Inverse of <see cref="GetSymbolNumber"/>: maps the 3-bit format information symbol number (0-7) back to its version/ECC combination.
     /// </summary>
     public static void GetVersionAndEccFromSymbolNumber(int symbolNumber, out MicroQRVersion version, out MicroQREccLevel eccLevel)
     {
@@ -146,9 +142,8 @@ internal static class MicroQRConstants
     };
 
     /// <summary>
-    /// Mode availability per version (ISO/IEC 18004): M1 numeric only, M2 adds
-    /// alphanumeric, M3/M4 add byte. Kanji is decode-only, so it is absent here; its
-    /// count width lives in <see cref="GetKanjiCountIndicatorLength"/>.
+    /// Mode availability per version (ISO/IEC 18004): M1 numeric only, M2 adds alphanumeric, M3/M4 add byte.
+    /// Kanji is decode-only, so it is absent here; its count width lives in <see cref="GetKanjiCountIndicatorLength"/>.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsModeSupported(MicroQRVersion version, EncodingMode mode) => mode switch
@@ -160,8 +155,7 @@ internal static class MicroQRConstants
     };
 
     /// <summary>
-    /// Character count indicator width in bits (ISO/IEC 18004 Table 3):
-    /// Numeric = version + 2, Alphanumeric/Byte = version + 1.
+    /// Character count indicator width in bits (ISO/IEC 18004 Table 3): Numeric = version + 2, Alphanumeric/Byte = version + 1.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetCountIndicatorLength(MicroQRVersion version, EncodingMode mode) => mode switch
@@ -172,9 +166,8 @@ internal static class MicroQRConstants
     };
 
     /// <summary>
-    /// Character count indicator width for Kanji mode (ISO/IEC 18004 Table 3):
-    /// 3 bits for M3, 4 for M4. M1 and M2 do not define Kanji mode, and their mode
-    /// indicators (0 and 1 bit wide) cannot express its value, so it never reaches here.
+    /// Character count indicator width for Kanji mode (ISO/IEC 18004 Table 3): 3 bits for M3, 4 for M4.
+    /// M1 and M2 do not define Kanji mode, and their mode indicators (0 and 1 bit wide) cannot express its value, so it never reaches here.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(MicroQRVersion version)
@@ -196,10 +189,7 @@ internal static class MicroQRConstants
     public static int GetTerminatorLength(MicroQRVersion version) => 2 * (int)version + 1;
 
     /// <summary>
-    /// Computes the 15 format information bits for the given version, ECC level and
-    /// mask pattern: 5 data bits (3-bit symbol number + 2-bit mask) protected by
-    /// BCH(15,5) with generator polynomial 0x537, XOR-masked with 0x4445
-    /// (ISO/IEC 18004 Micro QR format information; Standard QR uses XOR 0x5412).
+    /// Computes the 15 format information bits for the given version, ECC level and mask pattern: 5 data bits (3-bit symbol number + 2-bit mask) protected by BCH(15,5) with generator polynomial 0x537, XOR-masked with 0x4445 (ISO/IEC 18004 Micro QR format information; Standard QR uses XOR 0x5412).
     /// </summary>
     public static ushort GetFormatBits(MicroQRVersion version, MicroQREccLevel eccLevel, int maskPattern)
     {

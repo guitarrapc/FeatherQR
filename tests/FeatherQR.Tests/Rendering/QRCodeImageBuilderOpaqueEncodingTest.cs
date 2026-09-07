@@ -16,7 +16,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     [Test]
     public async Task DefaultColors_ProducesOpaqueImage()
     {
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
 
         using var image = new QRCodeImageBuilder(qr).WithSize(300, 300).ToImage();
 
@@ -28,7 +28,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     {
         // Pad area stays transparent, so the surface must keep its alpha channel.
         const int modulePixelSize = 4;
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var canvasSide = qr.Size * modulePixelSize + 40;
 
         using var image = new QRCodeImageBuilder(qr)
@@ -46,7 +46,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     public async Task OpaqueClearWithPadding_ProducesOpaqueImage()
     {
         const int modulePixelSize = 4;
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var canvasSide = qr.Size * modulePixelSize + 40;
 
         using var image = new QRCodeImageBuilder(qr)
@@ -63,7 +63,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     {
         // Translucent background over a transparent canvas: pixels stay
         // translucent, so the alpha channel must be preserved.
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var translucentWhite = new SKColor(0xFF, 0xFF, 0xFF, 0x80);
 
         using var image = new QRCodeImageBuilder(qr)
@@ -82,7 +82,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     {
         // The opaque cleared canvas is the base layer; the translucent background
         // blends over it and every pixel stays opaque.
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var translucentWhite = new SKColor(0xFF, 0xFF, 0xFF, 0x80);
 
         using var image = new QRCodeImageBuilder(qr)
@@ -98,7 +98,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     {
         // The encoded PNG must stay visually identical to the premul render;
         // only the alpha channel representation may differ.
-        var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         const int size = 300;
 
         var png = QRCodeImageBuilder.GetPngBytes(qr, size);

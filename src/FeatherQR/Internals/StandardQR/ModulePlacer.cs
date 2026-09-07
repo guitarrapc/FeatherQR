@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Static utility class for placing QR code modules (patterns and data).
@@ -29,8 +29,7 @@ internal static partial class ModulePlacer
     /// - Skip timing pattern column (column 6)
     /// - Fill out non-blocked modules
     ///
-    /// Performance (see the micro-optimization findings log, ~2x over the
-    /// per-module implementation at every version, zero allocations):
+    /// Performance (see the micro-optimization findings log, ~2x over the per-module implementation at every version, zero allocations):
     /// - The stream is consumed strictly sequentially, so the next up-to-64 bits
     ///   are kept MSB-aligned in a ulong register and refilled 8 bytes at a time,
     ///   replacing an indexed byte load + variable shift per module.
@@ -297,8 +296,7 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Places timing patterns (alternating dark/light modules).
-    /// Horizontal and vertical lines at row 6 and column 6.
-    /// Used for module coordinate mapping during decoding.
+    /// Horizontal and vertical lines at row 6 and column 6. Used for module coordinate mapping during decoding.
     /// </summary>
     /// <param name="buffer"></param>
     /// <param name="size"></param>

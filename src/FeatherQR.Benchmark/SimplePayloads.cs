@@ -1,6 +1,5 @@
 /// <summary>
-/// Payloads shared by the Micro QR encode and decode comparisons, so both directions
-/// measure the same three symbols.
+/// Payloads shared by the Micro QR encode and decode comparisons, so both directions measure the same three symbols.
 /// </summary>
 internal static class MicroQRPayloads
 {
@@ -10,8 +9,7 @@ internal static class MicroQRPayloads
 }
 
 /// <summary>
-/// Payloads shared by the rMQR encode and decode comparisons, so both directions measure
-/// the same three symbols.
+/// Payloads shared by the rMQR encode and decode comparisons, so both directions measure the same three symbols.
 /// </summary>
 internal static class RmQRPayloads
 {
@@ -24,8 +22,7 @@ internal static class RmQRPayloads
 }
 
 /// <summary>
-/// Converts a module matrix produced by this library into the form CodeGlyphX decodes,
-/// so the comparison rows start from identical modules.
+/// Converts a module matrix produced by this library into the form CodeGlyphX decodes, so the comparison rows start from identical modules.
 /// </summary>
 internal static class GlyphBitMatrix
 {

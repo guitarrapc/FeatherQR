@@ -1,5 +1,5 @@
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class RmQRBinaryDecoderUnitTest
 {
-    private static (QRCodeDecodeStatus Status, string Text) Decode(byte[] data, RmQRVersion version)
+    private static (DecodeStatus Status, string Text) Decode(byte[] data, RmQRVersion version)
     {
         var destination = new char[RmQRMatrixDecoder.GetMaxCharCount(version)];
         var status = RmQRBinaryDecoder.DecodeBitStream(data, data.Length * 8, version, destination, out var written);
@@ -40,7 +40,7 @@ public class RmQRBinaryDecoderUnitTest
     public async Task Decode_OracleGolden_R7x43M_Numeric1()
     {
         var (status, text) = Decode([0x22, 0x20, 0xEC, 0x11, 0xEC, 0x11], RmQRVersion.R7x43);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("1");
     }
 
@@ -55,7 +55,7 @@ public class RmQRBinaryDecoderUnitTest
     public async Task Decode_EncoderRoundTrip(string text, RmQRVersion version, RmQREccLevel ecc)
     {
         var (status, decoded) = Decode(Encode(text, version, ecc), version);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(decoded).IsEqualTo(text);
     }
 
@@ -64,11 +64,11 @@ public class RmQRBinaryDecoderUnitTest
     {
         // R7x43-H byte "ab": 3 + 3 + 16 = 22 bits + 2-bit terminator, no padding.
         var (status, decoded) = Decode(Encode("ab", RmQRVersion.R7x43, RmQREccLevel.H), RmQRVersion.R7x43);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(decoded).IsEqualTo("ab");
         // 12 digits at R7x43-M: 47 of 48 bits used, 1-bit terminator.
         var (status2, decoded2) = Decode(Encode("999999999999", RmQRVersion.R7x43, RmQREccLevel.M), RmQRVersion.R7x43);
-        await Assert.That(status2).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status2).IsEqualTo(DecodeStatus.Success);
         await Assert.That(decoded2).IsEqualTo("999999999999");
     }
 
@@ -78,7 +78,7 @@ public class RmQRBinaryDecoderUnitTest
         // 111 (ECI) + 00011010 (26 = UTF-8) + 011 (byte) + count 3 bits = 2 + "é" as UTF-8 C3 A9 + terminator, R7x43-M (6 codewords).
         var data = Bits("111 00011010 011 010 11000011 10101001 000", 6);
         var (status, text) = Decode(data, RmQRVersion.R7x43);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("é");
     }
 
@@ -88,7 +88,7 @@ public class RmQRBinaryDecoderUnitTest
         // ECI 3 = ISO-8859-1, then byte "é" = E9.
         var data = Bits("111 00000011 011 001 11101001 000", 6);
         var (status, text) = Decode(data, RmQRVersion.R7x43);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("é");
     }
 
@@ -96,7 +96,7 @@ public class RmQRBinaryDecoderUnitTest
     public async Task Decode_UnsupportedEci_ReportsUnsupportedContent()
     {
         var data = Bits("111 00010100 011 001 01000001 000", 6); // ECI 20 (Shift JIS): not mapped
-        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.UnsupportedContent);
     }
 
     // Kanji mode (decode only; the rMQR encoder never emits it)
@@ -115,7 +115,7 @@ public class RmQRBinaryDecoderUnitTest
         var data = Bits("100 10 " + Kanji(0x93FA) + Kanji(0x967B) + " 000", 6);
         var (status, text) = Decode(data, RmQRVersion.R7x43);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("日本");
     }
 
@@ -126,7 +126,7 @@ public class RmQRBinaryDecoderUnitTest
         var data = Bits("100 0000001 " + Kanji(0x8A45) + " 000", 20);
         var (status, text) = Decode(data, RmQRVersion.R13x139);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("界");
     }
 
@@ -141,7 +141,7 @@ public class RmQRBinaryDecoderUnitTest
         var data = Bits("100 01 " + Kanji(0x93FA) + " 001 0011 0001111011 000", 6);
         var (status, text) = Decode(data, RmQRVersion.R7x43);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("日123");
     }
 
@@ -149,14 +149,14 @@ public class RmQRBinaryDecoderUnitTest
     public async Task Decode_KanjiCellOutsideJisX0208_ReportsUnmappedCharacter()
     {
         var data = Bits("100 01 " + Kanji(0x8740) + " 000", 6); // NEC row 13, CP932-only
-        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
     }
 
     [Test]
     public async Task Decode_KanjiStructurallyImpossibleCell_ReportsInvalidBitstream()
     {
         var data = Bits("100 01 0000000111111 000", 6); // low byte 0x3F: no such Shift_JIS trail byte
-        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -169,7 +169,7 @@ public class RmQRBinaryDecoderUnitTest
         var data = Bits("100 00 001 0001 0111 000", 6); // empty Kanji, then Numeric "7"
         var (status, text) = Decode(data, RmQRVersion.R7x43);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("7");
     }
 
@@ -190,7 +190,7 @@ public class RmQRBinaryDecoderUnitTest
         // consume 45, leaving a Kanji mode indicator with 0 bits for its count.
         var data = Bits(string.Concat(Enumerable.Repeat("100 00 ", 9)) + "100", 6);
 
-        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -205,7 +205,7 @@ public class RmQRBinaryDecoderUnitTest
         // indicator at bit 44, leaving 1 of the 2 count bits.
         var data = Bits("100 11 " + Kanji(0x93FA) + Kanji(0x967B) + Kanji(0x8CEA) + " 100", 6);
 
-        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -236,8 +236,8 @@ public class RmQRBinaryDecoderUnitTest
     [Test]
     public async Task Decode_ReservedModes_AreInvalidBitstream()
     {
-        await Assert.That(Decode(Bits("101 0000", 6), RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
-        await Assert.That(Decode(Bits("110 0000", 6), RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(Bits("101 0000", 6), RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(Bits("110 0000", 6), RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -246,10 +246,10 @@ public class RmQRBinaryDecoderUnitTest
         // Numeric mode indicator at bit 45 of 48 (after a byte segment and four empty numeric
         // segments that consume bits without terminating): its 4-bit count does not fit.
         var truncatedCount = Bits("011 001 01000001 0010000 0010000 0010000 0010000 001", 6);
-        await Assert.That(Decode(truncatedCount, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(truncatedCount, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
         // Byte segment claiming more bytes than the stream holds.
         var truncatedPayload = Bits("011 111 01000001 01000010", 6); // claims 7 bytes (56 bits) with 42 bits left
-        await Assert.That(Decode(truncatedPayload, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(truncatedPayload, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -258,10 +258,10 @@ public class RmQRBinaryDecoderUnitTest
         // 011 (byte) count 1 'A' then 000 terminator, then arbitrary pad garbage must be ignored.
         var data = Bits("011 001 01000001 000 11111111 10101010 11001100", 6);
         var (status, text) = Decode(data, RmQRVersion.R7x43);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("A");
         // Empty-count segments are skipped, not terminators (only 000 ends the stream).
         var empty = Bits("001 0000 011 001 01000010 000", 6);
-        await Assert.That(Decode(empty, RmQRVersion.R7x43)).IsEqualTo((QRCodeDecodeStatus.Success, "B"));
+        await Assert.That(Decode(empty, RmQRVersion.R7x43)).IsEqualTo((DecodeStatus.Success, "B"));
     }
 }

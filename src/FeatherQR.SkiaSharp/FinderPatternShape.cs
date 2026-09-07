@@ -3,60 +3,52 @@ using SkiaSharp;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Defines the shape of QR code finder pattern (position detection patterns).
+/// How the three finder patterns, the large squares in the corners, are drawn.
 /// </summary>
 public abstract class FinderPatternShape
 {
     /// <summary>
     /// Gets whether this shape requires antialiasing for smooth rendering.
-    /// Curved shapes such as circles and rounded rectangles should return <see langword="true"/>;
-    /// straight-edged shapes such as rectangles can return <see langword="false"/>.
+    /// Curved shapes such as circles and rounded rectangles should return <see langword="true"/>; straight-edged shapes such as rectangles can return <see langword="false"/>.
     /// </summary>
     public virtual bool RequiresAntialiasing => false;
 
     /// <summary>
-    /// Draw a finder pattern at the specified location.
+    /// Draws a finder pattern.
     /// </summary>
     /// <param name="canvas">The canvas to render on.</param>
-    /// <param name="rect">The rectangular area for the finder pattern (7x7 modules).</param>
-    /// <param name="paint">The paint to use for drawing.</param>
+    /// <param name="rect">Where to draw it: the 7 by 7 module area.</param>
+    /// <param name="paint">The paint to draw with.</param>
     public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
 
     /// <summary>
-    /// Draw a finder pattern at the specified location with background color support.
+    /// Draws a finder pattern, coloring its light modules too.
     /// </summary>
     /// <param name="canvas">The canvas to render on.</param>
-    /// <param name="rect">The rectangular area for the finder pattern (7x7 modules).</param>
-    /// <param name="paint">The paint to use for drawing dark modules.</param>
-    /// <param name="backgroundColor">The color used for light modules in the finder pattern.</param>
+    /// <param name="rect">Where to draw it: the 7 by 7 module area.</param>
+    /// <param name="paint">The paint for dark modules.</param>
+    /// <param name="backgroundColor">The color for light modules.</param>
     public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
     {
         Draw(canvas, rect, paint);
     }
 
     /// <summary>
-    /// Draw a finder pattern at the specified location using an existing background paint.
+    /// Draws a finder pattern using the paint the renderer already holds for light modules.
     /// </summary>
     /// <remarks>
-    /// The default implementation preserves compatibility with custom finder shapes that
-    /// override the color-based overload. Built-in shapes override this overload so the
-    /// renderer can reuse its background paint. The renderer may set the paint's blend mode
-    /// to <see cref="SKBlendMode.Clear"/> while drawing on an isolated layer so transparent
-    /// and translucent light modules reveal the background rendered beneath the finder pattern.
-    /// Implementations should therefore draw with this paint directly instead of copying only
-    /// its color. The renderer owns <paramref name="backgroundPaint"/> and may reuse it across
-    /// calls; implementations must not modify or dispose it.
-    /// Custom shapes should override this overload when they need to reuse the renderer's
-    /// configured background paint or when they must support non-opaque backgrounds (blend modes).
-    /// Existing custom shapes may continue to override <see cref="Draw(SKCanvas, SKRect, SKPaint, SKColor)"/>,
-    /// but that overload cannot use the renderer's blend mode.
+    /// The default implementation preserves compatibility with custom finder shapes that override the color-based overload.
+    /// Built-in shapes override this overload so the renderer can reuse its background paint.
+    /// The renderer may set the paint's blend mode to <see cref="SKBlendMode.Clear"/> while drawing on an isolated layer so transparent and translucent light modules reveal the background rendered beneath the finder pattern.
+    /// Implementations should therefore draw with this paint directly instead of copying only its color.
+    /// The renderer owns <paramref name="backgroundPaint"/> and may reuse it across calls; implementations must not modify or dispose it.
+    /// Custom shapes should override this overload when they need to reuse the renderer's configured background paint or when they must support non-opaque backgrounds (blend modes).
+    /// Existing custom shapes may continue to override <see cref="Draw(SKCanvas, SKRect, SKPaint, SKColor)"/>, but that overload cannot use the renderer's blend mode.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
-    /// <param name="rect">The rectangular area for the finder pattern (7x7 modules).</param>
-    /// <param name="paint">The paint to use for drawing dark modules.</param>
-    /// <param name="backgroundPaint">
-    /// The renderer-owned paint to use for drawing light modules. Do not modify or dispose it.
-    /// </param>
+    /// <param name="rect">Where to draw it: the 7 by 7 module area.</param>
+    /// <param name="paint">The paint for dark modules.</param>
+    /// <param name="backgroundPaint">The renderer-owned paint to use for drawing light modules. Do not modify or dispose it.</param>
     public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
     {
         Draw(canvas, rect, paint, backgroundPaint.Color);
@@ -64,12 +56,12 @@ public abstract class FinderPatternShape
 }
 
 /// <summary>
-/// Standard QR code finder pattern (three nested squares, 7x7, 5x5, 3x3).
+/// The standard finder pattern: three nested squares.
 /// </summary>
 public sealed class RectangleFinderPatternShape : FinderPatternShape
 {
     /// <summary>
-    /// Gets the default instance.
+    /// A ready-made instance to use as-is.
     /// </summary>
     public static readonly RectangleFinderPatternShape Default = new();
 
@@ -77,7 +69,7 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
     private RectangleFinderPatternShape() { }
 
     /// <summary>
-    /// Antialiasing disabled; straight-edged rectangles render cleanly without it.
+    /// Off: straight edges render cleanly without it.
     /// </summary>
     public override bool RequiresAntialiasing => false;
 
@@ -121,12 +113,12 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
 }
 
 /// <summary>
-/// Circular finder pattern. (three nested circles, 7x7, 5x5, 3x3)
+/// Three nested circles.
 /// </summary>
 public sealed class CircleFinderPatternShape : FinderPatternShape
 {
     /// <summary>
-    /// Gets the default instance.
+    /// A ready-made instance to use as-is.
     /// </summary>
     public static readonly CircleFinderPatternShape Default = new();
 
@@ -134,7 +126,7 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
     private CircleFinderPatternShape() { }
 
     /// <summary>
-    /// Requires antialiasing to prevent jagged edges on curves.
+    /// On, so the curves do not come out jagged.
     /// </summary>
     public override bool RequiresAntialiasing => true;
 
@@ -169,23 +161,22 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
 }
 
 /// <summary>
-/// Rounded rectangle outer with circular center finder pattern.
-/// Three nested shapes: outer rounded rectangle (7×7), middle rounded rectangle (5×5), inner rounded rectangle (3×3).
+/// Three nested rounded rectangles.
 /// </summary>
 public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
 {
     /// <summary>
-    /// Gets the default instance.
+    /// A ready-made instance to use as-is.
     /// </summary>
     public static readonly RoundedRectangleFinderPatternShape Default = new();
 
     private readonly float _cornerRadiusPercent;
 
     /// <summary>
-    /// Initializes a new instance with the specified corner radius.
+    /// Creates the shape with a corner radius of your own.
     /// </summary>
-    /// <param name="cornerRadiusPercent">The corner radius as a percentage of the module size (0.0 to 1.0).</param>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="cornerRadiusPercent">The radius as a fraction of the module size, 0.0 to 1.0.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the radius is outside 0.0 to 1.0.</exception>
     public RoundedRectangleFinderPatternShape(float cornerRadiusPercent = 0.2f)
     {
         if (cornerRadiusPercent < 0 || cornerRadiusPercent > 1)
@@ -194,7 +185,7 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
     }
 
     /// <summary>
-    /// Requires antialiasing to prevent jagged edges on curves.
+    /// On, so the curves do not come out jagged.
     /// </summary>
     public override bool RequiresAntialiasing => true;
 
@@ -239,23 +230,22 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
 }
 
 /// <summary>
-/// Rounded rectangle outer with circular center finder pattern.
-/// Three nested shapes: outer rounded rectangle (7×7), middle rounded rectangle (5×5), inner circle (3×3).
+/// Two nested rounded rectangles around a circle.
 /// </summary>
 public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape
 {
     /// <summary>
-    /// Gets the default instance.
+    /// A ready-made instance to use as-is.
     /// </summary>
     public static readonly RoundedRectangleCircleFinderPatternShape Default = new();
 
     private readonly float _cornerRadiusPercent;
 
     /// <summary>
-    /// Initializes a new instance with the specified corner radius.
+    /// Creates the shape with a corner radius of your own.
     /// </summary>
-    /// <param name="cornerRadiusPercent">The corner radius as a percentage of the module size (0.0 to 1.0).</param>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="cornerRadiusPercent">The radius as a fraction of the module size, 0.0 to 1.0.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the radius is outside 0.0 to 1.0.</exception>
     public RoundedRectangleCircleFinderPatternShape(float cornerRadiusPercent = 0.3f)
     {
         if (cornerRadiusPercent < 0 || cornerRadiusPercent > 1)
@@ -264,7 +254,7 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
     }
 
     /// <summary>
-    /// Requires antialiasing to prevent jagged edges on curves.
+    /// On, so the curves do not come out jagged.
     /// </summary>
     public override bool RequiresAntialiasing => true;
 

@@ -4,17 +4,12 @@ using System.Runtime.CompilerServices;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Places Micro QR function patterns, data modules, masking and format
-/// information into a byte-per-module core matrix (ISO/IEC 18004).
+/// Places Micro QR function patterns, data modules, masking and format information into a byte-per-module core matrix (ISO/IEC 18004).
 /// </summary>
 /// <remarks>
-/// Micro QR layout: a single finder pattern at the top-left, separators along its
-/// right/bottom edges, timing patterns along row 0 and column 0, and 15 format
-/// modules adjacent to the finder. The entire function region reduces to the
-/// predicate <c>row == 0 || col == 0 || (row &lt;= 8 &amp;&amp; col &lt;= 8)</c>:
-/// no alignment patterns, no dark module, no version information.
-/// The fused fast-path pipeline lives in MicroQRModulePlacer.PlaceSymbol.cs;
-/// the per-module implementations in this file are the readable reference.
+/// Micro QR layout: a single finder pattern at the top-left, separators along its right/bottom edges, timing patterns along row 0 and column 0, and 15 format modules adjacent to the finder.
+/// The entire function region reduces to the predicate <c>row == 0 || col == 0 || (row &lt;= 8 &amp;&amp; col &lt;= 8)</c>: no alignment patterns, no dark module, no version information.
+/// The fused fast-path pipeline lives in MicroQRModulePlacer.PlaceSymbol.cs; the per-module implementations in this file are the readable reference.
 /// </remarks>
 internal static partial class MicroQRModulePlacer
 {
@@ -55,17 +50,13 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// Places the codeword bit stream into the data region using the two-column
-    /// zigzag (bottom-right start, upward first, alternating per column pair).
+    /// Places the codeword bit stream into the data region using the two-column zigzag (bottom-right start, upward first, alternating per column pair).
     /// </summary>
     /// <param name="matrix">Core matrix with function patterns already placed.</param>
     /// <param name="size">Core side length in modules.</param>
     /// <param name="dataCodewords">Data codewords including padding.</param>
     /// <param name="eccCodewords">Error correction codewords.</param>
-    /// <param name="dataBitCount">
-    /// Number of DATA bits to emit, for M1/M3 this stops after the high nibble of
-    /// the final (4-bit) data codeword; its forced-zero low nibble is never placed.
-    /// </param>
+    /// <param name="dataBitCount">Number of DATA bits to emit, for M1/M3 this stops after the high nibble of the final (4-bit) data codeword; its forced-zero low nibble is never placed.</param>
     public static void PlaceDataCodewords(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
     {
         var totalBits = dataBitCount + eccCodewords.Length * 8;
@@ -100,10 +91,7 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// Reads bit <paramref name="bitIndex"/> of the transmission stream: data bits
-    /// first (MSB-first per codeword; naturally covers only the high nibble of a
-    /// final half codeword because <paramref name="dataBitCount"/> stops there),
-    /// then ECC bits.
+    /// Reads bit <paramref name="bitIndex"/> of the transmission stream: data bits first (MSB-first per codeword; naturally covers only the high nibble of a final half codeword because <paramref name="dataBitCount"/> stops there), then ECC bits.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static byte GetStreamBit(int bitIndex, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
@@ -118,16 +106,13 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// Scores the four Micro QR mask patterns and applies the winner to the data
-    /// region. Returns the selected mask pattern (0-3).
+    /// Scores the four Micro QR mask patterns and applies the winner to the data region.
+    /// Returns the selected mask pattern (0-3).
     /// </summary>
     /// <remarks>
-    /// ISO/IEC 18004 Micro QR evaluation: count dark modules on the right edge
-    /// (SUM1) and lower edge (SUM2), both excluding row/column 0; score is
-    /// <c>min·16 + max</c> and the HIGHEST score wins (more dark edge modules
-    /// make the symbol easier to distinguish from its quiet zone). Ties keep the
-    /// lowest pattern number. Scoring reads only the two edges with the candidate
-    /// mask applied on the fly, so no trial matrices are materialized.
+    /// ISO/IEC 18004 Micro QR evaluation: count dark modules on the right edge (SUM1) and lower edge (SUM2), both excluding row/column 0; score is <c>min·16 + max</c> and the HIGHEST score wins (more dark edge modules make the symbol easier to distinguish from its quiet zone).
+    /// Ties keep the lowest pattern number.
+    /// Scoring reads only the two edges with the candidate mask applied on the fly, so no trial matrices are materialized.
     /// </remarks>
     public static int SelectAndApplyMask(Span<byte> matrix, int size)
     {
@@ -178,10 +163,9 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// Micro QR mask conditions (ISO/IEC 18004 Table 10; they correspond to
-    /// Standard QR patterns 1, 4, 6 and 7 respectively). True = flip the module.
-    /// Shared with the decoder (<see cref="MicroQRMatrixDecoder"/>) so both sides
-    /// always agree on the mask templates.
+    /// Micro QR mask conditions (ISO/IEC 18004 Table 10; they correspond to Standard QR patterns 1, 4, 6 and 7 respectively).
+    /// True = flip the module.
+    /// Shared with the decoder (<see cref="MicroQRMatrixDecoder"/>) so both sides always agree on the mask templates.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool GetMaskBit(int mask, int row, int col) => mask switch
@@ -193,8 +177,7 @@ internal static partial class MicroQRModulePlacer
     };
 
     /// <summary>
-    /// Places the 15 format information bits: bit 14 … 8 along row 8 columns 1-7,
-    /// bit 7 at (8,8), bits 6 … 0 down column 8 rows 7-1 (ISO/IEC 18004).
+    /// Places the 15 format information bits: bit 14 … 8 along row 8 columns 1-7, bit 7 at (8,8), bits 6 … 0 down column 8 rows 7-1 (ISO/IEC 18004).
     /// </summary>
     public static void PlaceFormat(Span<byte> matrix, int size, ushort formatBits)
     {

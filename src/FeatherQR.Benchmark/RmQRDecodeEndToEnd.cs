@@ -1,7 +1,6 @@
 /// <summary>
-/// End-to-end rMQR matrix decoding through the public API (RmQRCodeDecoder):
-/// module matrix (no quiet zone) → text. Baseline for the reference-shaped decoder;
-/// span-destination variants must stay allocation-free.
+/// End-to-end rMQR matrix decoding through the public API (RmQRCodeDecoder): module matrix (no quiet zone) → text.
+/// Baseline for the reference-shaped decoder; span-destination variants must stay allocation-free.
 ///
 /// Scenarios (same payloads as RmQREncodeEndToEnd):
 ///   Numeric_R7x43_M      : smallest symbol, single RS block
@@ -40,10 +39,10 @@ public class RmQRDecodeEndToEnd
         _numericDamagedModules = Damage(_numericModules, _numericSize, RmQRVersion.R7x43, flips: 2, seed: 17);
         _byteDamagedModules = Damage(_byteModules, _byteSize, RmQRVersion.R17x139, flips: 6, seed: 23);
 
-        var calculated = Sizing.Required("012345678901", ECCLevel.L, 0);
+        var calculated = Sizing.Required("012345678901", QREccLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
-        FeatherQR.QRCodeGenerator.CreateQrCode("012345678901", ECCLevel.L, _standardModules, quietZoneSize: 0);
-        _standardSize = calculated.QrSize;
+        FeatherQR.QRCodeGenerator.Create("012345678901", QREccLevel.L, _standardModules, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        _standardSize = calculated.Size;
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
 
@@ -133,16 +132,12 @@ public class RmQRDecodeEndToEnd
     }
 
     /// <summary>
-    /// Flips <paramref name="flips"/> distinct modules and keeps the draw only when the
-    /// decoder reports exactly that many corrected errors, so the scenario measures the
-    /// correction path at its stated strength rather than the failure path.
+    /// Flips <paramref name="flips"/> distinct modules and keeps the draw only when the decoder reports exactly that many corrected errors, so the scenario measures the correction path at its stated strength rather than the failure path.
     /// </summary>
     /// <remarks>
-    /// The ErrorsCorrected check is what makes the count honest. Drawing from the whole
-    /// matrix spends flips on function patterns, which carry no codeword, and two flips
-    /// can land in one codeword byte: either way a nominal 2-flip case injects one actual
-    /// error and measures a shorter correction than its name promises. Rejecting those
-    /// draws is conservative — every excluded sample is easier than the one kept.
+    /// The ErrorsCorrected check is what makes the count honest.
+    /// Drawing from the whole matrix spends flips on function patterns, which carry no codeword, and two flips can land in one codeword byte: either way a nominal 2-flip case injects one actual error and measures a shorter correction than its name promises.
+    /// Rejecting those draws is conservative — every excluded sample is easier than the one kept.
     /// </remarks>
     private static byte[] Damage(byte[] modules, (int Width, int Height) size, RmQRVersion version, int flips, int seed)
     {
@@ -176,7 +171,7 @@ public class RmQRDecodeEndToEnd
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         var buffer = new byte[calculated.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), eccLevel, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        RmQRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         return (buffer, (calculated.Width, calculated.Height));
     }
 }

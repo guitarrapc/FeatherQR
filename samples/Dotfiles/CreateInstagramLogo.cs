@@ -1,6 +1,6 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
-#:project ../../src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj
+#:project ../../src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj
 using SkiaSharp;
 
 // Generate a square Instagram-style logo with Skia.

@@ -1,5 +1,5 @@
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -45,8 +45,8 @@ public class CapacityOverflowGuardTest
     [Test]
     public async Task StandardQR_TryGetVersion_RejectsWrappingLength()
     {
-        await Assert.That(QRCodeGenerator.TryGetVersion(OverflowingByteLength, EncodingMode.Byte, ECCLevel.L, EciMode.Default, utf8BOM: false, out _)).IsFalse();
-        await Assert.That(QRCodeGenerator.TryGetVersion(OverflowingByteLength, EncodingMode.Byte, ECCLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetVersion(OverflowingByteLength, EncodingMode.Byte, QREccLevel.L, EciMode.Default, utf8BOM: false, out _)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetVersion(OverflowingByteLength, EncodingMode.Byte, QREccLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
     }
 
     [Test]
@@ -64,7 +64,7 @@ public class CapacityOverflowGuardTest
 
         // Standard QR validates the ECC level inside the version scan, so an oversized
         // payload must still reach it rather than short-cutting to false.
-        await Assert.That(() => QRCodeGenerator.TryGetVersion(OverflowingByteLength, EncodingMode.Byte, (ECCLevel)9, EciMode.Default, utf8BOM: false, out _)).Throws<ArgumentException>();
+        await Assert.That(() => QRCodeGenerator.TryGetVersion(OverflowingByteLength, EncodingMode.Byte, (QREccLevel)9, EciMode.Default, utf8BOM: false, out _)).Throws<ArgumentException>();
 
         await Assert.That(() => RmQRVersionSelector.TrySelect(EncodingMode.Byte, OverflowingByteLength, EciMode.Default, (RmQREccLevel)2, null, RmQRFitStrategy.MinimizeArea, null, out _)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRVersionSelector.TrySelect(EncodingMode.Byte, OverflowingByteLength, EciMode.Default, RmQREccLevel.M, (RmQRVersion)33, RmQRFitStrategy.MinimizeArea, null, out _)).Throws<ArgumentOutOfRangeException>();
@@ -86,9 +86,9 @@ public class CapacityOverflowGuardTest
     {
         // effectiveLength += 3 must not wrap before the widened multiply, or a maximal
         // Byte payload reads as Version 1.
-        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue, EncodingMode.Byte, ECCLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
-        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue - 2, EncodingMode.Byte, ECCLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
-        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue, EncodingMode.Numeric, ECCLevel.L, EciMode.Default, utf8BOM: false, out _)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue, EncodingMode.Byte, QREccLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue - 2, EncodingMode.Byte, QREccLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue, EncodingMode.Numeric, QREccLevel.L, EciMode.Default, utf8BOM: false, out _)).IsFalse();
     }
 
     [Test]
@@ -101,9 +101,9 @@ public class CapacityOverflowGuardTest
         var micro = new TextAnalysisResult(EncodingMode.Numeric, EciMode.Default, 35);
         await Assert.That(MicroQRCodeGenerator.TrySelectVersion(in micro, MicroQREccLevel.L, MicroQRVersion.M4, out _)).IsTrue();
 
-        await Assert.That(QRCodeGenerator.TryGetVersion(2953, EncodingMode.Byte, ECCLevel.L, EciMode.Default, utf8BOM: false, out var v40Byte)).IsTrue();
+        await Assert.That(QRCodeGenerator.TryGetVersion(2953, EncodingMode.Byte, QREccLevel.L, EciMode.Default, utf8BOM: false, out var v40Byte)).IsTrue();
         await Assert.That(v40Byte).IsEqualTo(40);
-        await Assert.That(QRCodeGenerator.TryGetVersion(7089, EncodingMode.Numeric, ECCLevel.L, EciMode.Default, utf8BOM: false, out var v40Numeric)).IsTrue();
+        await Assert.That(QRCodeGenerator.TryGetVersion(7089, EncodingMode.Numeric, QREccLevel.L, EciMode.Default, utf8BOM: false, out var v40Numeric)).IsTrue();
         await Assert.That(v40Numeric).IsEqualTo(40);
     }
 }

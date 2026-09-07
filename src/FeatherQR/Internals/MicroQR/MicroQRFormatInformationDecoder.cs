@@ -4,13 +4,9 @@ namespace FeatherQR.Internals.MicroQR;
 /// Decodes the 15-bit Micro QR format information (symbol number + mask pattern).
 /// </summary>
 /// <remarks>
-/// Inverse of <see cref="MicroQRConstants.GetFormatBits"/>. Micro QR places a
-/// single format information copy (Standard QR has two redundant copies), so the
-/// raw 15 bits are matched against all 32 valid masked patterns (8 symbol numbers
-/// × 4 masks) by Hamming distance. BCH(15,5) has minimum distance 7, so up to
-/// 3 bit errors are unambiguously correctable, a candidate is accepted only when
-/// its distance is ≤ 3. The XOR mask (0x4445) preserves pairwise distances, so
-/// the masked patterns keep the same correction radius.
+/// Inverse of <see cref="MicroQRConstants.GetFormatBits"/>.
+/// Micro QR places a single format information copy (Standard QR has two redundant copies), so the raw 15 bits are matched against all 32 valid masked patterns (8 symbol numbers × 4 masks) by Hamming distance.
+/// BCH(15,5) has minimum distance 7, so up to 3 bit errors are unambiguously correctable, a candidate is accepted only when its distance is ≤ 3. The XOR mask (0x4445) preserves pairwise distances, so the masked patterns keep the same correction radius.
 /// </remarks>
 internal static class MicroQRFormatInformationDecoder
 {

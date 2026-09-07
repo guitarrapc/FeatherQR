@@ -22,7 +22,7 @@ public class MicroQRMaskPatternOverrideTest
     [Arguments(3)]
     public async Task PinnedMask_IsWrittenToFormatInformation_AndRoundTrips(int maskPattern)
     {
-        var qr = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = maskPattern });
+        var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = maskPattern });
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"mask={maskPattern}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(Content);
@@ -56,7 +56,7 @@ public class MicroQRMaskPatternOverrideTest
     public async Task PinnedMask_AtPinnedVersion_RoundTrips(string content, MicroQREccLevel ecc, MicroQRVersion version, int maskPattern)
     {
         var options = new MicroQRCodeGeneratorOptions { Version = version, MaskPattern = maskPattern };
-        var qr = MicroQRCodeGenerator.CreateMicroQRCode(content, ecc, options);
+        var qr = MicroQRCodeGenerator.Create(content, ecc, options);
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue().Because($"v={version}, mask={maskPattern}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
@@ -67,10 +67,10 @@ public class MicroQRMaskPatternOverrideTest
     [Test]
     public async Task PinnedMask_MatchingTheAutomaticWinner_IsByteIdenticalToAutomatic()
     {
-        var auto = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var auto = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
         await Assert.That(MicroQRCodeDecoder.TryDecode(auto, out _, out var autoInfo)).IsTrue();
 
-        var pinned = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = autoInfo.MaskPattern });
+        var pinned = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = autoInfo.MaskPattern });
 
         await Assert.That(pinned.GetRawData().AsSpan().SequenceEqual(auto.GetRawData())).IsTrue();
     }
@@ -78,11 +78,11 @@ public class MicroQRMaskPatternOverrideTest
     [Test]
     public async Task PinnedMask_DifferingFromTheAutomaticWinner_ProducesADifferentButValidSymbol()
     {
-        var auto = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var auto = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
         await Assert.That(MicroQRCodeDecoder.TryDecode(auto, out _, out var autoInfo)).IsTrue();
 
         var otherMask = (autoInfo.MaskPattern + 1) % 4;
-        var pinned = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = otherMask });
+        var pinned = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = otherMask });
 
         await Assert.That(pinned.GetRawData().AsSpan().SequenceEqual(auto.GetRawData())).IsFalse();
         await Assert.That(MicroQRCodeDecoder.TryDecode(pinned, out var decoded, out var pinnedInfo)).IsTrue();
@@ -95,9 +95,9 @@ public class MicroQRMaskPatternOverrideTest
     [Test]
     public async Task UnsetMask_IsAutomatic_AndMatchesTheReleasedOverload()
     {
-        var released = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L);
-        var unset = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var explicitNull = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = null });
+        var released = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+        var unset = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var explicitNull = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { MaskPattern = null });
 
         await Assert.That(unset.GetRawData().AsSpan().SequenceEqual(released.GetRawData())).IsTrue();
         await Assert.That(explicitNull.GetRawData().AsSpan().SequenceEqual(released.GetRawData())).IsTrue();
@@ -116,15 +116,15 @@ public class MicroQRMaskPatternOverrideTest
     {
         var options = new MicroQRCodeGeneratorOptions { MaskPattern = 2 };
 
-        var allocating = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L, options);
+        var allocating = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, options);
         await Assert.That(MicroQRCodeDecoder.TryDecode(allocating, out _, out var allocatingInfo)).IsTrue();
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(Content.AsSpan(), MicroQREccLevel.L, out var size, options)).IsTrue();
 
         var buffer = new byte[size.BufferSize];
-        var written = MicroQRCodeGenerator.CreateMicroQRCode(Content.AsSpan(), MicroQREccLevel.L, buffer, options);
+        var written = MicroQRCodeGenerator.Create(Content.AsSpan(), MicroQREccLevel.L, buffer, options);
 
         await Assert.That(written).IsEqualTo(size.BufferSize);
-        await Assert.That(MicroQRCodeDecoder.TryDecode(buffer.AsSpan(0, written), size.QrSize, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(MicroQRCodeDecoder.TryDecode(buffer.AsSpan(0, written), size.Size, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
         await Assert.That(decoded).IsEqualTo(Content);
         await Assert.That(info.MaskPattern).IsEqualTo(2);
         await Assert.That(info.MaskPattern).IsEqualTo(allocatingInfo.MaskPattern);
@@ -171,7 +171,7 @@ public class MicroQRMaskPatternOverrideTest
     [Test]
     public async Task Builder_WithMaskPattern_OnPrebuiltData_Throws()
     {
-        var qr = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L);
+        var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
         await Assert.That(() => new MicroQRCodeImageBuilder(qr).WithMaskPattern(1)).Throws<InvalidOperationException>();
     }
 }

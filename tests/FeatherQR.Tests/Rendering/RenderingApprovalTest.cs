@@ -59,7 +59,7 @@ public class RenderingApprovalTest
         {
             using var icon = CreateIconBitmap();
             return new QRCodeImageBuilder(StandardContent)
-                .WithErrorCorrection(ECCLevel.H)
+                .WithErrorCorrection(QREccLevel.H)
                 .WithModulePixelSize(4)
                 .WithColors(SKColors.Black, SKColors.White, SKColors.White)
                 .WithIcon(IconData.FromImage(icon))
@@ -107,7 +107,7 @@ public class RenderingApprovalTest
 
     private static QRCodeImageBuilder StandardBuilder() =>
         new QRCodeImageBuilder(StandardContent)
-            .WithErrorCorrection(ECCLevel.M)
+            .WithErrorCorrection(QREccLevel.M)
             .WithModulePixelSize(4)
             .WithColors(SKColors.Black, SKColors.White, SKColors.White);
 

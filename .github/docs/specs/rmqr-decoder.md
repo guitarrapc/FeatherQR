@@ -12,7 +12,7 @@ Status: **matrix level shipped (Phase 6, 2026-08-15); image level shipped (Phase
 
 ### Matrix level
 
-Input: `RmQRCodeData`, or a byte-per-module span with `width` and `height` (the format `RmQRCodeGenerator.CreateRmQRCode(Span<byte>)` produces), with or without a light quiet zone (uniform or asymmetric borders are stripped automatically).
+Input: `RmQRCodeData`, or a byte-per-module span with `width` and `height` (the format `RmQRCodeGenerator.Create(Span<byte>)` produces), with or without a light quiet zone (uniform or asymmetric borders are stripped automatically).
 
 Behavior: version from the physical dimensions → both format-information copies → fixed unmask + inverse zigzag → block deinterleave → per-block Reed-Solomon correction → bit-stream parsing (Numeric / Alphanumeric / Byte, ECI segments parsed) → text. Diagnostics in `RmQRCodeDecodeInfo` (status, version, ECC level, corrected codewords). Overloads mirror `MicroQRCodeDecoder`: string result, and an allocation-free span-destination variant sized by `GetMaxDecodedLength(version)`.
 

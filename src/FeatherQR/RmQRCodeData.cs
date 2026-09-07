@@ -1,23 +1,118 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR;
 
 /// <summary>
-/// Represents rMQR code data as a 2D boolean matrix (versions R7x43-R17x139,
-/// rectangular: 7-17 modules high, 27-139 modules wide).
+/// An rMQR code as a module matrix, ready to render, serialize or decode.
 /// </summary>
 /// <remarks>
-/// Storage mirrors <see cref="MicroQRCodeData"/>: core modules only (no quiet
-/// zone), bit-packed MSB-first in flat row-major order; the quiet zone is virtual
-/// and always reads light. Serialization uses the "QRX" container:
-/// <c>"QRX" + symbol type (1 byte, 2 = rMQR) + width (1 byte) + height (1 byte) + packed core bits</c>.
-/// Micro QR (symbol type 1) and the legacy Standard QR "QRR" streams are rejected.
+/// The matrix is bit-packed and rectangular, 7 to 17 modules high and 27 to 139 wide depending on version, plus the quiet zone.
+/// Serialization writes a "QRX" header carrying the symbology and dimensions, then the packed modules.
 /// </remarks>
-public class RmQRCodeData
+public sealed class RmQRCodeData
 {
+    // =====================================================================
+    // Memory Layout
+    // =====================================================================
+    //
+    // RmQRCodeData stores CORE modules only (no quiet zone), bit-packed
+    // MSB-first in flat row-major order, zero-padded to a whole byte, and the
+    // packed bits ARE the serialization payload. See QRCodeData for the
+    // measurements that motivate the layout.
+    //
+    // The difference that matters here is that rMQR is RECTANGULAR, so there is
+    // no single "size": the row stride is _coreWidth, and width and height are
+    // tracked separately everywhere.
+    //
+    //   bitIndex = coreRow * _coreWidth + coreCol        // stride is the WIDTH
+    //   dark(coreRow, coreCol) = (_bits[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1
+    //
+    // The bounds check is asymmetric for the same reason: rows are compared
+    // against _height / _coreHeight and columns against _width / _coreWidth.
+    // Versions run R7x43 to R17x139, 7-17 modules high and 27-139 wide, and the
+    // specification asks for a 2-module quiet zone (Standard QR uses 4).
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Example (R7x43, QuietZone = 2)                          │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ _coreWidth: 43, _coreHeight: 7 (no quiet zone)          │
+    // │ _quietZoneSize: 2 (border width)                        │
+    // │ _width: 47, _height: 11 (including quiet zone)          │
+    // │ _bits.Length: 38 bytes (ceil(43 * 7 / 8))               │
+    // │   (byte-per-module over the same 47×11: 517 bytes)      │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // The quiet zone is VIRTUAL: it is all-light by definition, so the public
+    // indexer answers false outside the core area instead of storing border
+    // modules. _width/_height/_quietZoneSize only affect coordinate translation.
+    //
+    // Visual Representation (47×11 with QuietZone=2), showing the whole height:
+    //
+    //     0   1   2   3 ... 44  45  46
+    //   ┌───┬───┬───┬───┬───┬───┬───┬───┐
+    // 0 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ ← QuietZone (row 0-1)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 1 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 2 │ Q │ Q │ C │ C │...│ C │ Q │ Q │ ← Core starts (row 2-8, col 2-44)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 3 │ Q │ Q │ C │ C │...│ C │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    //   │...│...│...│...│...│...│...│...│
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 8 │ Q │ Q │ C │ C │...│ C │ Q │ Q │ ← Core ends
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 9 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ ← QuietZone (row 9-10)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┤
+    // 10│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │
+    //   └───┴───┴───┴───┴───┴───┴───┴───┘
+    //
+    // Q = QuietZone (VIRTUAL — not stored, indexer returns false)
+    // C = Core modules (stored bit-packed in _bits)
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Bit Mapping (core only, row-major, MSB-first)           │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ coreRow  = row - _quietZoneSize                         │
+    // │ coreCol  = col - _quietZoneSize                         │
+    // │   (outside the core extents → quiet zone → false)       │
+    // │ bitIndex = coreRow × _coreWidth + coreCol               │
+    // │                                                         │
+    // │ Example: Access (row=3, col=5) at R7x43, QuietZone=2    │
+    // │   → coreRow = 1, coreCol = 3                            │
+    // │   → bitIndex = 1 × 43 + 3 = 46                          │
+    // │   → _bits[5], bit 1 (= 7 - (46 & 7))                    │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // =====================================================================
+    // Serialization / Deserialization
+    // =====================================================================
+    //
+    // The "QRX" container names the symbology and both dimensions, so one
+    // reader can tell an rMQR payload from a Micro QR one. Here the width and
+    // height bytes genuinely differ, which is what lets a reader recover the
+    // rectangle; Standard QR keeps its own 4-byte "QRR" header with one size.
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Serialization (GetRawData)                               │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ _bits (already the packed payload)                       │
+    // │   ↓ copy                                                 │
+    // │ rawData ("QRX" + type + width + height + _bits)          │
+    // │           3B     1B      1B       1B                     │
+    // └──────────────────────────────────────────────────────────┘
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Deserialization (Constructor)                            │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ rawData ("QRX" + type + width + height + packed bits)    │
+    // │   ↓ copy (padding bits masked to zero)                   │
+    // │ _bits                                                    │
+    // └──────────────────────────────────────────────────────────┘
+
     private readonly byte[] _bits;
     private readonly int _coreWidth;
     private readonly int _coreHeight;
@@ -25,22 +120,24 @@ public class RmQRCodeData
     private readonly int _width;
     private readonly int _height;
 
-    /// <summary>Gets the matrix width in modules, including the quiet zone.</summary>
+    /// <summary>Width in modules, quiet zone included.</summary>
     public int Width => _width;
 
-    /// <summary>Gets the matrix height in modules, including the quiet zone.</summary>
+    /// <summary>Height in modules, quiet zone included.</summary>
     public int Height => _height;
 
-    /// <summary>Gets the rMQR version (R7x43-R17x139).</summary>
+    /// <summary>The rMQR code version.</summary>
     public RmQRVersion Version { get; }
 
     /// <summary>
-    /// Gets the module state at the specified position (quiet zone included).
-    /// Quiet zone positions always read false.
+    /// The module at the given position.
     /// </summary>
-    /// <param name="row">Row index (0-based, including quiet zone if present).</param>
-    /// <param name="col">Column index (0-based, including quiet zone if present).</param>
-    /// <returns>True if the module is dark, false if light.</returns>
+    /// <param name="row">Row, counted from the outer edge of the quiet zone.</param>
+    /// <param name="col">Column, counted from the outer edge of the quiet zone.</param>
+    /// <returns><c>true</c> when the module is dark.</returns>
+    /// <remarks>
+    /// Quiet zone positions always read <c>false</c>: the quiet zone is light by definition and is not stored.
+    /// </remarks>
     public bool this[int row, int col]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -60,13 +157,10 @@ public class RmQRCodeData
     }
 
     /// <summary>
-    /// Initializes an empty (all light) matrix for the specified version.
+    /// Creates an empty matrix sized for the given version.
     /// </summary>
-    /// <param name="version">rMQR version (R7x43-R17x139).</param>
-    /// <param name="quietZoneSize">
-    /// Quiet zone width in modules. The rMQR specification requires a quiet zone
-    /// of 2 modules on every side (narrower than Standard QR's 4).
-    /// </param>
+    /// <param name="version">The rMQR code version.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules. The specification asks for 2, narrower than the 4 Standard QR uses.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not an rMQR version or the quiet zone size is out of range.</exception>
     public RmQRCodeData(RmQRVersion version, int quietZoneSize)
     {
@@ -84,12 +178,16 @@ public class RmQRCodeData
     }
 
     /// <summary>
-    /// Deserializes rMQR data previously produced by <see cref="GetRawData()"/>.
+    /// Restores an rMQR code from bytes written by <see cref="GetRawData()"/>.
     /// </summary>
-    /// <param name="rawData">The serialized "QRX" data.</param>
-    /// <param name="quietZoneSize">Quiet zone width to apply; independent of the serialized data.</param>
-    /// <exception cref="InvalidDataException">Thrown when the header, symbol type or dimensions are invalid.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the payload is truncated.</exception>
+    /// <remarks>
+    /// The serialized form is a "QRX" header (3 bytes), the symbology (1 byte), the width and height (1 byte each), then the bit-packed modules.
+    /// It holds the core modules only, so the quiet zone is chosen again here and need not match the one the code was serialized with.
+    /// </remarks>
+    /// <param name="rawData">The serialized rMQR code.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules. 2 is the standard width.</param>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized rMQR code.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public RmQRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
     {
@@ -141,12 +239,16 @@ public class RmQRCodeData
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
     }
 
-    /// <summary>Gets the serialized size in bytes ("QRX" header + packed core bits).</summary>
+    /// <summary>How many bytes <see cref="GetRawData()"/> produces for this rMQR code.</summary>
     public int GetRawDataSize() => 6 + (_coreWidth * _coreHeight + 7) / 8;
 
     /// <summary>
-    /// Serializes the core modules (quiet zone excluded) to a new byte array.
+    /// Serializes the rMQR code so it can be stored, sent or cached.
     /// </summary>
+    /// <remarks>
+    /// Writes a "QRX" header (3 bytes), the symbology (1 byte), the width and height (1 byte each), then the bit-packed modules.
+    /// The quiet zone is not written; pick its width again when restoring.
+    /// </remarks>
     public byte[] GetRawData()
     {
         var result = new byte[GetRawDataSize()];
@@ -155,8 +257,7 @@ public class RmQRCodeData
     }
 
     /// <summary>
-    /// Writes the serialized data to the specified buffer writer without
-    /// intermediate allocation.
+    /// Serializes the rMQR code into a buffer writer, without allocating a byte array.
     /// </summary>
     /// <returns>The number of bytes written.</returns>
     public int GetRawData(IBufferWriter<byte> writer)
@@ -180,30 +281,24 @@ public class RmQRCodeData
     }
 
     /// <summary>
-    /// Gets an upper bound on the number of rectangles <see cref="GetModuleRectangles"/>
-    /// can return, suitable for sizing a pooled buffer for
-    /// <see cref="TryGetModuleRectangles"/>. O(1), no matrix scan.
+    /// Gets an upper bound on the number of rectangles <see cref="GetModuleRectangles"/> can return, suitable for sizing a pooled buffer for <see cref="TryGetModuleRectangles"/>.
+    /// O(1), no matrix scan.
     /// </summary>
     public int GetModuleRectanglesMaxCount() => ModuleRunScanner.GetMaxRunCount(_coreWidth, _coreHeight);
 
     /// <summary>
-    /// Gets the dark modules as merged rectangles in module coordinates, for rendering
-    /// with any graphics API without SkiaSharp (SVG path data, draw calls, vector output).
+    /// The dark modules as merged rectangles, for drawing the rMQR code with any graphics API: SVG paths, draw calls, vector output.
     /// </summary>
     /// <returns>Rectangles that are disjoint and cover exactly the dark modules.</returns>
     /// <remarks>
     /// <para>
-    /// Coordinates use the same space as the indexer (<c>this[row, col]</c>): one unit is
-    /// one module, origin at the top-left including the quiet zone, <see cref="ModuleRect.X"/>
-    /// is the column and <see cref="ModuleRect.Y"/> is the row. Consumers scale by the pixel
-    /// size of one module; <see cref="Width"/> and <see cref="Height"/> give the total
-    /// extent in modules.
+    /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
+    /// Scale by the pixel size of one module.
+    /// Consumers scale by the pixel size of one module; <see cref="Width"/> and <see cref="Height"/> give the total extent in modules.
     /// </para>
     /// <para>
-    /// Three properties are contractual: rectangles never overlap, cover only dark modules,
-    /// and cover every dark module. The decomposition shape and ordering are unspecified and
-    /// may change between versions (currently maximal horizontal runs in row-major order,
-    /// the same merge the built-in renderer draws).
+    /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
+    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws).
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()
@@ -213,12 +308,11 @@ public class RmQRCodeData
     }
 
     /// <summary>
-    /// Writes the dark modules as merged rectangles into a caller-provided buffer.
-    /// Same contract as <see cref="GetModuleRectangles"/> without allocations.
+    /// Writes the rectangles of <see cref="GetModuleRectangles"/> into the buffer you provide, without allocating.
     /// </summary>
     /// <param name="destination">Buffer to receive the rectangles. Size it with <see cref="GetModuleRectanglesMaxCount"/>.</param>
     /// <param name="written">The number of rectangles written, or 0 when the buffer is too small.</param>
-    /// <returns>True on success; false only when <paramref name="destination"/> cannot hold every rectangle.</returns>
+    /// <returns><c>false</c> only when <paramref name="destination"/> cannot hold every rectangle.</returns>
     public bool TryGetModuleRectangles(Span<ModuleRect> destination, out int written)
     {
         var view = new RmQRMatrixView(this);
@@ -240,8 +334,7 @@ public class RmQRCodeData
     }
 
     /// <summary>
-    /// Unpacks the core matrix into a byte-per-module buffer (0 = light, 1 = dark),
-    /// row-major over the core width, the format consumed by the matrix decoder.
+    /// Unpacks the core matrix into a byte-per-module buffer (0 = light, 1 = dark), row-major over the core width, the format consumed by the matrix decoder.
     /// </summary>
     internal void GetCoreData(Span<byte> destination)
     {
@@ -253,8 +346,7 @@ public class RmQRCodeData
     }
 
     /// <summary>
-    /// Packs a byte-per-module core matrix (0 = light, non-zero = dark; row-major
-    /// over the core width) into the internal bit representation.
+    /// Packs a byte-per-module core matrix (0 = light, non-zero = dark; row-major over the core width) into the internal bit representation.
     /// </summary>
     internal void SetCoreData(ReadOnlySpan<byte> source)
     {

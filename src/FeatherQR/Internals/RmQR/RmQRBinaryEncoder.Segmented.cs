@@ -2,26 +2,20 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// Multi-segment data-codeword stream for <see cref="RmQRSegmentation.Optimal"/>.
-/// Same bit grammar as the single-segment writer, repeated per planned run: mode
-/// indicator, count indicator, payload; one optional ECI prefix ahead of the first
-/// run (an rMQR decoder carries the declared charset across the runs that follow),
-/// then the shared terminator / padding tail.
+/// Same bit grammar as the single-segment writer, repeated per planned run: mode indicator, count indicator, payload; one optional ECI prefix ahead of the first run (an rMQR decoder carries the declared charset across the runs that follow), then the shared terminator / padding tail.
 /// </summary>
 /// <remarks>
-/// The cold half of the encoder, reusing the hot path's segment writers so the bits
-/// are identical run for run. It re-derives the planned bit cost up front because
-/// those writers store without per-flush bounds checks: a plan that does not fit must
-/// be rejected before the first store, not discovered as a buffer overrun.
+/// The cold half of the encoder, reusing the hot path's segment writers so the bits are identical run for run.
+/// It re-derives the planned bit cost up front because those writers store without per-flush bounds checks: a plan that does not fit must be rejected before the first store, not discovered as a buffer overrun.
 /// </remarks>
 internal static partial class RmQRBinaryEncoder
 {
     /// <summary>
-    /// Writes the data codewords for a planned mixed-mode split and returns the
-    /// number of codewords written (always the version and ECC data codeword count).
+    /// Writes the data codewords for a planned mixed-mode split and returns the number of codewords written (always the version and ECC data codeword count).
     /// </summary>
     /// <param name="text">Content the plan indexes into.</param>
     /// <param name="version">Target version.</param>
@@ -110,9 +104,8 @@ internal static partial class RmQRBinaryEncoder
     }
 
     /// <summary>
-    /// Transcodes one Byte-mode run and writes it. <paramref name="expectedBytes"/>
-    /// is what the plan budgeted; a mismatch means the plan and the transcoder
-    /// disagree, which would silently produce an unreadable symbol.
+    /// Transcodes one Byte-mode run and writes it.
+    /// <paramref name="expectedBytes"/> is what the plan budgeted; a mismatch means the plan and the transcoder disagree, which would silently produce an unreadable symbol.
     /// </summary>
     private static void WriteUtf8Segment(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> chars, int expectedBytes, Span<byte> scratch)
     {

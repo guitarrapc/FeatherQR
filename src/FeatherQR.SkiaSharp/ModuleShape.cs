@@ -3,36 +3,37 @@ using SkiaSharp;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Defines the shape of QR code modules
+/// How the individual modules of a symbol are drawn.
 /// </summary>
 public abstract class ModuleShape
 {
     /// <summary>
-    /// Gets whether this shape requires antialiasing for smooth rendering.
+    /// Whether the shape needs antialiasing.
+    /// Return <see langword="true"/> for curves, <see langword="false"/> for straight edges.
     /// </summary>
     public abstract bool RequiresAntialiasing { get; }
 
     /// <summary>
-    /// Draw a module at the specified location.
+    /// Draws one module.
     /// </summary>
     /// <param name="canvas">The canvas to render on.</param>
-    /// <param name="rect">The rectangular area for the module.</param>
-    /// <param name="paint">The paint to use for drawing.</param>
+    /// <param name="rect">Where to draw it.</param>
+    /// <param name="paint">The paint to draw with.</param>
     public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
 }
 
 /// <summary>
-/// Draw modules as rectangles.
+/// Draws modules as squares, the standard look.
 /// </summary>
 public sealed class RectangleModuleShape : ModuleShape
 {
     /// <summary>
-    /// Gets the default instance.
+    /// A ready-made instance to use as-is.
     /// </summary>
     public static readonly RectangleModuleShape Default = new();
 
     /// <summary>
-    /// Antialiasing disabled to prevent gray borders between modules.
+    /// Off, so neighbouring modules do not show a gray seam between them.
     /// </summary>
     public override bool RequiresAntialiasing => false;
 
@@ -52,12 +53,12 @@ public sealed class RectangleModuleShape : ModuleShape
 public sealed class CircleModuleShape : ModuleShape
 {
     /// <summary>
-    /// Gets the default instance.
+    /// A ready-made instance to use as-is.
     /// </summary>
     public static readonly CircleModuleShape Default = new();
 
     /// <summary>
-    /// Requires antialiasing to prevent jagged edges on curves.
+    /// On, so the curves do not come out jagged.
     /// </summary>
     public override bool RequiresAntialiasing => true;
 
@@ -75,12 +76,12 @@ public sealed class CircleModuleShape : ModuleShape
 }
 
 /// <summary>
-/// Draws modules as rounded rectangles.
+/// Draws modules as rounded squares.
 /// </summary>
 public sealed class RoundedRectangleModuleShape : ModuleShape
 {
     /// <summary>
-    /// Gets the default instance.
+    /// A ready-made instance to use as-is.
     /// </summary>
     public static readonly RoundedRectangleModuleShape Default = new(0.3f);
 
@@ -88,15 +89,15 @@ public sealed class RoundedRectangleModuleShape : ModuleShape
     private readonly float _cornerRadiusPercent;
 
     /// <summary>
-    /// Requires antialiasing to prevent jagged edges on curves.
+    /// On, so the curves do not come out jagged.
     /// </summary>
     public override bool RequiresAntialiasing => true;
 
     /// <summary>
-    /// Initializes a new instance with the specified corner radius.
+    /// Creates the shape with a corner radius of your own.
     /// </summary>
-    /// <param name="cornerRadiusPercent">The corner radius as a percentage of the module size (0.0 to 1.0).</param>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="cornerRadiusPercent">The radius as a fraction of the module size, 0.0 to 1.0.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the radius is outside 0.0 to 1.0.</exception>
     public RoundedRectangleModuleShape(float cornerRadiusPercent = 0.3f)
     {
         if (cornerRadiusPercent < 0 || cornerRadiusPercent > 1)

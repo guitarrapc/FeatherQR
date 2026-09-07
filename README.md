@@ -150,7 +150,7 @@ using FeatherQR.SkiaSharp;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
-    .WithErrorCorrection(ECCLevel.H)
+    .WithErrorCorrection(QREccLevel.H)
     .ToByteArray();
 ```
 
@@ -162,12 +162,12 @@ using FeatherQR.SkiaSharp;
 
 // Requests M as the minimum; the symbol may come out as Q or H at the same size.
 var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithErrorCorrection(ECCLevel.M)
+    .WithErrorCorrection(QREccLevel.M)
     .WithErrorCorrectionBoost()
     .ToByteArray();
 
 // Generator API equivalent
-var qrData = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M, new QRCodeGeneratorOptions { BoostEccLevel = true });
+var qrData = QRCodeGenerator.Create("https://example.com", QREccLevel.M, new QRCodeGeneratorOptions { BoostEccLevel = true });
 ```
 
 Save Directly to Stream
@@ -177,7 +177,7 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 using var stream = File.OpenWrite("qrcode.png");
-QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
+QRCodeImageBuilder.SavePng("Your content here", stream, QREccLevel.M, size: 512);
 ```
 
 ## Migration
@@ -192,7 +192,7 @@ Choose an API based on the output you need. Start with an image builder for most
 | --- | --- | --- | --- |
 | Create PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
 | Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
-| Render a matrix to `SKCanvas` | `QRCodeRenderer` | `QRCodeRenderer` | `QRCodeRenderer` |
+| Render a matrix to `SKCanvas` | `SymbolRenderer` | `SymbolRenderer` | `SymbolRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 
 All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers.
@@ -207,28 +207,28 @@ var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
 
 See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
 
-### QRCodeRenderer (Advanced)
+### SymbolRenderer (Advanced)
 
-`QRCodeRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics.
+`SymbolRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics.
 
 ```csharp
 using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
-var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
+var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
 var canvas = surface.Canvas;
-QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
+SymbolRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 ```
 
 ### Generators (Low-Level)
 
-Generators create module matrices without rendering them. Use them for custom output such as ASCII art or LED displays, or as input to `QRCodeRenderer`.
+Generators create module matrices without rendering them. Use them for custom output such as ASCII art or LED displays, or as input to `SymbolRenderer`.
 
 ```csharp
 using FeatherQR;
 
-var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
+var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
 var isDark = qrData[row, col];
 ```
 
@@ -250,13 +250,13 @@ sb.Append("\"/></svg>");
 Beyond the short calls above, every generator entry point has an overload taking an options struct. This is where new options are added, so it is the form to reach for when you need more than the defaults.
 
 ```csharp
-var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, new QRCodeGeneratorOptions
+var qrData = QRCodeGenerator.Create("content", QREccLevel.M, new QRCodeGeneratorOptions
 {
     EciMode = EciMode.Utf8,
     QuietZoneSize = 0,
 });
 
-var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRCodeGeneratorOptions
+var rmqr = RmQRCodeGenerator.Create("content", RmQREccLevel.M, new RmQRCodeGeneratorOptions
 {
     Height = RmQRHeight.H9,
     Segmentation = RmQRSegmentation.Optimal,
@@ -270,7 +270,7 @@ var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRC
 | Option | `QRCodeGeneratorOptions` | `MicroQRCodeGeneratorOptions` | `RmQRCodeGeneratorOptions` |
 |---|---|---|---|
 | `EciMode` | `Default` (auto-detect) | — | `Default` (auto-detect) |
-| `Utf8BOM` | `false` | — | — |
+| `Utf8Bom` | `false` | — | — |
 | `Version` | `Any` (1-40) | `Any` (M1-M4) | `null` (fit automatically) |
 | `QuietZoneSize` | `4` | `2` | `2` |
 | `BoostEccLevel` | `false` | — | — |
@@ -284,8 +284,8 @@ The quiet zone defaults differ because the specifications do: ISO/IEC 18004 requ
 `Options.Default` and `default(Options)` are the same value, so these are equivalent:
 
 ```csharp
-QRCodeGenerator.CreateQrCode("content", ECCLevel.M);                                  // short call
-QRCodeGenerator.CreateQrCode("content", ECCLevel.M, QRCodeGeneratorOptions.Default);  // same result
+QRCodeGenerator.Create("content", QREccLevel.M);                                  // short call
+QRCodeGenerator.Create("content", QREccLevel.M, QRCodeGeneratorOptions.Default);  // same result
 ```
 
 #### Changing one option with `with`
@@ -311,7 +311,7 @@ Standard QR and Micro QR take a *range* of acceptable versions rather than a sin
 ```csharp
 new QRCodeGeneratorOptions { Version = 15 }                              // exactly version 15
 new QRCodeGeneratorOptions { Version = new(10, 20) }                     // 10 to 20, both inclusive
-new QRCodeGeneratorOptions { Version = QRCodeVersionRange.AtLeast(10) }  // 10 or larger
+new QRCodeGeneratorOptions { Version = QRVersionRange.AtLeast(10) }      // 10 or larger
 new QRCodeGeneratorOptions { Version = configuredVersion }               // an int?; null means automatic
 new QRCodeGeneratorOptions { }                                           // automatic
 ```
@@ -327,7 +327,7 @@ The generator normally scores the data mask patterns the specification defines (
 ```csharp
 // Reproduce a symbol: decode reports the mask, encode accepts it back
 QRCodeDecoder.TryDecode(scanned, out var text, out var info);
-var identical = QRCodeGenerator.CreateQrCode(text, info.EccLevel, new QRCodeGeneratorOptions { MaskPattern = info.MaskPattern });
+var identical = QRCodeGenerator.Create(text, info.EccLevel, new QRCodeGeneratorOptions { MaskPattern = info.MaskPattern });
 
 // Builder equivalent, Micro QR alike
 var png = new QRCodeImageBuilder("content").WithMaskPattern(3).ToByteArray();
@@ -340,25 +340,25 @@ Because an `int?` converts implicitly, an optional version needs no branch at th
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
-By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode. `QRCodeSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits, which often drops the symbol by a version or more and can even encode content that no single mode fits at any version. It is safe to turn on: the symbol is never larger than the default, and whenever splitting would not shrink it the default bit stream is emitted unchanged.
+By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode. `QRSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits, which often drops the symbol by a version or more and can even encode content that no single mode fits at any version. It is safe to turn on: the symbol is never larger than the default, and whenever splitting would not shrink it the default bit stream is emitted unchanged.
 
 ```csharp
 const string content = "https://example.com/item?id=123456789012345678901234567890";
 
-var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+var single = QRCodeGenerator.Create(content, QREccLevel.M);
 Console.WriteLine(single.Version);  // 4 - one Byte segment
 
-var optimal = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 Console.WriteLine(optimal.Version); // 3 - Byte + Numeric
 
 // 5,500 characters overflow Byte mode at every version (40-L holds 2,953), but fit once split
 var mixed = new string('x', 1000) + new string('1', 4500);
-QRCodeGenerator.CreateQrCode(mixed, ECCLevel.L);                                   // throws: too long
-QRCodeGenerator.CreateQrCode(mixed, ECCLevel.L, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal }); // version 40
+QRCodeGenerator.Create(mixed, QREccLevel.L);                                   // throws: too long
+QRCodeGenerator.Create(mixed, QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal }); // version 40
 
 // Also available on the image builder
 var pngBytes = new QRCodeImageBuilder(content)
-    .WithSegmentation(QRCodeSegmentation.Optimal)
+    .WithSegmentation(QRSegmentation.Optimal)
     .ToByteArray();
 ```
 
@@ -367,11 +367,11 @@ It is opt-in so existing callers keep their exact bit streams. Planning allocate
 Three notes:
 
 - Size destination buffers with the same `Segmentation` you encode with, `TryGetRequiredBufferSize` honors it, and the two can select different versions.
-- A split the decoder would misread is never emitted: with `Utf8BOM` writing a byte order mark the single-mode stream is kept, and content only such a split could fit reports "does not fit" instead of corrupting.
-- All three symbologies carry the option (`QRCodeSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation`, see the rMQR section below). On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win:
+- A split the decoder would misread is never emitted: with `Utf8Bom` writing a byte order mark the single-mode stream is kept, and content only such a split could fit reports "does not fit" instead of corrupting.
+- All three symbologies carry the option (`QRSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation`, see the rMQR section below). On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win:
 
 ```csharp
-var micro = MicroQRCodeGenerator.CreateMicroQRCode("AB12345678901234567", MicroQREccLevel.L,
+var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L,
     new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
 ```
 
@@ -385,13 +385,13 @@ Size the generation buffer with `TryGetRequiredBufferSize`:
 using System.Buffers;
 using FeatherQR;
 
-if (!QRCodeGenerator.TryGetRequiredBufferSize("content", ECCLevel.M, out var calculated))
+if (!QRCodeGenerator.TryGetRequiredBufferSize("content", QREccLevel.M, out var calculated))
     return "Content does not fit a QR symbol at this ECC level.";
 
 var buffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
 try
 {
-    var written = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, buffer);
+    var written = QRCodeGenerator.Create("content", QREccLevel.M, buffer);
     var matrix = buffer.AsSpan(0, written);
 }
 finally
@@ -412,7 +412,7 @@ var buffer = ArrayPool<byte>.Shared.Rent(size.BufferSize);
 try
 {
     // Passing the resolved version back removes the fit, so no length error can follow.
-    var written = RmQRCodeGenerator.CreateRmQRCode(userInput, RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Version = size.Version });
+    var written = RmQRCodeGenerator.Create(userInput, RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Version = size.Version });
     var matrix = buffer.AsSpan(0, written);
 }
 finally
@@ -423,7 +423,7 @@ finally
 
 `false` means one thing: the content does not fit. Invalid arguments (an undefined ECC level, a `Version` and `Height` that disagree, a negative quiet zone) still throw, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
 
-> **`GetRequiredBufferSize` is obsolete.** Standard QR and Micro QR still carry the throwing sizing method released in v1.1.1, marked `[Obsolete]` and scheduled for removal in 2.0.0. rMQR never shipped one. Replace `GetRequiredBufferSize(text, ecc, …)` with `TryGetRequiredBufferSize(text, ecc, out var size, …)`; see [docs/migration.md](docs/migration.md).
+> **Upgrading from 1.x:** `GetRequiredBufferSize` is gone. It was the throwing sizing method Standard QR and Micro QR released in v1.1.1, deprecated in 1.2.0 and removed in 2.0.0; rMQR never shipped one. Replace `GetRequiredBufferSize(text, ecc, …)` with `TryGetRequiredBufferSize(text, ecc, out var size, …)`; see [docs/migration.md](docs/migration.md).
 
 ### Decoders
 
@@ -436,14 +436,14 @@ using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
-var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
+var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
 if (QRCodeDecoder.TryDecode(qrData, out var text))
 {
     Console.WriteLine(text);
 }
 
 using var bitmap = SKBitmap.Decode("qr.png");
-if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
+if (QRCodeImageDecoder.TryDecode(bitmap, out text, out var info))
 {
     Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 }
@@ -470,7 +470,7 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
@@ -479,7 +479,7 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -505,21 +505,21 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 #### Windows
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
@@ -612,8 +612,8 @@ For optimal scan reliability, we recommend:
 
 - **Use rectangular modules (default)**: Rectangle-shaped modules (`RectangleModuleShape`) provide the lowest error rate when scanning QR codes.
 - **Avoid gaps between modules**: Using smaller module sizes or shapes like `Circle` or `RoundRect` creates gaps between modules, which increases scan error rates.
-- **Use `ECCLevel.H` for non-standard styles**: If you need to use `Circle`, `RoundRect`, or other custom module shapes, we strongly recommend setting the error correction level to `ECCLevel.H` (High - 30% recovery capacity) to compensate for the reduced readability.
-- **Always use `ECCLevel.H` with icons/logos**: When embedding icons or logos using `IconData`, `ECCLevel.H` is required to ensure the QR code remains scannable even when the center is partially obscured.
+- **Use `QREccLevel.H` for non-standard styles**: If you need to use `Circle`, `RoundRect`, or other custom module shapes, we strongly recommend setting the error correction level to `QREccLevel.H` (High - 30% recovery capacity) to compensate for the reduced readability.
+- **Always use `QREccLevel.H` with icons/logos**: When embedding icons or logos using `IconData`, `QREccLevel.H` is required to ensure the QR code remains scannable even when the center is partially obscured.
 
 **Example:**
 
@@ -628,7 +628,7 @@ var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 // If using Circle or RoundRect - use High error correction
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H) // Required for custom shapes
+    .WithErrorCorrection(QREccLevel.H) // Required for custom shapes
     .WithModuleShape(CircleModuleShape.Default);
 
 // When using icons/logos - always use High error correction
@@ -637,14 +637,14 @@ var icon = IconData.FromImage(logo, iconSizePercent: 15);
 
 var qrCodeWithIcon = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H) // Required for icons
+    .WithErrorCorrection(QREccLevel.H) // Required for icons
     .WithIcon(icon);
 
 // Or let the symbol absorb the icon with whatever capacity it has to spare:
 // requests M as the floor and raises the level to fill the chosen version.
 var qrCodeBoosted = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.M)
+    .WithErrorCorrection(QREccLevel.M)
     .WithErrorCorrectionBoost()
     .WithIcon(icon);
 ```
@@ -716,7 +716,7 @@ using FeatherQR.SkiaSharp;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H);
+    .WithErrorCorrection(QREccLevel.H);
 
 var pngBytes = qrCode.ToByteArray();
 File.WriteAllBytes("qrcode.png", pngBytes);
@@ -750,7 +750,7 @@ var webpBytes = new QRCodeImageBuilder("https://example.com")
 
 // Or one-liner helpers
 var bytes = QRCodeImageBuilder.GetImageBytes(
-    "https://example.com", SKEncodedImageFormat.Jpeg, ECCLevel.M, size: 512, quality: 90);
+    "https://example.com", SKEncodedImageFormat.Jpeg, QREccLevel.M, size: 512, quality: 90);
 ```
 
 #### SVG Output (Vector)
@@ -772,7 +772,7 @@ var svg = QRCodeImageBuilder.GetSvgString("https://example.com");
 // Builder: full styling support
 var svgString = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10)
-    .WithErrorCorrection(ECCLevel.H)
+    .WithErrorCorrection(QREccLevel.H)
     .WithColors(codeColor: SKColor.Parse("1B9CFC"))
     .ToSvgString(); // or SaveToSvg(stream) / SaveToSvg(bufferWriter) / GetSvgBytes(...)
 ```
@@ -798,7 +798,7 @@ using FeatherQR.SkiaSharp;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10) // content = (QR matrix size in modules) * 10
-    .WithErrorCorrection(ECCLevel.H)
+    .WithErrorCorrection(QREccLevel.H)
     .WithQuietZone(4);
 
 var pngBytes = qrCode.ToByteArray();
@@ -882,7 +882,7 @@ var iconByModules = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBo
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(12)
     // .WithSize(512, 512) // optional: larger canvas with centered padding
-    .WithErrorCorrection(ECCLevel.H) // High ECC recommended for icons
+    .WithErrorCorrection(QREccLevel.H) // High ECC recommended for icons
     .WithIcon(iconByModules);
 
 var pngBytes = qrCode.ToByteArray();
@@ -910,7 +910,7 @@ var icon = new IconData
 };
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H) // High ECC recommended for icons
+    .WithErrorCorrection(QREccLevel.H) // High ECC recommended for icons
     .WithIcon(icon);
 
 var pngBytes = qrCode.ToByteArray();
@@ -982,7 +982,7 @@ using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
-var micro = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
+var micro = MicroQRCodeGenerator.Create("01234567", MicroQREccLevel.L);
 if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
 {
     Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
@@ -1027,7 +1027,7 @@ var pngBytes = new RmQRCodeImageBuilder("https://example.com/r/12345")
     .ToByteArray();
 
 // Prefer the shortest available height
-var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
+var flat = RmQRCodeGenerator.Create("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
 Console.WriteLine(flat.Version); // R7x43
 ```
 
@@ -1043,16 +1043,16 @@ using FeatherQR.SkiaSharp;
 
 const string content = "https://example.com/p/1234567890123456";
 
-var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
+var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
 Console.WriteLine(single.Version);  // R11x77 - one Byte segment, 313 bits
 
-var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 Console.WriteLine(optimal.Version); // R15x43 - Byte + Numeric, 249 bits
 
 // 200 characters is 50 over the largest Byte-mode capacity, but fits once split
 var mixed = new string('a', 100) + new string('7', 100);
-RmQRCodeGenerator.CreateRmQRCode(mixed, RmQREccLevel.M);                                  // throws: too long
-RmQRCodeGenerator.CreateRmQRCode(mixed, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }); // R17x139
+RmQRCodeGenerator.Create(mixed, RmQREccLevel.M);                                  // throws: too long
+RmQRCodeGenerator.Create(mixed, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }); // R17x139
 
 // Also available on the image builder
 var pngBytes = new RmQRCodeImageBuilder(content)
@@ -1071,7 +1071,7 @@ using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
-var rmqr = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
+var rmqr = RmQRCodeGenerator.Create("012345678901", RmQREccLevel.M);
 if (RmQRCodeDecoder.TryDecode(rmqr, out var text, out var info))
 {
     Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 012345678901 (R11x27, ECC M)

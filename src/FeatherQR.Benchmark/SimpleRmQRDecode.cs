@@ -1,9 +1,8 @@
 using BenchmarkDotNet.Configs;
 
 /// <summary>
-/// Cross-library rMQR decoding, over the same three symbols as
-/// <see cref="SimpleRmQREncode"/>. CodeGlyphX is the only other library compared in this
-/// project that reads rMQR at all.
+/// Cross-library rMQR decoding, over the same three symbols as <see cref="SimpleRmQREncode"/>.
+/// CodeGlyphX is the only other library compared in this project that reads rMQR at all.
 ///
 /// Comparability notes:
 ///
@@ -115,7 +114,7 @@ public class SimpleRmQRDecode
         var options = new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 };
         var calculated = Sizing.Required(content.AsSpan(), RmQREccLevel.M, options);
         var buffer = new byte[calculated.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.M, buffer, options);
+        RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.M, buffer, options);
         return (buffer, (calculated.Width, calculated.Height));
     }
 }

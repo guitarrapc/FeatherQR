@@ -31,7 +31,7 @@ public class MicroQRMatrixExtractionTest
     [MethodDataSource(nameof(AllVersionEccCombinations))]
     public async Task ExtractedCodewords_MatchEncoderOutput_AndEccRecomputes(string text, MicroQREccLevel ecc, MicroQRVersion expectedVersion)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, quietZoneSize: 0);
+        var data = MicroQRCodeGenerator.Create(text, ecc, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         await Assert.That(data.Version).IsEqualTo(expectedVersion);
         var size = data.Size;
 

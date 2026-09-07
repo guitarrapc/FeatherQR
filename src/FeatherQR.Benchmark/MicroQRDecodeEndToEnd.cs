@@ -1,7 +1,6 @@
 /// <summary>
 /// End-to-end Micro QR matrix decoding through the public API (MicroQRCodeDecoder).
-/// Payloads mirror MicroQREncode so encode and decode costs are directly comparable;
-/// a Standard QR v1 decode of the same numeric payload gives the scale reference.
+/// Payloads mirror MicroQREncode so encode and decode costs are directly comparable; a Standard QR v1 decode of the same numeric payload gives the scale reference.
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
 ///
 /// Scenarios:
@@ -30,10 +29,10 @@ public class MicroQRDecodeEndToEnd
         (_byteModules, _byteSize) = BuildMicro("bytes m4 mode", MicroQREccLevel.M);             // M4-M
         _chars = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
 
-        var calculated = Sizing.Required("0123456789", ECCLevel.L, 0);
+        var calculated = Sizing.Required("0123456789", QREccLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
-        FeatherQR.QRCodeGenerator.CreateQrCode("0123456789", ECCLevel.L, _standardModules, quietZoneSize: 0);
-        _standardSize = calculated.QrSize;
+        FeatherQR.QRCodeGenerator.Create("0123456789", QREccLevel.L, _standardModules, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        _standardSize = calculated.Size;
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
 
@@ -96,7 +95,7 @@ public class MicroQRDecodeEndToEnd
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
-        return (buffer, calculated.QrSize);
+        MicroQRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        return (buffer, calculated.Size);
     }
 }

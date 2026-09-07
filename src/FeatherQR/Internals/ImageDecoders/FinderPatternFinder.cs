@@ -23,34 +23,18 @@ internal struct FinderPattern
 /// Locates the three 7×7 finder patterns in a binarized luminance image.
 /// </summary>
 /// <remarks>
-/// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then
-/// cross-checks each hit vertically, horizontally and diagonally before accepting
-/// it as a candidate (the standard ZXing-style detection approach). Designed for
-/// Tier-1 inputs, clean, well-lit, screen-rendered or scanned images with mild
-/// rotation, not for low-contrast photos.
+/// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then cross-checks each hit vertically, horizontally and diagonally before accepting it as a candidate (the standard ZXing-style detection approach).
+/// Designed for Tier-1 inputs, clean, well-lit, screen-rendered or scanned images with mild rotation, not for low-contrast photos.
 /// <para>
-/// Two entry points: TryFind (three patterns, Standard QR) and FindCandidates
-/// (one pattern, Micro QR and rMQR). Both stride over rows, and both are widened to
-/// a full sweep when the symbol was not read — but only TryFind can decide that for
-/// itself, because "no consistent triple" is a question about the symbol. A single
-/// candidate list cannot answer the same question, so FindCandidates has no fallback
-/// of its own and its callers re-run it strideless instead. See each method.
+/// Two entry points: TryFind (three patterns, Standard QR) and FindCandidates (one pattern, Micro QR and rMQR).
+/// Both stride over rows, and both are widened to a full sweep when the symbol was not read — but only TryFind can decide that for itself, because "no consistent triple" is a question about the symbol.
+/// A single candidate list cannot answer the same question, so FindCandidates has no fallback of its own and its callers re-run it strideless instead.
+/// See each method.
 /// </para>
 /// <para>
-/// The scan strides over rows: the band of rows showing the 1:1:3:1:1 signature
-/// is 3 modules tall for an axis-aligned symbol (under rotation the ratios drift
-/// off-centre and it narrows — see CandidateRowStride), and although the module
-/// size is unknown before detection, the worst case (a version-40 symbol filling
-/// the frame) bounds it from below, so a stride of 3·height/(4·177) hits the band of
-/// every supported axis-aligned symbol. When TryFind's stride pass cannot select a
-/// consistent triple, the rows it skipped are scanned as a complementary pass,
-/// together exactly one full-image sweep, so its striding cannot lose a symbol a
-/// full scan would find — that fallback, not the stride arithmetic, is what makes
-/// TryFind safe under rotation too. On net8.0+ each row
-/// is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any
-/// 128-bit acceleration) and walked run-by-run via trailing-zero counts instead
-/// of pixel-by-pixel (measured ~11x combined on the found path on x64 and
-/// 3.3-4.1x on Apple M2).
+/// The scan strides over rows: the band of rows showing the 1:1:3:1:1 signature is 3 modules tall for an axis-aligned symbol (under rotation the ratios drift off-centre and it narrows — see CandidateRowStride), and although the module size is unknown before detection, the worst case (a version-40 symbol filling the frame) bounds it from below, so a stride of 3·height/(4·177) hits the band of every supported axis-aligned symbol.
+/// When TryFind's stride pass cannot select a consistent triple, the rows it skipped are scanned as a complementary pass, together exactly one full-image sweep, so its striding cannot lose a symbol a full scan would find — that fallback, not the stride arithmetic, is what makes TryFind safe under rotation too.
+/// On net8.0+ each row is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any 128-bit acceleration) and walked run-by-run via trailing-zero counts instead of pixel-by-pixel (measured ~11x combined on the found path on x64 and 3.3-4.1x on Apple M2).
 /// </para>
 /// </remarks>
 internal static class FinderPatternFinder
@@ -77,35 +61,22 @@ internal static class FinderPatternFinder
         => TryFindCore(luminance, width, height, threshold, forceScalar: true, patterns);
 
     /// <summary>
-    /// Row stride for <see cref="FindCandidates"/>. The band of rows carrying the
-    /// 1:1:3:1:1 signature is 3 modules tall only while the symbol is axis-aligned:
-    /// under rotation the run ratios drift off-centre and the band that survives the
-    /// cross-checks narrows. Measured over module sizes 3-8 px at every rotation, its
-    /// floor is 5 rows at the 3 px/module bottom of the decode envelope, so a stride
-    /// of 4 lands in every in-envelope band with a row to spare and 6 does not. The
-    /// caller's strideless retry is what makes detection correct either way; this
-    /// value decides how often that retry has to be paid.
+    /// Row stride for <see cref="FindCandidates"/>.
+    /// The band of rows carrying the 1:1:3:1:1 signature is 3 modules tall only while the symbol is axis-aligned: under rotation the run ratios drift off-centre and the band that survives the cross-checks narrows.
+    /// Measured over module sizes 3-8 px at every rotation, its floor is 5 rows at the 3 px/module bottom of the decode envelope, so a stride of 4 lands in every in-envelope band with a row to spare and 6 does not.
+    /// The caller's strideless retry is what makes detection correct either way; this value decides how often that retry has to be paid.
     /// </summary>
     private const int CandidateRowStride = 4;
 
     /// <summary>
-    /// Collects every cross-checked finder pattern candidate, without the
-    /// three-pattern selection. Used by the Micro QR and rMQR image decoders, where a
-    /// symbol carries a single finder pattern.
+    /// Collects every cross-checked finder pattern candidate, without the three-pattern selection.
+    /// Used by the Micro QR and rMQR image decoders, where a symbol carries a single finder pattern.
     /// </summary>
     /// <remarks>
-    /// Strided like <see cref="TryFind"/>, but with no fallback of its own: this scan
-    /// has only a flat candidate list, and every signal available inside it is a
-    /// statement about the image rather than about the symbol being looked for. A
-    /// confirmation test (any candidate seen on two or more rows) reads like a
-    /// per-symbol signal but is not one — a second QR code, a printed logo, or
-    /// salt-and-pepper noise confirms by itself and would suppress the pass the real
-    /// symbol needed. The only question that distinguishes them is "did anything
-    /// actually decode", which only the caller can answer, so the widening lives
-    /// there: the image decoders run this scan first and re-run
-    /// <see cref="FindCandidatesFullSweep"/> when nothing decoded. Skipping three rows
-    /// in four is most of the rMQR image path: end to end the span decode of the widest
-    /// symbol is 2.7x a strideless build's (see the plan's benchmark tables).
+    /// Strided like <see cref="TryFind"/>, but with no fallback of its own: this scan has only a flat candidate list, and every signal available inside it is a statement about the image rather than about the symbol being looked for.
+    /// A confirmation test (any candidate seen on two or more rows) reads like a per-symbol signal but is not one — a second QR code, a printed logo, or salt-and-pepper noise confirms by itself and would suppress the pass the real symbol needed.
+    /// The only question that distinguishes them is "did anything actually decode", which only the caller can answer, so the widening lives there: the image decoders run this scan first and re-run <see cref="FindCandidatesFullSweep"/> when nothing decoded.
+    /// Skipping three rows in four is most of the rMQR image path: end to end the span decode of the widest symbol is 2.7x a strideless build's (see the plan's benchmark tables).
     /// </remarks>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -117,10 +88,8 @@ internal static class FinderPatternFinder
         => FindCandidatesCore(luminance, width, height, threshold, candidates, CandidateRowStride);
 
     /// <summary>
-    /// Every row, no stride. The widening step of <see cref="FindCandidates"/>: the
-    /// image decoders re-run the scan through this entry when the strided pass
-    /// produced nothing that decoded, which is what keeps the detection envelope from ever
-    /// being narrower than a full sweep's.
+    /// Every row, no stride.
+    /// The widening step of <see cref="FindCandidates"/>: the image decoders re-run the scan through this entry when the strided pass produced nothing that decoded, which is what keeps the detection envelope from ever being narrower than a full sweep's.
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -283,11 +252,8 @@ internal static class FinderPatternFinder
         (byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
 
     /// <summary>
-    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px
-    /// otherwise) produce a dark bitmask; runs are walked via trailing-zero
-    /// counts. The 1:1:3:1:1 window is evaluated at the end of every dark run
-    /// from the third onward, exactly the positions and order the scalar walk
-    /// evaluates, so the result is bit-identical.
+    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask; runs are walked via trailing-zero counts.
+    /// The 1:1:3:1:1 window is evaluated at the end of every dark run from the third onward, exactly the positions and order the scalar walk evaluates, so the result is bit-identical.
     /// </summary>
     private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
@@ -463,8 +429,7 @@ internal static class FinderPatternFinder
     }
 
     /// <summary>
-    /// Cross-checks a horizontal hit vertically, then horizontally again, then
-    /// diagonally; merges the refined center into the candidate list.
+    /// Cross-checks a horizontal hit vertically, then horizontally again, then diagonally; merges the refined center into the candidate list.
     /// </summary>
     private static void TryAddCandidate(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<int> runs, int endX, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
@@ -508,8 +473,8 @@ internal static class FinderPatternFinder
     }
 
     /// <summary>
-    /// Walks outwards from a supposed center along one axis and re-validates the
-    /// 1:1:3:1:1 ratio. Returns the refined center coordinate on that axis, or NaN.
+    /// Walks outwards from a supposed center along one axis and re-validates the 1:1:3:1:1 ratio.
+    /// Returns the refined center coordinate on that axis, or NaN.
     /// </summary>
     private static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, bool vertical, int expectedTotal, out int total)
     {
@@ -574,8 +539,7 @@ internal static class FinderPatternFinder
     }
 
     /// <summary>
-    /// Validates the 1:1:3:1:1 ratio along the top-left → bottom-right diagonal,
-    /// killing false positives that pass both axis checks (e.g. dense data areas).
+    /// Validates the 1:1:3:1:1 ratio along the top-left → bottom-right diagonal, killing false positives that pass both axis checks (e.g. dense data areas).
     /// </summary>
     private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY)
     {
@@ -628,8 +592,7 @@ internal static class FinderPatternFinder
         => luminance[y * width + x] < threshold;
 
     /// <summary>
-    /// Picks the three candidates with the most consistent module size,
-    /// preferring repeatedly confirmed ones.
+    /// Picks the three candidates with the most consistent module size, preferring repeatedly confirmed ones.
     /// </summary>
     private static bool TrySelectBestThree(Span<FinderPattern> candidates, Span<FinderPattern> patterns)
     {

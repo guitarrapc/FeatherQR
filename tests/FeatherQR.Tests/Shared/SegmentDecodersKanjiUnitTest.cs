@@ -36,7 +36,7 @@ public class SegmentDecodersKanjiUnitTest
         return bytes;
     }
 
-    private static (QRCodeDecodeStatus Status, string Text) Decode(byte[] data, int count, int destinationLength, int? totalBits = null)
+    private static (DecodeStatus Status, string Text) Decode(byte[] data, int count, int destinationLength, int? totalBits = null)
     {
         var reader = new BitReader(data);
         var destination = new char[destinationLength];
@@ -55,7 +55,7 @@ public class SegmentDecodersKanjiUnitTest
     public async Task DecodeKanjiPayload_SingleCell_AcrossBothRanges(int sjis, string expected)
     {
         var (status, text) = Decode(Pack(Index13(sjis)), count: 1, destinationLength: 1);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo(expected);
     }
 
@@ -64,7 +64,7 @@ public class SegmentDecodersKanjiUnitTest
     {
         var indices = new[] { 0x82B1, 0x82F1, 0x82C9, 0x82BF, 0x82CD, 0x90A2, 0x8A45 }.Select(Index13).ToArray();
         var (status, text) = Decode(Pack(indices), count: indices.Length, destinationLength: indices.Length);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("こんにちは世界");
     }
 
@@ -74,7 +74,7 @@ public class SegmentDecodersKanjiUnitTest
     {
         var indices = new[] { 0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA }.Select(Index13).ToArray();
         var (status, text) = Decode(Pack(indices), count: indices.Length, destinationLength: indices.Length);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("\\〜‖−¢£¬");
     }
 
@@ -99,7 +99,7 @@ public class SegmentDecodersKanjiUnitTest
 
         var (status, text) = Decode(packed, count: indices.Length, destinationLength: indices.Length);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("日本語亜こんに界");
     }
 
@@ -107,7 +107,7 @@ public class SegmentDecodersKanjiUnitTest
     public async Task DecodeKanjiPayload_ZeroCount_WritesNothing()
     {
         var (status, text) = Decode(Pack(Index13(0x82B1)), count: 0, destinationLength: 0);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("");
     }
 
@@ -124,7 +124,7 @@ public class SegmentDecodersKanjiUnitTest
     public async Task DecodeKanjiPayload_CountExceedsAvailableBits_ReportsInvalidBitstream(int count)
     {
         var (status, _) = Decode(Pack(Index13(0x82B1)), count, destinationLength: 200, totalBits: 13);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -132,7 +132,7 @@ public class SegmentDecodersKanjiUnitTest
     {
         var indices = new[] { 0x82B1, 0x82F1, 0x82C9 }.Select(Index13).ToArray();
         var (status, _) = Decode(Pack(indices), count: indices.Length, destinationLength: 2);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(status).IsEqualTo(DecodeStatus.DestinationTooSmall);
     }
 
     /// <summary>When both are wrong, the bitstream verdict wins.</summary>
@@ -140,7 +140,7 @@ public class SegmentDecodersKanjiUnitTest
     public async Task DecodeKanjiPayload_ShortDestinationAndShortBitstream_ReportsInvalidBitstream()
     {
         var (status, _) = Decode(Pack(Index13(0x82B1)), count: 5, destinationLength: 1, totalBits: 13);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -155,13 +155,13 @@ public class SegmentDecodersKanjiUnitTest
         var unmapped = Decode(Pack(Index13(0x8740)), count: 1, destinationLength: 1).Status;   // NEC row 13, CP932-only
         var impossible = Decode(Pack(0x3F), count: 1, destinationLength: 1).Status;            // no such Shift_JIS pair
 
-        await Assert.That(mapped).IsEqualTo(QRCodeDecodeStatus.Success);
-        await Assert.That(unmapped).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
-        await Assert.That(impossible).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(mapped).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(unmapped).IsEqualTo(DecodeStatus.UnmappedCharacter);
+        await Assert.That(impossible).IsEqualTo(DecodeStatus.InvalidBitstream);
 
         // The point of the new status: "this symbol is readable by a CP932 reader" must
         // not be confused with "this symbol uses a feature we do not implement".
-        await Assert.That(unmapped).IsNotEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(unmapped).IsNotEqualTo(DecodeStatus.UnsupportedContent);
         await Assert.That(unmapped).IsNotEqualTo(impossible);
     }
 
@@ -179,7 +179,7 @@ public class SegmentDecodersKanjiUnitTest
     public async Task DecodeKanjiPayload_UnassignedCell_ReportsUnmappedCharacter(int sjis)
     {
         var (status, _) = Decode(Pack(Index13(sjis)), count: 1, destinationLength: 1);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(status).IsEqualTo(DecodeStatus.UnmappedCharacter);
     }
 
     /// <summary>
@@ -194,7 +194,7 @@ public class SegmentDecodersKanjiUnitTest
     public async Task DecodeKanjiPayload_StructurallyImpossibleValue_ReportsInvalidBitstream(int index13)
     {
         var (status, _) = Decode(Pack(index13), count: 1, destinationLength: 1);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>A bad cell in the middle stops the segment; earlier characters are not trusted.</summary>
@@ -203,6 +203,6 @@ public class SegmentDecodersKanjiUnitTest
     {
         var indices = new[] { Index13(0x82B1), Index13(0x8740), Index13(0x82F1) };
         var (status, _) = Decode(Pack(indices), count: 3, destinationLength: 3);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(status).IsEqualTo(DecodeStatus.UnmappedCharacter);
     }
 }

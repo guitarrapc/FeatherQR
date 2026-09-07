@@ -1,9 +1,8 @@
 using BenchmarkDotNet.Configs;
 
 /// <summary>
-/// Cross-library Micro QR decoding, over the same three symbols as
-/// <see cref="SimpleMicroQREncode"/>. CodeGlyphX is the only other library compared in
-/// this project that decodes Micro QR at all: QRCoder encodes it but does not read it.
+/// Cross-library Micro QR decoding, over the same three symbols as <see cref="SimpleMicroQREncode"/>.
+/// CodeGlyphX is the only other library compared in this project that decodes Micro QR at all: QRCoder encodes it but does not read it.
 ///
 /// Comparability notes:
 ///
@@ -113,7 +112,7 @@ public class SimpleMicroQRDecode
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
-        return (buffer, calculated.QrSize);
+        MicroQRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        return (buffer, calculated.Size);
     }
 }

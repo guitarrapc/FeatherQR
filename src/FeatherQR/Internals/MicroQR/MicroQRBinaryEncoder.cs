@@ -11,8 +11,7 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Encodes text into Micro QR data codewords: mode indicator, character count,
-/// data bits, terminator and padding (ISO/IEC 18004 Micro QR bit stream rules).
+/// Encodes text into Micro QR data codewords: mode indicator, character count, data bits, terminator and padding (ISO/IEC 18004 Micro QR bit stream rules).
 /// </summary>
 /// <remarks>
 /// Micro QR differences from Standard QR handled here:
@@ -23,42 +22,27 @@ namespace FeatherQR.Internals.MicroQR;
 /// <item>No ECI: non-Latin-1 text is emitted as raw UTF-8 bytes in Byte mode
 /// (Micro QR has no ECI mode; readers detect UTF-8 heuristically).</item>
 /// <item>M1/M3 capacities end on a half byte: the final data codeword is 4 bits
-/// stored in the byte's high nibble with a forced-zero low nibble, and a final
-/// 4-bit pad codeword is 0000 (never part of the 0xEC/0x11 cycle).</item>
+/// stored in the byte's high nibble with a forced-zero low nibble, and a final 4-bit pad codeword is 0000 (never part of the 0xEC/0x11 cycle).</item>
 /// </list>
-/// Reed-Solomon ECC is computed by the shared <see cref="BinaryEncoders.EccBinaryEncoder"/> over
-/// the returned codeword bytes as-is (the half codeword participates as its
-/// high-nibble byte value).
+/// Reed-Solomon ECC is computed by the shared <see cref="BinaryEncoders.EccBinaryEncoder"/> over the returned codeword bytes as-is (the half codeword participates as its high-nibble byte value).
 ///
-/// Performance design: Micro QR data codewords top out at 16 bytes (M4-L), so
-/// the whole bit stream is accumulated MSB-first in two ulong registers
-/// (hi = output bytes 0-7, lo = bytes 8-15) with no intermediate buffer. The
-/// UTF-8 fallback runs as a fully separate cold function because sharing the
-/// accumulator by ref with a non-inlined callee would address-expose it and
-/// force every hot-path append through the stack. Terminator/alignment zeros
-/// are position arithmetic only, and the 0xEC/0x11 pad run is OR-ed in from a
-/// phase-selected 128-bit constant.
+/// Performance design: Micro QR data codewords top out at 16 bytes (M4-L), so the whole bit stream is accumulated MSB-first in two ulong registers (hi = output bytes 0-7, lo = bytes 8-15) with no intermediate buffer.
+/// The UTF-8 fallback runs as a fully separate cold function because sharing the accumulator by ref with a non-inlined callee would address-expose it and force every hot-path append through the stack.
+/// Terminator/alignment zeros are position arithmetic only, and the 0xEC/0x11 pad run is OR-ed in from a phase-selected 128-bit constant.
 ///
-/// Byte-mode Latin-1 SIMD tiers: x64 narrows 8 chars per SSE2 pack into one
-/// 64-bit append behind the scalar OR-reduction validity scan. ARM64 goes
-/// further, because payloads never exceed 15 chars, one aligned load plus one
-/// end-overlapped load cover the whole text, serving both the validity check
-/// (UMAXV) and the appends (XTN narrow; the overlapped vector's low bytes are
-/// the tail), with a 64-bit SWAR variant of the same overlap for 4-7 chars.
+/// Byte-mode Latin-1 SIMD tiers: x64 narrows 8 chars per SSE2 pack into one 64-bit append behind the scalar OR-reduction validity scan.
+/// ARM64 goes further, because payloads never exceed 15 chars, one aligned load plus one end-overlapped load cover the whole text, serving both the validity check (UMAXV) and the appends (XTN narrow; the overlapped vector's low bytes are the tail), with a 64-bit SWAR variant of the same overlap for 4-7 chars.
 /// </remarks>
 internal static partial class MicroQRBinaryEncoder
 {
     /// <summary>
-    /// Encodes <paramref name="text"/> into data codewords (padding included) and
-    /// writes them to <paramref name="destination"/>.
+    /// Encodes <paramref name="text"/> into data codewords (padding included) and writes them to <paramref name="destination"/>.
     /// </summary>
     /// <param name="text">Input text; must satisfy the mode's alphabet and the version's capacity (validated by the caller).</param>
     /// <param name="version">Micro QR version (M1-M4).</param>
     /// <param name="eccLevel">Error correction level (valid for the version).</param>
     /// <param name="mode">Data encoding mode (Numeric / Alphanumeric / Byte).</param>
-    /// <param name="destination">Destination for the data codewords. When at least 16 bytes long
-    /// the full accumulator is stored (bytes beyond the returned count are zero); shorter
-    /// destinations receive exactly the codeword bytes.</param>
+    /// <param name="destination">Destination for the data codewords. When at least 16 bytes long the full accumulator is stored (bytes beyond the returned count are zero); shorter destinations receive exactly the codeword bytes.</param>
     /// <returns>Number of codeword bytes written (= data codeword count for the version/ECC).</returns>
     public static int EncodeDataCodewords(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, EncodingMode mode, Span<byte> destination)
     {
@@ -228,17 +212,14 @@ internal static partial class MicroQRBinaryEncoder
     /// Numeric segment: 10/7/4 bits per 3/2/1 digits (ISO/IEC 18004 7.4.3).
     /// </summary>
     /// <remarks>
-    /// The spec writes one 10-bit field per 3-digit group. Here three groups
-    /// (9 digits) are combined into a single 30-bit append:
+    /// The spec writes one 10-bit field per 3-digit group.
+    /// Here three groups (9 digits) are combined into a single 30-bit append:
     /// <code>
     /// "123456789"  ->  123 / 456 / 789 (10 bits each)
     ///              ->  [group0: 10 bits][group1: 10 bits][group2: 10 bits]
     ///              ->  (123 &lt;&lt; 20) | (456 &lt;&lt; 10) | 789
     /// </code>
-    /// Group values come from <see cref="SwarGroup"/>, whose 8-byte load covers
-    /// 4 chars for a 3-digit group, so every SWAR grain needs one readable char
-    /// beyond it (hence the i+9 / i+3 guards); tails without that headroom use
-    /// scalar group math with the '0' bias folded into one constant.
+    /// Group values come from <see cref="SwarGroup"/>, whose 8-byte load covers 4 chars for a 3-digit group, so every SWAR grain needs one readable char beyond it (hence the i+9 / i+3 guards); tails without that headroom use scalar group math with the '0' bias folded into one constant.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteNumericData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> digits)
@@ -339,10 +320,7 @@ internal static partial class MicroQRBinaryEncoder
 
 #if NET8_0_OR_GREATER
     /// <summary>
-    /// Compacts four little-endian 16-bit char lanes (high bytes zero, verified
-    /// by the caller's validity mask) to their four low bytes:
-    /// <c>chunk | chunk &gt;&gt; 8</c> yields bytes <c>[c0 c1 c1 c2 c2 c3 c3 0]</c>
-    /// (LSB first); bytes 0-1 and 4-5 are the contiguous pairs.
+    /// Compacts four little-endian 16-bit char lanes (high bytes zero, verified by the caller's validity mask) to their four low bytes: <c>chunk | chunk &gt;&gt; 8</c> yields bytes <c>[c0 c1 c1 c2 c2 c3 c3 0]</c> (LSB first); bytes 0-1 and 4-5 are the contiguous pairs.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint SwarPack4(ulong chunk)
@@ -371,17 +349,14 @@ internal static partial class MicroQRBinaryEncoder
     ];
 
     /// <summary>
-    /// Alphanumeric segment: 11 bits per pair (value0 * 45 + value1),
-    /// 6 bits for a trailing odd character (ISO/IEC 18004 7.4.4).
+    /// Alphanumeric segment: 11 bits per pair (value0 * 45 + value1), 6 bits for a trailing odd character (ISO/IEC 18004 7.4.4).
     /// </summary>
     /// <remarks>
     /// Two pairs (4 chars) are combined into a single 22-bit append:
     /// <code>
     /// [pair0: 11 bits][pair1: 11 bits]  ->  (p0 &lt;&lt; 11) | p1
     /// </code>
-    /// Like the numeric 9-digit batch, the point is fewer Append calls, each
-    /// one is a variable-shift OR into the 128-bit accumulator, so halving the
-    /// call count halves that work.
+    /// Like the numeric 9-digit batch, the point is fewer Append calls, each one is a variable-shift OR into the 128-bit accumulator, so halving the call count halves that work.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteAlphanumericData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> chars)
@@ -414,8 +389,8 @@ internal static partial class MicroQRBinaryEncoder
 
     /// <summary>
     /// Byte segment for non-Latin-1 text: full encode on a private accumulator.
-    /// The count indicator counts encoded BYTES. Not inlined by design, see the
-    /// class remarks on address exposure.
+    /// The count indicator counts encoded BYTES.
+    /// Not inlined by design, see the class remarks on address exposure.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int EncodeUtf8Codewords(ReadOnlySpan<char> text, MicroQRVersion version, int capacityBits, int codewordCount, int modeValue, int headerBits, Span<byte> destination)
@@ -450,11 +425,9 @@ internal static partial class MicroQRBinaryEncoder
     }
 
     /// <summary>
-    /// Hand-rolled UTF-8 encoder matching Encoding.UTF8.GetBytes semantics,
-    /// including U+FFFD replacement for lone surrogates. Payloads are tiny (≤ 15
-    /// encoded bytes), where Encoding's fixed dispatch cost dominates. This also
-    /// replaces the old netstandard2.0 path, <c>Encoding.UTF8.GetBytes(text.ToString())</c> —
-    /// which allocated both a string and a byte array per call; this loop allocates nothing.
+    /// Hand-rolled UTF-8 encoder matching Encoding.UTF8.GetBytes semantics, including U+FFFD replacement for lone surrogates.
+    /// Payloads are tiny (≤ 15 encoded bytes), where Encoding's fixed dispatch cost dominates.
+    /// This also replaces the old netstandard2.0 path, <c>Encoding.UTF8.GetBytes(text.ToString())</c> — which allocated both a string and a byte array per call; this loop allocates nothing.
     /// </summary>
     private static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
     {
@@ -511,8 +484,7 @@ internal static partial class MicroQRBinaryEncoder
     // ---------------------------------------------------------------
 
     /// <summary>
-    /// Appends the low <paramref name="bitCount"/> bits of
-    /// <paramref name="value"/> (1-32 bits) at the current position.
+    /// Appends the low <paramref name="bitCount"/> bits of <paramref name="value"/> (1-32 bits) at the current position.
     /// Internal (not private) so boundary tests can drive it directly.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -560,12 +532,8 @@ internal static partial class MicroQRBinaryEncoder
     }
 
     /// <summary>
-    /// Appends the low <paramref name="bitCount"/> bits (1-56) of an
-    /// already-masked ulong, Append generalized past 32 bits for the NEON byte
-    /// tail (up to 7 bytes in one call). Unlike Append this does not mask
-    /// internally: the caller needs the mask anyway to strip the overlap bytes
-    /// of its tail load, so re-masking here would be a redundant AND, the
-    /// pre-masked contract is asserted instead.
+    /// Appends the low <paramref name="bitCount"/> bits (1-56) of an already-masked ulong, Append generalized past 32 bits for the NEON byte tail (up to 7 bytes in one call).
+    /// Unlike Append this does not mask internally: the caller needs the mask anyway to strip the overlap bytes of its tail load, so re-masking here would be a redundant AND, the pre-masked contract is asserted instead.
     /// Internal (not private) so boundary tests can drive it directly.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -619,10 +587,8 @@ internal static partial class MicroQRBinaryEncoder
     }
 
     /// <summary>
-    /// Terminator + byte alignment (all zero bits: position arithmetic
-    /// only), alternating 0xEC/0x11 pad codewords via a phase-selected constant,
-    /// then the store. The M1/M3 final 4-bit pad codeword and any trailing zero
-    /// fill are already zeros in the accumulator.
+    /// Terminator + byte alignment (all zero bits: position arithmetic only), alternating 0xEC/0x11 pad codewords via a phase-selected constant, then the store.
+    /// The M1/M3 final 4-bit pad codeword and any trailing zero fill are already zeros in the accumulator.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void FinishAndStore(ulong hi, ulong lo, int pos, MicroQRVersion version, int capacityBits, int codewordCount, Span<byte> destination)

@@ -1,10 +1,7 @@
 /// <summary>
-/// What <c>MicroQRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the
-/// same content through the same zero-allocation span path.
+/// What <c>MicroQRSegmentation.Optimal</c> costs against <c>Single</c>, encoding the same content through the same zero-allocation span path.
 ///
-/// Micro QR content never exceeds 35 characters and there are at most three
-/// candidate versions below the single-mode fit, so planning is a handful of tiny
-/// dynamic-program passes; the shapes separate the scan's paths:
+/// Micro QR content never exceeds 35 characters and there are at most three candidate versions below the single-mode fit, so planning is a handful of tiny dynamic-program passes; the shapes separate the scan's paths:
 ///
 ///   numeric-20 : all digits, one mode is provably optimal, no cost run at all
 ///   alnum-15   : single-mode content the trivial bound rules out without a cost run
@@ -53,12 +50,12 @@ public class MicroQRSegmentationEncode
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), MicroQREccLevel.L, _spanDestination);
+        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), MicroQREccLevel.L, _spanDestination, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
     }
 }

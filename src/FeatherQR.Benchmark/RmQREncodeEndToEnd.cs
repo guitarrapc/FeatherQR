@@ -1,7 +1,6 @@
 /// <summary>
 /// End-to-end rMQR matrix encoding through the public API (RmQRCodeGenerator).
-/// Baseline for the future placement / bit-stream fast paths, and the guard that
-/// the reference-shaped pipeline stays allocation-free on the span path.
+/// Baseline for the future placement / bit-stream fast paths, and the guard that the reference-shaped pipeline stays allocation-free on the span path.
 ///
 /// Scenarios (requested versions pin the size so the fit search is not what is measured):
 ///   Numeric_R7x43_M      : smallest symbol, 12 digits (capacity boundary)
@@ -11,9 +10,7 @@
 ///   Utf8_Eci_R17x139_M   : explicit ECI 26 Byte segment
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
 ///
-/// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>):
-/// it varies content shape rather than version, and every row needs a same-run Single
-/// pair, which does not belong in this table.
+/// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>): it varies content shape rather than version, and every row needs a same-run Single pair, which does not belong in this table.
 /// </summary>
 public class RmQREncodeEndToEnd
 {
@@ -34,7 +31,7 @@ public class RmQREncodeEndToEnd
         _utf8 = string.Concat(Enumerable.Repeat("日本語QRコード", 5));
         _spanDestination = new byte[Math.Max(
             Sizing.Required(_byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }).BufferSize,
-            Sizing.Required(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
+            Sizing.Required(_numeric.AsSpan(), QREccLevel.L).BufferSize)];
     }
 
     // Class API (allocates the result object only)
@@ -42,37 +39,37 @@ public class RmQREncodeEndToEnd
     [Benchmark(Baseline = true)]
     public RmQRCodeData RmQR_Numeric_R7x43_Encode()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_numeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
+        return RmQRCodeGenerator.Create(_numeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
     }
 
     [Benchmark]
     public RmQRCodeData RmQR_Alphanumeric_R11x59_Encode()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_alphanumeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59 });
+        return RmQRCodeGenerator.Create(_alphanumeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59 });
     }
 
     [Benchmark]
     public RmQRCodeData RmQR_Byte_R17x139_Encode()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+        return RmQRCodeGenerator.Create(_byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
     }
 
     [Benchmark]
     public RmQRCodeData RmQR_Latin1Eci_R17x139_Encode()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_latin1.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Version = RmQRVersion.R17x139 });
+        return RmQRCodeGenerator.Create(_latin1.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Version = RmQRVersion.R17x139 });
     }
 
     [Benchmark]
     public RmQRCodeData RmQR_Utf8Eci_R17x139_Encode()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_utf8.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R17x139 });
+        return RmQRCodeGenerator.Create(_utf8.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R17x139 });
     }
 
     [Benchmark]
     public RmQRCodeData RmQR_Numeric_AutoFit_Encode()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_numeric.AsSpan(), RmQREccLevel.M);
+        return RmQRCodeGenerator.Create(_numeric.AsSpan(), RmQREccLevel.M);
     }
 
     // Span destination (zero-allocation) variants
@@ -80,37 +77,37 @@ public class RmQREncodeEndToEnd
     [Benchmark(Description = "RmQR_Numeric_R7x43_Encode (Span)")]
     public int RmQR_Numeric_R7x43_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
+        return RmQRCodeGenerator.Create(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
     }
 
     [Benchmark(Description = "RmQR_Alphanumeric_R11x59_Encode (Span)")]
     public int RmQR_Alphanumeric_R11x59_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_alphanumeric.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59 });
+        return RmQRCodeGenerator.Create(_alphanumeric.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59 });
     }
 
     [Benchmark(Description = "RmQR_Byte_R17x139_Encode (Span)")]
     public int RmQR_Byte_R17x139_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_byte.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+        return RmQRCodeGenerator.Create(_byte.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
     }
 
     [Benchmark(Description = "RmQR_Latin1_ECI_R17x139_Encode (Span)")]
     public int RmQR_Latin1Eci_R17x139_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_latin1.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Version = RmQRVersion.R17x139 });
+        return RmQRCodeGenerator.Create(_latin1.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Version = RmQRVersion.R17x139 });
     }
 
     [Benchmark(Description = "RmQR_UTF8_ECI_R17x139_Encode (Span)")]
     public int RmQR_Utf8Eci_R17x139_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_utf8.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R17x139 });
+        return RmQRCodeGenerator.Create(_utf8.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R17x139 });
     }
 
     [Benchmark(Description = "RmQR_Numeric_AutoFit_Encode (Span)")]
     public int RmQR_Numeric_AutoFit_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination);
+        return RmQRCodeGenerator.Create(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination);
     }
 
     // Standard QR version 1 with the same numeric payload, for scale reference. Also
@@ -120,6 +117,6 @@ public class RmQREncodeEndToEnd
     [Benchmark(Description = "StandardQr_Numeric_V1_Encode (Span)")]
     public int StandardQr_Numeric_V1_EncodeSpan()
     {
-        return FeatherQR.QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L, _spanDestination);
+        return FeatherQR.QRCodeGenerator.Create(_numeric.AsSpan(), QREccLevel.L, _spanDestination);
     }
 }

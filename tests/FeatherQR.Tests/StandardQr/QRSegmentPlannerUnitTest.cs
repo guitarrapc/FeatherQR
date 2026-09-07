@@ -1,5 +1,5 @@
 using FeatherQR.Internals;
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
@@ -39,7 +39,7 @@ public class QRSegmentPlannerUnitTest
     {
         // 7089 digits are an exact fit for version 40-L: 2363 groups x 10 bits, plus
         // the 4-bit mode indicator and the 14-bit count indicator.
-        var capacityBits = 8 * QRCodeConstants.GetEccInfo(40, ECCLevel.L).TotalDataCodewords;
+        var capacityBits = 8 * QRCodeConstants.GetEccInfo(40, QREccLevel.L).TotalDataCodewords;
         var atLimit = new string('1', QRSegmentPlanner.MaxPlannableChars);
         var costAtLimit = QRSegmentPlanner.MinimumPayloadBits(atLimit, EciMode.Default, 14, 13, 16);
         await Assert.That(costAtLimit).IsEqualTo(capacityBits);
@@ -138,7 +138,7 @@ public class QRSegmentPlannerUnitTest
         foreach (var version in new[] { 1, 10, 27 })
         {
             var segments = new ModeSegment[content.Length];
-            if (!QRSegmentPlanner.TryBuildPlan(content, charset, version, ECCLevel.L, segments, out var count))
+            if (!QRSegmentPlanner.TryBuildPlan(content, charset, version, QREccLevel.L, segments, out var count))
                 continue; // the plan legitimately does not fit this version
 
             var cciNumeric = EncodingMode.Numeric.GetCountIndicatorLength(version);
@@ -170,7 +170,7 @@ public class QRSegmentPlannerUnitTest
         // which no round-trip test can distinguish from a 2-run plan.
         var content = "abcdefghijkl123456789012mnopqrstuvwx";
         var segments = new ModeSegment[content.Length];
-        await Assert.That(QRSegmentPlanner.TryBuildPlan(content, EciMode.Default, version: 3, ECCLevel.L, segments, out var count)).IsTrue();
+        await Assert.That(QRSegmentPlanner.TryBuildPlan(content, EciMode.Default, version: 3, QREccLevel.L, segments, out var count)).IsTrue();
 
         await Assert.That(count).IsEqualTo(3);
         await Assert.That(segments[0].Mode).IsEqualTo(EncodingMode.Byte);

@@ -1,4 +1,4 @@
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -41,14 +41,14 @@ public class RmQRCodeDecoderRoundTripTest
             var text = Payload(version, ecc, mode);
             foreach (var quietZone in new[] { 0, 2, 4 })
             {
-                var data = RmQRCodeGenerator.CreateRmQRCode(text, ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
+                var data = RmQRCodeGenerator.Create(text, ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
 
                 // RmQRCodeData overloads
                 await Assert.That(RmQRCodeDecoder.TryDecode(data, out var text1)).IsTrue().Because($"{version}-{ecc} {mode} qz{quietZone}");
                 await Assert.That(text1).IsEqualTo(text);
                 await Assert.That(RmQRCodeDecoder.TryDecode(data, out var text2, out var info)).IsTrue();
                 await Assert.That(text2).IsEqualTo(text);
-                await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+                await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
                 await Assert.That(info.Version).IsEqualTo(version);
                 await Assert.That(info.EccLevel).IsEqualTo(ecc);
                 await Assert.That(info.ErrorsCorrected).IsEqualTo(0);
@@ -56,7 +56,7 @@ public class RmQRCodeDecoderRoundTripTest
                 // Module-matrix overloads (byte per module incl. quiet zone)
                 var size = Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
                 var modules = new byte[size.BufferSize];
-                RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
+                RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
                 await Assert.That(RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, out var text3, out var info3)).IsTrue();
                 await Assert.That(text3).IsEqualTo(text);
                 await Assert.That(info3.Version).IsEqualTo(version);
@@ -74,7 +74,7 @@ public class RmQRCodeDecoderRoundTripTest
     public async Task Decode_AsymmetricPadding_IsLocatedByTheDarkBoundingBox()
     {
         var text = "ASYMMETRIC";
-        var core = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var core = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
         var cw = core.Width;
         var ch = core.Height;
         // 3 light columns left, 7 right, 1 row top, 5 bottom.
@@ -95,7 +95,7 @@ public class RmQRCodeDecoderRoundTripTest
     {
         foreach (var text in new[] { "こんにちは世界", "naïve café", "😀 emoji", "" })
         {
-            var data = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M);
+            var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M);
             await Assert.That(RmQRCodeDecoder.TryDecode(data, out var decoded, out var info)).IsTrue().Because(text);
             await Assert.That(decoded).IsEqualTo(text);
             await Assert.That(info.ErrorsCorrected).IsEqualTo(0);
@@ -134,19 +134,19 @@ public class RmQRCodeDecoderRoundTripTest
     {
         // Standard QR v1 (21×21) and Micro QR M2 (13×13) matrices are square, not an rMQR size.
         var standard = new byte[21 * 21];
-        QRCodeGenerator.CreateQrCode("hello".AsSpan(), ECCLevel.M, standard, quietZoneSize: 0);
+        QRCodeGenerator.Create("hello".AsSpan(), QREccLevel.M, standard, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         await Assert.That(RmQRCodeDecoder.TryDecode(standard, 21, 21, out _, out var info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
 
         var micro = new byte[13 * 13];
-        MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.L, micro, quietZoneSize: 0);
+        MicroQRCodeGenerator.Create("12345".AsSpan(), MicroQREccLevel.L, micro, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
         await Assert.That(RmQRCodeDecoder.TryDecode(micro, 13, 13, out _, out info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
 
         // Blank and transposed rMQR sizes.
         await Assert.That(RmQRCodeDecoder.TryDecode(new byte[43 * 7], 43, 7, out _, out info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
-        var data = RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.InvalidMatrix);
+        var data = RmQRCodeGenerator.Create("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
         var modules = new byte[data.Width * data.Height];
         for (var r = 0; r < data.Height; r++)
             for (var c = 0; c < data.Width; c++)
@@ -166,7 +166,7 @@ public class RmQRCodeDecoderRoundTripTest
         var content = "0123456789ABCDEF ZERO ALLOC";
         var calculated = Sizing.Required(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { QuietZoneSize = 2 });
         var buffer = new byte[calculated.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = 2 });
+        RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = 2 });
         var destination = new char[RmQRCodeDecoder.GetMaxDecodedLength(calculated.Version)];
 
         for (var i = 0; i < 3; i++)

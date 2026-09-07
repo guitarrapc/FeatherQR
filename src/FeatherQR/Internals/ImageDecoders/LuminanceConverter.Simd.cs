@@ -7,31 +7,20 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// AVX2 luminance conversion: 32 pixels per iteration, bit-identical to the
-/// per-pixel loop in LuminanceConverter.cs.
+/// AVX2 luminance conversion: 32 pixels per iteration, bit-identical to the per-pixel loop in LuminanceConverter.cs.
 /// </summary>
 /// <remarks>
-/// The BT.601 weights sum to 256 and every channel is a byte, so the exact weighted
-/// sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned. That is what
-/// makes this vector form exact rather than approximate.
+/// The BT.601 weights sum to 256 and every channel is a byte, so the exact weighted sum never exceeds 255 · 256 = 65,280 and fits in 16 bits unsigned.
+/// That is what makes this vector form exact rather than approximate.
 /// <para>
-/// <c>pmaddubsw</c> multiplies adjacent byte pairs into signed 16-bit lanes, so it
-/// saturates above a pair weight of 128. The weights sum to 256, so a split into two
-/// pairs of exactly 128 exists: cut green as 51 + 99 and shuffle each pixel into the
-/// byte quad <c>[R, G, G, B]</c> against weights <c>[77, 51, 99, 29]</c>. Each
-/// partial peaks at 255 · 128 = 32,640 and cannot saturate; <c>pmaddwd</c> with ones
-/// then adds the pair back to 77R + 150G + 29B exactly.
+/// <c>pmaddubsw</c> multiplies adjacent byte pairs into signed 16-bit lanes, so it saturates above a pair weight of 128. The weights sum to 256, so a split into two pairs of exactly 128 exists: cut green as 51 + 99 and shuffle each pixel into the byte quad <c>[R, G, G, B]</c> against weights <c>[77, 51, 99, 29]</c>.
+/// Each partial peaks at 255 · 128 = 32,640 and cannot saturate; <c>pmaddwd</c> with ones then adds the pair back to 77R + 150G + 29B exactly.
 /// </para>
 /// <para>
-/// Alpha is handled without leaving the vector path in the two shapes that occur in
-/// practice. Straight alpha: fully transparent pixels composite to white, and white
-/// is exactly luminance 255, so the pixel is replaced by 0xFFFFFFFF before the
-/// shuffle; a partial alpha falls back to the scalar formula for the rest of the row.
-/// Premultiplied: the composite adds 255 − a to every channel, which (because the
-/// weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to
-/// adding 255 − a to the luminance — exact for every alpha, so that path never falls
-/// back. Measured 14-30x over the per-pixel loop; see LuminanceConverterParityTest
-/// for the equivalence proof by test.
+/// Alpha is handled without leaving the vector path in the two shapes that occur in practice.
+/// Straight alpha: fully transparent pixels composite to white, and white is exactly luminance 255, so the pixel is replaced by 0xFFFFFFFF before the shuffle; a partial alpha falls back to the scalar formula for the rest of the row.
+/// Premultiplied: the composite adds 255 − a to every channel, which (because the weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to adding 255 − a to the luminance — exact for every alpha, so that path never falls back.
+/// Measured 14-30x over the per-pixel loop; see LuminanceConverterParityTest for the equivalence proof by test.
 /// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
@@ -40,17 +29,16 @@ internal static partial class LuminanceConverter
     private const int BlockPixels = 32;
 
     /// <summary>
-    /// pmaddubsw weights for the byte quad [R, G, G, B], repeated per pixel. Both
-    /// pairs sum to exactly 128 (77+51 and 99+29), which is what keeps the 16-bit
-    /// partials below the saturation point.
+    /// pmaddubsw weights for the byte quad [R, G, G, B], repeated per pixel.
+    /// Both pairs sum to exactly 128 (77+51 and 99+29), which is what keeps the 16-bit partials below the saturation point.
     /// </summary>
     private static Vector256<sbyte> Weights => Vector256.Create(
         (sbyte)77, 51, 99, 29, 77, 51, 99, 29, 77, 51, 99, 29, 77, 51, 99, 29,
         77, 51, 99, 29, 77, 51, 99, 29, 77, 51, 99, 29, 77, 51, 99, 29);
 
     /// <summary>
-    /// vpshufb indices turning each BGRA pixel into [R, G, G, B]. Indices are per
-    /// 128-bit lane, so both lanes repeat 0..15.
+    /// vpshufb indices turning each BGRA pixel into [R, G, G, B].
+    /// Indices are per 128-bit lane, so both lanes repeat 0..15.
     /// </summary>
     private static Vector256<byte> BgraShuffle => Vector256.Create(
         (byte)2, 1, 1, 0, 6, 5, 5, 4, 10, 9, 9, 8, 14, 13, 13, 12,
@@ -62,8 +50,8 @@ internal static partial class LuminanceConverter
         0, 1, 1, 2, 4, 5, 5, 6, 8, 9, 9, 10, 12, 13, 13, 14);
 
     /// <summary>
-    /// Converts with AVX2. <paramref name="bgra"/> selects the channel order,
-    /// <paramref name="hasAlpha"/> is false for RGB888x (its fourth byte is padding).
+    /// Converts with AVX2.
+    /// <paramref name="bgra"/> selects the channel order, <paramref name="hasAlpha"/> is false for RGB888x (its fourth byte is padding).
     /// </summary>
     internal static void ConvertRgbaAvx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
     {
@@ -76,8 +64,8 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// No alpha, or straight (non-premultiplied) alpha. Opaque and fully transparent
-    /// pixels stay on the vector path; a partial alpha finishes the row scalar.
+    /// No alpha, or straight (non-premultiplied) alpha.
+    /// Opaque and fully transparent pixels stay on the vector path; a partial alpha finishes the row scalar.
     /// </summary>
     private static void ConvertStraightAvx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha)
     {
@@ -150,8 +138,8 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Premultiplied alpha. Never falls back: see the class remarks for why the
-    /// composite collapses to adding 255 − a to the luminance.
+    /// Premultiplied alpha.
+    /// Never falls back: see the class remarks for why the composite collapses to adding 255 − a to the luminance.
     /// </summary>
     private static void ConvertPremultipliedAvx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra)
     {
@@ -208,8 +196,7 @@ internal static partial class LuminanceConverter
         => Avx2.MultiplyAddAdjacent(Avx2.MultiplyAddAdjacent(Avx2.Shuffle(v, shuffle), weights), ones);
 
     /// <summary>
-    /// Premultiplied luminance, already shifted and masked to a byte per dword:
-    /// (S + 256 · (255 − a)) &gt;&gt; 8, with the scalar cast reproduced by the 8-bit mask.
+    /// Premultiplied luminance, already shifted and masked to a byte per dword: (S + 256 · (255 − a)) &gt;&gt; 8, with the scalar cast reproduced by the 8-bit mask.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector256<int> PremultipliedLuma(Vector256<byte> v, Vector256<byte> shuffle, Vector256<sbyte> weights, Vector256<short> ones)
@@ -222,9 +209,8 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Replaces every fully transparent pixel with white; false when some alpha is
-    /// partial. Straight alpha only: there a = 0 gives (c·0 + 255·255)/255 = 255
-    /// whatever c was, while a premultiplied buffer that violates c ≤ a would not.
+    /// Replaces every fully transparent pixel with white; false when some alpha is partial.
+    /// Straight alpha only: there a = 0 gives (c·0 + 255·255)/255 = 255 whatever c was, while a premultiplied buffer that violates c ≤ a would not.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryWhiten(ref Vector256<byte> v, Vector256<uint> solidAlpha)
@@ -269,8 +255,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Finishes a row from <paramref name="x"/> with the exact per-pixel formula.
-    /// The shifts locate red and blue inside the little-endian pixel word; green is
-    /// always at bit 8 and alpha at bit 24.
+    /// The shifts locate red and blue inside the little-endian pixel word; green is always at bit 8 and alpha at bit 24.
     /// </summary>
     private static void ConvertScalarRange(ref byte row, ref byte dest, nint x, int width, int redShift, int blueShift, bool hasAlpha, bool premultiplied)
     {

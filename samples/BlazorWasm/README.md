@@ -2,7 +2,7 @@
 
 Blazor WebAssembly sample for FeatherQR (the SkiaSharp.QrCode package). The UI mirrors [FeatherQR.Playground](../../src/FeatherQR.Playground) (the pure-WASM [GitHub Pages playground](https://guitarrapc.github.io/FeatherQR/)), but demonstrates the Blazor-specific integration:
 
-- **Live preview** renders directly onto a [SkiaSharp.Views.Blazor](https://www.nuget.org/packages/SkiaSharp.Views.Blazor) `SKCanvasView` with `QRCodeRenderer`, every control change repaints the surface.
+- **Live preview** renders directly onto a [SkiaSharp.Views.Blazor](https://www.nuget.org/packages/SkiaSharp.Views.Blazor) `SKCanvasView` with `SymbolRenderer`, every control change repaints the surface.
 - **Download PNG / SVG** exports through the symbology's image builder at the selected export size (`QRCodeImageBuilder` for Standard QR, `MicroQRCodeImageBuilder` for Micro QR).
 - [QrOptions.cs](QrOptions.cs) holds the page state; [QrImageFactory.cs](QrImageFactory.cs) translates it into library calls shared by both paths.
 

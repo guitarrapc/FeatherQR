@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// fast path is pixel-identical to per-module drawing (forced through a rect shape
 /// of a different type, which bypasses the fast-path type check).
 /// </summary>
-public class QRCodeRendererRunMergeParityTest
+public class SymbolRendererRunMergeParityTest
 {
     // Draws exactly like RectangleModuleShape, but as a different type the renderer
     // routes it through the per-module path instead of the run-merged fast path.
@@ -26,7 +26,7 @@ public class QRCodeRendererRunMergeParityTest
     [Arguments("https://github.com/guitarrapc/FeatherQR/blob/main/README.md?foo=sample&bar=dummy", 4, 512)] // v~5
     public async Task MergedRuns_MatchPerModuleRendering(string content, int quietZone, int imageSize)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: quietZone);
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
 
         var merged = RenderPixels(qr, imageSize, moduleShape: null);
         var perModule = RenderPixels(qr, imageSize, moduleShape: new PerModuleRectangleShape());
@@ -37,7 +37,7 @@ public class QRCodeRendererRunMergeParityTest
     [Test]
     public async Task MergedRuns_WithGradient_MatchPerModuleRendering()
     {
-        var qr = QRCodeGenerator.CreateQrCode("gradient-run-merge-parity", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("gradient-run-merge-parity", QREccLevel.M);
         var gradient = new GradientOptions([SKColors.Purple, SKColors.Orange], GradientDirection.TopLeftToBottomRight);
 
         var merged = RenderPixels(qr, 512, moduleShape: null, gradientOptions: gradient);
@@ -58,7 +58,7 @@ public class QRCodeRendererRunMergeParityTest
         // guarantee, non-axis-aligned rasterization rounds shared edges at
         // sub-pixel level, which affects per-module drawing between adjacent
         // modules just the same (measured ~0.003% of pixels at 7-30 degrees).
-        var qr = QRCodeGenerator.CreateQrCode("transform-parity", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("transform-parity", QREccLevel.M);
 
         var merged = RenderTransformedPixels(qr, moduleShape: null, dx, dy, scale);
         var perModule = RenderTransformedPixels(qr, new PerModuleRectangleShape(), dx, dy, scale);
@@ -71,7 +71,7 @@ public class QRCodeRendererRunMergeParityTest
     {
         // Runs must break at finder pattern modules so the custom finder shape
         // is not painted over.
-        var qr = QRCodeGenerator.CreateQrCode("finder-run-merge-parity", ECCLevel.M);
+        var qr = QRCodeGenerator.Create("finder-run-merge-parity", QREccLevel.M);
 
         var merged = RenderPixels(qr, 512, moduleShape: null, finderPatternShape: RectangleFinderPatternShape.Default);
         var perModule = RenderPixels(qr, 512, moduleShape: new PerModuleRectangleShape(), finderPatternShape: RectangleFinderPatternShape.Default);
@@ -89,7 +89,7 @@ public class QRCodeRendererRunMergeParityTest
         canvas.Translate(dx, dy);
         canvas.Scale(scale);
 
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             SKRect.Create(10, 10, 411, 411),
             qr,
@@ -111,7 +111,7 @@ public class QRCodeRendererRunMergeParityTest
         using var bitmap = new SKBitmap(imageSize, imageSize);
         using var canvas = new SKCanvas(bitmap);
 
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             area,
             qr,

@@ -9,16 +9,11 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Conversion between the byte-per-module matrix (0 = light, non-zero = dark) and the
-/// MSB-first bit-packed storage of the Micro QR / rMQR data models: bit 7 of byte 0
-/// is module 0, the padding bits of the final byte are zero.
+/// Conversion between the byte-per-module matrix (0 = light, non-zero = dark) and the MSB-first bit-packed storage of the Micro QR / rMQR data models: bit 7 of byte 0 is module 0, the padding bits of the final byte are zero.
 /// </summary>
 /// <remarks>
-/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+ —
-/// pack: non-zero compare, lane reversal within each byte group (pshufb / tbl), move-mask; unpack:
-/// per-lane byte broadcast, bit mask, compare — with a SWAR / unrolled scalar tail,
-/// and a portable scalar path on netstandard. Kept behind byte parity with a naive
-/// reference by <c>ModuleBitPackerParityTest</c>.
+/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+ — pack: non-zero compare, lane reversal within each byte group (pshufb / tbl), move-mask; unpack: per-lane byte broadcast, bit mask, compare — with a SWAR / unrolled scalar tail, and a portable scalar path on netstandard.
+/// Kept behind byte parity with a naive reference by <c>ModuleBitPackerParityTest</c>.
 /// </remarks>
 internal static class ModuleBitPacker
 {

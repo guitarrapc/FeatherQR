@@ -1,15 +1,14 @@
 namespace FeatherQR;
 
 /// <summary>
-/// The Standard QR versions a generator may choose from: the smallest one in the range
-/// that holds the content is used. A fixed version is <see cref="Exactly"/>, the
-/// degenerate case, rather than a separate setting.
+/// The Standard QR versions a generator may choose from: the smallest one in the range that holds the content is used.
+/// A fixed version is <see cref="Exactly"/>, the degenerate case, rather than a separate setting.
 /// </summary>
 /// <remarks>
 /// Both bounds are inclusive, unlike <see cref="System.Range"/> whose end is exclusive.
 /// That is why <c>1..40</c> is not usable here: it would read as 1 to 40 and mean 1 to 39.
 /// </remarks>
-public readonly record struct QRCodeVersionRange
+public readonly record struct QRVersionRange
 {
     /// <summary>The lowest version defined by ISO/IEC 18004.</summary>
     public const int MinVersion = 1;
@@ -25,7 +24,7 @@ public readonly record struct QRCodeVersionRange
 
     /// <summary>An inclusive range from <paramref name="min"/> to <paramref name="max"/>.</summary>
     /// <exception cref="ArgumentOutOfRangeException">A bound is outside 1-40, or <paramref name="min"/> exceeds <paramref name="max"/>.</exception>
-    public QRCodeVersionRange(int min, int max)
+    public QRVersionRange(int min, int max)
     {
         ValidateBound(min, nameof(min));
         ValidateBound(max, nameof(max));
@@ -49,36 +48,34 @@ public readonly record struct QRCodeVersionRange
     public bool IsExact => Min == Max;
 
     /// <summary>Every version, 1 to 40. Identical to <c>default</c>.</summary>
-    public static QRCodeVersionRange Any => default;
+    public static QRVersionRange Any => default;
 
-    /// <inheritdoc cref="QRCodeVersionRange(int, int)"/>
+    /// <inheritdoc cref="QRVersionRange(int, int)"/>
     /// <summary>Exactly <paramref name="version"/>, with no automatic selection.</summary>
-    public static QRCodeVersionRange Exactly(int version) => new(version, version);
+    public static QRVersionRange Exactly(int version) => new(version, version);
 
-    /// <inheritdoc cref="QRCodeVersionRange(int, int)"/>
+    /// <inheritdoc cref="QRVersionRange(int, int)"/>
     /// <summary><paramref name="version"/> or larger.</summary>
-    public static QRCodeVersionRange AtLeast(int version) => new(version, MaxVersion);
+    public static QRVersionRange AtLeast(int version) => new(version, MaxVersion);
 
-    /// <inheritdoc cref="QRCodeVersionRange(int, int)"/>
+    /// <inheritdoc cref="QRVersionRange(int, int)"/>
     /// <summary><paramref name="version"/> or smaller.</summary>
-    public static QRCodeVersionRange AtMost(int version) => new(MinVersion, version);
+    public static QRVersionRange AtMost(int version) => new(MinVersion, version);
 
-    /// <inheritdoc cref="QRCodeVersionRange(int, int)"/>
+    /// <inheritdoc cref="QRVersionRange(int, int)"/>
     /// <summary>An inclusive range from <paramref name="min"/> to <paramref name="max"/>.</summary>
-    public static QRCodeVersionRange Between(int min, int max) => new(min, max);
+    public static QRVersionRange Between(int min, int max) => new(min, max);
 
-    /// <inheritdoc cref="QRCodeVersionRange(int, int)"/>
+    /// <inheritdoc cref="QRVersionRange(int, int)"/>
     /// <summary>A single version, as <see cref="Exactly"/>. Lets an option set read <c>Version = 15</c>.</summary>
-    public static implicit operator QRCodeVersionRange(int version) => Exactly(version);
+    public static implicit operator QRVersionRange(int version) => Exactly(version);
 
     /// <summary>A single version, or <see cref="Any"/> when there is none.</summary>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="version"/> has a value outside 1-40.</exception>
     /// <remarks>
-    /// Lets a caller whose version is optional pass it through without branching. -1 is not
-    /// accepted as a second spelling of <see cref="Any"/>: a mistyped or defaulted value
-    /// must fail rather than silently produce an automatically sized symbol.
+    /// Lets a caller whose version is optional pass it through without branching. -1 is not accepted as a second spelling of <see cref="Any"/>: a mistyped or defaulted value must fail rather than silently produce an automatically sized symbol.
     /// </remarks>
-    public static implicit operator QRCodeVersionRange(int? version) => version.HasValue ? Exactly(version.GetValueOrDefault()) : Any;
+    public static implicit operator QRVersionRange(int? version) => version.HasValue ? Exactly(version.GetValueOrDefault()) : Any;
 
     /// <summary>Whether <paramref name="version"/> falls inside this range.</summary>
     public bool Contains(int version) => version >= Min && version <= Max;

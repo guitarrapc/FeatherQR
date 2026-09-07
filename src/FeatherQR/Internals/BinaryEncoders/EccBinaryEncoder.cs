@@ -8,10 +8,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// </summary>
 /// <remarks>
 /// This encoder implements the Reed-Solomon error correction algorithm as specified in ISO/IEC 18004 Section 8.5.
-/// The public entry point dispatches to the fastest kernel the runtime supports:
-/// GFNI (net10.0+, ~64x over the naive form), SSSE3 (net8.0+, ~52x), NEON
-/// (net8.0+ ARM64, ~21-36x), or a portable scalar kernel (~4.4x) used on
-/// netstandard and pre-SSSE3 x86.
+/// The public entry point dispatches to the fastest kernel the runtime supports: GFNI (net10.0+, ~64x over the naive form), SSSE3 (net8.0+, ~52x), NEON (net8.0+ ARM64, ~21-36x), or a portable scalar kernel (~4.4x) used on netstandard and pre-SSSE3 x86.
 /// All kernels produce byte-identical output; see the kernel parity tests.
 /// </remarks>
 internal static partial class EccBinaryEncoder
@@ -68,7 +65,8 @@ internal static partial class EccBinaryEncoder
     }
 
     /// <summary>
-    /// Portable scalar kernel. Runs on every target (netstandard2.0+, old x86, pre-NEON ARM).
+    /// Portable scalar kernel.
+    /// Runs on every target (netstandard2.0+, old x86, pre-NEON ARM).
     /// </summary>
     /// <remarks>
     /// Two optimizations over the naive polynomial division, both measured (~4.4x combined):
@@ -120,8 +118,8 @@ internal static partial class EccBinaryEncoder
     }
 
     /// <summary>
-    /// Naive polynomial division (the pre-optimization implementation). Used only when
-    /// the generator polynomial has no log-domain representation (eccCount == 255).
+    /// Naive polynomial division (the pre-optimization implementation).
+    /// Used only when the generator polynomial has no log-domain representation (eccCount == 255).
     /// </summary>
     private static void CalculateEccNaive(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
@@ -155,17 +153,12 @@ internal static partial class EccBinaryEncoder
     private static readonly byte[] _logGenUnrepresentable = [];
 
     /// <summary>
-    /// Returns the cached log-domain generator polynomial, or null when it has no
-    /// log-domain representation.
+    /// Returns the cached log-domain generator polynomial, or null when it has no log-domain representation.
     /// </summary>
     /// <remarks>
-    /// Reed-Solomon generator polynomials have all-nonzero coefficients for
-    /// eccCount ≤ 254: G(x) is itself a codeword of the length-255 RS code with
-    /// minimum distance eccCount + 1 (MDS), so its weight must be ≥ eccCount + 1 —
-    /// every one of its eccCount + 1 coefficients. The single exception is
-    /// eccCount == 255, where G(x) = Π(x - α^i) over all nonzero field elements
-    /// collapses to x^255 + 1 (254 zero coefficients). Verified by exhaustive scan
-    /// over eccCount 1..255.
+    /// Reed-Solomon generator polynomials have all-nonzero coefficients for eccCount ≤ 254: G(x) is itself a codeword of the length-255 RS code with minimum distance eccCount + 1 (MDS), so its weight must be ≥ eccCount + 1 — every one of its eccCount + 1 coefficients.
+    /// The single exception is eccCount == 255, where G(x) = Π(x - α^i) over all nonzero field elements collapses to x^255 + 1 (254 zero coefficients).
+    /// Verified by exhaustive scan over eccCount 1..255.
     /// </remarks>
     private static byte[]? GetLogGenerator(int eccCount)
     {
@@ -197,20 +190,19 @@ internal static partial class EccBinaryEncoder
     /// <param name="generator">Output buffer for generator polynomial coefficients.</param>
     /// <param name="eccCount">Number of error correction codewords.</param>
     /// <remarks>
-    /// Formula: (x - α^0)(x - α^1)...(x - α^(n-1)) where n = numEccWords
-    /// Example for eccWordCount = 3:
-    /// G(x) = (x - α^0)(x - α^1)(x - α^2)
+    /// Formula: (x - α^0)(x - α^1)...(x - α^(n-1)) where n = numEccWords Example for eccWordCount = 3: G(x) = (x - α^0)(x - α^1)(x - α^2)
     ///      = (x - 1)(x - α)(x - α^2)
     ///      = x^3 + α^0·x^2 + α^1·x + α^0
     ///
     /// The generator polynomial is built iteratively:
     /// 1. Start: G(x) = 1 (polynomial of degree 0)
     /// 2. Multiply by (x - α^0): G(x) = (1)(x - 1) = x - 1 (degree 1)
-    /// 3. Multiply by (x - α^1): G(x) = (x - 1)(x - α) = x^2 + ... (degree 2)
-    /// 4. Multiply by (x - α^2): G(x) = x^3 + ... (degree 3)
-    /// 5. Continue until degree = eccCount.
-    /// ...
-    /// n. Result has degree = eccCount.
+    /// 3. Multiply by (x - α^1): G(x) = (x - 1)(x - α) = x^2 + ...
+    /// (degree 2)
+    /// 4. Multiply by (x - α^2): G(x) = x^3 + ...
+    /// (degree 3)
+    /// 5. Continue until degree = eccCount. ... n.
+    /// Result has degree = eccCount.
     /// </remarks>
     private static void GenerateGeneratorPolynomial(Span<byte> generator, int eccCount)
     {

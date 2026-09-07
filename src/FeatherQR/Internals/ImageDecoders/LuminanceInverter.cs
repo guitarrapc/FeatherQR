@@ -6,17 +6,12 @@ using System.Runtime.Intrinsics;
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// Reflectance reversal: writes the photographic negative of a luminance buffer, so a
-/// light-on-dark symbol can be retried as dark-on-light.
+/// Reflectance reversal: writes the photographic negative of a luminance buffer, so a light-on-dark symbol can be retried as dark-on-light.
 /// </summary>
 /// <remarks>
-/// Shared by all three image decoders, and paid on every image that fails to decode in
-/// its first polarity — which makes it a fixed cost of the failure path rather than of
-/// the success path. <c>255 - x</c> on a byte is the ones' complement, so the vector
-/// form is a single NOT per lane; measured 17-20x over the per-byte loop across
-/// 33k-922k pixels on AVX2. Two vector widths rather than one: 256-bit where it is
-/// accelerated, otherwise 128-bit, which keeps ARM64 (NEON is 128-bit, so
-/// <c>Vector256.IsHardwareAccelerated</c> is false there) off the scalar loop.
+/// Shared by all three image decoders, and paid on every image that fails to decode in its first polarity — which makes it a fixed cost of the failure path rather than of the success path.
+/// <c>255 - x</c> on a byte is the ones' complement, so the vector form is a single NOT per lane; measured 17-20x over the per-byte loop across 33k-922k pixels on AVX2.
+/// Two vector widths rather than one: 256-bit where it is accelerated, otherwise 128-bit, which keeps ARM64 (NEON is 128-bit, so <c>Vector256.IsHardwareAccelerated</c> is false there) off the scalar loop.
 /// </remarks>
 internal static class LuminanceInverter
 {

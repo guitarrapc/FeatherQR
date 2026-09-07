@@ -47,8 +47,8 @@ public class MicroQRSegmentationTest
     [MethodDataSource(nameof(Corpus))]
     public async Task Optimal_IsNeverLargerThanSingle_AndAlwaysRoundTrips(string content)
     {
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That((int)optimal.Version).IsLessThanOrEqualTo((int)single.Version);
 
@@ -60,8 +60,8 @@ public class MicroQRSegmentationTest
     [MethodDataSource(nameof(Corpus))]
     public async Task Optimal_SameVersionAsSingle_ProducesTheIdenticalMatrix(string content)
     {
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         if (optimal.Version != single.Version)
             return; // a genuine gain; the round-trip test covers it
@@ -74,8 +74,8 @@ public class MicroQRSegmentationTest
     [Arguments("ab1234567890123")]
     public async Task Optimal_MixedContent_SelectsSmallerVersionThanSingle(string content)
     {
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That((int)optimal.Version).IsLessThan((int)single.Version);
 
@@ -89,8 +89,8 @@ public class MicroQRSegmentationTest
     [Arguments("hello")]
     public async Task Optimal_SingleModeContent_KeepsTheSameVersion(string content)
     {
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
@@ -108,7 +108,7 @@ public class MicroQRSegmentationTest
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out var size, options)).IsTrue();
 
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options);
         await Assert.That(data.Version).IsEqualTo(size.Version);
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue();
@@ -121,9 +121,9 @@ public class MicroQRSegmentationTest
         // At M3-L the single Alphanumeric stream (19 chars = 111 bits > 84)
         // overflows, but Alnum(2) + Numeric(17) = 81 bits fits.
         var content = "AB12345678901234567";
-        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3 }));
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3 }));
 
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3, Segmentation = MicroQRSegmentation.Optimal });
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3, Segmentation = MicroQRSegmentation.Optimal });
         await Assert.That(data.Version).IsEqualTo(MicroQRVersion.M3);
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue();
@@ -138,8 +138,8 @@ public class MicroQRSegmentationTest
         // bits > M2-L's 40, landing on M3; split Alnum(1) + Numeric(7) =
         // (1+3+6) + (1+4+24) = 39 bits fits M2-L exactly under the cap.
         var content = "A1234567";
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(MicroQRVersion.M2);
         await Assert.That((int)optimal.Version).IsLessThan((int)single.Version);
@@ -152,7 +152,7 @@ public class MicroQRSegmentationTest
     public async Task Optimal_WithPinnedMask_UsesThatMask()
     {
         var content = "AB12345678901234567";
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal, MaskPattern = 2 });
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal, MaskPattern = 2 });
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -165,8 +165,8 @@ public class MicroQRSegmentationTest
         var options = new MicroQRCodeGeneratorOptions { Segmentation = (MicroQRSegmentation)5 };
         var buffer = new byte[1024];
 
-        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L, options));
-        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.L, buffer, options));
+        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L, options));
+        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.Create("12345".AsSpan(), MicroQREccLevel.L, buffer, options));
         var fromSizing = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("12345", MicroQREccLevel.L, out _, options));
 
         await Assert.That(fromCreate.ParamName).IsEqualTo("segmentation");
@@ -180,8 +180,8 @@ public class MicroQRSegmentationTest
         var options = new MicroQRCodeGeneratorOptions { Segmentation = (MicroQRSegmentation)3, QuietZoneSize = -1 };
         var buffer = new byte[1024];
 
-        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L, options));
-        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.L, buffer, options));
+        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L, options));
+        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.Create("12345".AsSpan(), MicroQREccLevel.L, buffer, options));
         var fromSizing = Assert.Throws<ArgumentOutOfRangeException>(() => MicroQRCodeGenerator.TryGetRequiredBufferSize("12345", MicroQREccLevel.L, out _, options));
 
         await Assert.That(fromCreate.ParamName).IsEqualTo("quietZoneSize");
@@ -199,15 +199,15 @@ public class MicroQRSegmentationTest
             await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out var size, options)).IsTrue();
 
             var buffer = new byte[size.BufferSize];
-            var written = MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), MicroQREccLevel.L, buffer, options);
+            var written = MicroQRCodeGenerator.Create(content.AsSpan(), MicroQREccLevel.L, buffer, options);
             await Assert.That(written).IsEqualTo(size.BufferSize);
 
-            var expected = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options);
-            for (var row = 0; row < size.QrSize; row++)
+            var expected = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options);
+            for (var row = 0; row < size.Size; row++)
             {
-                for (var col = 0; col < size.QrSize; col++)
+                for (var col = 0; col < size.Size; col++)
                 {
-                    if (expected[row, col] != (buffer[row * size.QrSize + col] != 0))
+                    if (expected[row, col] != (buffer[row * size.Size + col] != 0))
                         throw new InvalidOperationException($"module mismatch at ({row}, {col}), quietZone={quietZone}");
                 }
             }
@@ -228,7 +228,7 @@ public class MicroQRSegmentationTest
         await Assert.That(decoded).IsEqualTo(content);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new MicroQRCodeImageBuilder("12345").WithSegmentation((MicroQRSegmentation)5));
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         Assert.Throws<InvalidOperationException>(() => new MicroQRCodeImageBuilder(data).WithSegmentation(MicroQRSegmentation.Optimal));
     }
 
@@ -254,7 +254,7 @@ public class MicroQRSegmentationTest
             if (!optimalFits)
                 continue;
 
-            var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, options);
+            var data = MicroQRCodeGenerator.Create(content, eccLevel, options);
             await Assert.That(data.Version).IsEqualTo(optimalSize.Version);
             await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue().Because($"content=\"{content}\", ecc={eccLevel}");
             await Assert.That(decoded).IsEqualTo(content);
@@ -270,7 +270,7 @@ public class MicroQRSegmentationTest
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.M, out _)).IsFalse();
 
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M, options);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.M, options);
         await Assert.That(data.Version).IsEqualTo(MicroQRVersion.M4);
         await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -279,8 +279,8 @@ public class MicroQRSegmentationTest
     [Test]
     public async Task Optimal_EmptyContent_MatchesSingle()
     {
-        var single = MicroQRCodeGenerator.CreateMicroQRCode("", MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode("", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create("", MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create("", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
@@ -294,11 +294,11 @@ public class MicroQRSegmentationTest
         // Non-numeric content cannot reach M1, the only ErrorDetectionOnly version:
         // an ordinary "does not fit" on both paths.
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize("A1234567", MicroQREccLevel.ErrorDetectionOnly, out _, options)).IsFalse();
-        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode("A1234567", MicroQREccLevel.ErrorDetectionOnly, options));
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create("A1234567", MicroQREccLevel.ErrorDetectionOnly, options));
 
         // Numeric content takes the shortcut and must be byte-identical to Single.
-        var single = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly, options);
+        var single = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly, options);
         await Assert.That(optimal.Version).IsEqualTo(MicroQRVersion.M1);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
     }
@@ -310,8 +310,8 @@ public class MicroQRSegmentationTest
         // the single-mode stream (M3) is emitted unchanged.
         var content = "A1234567";
         var range = MicroQRVersionRange.Between(MicroQRVersion.M3, MicroQRVersion.M4);
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = range });
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = range, Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = range });
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = range, Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
@@ -328,7 +328,7 @@ public class MicroQRSegmentationTest
 
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = range })).IsFalse();
 
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options);
         await Assert.That(data.Version).IsEqualTo(MicroQRVersion.M3);
         await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -343,7 +343,7 @@ public class MicroQRSegmentationTest
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
 
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsFalse();
-        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options));
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options));
     }
 
     [Test]
@@ -355,8 +355,8 @@ public class MicroQRSegmentationTest
         // The planner must refuse such a plan and emit the single-mode stream, which
         // round-trips (the whole payload is invalid UTF-8 thanks to the lone E9).
         var content = "Ã©123456789012é";
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
@@ -371,8 +371,8 @@ public class MicroQRSegmentationTest
         // The guard must not over-reject: "é" narrows to E9, invalid as UTF-8 in any
         // run, so every byte run still decodes as Latin-1 and the split stays safe.
         var content = "é123456789012é";
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That((int)optimal.Version).IsLessThan((int)single.Version);
         await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
@@ -389,7 +389,7 @@ public class MicroQRSegmentationTest
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
 
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsFalse();
-        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options));
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options));
     }
 
     [Test]
@@ -399,8 +399,8 @@ public class MicroQRSegmentationTest
         // the decoder consumes it as a BOM; the single-mode stream keeps it interior
         // and intact, so the planner must fall back.
         var content = "123456\uFEFFa";
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
         await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
@@ -419,7 +419,7 @@ public class MicroQRSegmentationTest
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
 
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsFalse();
-        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options));
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options));
 
         // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(new string('1', 20) + "a", MicroQREccLevel.L, out _, options)).IsTrue();
@@ -450,17 +450,17 @@ public class MicroQRSegmentationTest
 
         for (var i = 0; i < 3; i++)
         {
-            MicroQRCodeGenerator.CreateMicroQRCode(mixed.AsSpan(), MicroQREccLevel.L, buffer, options);
-            MicroQRCodeGenerator.CreateMicroQRCode(latin1.AsSpan(), MicroQREccLevel.L, buffer, options);
-            MicroQRCodeGenerator.CreateMicroQRCode(utf8.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.Create(mixed.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.Create(latin1.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.Create(utf8.AsSpan(), MicroQREccLevel.L, buffer, options);
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 16; i++)
         {
-            MicroQRCodeGenerator.CreateMicroQRCode(mixed.AsSpan(), MicroQREccLevel.L, buffer, options);
-            MicroQRCodeGenerator.CreateMicroQRCode(latin1.AsSpan(), MicroQREccLevel.L, buffer, options);
-            MicroQRCodeGenerator.CreateMicroQRCode(utf8.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.Create(mixed.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.Create(latin1.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.Create(utf8.AsSpan(), MicroQREccLevel.L, buffer, options);
         }
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
@@ -478,8 +478,8 @@ public class MicroQRSegmentationTest
         // exemption (which silently falls back to the identical single-mode
         // symbol) fails this test instead of passing it vacuously.
         var content = "\uFEFF123456a";
-        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
-        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That((int)optimal.Version).IsLessThan((int)single.Version);
         await Assert.That(MicroQRCodeDecoder.TryDecode(single, out var singleDecoded)).IsTrue();
@@ -496,10 +496,10 @@ public class MicroQRSegmentationTest
             await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out var size, options)).IsTrue();
 
             var buffer = new byte[size.BufferSize];
-            var written = MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), MicroQREccLevel.L, buffer, options);
+            var written = MicroQRCodeGenerator.Create(content.AsSpan(), MicroQREccLevel.L, buffer, options);
             await Assert.That(written).IsEqualTo(size.BufferSize);
 
-            var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options);
+            var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options);
             await Assert.That(data.Version).IsEqualTo(size.Version);
         }
     }

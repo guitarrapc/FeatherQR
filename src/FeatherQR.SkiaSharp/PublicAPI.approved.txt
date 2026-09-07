@@ -1,5 +1,5 @@
 // FeatherQR.SkiaSharp
-// 26 exported types
+// 25 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR.SkiaSharp
@@ -43,24 +43,27 @@ namespace FeatherQR.SkiaSharp
         BottomRightToTopLeft = 8,
     }
 
-    public class GradientOptions : IEquatable<GradientOptions>
+    public sealed class GradientOptions : IEquatable<GradientOptions>
     {
         public static readonly GradientOptions Default;
-        public GradientOptions(SKColor[] colors, GradientDirection direction = 1, float[]? colorPositions = null);
+        public GradientOptions(ReadOnlySpan<SKColor> colors, GradientDirection direction = 1, ReadOnlySpan<float> colorPositions = null);
         public GradientDirection Direction { get; init; }
-        public SKColor[] Colors { get; init; }
-        public float[]? ColorPositions { get; init; }
+        public ReadOnlySpan<SKColor> Colors { get; }
+        public ReadOnlySpan<float> ColorPositions { get; }
+        public bool Equals(GradientOptions? other);
+        public override int GetHashCode();
     }
 
-    public class IconData
+    public sealed class IconData : IEquatable<IconData>
     {
         [Obsolete] public IconData();
-        public IconShape Icon { get; set; }
-        public int IconBorderWidth { get; set; }
-        public int IconSizePercent { get; set; }
-        public int MaxCoreOccupancyPercent { get; set; }
-        public int? IconBorderModules { get; set; }
-        public int? IconSizeModules { get; set; }
+        public IconData(IconShape icon, int iconSizePercent = 10, int iconBorderWidth = 2, int? iconSizeModules = null, int? iconBorderModules = null, int maxCoreOccupancyPercent = 30);
+        public IconShape Icon { get; init; }
+        public int IconBorderWidth { get; init; }
+        public int IconSizePercent { get; init; }
+        public int MaxCoreOccupancyPercent { get; init; }
+        public int? IconBorderModules { get; init; }
+        public int? IconSizeModules { get; init; }
         public static IconData FromImage(SKBitmap image, int iconSizePercent = 10, int iconBorderWidth = 2);
         public static IconData FromImageByModules(SKBitmap image, int iconSizeModules, int iconBorderModules = 1, int maxCoreOccupancyPercent = 30);
     }
@@ -83,7 +86,7 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor);
     }
 
-    public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBuilder>
+    public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCodeImageBuilder>
     {
         public MicroQRCodeImageBuilder(MicroQRCodeData microQrCodeData);
         public MicroQRCodeImageBuilder(string content);
@@ -125,81 +128,43 @@ namespace FeatherQR.SkiaSharp
         public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
-    public static class QRCodeExtensions
-    {
-        public static void Render(SKCanvas canvas, MicroQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
-        public static void Render(SKCanvas canvas, MicroQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
-        public static void Render(SKCanvas canvas, QRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
-        public static void Render(SKCanvas canvas, QRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
-        public static void Render(SKCanvas canvas, RmQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
-        public static void Render(SKCanvas canvas, RmQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
-    }
-
-    public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
+    public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuilder>
     {
         public QRCodeImageBuilder(QRCodeData qrCodeData);
         public QRCodeImageBuilder(string content);
         public QRCodeImageBuilder WithEciMode(EciMode eciMode);
-        public QRCodeImageBuilder WithErrorCorrection(ECCLevel eccLevel);
+        public QRCodeImageBuilder WithErrorCorrection(QREccLevel eccLevel);
         public QRCodeImageBuilder WithErrorCorrectionBoost(bool boostEccLevel = true);
         public QRCodeImageBuilder WithFinderPatternShape(FinderPatternShape? finderPatternShape);
         public QRCodeImageBuilder WithIcon(IconData? iconData);
         public QRCodeImageBuilder WithMaskPattern(int? maskPattern);
-        public QRCodeImageBuilder WithSegmentation(QRCodeSegmentation segmentation);
-        public QRCodeImageBuilder WithVersion(QRCodeVersionRange versionRange);
+        public QRCodeImageBuilder WithSegmentation(QRSegmentation segmentation);
+        public QRCodeImageBuilder WithVersion(QRVersionRange versionRange);
         public QRCodeImageBuilder WithVersion(int version);
         public static byte[] GetImageBytes(QRCodeData qrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100);
-        public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, ECCLevel eccLevel = 1, int size = 512, int quality = 100);
+        public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, QREccLevel eccLevel = 1, int size = 512, int quality = 100);
         public static byte[] GetPngBytes(QRCodeData qrCodeData, int size = 512);
-        public static byte[] GetPngBytes(string content, ECCLevel eccLevel = 1, int size = 512);
+        public static byte[] GetPngBytes(string content, QREccLevel eccLevel = 1, int size = 512);
         public static byte[] GetSvgBytes(QRCodeData qrCodeData, int size = 512);
-        public static byte[] GetSvgBytes(string content, ECCLevel eccLevel = 1, int size = 512);
+        public static byte[] GetSvgBytes(string content, QREccLevel eccLevel = 1, int size = 512);
         public static string GetSvgString(QRCodeData qrCodeData, int size = 512);
-        public static string GetSvgString(string content, ECCLevel eccLevel = 1, int size = 512);
+        public static string GetSvgString(string content, QREccLevel eccLevel = 1, int size = 512);
         public static void SavePng(QRCodeData qrCodeData, Stream output, int size = 512);
-        public static void SavePng(string content, Stream output, ECCLevel eccLevel = 1, int size = 512);
+        public static void SavePng(string content, Stream output, QREccLevel eccLevel = 1, int size = 512);
         public static void SaveSvg(QRCodeData qrCodeData, Stream output, int size = 512);
-        public static void SaveSvg(string content, Stream output, ECCLevel eccLevel = 1, int size = 512);
+        public static void SaveSvg(string content, Stream output, QREccLevel eccLevel = 1, int size = 512);
         public static void WriteImage(QRCodeData qrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = 512, int quality = 100);
-        public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, ECCLevel eccLevel = 1, int size = 512, int quality = 100);
+        public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, QREccLevel eccLevel = 1, int size = 512, int quality = 100);
         public static void WritePng(QRCodeData qrCodeData, IBufferWriter<byte> writer, int size = 512);
-        public static void WritePng(string content, IBufferWriter<byte> writer, ECCLevel eccLevel = 1, int size = 512);
+        public static void WritePng(string content, IBufferWriter<byte> writer, QREccLevel eccLevel = 1, int size = 512);
         public static void WriteSvg(QRCodeData qrCodeData, IBufferWriter<byte> writer, int size = 512);
-        public static void WriteSvg(string content, IBufferWriter<byte> writer, ECCLevel eccLevel = 1, int size = 512);
-    }
-
-    public abstract class QRCodeImageBuilderBase<TSelf>
-    {
-        public SKBitmap ToBitmap();
-        public SKImage ToImage();
-        public TSelf WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null);
-        public TSelf WithFormat(SKEncodedImageFormat format, int quality = 100);
-        public TSelf WithGradient(GradientOptions? gradientOptions);
-        public TSelf WithModulePixelSize(int modulePixelSize);
-        public TSelf WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1);
-        public TSelf WithQuietZone(int size);
-        public TSelf WithSize(int width, int height);
-        public byte[] ToByteArray();
-        public string ToSvgString();
-        public void SaveTo(IBufferWriter<byte> writer);
-        public void SaveTo(Stream output);
-        public void SaveToSvg(IBufferWriter<byte> writer);
-        public void SaveToSvg(Stream output);
+        public static void WriteSvg(string content, IBufferWriter<byte> writer, QREccLevel eccLevel = 1, int size = 512);
     }
 
     public static class QRCodeImageDecoder
     {
         public static bool TryDecode(SKBitmap bitmap, out string text);
         public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info);
-    }
-
-    public static class QRCodeRenderer
-    {
-        public static SKRect GetFinderPatternRect(QRCodeData data, int patternIndex, SKRect renderArea);
-        public static ValueTuple<SKRect, SKRect> GetIconRects(QRCodeData data, SKRect area, IconData iconData);
-        public static void Render(SKCanvas canvas, SKRect area, MicroQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
-        public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? codeColor, SKColor? backgroundColor, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
-        public static void Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
     }
 
     public sealed class RectangleFinderPatternShape : FinderPatternShape
@@ -218,7 +183,7 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
-    public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
+    public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
     {
         public RmQRCodeImageBuilder(RmQRCodeData rmQrCodeData);
         public RmQRCodeImageBuilder(string content);
@@ -283,26 +248,48 @@ namespace FeatherQR.SkiaSharp
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
+    public static class SKCanvasExtensions
+    {
+        public static void Render(SKCanvas canvas, MicroQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+        public static void Render(SKCanvas canvas, MicroQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+        public static void Render(SKCanvas canvas, QRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, QRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, RmQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+        public static void Render(SKCanvas canvas, RmQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+    }
+
+    public abstract class SymbolImageBuilderBase<TSelf>
+    {
+        public SKBitmap ToBitmap();
+        public SKImage ToImage();
+        public TSelf WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null);
+        public TSelf WithFormat(SKEncodedImageFormat format, int quality = 100);
+        public TSelf WithGradient(GradientOptions? gradientOptions);
+        public TSelf WithModulePixelSize(int modulePixelSize);
+        public TSelf WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1);
+        public TSelf WithQuietZone(int size);
+        public TSelf WithSize(int width, int height);
+        public byte[] ToByteArray();
+        public string ToSvgString();
+        public void SaveTo(IBufferWriter<byte> writer);
+        public void SaveTo(Stream output);
+        public void SaveToSvg(IBufferWriter<byte> writer);
+        public void SaveToSvg(Stream output);
+    }
+
+    public static class SymbolRenderer
+    {
+        public static SKRect GetFinderPatternRect(QRCodeData data, int patternIndex, SKRect renderArea);
+        public static ValueTuple<SKRect, SKRect> GetIconRects(QRCodeData data, SKRect area, IconData iconData);
+        public static void Render(SKCanvas canvas, SKRect area, MicroQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+        public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? codeColor, SKColor? backgroundColor, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+    }
+
     public enum TextVerticalAlignment : int
     {
         Bottom = 0,
         Center = 1,
         Top = 2,
-    }
-
-    public readonly struct Vector2Slim : IEquatable<Vector2Slim>
-    {
-        public static readonly Vector2Slim One;
-        public static readonly Vector2Slim UnitX;
-        public static readonly Vector2Slim UnitY;
-        public static readonly Vector2Slim Zero;
-        public Vector2Slim(int value);
-        public Vector2Slim(int x, int y);
-        public int X { get; }
-        public int Y { get; }
-        public void CopyTo(Span<int> span);
-        public void CopyTo(Span<int> span, int index);
-        public void CopyTo(int[] array);
-        public void CopyTo(int[] array, int index);
     }
 }

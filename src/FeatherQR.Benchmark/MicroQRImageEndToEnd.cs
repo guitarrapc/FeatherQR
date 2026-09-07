@@ -1,12 +1,8 @@
 /// <summary>
-/// End-to-end PNG image generation through the public Micro QR API
-/// (MicroQRCodeImageBuilder.GetPngBytes). MicroQRCodeData is pre-generated in
-/// setup so the measurement covers the Skia render + PNG encode path only, not
-/// the Micro QR encoding itself.
+/// End-to-end PNG image generation through the public Micro QR API (MicroQRCodeImageBuilder.GetPngBytes).
+/// MicroQRCodeData is pre-generated in setup so the measurement covers the Skia render + PNG encode path only, not the Micro QR encoding itself.
 ///
-/// Micro QR matrices are tiny (11-17 core modules), so per-image overhead
-/// dominates; scenarios cover the smallest and largest versions at the default
-/// 512px output plus a small 128px output typical for inline display.
+/// Micro QR matrices are tiny (11-17 core modules), so per-image overhead dominates; scenarios cover the smallest and largest versions at the default 512px output plus a small 128px output typical for inline display.
 /// </summary>
 public class MicroQRImageEndToEnd
 {
@@ -19,8 +15,8 @@ public class MicroQRImageEndToEnd
     [GlobalSetup]
     public void Setup()
     {
-        _m2 = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L); // M2, 13x13 core
-        _m4 = MicroQRCodeGenerator.CreateMicroQRCode("MICRO QR M4 BENCH", MicroQREccLevel.M); // M4, 17x17 core
+        _m2 = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L); // M2, 13x13 core
+        _m4 = MicroQRCodeGenerator.Create("MICRO QR M4 BENCH", MicroQREccLevel.M); // M4, 17x17 core
 
         // Grayscale of an 8px/module render for the image-decode scenario
         using var bitmap = new MicroQRCodeImageBuilder(_m4).WithModulePixelSize(8).ToBitmap();

@@ -1,8 +1,7 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Micro QR Code symbol version (ISO/IEC 18004). Determines symbol size:
-/// M1 = 11×11, M2 = 13×13, M3 = 15×15, M4 = 17×17 modules.
+/// Micro QR version (ISO/IEC 18004), which fixes the size: M1 is 11 × 11 modules, M2 13 × 13, M3 15 × 15 and M4 17 × 17.
 /// </summary>
 public enum MicroQRVersion
 {

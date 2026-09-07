@@ -6,46 +6,34 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// ARM64 pair-plane extraction kernel: the byte grid is transposed straight into
-/// per-column-PAIR words, which are then compressed to the codeword stream a run at
-/// a time. No module byte is touched more than once and no output bit is handled
-/// individually.
+/// ARM64 pair-plane extraction kernel: the byte grid is transposed straight into per-column-PAIR words, which are then compressed to the codeword stream a run at a time.
+/// No module byte is touched more than once and no output bit is handled individually.
 /// </summary>
 /// <remarks>
-/// Deliberately not a port of the x64 bit-plane kernel. NEON has neither PEXT nor
-/// PDEP, so instead of a plane per column plus a deposit step, one 32-bit lane holds a
-/// whole column pair: bit <c>2j+1</c> is the pair's right column and <c>2j</c> its
-/// left, where j counts data rows in walk order. The walk alternates between a pair's
-/// two columns on every row, so that word already <em>is</em> the pair's output field
-/// with the function modules still in it, and the pair operation collapses to a single
-/// PEXT-shaped compress with no deposit at all.
+/// Deliberately not a port of the x64 bit-plane kernel.
+/// NEON has neither PEXT nor PDEP, so instead of a plane per column plus a deposit step, one 32-bit lane holds a whole column pair: bit <c>2j+1</c> is the pair's right column and <c>2j</c> its left, where j counts data rows in walk order.
+/// The walk alternates between a pair's two columns on every row, so that word already <em>is</em> the pair's output field with the function modules still in it, and the pair operation collapses to a single PEXT-shaped compress with no deposit at all.
 /// <para>
-/// The compress uses what ARM does have. A pair's data mask is a handful of runs of
-/// consecutive bits, because function modules come from rectangular blocks (finder,
-/// sub-finder, format, alignment) rather than scattered modules, and one run is one AND
-/// plus one shift. The runs of the whole symbol are one flat table, so no pair pays for
-/// another pair's worst case.
+/// The compress uses what ARM does have.
+/// A pair's data mask is a handful of runs of consecutive bits, because function modules come from rectangular blocks (finder, sub-finder, format, alignment) rather than scattered modules, and one run is one AND plus one shift.
+/// The runs of the whole symbol are one flat table, so no pair pays for another pair's worst case.
 /// </para>
 /// <para>
-/// Measured ratios, the per-bit cost model behind having no size switch, and the
-/// rejected alternatives are recorded in .github/docs/specs/rmqr-decoder.md.
+/// Measured ratios, the per-bit cost model behind having no size switch, and the rejected alternatives are recorded in .github/docs/specs/rmqr-decoder.md.
 /// </para>
 /// </remarks>
 internal static partial class RmQRMatrixDecoder
 {
     /// <summary>
-    /// Extracts the codeword stream through pair-interleaved column planes. Writes
-    /// every byte of <paramref name="stream"/>.
+    /// Extracts the codeword stream through pair-interleaved column planes.
+    /// Writes every byte of <paramref name="stream"/>.
     /// </summary>
     /// <remarks>
-    /// Blocks are transposed in descending order, which is walk order, so each block's
-    /// four pairs are consumed straight out of the vector that produced them and no
-    /// plane buffer is materialized. Steps take 32 columns while four whole blocks
-    /// remain and 16 afterwards: a fixed 32-column step would round a 43-column symbol
-    /// up to 64 columns and pay for half of its work twice.
+    /// Blocks are transposed in descending order, which is walk order, so each block's four pairs are consumed straight out of the vector that produced them and no plane buffer is materialized.
+    /// Steps take 32 columns while four whole blocks remain and 16 afterwards: a fixed 32-column step would round a 43-column symbol up to 64 columns and pay for half of its work twice.
     /// </remarks>
     private static void ExtractCodewordsPairPlanes(ReadOnlySpan<byte> modules, int width, int height, PairPlaneLayout layout, Span<byte> stream)
     {
@@ -165,16 +153,12 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// One row of 16 columns as 8 lanes of <c>(right &lt;&lt; 1) | left</c>, right being
-    /// the odd column. The two columns are merged while still bytes — a pair value is at
-    /// most 3 — so one widening feeds the accumulator instead of one per column.
+    /// One row of 16 columns as 8 lanes of <c>(right &lt;&lt; 1) | left</c>, right being the odd column.
+    /// The two columns are merged while still bytes — a pair value is at most 3 — so one widening feeds the accumulator instead of one per column.
     /// </summary>
     /// <remarks>
-    /// The load reads past the columns it uses and past the row end rather than peeling
-    /// a tail: rows 1..h−2 always have a row below them and every rMQR width is at least
-    /// 27, so the read stays inside the width × height grid and the extra lanes are
-    /// discarded. The dark test is <c>min(value, 1)</c>, not a compare, because modules
-    /// are "0 = light, non-zero = dark".
+    /// The load reads past the columns it uses and past the row end rather than peeling a tail: rows 1..h−2 always have a row below them and every rMQR width is at least 27, so the read stays inside the width × height grid and the extra lanes are discarded.
+    /// The dark test is <c>min(value, 1)</c>, not a compare, because modules are "0 = light, non-zero = dark".
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<ushort> PairBits16(ref byte q, Vector128<byte> one)
@@ -185,9 +169,8 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// The same for 32 columns, as 16 byte lanes. UZP1/UZP2 take two source vectors, so
-    /// unzipping two loaded rows against each other splits 32 columns into evens and odds
-    /// for the same two instructions that split 16.
+    /// The same for 32 columns, as 16 byte lanes.
+    /// UZP1/UZP2 take two source vectors, so unzipping two loaded rows against each other splits 32 columns into evens and odds for the same two instructions that split 16.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<byte> PairBits32(ref byte q, Vector128<byte> one)
@@ -205,16 +188,11 @@ internal static partial class RmQRMatrixDecoder
             : AdvSimd.ShiftLogical(AdvSimd.ZeroExtendWideningLower(upper.GetLower()), join) | AdvSimd.ZeroExtendWideningLower(lower.GetLower());
 
     /// <summary>
-    /// Finishes four pairs and stores them: pairs walked downward need the row-reversed
-    /// word, then the data mask is applied in plane coordinates.
+    /// Finishes four pairs and stores them: pairs walked downward need the row-reversed word, then the data mask is applied in plane coordinates.
     /// </summary>
     /// <remarks>
-    /// The reversed word is the forward word with its 2-bit groups in reverse order, so
-    /// it is produced once per block from the finished accumulator (RBIT + REV32 reverses
-    /// all 32 bits, one adjacent-bit swap restores each group's internal order, and the
-    /// shift drops the zero bits the reversal moved to the bottom) instead of costing a
-    /// shift, a shift and an OR on every row. Which of the two a lane needs is fixed by
-    /// the pair's parity, so the choice is a constant vector and one BSL.
+    /// The reversed word is the forward word with its 2-bit groups in reverse order, so it is produced once per block from the finished accumulator (RBIT + REV32 reverses all 32 bits, one adjacent-bit swap restores each group's internal order, and the shift drops the zero bits the reversal moved to the bottom) instead of costing a shift, a shift and an OR on every row.
+    /// Which of the two a lane needs is fixed by the pair's parity, so the choice is a constant vector and one BSL.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Store(Vector128<uint> forward, Vector128<uint> downwardLanes, Vector128<uint> odd, Vector128<int> align, ref uint planeXor, nuint at, ref uint destination)
@@ -227,11 +205,8 @@ internal static partial class RmQRMatrixDecoder
     }
 
     /// <summary>
-    /// Compresses one block's pairs into the stream: each run contributes one AND, one
-    /// shift and one OR into the bit accumulator, which is drained a whole 32-bit word at
-    /// a time. The drain is a branch on purpose — the run lengths are per-version
-    /// constants, so its pattern is periodic and the predictor learns it; making it
-    /// branchless measured 13-22 % slower.
+    /// Compresses one block's pairs into the stream: each run contributes one AND, one shift and one OR into the bit accumulator, which is drained a whole 32-bit word at a time.
+    /// The drain is a branch on purpose — the run lengths are per-version constants, so its pattern is periodic and the predictor learns it; making it branchless measured 13-22 % slower.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Emit(ref byte dst, ref uint lanes, ref uint runs, nuint end, ref ulong accumulator, ref int accumulated, ref nint written, ref nuint at)

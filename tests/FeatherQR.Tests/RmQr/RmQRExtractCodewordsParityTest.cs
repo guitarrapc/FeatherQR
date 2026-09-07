@@ -1,5 +1,5 @@
 using TUnit.Assertions.Enums;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 

@@ -1,7 +1,7 @@
 using System.Buffers;
 using FeatherQR.Internals.BinaryDecoders;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Decodes a QR module matrix (one byte per module, no quiet zone) back into text.
@@ -16,10 +16,7 @@ namespace FeatherQR.Internals.StandardQr;
 /// 5. Reed-Solomon error correction per block
 /// 6. Bitstream decoding (mode segments → text)
 /// </code>
-/// The function-pattern layout comes from the encoder's own per-version placement
-/// tables (<see cref="ModulePlacer.GetLayout"/>, built by
-/// <see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>), so the decoder can
-/// never disagree with the encoder about which modules carry data.
+/// The function-pattern layout comes from the encoder's own per-version placement tables (<see cref="ModulePlacer.GetLayout"/>, built by <see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>), so the decoder can never disagree with the encoder about which modules carry data.
 /// </remarks>
 internal static class QRMatrixDecoder
 {
@@ -35,15 +32,15 @@ internal static class QRMatrixDecoder
     /// <param name="destination">Destination buffer for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
-    public static QRCodeDecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
         // 1. Version from size
         if (size < 21 || size > 177 || (size - 21) % 4 != 0 || modules.Length < size * size)
         {
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
-            return QRCodeDecodeStatus.InvalidMatrix;
+            info = new QRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            return DecodeStatus.InvalidMatrix;
         }
         var version = (size - 21) / 4 + 1;
 
@@ -51,8 +48,8 @@ internal static class QRMatrixDecoder
         ReadFormatBits(modules, size, out var rawFormat1, out var rawFormat2);
         if (!FormatInformationDecoder.TryDecode(rawFormat1, rawFormat2, out var eccLevel, out var maskPattern))
         {
-            info = new QRCodeDecodeInfo(QRCodeDecodeStatus.FormatInformationInvalid, version, default, -1, 0);
-            return QRCodeDecodeStatus.FormatInformationInvalid;
+            info = new QRCodeDecodeInfo(DecodeStatus.FormatInformationInvalid, version, default, -1, 0);
+            return DecodeStatus.FormatInformationInvalid;
         }
 
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
@@ -94,8 +91,8 @@ internal static class QRMatrixDecoder
 
                 if (!EccBinaryDecoder.TryCorrect(block, eccInfo.ECCPerBlock, out var blockErrors))
                 {
-                    info = new QRCodeDecodeInfo(QRCodeDecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
-                    return QRCodeDecodeStatus.DataUncorrectable;
+                    info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
+                    return DecodeStatus.DataUncorrectable;
                 }
 
                 errorsCorrected += blockErrors;
@@ -120,11 +117,10 @@ internal static class QRMatrixDecoder
     /// Upper bound of decoded characters for a version, across all ECC levels and modes.
     /// </summary>
     /// <remarks>
-    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword
-    /// (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
+    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
     /// </remarks>
     public static int GetMaxCharCount(int version)
-        => QRCodeConstants.GetEccInfo(version, ECCLevel.L).TotalDataCodewords * 3;
+        => QRCodeConstants.GetEccInfo(version, QREccLevel.L).TotalDataCodewords * 3;
 
     /// <summary>
     /// Reads the two redundant 15-bit format information copies.
@@ -164,9 +160,7 @@ internal static class QRMatrixDecoder
     }
 
     /// <summary>
-    /// Reads data/ECC codeword bits from the matrix in placement order (inverse of
-    /// <see cref="ModulePlacer.PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>),
-    /// unmasking each module on the fly.
+    /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="ModulePlacer.PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>), unmasking each module on the fly.
     /// Remainder bits beyond the output capacity are ignored.
     /// </summary>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int size, ReadOnlySpan<byte> blockedMask, int maskPattern, Span<byte> output)
@@ -229,8 +223,7 @@ internal static class QRMatrixDecoder
     };
 
     /// <summary>
-    /// Distributes interleaved codewords into per-block contiguous [data | ecc]
-    /// layout, the exact inverse of <see cref="BinaryEncoders.BinaryInterleaver.InterleaveCodewords"/>.
+    /// Distributes interleaved codewords into per-block contiguous [data | ecc] layout, the exact inverse of <see cref="BinaryEncoders.BinaryInterleaver.InterleaveCodewords"/>.
     /// </summary>
     private static void DeinterleaveCodewords(ReadOnlySpan<byte> interleaved, Span<byte> blocks, in ECCInfo eccInfo)
     {
@@ -278,9 +271,7 @@ internal static class QRMatrixDecoder
     }
 
     /// <summary>
-    /// Gets the blocked-module bitmask for a version: the encoder's cached placement
-    /// tables (<see cref="ModulePlacer.GetLayout"/>), built by its own function-pattern
-    /// placement, so the decoder can never disagree with the encoder.
+    /// Gets the blocked-module bitmask for a version: the encoder's cached placement tables (<see cref="ModulePlacer.GetLayout"/>), built by its own function-pattern placement, so the decoder can never disagree with the encoder.
     /// </summary>
     private static byte[] GetBlockedMask(int version, int size)
     {

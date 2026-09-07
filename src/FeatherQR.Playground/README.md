@@ -111,7 +111,7 @@ re-run its release workflow run. GitHub Pages must be configured with
 The "Performance benchmark" panel generates many unique codes sequentially (content suffixed
 with `#1`, `#2`, …) to demo library throughput under load, in two modes:
 
-- **Encode only**, the zero-allocation `CreateQrCode(text, ecc, Span<byte>)` overload in a
+- **Encode only**, the zero-allocation `Create(text, ecc, Span<byte>)` overload in a
   tight loop (pooled text/module buffers, no per-iteration allocation).
 - **Full pipeline**, encode + Skia render + PNG encode with the current visual settings.
 

@@ -1,4 +1,4 @@
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -24,7 +24,7 @@ public class RmQRCodeDecoderRobustnessTest
         var text = "R" + (int)version; // 2-3 alphanumeric chars: fits every version × ECC
         var size = Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         var modules = new byte[size.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         return (modules, size.Width, size.Height, text);
     }
 
@@ -134,7 +134,7 @@ public class RmQRCodeDecoderRobustnessTest
         // decode "success" with wrong text; assert we never claim success with the original.
         await Assert.That(ok && decodeInfo.ErrorsCorrected <= t).IsFalse().Because($"{version}-{ecc}: {t + 1} errors in one block must not decode cleanly");
         if (!ok)
-            await Assert.That(decodeInfo.Status).IsEqualTo(QRCodeDecodeStatus.DataUncorrectable);
+            await Assert.That(decodeInfo.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
     }
 
     [Test]
@@ -176,7 +176,7 @@ public class RmQRCodeDecoderRobustnessTest
         // 15 flips per copy may by chance land within 3 bits of another word (then the
         // version cross-check or RS rejects it); a clean success with the original text is impossible.
         await Assert.That(ok).IsFalse();
-        await Assert.That(i3.Status == QRCodeDecodeStatus.FormatInformationInvalid || i3.Status == QRCodeDecodeStatus.DataUncorrectable).IsTrue();
+        await Assert.That(i3.Status == DecodeStatus.FormatInformationInvalid || i3.Status == DecodeStatus.DataUncorrectable).IsTrue();
     }
 
     /// <summary>
@@ -261,7 +261,7 @@ public class RmQRCodeDecoderRobustnessTest
         }
 
         await Assert.That(RmQRCodeDecoder.TryDecode(forged, width, height, out _, out var info)).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.FormatInformationInvalid);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.FormatInformationInvalid);
     }
 
     [Test]

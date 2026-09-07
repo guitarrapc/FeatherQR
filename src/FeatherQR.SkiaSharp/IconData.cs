@@ -6,56 +6,102 @@ namespace FeatherQR.SkiaSharp;
 /// The logo or image drawn at the center of a QR code, and its size.
 /// </summary>
 /// <remarks>
-/// The icon covers modules, so the symbol relies on error correction to stay readable.
-/// Use the highest error correction level (<see cref="ECCLevel.H"/>) and keep the icon
-/// small. When the size is given in modules, rendering throws if the icon and its border
-/// span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes
-/// given as a percentage of the image are not checked against the symbol at all.
+/// The icon covers modules, so the QR code relies on error correction to stay readable.
+/// Use the highest error correction level (<see cref="QREccLevel.H"/>) and keep the icon small.
+/// When the size is given in modules, rendering throws if the icon and its border span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes given as a percentage of the image are not checked against the QR code at all.
+/// <para>
+/// Equality compares the sizing members by value and <see cref="Icon"/> by reference, so two instances built from the same <see cref="SKBitmap"/> through separate <see cref="FromImage(SKBitmap, int, int)"/> calls are not equal.
+/// <see cref="IconShape"/> is an open extension point wrapping an <see cref="SKBitmap"/>, neither of which defines value equality, so there is nothing to compare element-wise the way <see cref="GradientOptions"/> compares its colours.
+/// </para>
 /// </remarks>
-public class IconData
+public sealed record class IconData
 {
     /// <summary>
-    /// The icon shape to overlay on the QR code.
+    /// Creates an icon whose members are set through an object initializer.
     /// </summary>
-    public required IconShape Icon { get; set; }
+    /// <remarks>
+    /// Declared rather than left implicit, because declaring the constructor below would otherwise remove it and break every <c>new IconData { … }</c> call site.
+    /// </remarks>
+    public IconData()
+    {
+    }
 
     /// <summary>
-    /// The size of the icon as a percentage of the QR code size (1-100).
-    /// Ignored when <see cref="IconSizeModules"/> is set.
+    /// Creates an icon without an object initializer, for consumers whose language version predates C# 9.
     /// </summary>
-    public int IconSizePercent { get; set; } = 10;
+    /// <remarks>
+    /// Prefer the object initializer (<c>new IconData { Icon = shape, IconSizePercent = 15 }</c>) or one of the <c>FromImage</c> factories: they name only what they set and do not depend on this parameter order.
+    /// This exists because <c>init</c> accessors are unassignable before C# 9, and .NET Framework and netstandard2.0 projects default to C# 7.3 while netstandard2.1 defaults to C# 8.0. Without it the factories are the only route, and both hardcode <see cref="ImageIconShape"/>, so <see cref="ImageTextIconShape"/> and any caller-written <see cref="IconShape"/> would be unreachable there.
+    /// Pass arguments by name: <paramref name="iconSizePercent"/>, <paramref name="iconBorderWidth"/> and <paramref name="maxCoreOccupancyPercent"/> are all integers, so a positional call can transpose them and still compile.
+    /// Each default is the value the object initializer leaves the property at, so omitting one changes nothing.
+    /// </remarks>
+    /// <param name="icon">See <see cref="Icon"/>. Required, so it has no default.</param>
+    /// <param name="iconSizePercent">See <see cref="IconSizePercent"/>.</param>
+    /// <param name="iconBorderWidth">See <see cref="IconBorderWidth"/>.</param>
+    /// <param name="iconSizeModules">See <see cref="IconSizeModules"/>.</param>
+    /// <param name="iconBorderModules">See <see cref="IconBorderModules"/>.</param>
+    /// <param name="maxCoreOccupancyPercent">See <see cref="MaxCoreOccupancyPercent"/>.</param>
+    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+    public IconData(
+        IconShape icon,
+        int iconSizePercent = 10,
+        int iconBorderWidth = 2,
+        int? iconSizeModules = null,
+        int? iconBorderModules = null,
+        int maxCoreOccupancyPercent = 30)
+    {
+        // Guarded here and not on the property, because this constructor is reached from
+        // language versions with no nullable analysis, where passing null compiles silently
+        // and then renders a symbol with no icon at all.
+        Icon = icon ?? throw new ArgumentNullException(nameof(icon));
+        IconSizePercent = iconSizePercent;
+        IconBorderWidth = iconBorderWidth;
+        IconSizeModules = iconSizeModules;
+        IconBorderModules = iconBorderModules;
+        MaxCoreOccupancyPercent = maxCoreOccupancyPercent;
+    }
 
     /// <summary>
-    /// The border width around the icon in pixels. Creates a background-colored padding around the icon.
-    /// Ignored when <see cref="IconSizeModules"/> is set.
+    /// What to draw at the center.
     /// </summary>
-    public int IconBorderWidth { get; set; } = 2;
+    public required IconShape Icon { get; init; }
 
     /// <summary>
-    /// The size of the icon body in QR modules.
-    /// When set, module-based sizing is used and <see cref="IconSizePercent"/> / <see cref="IconBorderWidth"/> are ignored.
+    /// Icon size as a percentage of the image, 1 to 100. Ignored once <see cref="IconSizeModules"/> is set.
     /// </summary>
-    public int? IconSizeModules { get; set; }
+    public int IconSizePercent { get; init; } = 10;
 
     /// <summary>
-    /// The border width around the icon in QR modules.
-    /// When <see cref="IconSizeModules"/> is set and this is null, defaults to 1.
+    /// Width of the background-colored padding around the icon, in pixels.
+    /// Ignored once <see cref="IconSizeModules"/> is set.
     /// </summary>
-    public int? IconBorderModules { get; set; }
+    public int IconBorderWidth { get; init; } = 2;
 
     /// <summary>
-    /// Maximum allowed icon occupancy of the QR core area, as a percentage (1-100).
-    /// Used only for module-based sizing. Default is 30.
+    /// Icon size in modules, which keeps the icon aligned to the grid.
+    /// Setting it switches sizing to modules, and <see cref="IconSizePercent"/> and <see cref="IconBorderWidth"/> stop applying.
     /// </summary>
-    public int MaxCoreOccupancyPercent { get; set; } = 30;
+    public int? IconSizeModules { get; init; }
 
     /// <summary>
-    /// Create IconData from a bitmap image using percent/pixel sizing.
+    /// Width of the padding around the icon, in modules.
+    /// 1 when omitted.
     /// </summary>
-    /// <param name="image">The bitmap image to display as the icon.</param>
-    /// <param name="iconSizePercent">The size of the icon as a percentage of the QR code size (1-100). Default is 10.</param>
-    /// <param name="iconBorderWidth">The border width around the icon in pixels. Default is 2.</param>
-    /// <returns>A new <see cref="IconData"/> instance configured with the specified image, size, and border width.</returns>
+    public int? IconBorderModules { get; init; }
+
+    /// <summary>
+    /// How much of the QR code the icon and its border may cover, as a percentage.
+    /// 30 by default.
+    /// Only checked when the size is given in modules; rendering throws when the icon exceeds it.
+    /// </summary>
+    public int MaxCoreOccupancyPercent { get; init; } = 30;
+
+    /// <summary>
+    /// Creates an icon sized as a percentage of the image.
+    /// </summary>
+    /// <param name="image">The image to draw. The caller keeps ownership of it.</param>
+    /// <param name="iconSizePercent">Icon size as a percentage of the image, 1 to 100.</param>
+    /// <param name="iconBorderWidth">Width of the padding around the icon, in pixels.</param>
     public static IconData FromImage(SKBitmap image, int iconSizePercent = 10, int iconBorderWidth = 2)
     {
         return new IconData
@@ -67,23 +113,21 @@ public class IconData
     }
 
     /// <summary>
-    /// Create IconData from a bitmap image using module-based sizing.
+    /// Creates an icon sized in modules, so it lines up with the QR code grid.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Prefer combining this with <c>WithModulePixelSize</c> so each module maps to an integer pixel size.
-    /// Optional <c>WithSize</c> can then set a larger canvas; content is centered and padded.
+    /// Pair it with <c>WithModulePixelSize</c> so every module lands on a whole number of pixels; <c>WithSize</c> can then give a larger canvas, with the QR code centered and padded.
     /// </para>
     /// <para>
-    /// Validation against QR size/core occupancy happens at render time.
+    /// The size is checked against the QR code when it is drawn, not here.
     /// </para>
     /// </remarks>
-    /// <param name="image">The bitmap image to display as the icon.</param>
-    /// <param name="iconSizeModules">Icon body size in modules (must be &gt;= 1).</param>
-    /// <param name="iconBorderModules">Border size in modules (must be &gt;= 0). Default is 1.</param>
-    /// <param name="maxCoreOccupancyPercent">Maximum core occupancy percent (1-100). Default is 30.</param>
-    /// <returns>A new <see cref="IconData"/> instance configured with module-based sizing.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="image">The image to draw. The caller keeps ownership of it.</param>
+    /// <param name="iconSizeModules">Icon size in modules, at least 1.</param>
+    /// <param name="iconBorderModules">Width of the padding around the icon, in modules.</param>
+    /// <param name="maxCoreOccupancyPercent">How much of the QR code the icon may cover, as a percentage.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static IconData FromImageByModules(
         SKBitmap image,
         int iconSizeModules,

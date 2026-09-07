@@ -2,12 +2,8 @@ using SkiaSharp;
 
 /// <summary>
 /// End-to-end PNG image generation and image decoding through the public rMQR API.
-/// RmQRCodeData is pre-generated in setup so the render scenarios cover the Skia
-/// render + PNG encode path only (letterboxed into a square canvas, as
-/// RmQRCodeImageBuilder does by default), and the decode scenarios cover the image
-/// detector (finder candidates → format → sub-finder anchored sampling → matrix
-/// decode) on clean 8 px/module renders. The span decode variants must stay
-/// allocation-free; the bitmap ones go through string overloads and carry the result.
+/// RmQRCodeData is pre-generated in setup so the render scenarios cover the Skia render + PNG encode path only (letterboxed into a square canvas, as RmQRCodeImageBuilder does by default), and the decode scenarios cover the image detector (finder candidates → format → sub-finder anchored sampling → matrix decode) on clean 8 px/module renders.
+/// The span decode variants must stay allocation-free; the bitmap ones go through string overloads and carry the result.
 ///
 /// Scenarios:
 ///   R7x43_512px / R17x139_1024px : smallest / largest symbol rendered to PNG
@@ -34,8 +30,8 @@ public class RmQRImageEndToEnd
     [GlobalSetup]
     public void Setup()
     {
-        _small = RmQRCodeGenerator.CreateRmQRCode("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
-        _large = RmQRCodeGenerator.CreateRmQRCode(
+        _small = RmQRCodeGenerator.Create("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
+        _large = RmQRCodeGenerator.Create(
             string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150),
             RmQREccLevel.M,
             new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });

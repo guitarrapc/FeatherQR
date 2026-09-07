@@ -1,0 +1,201 @@
+using SkiaSharp;
+
+namespace FeatherQR.SkiaSharp;
+
+/// <summary>
+/// Draws a QR, Micro QR or rMQR code onto an <see cref="SKCanvas"/> you already have, instead of producing an image file.
+/// </summary>
+/// <remarks>
+/// Each method clears the whole canvas before drawing, so anything already on it is lost.
+/// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
+/// </remarks>
+public static class SKCanvasExtensions
+{
+    /// <summary>
+    /// Draws a QR code filling an area of this size, with the default colors.
+    /// </summary>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The QR code to draw.</param>
+    /// <param name="width">Width of the area to draw into.</param>
+    /// <param name="height">Height of the area to draw into.</param>
+    /// <param name="clearColor">Clears the canvas before drawing. Transparent when omitted.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
+    /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder patterns as. When omitted they follow the module shape.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        QRCodeData data,
+        int width,
+        int height,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        IconData? iconData = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
+    {
+        var area = SKRect.Create(0, 0, width, height);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
+    }
+
+    /// <summary>
+    /// Draws a QR code into an area of the canvas.
+    /// </summary>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The QR code to draw.</param>
+    /// <param name="area">Where to draw it.</param>
+    /// <param name="clearColor">Clears the canvas before drawing. Transparent when omitted.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
+    /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder patterns as. When omitted they follow the module shape.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        QRCodeData data,
+        SKRect area,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        IconData? iconData = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
+    {
+        canvas.Clear(clearColor ?? SKColors.Transparent);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
+    }
+
+    /// <summary>
+    /// Draws a Micro QR code filling an area of this size, with the default colors.
+    /// </summary>
+    /// <remarks>
+    /// Micro QR does not offer the Standard QR icon overlay or custom finder pattern shape options (single finder pattern, no error-correction headroom for overlays).
+    /// </remarks>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The Micro QR code to draw.</param>
+    /// <param name="width">Width of the area to draw into.</param>
+    /// <param name="height">Height of the area to draw into.</param>
+    /// <param name="clearColor">Clears the canvas before drawing. Transparent when omitted.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        MicroQRCodeData data,
+        int width,
+        int height,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        var area = SKRect.Create(0, 0, width, height);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+    }
+
+    /// <summary>
+    /// Draws a Micro QR code into an area of the canvas.
+    /// </summary>
+    /// <remarks>
+    /// Micro QR does not offer the Standard QR icon overlay or custom finder pattern shape options (single finder pattern, no error-correction headroom for overlays).
+    /// </remarks>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The Micro QR code to draw.</param>
+    /// <param name="area">Where to draw it.</param>
+    /// <param name="clearColor">Clears the canvas before drawing. Transparent when omitted.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        MicroQRCodeData data,
+        SKRect area,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        canvas.Clear(clearColor ?? SKColors.Transparent);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+    }
+
+    /// <summary>
+    /// Draws a rMQR code filling an area of this size, with the default colors.
+    /// </summary>
+    /// <remarks>
+    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has one finder pattern and no error correction headroom to spare, so there are no icon or finder shape options.
+    /// </remarks>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The rMQR code to draw.</param>
+    /// <param name="width">Width of the area to draw into.</param>
+    /// <param name="height">Height of the area to draw into.</param>
+    /// <param name="clearColor">Clears the canvas before drawing. Transparent when omitted.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        RmQRCodeData data,
+        int width,
+        int height,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        var area = SKRect.Create(0, 0, width, height);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+    }
+
+    /// <summary>
+    /// Draws a rMQR code into an area of the canvas.
+    /// </summary>
+    /// <remarks>
+    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has one finder pattern and no error correction headroom to spare, so there are no icon or finder shape options.
+    /// </remarks>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The rMQR code to draw.</param>
+    /// <param name="area">Where to draw it.</param>
+    /// <param name="clearColor">Clears the canvas before drawing. Transparent when omitted.</param>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
+    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        RmQRCodeData data,
+        SKRect area,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        canvas.Clear(clearColor ?? SKColors.Transparent);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+    }
+}

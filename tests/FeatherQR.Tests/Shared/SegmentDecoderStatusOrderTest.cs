@@ -2,7 +2,7 @@ using SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
 using FeatherQR.SkiaSharp;
 using FeatherQR.Internals.MicroQR;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -32,13 +32,13 @@ public class SegmentDecoderStatusOrderTest
     {
         var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         var modules = new byte[size.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.M, modules, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
+        RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.M, modules, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
 
         for (var length = 0; length < expectedLength; length++)
         {
             var status = RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, new char[length], out _, out var info);
             await Assert.That(status).IsFalse();
-            await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall)
+            await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall)
                 .Because($"'{content}' with a {length}-char destination");
         }
 
@@ -54,14 +54,14 @@ public class SegmentDecoderStatusOrderTest
     [Test]
     public async Task ShortBuffer_ThroughTheImageEntryPoint_ReportsDestinationTooSmall()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("123456", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
+        var data = RmQRCodeGenerator.Create("123456", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(8).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
         BitmapLuminanceConverter.Convert(bitmap, luminance);
 
         var status = RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, new char[3], out _, out var info);
         await Assert.That(status).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
     }
 
     /// <summary>
@@ -77,7 +77,7 @@ public class SegmentDecoderStatusOrderTest
     public async Task MicroQR_ShortBuffer_ThroughTheImageEntryPoint_ReportsDestinationTooSmall(
         MicroQRVersion version, MicroQREccLevel ecc, string content, int expectedLength)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, ecc, version);
+        var data = MicroQRCodeGenerator.Create(content, ecc, new MicroQRCodeGeneratorOptions { Version = version });
         using var bitmap = new MicroQRCodeImageBuilder(data).WithModulePixelSize(8).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
         BitmapLuminanceConverter.Convert(bitmap, luminance);
@@ -86,7 +86,7 @@ public class SegmentDecoderStatusOrderTest
         {
             var status = MicroQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, new char[length], out _, out var info);
             await Assert.That(status).IsFalse();
-            await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall)
+            await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall)
                 .Because($"{version}-{ecc} '{content}' with a {length}-char destination");
         }
 
@@ -103,8 +103,8 @@ public class SegmentDecoderStatusOrderTest
     [Test]
     public async Task MicroQR_DestinationTooSmall_DoesNotRetryTheOppositePolarity()
     {
-        var longData = MicroQRCodeGenerator.CreateMicroQRCode("ABCDEFGHIJ", MicroQREccLevel.L, MicroQRVersion.M3);
-        var shortData = MicroQRCodeGenerator.CreateMicroQRCode("1", MicroQREccLevel.L, MicroQRVersion.M2);
+        var longData = MicroQRCodeGenerator.Create("ABCDEFGHIJ", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3 });
+        var shortData = MicroQRCodeGenerator.Create("1", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M2 });
         using var normal = new MicroQRCodeImageBuilder(longData)
             .WithModulePixelSize(8)
             .WithColors(SKColors.Black, SKColors.White, SKColors.White)
@@ -131,15 +131,15 @@ public class SegmentDecoderStatusOrderTest
         var decoded = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out _, out var info);
 
         await Assert.That(decoded).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
         await Assert.That(info.Version).IsEqualTo(MicroQRVersion.M3);
     }
 
     [Test]
     public async Task StandardQR_DestinationTooSmall_DoesNotRetryTheOppositePolarity()
     {
-        var longData = QRCodeGenerator.CreateQrCode("STANDARD-DESTINATION-TOO-SMALL", ECCLevel.M);
-        var shortData = QRCodeGenerator.CreateQrCode("1", ECCLevel.M);
+        var longData = QRCodeGenerator.Create("STANDARD-DESTINATION-TOO-SMALL", QREccLevel.M);
+        var shortData = QRCodeGenerator.Create("1", QREccLevel.M);
         using var normal = new QRCodeImageBuilder(longData)
             .WithModulePixelSize(6)
             .WithColors(SKColors.Black, SKColors.White, SKColors.White)
@@ -166,7 +166,7 @@ public class SegmentDecoderStatusOrderTest
         var decoded = QRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out _, out var info);
 
         await Assert.That(decoded).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
         await Assert.That(info.Version).IsEqualTo(longData.Version);
     }
 
@@ -184,16 +184,16 @@ public class SegmentDecoderStatusOrderTest
         // Micro QR M4: 3-bit mode indicator, then a 6-bit numeric / 5-bit alphanumeric
         // count. Numeric count 63 needs 210 bits, only 72 - 9 = 63 remain.
         var numeric = MicroQRBinaryDecoder.DecodeBitStream(Bits("000111111"), 72, MicroQRVersion.M4, new char[4], out _);
-        await Assert.That(numeric).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream).Because("M4 numeric count 63 in 63 remaining bits");
+        await Assert.That(numeric).IsEqualTo(DecodeStatus.InvalidBitstream).Because("M4 numeric count 63 in 63 remaining bits");
 
         // Alphanumeric count 31 needs 171 bits, only 72 - 8 = 64 remain.
         var alnum = MicroQRBinaryDecoder.DecodeBitStream(Bits("00111111"), 72, MicroQRVersion.M4, new char[4], out _);
-        await Assert.That(alnum).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream).Because("M4 alphanumeric count 31 in 64 remaining bits");
+        await Assert.That(alnum).IsEqualTo(DecodeStatus.InvalidBitstream).Because("M4 alphanumeric count 31 in 64 remaining bits");
 
         // rMQR R11x27: 3-bit mode indicator, then a 4-bit numeric count. Count 15 needs
         // 50 bits, only 30 - 7 = 23 remain.
         var rmqr = RmQRBinaryDecoder.DecodeBitStream(Bits("0011111"), 30, RmQRVersion.R11x27, new char[4], out _);
-        await Assert.That(rmqr).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream).Because("R11x27 numeric count 15 in 23 remaining bits");
+        await Assert.That(rmqr).IsEqualTo(DecodeStatus.InvalidBitstream).Because("R11x27 numeric count 15 in 23 remaining bits");
     }
 
     /// <summary>Packs an MSB-first bit string into bytes, zero-padded.</summary>
@@ -229,12 +229,12 @@ public class SegmentDecoderStatusOrderTest
     {
         foreach (var version in new[] { MicroQRVersion.M3, MicroQRVersion.M4 })
         {
-            var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, version);
+            var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version });
             await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var text)).IsTrue().Because($"{version} '{content}'");
             await Assert.That(text).IsEqualTo(content);
         }
 
-        var rmqr = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
+        var rmqr = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         await Assert.That(RmQRCodeDecoder.TryDecode(rmqr, out var rmqrText)).IsTrue().Because($"R11x27 '{content}'");
         await Assert.That(rmqrText).IsEqualTo(content);
     }
@@ -253,7 +253,7 @@ public class SegmentDecoderStatusOrderTest
     [Arguments("0")]
     public async Task MicroQrM1_NumericAtEveryLengthToCapacity_RoundTrips(string content)
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.ErrorDetectionOnly, MicroQRVersion.M1);
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.ErrorDetectionOnly, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M1 });
         await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var text)).IsTrue().Because($"M1 '{content}'");
         await Assert.That(text).IsEqualTo(content);
     }

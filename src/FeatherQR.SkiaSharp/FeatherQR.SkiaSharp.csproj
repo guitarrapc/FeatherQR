@@ -10,7 +10,9 @@
     <PackageId>FeatherQR.SkiaSharp</PackageId>
     <Description>SkiaSharp rendering and bitmap decoding for FeatherQR: QR Code, Micro QR and rMQR images (PNG, JPEG, WebP, SVG), canvas rendering, custom shapes, gradients and icons. No GDI, no System.Drawing.</Description>
 
-    <!-- API compatibility. No baseline until 2.0.0 ships; set PackageValidationBaselineVersion then. -->
+    <!-- API compatibility. No baseline until 2.0.0 ships; set PackageValidationBaselineVersion then, to
+         2.0.0 and never to a 1.x. 2.0.0 renames QRCodeRenderer, QRCodeExtensions and QRCodeImageBuilderBase
+         and makes Vector2Slim internal, so a 1.x baseline reports every one of them and fails pack. -->
     <EnablePackageValidation>true</EnablePackageValidation>
 
     <!-- Trimming/NativeAOT, as in FeatherQR.csproj. -->

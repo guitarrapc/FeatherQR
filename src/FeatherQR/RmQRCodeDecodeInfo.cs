@@ -1,14 +1,11 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Diagnostic information from an rMQR decode attempt (<see cref="RmQRCodeDecoder"/>):
-/// status, and when the format information could be read, the version and ECC
-/// level plus the number of Reed-Solomon codeword corrections applied. rMQR has a
-/// single data mask, so there is no mask pattern to report.
+/// Diagnostic information from an rMQR decode attempt (<see cref="RmQRCodeDecoder"/>): status, and when the format information could be read, the version and ECC level plus the number of Reed-Solomon codeword corrections applied. rMQR has a single data mask, so there is no mask pattern to report.
 /// </summary>
-public readonly struct RmQRCodeDecodeInfo
+public readonly record struct RmQRCodeDecodeInfo
 {
-    internal RmQRCodeDecodeInfo(QRCodeDecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected)
+    internal RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected)
     {
         Status = status;
         Version = version;
@@ -16,8 +13,8 @@ public readonly struct RmQRCodeDecodeInfo
         ErrorsCorrected = errorsCorrected;
     }
 
-    /// <summary>Decode outcome; <see cref="QRCodeDecodeStatus.Success"/> when text was produced.</summary>
-    public QRCodeDecodeStatus Status { get; }
+    /// <summary>Decode outcome; <see cref="DecodeStatus.Success"/> when text was produced.</summary>
+    public DecodeStatus Status { get; }
 
     /// <summary>The symbol version (from the physical dimensions), or 0 when the input is not an rMQR matrix.</summary>
     public RmQRVersion Version { get; }

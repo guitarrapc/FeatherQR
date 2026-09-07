@@ -1,6 +1,6 @@
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -25,7 +25,7 @@ public class RmQRCodeDecoderImageTest
     }
 
     private static RmQRCodeData Create(string content, RmQREccLevel eccLevel, RmQRVersion? version = null, int quietZone = 2)
-        => RmQRCodeGenerator.CreateRmQRCode(content, eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
+        => RmQRCodeGenerator.Create(content, eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
 
     private static SKBitmap RenderBitmap(RmQRCodeData data, int modulePixelSize)
         => new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
@@ -105,7 +105,7 @@ public class RmQRCodeDecoderImageTest
         using var rendered = new SKBitmap(data.Width * 8, data.Height * 12);
         using (var canvas = new SKCanvas(rendered))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, rendered.Width, rendered.Height), data, SKColors.Black, SKColors.White);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, rendered.Width, rendered.Height), data, SKColors.Black, SKColors.White);
             canvas.Flush();
         }
         using var bitmap = Rotate(rendered, degrees);
@@ -254,7 +254,7 @@ public class RmQRCodeDecoderImageTest
         canvas.Translate(canvasPx / 2f, canvasPx / 2f);
         canvas.RotateDegrees(degrees);
         canvas.Translate(-widthPx / 2f, -heightPx / 2f);
-        QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, widthPx, heightPx), data, SKColors.Black, SKColors.White);
+        SymbolRenderer.Render(canvas, SKRect.Create(0, 0, widthPx, heightPx), data, SKColors.Black, SKColors.White);
         canvas.Flush();
         return bitmap;
     }
@@ -444,7 +444,7 @@ public class RmQRCodeDecoderImageTest
         var tinyElapsed = stopwatch.Elapsed;
 
         await Assert.That(ok).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
         await Assert.That(info.Version).IsEqualTo(RmQRVersion.R13x99);
         var bound = TimeSpan.FromTicks(sizedElapsed.Ticks * 50) + TimeSpan.FromMilliseconds(250);
         await Assert.That(tinyElapsed).IsLessThan(bound)
@@ -455,7 +455,7 @@ public class RmQRCodeDecoderImageTest
         for (var i = 0; i < inverted.Length; i++)
             inverted[i] = (byte)(255 - luminance[i]);
         await Assert.That(RmQRCodeDecoder.TryDecodeImage(inverted, bitmap.Width, bitmap.Height, tiny, out _, out var invertedInfo)).IsFalse();
-        await Assert.That(invertedInfo.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(invertedInfo.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
         await Assert.That(invertedInfo.Version).IsEqualTo(RmQRVersion.R13x99);
     }
 
@@ -544,19 +544,19 @@ public class RmQRCodeDecoderImageTest
         var success = RmQRCodeDecoder.TryDecode(bitmap, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsNotEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.Success);
     }
 
     [Test]
     public async Task Decode_MicroQrImage_IsRejected()
     {
-        var micro = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var micro = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         using var bitmap = new MicroQRCodeImageBuilder(micro).WithModulePixelSize(8).ToBitmap();
 
         var success = RmQRCodeDecoder.TryDecode(bitmap, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsNotEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.Success);
     }
 
     [Test]
@@ -582,7 +582,7 @@ public class RmQRCodeDecoderImageTest
 
         await Assert.That(success).IsFalse();
         await Assert.That(text).IsEqualTo(string.Empty);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -597,7 +597,7 @@ public class RmQRCodeDecoderImageTest
         var success = RmQRCodeDecoder.TryDecode(bitmap, out _, out var info);
 
         await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     [Test]
@@ -617,9 +617,9 @@ public class RmQRCodeDecoderImageTest
             out var charsWritten,
             out var info);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(status).IsEqualTo(DecodeStatus.NotDetected);
         await Assert.That(charsWritten).IsEqualTo(0);
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
     #endregion

@@ -9,45 +9,27 @@ using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR module placement (ISO/IEC 23941 6.3, 7.7-7.9): function patterns, both
-/// format-information copies, and the two-column zigzag data placement with the
-/// single fixed data mask. Writes a byte-per-module core matrix (0 light, 1 dark,
-/// row-major over the symbol width, quiet zone excluded).
+/// rMQR module placement (ISO/IEC 23941 6.3, 7.7-7.9): function patterns, both format-information copies, and the two-column zigzag data placement with the single fixed data mask.
+/// Writes a byte-per-module core matrix (0 light, 1 dark, row-major over the symbol width, quiet zone excluded).
 /// </summary>
 /// <remarks>
-/// Two implementations live here and are held to byte parity by
-/// <c>RmQRModulePlacerParityTest</c>:
+/// Two implementations live here and are held to byte parity by <c>RmQRModulePlacerParityTest</c>:
 /// <list type="bullet">
 /// <item><see cref="PlaceSymbolReference"/> — the readable per-module reference
-/// (<see cref="PlaceFunctionModules"/>, <see cref="PlaceFormat"/>,
-/// <see cref="PlaceData"/>). The function-module predicate
-/// (<see cref="IsFunctionModule"/>) and the mask (<see cref="GetMaskBit"/>) are the
-/// single source of truth the matrix decoder reuses, so both sides always agree.</item>
+/// (<see cref="PlaceFunctionModules"/>, <see cref="PlaceFormat"/>, <see cref="PlaceData"/>).
+/// The function-module predicate (<see cref="IsFunctionModule"/>) and the mask (<see cref="GetMaskBit"/>) are the single source of truth the matrix decoder reuses, so both sides always agree.</item>
 /// <item><see cref="PlaceSymbol(Span{byte}, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte})"/>
-/// is the fast path (benchmark-driven, 16-27x over the reference). Everything derived
-/// from the version alone is built once and cached
-/// (<see cref="Layout"/>); placement is then a template copy, one vector pass that
-/// expands the message bits and XORs the masks, and a store pass. The store pass is
-/// documented on <see cref="ScatterPairs"/>, its ARM64 tier in
-/// RmQRModulePlacer.Simd.Arm.cs. Zero allocations after the one-time tables.</item>
+/// is the fast path (benchmark-driven, 16-27x over the reference).
+/// Everything derived from the version alone is built once and cached (<see cref="Layout"/>); placement is then a template copy, one vector pass that expands the message bits and XORs the masks, and a store pass.
+/// The store pass is documented on <see cref="ScatterPairs"/>, its ARM64 tier in RmQRModulePlacer.Simd.Arm.cs.
+/// Zero allocations after the one-time tables.</item>
 /// </list>
 ///
-/// Geometry (0-based, h = height, w = width):
-/// finder 7×7 at (0,0) with light separators col 7 (rows 0-7) and row 7 (cols 0-7);
-/// sub-finder 5×5 at (h-5, w-5); timing patterns on rows 0 / h-1 (dark at even
-/// columns) and cols 0 / w-1 (dark at even rows); corner patterns (0,w-2), (1,w-1)
-/// dark with (1,w-2) light and (h-2,0), (h-1,1) dark with (h-2,1) light (on height 9
-/// the separator row 7 overrides (h-2,0) to light); vertical
-/// timing columns (RmQRConstants.GetAlignmentColumns) dark at even rows with a 3×3
-/// alignment pattern (dark ring, light center) at rows 0-2 and h-3..h-1; format
-/// copy 1 in rows 1-5 × cols 8-10 (bit = col-major index) plus col 11 rows 1-3
-/// (bits 15-17); format copy 2 in rows h-6..h-2 × cols w-8..w-6 plus row h-6 cols
-/// w-5..w-3. Data walks column pairs from (w-2, w-3) leftward, upward first, right
-/// column first, skipping function modules; bits beyond the final message are
-/// remainder bits and are light before masking.
+/// Geometry (0-based, h = height, w = width): finder 7×7 at (0,0) with light separators col 7 (rows 0-7) and row 7 (cols 0-7); sub-finder 5×5 at (h-5, w-5); timing patterns on rows 0 / h-1 (dark at even columns) and cols 0 / w-1 (dark at even rows); corner patterns (0,w-2), (1,w-1) dark with (1,w-2) light and (h-2,0), (h-1,1) dark with (h-2,1) light (on height 9 the separator row 7 overrides (h-2,0) to light); vertical timing columns (RmQRConstants.GetAlignmentColumns) dark at even rows with a 3×3 alignment pattern (dark ring, light center) at rows 0-2 and h-3..h-1; format copy 1 in rows 1-5 × cols 8-10 (bit = col-major index) plus col 11 rows 1-3 (bits 15-17); format copy 2 in rows h-6..h-2 × cols w-8..w-6 plus row h-6 cols w-5..w-3.
+/// Data walks column pairs from (w-2, w-3) leftward, upward first, right column first, skipping function modules; bits beyond the final message are remainder bits and are light before masking.
 /// </remarks>
 internal static partial class RmQRModulePlacer
 {
@@ -56,9 +38,7 @@ internal static partial class RmQRModulePlacer
     public static bool GetMaskBit(int row, int col) => (((row >> 1) + col / 3) & 1) == 0;
 
     /// <summary>
-    /// Whether (row, col) is a function module (finder, separators, sub-finder,
-    /// timing, corners, alignment / vertical timing, or format information) for the
-    /// version; everything else is a data or remainder module.
+    /// Whether (row, col) is a function module (finder, separators, sub-finder, timing, corners, alignment / vertical timing, or format information) for the version; everything else is a data or remainder module.
     /// </summary>
     public static bool IsFunctionModule(RmQRVersion version, int row, int col)
     {
@@ -103,9 +83,7 @@ internal static partial class RmQRModulePlacer
 
 
     /// <summary>
-    /// Writes the complete symbol: function patterns, both format copies, and the
-    /// masked final message (data + ECC + remainder) into <paramref name="core"/>
-    /// (byte per module, row-major over the version's width; every module is written).
+    /// Writes the complete symbol: function patterns, both format copies, and the masked final message (data + ECC + remainder) into <paramref name="core"/> (byte per module, row-major over the version's width; every module is written).
     /// Fast path; see the class remarks.
     /// </summary>
     /// <param name="core">At least width × height bytes.</param>
@@ -122,10 +100,8 @@ internal static partial class RmQRModulePlacer
     }
 
     /// <summary>
-    /// Strided variant: writes the symbol into a wider matrix whose rows are
-    /// <paramref name="stride"/> bytes apart (e.g. a quiet-zoned destination, with
-    /// <paramref name="destination"/> starting at the top-left core module). Only the
-    /// width × height core modules are written; the bytes between rows are untouched.
+    /// Strided variant: writes the symbol into a wider matrix whose rows are <paramref name="stride"/> bytes apart (e.g. a quiet-zoned destination, with <paramref name="destination"/> starting at the top-left core module).
+    /// Only the width × height core modules are written; the bytes between rows are untouched.
     /// </summary>
     /// <param name="destination">At least (height − 1) × stride + width bytes.</param>
     /// <param name="stride">Row pitch in bytes, at least the symbol width.</param>
@@ -188,8 +164,7 @@ internal static partial class RmQRModulePlacer
     private const int VectorSlack = 32;
 
     /// <summary>
-    /// Reference composition (per-module painters), the oracle the fast path is
-    /// parity-tested against; also builds the cached tables.
+    /// Reference composition (per-module painters), the oracle the fast path is parity-tested against; also builds the cached tables.
     /// </summary>
     internal static void PlaceSymbolReference(Span<byte> core, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage)
     {
@@ -225,9 +200,7 @@ internal static partial class RmQRModulePlacer
         /// <summary>The fastest tier this machine supports.</summary>
         Auto,
         /// <summary>
-        /// The whole portable path — SWAR bit expansion plus pair stores and index
-        /// scatter — on every target, exactly what netstandard2.0/2.1 and non-SIMD
-        /// CPUs run.
+        /// The whole portable path — SWAR bit expansion plus pair stores and index scatter — on every target, exactly what netstandard2.0/2.1 and non-SIMD CPUs run.
         /// </summary>
         Portable,
         /// <summary>ARM64 register transpose blocks + row runs + single scatter.</summary>
@@ -236,9 +209,7 @@ internal static partial class RmQRModulePlacer
 
     /// <summary>
     /// Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.
-    /// Pinning a tier this machine cannot run throws rather than falling back: a parity
-    /// test that silently compares the portable kernel against itself is worse than no
-    /// test at all, because it stays green while the tier it names goes unexercised.
+    /// Pinning a tier this machine cannot run throws rather than falling back: a parity test that silently compares the portable kernel against itself is worse than no test at all, because it stays green while the tier it names goes unexercised.
     /// </summary>
     internal static void PlaceSymbol(Span<byte> destination, int stride, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage, PlaceKernel kernel)
     {
@@ -283,10 +254,8 @@ internal static partial class RmQRModulePlacer
     }
 
     /// <summary>
-    /// bits[i] = message bit i (MSB first) XOR mask[i] for i &lt; 8 × message length;
-    /// remainder positions up to <paramref name="count"/> get the mask only (light).
-    /// One vector pass: pshufb replicates each message byte over 8 lanes, an AND with
-    /// the per-lane bit mask + compare-equal yields 0/1 bytes, XOR with the mask table.
+    /// bits[i] = message bit i (MSB first) XOR mask[i] for i &lt; 8 × message length; remainder positions up to <paramref name="count"/> get the mask only (light).
+    /// One vector pass: pshufb replicates each message byte over 8 lanes, an AND with the per-lane bit mask + compare-equal yields 0/1 bytes, XOR with the mask table.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ExpandBitsMasked(ReadOnlySpan<byte> message, byte[] masks, int count, Span<byte> bits, PlaceKernel kernel)
@@ -383,12 +352,9 @@ internal static partial class RmQRModulePlacer
     }
 
     /// <summary>
-    /// Store pass. Clean pairs: the walk visits (row, col) then (row, col-1), so the two
-    /// consecutive bit-array bytes land at core[row, col-1..col] byte-swapped, one
-    /// 16-bit store per row walking the rows in the pair's direction. Other pairs:
-    /// scatter through the index table (core offsets when the destination pitch is
-    /// the symbol width, row/col codes × the pitch otherwise; <paramref name="strided"/>
-    /// is a JIT-time constant at both call sites).
+    /// Store pass.
+    /// Clean pairs: the walk visits (row, col) then (row, col-1), so the two consecutive bit-array bytes land at core[row, col-1..col] byte-swapped, one 16-bit store per row walking the rows in the pair's direction.
+    /// Other pairs: scatter through the index table (core offsets when the destination pitch is the symbol width, row/col codes × the pitch otherwise; <paramref name="strided"/> is a JIT-time constant at both call sites).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ScatterPairs(ref byte dest, ref byte src, Layout layout, int height, int stride, bool strided)
@@ -484,9 +450,8 @@ internal static partial class RmQRModulePlacer
     }
 
     /// <summary>
-    /// Four consecutive clean column pairs — eight consecutive columns — that the ARM64
-    /// tier transposes in registers. Consecutive clean pairs occupy consecutive walk
-    /// positions, so the first pair's start locates all four.
+    /// Four consecutive clean column pairs — eight consecutive columns — that the ARM64 tier transposes in registers.
+    /// Consecutive clean pairs occupy consecutive walk positions, so the first pair's start locates all four.
     /// </summary>
     private readonly struct BlockSegment
     {
@@ -503,10 +468,8 @@ internal static partial class RmQRModulePlacer
     }
 
     /// <summary>
-    /// A stretch of consecutive rows of one column pair where BOTH columns are data,
-    /// so the two modules of every row are adjacent walk positions and can be written
-    /// with one byte-swapped 16-bit store. Unlike <see cref="PairSegment.Clean"/> this
-    /// survives function modules elsewhere in the same pair.
+    /// A stretch of consecutive rows of one column pair where BOTH columns are data, so the two modules of every row are adjacent walk positions and can be written with one byte-swapped 16-bit store.
+    /// Unlike <see cref="PairSegment.Clean"/> this survives function modules elsewhere in the same pair.
     /// </summary>
     private readonly struct RunSegment
     {
@@ -626,10 +589,8 @@ internal static partial class RmQRModulePlacer
     }
 
     /// <summary>
-    /// Segmentation the ARM64 store tier consumes: transpose blocks, then the row runs
-    /// the blocks did not take, then the isolated modules. Built only where that tier
-    /// can run (<c>AdvSimd.Arm64.IsSupported</c> is a JIT constant, so other targets
-    /// neither build nor carry these tables).
+    /// Segmentation the ARM64 store tier consumes: transpose blocks, then the row runs the blocks did not take, then the isolated modules.
+    /// Built only where that tier can run (<c>AdvSimd.Arm64.IsSupported</c> is a JIT constant, so other targets neither build nor carry these tables).
     /// </summary>
     private static (BlockSegment[] Blocks, RunSegment[] Runs, int[] Singles, byte[] ReverseIndex) BuildNeonTables(RmQRVersion version, int height, int width, List<PairSegment> pairs, int positionCount)
     {
@@ -810,9 +771,7 @@ internal static partial class RmQRModulePlacer
     }
 
     /// <summary>
-    /// Two-column zigzag data placement with the fixed mask: column pairs from
-    /// (w-2, w-3) leftward, upward first, right column first, function modules
-    /// skipped; bits beyond the message are remainder bits (light before masking).
+    /// Two-column zigzag data placement with the fixed mask: column pairs from (w-2, w-3) leftward, upward first, right column first, function modules skipped; bits beyond the message are remainder bits (light before masking).
     /// </summary>
     internal static void PlaceData(Span<byte> core, RmQRVersion version, int height, int width, ReadOnlySpan<byte> finalMessage)
     {

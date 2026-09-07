@@ -8,24 +8,20 @@ namespace FeatherQR.Internals.MicroQR;
 /// Decodes the Micro QR data bitstream (mode segments) back into text.
 /// </summary>
 /// <remarks>
-/// Inverse of <see cref="MicroQRBinaryEncoder"/>. Micro QR framing differs from
-/// Standard QR (ISO/IEC 18004 Table 2/3):
+/// Inverse of <see cref="MicroQRBinaryEncoder"/>.
+/// Micro QR framing differs from Standard QR (ISO/IEC 18004 Table 2/3):
 /// <list type="bullet">
 /// <item>Mode indicator is version − 1 bits wide (M1 has none; Numeric is implied).
-/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (decoded as JIS X 0208
-/// via the shared <see cref="ShiftJisKanjiTable"/>, M3 and M4 only since narrower mode
-/// indicators cannot express it); M4 values 4-7 are undefined.</item>
+/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>, M3 and M4 only since narrower mode indicators cannot express it); M4 values 4-7 are undefined.</item>
 /// <item>Character count indicator is 3-6 bits (Numeric = version + 2, others = version + 1).</item>
 /// <item>The terminator (2·version + 1 zero bits) is exactly a Numeric mode
-/// indicator followed by an all-zero count, a zero-count Numeric segment ends the
-/// stream. It may be truncated when the data fills the capacity.</item>
+/// indicator followed by an all-zero count, a zero-count Numeric segment ends the stream.
+/// It may be truncated when the data fills the capacity.</item>
 /// <item>No ECI: byte segments always use the UTF-8-validates heuristic.</item>
 /// <item>The bit capacity is not a whole number of bytes for M1/M3: the final data
-/// codeword carries 4 bits in its high nibble, so decoding is bounded by
-/// <c>dataBitCount</c>, not by the codeword byte length.</item>
+/// codeword carries 4 bits in its high nibble, so decoding is bounded by <c>dataBitCount</c>, not by the codeword byte length.</item>
 /// </list>
-/// Segment payload decoding is shared with the other symbology decoders via
-/// <see cref="SegmentDecoders"/>.
+/// Segment payload decoding is shared with the other symbology decoders via <see cref="SegmentDecoders"/>.
 /// </remarks>
 internal static class MicroQRBinaryDecoder
 {
@@ -42,7 +38,7 @@ internal static class MicroQRBinaryDecoder
     /// <param name="version">Micro QR version (M1-M4), determines mode/count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    public static QRCodeDecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, MicroQRVersion version, Span<char> destination, out int charsWritten)
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, MicroQRVersion version, Span<char> destination, out int charsWritten)
     {
         charsWritten = 0;
         var reader = new BitReader(data);
@@ -62,7 +58,7 @@ internal static class MicroQRBinaryDecoder
                 // M1 has no mode indicator; Numeric is implied.
                 var modeValue = modeBits == 0 ? ModeNumeric : reader.Reads(modeBits);
                 if (modeValue > ModeKanji)
-                    return QRCodeDecodeStatus.InvalidBitstream; // M4 indicators 4-7 are undefined
+                    return DecodeStatus.InvalidBitstream; // M4 indicators 4-7 are undefined
 
                 // Kanji is outside EncodingMode (that enum names the modes the encoder
                 // writes), so it takes an early branch and leaves the three encodable
@@ -88,7 +84,7 @@ internal static class MicroQRBinaryDecoder
                     // truncated terminator; anything else is a truncated segment.
                     if (modeValue == ModeNumeric)
                         break;
-                    return QRCodeDecodeStatus.InvalidBitstream;
+                    return DecodeStatus.InvalidBitstream;
                 }
 
                 var count = reader.Reads(countBits);
@@ -118,7 +114,7 @@ internal static class MicroQRBinaryDecoder
                 if (modeValue == ModeKanji)
                 {
                     var kanjiStatus = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
-                    if (kanjiStatus != QRCodeDecodeStatus.Success)
+                    if (kanjiStatus != DecodeStatus.Success)
                         return kanjiStatus;
                     continue;
                 }
@@ -128,14 +124,14 @@ internal static class MicroQRBinaryDecoder
                     case ModeNumeric:
                         {
                             var status = SegmentDecoders.DecodeNumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
                     case ModeAlphanumeric:
                         {
                             var status = SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
@@ -144,14 +140,14 @@ internal static class MicroQRBinaryDecoder
                             // Micro QR data codewords top out at 16 bytes (M4-L).
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
                             var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, rentedBytes, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
+                            if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
                 }
             }
 
-            return QRCodeDecodeStatus.Success;
+            return DecodeStatus.Success;
         }
         finally
         {

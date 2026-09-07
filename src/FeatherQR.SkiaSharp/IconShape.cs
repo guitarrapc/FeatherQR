@@ -3,43 +3,43 @@ using SkiaSharp;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Specifies the vertical alignment of text relative to the icon.
+/// Where the text sits relative to the icon.
 /// </summary>
 public enum TextVerticalAlignment
 {
     /// <summary>
-    /// Text is positioned below the icon (default).
+    /// Below the icon.
     /// </summary>
     Bottom = 0,
 
     /// <summary>
-    /// Text is centered vertically with the icon.
+    /// Centered on the icon.
     /// </summary>
     Center = 1,
 
     /// <summary>
-    /// Text is positioned above the icon.
+    /// Above the icon.
     /// </summary>
     Top = 2,
 }
 
 /// <summary>
-/// Defines the shape and rendering behavior of a QR code center icon/logo.
+/// How the icon at the center of a symbol is drawn.
 /// </summary>
 public abstract class IconShape
 {
     /// <summary>
-    /// Draw an icon bitmap at the specified location.
+    /// Draws the icon.
     /// </summary>
     /// <param name="canvas">The canvas to render on.</param>
-    /// <param name="rect">The rectangular area for the icon.</param>
+    /// <param name="rect">Where to draw the icon.</param>
     /// <param name="borderRect">The rectangular area for the border (if border width > 0).</param>
-    /// <param name="backgroundColor">Border background color</param>
+    /// <param name="backgroundColor">The color to fill the border with.</param>
     public abstract void Draw(SKCanvas canvas, SKRect rect, SKRect borderRect, SKColor backgroundColor);
 }
 
 /// <summary>
-/// Icon shape that draws an image.
+/// Draws an image as the icon.
 /// </summary>
 public sealed class ImageIconShape : IconShape
 {
@@ -76,7 +76,7 @@ public sealed class ImageIconShape : IconShape
 }
 
 /// <summary>
-/// Icon shape that draws an image with text positioned relative to it.
+/// Draws an image as the icon, with a caption beside it.
 /// </summary>
 public sealed class ImageTextIconShape : IconShape
 {
@@ -89,15 +89,15 @@ public sealed class ImageTextIconShape : IconShape
     private readonly int _textPadding;
 
     /// <summary>
-    /// Creates an icon shape that displays an image with text positioned relative to it.
+    /// Creates the icon from an image and a caption.
     /// </summary>
-    /// <param name="image">The bitmap image to display.</param>
-    /// <param name="text">The text to display relative to the image.</param>
-    /// <param name="textColor">The color of the text.</param>
-    /// <param name="font">The font to use for the text.</param>
-    /// <param name="horizontalAlign">Horizontal text alignment (Left, Center, or Right). Default is Center.</param>
-    /// <param name="verticalAlign">Vertical text alignment relative to the image (Top, Center, or Bottom). Default is Bottom.</param>
-    /// <param name="textPadding">Padding between the image and text in pixels. Default is 0.</param>
+    /// <param name="image">The image to draw. Stretched to fill the icon area, so its aspect ratio is not kept.</param>
+    /// <param name="text">The caption.</param>
+    /// <param name="textColor">The caption color.</param>
+    /// <param name="font">The caption font.</param>
+    /// <param name="horizontalAlign">How the caption lines up horizontally.</param>
+    /// <param name="verticalAlign">Where the caption sits relative to the image.</param>
+    /// <param name="textPadding">Gap between the image and the caption, in pixels.</param>
     public ImageTextIconShape(SKBitmap image, string text, SKColor textColor, SKFont font, SKTextAlign horizontalAlign = SKTextAlign.Center, TextVerticalAlignment verticalAlign = TextVerticalAlignment.Bottom, int textPadding = 0)
     {
         _image = image ?? throw new ArgumentNullException(nameof(image));

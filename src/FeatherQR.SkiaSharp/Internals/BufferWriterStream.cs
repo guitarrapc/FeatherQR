@@ -3,10 +3,8 @@ using System.Buffers;
 namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
-/// Write-only stream adapter over an <see cref="IBufferWriter{T}"/>. Data is copied in
-/// writer-provided segments (via <see cref="BuffersExtensions.Write{T}"/>), so no single
-/// contiguous buffer is ever requested for the whole payload, segmented writers such as
-/// PipeWriter never receive an oversized GetSpan request.
+/// Write-only stream adapter over an <see cref="IBufferWriter{T}"/>.
+/// Data is copied in writer-provided segments (via <see cref="BuffersExtensions.Write{T}"/>), so no single contiguous buffer is ever requested for the whole payload, segmented writers such as PipeWriter never receive an oversized GetSpan request.
 /// </summary>
 internal sealed class BufferWriterStream : Stream
 {

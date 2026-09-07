@@ -4,24 +4,17 @@ using System.Runtime.InteropServices;
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// Converts pixel buffers to the 8-bit grayscale luminance the image decoders read
-/// (<c>TryDecodeImage</c> on <see cref="QRCodeDecoder"/>, <see cref="MicroQRCodeDecoder"/>
-/// and <see cref="RmQRCodeDecoder"/>).
+/// Converts pixel buffers to the 8-bit grayscale luminance the image decoders read (<c>TryDecodeImage</c> on <see cref="QRCodeDecoder"/>, <see cref="MicroQRCodeDecoder"/> and <see cref="RmQRCodeDecoder"/>).
 /// </summary>
 /// <remarks>
 /// <para>
-/// Internal, reached by the first-party rendering package through
-/// <c>InternalsVisibleTo</c>: an adapter reads the pixel layout out of its bitmap type
-/// and hands the raw bytes here. The layouts are the ones QR sources actually use
-/// (<see cref="PixelLayout"/>); anything else is converted by the caller first. A
-/// third-party decoder adapter produces luminance itself and calls <c>TryDecodeImage</c>;
-/// this type is not public so that the surface does not grow ahead of a concrete need.
+/// Internal, reached by the first-party rendering package through <c>InternalsVisibleTo</c>: an adapter reads the pixel layout out of its bitmap type and hands the raw bytes here.
+/// The layouts are the ones QR sources actually use (<see cref="PixelLayout"/>); anything else is converted by the caller first.
+/// A third-party decoder adapter produces luminance itself and calls <c>TryDecodeImage</c>; this type is not public so that the surface does not grow ahead of a concrete need.
 /// </para>
 /// <para>
-/// Luminance is ITU-R BT.601, (77 R + 150 G + 29 B) / 256. Transparent pixels are
-/// composited against white before weighting: QR quiet zones are white by definition,
-/// and transparent-background PNGs are a common input. The kernels run in three tiers
-/// (AVX2, NEON, portable scalar) that produce identical bytes.
+/// Luminance is ITU-R BT.601, (77 R + 150 G + 29 B) / 256. Transparent pixels are composited against white before weighting: QR quiet zones are white by definition, and transparent-background PNGs are a common input.
+/// The kernels run in three tiers (AVX2, NEON, portable scalar) that produce identical bytes.
 /// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
@@ -84,17 +77,14 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Pixel buffer to BT.601 luminance. Three tiers: an AVX2 kernel at 32 pixels per
-    /// iteration (LuminanceConverter.Simd.cs), a NEON kernel at 16 pixels per
-    /// iteration (LuminanceConverter.Simd.Arm.cs), and this per-pixel loop everywhere
-    /// else. All three produce identical bytes; see LuminanceConverterParityTest.
+    /// Pixel buffer to BT.601 luminance.
+    /// Three tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.Simd.cs), a NEON kernel at 16 pixels per iteration (LuminanceConverter.Simd.Arm.cs), and this per-pixel loop everywhere else.
+    /// All three produce identical bytes; see LuminanceConverterParityTest.
     /// </summary>
     /// <remarks>
-    /// The extents are checked once here, not per row. Every tier walks by <c>ref</c>
-    /// from a single <c>GetReference</c> and so carries no bounds check of its own —
-    /// including the scalar tier, whose per-row re-slicing was removed for speed. A
-    /// caller that hands over a short destination would otherwise corrupt whatever
-    /// follows it (in practice a pooled rental) instead of throwing.
+    /// The extents are checked once here, not per row.
+    /// Every tier walks by <c>ref</c> from a single <c>GetReference</c> and so carries no bounds check of its own — including the scalar tier, whose per-row re-slicing was removed for speed.
+    /// A caller that hands over a short destination would otherwise corrupt whatever follows it (in practice a pooled rental) instead of throwing.
     /// </remarks>
     internal static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar = false)
     {
@@ -127,11 +117,8 @@ internal static partial class LuminanceConverter
         => greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2);
 
     /// <summary>
-    /// UDOT carries the whole luminance sum (<see cref="System.Runtime.Intrinsics.Arm.Dp"/>,
-    /// an ARMv8.2 extension that Cortex-A53/A72-class cores lack) and the composite path
-    /// separates planes with UZP1/UZP2, which live under <c>AdvSimd.Arm64</c> — so both
-    /// gates are required rather than plain AdvSimd. LD4 would also serve for the planes
-    /// but has no ref-taking overload, so it was rejected (see LuminanceConverter.Simd.Arm.cs).
+    /// UDOT carries the whole luminance sum (<see cref="System.Runtime.Intrinsics.Arm.Dp"/>, an ARMv8.2 extension that Cortex-A53/A72-class cores lack) and the composite path separates planes with UZP1/UZP2, which live under <c>AdvSimd.Arm64</c> — so both gates are required rather than plain AdvSimd.
+    /// LD4 would also serve for the planes but has no ref-taking overload, so it was rejected (see LuminanceConverter.Simd.Arm.cs).
     /// </summary>
     private static bool IsAdvSimdTierAvailable
         => System.Runtime.Intrinsics.Arm.Dp.IsSupported && System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported;
@@ -181,10 +168,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Whether a vector kernel actually converts a row of this width and layout here.
-    /// A parity test must consult this before pinning <see cref="ConvertTier.Vector"/>:
-    /// the NEON tier declines rows narrower than one block, so on ARM64 the small widths
-    /// would otherwise compare the scalar tier against itself and pass without running
-    /// the kernel they name.
+    /// A parity test must consult this before pinning <see cref="ConvertTier.Vector"/>: the NEON tier declines rows narrower than one block, so on ARM64 the small widths would otherwise compare the scalar tier against itself and pass without running the kernel they name.
     /// </summary>
     internal static bool IsVectorTierTaken(int width, int redOffset, int greenOffset, int blueOffset)
     {
@@ -198,10 +182,8 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// The layout half of <see cref="IsVectorTierTaken"/> — layout ONLY, deliberately
-    /// carrying no ISA or width term. A parity test skips on this and then asserts a
-    /// coverage floor, so anything that switches a tier off fails the floor instead of
-    /// widening the skip until the test is green and empty.
+    /// The layout half of <see cref="IsVectorTierTaken"/> — layout ONLY, deliberately carrying no ISA or width term.
+    /// A parity test skips on this and then asserts a coverage floor, so anything that switches a tier off fails the floor instead of widening the skip until the test is green and empty.
     /// </summary>
     internal static bool IsVectorTierTakenForLayout(int redOffset, int greenOffset, int blueOffset)
     {
@@ -213,9 +195,8 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Tier-selecting entry for parity tests. <see cref="ConvertTier.Vector"/> throws
-    /// when no vector kernel would run for these arguments rather than quietly handing
-    /// back the scalar result — see <see cref="IsVectorTierTaken"/>.
+    /// Tier-selecting entry for parity tests.
+    /// <see cref="ConvertTier.Vector"/> throws when no vector kernel would run for these arguments rather than quietly handing back the scalar result — see <see cref="IsVectorTierTaken"/>.
     /// </summary>
     internal static void ConvertRgbaForTest(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, ConvertTier tier)
     {
@@ -232,31 +213,23 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// The portable tier: every target without a vector kernel (netstandard, x86
-    /// without AVX2, ARM64 without the dot-product extension) and every row too narrow
-    /// for one, so it is shipped code rather than only a reference.
+    /// The portable tier: every target without a vector kernel (netstandard, x86 without AVX2, ARM64 without the dot-product extension) and every row too narrow for one, so it is shipped code rather than only a reference.
     /// </summary>
     /// <remarks>
-    /// Three things earn their keep here, each measured separately on Apple M2 against
-    /// the straightforward per-pixel loop this replaces (1.3-1.8x overall):
+    /// Three things earn their keep here, each measured separately on Apple M2 against the straightforward per-pixel loop this replaces (1.3-1.8x overall):
     /// <list type="bullet">
     /// <item>The channel offsets become constants of a per-layout loop instead of
-    /// parameters, so the address arithmetic folds and RGB888x drops its alpha branch
-    /// outright.</item>
+    /// parameters, so the address arithmetic folds and RGB888x drops its alpha branch outright.</item>
     /// <item>Walking by <c>ref</c> rather than re-slicing spans removes the per-pixel
     /// bounds checks: worth 16-30 % on its own.</item>
     /// <item>Four pixels per iteration, worth a further 8-11 % because the loop is
     /// latency-bound on load → multiply → store rather than throughput-bound.</item>
     /// </list>
     /// <para>
-    /// Two plausible-looking alternatives were measured and rejected. Reading the pixel
-    /// as one <c>uint</c> and splitting it with shifts costs 37-53 % on ARM64, where a
-    /// byte load at a constant offset is cheap and the extra ALU work is not; that is
-    /// the opposite of the x64 result. Replacing the three multiplies with 256-entry
-    /// weight tables loses 3-5 % (MUL is 1-2 cycles at one per cycle, while three more
-    /// L1 loads contend with the pixel loads) and would additionally read out of bounds
-    /// on a premultiplied buffer that violates c ≤ a, which nothing forbids at this
-    /// boundary. Eight pixels per iteration regressed one layout by 2x.
+    /// Two plausible-looking alternatives were measured and rejected.
+    /// Reading the pixel as one <c>uint</c> and splitting it with shifts costs 37-53 % on ARM64, where a byte load at a constant offset is cheap and the extra ALU work is not; that is the opposite of the x64 result.
+    /// Replacing the three multiplies with 256-entry weight tables loses 3-5 % (MUL is 1-2 cycles at one per cycle, while three more L1 loads contend with the pixel loads) and would additionally read out of bounds on a premultiplied buffer that violates c ≤ a, which nothing forbids at this boundary.
+    /// Eight pixels per iteration regressed one layout by 2x.
     /// </para>
     /// </remarks>
     private static void ConvertRgbaScalar(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)

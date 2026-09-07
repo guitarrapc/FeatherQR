@@ -36,7 +36,7 @@ var outputPath = GetOutputPath(args);
 var wantsHtml = args.Contains("--html");
 // Both shipped assemblies, in the order the packages depend on each other. The project
 // reference to the rendering package brings the core along, so one reference covers both.
-var assemblies = new[] { typeof(FeatherQR.QRCodeData).Assembly, typeof(FeatherQR.SkiaSharp.QRCodeRenderer).Assembly };
+var assemblies = new[] { typeof(FeatherQR.QRCodeData).Assembly, typeof(FeatherQR.SkiaSharp.SymbolRenderer).Assembly };
 var version = assemblies[0].GetName().Version;
 var nullability = new NullabilityInfoContext();
 
@@ -568,7 +568,7 @@ string GenericSuffix(Type[] arguments) => arguments.Length == 0 ? "" : $"<{strin
 string BareName(Type type)
 {
     // A generic parameter reports the type that declared it as its declaring type, which would
-    // otherwise qualify it as if it were nested: TSelf, not QRCodeImageBuilderBase.TSelf.
+    // otherwise qualify it as if it were nested: TSelf, not SymbolImageBuilderBase.TSelf.
     if (type.IsGenericParameter) return type.Name;
 
     var name = type.Name;

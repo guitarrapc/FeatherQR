@@ -34,7 +34,7 @@ public class StandardQrFixtureTest
         await Assert.That(success).IsTrue();
         await Assert.That(text).IsEqualTo(manifest.PayloadText);
         await Assert.That(info.Version).IsEqualTo(manifest.Version);
-        await Assert.That(info.EccLevel).IsEqualTo(Enum.Parse<ECCLevel>(manifest.ErrorCorrectionLevel));
+        await Assert.That(info.EccLevel).IsEqualTo(Enum.Parse<QREccLevel>(manifest.ErrorCorrectionLevel));
         await Assert.That(info.ErrorsCorrected).IsEqualTo(0);
         if (manifest.MaskPattern >= 0)
         {
@@ -82,6 +82,6 @@ public class StandardQrFixtureTest
         await Assert.That(success).IsTrue();
         await Assert.That(text).IsEqualTo(manifest.PayloadText);
         await Assert.That(info.Version).IsEqualTo(manifest.Version);
-        await Assert.That(info.EccLevel).IsEqualTo(Enum.Parse<ECCLevel>(manifest.ErrorCorrectionLevel));
+        await Assert.That(info.EccLevel).IsEqualTo(Enum.Parse<QREccLevel>(manifest.ErrorCorrectionLevel));
     }
 }

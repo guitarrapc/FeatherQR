@@ -4,44 +4,29 @@ using FeatherQR.Internals.BinaryDecoders;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Mixed-mode segmentation for <see cref="MicroQRSegmentation.Optimal"/>: the split
-/// of the content into Numeric / Alphanumeric / Byte runs whose total bit cost is
-/// minimal for a given version, and the version fit that follows from it.
+/// Mixed-mode segmentation for <see cref="MicroQRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
-/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with
-/// the Standard QR and rMQR planners; what lives here is Micro QR's version scan:
-/// at most three candidates below the single-mode fit, each screened by the trivial
-/// per-character lower bound before a cost run (a Micro QR encode is so cheap that
-/// even one wasted dynamic-program pass doubles it). What Micro QR adds is
-/// per-version mode availability: M1 is Numeric-only and M2 has no Byte mode, so
-/// candidates whose mode set cannot carry the content are skipped, and the missing
-/// transitions are disabled in the dynamic program.
+/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Standard QR and rMQR planners; what lives here is Micro QR's version scan: at most three candidates below the single-mode fit, each screened by the trivial per-character lower bound before a cost run (a Micro QR encode is so cheap that even one wasted dynamic-program pass doubles it).
+/// What Micro QR adds is per-version mode availability: M1 is Numeric-only and M2 has no Byte mode, so candidates whose mode set cannot carry the content are skipped, and the missing transitions are disabled in the dynamic program.
 /// </remarks>
 internal static class MicroQRSegmentPlanner
 {
     /// <summary>
-    /// Longest content any Micro QR symbol can hold, in characters (35 digits at
-    /// M4-L: 11 groups × 10 bits + 7 + the 9-bit header = 126 of 128 bits). No mixed
-    /// plan can beat it, and every plan buffer is sized by it (35 runs of one
-    /// character each is the theoretical worst case, 280 stack bytes).
+    /// Longest content any Micro QR symbol can hold, in characters (35 digits at M4-L: 11 groups × 10 bits + 7 + the 9-bit header = 126 of 128 bits).
+    /// No mixed plan can beat it, and every plan buffer is sized by it (35 runs of one character each is the theoretical worst case, 280 stack bytes).
     /// </summary>
     /// <remarks>
-    /// A rejection rule, not only a work cap: a mixed plan can encode content no
-    /// single mode holds, so this is what declares longer content impossible. The
-    /// margin is one whole group (36 digits cost 129 against 128), so re-derive it
-    /// rather than nudge it if the capacity tables change. Pinned by
-    /// <c>MicroQRSegmentPlannerUnitTest</c>.
+    /// A rejection rule, not only a work cap: a mixed plan can encode content no single mode holds, so this is what declares longer content impossible.
+    /// The margin is one whole group (36 digits cost 129 against 128), so re-derive it rather than nudge it if the capacity tables change.
+    /// Pinned by <c>MicroQRSegmentPlannerUnitTest</c>.
     /// </remarks>
     public const int MaxPlannableChars = 35;
 
     /// <summary>
-    /// Version fit for mixed-mode segmentation, restricted to
-    /// <paramref name="range"/>. Returns the version to encode at and whether a
-    /// mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is
-    /// false the caller emits the ordinary single-mode stream, bit-identical to
-    /// <see cref="MicroQRSegmentation.Single"/>. <c>false</c> means the content fits
-    /// neither one mode nor a mixed plan in the range; the caller owns the error.
+    /// Version fit for mixed-mode segmentation, restricted to <paramref name="range"/>.
+    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="MicroQRSegmentation.Single"/>.
+    /// <c>false</c> means the content fits neither one mode nor a mixed plan in the range; the caller owns the error.
     /// Throws exactly what the single-mode selector throws for argument errors.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected, out bool useSegments)
@@ -109,13 +94,8 @@ internal static class MicroQRSegmentPlanner
     }
 
     /// <summary>
-    /// Builds the minimal-cost plan for <paramref name="version"/> into
-    /// <paramref name="segments"/>. Returns false when the content is unplannable at
-    /// this version, the plan needs more runs than the caller lent room for, the
-    /// plan would be misread on decode (a relocated byte order mark, or a Latin-1
-    /// run the charset heuristic reads as UTF-8), or the exact re-costed stream
-    /// would not fit; the caller answers all four by falling back to the
-    /// single-mode stream.
+    /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
+    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a relocated byte order mark, or a Latin-1 run the charset heuristic reads as UTF-8), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -179,17 +159,13 @@ internal static class MicroQRSegmentPlanner
     }
 
     /// <summary>
-    /// Named entry point for <c>MicroQRSegmentPlannerUnitTest</c>: the minimal
-    /// payload bits at <paramref name="version"/>'s widths and mode set, or a value
-    /// at or above <see cref="ModeSegmenter.Unreachable"/> when the content needs a
-    /// mode the version lacks.
+    /// Named entry point for <c>MicroQRSegmentPlannerUnitTest</c>: the minimal payload bits at <paramref name="version"/>'s widths and mode set, or a value at or above <see cref="ModeSegmenter.Unreachable"/> when the content needs a mode the version lacks.
     /// </summary>
     public static int MinimumPayloadBits(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version)
         => PlanCost(text, charset, version, default, out _);
 
     /// <summary>
-    /// Whether any Byte run's narrowed Latin-1 bytes would be read as UTF-8 by the
-    /// decoder's unspecified-charset resolution (Micro QR has no ECI to pin it).
+    /// Whether any Byte run's narrowed Latin-1 bytes would be read as UTF-8 by the decoder's unspecified-charset resolution (Micro QR has no ECI to pin it).
     /// Pure-ASCII runs are exempt: they decode identically either way.
     /// </summary>
     private static bool HasLatin1RunTheHeuristicReadsAsUtf8(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)

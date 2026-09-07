@@ -56,7 +56,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task ToBitmap_ModulePixelSize_EveryModuleMatchesMatrix(MicroQRVersion version, MicroQREccLevel eccLevel, string content)
     {
         const int modulePixelSize = 4;
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, version);
+        var data = MicroQRCodeGenerator.Create(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
 
         using var bitmap = new MicroQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
@@ -83,7 +83,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task ToBitmap_CustomColors_UsesConfiguredColors()
     {
         const int modulePixelSize = 4;
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
 
         using var bitmap = new MicroQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
@@ -108,7 +108,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task ToBitmap_CircleModuleShape_DarkModuleCentersAreDark()
     {
         const int modulePixelSize = 8;
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
 
         using var bitmap = new MicroQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
@@ -138,7 +138,7 @@ public class MicroQRCodeImageBuilderUnitTest
     {
         const int modulePixelSize = 4;
         // Same content and ECC as the builder's internal generation.
-        var expectedData = MicroQRCodeGenerator.CreateMicroQRCode(TestContent, MicroQREccLevel.M);
+        var expectedData = MicroQRCodeGenerator.Create(TestContent, MicroQREccLevel.M);
         var coreSize = expectedData.Size - 2 * 2; // default quiet zone is 2 modules per side
 
         using var bitmap = new MicroQRCodeImageBuilder(TestContent)
@@ -152,7 +152,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task ContentBuilder_WithQuietZone_OverridesDefault()
     {
         const int modulePixelSize = 4;
-        var zeroQuietData = MicroQRCodeGenerator.CreateMicroQRCode(TestContent, MicroQREccLevel.M, quietZoneSize: 0);
+        var zeroQuietData = MicroQRCodeGenerator.Create(TestContent, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
 
         using var bitmap = new MicroQRCodeImageBuilder(TestContent)
             .WithQuietZone(0)
@@ -178,7 +178,7 @@ public class MicroQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithVersion_FixedVersion_MatchesDataRendering()
     {
-        using var expectedBitmap = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.M, MicroQRVersion.M4))
+        using var expectedBitmap = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.Create("12345", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 }))
             .WithSize(256, 256)
             .ToBitmap();
 
@@ -194,7 +194,7 @@ public class MicroQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithVersion_DataBuilder_ThrowsInvalidOperationException()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         var builder = new MicroQRCodeImageBuilder(data);
 
         Assert.Throws<InvalidOperationException>(() => builder.WithVersion(MicroQRVersion.M4));
@@ -203,7 +203,7 @@ public class MicroQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithErrorCorrection_DataBuilder_ThrowsInvalidOperationException()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         var builder = new MicroQRCodeImageBuilder(data);
 
         Assert.Throws<InvalidOperationException>(() => builder.WithErrorCorrection(MicroQREccLevel.M));
@@ -259,7 +259,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task WithModulePixelSize_AndLargerCanvas_PadsAndCentersContent()
     {
         const int modulePixelSize = 6;
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(TestContent, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(TestContent, MicroQREccLevel.M);
         var contentSide = data.Size * modulePixelSize;
         const int canvasWidth = 200;
         const int canvasHeight = 240;
@@ -291,7 +291,7 @@ public class MicroQRCodeImageBuilderUnitTest
     public async Task WithModulePixelSize_AndTooSmallCanvas_ThrowsInvalidOperationException()
     {
         const int modulePixelSize = 10;
-        var data = MicroQRCodeGenerator.CreateMicroQRCode(TestContent, MicroQREccLevel.M);
+        var data = MicroQRCodeGenerator.Create(TestContent, MicroQREccLevel.M);
         var contentSide = data.Size * modulePixelSize;
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
@@ -324,7 +324,7 @@ public class MicroQRCodeImageBuilderUnitTest
     [Test]
     public async Task GetPngBytes_FromData_ReturnsValidPngBytes()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         var bytes = MicroQRCodeImageBuilder.GetPngBytes(data);
 
         await Assert.That(bytes).IsNotNull();
@@ -434,16 +434,16 @@ public class MicroQRCodeImageBuilderUnitTest
     #region Renderer / canvas extension entry points
 
     [Test]
-    public async Task QRCodeRenderer_Render_MicroQRData_EveryModuleMatchesMatrix()
+    public async Task SymbolRenderer_Render_MicroQRData_EveryModuleMatchesMatrix()
     {
         const int modulePixelSize = 4;
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         var side = data.Size * modulePixelSize;
 
         using var bitmap = new SKBitmap(side, side);
         using (var canvas = new SKCanvas(bitmap))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, side, side), data, codeColor: null, backgroundColor: null);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, side, side), data, codeColor: null, backgroundColor: null);
         }
 
         for (var row = 0; row < data.Size; row++)
@@ -463,7 +463,7 @@ public class MicroQRCodeImageBuilderUnitTest
     [Test]
     public async Task CanvasExtension_Render_MicroQRData_DrawsSymbol()
     {
-        var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L);
         const int side = 150; // 15 * 10: exact multiple of the M2 default matrix (11 + 2*2 quiet zone)
 
         using var bitmap = new SKBitmap(side, side);

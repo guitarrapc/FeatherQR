@@ -7,31 +7,22 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// GFNI syndrome kernel: all ≤30 syndrome accumulators live in one 256-bit register,
-/// so every data byte updates every syndrome with one gf2p8mulb, replacing up to 30
-/// scalar GF multiplies per byte (measured ~114x on a version 40 block).
+/// GFNI syndrome kernel: all ≤30 syndrome accumulators live in one 256-bit register, so every data byte updates every syndrome with one gf2p8mulb, replacing up to 30 scalar GF multiplies per byte (measured ~114x on a version 40 block).
 /// </summary>
 /// <remarks>
-/// GF2P8MULB is hardwired to the AES polynomial 0x11B while QR uses 0x11D, so the
-/// kernel runs in an isomorphic image of the field: φ maps GF(0x11D) → GF(0x11B)
-/// (constructed from β = the first root of x⁸+x⁴+x³+x²+1 in GF(0x11B); it happens to
-/// be an involution, φ = φ⁻¹). One gf2p8affineqb maps each operand in, one maps the
-/// accumulator back out at the end. XOR is field addition and φ is GF(2)-linear, so
-/// accumulation commutes with the mapping.
+/// GF2P8MULB is hardwired to the AES polynomial 0x11B while QR uses 0x11D, so the kernel runs in an isomorphic image of the field: φ maps GF(0x11D) → GF(0x11B) (constructed from β = the first root of x⁸+x⁴+x³+x²+1 in GF(0x11B); it happens to be an involution, φ = φ⁻¹).
+/// One gf2p8affineqb maps each operand in, one maps the accumulator back out at the end.
+/// XOR is field addition and φ is GF(2)-linear, so accumulation commutes with the mapping.
 /// <para>
-/// The Horner recurrence is unrolled ×4 (acc·A⁴ ^ φ(c0)·A³ ^ φ(c1)·A² ^ φ(c2)·A ^ φ(c3),
-/// xor-tree reassociated) because the loop is latency-bound on the acc → mulb → xor
-/// carried chain; the c·Aⁿ multiplies are off-chain. Measured 29% over unroll ×2 and
-/// 47% over the plain recurrence; unroll ×8 stalled (throughput-bound), so ×4 is the
-/// converged shape. The constants are baked and locked to the runtime construction by
-/// GfniIsomorphismConstants_MatchFirstPrinciplesConstruction.
+/// The Horner recurrence is unrolled ×4 (acc·A⁴ ^ φ(c0)·A³ ^ φ(c1)·A² ^ φ(c2)·A ^ φ(c3), xor-tree reassociated) because the loop is latency-bound on the acc → mulb → xor carried chain; the c·Aⁿ multiplies are off-chain.
+/// Measured 29% over unroll ×2 and 47% over the plain recurrence; unroll ×8 stalled (throughput-bound), so ×4 is the converged shape.
+/// The constants are baked and locked to the runtime construction by GfniIsomorphismConstants_MatchFirstPrinciplesConstruction.
 /// </para>
 /// </remarks>
 internal static partial class EccBinaryDecoder
 {
     /// <summary>
-    /// φ = φ⁻¹ as a gf2p8affineqb bit matrix (qword byte (7-i) = matrix row for
-    /// result bit i, row bit k = bit i of φ(2^k)).
+    /// φ = φ⁻¹ as a gf2p8affineqb bit matrix (qword byte (7-i) = matrix row for result bit i, row bit k = bit i of φ(2^k)).
     /// </summary>
     internal const ulong GfniPhiMatrix = 0xFFAACC88F0A0C080UL;
 
@@ -72,9 +63,8 @@ internal static partial class EccBinaryDecoder
     ];
 
     /// <summary>
-    /// Computes the syndromes for one block. <paramref name="syndromes"/> must have
-    /// room for <see cref="SyndromeLanes"/> bytes; lanes past <paramref name="eccCount"/>
-    /// receive syndromes of roots the code does not use and must not be read.
+    /// Computes the syndromes for one block.
+    /// <paramref name="syndromes"/> must have room for <see cref="SyndromeLanes"/> bytes; lanes past <paramref name="eccCount"/> receive syndromes of roots the code does not use and must not be read.
     /// </summary>
     internal static bool ComputeSyndromesGfni(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
     {

@@ -1,15 +1,14 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Result of <see cref="MicroQRCodeGenerator.TryGetRequiredBufferSize"/>: buffer size,
-/// matrix side length and selected version for a pending Micro QR encode.
+/// Result of <see cref="MicroQRCodeGenerator.TryGetRequiredBufferSize"/>: buffer size, matrix side length and selected version for a pending Micro QR encode.
 /// </summary>
-public readonly struct MicroQRCodeCalculatedSize
+public readonly record struct MicroQRCodeCalculatedSize
 {
     internal MicroQRCodeCalculatedSize(int bufferSize, int qrSize, MicroQRVersion version)
     {
         BufferSize = bufferSize;
-        QrSize = qrSize;
+        Size = qrSize;
         Version = version;
     }
 
@@ -17,7 +16,7 @@ public readonly struct MicroQRCodeCalculatedSize
     public int BufferSize { get; }
 
     /// <summary>Matrix side length in modules, quiet zone included.</summary>
-    public int QrSize { get; }
+    public int Size { get; }
 
     /// <summary>The Micro QR version that will be produced.</summary>
     public MicroQRVersion Version { get; }

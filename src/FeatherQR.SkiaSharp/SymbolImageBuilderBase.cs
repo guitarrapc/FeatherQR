@@ -6,27 +6,19 @@ using System.Text;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Shared implementation for the symbology-specific QR image builders
-/// (<see cref="QRCodeImageBuilder"/>, <see cref="MicroQRCodeImageBuilder"/>):
-/// the fluent options every symbology supports, canvas layout, and the complete
-/// raster/SVG output surface. Symbology-specific concerns, error correction and
-/// version types, icon overlays, finder pattern styling, live on the derived
-/// builders.
+/// Shared implementation for the symbology-specific QR image builders (<see cref="QRCodeImageBuilder"/>, <see cref="MicroQRCodeImageBuilder"/>): the fluent options every symbology supports, canvas layout, and the complete raster/SVG output surface.
+/// Symbology-specific concerns, error correction and version types, icon overlays, finder pattern styling, live on the derived builders.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The self-referential type parameter keeps fluent chains typed to the concrete
-/// builder, so shared and symbology-specific options mix freely without casts:
-/// <c>new MicroQRCodeImageBuilder("...").WithSize(256, 256).WithVersion(MicroQRVersion.M4)</c>.
+/// The self-referential type parameter keeps fluent chains typed to the concrete builder, so shared and symbology-specific options mix freely without casts: <c>new MicroQRCodeImageBuilder("...").WithSize(256, 256).WithVersion(MicroQRVersion.M4)</c>.
 /// </para>
 /// <para>
-/// Deriving from this class outside the library is not supported: the abstract
-/// hooks that connect a symbology's data model to the shared output pipeline are
-/// <c>private protected</c>.
+/// Deriving from this class outside the library is not supported: the abstract hooks that connect a symbology's data model to the shared output pipeline are <c>private protected</c>.
 /// </para>
 /// </remarks>
 /// <typeparam name="TSelf">The concrete builder type (self-referential).</typeparam>
-public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBuilderBase<TSelf>
+public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBuilderBase<TSelf>
 {
     private Vector2Slim? _explicitSize;
     private SKEncodedImageFormat _format = SKEncodedImageFormat.Png;
@@ -41,7 +33,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     private protected float _moduleSizePercent = 1.0f;
     private protected GradientOptions? _gradientOptions;
 
-    private protected QRCodeImageBuilderBase(int defaultQuietZoneSize)
+    private protected SymbolImageBuilderBase(int defaultQuietZoneSize)
     {
         _quietZoneSize = defaultQuietZoneSize;
     }
@@ -49,23 +41,19 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     // ─── Symbology hooks ───
 
     /// <summary>
-    /// Resolves the symbol to render (encoding the configured content when the
-    /// builder was not given pre-built data) and reports its matrix side length
-    /// including the quiet zone (width and height; equal for square symbologies).
+    /// Resolves the symbol to render (encoding the configured content when the builder was not given pre-built data) and reports its matrix side length including the quiet zone (width and height; equal for square symbologies).
     /// Called exactly once per output operation.
     /// </summary>
     private protected abstract object ResolveSymbol(out int matrixWidth, out int matrixHeight);
 
     /// <summary>
-    /// Whether an explicit canvas size fits the symbol with a uniform module scale
-    /// (letterbox) instead of filling the canvas. Square symbologies keep the
-    /// historical fill behavior; rectangular symbologies must never be stretched.
+    /// Whether an explicit canvas size fits the symbol with a uniform module scale (letterbox) instead of filling the canvas.
+    /// Square symbologies keep the historical fill behavior; rectangular symbologies must never be stretched.
     /// </summary>
     private protected virtual bool PreserveAspectRatio => false;
 
     /// <summary>
-    /// Canvas size used when neither <see cref="WithSize"/> nor
-    /// <see cref="WithModulePixelSize"/> was called (512 × 512 for square symbologies).
+    /// Canvas size used when neither <see cref="WithSize"/> nor <see cref="WithModulePixelSize"/> was called (512 × 512 for square symbologies).
     /// </summary>
     private protected virtual Vector2Slim GetDefaultCanvasSize(int matrixWidth, int matrixHeight) => new(512, 512);
 
@@ -73,35 +61,24 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     private protected abstract void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect);
 
     /// <summary>
-    /// Symbology-specific part of the crispEdges decision (e.g. Standard QR must
-    /// keep antialiasing for custom finder shapes and drawn icon overlays).
+    /// Symbology-specific part of the crispEdges decision (e.g.
+    /// Standard QR must keep antialiasing for custom finder shapes and drawn icon overlays).
     /// </summary>
     private protected abstract bool UseCrispEdgesCore();
 
     // ─── Fluent options shared by every symbology ───
 
     /// <summary>
-    /// Configure the output image size in absolute pixels.
+    /// Sets the output image size in pixels.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Used alone, this sets an exact canvas size. For the square symbologies the module
-    /// pixel size then becomes <c>imageSize / matrixSize</c>, which may be fractional and can
-    /// change when the version changes; the rectangular rMQR builder fits the symbol into
-    /// the canvas with a uniform module scale instead (letterbox, the leftover pad keeps
-    /// <c>clearColor</c>).
-    /// </para>
-    /// <para>
-    /// Used with <see cref="WithModulePixelSize(int)"/>, this sets the canvas size while module pixels
-    /// define the content size (<c>matrixSize * modulePixelSize</c>).
-    /// The canvas must be at least as large as the content on both sides; extra space is padded and
-    /// the content is centered. Padding uses <c>clearColor</c> from <see cref="WithColors"/>.
-    /// </para>
+    /// On its own, the symbol fills the canvas: a square symbology divides the canvas by the matrix size, which can be fractional and shifts when the version changes, while rMQR is fitted with one uniform module scale and the leftover is padded.
+    /// Combined with <see cref="WithModulePixelSize(int)"/> this is the canvas alone, the modules decide the content size, and the content is centered with the rest padded in the clear color.
+    /// A canvas smaller than the content on either side is an error.
     /// </remarks>
-    /// <param name="width">Width in pixels (must be positive).</param>
-    /// <param name="height">Height in pixels (must be positive).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="width">Width in pixels.</param>
+    /// <param name="height">Height in pixels.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when either side is not positive.</exception>
     public TSelf WithSize(int width, int height)
     {
         if (width <= 0)
@@ -114,22 +91,14 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Configure content size from pixels-per-module.
+    /// Gives every module an exact pixel size, so the symbol comes out crisp at any version.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Sets each module to an exact integer pixel size. Content side length is
-    /// <c>matrixSize * modulePixelSize</c>.
-    /// </para>
-    /// <para>
-    /// Used alone, the output image matches the content size.
-    /// Used with <see cref="WithSize(int, int)"/>, the content is centered on the larger canvas
-    /// and padded with <c>clearColor</c>. If the canvas is smaller than the content, rendering throws.
-    /// </para>
+    /// On its own the image is exactly as large as the symbol needs.
+    /// Combined with <see cref="WithSize(int, int)"/> the content is centered on that canvas and the rest padded in the clear color.
     /// </remarks>
-    /// <param name="modulePixelSize">Pixel size per module (must be positive).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="modulePixelSize">Pixels per module.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the size is not positive.</exception>
     public TSelf WithModulePixelSize(int modulePixelSize)
     {
         if (modulePixelSize <= 0)
@@ -140,12 +109,12 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Configure the output image format and quality.
+    /// Sets the encoded image format and quality.
+    /// PNG at 100 by default.
     /// </summary>
-    /// <param name="format">The image format to use.</param>
-    /// <param name="quality">The image quality (0-100).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="format">The format to encode as.</param>
+    /// <param name="quality">Quality from 0 to 100, for formats that are lossy.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the quality is outside 0 to 100.</exception>
     public TSelf WithFormat(SKEncodedImageFormat format, int quality = 100)
     {
         if (quality is < 0 or > 100)
@@ -157,16 +126,14 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Configure the quiet zone size (light border) around the symbol.
+    /// Sets the width of the light border around the symbol.
     /// </summary>
     /// <remarks>
-    /// When not called, the builder uses its symbology's specification default:
-    /// 4 modules for Standard QR, 2 for Micro QR and rMQR. Ignored when the builder was
-    /// given pre-built symbol data (the data already carries its quiet zone).
+    /// Defaults to what the specification asks for: 4 modules for Standard QR, 2 for Micro QR and rMQR.
+    /// Ignored when the builder was given a ready-made symbol, which carries its own quiet zone.
     /// </remarks>
-    /// <param name="size">Quiet zone size in modules (0-10).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="size">Width in modules, 0 to 10.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the width is outside 0 to 10.</exception>
     public TSelf WithQuietZone(int size)
     {
         if (size is < 0 or > 10)
@@ -176,12 +143,11 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Configure the colors used in the image.
+    /// Sets the colors of the image.
     /// </summary>
-    /// <param name="codeColor">Color of modules. If null, uses black.</param>
-    /// <param name="backgroundColor">Background color. If null, uses white.</param>
-    /// <param name="clearColor">Canvas clear color. If null, uses transparent.</param>
-    /// <returns>This builder instance for method chaining.</returns>
+    /// <param name="codeColor">The dark modules. Black when omitted.</param>
+    /// <param name="backgroundColor">Behind the symbol, quiet zone included. White when omitted.</param>
+    /// <param name="clearColor">The padding around the symbol when the canvas is larger than the content. Transparent when omitted.</param>
     public TSelf WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null)
     {
         _codeColor = codeColor;
@@ -191,17 +157,15 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Configure the shape of the modules.
+    /// Draws the modules as a shape other than plain squares.
     /// </summary>
     /// <remarks>
-    /// Note: Custom module shapes reduce scan margin; sizes below 0.8 may affect readability.
-    /// On Standard QR they also affect finder patterns unless a custom finder pattern shape is
-    /// explicitly set via its <c>WithFinderPatternShape</c> option.
+    /// Every custom shape costs scan margin, and below 0.8 the symbol may stop scanning reliably, so test what you ship.
+    /// On Standard QR the shape reaches the finder patterns too, unless <c>WithFinderPatternShape</c> gives them one of their own.
     /// </remarks>
-    /// <param name="moduleShape">Shape to use for modules. If null, uses rectangles.</param>
-    /// <param name="sizePercent">Module size as a percentage of cell size (0.5-1.0). Default is 1.0 (no gaps).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <param name="moduleShape">The shape to draw. Squares when omitted.</param>
+    /// <param name="sizePercent">How much of its cell a module fills, 0.5 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the size is outside 0.5 to 1.0.</exception>
     public TSelf WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1.0f)
     {
         if (sizePercent is < 0.5f or > 1.0f)
@@ -213,10 +177,9 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Configure gradient options for the modules.
+    /// Paints the modules with a gradient instead of one solid color.
     /// </summary>
-    /// <param name="gradientOptions">Gradient configuration. If null, uses solid color.</param>
-    /// <returns>This builder instance for method chaining.</returns>
+    /// <param name="gradientOptions">The gradient to paint. Solid color when omitted.</param>
     public TSelf WithGradient(GradientOptions? gradientOptions)
     {
         _gradientOptions = gradientOptions;
@@ -226,11 +189,11 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     // ─── Output surface ───
 
     /// <summary>
-    /// Generate the symbol image and save to stream.
+    /// Renders the symbol and writes the encoded image to a stream.
     /// </summary>
-    /// <param name="output">The output stream (must be writable).</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
     public void SaveTo(Stream output)
     {
         if (output is null)
@@ -246,11 +209,10 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Generate the symbol image and write to an IBufferWriter.
-    /// This is more efficient than SaveTo(Stream) as it avoids intermediate buffering.
+    /// Renders the symbol and writes the encoded image to a buffer writer, skipping the intermediate buffering the stream overload does.
     /// </summary>
-    /// <param name="writer">The buffer writer</param>
-    /// <exception cref="ArgumentNullException"></exception>
+    /// <param name="writer">Where to write.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
     public void SaveTo(IBufferWriter<byte> writer)
     {
         if (writer is null)
@@ -265,29 +227,17 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Generate the symbol and save as SVG document to stream.
+    /// Renders the symbol as an SVG document and writes it to a stream.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The symbol is drawn as vector shapes via <see cref="SKSvgCanvas"/>, so the output scales
-    /// without quality loss. All builder options apply.
-    /// </para>
-    /// <para>
-    /// The root element carries a <c>viewBox</c>, so the document scales its content when
-    /// embedded at a different size (img element, CSS). For plain rectangular modules,
-    /// <c>shape-rendering="crispEdges"</c> is added to avoid antialiasing seams between modules;
-    /// custom shapes keep antialiasing for smooth curves.
-    /// </para>
-    /// <para>
-    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored, SVG is a vector format,
-    /// not an <see cref="SKEncodedImageFormat"/>. Size options (<see cref="WithSize(int, int)"/>,
-    /// <see cref="WithModulePixelSize(int)"/>, or the symbology's default canvas) define the SVG viewport in units.
-    /// The stream is left open after writing.
-    /// </para>
+    /// The symbol is drawn as vector shapes, so it scales without losing quality, and every builder option applies.
+    /// The root element carries a <c>viewBox</c>, so the document resizes when embedded at another size.
+    /// Plain square modules get <c>shape-rendering="crispEdges"</c> to avoid antialiasing seams; custom shapes keep antialiasing for smooth curves.
+    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> does not apply, since SVG is not a raster format; the size options set the viewport instead.
     /// </remarks>
-    /// <param name="output">The output stream (must be writable).</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentException"></exception>
+    /// <param name="output">Where to write. Left open afterwards.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
     public void SaveToSvg(Stream output)
     {
         if (output is null)
@@ -299,15 +249,14 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Generate the symbol and write as SVG document to an IBufferWriter.
+    /// Renders the symbol as an SVG document and writes it to a buffer writer.
     /// </summary>
     /// <remarks>
-    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior. Data is written in
-    /// writer-provided segments, so segmented writers (e.g. PipeWriter) work without
-    /// a single contiguous buffer for the whole document.
+    /// Renders exactly as <see cref="SaveToSvg(Stream)"/>.
+    /// The document is written in the writer own segments, so a segmented writer such as a pipe never has to hold it contiguously.
     /// </remarks>
-    /// <param name="writer">The buffer writer to write to.</param>
-    /// <exception cref="ArgumentNullException"></exception>
+    /// <param name="writer">Where to write.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
     public void SaveToSvg(IBufferWriter<byte> writer)
     {
         if (writer is null)
@@ -318,12 +267,11 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Generate the symbol and return as SVG document string.
+    /// Renders the symbol as an SVG document and returns it as a string.
     /// </summary>
     /// <remarks>
-    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior.
+    /// Renders exactly as <see cref="SaveToSvg(Stream)"/>.
     /// </remarks>
-    /// <returns>SVG document.</returns>
     public string ToSvgString()
     {
         using var stream = new MemoryStream();
@@ -332,9 +280,8 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Generate the symbol image and return as byte array.
+    /// Renders the symbol and returns the encoded image bytes.
     /// </summary>
-    /// <returns>Encoded image as byte array.</returns>
     public byte[] ToByteArray()
     {
         using var image = GenerateImage();
@@ -343,18 +290,16 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Generate the symbol image and return as SKImage.
+    /// Renders the symbol as an <see cref="SKImage"/>, which the caller disposes.
     /// </summary>
-    /// <returns>SKImage instance (caller must dispose).</returns>
     public SKImage ToImage()
     {
         return GenerateImage();
     }
 
     /// <summary>
-    /// Generate the symbol image and return as SKBitmap.
+    /// Renders the symbol as an <see cref="SKBitmap"/>, which the caller disposes.
     /// </summary>
-    /// <returns>SKBitmap instance (caller must dispose).</returns>
     public SKBitmap ToBitmap()
     {
         using var image = GenerateImage();
@@ -364,17 +309,12 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     // ─── Shared pipeline ───
 
     /// <summary>
-    /// Renders the SVG document to the output stream, injecting root element attributes
-    /// (<c>viewBox</c>, optional <c>shape-rendering</c>) while streaming.
+    /// Renders the SVG document to the output stream, injecting root element attributes (<c>viewBox</c>, optional <c>shape-rendering</c>) while streaming.
     /// </summary>
     /// <remarks>
-    /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no
-    /// <c>viewBox</c>. Without a viewBox, an SVG embedded at a different size (img element, CSS)
-    /// keeps its content at the original coordinates instead of scaling, the main reason to use
-    /// SVG in the first place. <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes
-    /// right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the
-    /// document is never buffered as a whole; if the marker is not found (unexpected upstream
-    /// format change), the document passes through unpatched.
+    /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no <c>viewBox</c>.
+    /// Without a viewBox, an SVG embedded at a different size (img element, CSS) keeps its content at the original coordinates instead of scaling, the main reason to use SVG in the first place.
+    /// <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the document is never buffered as a whole; if the marker is not found (unexpected upstream format change), the document passes through unpatched.
     /// </remarks>
     private void RenderSvg(Stream output)
     {
@@ -395,10 +335,9 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Antialiasing between adjacent vector shapes produces visible hairline seams when the SVG
-    /// is scaled to non-integer sizes. For plain rectangular modules crispEdges removes the seams;
-    /// custom shapes keep antialiasing for smooth curves. The symbology hook adds conditions the
-    /// shared options cannot see (custom finder shapes, drawn icon overlays).
+    /// Antialiasing between adjacent vector shapes produces visible hairline seams when the SVG is scaled to non-integer sizes.
+    /// For plain rectangular modules crispEdges removes the seams; custom shapes keep antialiasing for smooth curves.
+    /// The symbology hook adds conditions the shared options cannot see (custom finder shapes, drawn icon overlays).
     /// </summary>
     private bool UseCrispEdges()
     {
@@ -441,8 +380,8 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     }
 
     /// <summary>
-    /// Draws the configured symbol onto the canvas. Shared by the raster
-    /// (<see cref="GenerateImage"/>) and SVG (<see cref="SaveToSvg(Stream)"/>) paths.
+    /// Draws the configured symbol onto the canvas.
+    /// Shared by the raster (<see cref="GenerateImage"/>) and SVG (<see cref="SaveToSvg(Stream)"/>) paths.
     /// </summary>
     private void RenderContent(SKCanvas canvas, object symbol, SKImageInfo info, SKRect contentRect)
     {

@@ -2,6 +2,8 @@
 #:property TargetFramework=net10.0
 #:property ManagePackageVersionsCentrally=false
 #:package SkiaSharp.QrCode@1.0.0
+// Pinned to the released 1.0.0 package on purpose, so every identifier below is that package's
+// API, not this repository's. A rename sweep over samples/ has to skip this file.
 using SkiaSharp;
 using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;

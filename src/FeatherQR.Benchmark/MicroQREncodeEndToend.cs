@@ -1,7 +1,6 @@
 /// <summary>
 /// End-to-end Micro QR matrix encoding through the public API (MicroQRCodeGenerator).
-/// Used to measure the user-visible impact of internal kernel changes such as the
-/// Reed-Solomon ECC encoder optimization.
+/// Used to measure the user-visible impact of internal kernel changes such as the Reed-Solomon ECC encoder optimization.
 ///
 /// Scenarios:
 ///   Numeric_M2_L : M2-L (numeric capacity boundary)
@@ -26,7 +25,7 @@ public class MicroQREncodeEndToend
         // (29x29 with quiet zone) exceeds every Micro QR buffer size.
         _spanDestination = new byte[Math.Max(
             Sizing.Required(_byte.AsSpan(), MicroQREccLevel.M).BufferSize,
-            Sizing.Required(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
+            Sizing.Required(_numeric.AsSpan(), QREccLevel.L).BufferSize)];
     }
 
     // Class API (allocates the result object only)
@@ -34,19 +33,19 @@ public class MicroQREncodeEndToend
     [Benchmark(Baseline = true)]
     public MicroQRCodeData MicroQR_Numeric_M2_Encode()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_numeric.AsSpan(), MicroQREccLevel.L);
+        return MicroQRCodeGenerator.Create(_numeric.AsSpan(), MicroQREccLevel.L);
     }
 
     [Benchmark]
     public MicroQRCodeData MicroQR_Alphanumeric_M3_Encode()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_alphanumeric.AsSpan(), MicroQREccLevel.L);
+        return MicroQRCodeGenerator.Create(_alphanumeric.AsSpan(), MicroQREccLevel.L);
     }
 
     [Benchmark]
     public MicroQRCodeData MicroQR_Byte_M4_Encode()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_byte.AsSpan(), MicroQREccLevel.M);
+        return MicroQRCodeGenerator.Create(_byte.AsSpan(), MicroQREccLevel.M);
     }
 
     // Span destination (zero-allocation) variants
@@ -54,19 +53,19 @@ public class MicroQREncodeEndToend
     [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span)")]
     public int MicroQR_Numeric_M2_EncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
+        return MicroQRCodeGenerator.Create(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "MicroQR_Alphanumeric_M3_Encode (Span)")]
     public int MicroQR_Alphanumeric_M3_EncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_alphanumeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
+        return MicroQRCodeGenerator.Create(_alphanumeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "MicroQR_Byte_M4_Encode (Span)")]
     public int MicroQR_Byte_M4_EncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_byte.AsSpan(), MicroQREccLevel.M, _spanDestination);
+        return MicroQRCodeGenerator.Create(_byte.AsSpan(), MicroQREccLevel.M, _spanDestination);
     }
 
     // Standard QR version 1 with the same numeric payload, for scale reference.
@@ -74,6 +73,6 @@ public class MicroQREncodeEndToend
     [Benchmark(Description = "StandardQr_Numeric_V1_Encode (Span)")]
     public int StandardQr_Numeric_V1_EncodeSpan()
     {
-        return FeatherQR.QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L, _spanDestination);
+        return FeatherQR.QRCodeGenerator.Create(_numeric.AsSpan(), QREccLevel.L, _spanDestination);
     }
 }

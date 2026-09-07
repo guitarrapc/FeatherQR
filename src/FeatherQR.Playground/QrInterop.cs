@@ -11,13 +11,12 @@ using SkiaSharp;
 namespace FeatherQR.Playground;
 
 /// <summary>
-/// Browser-callable QR generation API. Invoked by the host script after <c>runMain()</c> completes.
+/// Browser-callable QR generation API.
+/// Invoked by the host script after <c>runMain()</c> completes.
 /// <para>
 /// CRITICAL: Every <c>[JSExport]</c> method MUST catch all exceptions internally.
-/// An unhandled exception propagating through the interop boundary causes the Mono WASM
-/// runtime to abort (exit code 1). Once aborted, the runtime cannot be restarted without
-/// a full page reload, and all subsequent calls fail with
-/// "Assert failed: .NET runtime already exited with 1".
+/// An unhandled exception propagating through the interop boundary causes the Mono WASM runtime to abort (exit code 1).
+/// Once aborted, the runtime cannot be restarted without a full page reload, and all subsequent calls fail with "Assert failed: .NET runtime already exited with 1".
 /// </para>
 /// </summary>
 public static partial class QrInterop
@@ -49,17 +48,14 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Stats of the most recent successful <see cref="Generate"/> call as a JSON string:
-    /// <c>{"qrVersion":N,"matrixSize":N,"totalMs":N,"bytes":N}</c>.
+    /// Stats of the most recent successful <see cref="Generate"/> call as a JSON string: <c>{"qrVersion":N,"matrixSize":N,"totalMs":N,"bytes":N}</c>.
     /// </summary>
     [JSExport]
     public static string GetLastMeta() => s_lastMeta;
 
     /// <summary>
     /// Generates a QR code PNG from JSON options (see <see cref="QrRequest"/>).
-    /// Returns PNG bytes on success (first byte 0x89), or UTF-8 JSON
-    /// <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side
-    /// distinguishes the two by the first byte.
+    /// Returns PNG bytes on success (first byte 0x89), or UTF-8 JSON <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side distinguishes the two by the first byte.
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
     /// <param name="customLogo">Uploaded logo image bytes; empty unless logo mode is "custom".</param>
@@ -80,9 +76,7 @@ public static partial class QrInterop
 
     /// <summary>
     /// Generates a QR code SVG document from JSON options (see <see cref="QrRequest"/>).
-    /// Returns UTF-8 SVG bytes on success (first byte '&lt;' 0x3C), or UTF-8 JSON
-    /// <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side
-    /// distinguishes the two by the first byte.
+    /// Returns UTF-8 SVG bytes on success (first byte '&lt;' 0x3C), or UTF-8 JSON <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side distinguishes the two by the first byte.
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
     /// <param name="customLogo">Uploaded logo image bytes; empty unless logo mode is "custom".</param>
@@ -121,18 +115,10 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the
-    /// result as a JSON string:
-    /// <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N}</c>
-    /// on success, <c>{"ok":false,"status":"NotDetected","totalMs":N}</c> when no QR
-    /// decodes, or <c>{"error":"..."}</c> on unexpected failure.
+    /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string: <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N}</c> on success, <c>{"ok":false,"status":"NotDetected","totalMs":N}</c> when no QR decodes, or <c>{"error":"..."}</c> on unexpected failure.
     /// <para>
-    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then
-    /// rMQR (<c>"symbology"</c> reports which one matched; rMQR has a single fixed mask, so
-    /// <c>"maskPattern"</c> is -1 for it): clean, screen-rendered images
-    /// (arbitrary rotation, mirroring and mild perspective included). Heavily stylized codes
-    /// (low-contrast colors, inverted palettes, strong decoration) may report
-    /// NotDetected even when a computer-vision grade phone scanner reads them.
+    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then rMQR (<c>"symbology"</c> reports which one matched; rMQR has a single fixed mask, so <c>"maskPattern"</c> is -1 for it): clean, screen-rendered images (arbitrary rotation, mirroring and mild perspective included).
+    /// Heavily stylized codes (low-contrast colors, inverted palettes, strong decoration) may report NotDetected even when a computer-vision grade phone scanner reads them.
     /// </para>
     /// </summary>
     /// <param name="imageBytes">Encoded image file bytes.</param>
@@ -265,9 +251,9 @@ public static partial class QrInterop
 
     private static QRCodeData CreateStandardData(QrRequest request)
     {
-        return QRCodeGenerator.CreateQrCode(request.Content.AsSpan(), ParseEcc(request.Ecc), new QRCodeGeneratorOptions
+        return QRCodeGenerator.Create(request.Content.AsSpan(), ParseEcc(request.Ecc), new QRCodeGeneratorOptions
         {
-            Version = request.Version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(request.Version),
+            Version = ParseVersionRange(request.Version),
             QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
             BoostEccLevel = request.EccBoost,
         });
@@ -275,7 +261,7 @@ public static partial class QrInterop
 
     private static RmQRCodeData CreateRmData(QrRequest request)
     {
-        return RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ParseRmEcc(request.Ecc), new RmQRCodeGeneratorOptions
+        return RmQRCodeGenerator.Create(request.Content.AsSpan(), ParseRmEcc(request.Ecc), new RmQRCodeGeneratorOptions
         {
             Version = ParseRmVersion(request.Version),
             FitStrategy = ParseRmFitStrategy(request.FitStrategy),
@@ -285,9 +271,8 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Builds the rMQR image builder from request options. The requested size is
-    /// the image width; the height follows the rectangular symbol. rMQR has no icon
-    /// overlay or finder pattern shape options, the page hides those controls.
+    /// Builds the rMQR image builder from request options.
+    /// The requested size is the image width; the height follows the rectangular symbol. rMQR has no icon overlay or finder pattern shape options, the page hides those controls.
     /// </summary>
     private static RmQRCodeImageBuilder CreateRmBuilder(QrRequest request, RmQRCodeData data)
     {
@@ -331,17 +316,19 @@ public static partial class QrInterop
 
     private static MicroQRCodeData CreateMicroData(QrRequest request)
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(
+        return MicroQRCodeGenerator.Create(
             request.Content.AsSpan(),
             ParseMicroEcc(request.Ecc),
-            ParseMicroVersion(request.Version),
-            Math.Clamp(request.QuietZone, 0, 10));
+            new MicroQRCodeGeneratorOptions
+            {
+                Version = ParseMicroVersion(request.Version),
+                QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+            });
     }
 
     /// <summary>
-    /// Builds the Micro QR image builder from request options. Micro QR has no icon
-    /// overlay or finder pattern shape options (single finder, no ECC headroom), so
-    /// those request fields are ignored, the page hides the controls.
+    /// Builds the Micro QR image builder from request options.
+    /// Micro QR has no icon overlay or finder pattern shape options (single finder, no ECC headroom), so those request fields are ignored, the page hides the controls.
     /// </summary>
     private static MicroQRCodeImageBuilder CreateMicroBuilder(QrRequest request, MicroQRCodeData data)
     {
@@ -371,6 +358,12 @@ public static partial class QrInterop
         _ => throw new ArgumentException($"Unknown Micro QR version '{version}'. Use 1-4 (M1-M4) or -1 for automatic selection."),
     };
 
+    /// <summary>
+    /// The request carries -1 for "pick the smallest version that fits", which <see cref="QRVersionRange"/> spells as <see cref="QRVersionRange.Any"/>; it deliberately rejects -1 so a defaulted field cannot pass for automatic.
+    /// </summary>
+    private static QRVersionRange ParseVersionRange(int version)
+        => version == -1 ? QRVersionRange.Any : QRVersionRange.Exactly(version);
+
     /// <summary>Builds the image builder from request options; shared by preview and benchmark rendering.</summary>
     private static QRCodeImageBuilder CreateBuilder(QrRequest request, QRCodeData data, byte[] customLogo)
     {
@@ -387,16 +380,11 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Runs one benchmark batch and returns stats as a JSON string:
-    /// <c>{"count":N,"elapsedMs":N,"qrVersion":N,"matrixSize":N,"bytesTotal":N}</c>,
-    /// or <c>{"error":"..."}</c> on failure. The page script chains batches so the UI
-    /// stays responsive and can show progress / cancel.
+    /// Runs one benchmark batch and returns stats as a JSON string: <c>{"count":N,"elapsedMs":N,"qrVersion":N,"matrixSize":N,"bytesTotal":N}</c>, or <c>{"error":"..."}</c> on failure.
+    /// The page script chains batches so the UI stays responsive and can show progress / cancel.
     /// <para>
     /// Content is made unique per iteration by appending <c>" #&lt;index+1&gt;"</c>.
-    /// Mode <c>encode</c> exercises the allocation-free
-    /// <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>
-    /// overload only; mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode)
-    /// with the current visual options.
+    /// Mode <c>encode</c> exercises the allocation-free <see cref="QRCodeGenerator.Create(ReadOnlySpan{char}, QREccLevel, Span{byte}, bool, EciMode, int, int)"/> overload only; mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode) with the current visual options.
     /// </para>
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
@@ -450,9 +438,8 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Tight loop over the zero-allocation span API. The per-iteration text is composed in a
-    /// pooled char buffer (no string allocation) and the module matrix is written into a
-    /// pooled byte buffer sized for QR version 40, so the loop itself allocates nothing.
+    /// Tight loop over the zero-allocation span API.
+    /// The per-iteration text is composed in a pooled char buffer (no string allocation) and the module matrix is written into a pooled byte buffer sized for QR version 40, so the loop itself allocates nothing.
     /// </summary>
     private static string BenchmarkEncode(QrRequest request, int startIndex, int count)
     {
@@ -478,7 +465,7 @@ public static partial class QrInterop
             {
                 (startIndex + i + 1).TryFormat(textBuffer.AsSpan(prefixLength + 2), out var digits);
                 var text = textBuffer.AsSpan(0, prefixLength + 2 + digits);
-                written = QRCodeGenerator.CreateQrCode(text, ecc, moduleBuffer, requestedVersion: request.Version, quietZoneSize: quietZone);
+                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -509,7 +496,7 @@ public static partial class QrInterop
         for (var i = 0; i < count; i++)
         {
             var text = string.Create(CultureInfo.InvariantCulture, $"{request.Content} #{startIndex + i + 1}");
-            var data = QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, requestedVersion: request.Version, quietZoneSize: quietZone);
+            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
             qrVersion = data.Version;
             matrixSize = data.Size;
             bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
@@ -522,9 +509,8 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Tight loop over the zero-allocation Micro QR span API. Micro QR capacity is
-    /// tiny (≤ 35 characters), so unlike the Standard QR benchmark the content is
-    /// NOT suffixed with a unique index, appending one would overflow most payloads.
+    /// Tight loop over the zero-allocation Micro QR span API.
+    /// Micro QR capacity is tiny (≤ 35 characters), so unlike the Standard QR benchmark the content is NOT suffixed with a unique index, appending one would overflow most payloads.
     /// </summary>
     private static string BenchmarkMicroEncode(QrRequest request, int count)
     {
@@ -542,7 +528,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                written = MicroQRCodeGenerator.CreateMicroQRCode(request.Content.AsSpan(), ecc, moduleBuffer, version, quietZone);
+                written = MicroQRCodeGenerator.Create(request.Content.AsSpan(), ecc, moduleBuffer, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -560,8 +546,7 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Tight loop over the zero-allocation rMQR span API (same content every iteration,
-    /// as for Micro QR: capacities are small).
+    /// Tight loop over the zero-allocation rMQR span API (same content every iteration, as for Micro QR: capacities are small).
     /// </summary>
     private static string BenchmarkRmEncode(QrRequest request, int count)
     {
@@ -582,7 +567,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                bytesTotal += RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ecc, moduleBuffer, rmOptions);
+                bytesTotal += RmQRCodeGenerator.Create(request.Content.AsSpan(), ecc, moduleBuffer, rmOptions);
             }
             stopwatch.Stop();
 
@@ -640,12 +625,12 @@ public static partial class QrInterop
             $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
     }
 
-    private static ECCLevel ParseEcc(string ecc) => ecc.ToUpperInvariant() switch
+    private static QREccLevel ParseEcc(string ecc) => ecc.ToUpperInvariant() switch
     {
-        "L" => ECCLevel.L,
-        "M" => ECCLevel.M,
-        "Q" => ECCLevel.Q,
-        "H" => ECCLevel.H,
+        "L" => QREccLevel.L,
+        "M" => QREccLevel.M,
+        "Q" => QREccLevel.Q,
+        "H" => QREccLevel.H,
         _ => throw new ArgumentException($"Unknown ECC level '{ecc}'. Use L, M, Q or H."),
     };
 
@@ -716,8 +701,7 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Decodes the uploaded logo, caching the bitmap keyed by content so slider-driven
-    /// realtime regeneration does not re-decode the same image on every call.
+    /// Decodes the uploaded logo, caching the bitmap keyed by content so slider-driven realtime regeneration does not re-decode the same image on every call.
     /// </summary>
     private static SKBitmap? DecodeCustomLogo(byte[] bytes)
     {
@@ -735,8 +719,8 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Draws the built-in logo: an Instagram-style camera glyph on a warm-to-purple
-    /// gradient rounded square. Rendered with SkiaSharp itself, so no binary asset is shipped.
+    /// Draws the built-in logo: an Instagram-style camera glyph on a warm-to-purple gradient rounded square.
+    /// Rendered with SkiaSharp itself, so no binary asset is shipped.
     /// </summary>
     private static SKBitmap CreateDefaultLogo()
     {
@@ -779,9 +763,7 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// The library's capacity errors point developers at the API ("use Standard QR
-    /// (QRCodeGenerator)"); in the playground the actionable control is the
-    /// Symbology selector, so the remedy is rephrased for the page.
+    /// The library's capacity errors point developers at the API ("use Standard QR (QRCodeGenerator)"); in the playground the actionable control is the Symbology selector, so the remedy is rephrased for the page.
     /// </summary>
     private static string ToUserFacingMessage(Exception ex)
     {

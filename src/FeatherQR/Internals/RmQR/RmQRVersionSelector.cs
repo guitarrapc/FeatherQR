@@ -1,11 +1,8 @@
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR version fit (ISO/IEC 23941 capacities, design record
-/// specs/rmqr-encoder.md): exact requested version, or the best of the versions
-/// that hold the content according to an <see cref="RmQRFitStrategy"/>, optionally
-/// restricted to one <see cref="RmQRHeight"/>. Also owns the capacity arithmetic
-/// (required bits per mode, its inverse for error messages).
+/// rMQR version fit (ISO/IEC 23941 capacities, design record specs/rmqr-encoder.md): exact requested version, or the best of the versions that hold the content according to an <see cref="RmQRFitStrategy"/>, optionally restricted to one <see cref="RmQRHeight"/>.
+/// Also owns the capacity arithmetic (required bits per mode, its inverse for error messages).
 /// </summary>
 internal static class RmQRVersionSelector
 {
@@ -14,16 +11,12 @@ internal static class RmQRVersionSelector
     private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
 
     /// <summary>
-    /// Total bit count for header (3-bit mode + count indicator) plus data. The
-    /// count indicator range never binds below the bit capacity for any
-    /// version/mode (verified by RmQRConstantsUnitTest), so no range check is needed.
+    /// Total bit count for header (3-bit mode + count indicator) plus data.
+    /// The count indicator range never binds below the bit capacity for any version/mode (verified by RmQRConstantsUnitTest), so no range check is needed.
     /// </summary>
     /// <remarks>
-    /// Priced in <see cref="long"/>: Byte mode costs <c>8 × dataLength</c>, which wraps
-    /// <see cref="int"/> for a span past ~268M units and would read as a fit. Widening
-    /// keeps the mode switch on every path, which a length fast-path in
-    /// <see cref="Fits(RmQRVersion, RmQREccLevel, EncodingMode, int)"/> would skip for
-    /// exactly the lengths that need it most.
+    /// Priced in <see cref="long"/>: Byte mode costs <c>8 × dataLength</c>, which wraps <see cref="int"/> for a span past ~268M units and would read as a fit.
+    /// Widening keeps the mode switch on every path, which a length fast-path in <see cref="Fits(RmQRVersion, RmQREccLevel, EncodingMode, int)"/> would skip for exactly the lengths that need it most.
     /// </remarks>
     public static long GetRequiredBits(RmQRVersion version, EncodingMode mode, int dataLength)
     {
@@ -40,8 +33,8 @@ internal static class RmQRVersionSelector
 
     /// <inheritdoc cref="GetRequiredBits(RmQRVersion, EncodingMode, int)"/>
     /// <summary>
-    /// Total bit count including the optional rMQR ECI prefix. The supported
-    /// ISO-8859-1 and UTF-8 assignments both use the one-byte designator form.
+    /// Total bit count including the optional rMQR ECI prefix.
+    /// The supported ISO-8859-1 and UTF-8 assignments both use the one-byte designator form.
     /// </summary>
     public static long GetRequiredBits(RmQRVersion version, EncodingMode mode, int dataLength, EciMode eciMode)
     {
@@ -65,9 +58,7 @@ internal static class RmQRVersionSelector
         => GetRequiredBits(version, mode, dataLength, eciMode) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
 
     /// <summary>
-    /// Largest data length (digits / characters / bytes) that fits a version × ECC × mode,
-    /// the inverse of <see cref="GetRequiredBits(RmQRVersion, EncodingMode, int)"/> against
-    /// the data bit capacity.
+    /// Largest data length (digits / characters / bytes) that fits a version × ECC × mode, the inverse of <see cref="GetRequiredBits(RmQRVersion, EncodingMode, int)"/> against the data bit capacity.
     /// </summary>
     public static int GetMaxDataLength(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode)
     {
@@ -125,10 +116,9 @@ internal static class RmQRVersionSelector
     }
 
     /// <summary>
-    /// Fit-strategy comparator: true when <paramref name="candidate"/> should replace
-    /// <paramref name="incumbent"/>. MinimizeArea: fewer modules, ties → smaller
-    /// height; MinimizeWidth: smaller width, ties → smaller height; MinimizeHeight:
-    /// smaller height, ties → smaller width. Equal versions never replace each other.
+    /// Fit-strategy comparator: true when <paramref name="candidate"/> should replace <paramref name="incumbent"/>.
+    /// MinimizeArea: fewer modules, ties → smaller height; MinimizeWidth: smaller width, ties → smaller height; MinimizeHeight: smaller height, ties → smaller width.
+    /// Equal versions never replace each other.
     /// </summary>
     public static bool IsBetter(RmQRVersion candidate, RmQRVersion incumbent, RmQRFitStrategy strategy)
     {
@@ -155,9 +145,8 @@ internal static class RmQRVersionSelector
     }
 
     /// <summary>
-    /// Selects the version for the analyzed content. Validates every enum argument;
-    /// throws <see cref="ArgumentException"/> with an actionable message (actual
-    /// length, applicable maximum in mode units, remedy) when the content does not fit.
+    /// Selects the version for the analyzed content.
+    /// Validates every enum argument; throws <see cref="ArgumentException"/> with an actionable message (actual length, applicable maximum in mode units, remedy) when the content does not fit.
     /// </summary>
     public static RmQRVersion Select(EncodingMode mode, int dataLength, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
     {
@@ -205,8 +194,7 @@ internal static class RmQRVersionSelector
     }
 
     /// <summary>
-    /// The actionable "content is too long" error, built off the success path: the
-    /// applicable maximum in mode units, and which constraint produced it.
+    /// The actionable "content is too long" error, built off the success path: the applicable maximum in mode units, and which constraint produced it.
     /// </summary>
     private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRHeight? height)
     {
@@ -307,11 +295,9 @@ internal static class RmQRVersionSelector
     }
 
     /// <summary>
-    /// Non-throwing automatic fit: the same table scan the <c>Select</c> overloads run,
-    /// reporting "nothing fits" instead of throwing. <see cref="RmQRSegmentPlanner"/>
-    /// needs the answer without the exception, because content that overflows every
-    /// version in one mode can still fit once the modes are mixed. Arguments must
-    /// already be validated (see <see cref="ValidateFitArguments"/>).
+    /// Non-throwing automatic fit: the same table scan the <c>Select</c> overloads run, reporting "nothing fits" instead of throwing.
+    /// <see cref="RmQRSegmentPlanner"/> needs the answer without the exception, because content that overflows every version in one mode can still fit once the modes are mixed.
+    /// Arguments must already be validated (see <see cref="ValidateFitArguments"/>).
     /// </summary>
     public static bool TrySelectAutoFit(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion version)
     {
@@ -333,8 +319,7 @@ internal static class RmQRVersionSelector
     }
 
     /// <summary>
-    /// <c>Select</c> without the capacity throw: same argument validation, but a content
-    /// that does not fit returns false with <paramref name="version"/> at <c>default</c>.
+    /// <c>Select</c> without the capacity throw: same argument validation, but a content that does not fit returns false with <paramref name="version"/> at <c>default</c>.
     /// </summary>
     public static bool TrySelect(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion version)
     {
@@ -357,23 +342,19 @@ internal static class RmQRVersionSelector
 
     /// <summary>
     /// The auto-fit scan order for a strategy: version numbers (1-32), best first.
-    /// Exposed for <see cref="RmQRSegmentPlanner"/>, which walks the same ranking but
-    /// with a per-version bit cost that no table can precompute.
+    /// Exposed for <see cref="RmQRSegmentPlanner"/>, which walks the same ranking but with a per-version bit cost that no table can precompute.
     /// </summary>
     public static ReadOnlySpan<byte> GetFitOrder(RmQRFitStrategy fitStrategy) => FitOrders[(int)fitStrategy];
 
     /// <summary>
-    /// Rank mask for a height constraint over <see cref="GetFitOrder"/>: bit
-    /// <c>rank</c> is set when the version at that rank has the requested height.
+    /// Rank mask for a height constraint over <see cref="GetFitOrder"/>: bit <c>rank</c> is set when the version at that rank has the requested height.
     /// All bits are set when the height is unconstrained.
     /// </summary>
     public static uint GetFitHeightMask(RmQRFitStrategy fitStrategy, RmQRHeight? height)
         => height is { } h ? FitHeightMasks[(int)fitStrategy][((int)h - 7) / 2] : uint.MaxValue;
 
     /// <summary>
-    /// The argument validation both <c>Select</c> overloads perform before they look
-    /// at capacity, in the same order, so a caller that needs to try something else
-    /// before letting <c>Select</c> throw still reports argument errors identically.
+    /// The argument validation both <c>Select</c> overloads perform before they look at capacity, in the same order, so a caller that needs to try something else before letting <c>Select</c> throw still reports argument errors identically.
     /// </summary>
     public static void ValidateFitArguments(RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRVersion? requestedVersion, EciMode eciMode)
     {

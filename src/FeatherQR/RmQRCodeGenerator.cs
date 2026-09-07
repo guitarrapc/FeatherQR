@@ -2,57 +2,87 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR;
 
 /// <summary>
-/// rMQR Code (ISO/IEC 23941, R7x43-R17x139) generator: text → rectangular module
-/// matrix. Sibling of <see cref="QRCodeGenerator"/> and <see cref="MicroQRCodeGenerator"/>
-/// with rMQR-typed version, ECC and fit parameters.
+/// Encodes text into a rectangular rMQR code (ISO/IEC 23941), versions R7x43 to R17x139.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Version selection: an exact <see cref="RmQRVersion"/>, or automatic fit among
-/// the versions that hold the content by <see cref="RmQRFitStrategy"/> (default
-/// <see cref="RmQRFitStrategy.MinimizeArea"/>: fewest modules, the choice both
-/// reference encoders make; note it can prefer a taller, narrower symbol, e.g.
-/// 12 digits at M give R11x27 (297 modules) rather than R7x43 (301); use
-/// <see cref="RmQRFitStrategy.MinimizeHeight"/> or a fixed <see cref="RmQRHeight"/>
-/// for the flattest symbol), optionally restricted to one height.
-/// </para>
-/// <para>
-/// Modes: Numeric, Alphanumeric and Byte. Byte mode emits ECI assignment 3 for
-/// ISO-8859-1 and assignment 26 for UTF-8 (automatically selected by default, or
-/// explicitly requested). Kanji is not written, use UTF-8 instead;
-/// <see cref="RmQRCodeDecoder"/> does read the Kanji segments other encoders produce,
-/// so the two directions are deliberately asymmetric.
-/// The quiet zone defaults to the ISO/IEC 23941 value of 2 modules.
-/// </para>
+/// Pick a version outright, or let <see cref="RmQRFitStrategy"/> choose among those that hold the content, optionally within one height.
+/// The default <see cref="RmQRFitStrategy.MinimizeArea"/> takes the fewest modules, which can mean a taller and narrower code: 12 digits at level M give R11x27 (297 modules) rather than R7x43 (301).
+/// Use <see cref="RmQRFitStrategy.MinimizeHeight"/> or a fixed <see cref="RmQRHeight"/> when you want the flattest code instead.
+/// Writes Numeric, Alphanumeric and Byte mode, the last with ECI assignment 3 for ISO-8859-1 or 26 for UTF-8.
+/// Kanji mode is never written, so Japanese text goes out as UTF-8; <see cref="RmQRCodeDecoder"/> does read Kanji that other encoders produce.
+/// The quiet zone defaults to the 2 modules ISO/IEC 23941 asks for.
 /// </remarks>
 public static class RmQRCodeGenerator
 {
+    // -----------------------------------------------------
+    // rMQR Data Structure
+    // -----------------------------------------------------
+    //
+    // 1. Header
+    // ┌─────────────────┬───────────────┬────────────────┐
+    // │ ECI (0 or 11b)  │ Mode (3b)     │ Count (per ver)│
+    // └─────────────────┴───────────────┴────────────────┘
+    //   The ECI header is 11 bits, not Standard QR's 12: the rMQR mode
+    //   indicator is 3 bits wide, so it is 3 + 8 designator bits.
+    // 2. Data
+    // ┌──────────────────────────────────────────────────┐
+    // │ Encoded data (variable length)                   │
+    // └──────────────────────────────────────────────────┘
+    // 3. Padding
+    // ┌──────┬────────┬──────────────────────────────────┐
+    // │ Term │ Align  │ Pad bytes (0xEC, 0x11...)        │
+    // │ (3b) │ (0-7b) │ (until dataCapacityBits reached) │
+    // └──────┴────────┴──────────────────────────────────┘
+    // 4. Final message (what actually reaches the matrix)
+    // ┌────────────────────────────────┬─────────────────┐
+    // │ Interleaved data + ECC blocks  │ Remainder bits  │
+    // └────────────────────────────────┴─────────────────┘
+
     private const int MaxDataCodewords = 152;   // R17x139-M
     private const int MaxFinalMessageBytes = 233; // R17x139: 232 codewords + remainder byte
 
     /// <summary>
-    /// Creates an rMQR code from the provided plain text.
+    /// Encodes text into an rMQR code.
     /// </summary>
-    /// <param name="plainText">The text to encode.</param>
-    /// <param name="eccLevel">Error correction level (M or H).</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
+    /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
-    /// <returns>An <see cref="RmQRCodeData"/> containing the generated matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the data does not fit or the options contradict each other.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for invalid version / ECC / strategy / height / quiet zone / segmentation / ECI values.</exception>
-    public static RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
-        => CreateRmQRCode(plainText.AsSpan(), eccLevel, in options);
-
-    /// <inheritdoc cref="CreateRmQRCode(string, RmQREccLevel, in RmQRCodeGeneratorOptions)"/>
-    /// <param name="textSpan">The text span to encode.</param>
-    /// <param name="eccLevel">Error correction level (M or H).</param>
-    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
-    public static RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
+    /// <returns>The module matrix.</returns>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
+    public static RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
     {
+        // rMQR generation process:
+        // ------------------------------------------------
+        // 1. Validate input parameters (quiet zone size, version/height agreement)
+        // 2. Prepare configuration:
+        //    - Analyze text to determine the encoding mode and the ECI to declare
+        //    - Select the version: a pinned RmQRVersion, or the best fit among those
+        //      that hold the content by RmQRFitStrategy, optionally within one RmQRHeight
+        // 3. Encode data codewords:
+        //    - Write the ECI header (11 bits) when a charset is declared
+        //    - Write mode indicator (3 bits) and character count indicator
+        //    - Write the data bits
+        //    - Add padding (terminator, byte alignment, 0xEC/0x11 pattern)
+        // 4. Assemble the final message:
+        //    - Reed-Solomon per block, then interleave data and ECC codewords
+        //    - Append the version's remainder bits
+        // 5. Place the symbol:
+        //    - Place fixed patterns (finder 7x7 top-left, sub-finder 5x5 bottom-right,
+        //      timing on all four edges, corner patterns, vertical timing columns with
+        //      their 3x3 alignment patterns)
+        //    - Place the final message in the two-column zigzag, walking column pairs
+        //      leftward from the right edge
+        //    - Apply THE mask: rMQR defines one fixed pattern, dark where
+        //      ((row / 2) + (col / 3)) is even, so there is nothing to score or select
+        //    - Place both format information copies (finder side and sub-finder side)
+        // 6. Return RmQRCodeData (quiet zone handled by RmQRCodeData class)
+
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
         // One compare on the default path; validation of the value itself lives in the
@@ -83,21 +113,18 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Creates an rMQR code and writes the module matrix into the caller-provided
-    /// buffer without per-call heap allocation.
+    /// Encodes text into the buffer you provide, without allocating.
     /// </summary>
     /// <remarks>
-    /// Output format matches the other generators: one byte per module (0 = light,
-    /// 1 = dark), flat row-major over the full width, quiet zone included. Use
-    /// <see cref="TryGetRequiredBufferSize"/> to size the destination.
+    /// One byte per module, 0 light and 1 dark, row-major over the full width with the quiet zone included, so the module at (row, col) is <c>destination[row * width + col]</c>.
     /// </remarks>
-    /// <param name="textSpan">The text span to encode.</param>
-    /// <param name="eccLevel">Error correction level (M or H).</param>
-    /// <param name="destination">Destination buffer; at least <see cref="RmQRCodeCalculatedSize.BufferSize"/> bytes.</param>
-    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options, since they can select different versions.</param>
-    /// <returns>The number of bytes written (width × height, quiet zone included).</returns>
-    /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the options contradict each other.</exception>
-    public static int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default)
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
+    /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
+    /// <param name="destination">Where to write the matrix. Needs <see cref="RmQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
+    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
+    /// <returns>The number of bytes written.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, or when the options contradict each other.</exception>
+    public static int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default)
     {
         var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
@@ -138,30 +165,23 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Calculates the required buffer size, dimensions and version for encoding the
-    /// specified text as an rMQR code, reporting a content overflow as <c>false</c>
-    /// rather than as an exception.
+    /// Reports how large the rMQR code will be, or <c>false</c> when the content does not fit.
     /// </summary>
-    /// <param name="text">The text to encode.</param>
-    /// <param name="eccLevel">Error correction level (M or H).</param>
-    /// <param name="size">Dimensions and version on success; <c>default</c> when the content does not fit.</param>
+    /// <param name="text">The text to size for. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
+    /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
+    /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings.</param>
     /// <returns><c>true</c> when the content fits.</returns>
     /// <remarks>
     /// <para>
-    /// <c>false</c> means the content does not fit, and nothing else: argument errors
-    /// throw (rationale: specs/rmqr-encoder.md). rMQR holds 5-150 bytes, so an overflow
-    /// is an ordinary answer here rather than a defect, which is why this is the only
-    /// sizing method on this type.
+    /// <c>false</c> means that and only that; bad arguments still throw. rMQR holds 5 to 150 bytes, so not fitting is an ordinary answer here, which is why sizing is only offered in this form.
     /// </para>
     /// <para>
-    /// Pass the same <paramref name="options"/> you will encode with: segmentation and
-    /// ECI can select different versions, so a buffer sized for one can be too small for
-    /// the other.
+    /// Pass the options you will encode with, since segmentation and ECI can pick different versions and a buffer sized for one can be too small for the other.
     /// </para>
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="RmQRCodeGeneratorOptions.QuietZoneSize"/> is out of range, or when <paramref name="eccLevel"/>, <see cref="RmQRCodeGeneratorOptions.Version"/>, <see cref="RmQRCodeGeneratorOptions.FitStrategy"/> or <see cref="RmQRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
-    /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1. Content that does not fit is <em>not</em> an exception here; it is <c>false</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an out-of-range quiet zone, or an undefined level, version, fit strategy or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default)
     {
         size = default;
@@ -191,9 +211,8 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Mixed-mode fit without the "content is too long" throw. Mirrors
-    /// <see cref="PrepareConfigurationOptimal"/>, fallback included, so the version
-    /// reported here is the version an encode would use.
+    /// Mixed-mode fit without the "content is too long" throw.
+    /// Mirrors <see cref="PrepareConfigurationOptimal"/>, fallback included, so the version reported here is the version an encode would use.
     /// </summary>
     private static bool TryPlanOptimalVersion(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRSegmentation segmentation, out RmQRVersion version)
     {
@@ -222,8 +241,7 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Everything the mixed-mode entry points must reject, gathered off the default
-    /// path so <see cref="RmQRSegmentation.Single"/> pays only one compare.
+    /// Everything the mixed-mode entry points must reject, gathered off the default path so <see cref="RmQRSegmentation.Single"/> pays only one compare.
     /// </summary>
     private static void ValidateOptimalEntry(ReadOnlySpan<char> textSpan, EciMode eciMode, RmQRSegmentation segmentation)
     {
@@ -255,9 +273,8 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Runs encode → ECC + interleave → placement into a byte-per-module core window
-    /// (width × height, rows <paramref name="stride"/> bytes apart, every core module
-    /// written; stride == width for a packed core). Allocation-free: fixed stack budgets.
+    /// Runs encode → ECC + interleave → placement into a byte-per-module core window (width × height, rows <paramref name="stride"/> bytes apart, every core module written; stride == width for a packed core).
+    /// Allocation-free: fixed stack budgets.
     /// </summary>
     private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, Span<byte> core, int stride)
     {
@@ -363,10 +380,8 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Analyzes the content, fits a version under mixed-mode segmentation, and
-    /// writes the plan. A zero <paramref name="segmentCount"/> means the single-mode
-    /// stream is what gets emitted, which is the case whenever mixing would not
-    /// shrink the symbol.
+    /// Analyzes the content, fits a version under mixed-mode segmentation, and writes the plan.
+    /// A zero <paramref name="segmentCount"/> means the single-mode stream is what gets emitted, which is the case whenever mixing would not shrink the rMQR code.
     /// </summary>
     private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<ModeSegment> plan, out int segmentCount)
     {

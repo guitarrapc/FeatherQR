@@ -61,7 +61,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern2_static_stream.png");
 
     using var stream = File.OpenWrite(path);
-    QRCodeImageBuilder.SavePng(content, stream, ECCLevel.H, size: 512);
+    QRCodeImageBuilder.SavePng(content, stream, QREccLevel.H, size: 512);
 
     Console.WriteLine($"  ✓ Saved to: {path}");
 }
@@ -78,7 +78,7 @@ Console.WriteLine("""
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithSize(1024, 1024)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(2);
 
     var pngBytes = qrBuilder.ToByteArray();
@@ -100,7 +100,7 @@ Console.WriteLine("""
 
     var pngBytes = new QRCodeImageBuilder(content)
         .WithModulePixelSize(10)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
         .ToByteArray();
 
@@ -125,7 +125,7 @@ Console.WriteLine("""
         .WithModulePixelSize(8)
         .WithSize(512, 512)
         .WithColors(clearColor: SKColor.Parse("E8EEF5"))
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
         .ToByteArray();
 
@@ -147,7 +147,7 @@ Console.WriteLine("""
 
     new QRCodeImageBuilder(content)
         .WithSize(800, 800)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithColors(
             codeColor: SKColor.Parse("000080"),      // Navy
             backgroundColor: SKColor.Parse("FFE4B5"), // Moccasin
@@ -169,7 +169,7 @@ Console.WriteLine("""
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithSize(800, 800)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
         .WithColors(codeColor: SKColors.DarkBlue);
 
@@ -198,7 +198,7 @@ Console.WriteLine("""
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithSize(800, 800)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithGradient(gradient)
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f);
 
@@ -229,7 +229,7 @@ Console.WriteLine("""
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithModulePixelSize(12)
-        .WithErrorCorrection(ECCLevel.H) // H recommended for icons
+        .WithErrorCorrection(QREccLevel.H) // H recommended for icons
         .WithColors(codeColor: SKColors.DarkGreen, backgroundColor: SKColors.LightYellow)
         .WithIcon(icon);
 
@@ -269,7 +269,7 @@ Console.WriteLine("""
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithSize(1024, 1024)
         .WithFormat(SKEncodedImageFormat.Png, quality: 100)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithEciMode(EciMode.Utf8)
         .WithQuietZone(3)
         .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
@@ -285,17 +285,17 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
-// QRCodeRenderer Pattern (Low-level)
+// SymbolRenderer Pattern (Low-level)
 Console.WriteLine("""
-    Pattern 9: QRCodeRenderer Pattern (Low-level)
+    Pattern 9: SymbolRenderer Pattern (Low-level)
       - Best for: Advanced canvas control, custom rendering logic
-      - API: QRCodeGenerator + QRCodeRenderer.Render()
+      - API: QRCodeGenerator + SymbolRenderer.Render()
     """);
 {
     var path = Path.Combine(outputDir, "pattern9_renderer.png");
 
     // Generate QR data
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, quietZoneSize: 4);
+    var qrData = QRCodeGenerator.Create(content, QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
 
     // Create canvas
     var info = new SKImageInfo(800, 800);
@@ -307,7 +307,7 @@ Console.WriteLine("""
     var icon = IconData.FromImage(logo, iconBorderWidth: 9);
     var gradient = new GradientOptions([SKColors.DarkViolet, SKColors.DeepPink], GradientDirection.TopLeftToBottomRight);
 
-    QRCodeRenderer.Render(
+    SymbolRenderer.Render(
         canvas,
         SKRect.Create(0, 0, info.Width, info.Height),
         qrData,
@@ -338,7 +338,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern10_canvas_direct.png");
 
     // Generate QR data
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: 4);
+    var qrData = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
 
     // Create canvas
     var info = new SKImageInfo(600, 600);
@@ -389,7 +389,7 @@ Console.WriteLine("""
     using var fileStream = File.Create(path);
     var bufferWriter = System.IO.Pipelines.PipeWriter.Create(fileStream);
 
-    QRCodeImageBuilder.WritePng(content, bufferWriter, ECCLevel.M, size: 512);
+    QRCodeImageBuilder.WritePng(content, bufferWriter, QREccLevel.M, size: 512);
     bufferWriter.Complete();
 
     Console.WriteLine($"  ✓ Saved to: {path}");
@@ -424,7 +424,7 @@ Console.WriteLine("""
 
     // One-liner helper (same formats)
     var jpegBytes = QRCodeImageBuilder.GetImageBytes(
-        content, SKEncodedImageFormat.Jpeg, ECCLevel.M, size: 512, quality: 90);
+        content, SKEncodedImageFormat.Jpeg, QREccLevel.M, size: 512, quality: 90);
     var oneLinerPath = Path.Combine(outputDir, "pattern12_format_oneliner.jpg");
     File.WriteAllBytes(oneLinerPath, jpegBytes);
     Console.WriteLine($"  ✓ GetImageBytes(Jpeg): {oneLinerPath}");
@@ -479,7 +479,7 @@ Console.WriteLine("""
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithModulePixelSize(12)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
         .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
@@ -498,7 +498,7 @@ Console.WriteLine();
 Console.WriteLine("""
     Pattern 15: Instagram-style with Custom Frame
       - Best for: Branded QR codes with text overlay
-      - API: QRCodeRenderer + Custom canvas drawing
+      - API: SymbolRenderer + Custom canvas drawing
     """);
 {
     var path = Path.Combine(outputDir, "pattern15_instagram_frame.png");
@@ -548,7 +548,7 @@ Console.WriteLine("""
 
     // Generate QR data
     {
-        var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, quietZoneSize: 2);
+        var qrData = QRCodeGenerator.Create(content, QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 2 });
 
         // Instagram gradient
         var instagramGradient = new GradientOptions([
@@ -566,7 +566,7 @@ Console.WriteLine("""
         var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2, maxCoreOccupancyPercent: 40);
 
         var qrRect = SKRect.Create(sidePadding, topPadding, qrSize, qrSize);
-        QRCodeRenderer.Render(
+        SymbolRenderer.Render(
             canvas,
             qrRect,
             qrData,
@@ -636,7 +636,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern16_compress_decompress.png");
 
     // compression to zstandard ...
-    var qrCodeData = QRCodeGenerator.CreateQrCode(content, ECCLevel.L);
+    var qrCodeData = QRCodeGenerator.Create(content, QREccLevel.L);
     var src = qrCodeData.GetRawData();
     var size = qrCodeData.GetRawDataSize();
 
@@ -661,10 +661,10 @@ Console.WriteLine();
 Console.WriteLine("""
     Pattern 17: Console Output of QR Code
       - Best for: Quick visual verification in console
-      - API: QRCodeGenerator.CreateQrCode() + Console.Write()
+      - API: QRCodeGenerator.Create() + Console.Write()
     """);
 {
-    var qrCodeData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: 4);
+    var qrCodeData = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
     for (var row = 0; row < qrCodeData.Size; row++)
     {
         for (var col = 0; col < qrCodeData.Size; col++)
@@ -692,7 +692,7 @@ Console.WriteLine("""
 
         var pngBytes = new QRCodeImageBuilder(content)
             .WithSize(512, 512)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithQuietZone(4)
             .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.92f)
             .WithIcon(icon)
@@ -709,7 +709,7 @@ Console.WriteLine("""
 
         var pngBytes = new QRCodeImageBuilder(content)
             .WithModulePixelSize(12)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithQuietZone(4)
             .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.92f)
             .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
@@ -742,7 +742,7 @@ Console.WriteLine("""
 
     var pngBytes = new QRCodeImageBuilder(content)
         .WithModulePixelSize(12)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(3)
         .WithColors(backgroundColor: SKColor.Parse("0B1320"), clearColor: SKColor.Parse("0B1320"))
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.88f)
@@ -780,7 +780,7 @@ Console.WriteLine("""
     var pngBytes = new QRCodeImageBuilder(content)
         .WithModulePixelSize(10)
         .WithSize(640, 640)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
         .WithColors(backgroundColor: SKColors.White, clearColor: SKColor.Parse("FFF5EE"))
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
@@ -836,7 +836,7 @@ Console.WriteLine("""
 
     var pngBytes = new QRCodeImageBuilder(content)
         .WithModulePixelSize(11)
-        .WithErrorCorrection(ECCLevel.H)
+        .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
         .WithColors(backgroundColor: SKColor.Parse("111111"), clearColor: SKColor.Parse("111111"))
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.85f)
@@ -861,7 +861,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern22_svg_simple.svg");
     using (var stream = File.Create(path))
     {
-        QRCodeImageBuilder.SaveSvg(content, stream, ECCLevel.M, size: 512);
+        QRCodeImageBuilder.SaveSvg(content, stream, QREccLevel.M, size: 512);
     }
     Console.WriteLine($"  ✓ Saved to: {path}");
 
@@ -875,7 +875,7 @@ Console.WriteLine("""
     {
         new QRCodeImageBuilder(content)
             .WithModulePixelSize(10)
-            .WithErrorCorrection(ECCLevel.H)
+            .WithErrorCorrection(QREccLevel.H)
             .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
             .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
             .WithGradient(gradient)
@@ -892,7 +892,7 @@ Console.WriteLine("""
     Console.WriteLine($"  ✓ ToSvgString(): {svgString.Length} chars, starts with: {firstLine}");
 
     // Static one-liner string output for inline HTML embedding
-    var inlineSvg = QRCodeImageBuilder.GetSvgString(content, ECCLevel.M, size: 256);
+    var inlineSvg = QRCodeImageBuilder.GetSvgString(content, QREccLevel.M, size: 256);
     Console.WriteLine($"  ✓ GetSvgString(): viewBox present: {inlineSvg.Contains("viewBox=\"0 0 256 256\"")}");
 }
 Console.WriteLine();
@@ -905,7 +905,7 @@ Console.WriteLine("""
     """);
 {
     // 23a. Matrix round-trip: decode straight from QRCodeData (no image involved)
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+    var qrData = QRCodeGenerator.Create(content, QREccLevel.M);
     if (QRCodeDecoder.TryDecode(qrData, out var decoded, out var info))
     {
         Console.WriteLine($"  ✓ Matrix decode: \"{Truncate(decoded, 48)}\"");
@@ -954,7 +954,7 @@ Console.WriteLine("""
     }
 
     // 23d. Error correction at work: flip modules, Reed-Solomon repairs them
-    var damaged = QRCodeGenerator.CreateQrCode("error correction demo", ECCLevel.M, quietZoneSize: 0);
+    var damaged = QRCodeGenerator.Create("error correction demo", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
     var size = damaged.Size;
     var modules = new byte[size * size];
     for (var y = 0; y < size; y++)
@@ -1033,7 +1033,7 @@ Console.WriteLine("""
       - QRCodeDecoder stays Standard QR-only (cross-symbology rejection)
     """);
 {
-    var microData = MicroQRCodeGenerator.CreateMicroQRCode(microContent, MicroQREccLevel.L);
+    var microData = MicroQRCodeGenerator.Create(microContent, MicroQREccLevel.L);
     if (MicroQRCodeDecoder.TryDecode(microData, out var decoded, out var info))
     {
         Console.WriteLine($"  ✓ Matrix decode: \"{decoded}\" (version {info.Version}, ECC {info.EccLevel})");
@@ -1099,8 +1099,8 @@ Console.WriteLine("""
         .ToByteArray();
     File.WriteAllBytes(path, pngBytes);
 
-    var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
-    var smallest = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
+    var flat = RmQRCodeGenerator.Create("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
+    var smallest = RmQRCodeGenerator.Create("012345678901", RmQREccLevel.M);
     Console.WriteLine($"  ✓ Saved to: {path}");
     Console.WriteLine($"  ✓ 12 digits at M: default fit {smallest.Version} ({smallest.Width - 4}×{smallest.Height - 4} core), MinimizeHeight {flat.Version}");
 }
@@ -1113,7 +1113,7 @@ Console.WriteLine("""
       - Explicitly typed like MicroQRCodeDecoder; QRCodeDecoder stays Standard QR-only
     """);
 {
-    var rmData = RmQRCodeGenerator.CreateRmQRCode(rmqrContent, RmQREccLevel.M);
+    var rmData = RmQRCodeGenerator.Create(rmqrContent, RmQREccLevel.M);
     if (RmQRCodeDecoder.TryDecode(rmData, out var decoded, out var info))
     {
         Console.WriteLine($"  ✓ Matrix decode: \"{decoded}\" ({info.Version}, ECC {info.EccLevel})");
@@ -1144,7 +1144,7 @@ Console.WriteLine("""
       - Dark modules come back as merged rectangles in module coordinates (same space as data[row, col])
     """);
 {
-    var data = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+    var data = QRCodeGenerator.Create(content, QREccLevel.M);
 
     // Merged rectangles vs one-rect-per-module: merging roughly halves the element count.
     var rects = data.GetModuleRectangles();
@@ -1183,7 +1183,7 @@ Console.WriteLine("""
     }
 
     // Micro QR and rMQR expose the same members; rMQR is rectangular (Width/Height instead of Size).
-    var rm = RmQRCodeGenerator.CreateRmQRCode(rmqrContent, RmQREccLevel.M);
+    var rm = RmQRCodeGenerator.Create(rmqrContent, RmQREccLevel.M);
     Console.WriteLine($"  ✓ rMQR {rm.Version}: {rm.GetModuleRectangles().Length} rectangles in a {rm.Width}x{rm.Height} module grid");
 }
 Console.WriteLine();

@@ -2,8 +2,7 @@ using System.Text;
 
 /// <summary>
 /// End-to-end QR matrix encoding through the public API (QRCodeGenerator).
-/// Used to measure the user-visible impact of internal kernel changes such as the
-/// Reed-Solomon ECC encoder optimization.
+/// Used to measure the user-visible impact of internal kernel changes such as the Reed-Solomon ECC encoder optimization.
 ///
 /// Scenarios:
 ///   Numeric_V1_L : version 1, numeric mode (digits only)
@@ -33,7 +32,7 @@ public class QRCodeEncodeEndToEnd
         _byteLongL = BuildDeterministicText(2900); // version 40-L byte mode (max 2953)
         _byteLongH = BuildDeterministicText(1200); // version 40-H byte mode (max 1273)
         _spanDestination = new byte[Math.Max(
-            Sizing.Required(_byteLongL.AsSpan(), ECCLevel.L).BufferSize,
+            Sizing.Required(_byteLongL.AsSpan(), QREccLevel.L).BufferSize,
             Sizing.Required(_numeric.AsSpan(), MicroQREccLevel.L).BufferSize)];
     }
 
@@ -42,37 +41,37 @@ public class QRCodeEncodeEndToEnd
     [Benchmark(Baseline = true)]
     public QRCodeData QR_Numeric_V1_L_Encode()
     {
-        return QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L);
+        return QRCodeGenerator.Create(_numeric.AsSpan(), QREccLevel.L);
     }
 
     [Benchmark]
     public QRCodeData QR_Alphanumeric_V1_M_Encode()
     {
-        return QRCodeGenerator.CreateQrCode(_alphanumeric.AsSpan(), ECCLevel.M);
+        return QRCodeGenerator.Create(_alphanumeric.AsSpan(), QREccLevel.M);
     }
 
     [Benchmark]
     public QRCodeData QR_Byte_Url_V6_M_Encode()
     {
-        return QRCodeGenerator.CreateQrCode(_byteUrl.AsSpan(), ECCLevel.M);
+        return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M);
     }
 
     [Benchmark]
     public QRCodeData QR_Byte_V20_M_Encode()
     {
-        return QRCodeGenerator.CreateQrCode(_byteMidM.AsSpan(), ECCLevel.M);
+        return QRCodeGenerator.Create(_byteMidM.AsSpan(), QREccLevel.M);
     }
 
     [Benchmark]
     public QRCodeData QR_Byte_V40_L_Encode()
     {
-        return QRCodeGenerator.CreateQrCode(_byteLongL.AsSpan(), ECCLevel.L);
+        return QRCodeGenerator.Create(_byteLongL.AsSpan(), QREccLevel.L);
     }
 
     [Benchmark]
     public QRCodeData QR_Byte_V40_H_Encode()
     {
-        return QRCodeGenerator.CreateQrCode(_byteLongH.AsSpan(), ECCLevel.H);
+        return QRCodeGenerator.Create(_byteLongH.AsSpan(), QREccLevel.H);
     }
 
     // Span destination (zero-allocation) variants
@@ -80,31 +79,31 @@ public class QRCodeEncodeEndToEnd
     [Benchmark(Description = "QR_Numeric_V1_L_Encode (Span)")]
     public int QR_Numeric_V1_L_EncodeSpan()
     {
-        return QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L, _spanDestination);
+        return QRCodeGenerator.Create(_numeric.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "QR_Alphanumeric_V1_M_Encode (Span)")]
     public int QR_Alphanumeric_V1_M_EncodeSpan()
     {
-        return QRCodeGenerator.CreateQrCode(_alphanumeric.AsSpan(), ECCLevel.M, _spanDestination);
+        return QRCodeGenerator.Create(_alphanumeric.AsSpan(), QREccLevel.M, _spanDestination);
     }
 
     [Benchmark(Description = "QR_Byte_Url_V6_M_Encode (Span)")]
     public int QR_Byte_Url_V6_M_EncodeSpan()
     {
-        return QRCodeGenerator.CreateQrCode(_byteUrl.AsSpan(), ECCLevel.M, _spanDestination);
+        return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M, _spanDestination);
     }
 
     [Benchmark(Description = "QR_Byte_V40_L_Encode (Span)")]
     public int QR_Byte_V40_L_EncodeSpan()
     {
-        return QRCodeGenerator.CreateQrCode(_byteLongL.AsSpan(), ECCLevel.L, _spanDestination);
+        return QRCodeGenerator.Create(_byteLongL.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "QR_Byte_V40_H_Encode (Span)")]
     public int QR_Byte_V40_H_EncodeSpan()
     {
-        return QRCodeGenerator.CreateQrCode(_byteLongH.AsSpan(), ECCLevel.H, _spanDestination);
+        return QRCodeGenerator.Create(_byteLongH.AsSpan(), QREccLevel.H, _spanDestination);
     }
 
     // Micro QR M2-L with the same numeric payload, for scale reference.
@@ -112,31 +111,15 @@ public class QRCodeEncodeEndToEnd
     [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span)")]
     public int MicroQR_Numeric_M2_EncodeSpan()
     {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
+        return MicroQRCodeGenerator.Create(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
     }
 
-    // The options overloads against the parameter list overloads they forward to. They are
-    // single-expression forwarders, so these pairs should sit on top of each other; the
-    // point is to keep that a measured fact, since the options overloads are the path new
-    // options are added to and callers will be pointed at.
-
-    [Benchmark(Description = "QR_Byte_V40_L_Encode (Span, options)")]
-    public int QR_Byte_V40_L_EncodeSpanOptions()
-    {
-        return QRCodeGenerator.CreateQrCode(_byteLongL.AsSpan(), ECCLevel.L, _spanDestination, QRCodeGeneratorOptions.Default);
-    }
-
-    [Benchmark(Description = "QR_Numeric_V1_L_Encode (options)")]
-    public QRCodeData QR_Numeric_V1_L_EncodeOptions()
-    {
-        return QRCodeGenerator.CreateQrCode(_numeric, ECCLevel.L, QRCodeGeneratorOptions.Default);
-    }
-
-    [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span, options)")]
-    public int MicroQR_Numeric_M2_EncodeSpanOptions()
-    {
-        return MicroQRCodeGenerator.CreateMicroQRCode(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination, MicroQRCodeGeneratorOptions.Default);
-    }
+    // Three "(options)" benchmarks stood here until 2.0.0, pairing each options overload
+    // against the parameter list overload it forwarded to so that "the forwarder costs
+    // nothing" stayed a measured fact. The parameter list overloads were removed, and
+    // `QRCodeGeneratorOptions.Default` is `default`, so each pair collapsed into two
+    // spellings of one call and the pairs were dropped rather than left measuring
+    // themselves. The options path is now the only path, and the benchmarks above are on it.
 
     private static string BuildDeterministicText(int length)
     {

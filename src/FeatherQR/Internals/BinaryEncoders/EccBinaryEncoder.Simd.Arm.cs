@@ -7,13 +7,12 @@ using System.Runtime.Intrinsics.Arm;
 namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
-/// Vectorized Reed-Solomon kernel for ARM64 (Apple Silicon / Graviton). Selected at
-/// runtime by <see cref="EccBinaryEncoder.CalculateECC"/>; produces byte-identical
-/// output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
+/// Vectorized Reed-Solomon kernel for ARM64 (Apple Silicon / Graviton).
+/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>; produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
 /// </summary>
 /// <remarks>
-/// Faithful port of the SSSE3 kernel (see EccBinaryEncoder.Simd.cs for the shared
-/// architecture notes). Instruction mapping:
+/// Faithful port of the SSSE3 kernel (see EccBinaryEncoder.Simd.cs for the shared architecture notes).
+/// Instruction mapping:
 ///
 /// - PSHUFB → TBL (<see cref="AdvSimd.Arm64.VectorTableLookup(Vector128{byte}, Vector128{byte})"/>).
 ///   Both zero out-of-range lanes; the nibble indices here are always 0-15, so the
@@ -22,16 +21,14 @@ namespace FeatherQR.Internals.BinaryEncoders;
 ///   with a zero upper operand).
 /// - PALIGNR(hi, lo, n) → EXT(lo, hi, n), ARM's operand order is (lower, upper, index).
 ///
-/// The factor tables (nibble-split multiply, quad factors T, composed T∘U) are
-/// ISA-independent and shared with the x86 kernels. GFNI has no NEON equivalent
-/// (SVE2's GF ops have no .NET API and no Apple hardware), so the TBL nibble-split
-/// kernel is the ARM64 ceiling for now.
+/// The factor tables (nibble-split multiply, quad factors T, composed T∘U) are ISA-independent and shared with the x86 kernels.
+/// GFNI has no NEON equivalent (SVE2's GF ops have no .NET API and no Apple hardware), so the TBL nibble-split kernel is the ARM64 ceiling for now.
 /// </remarks>
 internal static partial class EccBinaryEncoder
 {
     /// <summary>
-    /// Entry point for the NEON kernel. Caller guarantees AdvSimd.Arm64.IsSupported
-    /// and eccCount ≤ 32 (QR maximum is 30).
+    /// Entry point for the NEON kernel.
+    /// Caller guarantees AdvSimd.Arm64.IsSupported and eccCount ≤ 32 (QR maximum is 30).
     /// </summary>
     internal static void CalculateEccAdvSimd(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {

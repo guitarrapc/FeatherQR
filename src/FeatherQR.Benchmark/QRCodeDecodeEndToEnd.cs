@@ -3,8 +3,7 @@ using System.Text;
 
 /// <summary>
 /// End-to-end QR matrix decoding through the public API (QRCodeDecoder).
-/// Payloads mirror QRCodeEncodeEndToEnd so encode and decode costs are directly comparable;
-/// a Micro QR M2-L decode of the same numeric payload gives the scale reference.
+/// Payloads mirror QRCodeEncodeEndToEnd so encode and decode costs are directly comparable; a Micro QR M2-L decode of the same numeric payload gives the scale reference.
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
 ///
 /// Scenarios:
@@ -42,20 +41,20 @@ public class QRCodeDecodeEndToEnd
     [GlobalSetup]
     public void GlobalSetup()
     {
-        (_numericModules, _numericSize) = BuildModules("0123456789", ECCLevel.L);
-        (_alphanumericModules, _alphanumericSize) = BuildModules("HELLO WORLD 2026", ECCLevel.M);
+        (_numericModules, _numericSize) = BuildModules("0123456789", QREccLevel.L);
+        (_alphanumericModules, _alphanumericSize) = BuildModules("HELLO WORLD 2026", QREccLevel.M);
         _byteUrl = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md?foo=sample&bar=dummy";
-        (_byteUrlModules, _byteUrlSize) = BuildModules(_byteUrl, ECCLevel.M);
+        (_byteUrlModules, _byteUrlSize) = BuildModules(_byteUrl, QREccLevel.M);
         _byteLongL = BuildDeterministicText(2900);
         _byteLongH = BuildDeterministicText(1200);
-        (_byteLongLModules, _byteLongLSize) = BuildModules(_byteLongL, ECCLevel.L);
-        (_byteLongHModules, _byteLongHSize) = BuildModules(_byteLongH, ECCLevel.H);
+        (_byteLongLModules, _byteLongLSize) = BuildModules(_byteLongL, QREccLevel.L);
+        (_byteLongHModules, _byteLongHSize) = BuildModules(_byteLongH, QREccLevel.H);
         _chars = new char[QRCodeDecoder.GetMaxDecodedLength(40)];
 
         (_microNumericModules, _microNumericSize) = BuildMicro("0123456789", MicroQREccLevel.L);
         _microChars = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M2)];
 
-        (_byteUrlLuminance, _byteUrlImageSize) = RenderLuminance(_byteUrl, ECCLevel.M, pixelsPerModule: 8);
+        (_byteUrlLuminance, _byteUrlImageSize) = RenderLuminance(_byteUrl, QREccLevel.M, pixelsPerModule: 8);
     }
 
     // String path (allocates the result string only)
@@ -155,30 +154,30 @@ public class QRCodeDecodeEndToEnd
         return written;
     }
 
-    private static (byte[] modules, int size) BuildModules(string content, ECCLevel eccLevel)
+    private static (byte[] modules, int size) BuildModules(string content, QREccLevel eccLevel)
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
-        return (buffer, calculated.QrSize);
+        QRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        return (buffer, calculated.Size);
     }
 
     private static (byte[] modules, int size) BuildMicro(string content, MicroQREccLevel eccLevel)
     {
         var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
-        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
-        return (buffer, calculated.QrSize);
+        MicroQRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        return (buffer, calculated.Size);
     }
 
-    private static (byte[] luminance, int size) RenderLuminance(string content, ECCLevel eccLevel, int pixelsPerModule)
+    private static (byte[] luminance, int size) RenderLuminance(string content, QREccLevel eccLevel, int pixelsPerModule)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel);
+        var qr = QRCodeGenerator.Create(content.AsSpan(), eccLevel);
         var sizePx = qr.Size * pixelsPerModule;
         using var bitmap = new SKBitmap(new SKImageInfo(sizePx, sizePx, SKColorType.Gray8));
         using (var canvas = new SKCanvas(bitmap))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.Black, SKColors.White);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.Black, SKColors.White);
             canvas.Flush();
         }
 

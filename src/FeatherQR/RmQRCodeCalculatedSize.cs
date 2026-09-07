@@ -1,11 +1,9 @@
 namespace FeatherQR;
 
 /// <summary>
-/// Result of <see cref="RmQRCodeGenerator.TryGetRequiredBufferSize"/>: the byte count of
-/// the byte-per-module matrix, its dimensions (quiet zone included) and the version
-/// that will be used.
+/// Result of <see cref="RmQRCodeGenerator.TryGetRequiredBufferSize"/>: the byte count of the byte-per-module matrix, its dimensions (quiet zone included) and the version that will be used.
 /// </summary>
-public readonly struct RmQRCodeCalculatedSize
+public readonly record struct RmQRCodeCalculatedSize
 {
     internal RmQRCodeCalculatedSize(int bufferSize, int width, int height, RmQRVersion version)
     {

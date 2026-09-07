@@ -3,18 +3,14 @@ using System.Runtime.CompilerServices;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Scans a symbol matrix into merged horizontal runs of dark modules. This is the
-/// single implementation behind both the public <c>GetModuleRectangles</c> family
-/// (finder skipping off) and the renderer's merged-run drawing path (finder skipping
-/// on when finder patterns are styled separately), so the geometry the public API
-/// reports is by construction the geometry the renderer draws.
+/// Scans a symbol matrix into merged horizontal runs of dark modules.
+/// This is the single implementation behind both the public <c>GetModuleRectangles</c> family (finder skipping off) and the renderer's merged-run drawing path (finder skipping on when finder patterns are styled separately), so the geometry the public API reports is by construction the geometry the renderer draws.
 /// </summary>
 internal static class ModuleRunScanner
 {
     /// <summary>
-    /// Upper bound on the number of runs a core matrix can produce: dark runs in a
-    /// row are separated by at least one light module, so a row of width w holds at
-    /// most ceil(w / 2) runs. O(1), quiet zone contributes nothing (always light).
+    /// Upper bound on the number of runs a core matrix can produce: dark runs in a row are separated by at least one light module, so a row of width w holds at most ceil(w / 2) runs.
+    /// O(1), quiet zone contributes nothing (always light).
     /// </summary>
     public static int GetMaxRunCount(int coreWidth, int coreHeight) => (coreWidth + 1) / 2 * coreHeight;
 
@@ -32,11 +28,8 @@ internal static class ModuleRunScanner
     }
 
     /// <summary>
-    /// Allocates an exact-size array of the merged runs, the shared implementation of
-    /// the <c>GetModuleRectangles()</c> overloads. Counting and scanning use the same
-    /// enumerator over the same matrix, so the guard is unreachable by construction;
-    /// it exists to turn any future divergence between the two passes into a loud
-    /// failure instead of a silently truncated or zero-padded result.
+    /// Allocates an exact-size array of the merged runs, the shared implementation of the <c>GetModuleRectangles()</c> overloads.
+    /// Counting and scanning use the same enumerator over the same matrix, so the guard is unreachable by construction; it exists to turn any future divergence between the two passes into a loud failure instead of a silently truncated or zero-padded result.
     /// </summary>
     public static ModuleRect[] ScanToArray<TView>(in TView view)
         where TView : struct, IModuleMatrixView
@@ -49,8 +42,7 @@ internal static class ModuleRunScanner
 
     /// <summary>
     /// Writes the merged runs as quiet-zone-inclusive <see cref="ModuleRect"/> values.
-    /// Returns false (with <paramref name="written"/> reset to 0) only when the
-    /// destination cannot hold every run.
+    /// Returns false (with <paramref name="written"/> reset to 0) only when the destination cannot hold every run.
     /// </summary>
     public static bool TryScan<TView>(in TView view, Span<ModuleRect> destination, out int written)
         where TView : struct, IModuleMatrixView
@@ -76,9 +68,8 @@ internal static class ModuleRunScanner
 
 /// <summary>
 /// Enumerates maximal horizontal runs of dark core modules in row-major order.
-/// A run never crosses a light module and, when <c>skipFinderPatterns</c> is set,
-/// never crosses into a finder pattern module (those are drawn separately by the
-/// styled finder path). Coordinates are core-relative; callers add the quiet zone.
+/// A run never crosses a light module and, when <c>skipFinderPatterns</c> is set, never crosses into a finder pattern module (those are drawn separately by the styled finder path).
+/// Coordinates are core-relative; callers add the quiet zone.
 /// </summary>
 internal ref struct ModuleRunEnumerator<TView>(TView view, bool skipFinderPatterns)
     where TView : struct, IModuleMatrixView

@@ -3,9 +3,8 @@ using System.Runtime.CompilerServices;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Character-class predicates and alphanumeric encoding values shared by all QR
-/// symbologies. The Numeric and Alphanumeric alphabets are defined identically by
-/// ISO/IEC 18004 (Standard QR, Micro QR) and ISO/IEC 23941 (rMQR).
+/// Character-class predicates and alphanumeric encoding values shared by all QR symbologies.
+/// The Numeric and Alphanumeric alphabets are defined identically by ISO/IEC 18004 (Standard QR, Micro QR) and ISO/IEC 23941 (rMQR).
 /// </summary>
 internal static class CharacterSets
 {
@@ -19,9 +18,7 @@ internal static class CharacterSets
 
     /// <summary>
     /// ASCII lookup table for alphanumeric character validation and encoding.
-    /// Index: ASCII code (0-127)
-    /// Value: Encoding value (0-44) or -1 if not alphanumeric
-    /// Based on ISO/IEC 18004 Section 7.4.3.
+    /// Index: ASCII code (0-127) Value: Encoding value (0-44) or -1 if not alphanumeric Based on ISO/IEC 18004 Section 7.4.3.
     /// </summary>
     private static ReadOnlySpan<sbyte> alphanumericLookup => [
         // 0-31: Control characters (invalid)

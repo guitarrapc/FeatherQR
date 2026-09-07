@@ -9,44 +9,30 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 
-namespace FeatherQR.Internals.RmQr;
+namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR data-codeword stream (ISO/IEC 23941 7.4): 3-bit mode indicator, per-version
-/// character count indicator, segment payload bits, terminator (000, shortened at
-/// capacity), zero bits to the byte boundary, then alternating 0xEC / 0x11 pad
-/// codewords up to the data codeword count. Single data segment; ISO-8859-1 and
-/// UTF-8 ECI prefixes are emitted before it when selected by the analyzer.
-/// Allocation-free: bits are written straight into the caller's
-/// destination and byte-mode transcoding uses a fixed stack budget with a pool
-/// fallback.
+/// rMQR data-codeword stream (ISO/IEC 23941 7.4): 3-bit mode indicator, per-version character count indicator, segment payload bits, terminator (000, shortened at capacity), zero bits to the byte boundary, then alternating 0xEC / 0x11 pad codewords up to the data codeword count.
+/// Single data segment; ISO-8859-1 and UTF-8 ECI prefixes are emitted before it when selected by the analyzer.
+/// Allocation-free: bits are written straight into the caller's destination and byte-mode transcoding uses a fixed stack budget with a pool fallback.
 /// </summary>
 /// <remarks>
-/// Performance design (benchmark-driven, parity-pinned by
-/// <c>RmQRBinaryEncoderParityTest</c> / <c>RmQRBinaryEncoderKernelParityTest</c>):
+/// Performance design (benchmark-driven, parity-pinned by <c>RmQRBinaryEncoderParityTest</c> / <c>RmQRBinaryEncoderKernelParityTest</c>):
 /// <list type="bullet">
 /// <item>Writer state is three raw locals (64-bit MSB-first accumulator, pending bit
-/// count, byte position) plus a <c>ref byte</c> into the destination, threaded by
-/// ref through inlined helpers. Every flushed word is real data inside the
-/// capacity that version selection guarantees, so stores need no per-flush slice
-/// bounds checks (measured ~2x over the shared <c>BitWriter</c> at this size).</item>
+/// count, byte position) plus a <c>ref byte</c> into the destination, threaded by ref through inlined helpers.
+/// Every flushed word is real data inside the capacity that version selection guarantees, so stores need no per-flush slice bounds checks (measured ~2x over the shared <c>BitWriter</c> at this size).</item>
 /// <item>Numeric: 3-digit group values by 64-bit SWAR (one load + one multiply),
-/// 9 digits per 30-bit append; on x64 with SSSE3/SSE4.1, 12 digits per iteration
-/// via <c>pmaddwd</c> (one group per 8-char load), <c>phaddd</c>, <c>packusdw</c>,
-/// <c>pmaddwd</c> into one 40-bit append.</item>
+/// 9 digits per 30-bit append; on x64 with SSSE3/SSE4.1, 12 digits per iteration via <c>pmaddwd</c> (one group per 8-char load), <c>phaddd</c>, <c>packusdw</c>, <c>pmaddwd</c> into one 40-bit append.</item>
 /// <item>Alphanumeric: unchecked 128-entry value table, 2 pairs per 22-bit append;
-/// on x64 with SSSE3/SSE4.1, 8 chars per iteration: <c>pshufb</c> offset classes
-/// (row 0x2_ specials, row 0x3_ digits + ':', letters) then
-/// <c>pmaddubsw</c>(45,1) and <c>pmaddwd</c>(2048,1) into one 44-bit append.</item>
+/// on x64 with SSSE3/SSE4.1, 8 chars per iteration: <c>pshufb</c> offset classes (row 0x2_ specials, row 0x3_ digits + ':', letters) then <c>pmaddubsw</c>(45,1) and <c>pmaddwd</c>(2048,1) into one 44-bit append.</item>
 /// <item>Byte (Latin-1): SSE2 narrows 8 chars per 64-bit append; UTF-8 runs as a
-/// separate cold function with its own writer (sharing the accumulator by ref with
-/// a non-inlined callee would address-expose it, Micro QR lesson).</item>
+/// separate cold function with its own writer (sharing the accumulator by ref with a non-inlined callee would address-expose it, Micro QR lesson).</item>
 /// <item>Terminator / alignment are bit-count arithmetic; the pad run is written as
 /// 8-byte 0xEC11 pattern stores.</item>
 /// </list>
-/// The mode switch computes the header for its own segment (one dispatch instead of
-/// three chained switches). Vector paths are <c>NET8_0_OR_GREATER</c> + capability
-/// gated; netstandard and non-x86 runtimes take the scalar SWAR / table paths.
+/// The mode switch computes the header for its own segment (one dispatch instead of three chained switches).
+/// Vector paths are <c>NET8_0_OR_GREATER</c> + capability gated; netstandard and non-x86 runtimes take the scalar SWAR / table paths.
 /// </remarks>
 internal static partial class RmQRBinaryEncoder
 {
@@ -61,10 +47,8 @@ internal static partial class RmQRBinaryEncoder
     private const int StackByteBudget = 160;
 
     /// <summary>
-    /// Writes the data codewords for <paramref name="text"/> into
-    /// <paramref name="destination"/> and returns the number of codewords written
-    /// (always the version × ECC data codeword count). The caller guarantees the
-    /// content fits (see <see cref="RmQRVersionSelector"/>).
+    /// Writes the data codewords for <paramref name="text"/> into <paramref name="destination"/> and returns the number of codewords written (always the version × ECC data codeword count).
+    /// The caller guarantees the content fits (see <see cref="RmQRVersionSelector"/>).
     /// </summary>
     /// <param name="text">Content, already analyzed.</param>
     /// <param name="version">Target version.</param>
@@ -137,8 +121,7 @@ internal static partial class RmQRBinaryEncoder
     }
 
     /// <summary>
-    /// Original no-ECI hot path, kept separate so the extra ECI validation and
-    /// header branches do not change the JIT layout for ASCII production calls.
+    /// Original no-ECI hot path, kept separate so the extra ECI validation and header branches do not change the JIT layout for ASCII production calls.
     /// The caller guarantees <see cref="TextAnalysisResult.EciMode"/> is Default.
     /// </summary>
     internal static int EncodeDataCodewordsWithoutEci(ReadOnlySpan<char> text, RmQRVersion version, RmQREccLevel eccLevel, in TextAnalysisResult analysis, Span<byte> destination)
@@ -194,9 +177,8 @@ internal static partial class RmQRBinaryEncoder
     // ---------------------------------------------------------------
 
     /// <summary>
-    /// Numeric segment: 10/7/4 bits per 3/2/1 digits. Contract: digits are '0'-'9'
-    /// (validated by the analyzer); the SWAR / SIMD group math produces a wrong but
-    /// memory-safe stream otherwise.
+    /// Numeric segment: 10/7/4 bits per 3/2/1 digits.
+    /// Contract: digits are '0'-'9' (validated by the analyzer); the SWAR / SIMD group math produces a wrong but memory-safe stream otherwise.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void WriteNumeric(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> digits, bool vectorized)
@@ -264,10 +246,8 @@ internal static partial class RmQRBinaryEncoder
     }
 
     /// <summary>
-    /// Alphanumeric segment: 11 bits per pair (45·a + b), 6 bits for a trailing
-    /// character. Contract: the alphabet is validated by the analyzer; the
-    /// <c>&amp; 0x7F</c> table index is memory-safe for any input but does not
-    /// sanitize.
+    /// Alphanumeric segment: 11 bits per pair (45·a + b), 6 bits for a trailing character.
+    /// Contract: the alphabet is validated by the analyzer; the <c>&amp; 0x7F</c> table index is memory-safe for any input but does not sanitize.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void WriteAlphanumeric(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> chars, bool vectorized)
@@ -331,9 +311,7 @@ internal static partial class RmQRBinaryEncoder
     }
 
     /// <summary>
-    /// Byte segment for Default / ISO-8859-1 text (every char ≤ 0xFF, validated by
-    /// the analyzer): 8 chars narrow to one 64-bit append on SSE2, 16 chars to two on
-    /// any other 128-bit vector target (ARM64, WASM), scalar otherwise.
+    /// Byte segment for Default / ISO-8859-1 text (every char ≤ 0xFF, validated by the analyzer): 8 chars narrow to one 64-bit append on SSE2, 16 chars to two on any other 128-bit vector target (ARM64, WASM), scalar otherwise.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void WriteLatin1(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> text, bool vectorized)
@@ -400,10 +378,9 @@ internal static partial class RmQRBinaryEncoder
     }
 
     /// <summary>
-    /// Byte segment for UTF-8 text: ECI assignment 26 + UTF-8 transcode on a
-    /// private writer. <paramref name="byteCount"/> is the analyzer's exact encoded
-    /// length, which picks the stack budget for every payload that passed version
-    /// selection. Not inlined by design (see the class remarks).
+    /// Byte segment for UTF-8 text: ECI assignment 26 + UTF-8 transcode on a private writer.
+    /// <paramref name="byteCount"/> is the analyzer's exact encoded length, which picks the stack budget for every payload that passed version selection.
+    /// Not inlined by design (see the class remarks).
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int EncodeUtf8Codewords(ReadOnlySpan<char> text, int codewordCount, int capacityBits, int headerValue, int headerBits, int byteCount, Span<byte> destination)
@@ -581,9 +558,7 @@ internal static partial class RmQRBinaryEncoder
     }
 
     /// <summary>
-    /// Appends 1-56 pre-masked bits (the SIMD numeric / alphanumeric quads); unlike
-    /// <see cref="Append"/> the pending bits plus the value may exceed 64 bits, in
-    /// which case a full 8-byte word is stored and the remainder stays pending.
+    /// Appends 1-56 pre-masked bits (the SIMD numeric / alphanumeric quads); unlike <see cref="Append"/> the pending bits plus the value may exceed 64 bits, in which case a full 8-byte word is stored and the remainder stays pending.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AppendWide(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ulong value, int bitCount)
@@ -631,10 +606,7 @@ internal static partial class RmQRBinaryEncoder
         => Unsafe.WriteUnaligned(ref Unsafe.Add(ref dest, bytePos), BitConverter.IsLittleEndian ? BinaryPrimitives.ReverseEndianness(value) : value);
 
     /// <summary>
-    /// Terminator (000, shortened at capacity) + zero bits to the byte boundary as
-    /// bit-count arithmetic (the accumulator's unused low bits are already zero),
-    /// drain of the pending whole bytes, then alternating 0xEC / 0x11 pads written
-    /// as 8-byte pattern stores (pads always start with 0xEC).
+    /// Terminator (000, shortened at capacity) + zero bits to the byte boundary as bit-count arithmetic (the accumulator's unused low bits are already zero), drain of the pending whole bytes, then alternating 0xEC / 0x11 pads written as 8-byte pattern stores (pads always start with 0xEC).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Finish(ref byte dest, ulong acc, int accBits, int bytePos, int codewordCount, int capacityBits)

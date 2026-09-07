@@ -1,10 +1,8 @@
 using System.Text;
 
 /// <summary>
-/// End-to-end PNG image generation through the public API
-/// (QRCodeImageBuilder.GetPngBytes). QRCodeData is pre-generated in setup so
-/// the measurement covers the Skia render + PNG encode path only, not the QR
-/// encoding itself.
+/// End-to-end PNG image generation through the public API (QRCodeImageBuilder.GetPngBytes).
+/// QRCodeData is pre-generated in setup so the measurement covers the Skia render + PNG encode path only, not the QR encoding itself.
 ///
 /// Scenarios cover the version/pixel spread:
 ///   Small : version 1 matrix (few modules, per-image overhead dominated)
@@ -19,8 +17,8 @@ public class QRCodeImageEndToEnd
     [GlobalSetup]
     public void Setup()
     {
-        _small = QRCodeGenerator.CreateQrCode("HELLO WORLD 2026", ECCLevel.M); // version 1-2
-        _large = QRCodeGenerator.CreateQrCode(BuildDeterministicText(2900), ECCLevel.L); // version 40
+        _small = QRCodeGenerator.Create("HELLO WORLD 2026", QREccLevel.M); // version 1-2
+        _large = QRCodeGenerator.Create(BuildDeterministicText(2900), QREccLevel.L); // version 40
     }
 
     [Benchmark]

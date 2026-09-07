@@ -1,9 +1,9 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
-#:project ../../src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj
+#:project ../../src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // Verification sample for WithModulePixelSize (+ optional WithSize canvas pad):
 // - Fixed image size can produce fractional module pixels.
@@ -29,7 +29,7 @@ var scenarios = new (int Version, int QuietZone)[]
 
 foreach (var (version, quietZone) in scenarios)
 {
-    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, requestedVersion: version, quietZoneSize: quietZone);
+    var qrData = QRCodeGenerator.Create(content, QREccLevel.H, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
     var contentSide = qrData.Size * modulePixelSize;
 
     using var fixedSizeBitmap = new QRCodeImageBuilder(qrData)

@@ -39,10 +39,10 @@ public class QRCodeDecoderZXingCrossTest
     {
         foreach (var (zxingLevel, expectedLevel) in new[]
         {
-            (ErrorCorrectionLevel.L, ECCLevel.L),
-            (ErrorCorrectionLevel.M, ECCLevel.M),
-            (ErrorCorrectionLevel.Q, ECCLevel.Q),
-            (ErrorCorrectionLevel.H, ECCLevel.H),
+            (ErrorCorrectionLevel.L, QREccLevel.L),
+            (ErrorCorrectionLevel.M, QREccLevel.M),
+            (ErrorCorrectionLevel.Q, QREccLevel.Q),
+            (ErrorCorrectionLevel.H, QREccLevel.H),
         })
         {
             var content = $"ecc level {zxingLevel}";

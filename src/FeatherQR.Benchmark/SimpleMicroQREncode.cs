@@ -1,12 +1,10 @@
 using BenchmarkDotNet.Configs;
 
 /// <summary>
-/// Cross-library Micro QR encoding. Micro QR narrows the field sharply: of the libraries
-/// compared elsewhere in this project only QRCoder and CodeGlyphX support it at all.
+/// Cross-library Micro QR encoding.
+/// Micro QR narrows the field sharply: of the libraries compared elsewhere in this project only QRCoder and CodeGlyphX support it at all.
 ///
-/// Payloads sit on the capacity boundary of three versions, and every library selects the
-/// same version for each (M2-L numeric, M3-L alphanumeric, M4-M byte), so the rows encode
-/// the same symbol.
+/// Payloads sit on the capacity boundary of three versions, and every library selects the same version for each (M2-L numeric, M3-L alphanumeric, M4-M byte), so the rows encode the same symbol.
 ///
 /// Comparability notes:
 ///
@@ -23,17 +21,17 @@ public class SimpleMicroQREncode
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Numeric_M2_Encode()
-        => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Numeric.AsSpan(), MicroQREccLevel.L);
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Numeric.AsSpan(), MicroQREccLevel.L);
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Alphanumeric_M3_Encode()
-        => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Alphanumeric.AsSpan(), MicroQREccLevel.L);
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Alphanumeric.AsSpan(), MicroQREccLevel.L);
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Byte_M4_Encode()
-        => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Byte.AsSpan(), MicroQREccLevel.M);
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Byte.AsSpan(), MicroQREccLevel.M);
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("CodeGlyphX")]

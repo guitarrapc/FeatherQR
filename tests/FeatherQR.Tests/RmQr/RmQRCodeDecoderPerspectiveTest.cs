@@ -112,7 +112,7 @@ public class RmQRCodeDecoderPerspectiveTest
         var tiny = new char[4];
         var ok = RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, tiny, out _, out var info);
         await Assert.That(ok).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall)
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall)
             .Because($"version={version}, tilt={tilt:P0}: a read symbol with a too-small destination must not be reported as {info.Status}");
         await Assert.That(info.Version).IsEqualTo(version);
     }
@@ -122,14 +122,14 @@ public class RmQRCodeDecoderPerspectiveTest
 
     private static SKBitmap RenderKeystone(string content, RmQRVersion version, float tilt, bool horizontal, float rotateDegrees)
     {
-        var qr = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 2 });
+        var qr = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 2 });
         var widthPx = qr.Width * 8;
         var heightPx = qr.Height * 8;
 
         using var flat = new SKBitmap(new SKImageInfo(widthPx, heightPx, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(flat))
         {
-            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, widthPx, heightPx), qr, SKColors.Black, SKColors.White);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, widthPx, heightPx), qr, SKColors.Black, SKColors.White);
             canvas.Flush();
         }
 

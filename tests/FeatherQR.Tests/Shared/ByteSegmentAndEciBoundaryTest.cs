@@ -1,6 +1,6 @@
 using FeatherQR.Internals.BinaryDecoders;
 using FeatherQR.Internals.BinaryEncoders;
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
@@ -30,7 +30,7 @@ namespace FeatherQR.Tests;
 /// </remarks>
 public class ByteSegmentAndEciBoundaryTest
 {
-    private static (QRCodeDecodeStatus Status, string Text) DecodeBytes(byte[] payload, ByteSegmentCharset charset, int destinationLength = 64)
+    private static (DecodeStatus Status, string Text) DecodeBytes(byte[] payload, ByteSegmentCharset charset, int destinationLength = 64)
     {
         var reader = new BitReader(payload);
         var destination = new char[destinationLength];
@@ -54,7 +54,7 @@ public class ByteSegmentAndEciBoundaryTest
     {
         var (status, _) = DecodeBytes([0xE9, 0xE8, 0xE7, 0xE6, 0xE5], ByteSegmentCharset.Iso8859_1, destinationLength);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(status).IsEqualTo(DecodeStatus.DestinationTooSmall);
     }
 
     /// <summary>The matching positive: exactly enough room succeeds.</summary>
@@ -63,13 +63,13 @@ public class ByteSegmentAndEciBoundaryTest
     {
         var (status, text) = DecodeBytes([0xE9, 0xE8, 0xE7, 0xE6, 0xE5], ByteSegmentCharset.Iso8859_1, destinationLength: 5);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("éèçæå");
     }
 
     // 2-4. ECI designator value masks.
 
-    private static (QRCodeDecodeStatus Status, int Eci) ReadEci(params byte[] designator)
+    private static (DecodeStatus Status, int Eci) ReadEci(params byte[] designator)
     {
         var reader = new BitReader(designator);
         var status = SegmentDecoders.ReadEciDesignator(ref reader, designator.Length * 8, out var eci);
@@ -97,7 +97,7 @@ public class ByteSegmentAndEciBoundaryTest
     {
         var (status, eci) = ReadEci(designator);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(eci).IsEqualTo(expected);
     }
 
@@ -107,7 +107,7 @@ public class ByteSegmentAndEciBoundaryTest
     [Arguments(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF })]
     public async Task EciDesignator_UndefinedForm_ReportsInvalidBitstream(byte[] designator)
     {
-        await Assert.That(ReadEci(designator).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(ReadEci(designator).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -127,7 +127,7 @@ public class ByteSegmentAndEciBoundaryTest
         Span<char> destination = stackalloc char[64];
         var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(status).IsEqualTo(DecodeStatus.UnsupportedContent);
         await Assert.That(charsWritten).IsEqualTo(0);
     }
 
@@ -144,7 +144,7 @@ public class ByteSegmentAndEciBoundaryTest
     {
         var (status, text) = DecodeBytes([0xFF], ByteSegmentCharset.Utf8);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("�");
         await Assert.That(text).IsNotEqualTo("ÿ").Because("that would be the Latin-1 reading, which an explicit ECI 26 forbids");
     }
@@ -167,7 +167,7 @@ public class ByteSegmentAndEciBoundaryTest
     {
         var (status, text) = DecodeBytes(payload, ByteSegmentCharset.Unspecified);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo(expected);
     }
 
@@ -187,7 +187,7 @@ public class ByteSegmentAndEciBoundaryTest
     {
         var (status, text) = DecodeBytes(payload, ByteSegmentCharset.Unspecified);
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo(expected);
     }
 

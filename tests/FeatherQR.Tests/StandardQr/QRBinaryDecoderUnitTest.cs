@@ -1,4 +1,4 @@
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals.BinaryEncoders;
 
 namespace FeatherQR.Tests;
@@ -39,7 +39,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("12A!");
     }
 
@@ -54,7 +54,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("あ");
     }
 
@@ -68,7 +68,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("A");
     }
 
@@ -85,7 +85,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("ï»¿A");
     }
 
@@ -98,7 +98,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("A");
     }
 
@@ -113,7 +113,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("X");
     }
 
@@ -122,7 +122,7 @@ public class QRBinaryDecoderUnitTest
     {
         var status = Decode([], out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo(string.Empty);
     }
 
@@ -134,7 +134,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("7");
     }
 
@@ -148,7 +148,7 @@ public class QRBinaryDecoderUnitTest
     {
         var data = Build((mode, 4), (0, 12));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.UnsupportedContent);
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ public class QRBinaryDecoderUnitTest
         await Assert.That(data.Length * 8).IsEqualTo(prefix.Length + 4 + bitsLeft)
             .Because("the stream must end exactly on the byte boundary the filler was sized for");
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     // Kanji mode (decode only: no generator in this library emits it)
@@ -198,7 +198,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("こんにちは世界");
     }
 
@@ -214,7 +214,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("A亜7");
     }
 
@@ -226,7 +226,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("〜");
     }
 
@@ -246,7 +246,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("日本語亜");
     }
 
@@ -264,7 +264,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
         await Assert.That(text).IsEquivalentTo("7");
     }
 
@@ -274,7 +274,7 @@ public class QRBinaryDecoderUnitTest
     {
         var data = Build((ModeKanji, 4), (1, 8), (Kanji(0x8740), 13), (ModeTerminator, 4));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.UnmappedCharacter);
     }
 
     [Test]
@@ -283,7 +283,7 @@ public class QRBinaryDecoderUnitTest
         // Low byte 0x3F would require Shift_JIS trail byte 0x7F, which does not exist.
         var data = Build((ModeKanji, 4), (1, 8), (0x3F, 13), (ModeTerminator, 4));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     /// <summary>
@@ -301,7 +301,7 @@ public class QRBinaryDecoderUnitTest
 
         await Assert.That(data.Length * 8 - 25).IsEqualTo(7).Because("exactly one bit short of the 8-bit count field");
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -309,7 +309,7 @@ public class QRBinaryDecoderUnitTest
     {
         var data = Build((ModeKanji, 4), (40, 8), (Kanji(0x889F), 13), (ModeTerminator, 4));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -321,7 +321,7 @@ public class QRBinaryDecoderUnitTest
             (ModeByte, 4), (1, 8), ('A', 8),
             (ModeTerminator, 4));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.UnsupportedContent);
     }
 
     // Invalid bitstreams (malformed input must fail cleanly, never throw)
@@ -334,7 +334,7 @@ public class QRBinaryDecoderUnitTest
     {
         var data = Build((mode, 4), (0, 12));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -343,7 +343,7 @@ public class QRBinaryDecoderUnitTest
         // 10-bit group encodes 3 digits, so values 1000-1023 are invalid
         var data = Build((ModeNumeric, 4), (3, 10), (1000, 10), (ModeTerminator, 4));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -352,7 +352,7 @@ public class QRBinaryDecoderUnitTest
         // 11-bit pair encodes values 0..2024
         var data = Build((ModeAlphanumeric, 4), (2, 9), (2025, 11), (ModeTerminator, 4));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -361,7 +361,7 @@ public class QRBinaryDecoderUnitTest
         // Declares 200 bytes but the stream ends immediately
         var data = Build((ModeByte, 4), (200, 8), (0, 8));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -369,7 +369,7 @@ public class QRBinaryDecoderUnitTest
     {
         var data = Build((ModeNumeric, 4), (100, 10), (0, 2));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -380,7 +380,7 @@ public class QRBinaryDecoderUnitTest
 
         var status = QRBinaryDecoder.DecodeBitStream(data, Version, Span<char>.Empty, out _);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -389,7 +389,7 @@ public class QRBinaryDecoderUnitTest
         // 2-byte designator prefix (10xxxxxx) with no second byte
         var data = Build((ModeEci, 4), (0x80, 8));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -398,7 +398,7 @@ public class QRBinaryDecoderUnitTest
         // 111xxxxx is not a valid designator length prefix
         var data = Build((ModeEci, 4), (0xE0, 8), (0, 16));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
     // Destination sizing
@@ -411,7 +411,7 @@ public class QRBinaryDecoderUnitTest
         Span<char> tiny = stackalloc char[2];
         var status = QRBinaryDecoder.DecodeBitStream(data, Version, tiny, out _);
 
-        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(status).IsEquivalentTo(DecodeStatus.DestinationTooSmall);
     }
 
     // Robustness: untrusted input must never throw
@@ -431,7 +431,7 @@ public class QRBinaryDecoderUnitTest
         }
     }
 
-    private static QRCodeDecodeStatus Decode(byte[] data, out string text)
+    private static DecodeStatus Decode(byte[] data, out string text)
     {
         Span<char> destination = stackalloc char[256];
         var status = QRBinaryDecoder.DecodeBitStream(data, Version, destination, out var charsWritten);

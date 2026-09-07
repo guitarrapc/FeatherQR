@@ -1,17 +1,11 @@
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// Projective (perspective) plane-to-plane transform, used to map module grid
-/// coordinates onto image pixels when the symbol is captured off-axis.
+/// Projective (perspective) plane-to-plane transform, used to map module grid coordinates onto image pixels when the symbol is captured off-axis.
 /// </summary>
 /// <remarks>
-/// Standard homogeneous 3×3 formulation (the classic ZXing/OpenCV construction):
-/// a unit-square-to-quadrilateral transform is built directly from the target quad,
-/// its inverse comes from the adjugate matrix (a projective transform needs no
-/// normalization, so the adjugate substitutes for the true inverse), and
-/// quad-to-quad is the composition of the two. Mild keystone distortion, the
-/// Tier-2 target, is exactly representable; the affine case falls out naturally
-/// when the fourth point matches the parallelogram estimate.
+/// Standard homogeneous 3×3 formulation (the classic ZXing/OpenCV construction): a unit-square-to-quadrilateral transform is built directly from the target quad, its inverse comes from the adjugate matrix (a projective transform needs no normalization, so the adjugate substitutes for the true inverse), and quad-to-quad is the composition of the two.
+/// Mild keystone distortion, the Tier-2 target, is exactly representable; the affine case falls out naturally when the fourth point matches the parallelogram estimate.
 /// </remarks>
 internal readonly struct PerspectiveTransform
 {
@@ -31,9 +25,8 @@ internal readonly struct PerspectiveTransform
     }
 
     /// <summary>
-    /// Builds the transform mapping source quadrilateral (x0..x3, y0..y3) onto the
-    /// destination quadrilateral (x0p..x3p, y0p..y3p). Point order: the four
-    /// correspondences are taken pairwise; any consistent order works.
+    /// Builds the transform mapping source quadrilateral (x0..x3, y0..y3) onto the destination quadrilateral (x0p..x3p, y0p..y3p).
+    /// Point order: the four correspondences are taken pairwise; any consistent order works.
     /// </summary>
     public static PerspectiveTransform QuadrilateralToQuadrilateral(
         float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
@@ -48,11 +41,8 @@ internal readonly struct PerspectiveTransform
     }
 
     /// <summary>
-    /// Builds a grid-to-image homography from a known point, its two local axis
-    /// derivatives, and the two projective denominator coefficients. A single
-    /// Micro QR finder supplies the point and local frame; bounded searches over
-    /// <paramref name="perspectiveX"/> and <paramref name="perspectiveY"/> recover
-    /// the remaining two degrees of freedom.
+    /// Builds a grid-to-image homography from a known point, its two local axis derivatives, and the two projective denominator coefficients.
+    /// A single Micro QR finder supplies the point and local frame; bounded searches over <paramref name="perspectiveX"/> and <paramref name="perspectiveY"/> recover the remaining two degrees of freedom.
     /// </summary>
     internal static PerspectiveTransform FromLocalFrame(
         float gridX,
@@ -90,8 +80,7 @@ internal readonly struct PerspectiveTransform
     }
 
     /// <summary>
-    /// Maps the unit square (0,0)-(1,1) onto the quadrilateral (x0,y0)..(x3,y3)
-    /// given in the order top-left, top-right, bottom-right, bottom-left.
+    /// Maps the unit square (0,0)-(1,1) onto the quadrilateral (x0,y0)..(x3,y3) given in the order top-left, top-right, bottom-right, bottom-left.
     /// </summary>
     private static PerspectiveTransform SquareToQuadrilateral(
         float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3)
@@ -121,8 +110,7 @@ internal readonly struct PerspectiveTransform
     }
 
     /// <summary>
-    /// Adjugate matrix: for projective transforms (defined up to scale) the
-    /// adjugate acts as the inverse without needing the determinant division.
+    /// Adjugate matrix: for projective transforms (defined up to scale) the adjugate acts as the inverse without needing the determinant division.
     /// </summary>
     private PerspectiveTransform BuildAdjoint()
     {

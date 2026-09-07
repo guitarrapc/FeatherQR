@@ -6,36 +6,126 @@ using FeatherQR.Internals.MicroQR;
 namespace FeatherQR;
 
 /// <summary>
-/// Represents Micro QR code data as a 2D boolean matrix (versions M1-M4,
-/// 11×11 to 17×17 modules).
+/// A Micro QR code as a module matrix, ready to render, serialize or decode.
 /// </summary>
 /// <remarks>
-/// Storage mirrors <see cref="QRCodeData"/>: core modules only (no quiet zone),
-/// bit-packed MSB-first in flat row-major order; the quiet zone is virtual and
-/// always reads light. Serialization uses the "QRX" container:
-/// <c>"QRX" + symbol type (1 byte) + width (1 byte) + height (1 byte) + packed core bits</c>.
-/// The legacy "QRR" format remains exclusive to Standard QR.
+/// The matrix is bit-packed and sized by version, from 11 × 11 at M1 to 17 × 17 at M4, plus the quiet zone.
+/// Serialization writes a "QRX" header carrying the symbology and dimensions, then the packed modules.
 /// </remarks>
-public class MicroQRCodeData
+public sealed class MicroQRCodeData
 {
+    // =====================================================================
+    // Memory Layout
+    // =====================================================================
+    //
+    // MicroQRCodeData stores CORE modules only (no quiet zone), bit-packed
+    // MSB-first in flat row-major order, zero-padded to a whole byte, and the
+    // packed bits ARE the serialization payload. See QRCodeData for the
+    // measurements that motivate the layout.
+    //
+    //   bitIndex = coreRow * _baseSize + coreCol
+    //   dark(coreRow, coreCol) = (_bits[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1
+    //
+    // Micro QR is square, so _baseSize is both the extent and the row stride.
+    // Sizes are M1 = 11, M2 = 13, M3 = 15, M4 = 17 modules per side, and the
+    // specification asks for a 2-module quiet zone (Standard QR uses 4).
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Example (M2, QuietZone = 2)                             │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ _baseSize: 13 (core modules, no quiet zone)             │
+    // │ _quietZoneSize: 2 (border width)                        │
+    // │ _size: 17 (13 + 2*2, including quiet zone)              │
+    // │ _bits.Length: 22 bytes (ceil(13 * 13 / 8))              │
+    // │   (byte-per-module over the same 17×17: 289 bytes)      │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // The quiet zone is VIRTUAL: it is all-light by definition, so the public
+    // indexer answers false outside the core area instead of storing border
+    // modules. _size/_quietZoneSize only affect coordinate translation.
+    //
+    // Visual Representation (17×17 with QuietZone=2):
+    //
+    //     0   1   2   3 ... 13  14  15  16
+    //   ┌───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    // 0 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ ← QuietZone (row 0-1)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 1 │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 2 │ Q │ Q │ C │ C │...│ C │ C │ Q │ Q │ ← Core starts (row/col 2-14)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    //   │...│...│...│...│...│...│...│...│...│
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 14│ Q │ Q │ C │ C │...│ C │ C │ Q │ Q │ ← Core ends
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 15│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ ← QuietZone (row 15-16)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 16│ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │
+    //   └───┴───┴───┴───┴───┴───┴───┴───┴───┘
+    //
+    // Q = QuietZone (VIRTUAL — not stored, indexer returns false)
+    // C = Core modules (stored bit-packed in _bits)
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Bit Mapping (core only, row-major, MSB-first)           │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ coreRow  = row - _quietZoneSize                         │
+    // │ coreCol  = col - _quietZoneSize                         │
+    // │   (outside 0.._baseSize-1 → quiet zone → false)         │
+    // │ bitIndex = coreRow × _baseSize + coreCol                │
+    // │                                                         │
+    // │ Example: Access (row=4, col=5) at M2 with QuietZone=2   │
+    // │   → coreRow = 2, coreCol = 3                            │
+    // │   → bitIndex = 2 × 13 + 3 = 29                          │
+    // │   → _bits[3], bit 2 (= 7 - (29 & 7))                    │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // =====================================================================
+    // Serialization / Deserialization
+    // =====================================================================
+    //
+    // The "QRX" container names the symbology and both dimensions, so one
+    // reader can tell a Micro QR payload from an rMQR one. Standard QR keeps
+    // its own 4-byte "QRR" header, which carries a single size byte.
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Serialization (GetRawData)                               │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ _bits (already the packed payload)                       │
+    // │   ↓ copy                                                 │
+    // │ rawData ("QRX" + type + width + height + _bits)          │
+    // │           3B     1B      1B       1B                     │
+    // │ width == height == _baseSize, Micro QR being square      │
+    // └──────────────────────────────────────────────────────────┘
+    //
+    // ┌──────────────────────────────────────────────────────────┐
+    // │ Deserialization (Constructor)                            │
+    // ├──────────────────────────────────────────────────────────┤
+    // │ rawData ("QRX" + type + width + height + packed bits)    │
+    // │   ↓ copy (padding bits masked to zero)                   │
+    // │ _bits                                                    │
+    // └──────────────────────────────────────────────────────────┘
+
     private readonly byte[] _bits;
     private readonly int _baseSize;
     private readonly int _quietZoneSize;
     private readonly int _size;
 
-    /// <summary>Gets the matrix side length in modules, including the quiet zone.</summary>
+    /// <summary>Side length in modules, quiet zone included.</summary>
     public int Size => _size;
 
-    /// <summary>Gets the Micro QR version (M1-M4).</summary>
+    /// <summary>The Micro QR code version, M1 to M4.</summary>
     public MicroQRVersion Version { get; }
 
     /// <summary>
-    /// Gets the module state at the specified position (quiet zone included).
-    /// Quiet zone positions always read false.
+    /// The module at the given position.
     /// </summary>
-    /// <param name="row">Row index (0-based, including quiet zone if present).</param>
-    /// <param name="col">Column index (0-based, including quiet zone if present).</param>
-    /// <returns>True if the module is dark, false if light.</returns>
+    /// <param name="row">Row, counted from the outer edge of the quiet zone.</param>
+    /// <param name="col">Column, counted from the outer edge of the quiet zone.</param>
+    /// <returns><c>true</c> when the module is dark.</returns>
+    /// <remarks>
+    /// Quiet zone positions always read <c>false</c>: the quiet zone is light by definition and is not stored.
+    /// </remarks>
     public bool this[int row, int col]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -55,13 +145,10 @@ public class MicroQRCodeData
     }
 
     /// <summary>
-    /// Initializes an empty matrix for the specified version.
+    /// Creates an empty matrix sized for the given version.
     /// </summary>
-    /// <param name="version">Micro QR version (M1-M4).</param>
-    /// <param name="quietZoneSize">
-    /// Quiet zone width in modules. The Micro QR specification requires a quiet
-    /// zone of 2 modules (narrower than Standard QR's 4).
-    /// </param>
+    /// <param name="version">The Micro QR code version.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules. The specification asks for 2, narrower than the 4 Standard QR uses.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not M1-M4 or the quiet zone size is out of range.</exception>
     public MicroQRCodeData(MicroQRVersion version, int quietZoneSize)
     {
@@ -77,12 +164,16 @@ public class MicroQRCodeData
     }
 
     /// <summary>
-    /// Deserializes Micro QR data previously produced by <see cref="GetRawData()"/>.
+    /// Restores a Micro QR code from bytes written by <see cref="GetRawData()"/>.
     /// </summary>
-    /// <param name="rawData">The serialized "QRX" data.</param>
-    /// <param name="quietZoneSize">Quiet zone width to apply; independent of the serialized data.</param>
-    /// <exception cref="InvalidDataException">Thrown when the header or dimensions are invalid.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the payload is truncated.</exception>
+    /// <remarks>
+    /// The serialized form is a "QRX" header (3 bytes), the symbology (1 byte), the width and height (1 byte each), then the bit-packed modules.
+    /// It holds the core modules only, so the quiet zone is chosen again here and need not match the one the code was serialized with.
+    /// </remarks>
+    /// <param name="rawData">The serialized Micro QR code.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules. 2 is the standard width.</param>
+    /// <exception cref="InvalidDataException">Thrown when the data is not a serialized Micro QR code.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public MicroQRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
     {
@@ -133,12 +224,16 @@ public class MicroQRCodeData
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
     }
 
-    /// <summary>Gets the serialized size in bytes ("QRX" header + packed core bits).</summary>
+    /// <summary>How many bytes <see cref="GetRawData()"/> produces for this Micro QR code.</summary>
     public int GetRawDataSize() => 6 + (_baseSize * _baseSize + 7) / 8;
 
     /// <summary>
-    /// Serializes the core modules (quiet zone excluded) to a new byte array.
+    /// Serializes the Micro QR code so it can be stored, sent or cached.
     /// </summary>
+    /// <remarks>
+    /// Writes a "QRX" header (3 bytes), the symbology (1 byte), the width and height (1 byte each), then the bit-packed modules.
+    /// The quiet zone is not written; pick its width again when restoring.
+    /// </remarks>
     public byte[] GetRawData()
     {
         var result = new byte[GetRawDataSize()];
@@ -147,8 +242,7 @@ public class MicroQRCodeData
     }
 
     /// <summary>
-    /// Writes the serialized data to the specified buffer writer without
-    /// intermediate allocation.
+    /// Serializes the Micro QR code into a buffer writer, without allocating a byte array.
     /// </summary>
     /// <returns>The number of bytes written.</returns>
     public int GetRawData(IBufferWriter<byte> writer)
@@ -172,29 +266,24 @@ public class MicroQRCodeData
     }
 
     /// <summary>
-    /// Gets an upper bound on the number of rectangles <see cref="GetModuleRectangles"/>
-    /// can return, suitable for sizing a pooled buffer for
-    /// <see cref="TryGetModuleRectangles"/>. O(1), no matrix scan.
+    /// Gets an upper bound on the number of rectangles <see cref="GetModuleRectangles"/> can return, suitable for sizing a pooled buffer for <see cref="TryGetModuleRectangles"/>.
+    /// O(1), no matrix scan.
     /// </summary>
     public int GetModuleRectanglesMaxCount() => ModuleRunScanner.GetMaxRunCount(_baseSize, _baseSize);
 
     /// <summary>
-    /// Gets the dark modules as merged rectangles in module coordinates, for rendering
-    /// with any graphics API without SkiaSharp (SVG path data, draw calls, vector output).
+    /// The dark modules as merged rectangles, for drawing the Micro QR code with any graphics API: SVG paths, draw calls, vector output.
     /// </summary>
     /// <returns>Rectangles that are disjoint and cover exactly the dark modules.</returns>
     /// <remarks>
     /// <para>
-    /// Coordinates use the same space as the indexer (<c>this[row, col]</c>): one unit is
-    /// one module, origin at the top-left including the quiet zone, <see cref="ModuleRect.X"/>
-    /// is the column and <see cref="ModuleRect.Y"/> is the row. Consumers scale by the pixel
-    /// size of one module; <see cref="Size"/> gives the total extent in modules.
+    /// Coordinates match the indexer: one unit is one module, the origin is the top-left corner including the quiet zone, <see cref="ModuleRect.X"/> is the column and <see cref="ModuleRect.Y"/> the row.
+    /// Scale by the pixel size of one module.
+    /// Consumers scale by the pixel size of one module; <see cref="Size"/> gives the total extent in modules.
     /// </para>
     /// <para>
-    /// Three properties are contractual: rectangles never overlap, cover only dark modules,
-    /// and cover every dark module. The decomposition shape and ordering are unspecified and
-    /// may change between versions (currently maximal horizontal runs in row-major order,
-    /// the same merge the built-in renderer draws).
+    /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
+    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws).
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()
@@ -204,12 +293,11 @@ public class MicroQRCodeData
     }
 
     /// <summary>
-    /// Writes the dark modules as merged rectangles into a caller-provided buffer.
-    /// Same contract as <see cref="GetModuleRectangles"/> without allocations.
+    /// Writes the rectangles of <see cref="GetModuleRectangles"/> into the buffer you provide, without allocating.
     /// </summary>
     /// <param name="destination">Buffer to receive the rectangles. Size it with <see cref="GetModuleRectanglesMaxCount"/>.</param>
     /// <param name="written">The number of rectangles written, or 0 when the buffer is too small.</param>
-    /// <returns>True on success; false only when <paramref name="destination"/> cannot hold every rectangle.</returns>
+    /// <returns><c>false</c> only when <paramref name="destination"/> cannot hold every rectangle.</returns>
     public bool TryGetModuleRectangles(Span<ModuleRect> destination, out int written)
     {
         var view = new MicroQRMatrixView(this);
@@ -228,8 +316,7 @@ public class MicroQRCodeData
     }
 
     /// <summary>
-    /// Unpacks the core matrix into a byte-per-module buffer (0 = light, 1 = dark),
-    /// the format consumed by <see cref="MicroQRCodeDecoder"/>.
+    /// Unpacks the core matrix into a byte-per-module buffer (0 = light, 1 = dark), the format consumed by <see cref="MicroQRCodeDecoder"/>.
     /// </summary>
     internal void GetCoreData(Span<byte> destination)
     {
@@ -241,8 +328,7 @@ public class MicroQRCodeData
     }
 
     /// <summary>
-    /// Packs a byte-per-module core matrix (0 = light, non-zero = dark) into the
-    /// internal bit representation.
+    /// Packs a byte-per-module core matrix (0 = light, non-zero = dark) into the internal bit representation.
     /// </summary>
     internal void SetCoreData(ReadOnlySpan<byte> source)
     {

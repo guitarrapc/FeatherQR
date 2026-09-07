@@ -4,13 +4,11 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
-namespace FeatherQR.Internals.StandardQr;
+namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Vectorized mask pattern selection for x86/x64 with AVX2. Selected at runtime
-/// by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and
-/// identical pattern selections to the scalar bit-packed implementation in
-/// ModulePlacer.Masking.cs (verified by ModulePlacerMaskSimdParityTest).
+/// Vectorized mask pattern selection for x86/x64 with AVX2.
+/// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskSimdParityTest).
 ///
 /// Architecture:
 /// - Versions 1-11 (one ulong per row) run lane-per-PATTERN: a Vector256&lt;ulong&gt;
@@ -39,13 +37,12 @@ namespace FeatherQR.Internals.StandardQr;
 ///   together for win-frequency ordering to matter (measured, mask-order
 ///   findings log).
 ///
-/// This file only executes under Avx2.IsSupported (x86/x64), so memory order is
-/// always little-endian and the SWAR tail reads skip endianness normalization.
+/// This file only executes under Avx2.IsSupported (x86/x64), so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
 /// </summary>
 internal static partial class ModulePlacer
 {
     /// <summary>Entry point for the vectorized tiers. Caller guarantees Avx2.IsSupported.</summary>
-    internal static int MaskCodeSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCodeSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         if (size <= 64)
         {
@@ -96,9 +93,8 @@ internal static partial class ModulePlacer
         1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
 
     /// <summary>
-    /// Packs a row of 0/1 module bytes into bits: pcmpeqb+pmovmskb handles 32
-    /// modules per step (vs 8 per SWAR multiply), then 16-byte, 8-byte-SWAR and
-    /// scalar tails. Bit c = row[c], same contract as PackRowBits64.
+    /// Packs a row of 0/1 module bytes into bits: pcmpeqb+pmovmskb handles 32 modules per step (vs 8 per SWAR multiply), then 16-byte, 8-byte-SWAR and scalar tails.
+    /// Bit c = row[c], same contract as PackRowBits64.
     /// </summary>
     internal static ulong PackRowBits64Simd(ReadOnlySpan<byte> row)
     {
@@ -135,9 +131,8 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Triple-word SIMD row packer. The 32-module chunks are 32-aligned so they
-    /// never straddle a word boundary; the 16/8-module tails stay within a word
-    /// for the same reason.
+    /// Triple-word SIMD row packer.
+    /// The 32-module chunks are 32-aligned so they never straddle a word boundary; the 16/8-module tails stay within a word for the same reason.
     /// </summary>
     private static Row192 PackRowBits192Simd(ReadOnlySpan<byte> row)
     {
@@ -353,7 +348,7 @@ internal static partial class ModulePlacer
                 for (var lane = 0; lane < 4; lane++)
                 {
                     var rowsOverlay = new ulong[size];
-                    var bits = QRCodeConstants.GetFormatBits((ECCLevel)e, 4 * g + lane);
+                    var bits = QRCodeConstants.GetFormatBits((QREccLevel)e, 4 * g + lane);
                     for (var i = 0; i < 15; i++)
                     {
                         if ((bits & (1 << i)) == 0) continue;
@@ -373,7 +368,7 @@ internal static partial class ModulePlacer
         return new MaskLayout64(pre, fmt, preScalar);
     }
 
-    internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         // The per-version tables are derived from the version's canonical blocked mask,
         // not from the parameter (kept for signature parity with the scalar and ARM
@@ -387,7 +382,7 @@ internal static partial class ModulePlacer
         if (buffer.Length < size * size)
             throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
         if ((uint)eccLevel > 3)
-            throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "ECCLevel was out of range");
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "QREccLevel was out of range");
 
         Span<ulong> packed = stackalloc ulong[64];
         packed = packed[..size];
@@ -451,10 +446,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Packs every row into bits with one (size &lt;= 32) or two 32-byte
-    /// compare+movemask loads; rows 0..size-2 may read past their own end into the
-    /// next row (masked off), the last row uses the exact-length packer so nothing
-    /// is read past the buffer.
+    /// Packs every row into bits with one (size &lt;= 32) or two 32-byte compare+movemask loads; rows 0..size-2 may read past their own end into the next row (masked off), the last row uses the exact-length packer so nothing is read past the buffer.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void PackRows64Wide(ReadOnlySpan<byte> buffer, int size, Span<ulong> packed)
@@ -475,12 +467,9 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of four
-    /// candidates; returns their four ISO/IEC 18004 penalty scores. Same rule
-    /// derivations as <see cref="CalculateScorePacked"/>; the accumulators are per
-    /// lane, so no horizontal reduction happens until the end. When all four lanes'
-    /// partials exceed <paramref name="abortAbove"/> at the checkpoint, every lane
-    /// reports int.MaxValue (pass int.MaxValue to disable, as for the first group).
+    /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of four candidates; returns their four ISO/IEC 18004 penalty scores.
+    /// Same rule derivations as <see cref="CalculateScorePacked"/>; the accumulators are per lane, so no horizontal reduction happens until the end.
+    /// When all four lanes' partials exceed <paramref name="abortAbove"/> at the checkpoint, every lane reports int.MaxValue (pass int.MaxValue to disable, as for the first group).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> nrows, Span<Vector256<ulong>> eq, int size, int abortAbove)
@@ -579,7 +568,7 @@ internal static partial class ModulePlacer
     // Two-word SoA tier (versions 12-29, size 65..128)
     // ---------------------------------
 
-    internal static int MaskCode128Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode128Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
         var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(8 * size);
@@ -708,8 +697,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>Two-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).
-    /// Returns int.MaxValue without running the column-rule-3 loop once the partial score
-    /// provably exceeds <paramref name="abortAbove"/> (see the checkpoint note in the file header).</summary>
+    /// Returns int.MaxValue without running the column-rule-3 loop once the partial score provably exceeds <paramref name="abortAbove"/> (see the checkpoint note in the file header).</summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int CalculateScore128Vec(
         Span<ulong> rw0, Span<ulong> rw1,
@@ -926,7 +914,7 @@ internal static partial class ModulePlacer
     // Three-word SoA tier (versions 30-40, size > 128)
     // ---------------------------------
 
-    internal static int MaskCode192Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode192Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
         var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
         var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(12 * size);
@@ -1120,8 +1108,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>Three-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).
-    /// Returns int.MaxValue without running the column-rule-3 loop once the partial score
-    /// provably exceeds <paramref name="abortAbove"/> (see the checkpoint note in the file header).</summary>
+    /// Returns int.MaxValue without running the column-rule-3 loop once the partial score provably exceeds <paramref name="abortAbove"/> (see the checkpoint note in the file header).</summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int CalculateScore192Vec(
         Span<ulong> rw0, Span<ulong> rw1, Span<ulong> rw2,

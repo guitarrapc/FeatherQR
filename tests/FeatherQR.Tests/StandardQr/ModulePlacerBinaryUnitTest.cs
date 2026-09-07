@@ -1,4 +1,4 @@
-using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.StandardQR;
 using Rectangle = FeatherQR.Internals.Rectangle;
 
 namespace FeatherQR.Tests;

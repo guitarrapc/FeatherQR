@@ -1,6 +1,6 @@
 using System.Text;
 using FeatherQR.Internals;
-using FeatherQR.Internals.RmQr;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 

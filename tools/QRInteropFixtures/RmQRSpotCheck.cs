@@ -40,9 +40,9 @@ public static class RmQRSpotCheck
                         : Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
                     var modules = new byte[calculated.BufferSize];
                     if (eciMode == EciMode.Default)
-                        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
+                        RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
                     else
-                        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
+                        RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
 
                     var luminance = RenderLuminance(modules, calculated.Width, calculated.Height, PixelsPerModule);
                     var image = new ImageView(luminance, calculated.Width * PixelsPerModule, calculated.Height * PixelsPerModule, ImageFormat.Lum);

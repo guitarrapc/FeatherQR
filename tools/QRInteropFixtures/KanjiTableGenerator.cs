@@ -189,7 +189,7 @@ public static class KanjiTableGenerator
             /// <para>
             /// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the
             /// cells CP932 adds stay unmapped here, so a symbol carrying them is reported
-            /// as QRCodeDecodeStatus.UnmappedCharacter rather than silently rewritten. The
+            /// as DecodeStatus.UnmappedCharacter rather than silently rewritten. The
             /// canonical statement of
             /// the divergence set and the reasoning is the scope decision in
             /// .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file
@@ -200,9 +200,9 @@ public static class KanjiTableGenerator
             /// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping. The
             /// caller separates the two reasons a cell can be unmapped with
             /// <see cref="IsStructurallyValid"/>: a value no Shift_JIS pair can express is a
-            /// corrupt bitstream (QRCodeDecodeStatus.InvalidBitstream), a well-formed value
+            /// corrupt bitstream (DecodeStatus.InvalidBitstream), a well-formed value
             /// outside the repertoire is a character this mapping has no reading for
-            /// (QRCodeDecodeStatus.UnmappedCharacter).
+            /// (DecodeStatus.UnmappedCharacter).
             /// </para>
             /// </remarks>
             internal static class ShiftJisKanjiTable

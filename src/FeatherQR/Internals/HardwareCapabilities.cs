@@ -4,15 +4,12 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals;
 
 /// <summary>
-/// Runtime CPU properties that the <c>IsSupported</c> flags of the hardware intrinsic
-/// classes do not express. net8.0+ only: every consumer is inside a SIMD tier.
+/// Runtime CPU properties that the <c>IsSupported</c> flags of the hardware intrinsic classes do not express. net8.0+ only: every consumer is inside a SIMD tier.
 /// </summary>
 internal static class HardwareCapabilities
 {
     /// <summary>
-    /// PDEP/PEXT are microcoded on AMD before Zen 3 (hundreds of cycles per
-    /// instruction), which would turn a BMI2 kernel into a large regression there:
-    /// true only on vendors without that lineage, or AMD family 0x19 (Zen 3) and later.
+    /// PDEP/PEXT are microcoded on AMD before Zen 3 (hundreds of cycles per instruction), which would turn a BMI2 kernel into a large regression there: true only on vendors without that lineage, or AMD family 0x19 (Zen 3) and later.
     /// Implies <see cref="Bmi2.X64.IsSupported"/>, so callers do not repeat that check.
     /// </summary>
     internal static readonly bool HasFastPext = DetectFastPext();

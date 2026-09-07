@@ -79,7 +79,7 @@ public class FinderCandidatesStrideTest
         canvas.Translate(canvasW / 2f, canvasH / 2f);
         canvas.RotateDegrees(degrees);
         canvas.Translate(-widthPx / 2f, -heightPx / 2f);
-        QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, widthPx, heightPx), data, SKColors.Black, SKColors.White);
+        SymbolRenderer.Render(canvas, SKRect.Create(0, 0, widthPx, heightPx), data, SKColors.Black, SKColors.White);
         canvas.Restore();
         canvas.Flush();
         return bitmap;
@@ -130,9 +130,9 @@ public class FinderCandidatesStrideTest
         // Both extremes of the rMQR shape range: the narrowest and the widest symbol.
         var symbols = new[]
         {
-            RmQRCodeGenerator.CreateRmQRCode("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 }),
-            RmQRCodeGenerator.CreateRmQRCode("27", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 }),
-            RmQRCodeGenerator.CreateRmQRCode(string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }),
+            RmQRCodeGenerator.Create("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 }),
+            RmQRCodeGenerator.Create("27", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 }),
+            RmQRCodeGenerator.Create(string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }),
         };
 
         foreach (var data in symbols)
@@ -167,7 +167,7 @@ public class FinderCandidatesStrideTest
     public async Task RotatedSymbol_AlongsideOtherFinderPatterns_KeepsEveryConfirmedCandidate(
         RmQRVersion version, string content, int modulePixelSize)
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
 
         for (var degrees = 0; degrees < 90; degrees++)
         {
@@ -196,7 +196,7 @@ public class FinderCandidatesStrideTest
     [Test]
     public async Task DecoyPatterns_DoNotChangeWhatIsFoundForTheSymbol()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
+        var data = RmQRCodeGenerator.Create("RMQR 43", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
 
         for (var degrees = 0; degrees < 90; degrees += 3)
         {
@@ -245,7 +245,7 @@ public class FinderCandidatesStrideTest
     public async Task DecodeThroughThePublicApi_SurvivesEveryRotation_WithOtherFinderPatternsInFrame(
         RmQRVersion version, string content, int modulePixelSize)
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         var buffer = new char[RmQRCodeDecoder.GetMaxDecodedLength(version)];
 
         for (var degrees = 0; degrees < 90; degrees++)
