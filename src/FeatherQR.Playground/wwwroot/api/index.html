@@ -282,7 +282,7 @@
   <header class="bar">
     <a class="back" href="../">&#8592; Playground</a>
     <h1>FeatherQR API</h1>
-    <span class="meta">2.0.0.0 &middot; <span id="count">58 types</span></span>
+    <span class="meta">2.0.0.0 &middot; <span id="count">60 types</span></span>
   </header>
 
   <div class="layout">
@@ -293,6 +293,7 @@
         <p class="toc-ns">FeatherQR</p>
         <a class="toc-item" href="#FeatherQR.DecodeStatus" data-for="FeatherQR.DecodeStatus">DecodeStatus</a>
         <a class="toc-item" href="#FeatherQR.EciMode" data-for="FeatherQR.EciMode">EciMode</a>
+        <a class="toc-item" href="#FeatherQR.ImagePoint" data-for="FeatherQR.ImagePoint">ImagePoint</a>
         <a class="toc-item" href="#FeatherQR.MicroQRCodeCalculatedSize" data-for="FeatherQR.MicroQRCodeCalculatedSize">MicroQRCodeCalculatedSize</a>
         <a class="toc-item" href="#FeatherQR.MicroQRCodeData" data-for="FeatherQR.MicroQRCodeData">MicroQRCodeData</a>
         <a class="toc-item" href="#FeatherQR.MicroQRCodeDecodeInfo" data-for="FeatherQR.MicroQRCodeDecodeInfo">MicroQRCodeDecodeInfo</a>
@@ -324,6 +325,7 @@
         <a class="toc-item" href="#FeatherQR.RmQRHeight" data-for="FeatherQR.RmQRHeight">RmQRHeight</a>
         <a class="toc-item" href="#FeatherQR.RmQRSegmentation" data-for="FeatherQR.RmQRSegmentation">RmQRSegmentation</a>
         <a class="toc-item" href="#FeatherQR.RmQRVersion" data-for="FeatherQR.RmQRVersion">RmQRVersion</a>
+        <a class="toc-item" href="#FeatherQR.SymbolCorners" data-for="FeatherQR.SymbolCorners">SymbolCorners</a>
         <p class="toc-ns">FeatherQR.SkiaSharp</p>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.CircleFinderPatternShape" data-for="FeatherQR.SkiaSharp.CircleFinderPatternShape">CircleFinderPatternShape</a>
         <a class="toc-item" href="#FeatherQR.SkiaSharp.CircleModuleShape" data-for="FeatherQR.SkiaSharp.CircleModuleShape">CircleModuleShape</a>
@@ -431,6 +433,27 @@
                 <summary>Notes</summary>
                 <p class="doc remarks">The ECI header costs 12 bits in Standard QR and 11 in rMQR, and each character takes 1 to 4 bytes. For Western European text Iso8859_1 is denser.</p>
               </details>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.ImagePoint" data-name="featherqr.imagepoint" data-text="featherqr.imagepoint public readonly struct imagepoint : iequatable&lt;imagepoint&gt; a position in an image, in continuous pixel coordinates: (0, 0) is the top-left corner of the top-left pixel and (width, height) the bottom-right corner of the image, so the value plots directly in skiasharp, a canvas or system.drawing. produced by the image decoders as the corners of a located symbol ( symbolcorners ). module-space geometry, such as modulerect , is a different coordinate system: this one is pixels of the input image. property public float x { get; } horizontal position in pixels, increasing to the right.  property public float y { get; } vertical position in pixels, increasing downward. ">
+          <h3><a class="anchor" href="#FeatherQR.ImagePoint" aria-label="Link to FeatherQR.ImagePoint">#</a><span class="kind">struct</span> <span class="name">ImagePoint</span></h3>
+          <pre class="sig"><code>public readonly struct ImagePoint : IEquatable&lt;ImagePoint&gt;</code></pre>
+          <p class="doc">A position in an image, in continuous pixel coordinates: (0, 0) is the top-left corner of the top-left pixel and (width, height) the bottom-right corner of the image, so the value plots directly in SkiaSharp, a canvas or System.Drawing.</p>
+          <details class="notes" data-text="produced by the image decoders as the corners of a located symbol ( symbolcorners ). module-space geometry, such as modulerect , is a different coordinate system: this one is pixels of the input image.">
+            <summary>Notes</summary>
+            <p class="doc remarks">Produced by the image decoders as the corners of a located symbol ( SymbolCorners ). Module-space geometry, such as ModuleRect , is a different coordinate system: this one is pixels of the input image.</p>
+          </details>
+          <div class="members">
+            <div class="member" data-text="property public float x { get; } horizontal position in pixels, increasing to the right. ">
+              <h4><span class="kind">property</span> <span class="name">X</span></h4>
+              <pre class="sig"><code>public float X { get; }</code></pre>
+              <p class="doc">Horizontal position in pixels, increasing to the right.</p>
+            </div>
+            <div class="member" data-text="property public float y { get; } vertical position in pixels, increasing downward. ">
+              <h4><span class="kind">property</span> <span class="name">Y</span></h4>
+              <pre class="sig"><code>public float Y { get; }</code></pre>
+              <p class="doc">Vertical position in pixels, increasing downward.</p>
             </div>
           </div>
         </article>
@@ -542,7 +565,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.MicroQRCodeDecodeInfo" data-name="featherqr.microqrcodedecodeinfo" data-text="featherqr.microqrcodedecodeinfo public readonly struct microqrcodedecodeinfo : iequatable&lt;microqrcodedecodeinfo&gt; diagnostic information produced by a micro qr code decode attempt. statuses are shared with the standard qr decoder ( decodestatus ); version, ecc level and mask pattern use the micro qr domains. property public decodestatus status { get; } decode result status. success when decoding succeeded.  property public microqrecclevel ecclevel { get; } error correction level read from the format information.  property public microqrversion version { get; } micro qr version (m1-m4), or default (0) when the matrix was invalid.  property public int errorscorrected { get; } number of codeword errors corrected by reed-solomon decoding.  property public int maskpattern { get; } mask pattern (0-3) read from the format information, or -1 when unknown. ">
+        <article class="type" id="FeatherQR.MicroQRCodeDecodeInfo" data-name="featherqr.microqrcodedecodeinfo" data-text="featherqr.microqrcodedecodeinfo public readonly struct microqrcodedecodeinfo : iequatable&lt;microqrcodedecodeinfo&gt; diagnostic information produced by a micro qr code decode attempt. statuses are shared with the standard qr decoder ( decodestatus ); version, ecc level and mask pattern use the micro qr domains. property public decodestatus status { get; } decode result status. success when decoding succeeded.  property public microqrecclevel ecclevel { get; } error correction level read from the format information.  property public microqrversion version { get; } micro qr version (m1-m4), or default (0) when the matrix was invalid.  property public symbolcorners corners { get; } where the symbol sits in the image, when decoded from one; see symbolcorners . empty for a matrix-level decode or a failed one.  property public int errorscorrected { get; } number of codeword errors corrected by reed-solomon decoding.  property public int maskpattern { get; } mask pattern (0-3) read from the format information, or -1 when unknown. ">
           <h3><a class="anchor" href="#FeatherQR.MicroQRCodeDecodeInfo" aria-label="Link to FeatherQR.MicroQRCodeDecodeInfo">#</a><span class="kind">struct</span> <span class="name">MicroQRCodeDecodeInfo</span></h3>
           <pre class="sig"><code>public readonly struct MicroQRCodeDecodeInfo : IEquatable&lt;MicroQRCodeDecodeInfo&gt;</code></pre>
           <p class="doc">Diagnostic information produced by a Micro QR code decode attempt.</p>
@@ -565,6 +588,11 @@
               <h4><span class="kind">property</span> <span class="name">Version</span></h4>
               <pre class="sig"><code>public MicroQRVersion Version { get; }</code></pre>
               <p class="doc">Micro QR version (M1-M4), or default (0) when the matrix was invalid.</p>
+            </div>
+            <div class="member" data-text="property public symbolcorners corners { get; } where the symbol sits in the image, when decoded from one; see symbolcorners . empty for a matrix-level decode or a failed one. ">
+              <h4><span class="kind">property</span> <span class="name">Corners</span></h4>
+              <pre class="sig"><code>public SymbolCorners Corners { get; }</code></pre>
+              <p class="doc">Where the symbol sits in the image, when decoded from one; see SymbolCorners . Empty for a matrix-level decode or a failed one.</p>
             </div>
             <div class="member" data-text="property public int errorscorrected { get; } number of codeword errors corrected by reed-solomon decoding. ">
               <h4><span class="kind">property</span> <span class="name">ErrorsCorrected</span></h4>
@@ -1029,7 +1057,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.QRCodeDecodeInfo" data-name="featherqr.qrcodedecodeinfo" data-text="featherqr.qrcodedecodeinfo public readonly struct qrcodedecodeinfo : iequatable&lt;qrcodedecodeinfo&gt; diagnostic information produced by a qr code decode attempt.  property public decodestatus status { get; } decode result status. success when decoding succeeded.  property public qrecclevel ecclevel { get; } error correction level read from the format information.  property public int errorscorrected { get; } total number of codeword errors corrected by reed-solomon decoding.  property public int maskpattern { get; } mask pattern (0-7) read from the format information, or -1 when unknown.  property public int version { get; } qr code version (1-40), or 0 when the matrix was invalid. ">
+        <article class="type" id="FeatherQR.QRCodeDecodeInfo" data-name="featherqr.qrcodedecodeinfo" data-text="featherqr.qrcodedecodeinfo public readonly struct qrcodedecodeinfo : iequatable&lt;qrcodedecodeinfo&gt; diagnostic information produced by a qr code decode attempt.  property public decodestatus status { get; } decode result status. success when decoding succeeded.  property public qrecclevel ecclevel { get; } error correction level read from the format information.  property public symbolcorners corners { get; } where the symbol sits in the image, when decoded from one; see symbolcorners . empty for a matrix-level decode or a failed one.  property public int errorscorrected { get; } total number of codeword errors corrected by reed-solomon decoding.  property public int maskpattern { get; } mask pattern (0-7) read from the format information, or -1 when unknown.  property public int version { get; } qr code version (1-40), or 0 when the matrix was invalid. ">
           <h3><a class="anchor" href="#FeatherQR.QRCodeDecodeInfo" aria-label="Link to FeatherQR.QRCodeDecodeInfo">#</a><span class="kind">struct</span> <span class="name">QRCodeDecodeInfo</span></h3>
           <pre class="sig"><code>public readonly struct QRCodeDecodeInfo : IEquatable&lt;QRCodeDecodeInfo&gt;</code></pre>
           <p class="doc">Diagnostic information produced by a QR code decode attempt.</p>
@@ -1043,6 +1071,11 @@
               <h4><span class="kind">property</span> <span class="name">EccLevel</span></h4>
               <pre class="sig"><code>public QREccLevel EccLevel { get; }</code></pre>
               <p class="doc">Error correction level read from the format information.</p>
+            </div>
+            <div class="member" data-text="property public symbolcorners corners { get; } where the symbol sits in the image, when decoded from one; see symbolcorners . empty for a matrix-level decode or a failed one. ">
+              <h4><span class="kind">property</span> <span class="name">Corners</span></h4>
+              <pre class="sig"><code>public SymbolCorners Corners { get; }</code></pre>
+              <p class="doc">Where the symbol sits in the image, when decoded from one; see SymbolCorners . Empty for a matrix-level decode or a failed one.</p>
             </div>
             <div class="member" data-text="property public int errorscorrected { get; } total number of codeword errors corrected by reed-solomon decoding. ">
               <h4><span class="kind">property</span> <span class="name">ErrorsCorrected</span></h4>
@@ -1463,7 +1496,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.RmQRCodeDecodeInfo" data-name="featherqr.rmqrcodedecodeinfo" data-text="featherqr.rmqrcodedecodeinfo public readonly struct rmqrcodedecodeinfo : iequatable&lt;rmqrcodedecodeinfo&gt; diagnostic information from an rmqr decode attempt ( rmqrcodedecoder ): status, and when the format information could be read, the version and ecc level plus the number of reed-solomon codeword corrections applied. rmqr has a single data mask, so there is no mask pattern to report.  property public decodestatus status { get; } decode outcome; success when text was produced.  property public rmqrecclevel ecclevel { get; } the ecc level read from the format information (valid once the format decoded).  property public rmqrversion version { get; } the symbol version (from the physical dimensions), or 0 when the input is not an rmqr matrix.  property public int errorscorrected { get; } total reed-solomon codeword corrections across all blocks (0 for a clean symbol). ">
+        <article class="type" id="FeatherQR.RmQRCodeDecodeInfo" data-name="featherqr.rmqrcodedecodeinfo" data-text="featherqr.rmqrcodedecodeinfo public readonly struct rmqrcodedecodeinfo : iequatable&lt;rmqrcodedecodeinfo&gt; diagnostic information from an rmqr decode attempt ( rmqrcodedecoder ): status, and when the format information could be read, the version and ecc level plus the number of reed-solomon codeword corrections applied. rmqr has a single data mask, so there is no mask pattern to report.  property public decodestatus status { get; } decode outcome; success when text was produced.  property public rmqrecclevel ecclevel { get; } the ecc level read from the format information (valid once the format decoded).  property public rmqrversion version { get; } the symbol version (from the physical dimensions), or 0 when the input is not an rmqr matrix.  property public symbolcorners corners { get; } where the symbol sits in the image, when decoded from one; see symbolcorners . empty for a matrix-level decode or a failed one.  property public int errorscorrected { get; } total reed-solomon codeword corrections across all blocks (0 for a clean symbol). ">
           <h3><a class="anchor" href="#FeatherQR.RmQRCodeDecodeInfo" aria-label="Link to FeatherQR.RmQRCodeDecodeInfo">#</a><span class="kind">struct</span> <span class="name">RmQRCodeDecodeInfo</span></h3>
           <pre class="sig"><code>public readonly struct RmQRCodeDecodeInfo : IEquatable&lt;RmQRCodeDecodeInfo&gt;</code></pre>
           <p class="doc">Diagnostic information from an rMQR decode attempt ( RmQRCodeDecoder ): status, and when the format information could be read, the version and ECC level plus the number of Reed-Solomon codeword corrections applied. rMQR has a single data mask, so there is no mask pattern to report.</p>
@@ -1482,6 +1515,11 @@
               <h4><span class="kind">property</span> <span class="name">Version</span></h4>
               <pre class="sig"><code>public RmQRVersion Version { get; }</code></pre>
               <p class="doc">The symbol version (from the physical dimensions), or 0 when the input is not an rMQR matrix.</p>
+            </div>
+            <div class="member" data-text="property public symbolcorners corners { get; } where the symbol sits in the image, when decoded from one; see symbolcorners . empty for a matrix-level decode or a failed one. ">
+              <h4><span class="kind">property</span> <span class="name">Corners</span></h4>
+              <pre class="sig"><code>public SymbolCorners Corners { get; }</code></pre>
+              <p class="doc">Where the symbol sits in the image, when decoded from one; see SymbolCorners . Empty for a matrix-level decode or a failed one.</p>
             </div>
             <div class="member" data-text="property public int errorscorrected { get; } total reed-solomon codeword corrections across all blocks (0 for a clean symbol). ">
               <h4><span class="kind">property</span> <span class="name">ErrorsCorrected</span></h4>
@@ -1845,6 +1883,42 @@
             <div class="member" data-text="value r17x139 = 32, 17 × 139 modules. ">
               <pre class="sig"><code>R17x139 = 32,</code></pre>
               <p class="doc">17 × 139 modules.</p>
+            </div>
+          </div>
+        </article>
+        <article class="type" id="FeatherQR.SymbolCorners" data-name="featherqr.symbolcorners" data-text="featherqr.symbolcorners public readonly struct symbolcorners : iequatable&lt;symbolcorners&gt; where a decoded symbol sits in the image: the four outer corners of its module area, quiet zone excluded, in the input image's continuous pixel coordinates (see imagepoint ). the corners are named in the symbol's own frame, not the image's: topleft is the corner beside the finder pattern that defines the symbol's top-left, wherever it landed in the picture. a rotated capture therefore reports rotated corners, and a mirrored capture reports them in reversed winding: seen on screen (y down), the corners of a symbol as printed run clockwise, and those of a mirrored capture run counter-clockwise. the four points form a general quadrilateral under perspective. they are estimates from the fitted symbol geometry, and how tight depends on how much the decoder had to infer. standard qr, fitted on three finders and an alignment pattern, holds every corner within half a module for flat, rotated, mirrored and keystoned captures (version 1 has no alignment pattern and is held for flat and rotated captures). micro qr and rmqr fit from a single finder: flat and at right angles they match that, but an oblique rotation settles on whichever axis angle still decodes and a keystone is recovered by a bounded search, so the corners far from their anchors can be off by about a module, and by up to a module and a half on a short rmqr symbol whose top or bottom edge is foreshortened by 3 % or more. populated only when the decode succeeded from an image. a matrix-level decode has no image and a failed image decode located nothing worth reporting; both leave the value at its default, which isempty reports. property public imagepoint bottomleft { get; } the corner at the symbol's bottom-left.  property public imagepoint bottomright { get; } the corner at the symbol's bottom-right.  property public imagepoint topleft { get; } the corner beside the symbol's top-left finder pattern.  property public imagepoint topright { get; } the corner at the symbol's top-right.  property public bool isempty { get; } true when no corners were reported: the decode did not succeed, or it ran on a module matrix rather than an image. ">
+          <h3><a class="anchor" href="#FeatherQR.SymbolCorners" aria-label="Link to FeatherQR.SymbolCorners">#</a><span class="kind">struct</span> <span class="name">SymbolCorners</span></h3>
+          <pre class="sig"><code>public readonly struct SymbolCorners : IEquatable&lt;SymbolCorners&gt;</code></pre>
+          <p class="doc">Where a decoded symbol sits in the image: the four outer corners of its module area, quiet zone excluded, in the input image's continuous pixel coordinates (see ImagePoint ).</p>
+          <details class="notes" data-text="the corners are named in the symbol's own frame, not the image's: topleft is the corner beside the finder pattern that defines the symbol's top-left, wherever it landed in the picture. a rotated capture therefore reports rotated corners, and a mirrored capture reports them in reversed winding: seen on screen (y down), the corners of a symbol as printed run clockwise, and those of a mirrored capture run counter-clockwise. the four points form a general quadrilateral under perspective. they are estimates from the fitted symbol geometry, and how tight depends on how much the decoder had to infer. standard qr, fitted on three finders and an alignment pattern, holds every corner within half a module for flat, rotated, mirrored and keystoned captures (version 1 has no alignment pattern and is held for flat and rotated captures). micro qr and rmqr fit from a single finder: flat and at right angles they match that, but an oblique rotation settles on whichever axis angle still decodes and a keystone is recovered by a bounded search, so the corners far from their anchors can be off by about a module, and by up to a module and a half on a short rmqr symbol whose top or bottom edge is foreshortened by 3 % or more. populated only when the decode succeeded from an image. a matrix-level decode has no image and a failed image decode located nothing worth reporting; both leave the value at its default, which isempty reports.">
+            <summary>Notes</summary>
+            <p class="doc remarks">The corners are named in the symbol's own frame, not the image's: TopLeft is the corner beside the finder pattern that defines the symbol's top-left, wherever it landed in the picture. A rotated capture therefore reports rotated corners, and a mirrored capture reports them in reversed winding: seen on screen (y down), the corners of a symbol as printed run clockwise, and those of a mirrored capture run counter-clockwise. The four points form a general quadrilateral under perspective. They are estimates from the fitted symbol geometry, and how tight depends on how much the decoder had to infer. Standard QR, fitted on three finders and an alignment pattern, holds every corner within half a module for flat, rotated, mirrored and keystoned captures (version 1 has no alignment pattern and is held for flat and rotated captures). Micro QR and rMQR fit from a single finder: flat and at right angles they match that, but an oblique rotation settles on whichever axis angle still decodes and a keystone is recovered by a bounded search, so the corners far from their anchors can be off by about a module, and by up to a module and a half on a short rMQR symbol whose top or bottom edge is foreshortened by 3 % or more. Populated only when the decode succeeded from an image. A matrix-level decode has no image and a failed image decode located nothing worth reporting; both leave the value at its default, which IsEmpty reports.</p>
+          </details>
+          <div class="members">
+            <div class="member" data-text="property public imagepoint bottomleft { get; } the corner at the symbol's bottom-left. ">
+              <h4><span class="kind">property</span> <span class="name">BottomLeft</span></h4>
+              <pre class="sig"><code>public ImagePoint BottomLeft { get; }</code></pre>
+              <p class="doc">The corner at the symbol's bottom-left.</p>
+            </div>
+            <div class="member" data-text="property public imagepoint bottomright { get; } the corner at the symbol's bottom-right. ">
+              <h4><span class="kind">property</span> <span class="name">BottomRight</span></h4>
+              <pre class="sig"><code>public ImagePoint BottomRight { get; }</code></pre>
+              <p class="doc">The corner at the symbol's bottom-right.</p>
+            </div>
+            <div class="member" data-text="property public imagepoint topleft { get; } the corner beside the symbol's top-left finder pattern. ">
+              <h4><span class="kind">property</span> <span class="name">TopLeft</span></h4>
+              <pre class="sig"><code>public ImagePoint TopLeft { get; }</code></pre>
+              <p class="doc">The corner beside the symbol's top-left finder pattern.</p>
+            </div>
+            <div class="member" data-text="property public imagepoint topright { get; } the corner at the symbol's top-right. ">
+              <h4><span class="kind">property</span> <span class="name">TopRight</span></h4>
+              <pre class="sig"><code>public ImagePoint TopRight { get; }</code></pre>
+              <p class="doc">The corner at the symbol's top-right.</p>
+            </div>
+            <div class="member" data-text="property public bool isempty { get; } true when no corners were reported: the decode did not succeed, or it ran on a module matrix rather than an image. ">
+              <h4><span class="kind">property</span> <span class="name">IsEmpty</span></h4>
+              <pre class="sig"><code>public bool IsEmpty { get; }</code></pre>
+              <p class="doc">true when no corners were reported: the decode did not succeed, or it ran on a module matrix rather than an image.</p>
             </div>
           </div>
         </article>
