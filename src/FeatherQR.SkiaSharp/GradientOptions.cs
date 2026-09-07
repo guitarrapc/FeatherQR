@@ -137,7 +137,9 @@ public sealed record class GradientOptions
     /// </summary>
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
-        builder.Append(_colors.Length).Append(" colors, Direction = ").Append(Direction);
+        // Append(Direction) binds to Append(object) and boxes the enum; no numeric overload
+        // accepts one, and ToString() is what the generated printer would have called anyway.
+        builder.Append(_colors.Length).Append(" colors, Direction = ").Append(Direction.ToString());
         if (_colorPositions.Length != 0)
             builder.Append(", ").Append(_colorPositions.Length).Append(" stops");
         return true;

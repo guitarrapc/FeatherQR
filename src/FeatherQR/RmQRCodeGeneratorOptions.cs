@@ -18,6 +18,36 @@ public readonly record struct RmQRCodeGeneratorOptions
     // as different.
     private readonly int _quietZoneSizeOffset;
 
+    /// <summary>
+    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
+    /// </summary>
+    /// <remarks>
+    /// Prefer the object initializer (<c>new RmQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order, and pass constructor arguments by name.
+    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation)"/>.
+    /// </remarks>
+    /// <param name="eciMode">See <see cref="EciMode"/>.</param>
+    /// <param name="version">See <see cref="Version"/>.</param>
+    /// <param name="fitStrategy">See <see cref="FitStrategy"/>.</param>
+    /// <param name="height">See <see cref="Height"/>.</param>
+    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
+    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
+    public RmQRCodeGeneratorOptions(
+        EciMode eciMode = EciMode.Default,
+        RmQRVersion? version = null,
+        RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea,
+        RmQRHeight? height = null,
+        int quietZoneSize = RmQRConstants.QuietZoneModules,
+        RmQRSegmentation segmentation = RmQRSegmentation.Single)
+        : this()
+    {
+        EciMode = eciMode;
+        Version = version;
+        FitStrategy = fitStrategy;
+        Height = height;
+        QuietZoneSize = quietZoneSize;
+        Segmentation = segmentation;
+    }
+
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static RmQRCodeGeneratorOptions Default => default;
 

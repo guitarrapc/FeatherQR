@@ -57,7 +57,7 @@ public readonly record struct RmQRCodeGeneratorOptions
 RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);
 int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default);   // byte per module, row-major, quiet zone included, returns bytes written
 bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default);
-public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
+public readonly record struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
 ```
 
 `Version` and `Height` together are accepted only when they agree (else `ArgumentException`); `FitStrategy` is ignored when `Version` is given.
@@ -80,7 +80,7 @@ public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int H
 
 **Where the fit lives.** `RmQRVersionSelector.TrySelect` (single mode) and `RmQRSegmentPlanner.TrySelectVersion` (mixed mode) are the non-throwing cores; the throwing `Select` / `SelectVersion` are wrappers that add the message. One selection path, and it is the same one the encode takes, so the reported version cannot disagree with the version an encode produces — the property `TryGetRequiredBufferSizeTest.RmQR_ReportedSize_MatchesTheEncodeItDescribes` asserts exactly that (reported buffer filled exactly, reported version chosen, `false` implies the encode throws) over content × ECC × strategy × height × segmentation.
 
-Data model (`public class RmQRCodeData`):
+Data model (`public sealed class RmQRCodeData`):
 
 ```csharp
 RmQRCodeData(RmQRVersion version, int quietZoneSize);
@@ -98,18 +98,18 @@ bool TryDecode(RmQRCodeData data, out string text);
 bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info);
 bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info);                          // byte per module, any light border (uniform or not: the dark bounding box is the core)
 bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
-bool TryDecode(SKBitmap bitmap, out string text);
-bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
 bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info);
 bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
 int GetMaxDecodedLength(RmQRVersion version);
-public readonly struct RmQRCodeDecodeInfo { DecodeStatus Status; RmQRVersion Version; RmQREccLevel EccLevel; int ErrorsCorrected; }   // no MaskPattern: rMQR has one mask
+public readonly record struct RmQRCodeDecodeInfo { DecodeStatus Status; RmQRVersion Version; RmQREccLevel EccLevel; int ErrorsCorrected; }   // no MaskPattern: rMQR has one mask
 ```
+
+The `SKBitmap` overloads are not here. `RmQRCodeDecoder` lives in the dependency-free core; bitmap decoding is `RmQRCodeImageDecoder` in the rendering package, reachable as `RmQRCodeDecoder.TryDecode(bitmap, …)` only through C# 14 extension members.
 
 Rendering:
 
 ```csharp
-public class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
+public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageBuilder>
   RmQRCodeImageBuilder(string content);  RmQRCodeImageBuilder(RmQRCodeData data);          // default quiet zone 2
   RmQRCodeImageBuilder WithErrorCorrection(RmQREccLevel eccLevel);  WithVersion(RmQRVersion version);
   RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy);  WithHeight(RmQRHeight height);  WithWidth(int width);   // rMQR-only, listed in the parity test's allowed differences (WithWidth: image width in pixels, height from the aspect ratio, background over the whole image)

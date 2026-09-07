@@ -14,6 +14,31 @@ public readonly record struct MicroQRCodeGeneratorOptions
 
     private readonly int? _maskPattern;
 
+    /// <summary>
+    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
+    /// </summary>
+    /// <remarks>
+    /// Prefer the object initializer (<c>new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order. Pass constructor arguments by name: <paramref name="quietZoneSize"/> and <paramref name="maskPattern"/> are adjacent integers, so a positional call can transpose them and still compile.
+    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation)"/>.
+    /// </remarks>
+    /// <param name="version">See <see cref="Version"/>.</param>
+    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
+    /// <param name="maskPattern">See <see cref="MaskPattern"/>.</param>
+    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-3 or <c>null</c>.</exception>
+    public MicroQRCodeGeneratorOptions(
+        MicroQRVersionRange version = default,
+        int quietZoneSize = MicroQRCodeGenerator.DefaultQuietZone,
+        int? maskPattern = null,
+        MicroQRSegmentation segmentation = MicroQRSegmentation.Single)
+        : this()
+    {
+        Version = version;
+        QuietZoneSize = quietZoneSize;
+        MaskPattern = maskPattern;
+        Segmentation = segmentation;
+    }
+
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static MicroQRCodeGeneratorOptions Default => default;
 

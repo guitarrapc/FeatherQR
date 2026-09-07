@@ -49,7 +49,7 @@ public static class RmQRCodeGenerator
     /// <summary>
     /// Encodes text into an rMQR code.
     /// </summary>
-    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
@@ -118,7 +118,7 @@ public static class RmQRCodeGenerator
     /// <remarks>
     /// One byte per module, 0 light and 1 dark, row-major over the full width with the quiet zone included, so the module at (row, col) is <c>destination[row * width + col]</c>.
     /// </remarks>
-    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
     /// <param name="destination">Where to write the matrix. Needs <see cref="RmQRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
@@ -167,7 +167,7 @@ public static class RmQRCodeGenerator
     /// <summary>
     /// Reports how large the rMQR code will be, or <c>false</c> when the content does not fit.
     /// </summary>
-    /// <param name="text">The text to encode.</param>
+    /// <param name="text">The text to size for. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the rMQR code should survive, M or H.</param>
     /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings.</param>

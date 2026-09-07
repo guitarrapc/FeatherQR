@@ -23,7 +23,7 @@ public static class MicroQRCodeImageDecoder
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
         /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text)
             => TryDecode(bitmap, out text, out _);
 
@@ -37,7 +37,7 @@ public static class MicroQRCodeImageDecoder
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
         /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
         /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQRCodeDecodeInfo info)
         {
             if (bitmap is null)

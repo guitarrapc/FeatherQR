@@ -196,16 +196,21 @@ public static class QRCodeGenerator
     // requestedVersion, quietZoneSize) were frozen through 1.2.0 and removed in 2.0.0,
     // which is what lets `options` carry a default here: while both sets existed,
     // Create(text, ecc) would have been ambiguous between them. The string convenience
-    // overloads went with them: `string` converts implicitly to ReadOnlySpan<char> on every
-    // target framework, so Create("text", ecc) still binds here.
+    // overloads went with them, on the strength of `string` converting implicitly to
+    // ReadOnlySpan<char> so that Create("text", ecc) still binds. That holds on three of the
+    // four assets, not all four: the conversion is compiler-synthesized, and when
+    // ReadOnlySpan<T> comes from the System.Memory package rather than the framework -- the
+    // netstandard2.0 asset, which is what .NET Framework consumers bind -- only C# 14
+    // synthesizes it. Below that, those consumers write Create(text.AsSpan(), ecc). The
+    // options structs carry a constructor for the same audience, since `init` needs C# 9.
     //
     // Sizing is deliberately not paired: only TryGetRequiredBufferSize is offered, because
     // "does not fit" is a data-dependent answer rather than a defect.
 
     /// <summary>
-    /// Encodes text into a QR QR code.
+    /// Encodes text into a QR code.
     /// </summary>
-    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
@@ -237,7 +242,7 @@ public static class QRCodeGenerator
     /// ArrayPool&lt;byte&gt;.Shared.Return(buffer);
     /// </code>
     /// </remarks>
-    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly.</param>
+    /// <param name="textSpan">The text to encode. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="destination">Where to write the matrix. Needs <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
@@ -261,7 +266,7 @@ public static class QRCodeGenerator
     /// With a narrowed <see cref="QRCodeGeneratorOptions.Version"/> it means no version in that range holds the content, not that it exceeds version 40. Pass the options you will encode with, since segmentation and ECI can pick different versions and a buffer sized for one can be too small for the other.
     /// <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> makes no difference here, as the boost never changes the version.
     /// </remarks>
-    /// <param name="text">The text to encode.</param>
+    /// <param name="text">The text to size for. A <see cref="string"/> converts implicitly, except on the netstandard2.0 asset below C# 14, where <c>text.AsSpan()</c> is needed.</param>
     /// <param name="eccLevel">How much damage the QR code should survive.</param>
     /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings.</param>

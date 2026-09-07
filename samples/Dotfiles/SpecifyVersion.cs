@@ -1,9 +1,9 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
-#:project ../../src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj
+#:project ../../src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // fix confirmation for: https://github.com/guitarrapc/SkiaSharp.QrCode/issues/296 & https://github.com/guitarrapc/SkiaSharp.QrCode/issues/292
 
@@ -52,7 +52,7 @@ File.WriteAllBytes(autoOutputPath, autoPngBytes);
 File.WriteAllBytes(fixedOutputPath, fixedPngBytes);
 
 var autoData = QRCodeGenerator.Create(content, QREccLevel.H);
-var version10Data = QRCodeGenerator.Create(content, QREccLevel.H, requestedVersion: 10);
+var version10Data = QRCodeGenerator.Create(content, QREccLevel.H, new QRCodeGeneratorOptions { Version = 10 });
 var autoCoreModules = autoData.Size - 8; // quiet zone = 4 on each side
 var version10CoreModules = version10Data.Size - 8; // quiet zone = 4 on each side
 

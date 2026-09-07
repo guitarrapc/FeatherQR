@@ -130,7 +130,7 @@ One rule decides every public name: **a prefix says which symbology (`QR`, `Micr
 
 `DecodeStatus`, `SymbolRenderer` and `SymbolImageBuilderBase<TSelf>` lost their prefix because they serve all three symbologies; `QRCodeExtensions` is named after the type it extends, as the BCL does. The `Create` methods dropped the part that repeated the class name, which is also what removes the `Qr` / `QR` casing inconsistency they carried.
 
-Every rename is a whole-word replacement, in this order (the `Core` suffixes and the longer names must go first):
+Every rename is a whole-word replacement. Order does not matter as written, because every pattern is `\b`-anchored and none is a prefix of another; put the longer name first if you add rules of your own.
 
 ```shell
 # bash, from your repository root; adjust the file glob to taste
@@ -150,17 +150,65 @@ grep -rlZ --include='*.cs' -e ECCLevel -e QRCode -e CreateQrCode -e CreateMicroQ
     -e 's/\bQRCodeExtensions\b/SKCanvasExtensions/g'
 ```
 
-Two cautions if you run it as-is. It rewrites `ECCLevel` wherever it appears, so a file that also uses **QRCoder**'s `QRCodeGenerator.ECCLevel` needs that one put back. And it is a rename script, not a migration script: it does not perform the [announced removals](#the-announced-removals) above, which the compiler will point at.
+Four cautions if you run it as-is.
+
+- **It rewrites names other libraries also use.** `ECCLevel` and `CreateQrCode` are spelled the same in **QRCoder** (`QRCodeGenerator.ECCLevel`, and four `CreateQrCode` overloads), and `QrSize` and `Utf8BOM` are generic enough to collide with your own code; those hits need putting back. Review the diff rather than committing the run.
+- **`sed -i` as written is GNU sed.** On macOS and BSD, write `sed -i ''` instead, or run it through `gsed`.
+- **It does not move namespaces.** The `using SkiaSharp.QrCode;` → `using FeatherQR;` change from the [namespace change](#namespaces) is the other mechanical edit, and it is not in the script.
+- **It is a rename script, not a migration script.** It does not perform the [announced removals](#the-announced-removals) above, which the compiler will point at.
 
 ### The `string` overloads are gone
 
-`Create` takes `ReadOnlySpan<char>`. The `string` overloads were removed because `string` converts to `ReadOnlySpan<char>` implicitly on every target framework, so the calls that used them keep compiling:
+`Create` takes `ReadOnlySpan<char>`. The `string` overloads were removed because `string` converts to `ReadOnlySpan<char>` implicitly, so the calls that used them keep compiling:
 
 ```csharp
 var data = QRCodeGenerator.Create("https://example.com", QREccLevel.M);   // unchanged
 ```
 
 The one spelling that needs an edit is a named argument: `plainText:` becomes `textSpan:`. A null `string` behaves as it always did — the removed overload called `AsSpan()` on it, which is null-safe, so null encodes an empty symbol on both sides of the upgrade.
+
+**Except on .NET Framework and other netstandard2.0 consumers.** See [Older language versions](#older-language-versions) below; that conversion is not available there before C# 14.
+
+### Older language versions
+
+Some 2.0.0 spellings need C# features your project may not have enabled. They affect the `netstandard2.0` asset, which is what .NET Framework 4.6.2+ binds, and the `init` ones affect `netstandard2.1` as well. Neither is about the runtime — the compiled library works fine on both; it is about what your compiler will let you write.
+
+| Your project targets | Default language version | A `string` where a `ReadOnlySpan<char>` is expected (`Create`, `TryGetRequiredBufferSize`) | Any `{ … }` initializer (`QRCodeGeneratorOptions`, `IconData`) |
+|---|---|---|---|
+| net472 / net48 / netstandard2.0 | 7.3 | needs C# 14 | needs C# 9 |
+| netstandard2.1 | 8.0 | works | needs C# 9 |
+| net8.0 | 12.0 | works | works |
+| net10.0 | 14.0 | works | works |
+
+`string` converts to `ReadOnlySpan<char>` through a conversion the compiler synthesizes, and on netstandard2.0 the span comes from the `System.Memory` package rather than the framework, where only C# 14 synthesizes it. Every version through C# 13 reports `CS1503`. `init` accessors are a C# 9 feature, so an object initializer that assigns one reports `CS8370` or `CS8400` below that.
+
+`IconData` carries one constraint the table cannot express, because it is about your *compiler* rather than your language version. `Icon` is a `required` member, and the compiler marks every constructor of such a type that is not annotated `[SetsRequiredMembers]` as unusable to compilers that do not understand required members, so a compiler older than Roslyn 4.3 (before VS 2022 17.3 / .NET SDK 6.0.4xx) reports `CS0619: 'IconData.IconData()' is obsolete: 'Constructors of types with required members are not supported in this version of your compiler.'` Raising `<LangVersion>` does not help there — only a newer SDK does, and the boundary is not the C# 11 line: Roslyn 4.3 caps out at C# 10 and already consumes required members. On any compiler from 4.3 onward the table applies as written, and `<LangVersion>9</LangVersion>` is enough. The `IconData` constructor below carries that annotation, so it stays usable even on the older compilers.
+
+You have two ways forward.
+
+**Raise the language version.** One line, and every example in this guide then compiles as written. C# 14 needs the .NET 10 SDK; C# 9 does not.
+
+```xml
+<LangVersion>14</LangVersion>
+```
+
+**Or keep your language version** and use the spellings that work everywhere. Each option struct has a constructor taking the same settings as optional parameters, and `IconData` has one taking the icon plus the rest as optional parameters, so nothing is out of reach:
+
+```csharp
+using System;                       // for AsSpan
+using SkiaSharp;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
+
+var data = QRCodeGenerator.Create("https://example.com".AsSpan(), QREccLevel.M,
+    new QRCodeGeneratorOptions(quietZoneSize: 2, version: 5));
+
+// IconData too. Below C# 9 this is the only way to reach a shape the FromImage
+// factories cannot build, since both of them hardcode ImageIconShape.
+var icon = new IconData(new ImageTextIconShape(logo, "FooBar", SKColors.Black, font), iconSizePercent: 15);
+```
+
+The constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order.
 
 ### Results, options and sealing
 
@@ -185,7 +233,7 @@ if (!QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size))
 var (bufferSize, qrSize, version) = (size.BufferSize, size.Size, size.Version);
 ```
 
-**`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself:
+**`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself (below C# 9, use the constructor described under [Older language versions](#older-language-versions)):
 
 ```csharp
 // before
@@ -221,6 +269,8 @@ var recolored = new GradientOptions([SKColors.Red, SKColors.Blue], options.Direc
 The constructor takes the same shapes the properties hand back — `ReadOnlySpan<SKColor>` and `ReadOnlySpan<float>`, with an empty span meaning "distribute evenly" — so building one gradient from another translates nothing either. Arrays convert implicitly, so `new GradientOptions(myColors, direction)` is unchanged.
 
 Two details if you passed the stops explicitly before: `null` is no longer a value you can pass (omit the argument, or pass `default` or `[]`), and an empty array now means "evenly distributed" where it used to be an `ArgumentException`. Stops are one per colour, so when the new colour count differs from the old, supply new stops or omit them — a non-empty span of a different length is still an `ArgumentException`.
+
+A `null` colour array is the one case whose *exception type* moved. It used to be an `ArgumentNullException`; a null array converts to an empty span, so it is now the same `ArgumentException` as any other array too short to make a gradient. Code that catches `ArgumentNullException` specifically has to widen to `ArgumentException`.
 
 **Sealed:** `QRCodeData`, `MicroQRCodeData`, `RmQRCodeData`, the three image builders, `IconData` and `GradientOptions`. None had a designed extension point. The shape hierarchies (`ModuleShape`, `FinderPatternShape`, `IconShape`) are still open and are the supported way to change how a symbol is drawn.
 

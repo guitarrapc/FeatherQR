@@ -217,7 +217,7 @@ internal static partial class EccBinaryDecoder
     /// </summary>
     /// <remarks>
     /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes long, not <paramref name="eccCount"/>: both vector kernels store their accumulator registers whole and only the first <paramref name="eccCount"/> lanes are meaningful.
-    /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds- checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode; EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes and .AdvSimdKernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
+    /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode; EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes and .AdvSimdKernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
     /// <para>
     /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once) or the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Simd.Arm.cs); both keep every syndrome in vector lanes rather than walking the codeword once per syndrome.
     /// </para>
