@@ -26,7 +26,8 @@ internal static class EncodingModeExtensions
     /// <returns>Bit length (8-16 bits):
     /// - Version 1-9: Numeric=10, Alphanumeric=9, Byte=8
     /// - Version 10-26: Numeric=12, Alphanumeric=11, Byte=16
-    /// - Version 27-40: Numeric=14, Alphanumeric=13, Byte=16</returns>
+    /// - Version 27-40: Numeric=14, Alphanumeric=13, Byte=16
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetCountIndicatorLength(this EncodingMode mode, int version)
     {

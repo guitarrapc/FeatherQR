@@ -22,7 +22,7 @@ internal static class TextAnalyzer
     private static readonly Encoding Iso88591Encoding = Encoding.GetEncoding("ISO-8859-1");
 
     /// <summary>
-    /// Analyzes the input text to determine the most efficient encoding mode (Numeric, Alphanumeric, Byte) If SIMD is supported, uses SIMD instructions for faster analysis.
+    /// Analyzes the input text to determine the most efficient encoding mode (Numeric, Alphanumeric, Byte). If SIMD is supported, uses SIMD instructions for faster analysis.
     /// </summary>
     /// <param name="text"></param>
     /// <param name="requestedEciMode"></param>
