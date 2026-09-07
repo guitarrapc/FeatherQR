@@ -179,6 +179,9 @@ const copyImageBtn = document.getElementById('copy-image-btn');
 const permalinkBtn = document.getElementById('permalink-btn');
 const decodeFileEl = document.getElementById('decode-file');
 const decodeResultEl = document.getElementById('decode-result');
+const decodePreviewEl = document.getElementById('decode-preview');
+const decodeCanvasEl = document.getElementById('decode-canvas');
+const decodePreviewCaptionEl = document.getElementById('decode-preview-caption');
 const decodeVerifyEl = document.getElementById('decode-verify');
 const benchModeSelect = document.getElementById('bench-mode-select');
 const benchCountSelect = document.getElementById('bench-count-select');
@@ -758,9 +761,74 @@ function callDecode(bytes) {
   }
 }
 
+/**
+ * Draws the decoded image with the reported symbol outline over it.
+ *
+ * The decoder works on the file's raw pixels, so the bitmap here is decoded with
+ * `imageOrientation: 'none'`: letting the browser apply EXIF rotation would move the image out
+ * from under the coordinates the library returned. `imageWidth`/`imageHeight` say what the
+ * decoder saw, and a mismatch means the two disagree, so the overlay is dropped rather than
+ * drawn in the wrong place.
+ */
+async function drawDecodePreview(file, result) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'none' });
+  } catch {
+    decodePreviewEl.hidden = true;
+    return;
+  }
+
+  decodeCanvasEl.width = bitmap.width;
+  decodeCanvasEl.height = bitmap.height;
+  const ctx = decodeCanvasEl.getContext('2d');
+  ctx.clearRect(0, 0, bitmap.width, bitmap.height);
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  const corners = result.corners;
+  const aligned = result.imageWidth === decodeCanvasEl.width && result.imageHeight === decodeCanvasEl.height;
+  if (!corners || corners.length !== 8 || !aligned) {
+    decodePreviewEl.hidden = false;
+    decodePreviewCaptionEl.textContent = corners && !aligned
+      ? 'The browser decoded this image at a different size than the library did, so the outline is not drawn.'
+      : 'No symbol was located, so there is no outline to draw.';
+    return;
+  }
+
+  // Scale the stroke with the image so the outline stays visible on a large photo and does not
+  // swallow a small one.
+  const stroke = Math.max(2, Math.round(Math.max(bitmap.width, bitmap.height) / 250));
+  ctx.lineWidth = stroke;
+  ctx.strokeStyle = '#ff3b30';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(corners[0], corners[1]);
+  for (let i = 2; i < 8; i += 2) ctx.lineTo(corners[i], corners[i + 1]);
+  ctx.closePath();
+  ctx.stroke();
+
+  // TopLeft is the corner beside the finder that defines the symbol's own top-left, so marking it
+  // is what shows a rotation or a mirror at a glance.
+  ctx.fillStyle = '#007aff';
+  ctx.beginPath();
+  ctx.arc(corners[0], corners[1], stroke * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // y grows downward, so a symbol as printed winds clockwise (positive cross product) and a
+  // mirrored capture reverses it. That is the whole mirror test; the library exposes no flag.
+  const cross = (corners[2] - corners[0]) * (corners[7] - corners[1])
+    - (corners[3] - corners[1]) * (corners[6] - corners[0]);
+  decodePreviewEl.hidden = false;
+  decodePreviewCaptionEl.textContent =
+    `Outline is the reported Corners; the dot is TopLeft. Winding is ${cross < 0 ? 'counter-clockwise, so this capture is mirrored' : 'clockwise, so this capture is not mirrored'}.`;
+}
+
 decodeFileEl.addEventListener('change', async () => {
   const file = decodeFileEl.files?.[0];
   if (!file) return;
+
+  decodePreviewEl.hidden = true;
 
   let bytes;
   try {
@@ -784,6 +852,7 @@ decodeFileEl.addEventListener('change', async () => {
   if (!result.ok) {
     decodeResultEl.textContent =
       `No QR code decoded (${result.status}). The built-in decoder targets clean, screen-rendered images.`;
+    await drawDecodePreview(file, result);
     return;
   }
   const decodedLabel = symbolLabel(result.symbology, result.qrVersion);
@@ -792,6 +861,7 @@ decodeFileEl.addEventListener('change', async () => {
   decodeResultEl.textContent =
     `“${result.text}” · ${decodedLabel} · ECC ${result.ecc}${maskLabel}`
     + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
+  await drawDecodePreview(file, result);
 });
 
 /** Shows an inline error while keeping the last good image visible. */

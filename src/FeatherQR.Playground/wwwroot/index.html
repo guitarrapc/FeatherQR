@@ -253,6 +253,10 @@
             <input type="file" id="decode-file" accept="image/png,image/jpeg,image/webp" />
           </label>
           <div id="decode-result" class="qr-stats" aria-live="polite"></div>
+          <figure id="decode-preview" class="decode-preview" hidden>
+            <canvas id="decode-canvas"></canvas>
+            <figcaption id="decode-preview-caption" class="field__hint"></figcaption>
+          </figure>
           <p class="field__hint">
             Runs FeatherQR's built-in decoders (QR Code, Micro QR, rMQR) in your browser, nothing is uploaded.
             They target clean, screen-rendered images (rotation, mirroring and mild perspective are fine);

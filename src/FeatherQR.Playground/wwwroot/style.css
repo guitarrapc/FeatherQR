@@ -385,6 +385,24 @@ output {
   min-height: 1.2em;
 }
 
+/* The decoded image with the reported symbol outline stroked over it. The canvas carries the
+   image's own aspect ratio, so only a max width is imposed here. */
+.decode-preview {
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.decode-preview canvas {
+  max-width: 100%;
+  max-height: min(60vh, 460px);
+  height: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
 .generate-error {
   color: var(--danger);
   font-size: 0.85rem;

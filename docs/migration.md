@@ -282,12 +282,13 @@ Additive: nothing to migrate, but new in 2.0.0. `QRCodeDecodeInfo`, `MicroQRCode
 if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
 {
     var c = info.Corners;
-    using var path = new SKPath();
-    path.MoveTo(c.TopLeft.X, c.TopLeft.Y);
-    path.LineTo(c.TopRight.X, c.TopRight.Y);
-    path.LineTo(c.BottomRight.X, c.BottomRight.Y);
-    path.LineTo(c.BottomLeft.X, c.BottomLeft.Y);
-    path.Close();
+    using var builder = new SKPathBuilder();
+    builder.MoveTo(c.TopLeft.X, c.TopLeft.Y);
+    builder.LineTo(c.TopRight.X, c.TopRight.Y);
+    builder.LineTo(c.BottomRight.X, c.BottomRight.Y);
+    builder.LineTo(c.BottomLeft.X, c.BottomLeft.Y);
+    builder.Close();
+    using var path = builder.Detach();
     canvas.DrawPath(path, outline);
 }
 ```
@@ -303,6 +304,8 @@ Three things the contract fixes:
   ```
 - **They are estimates from the fitted geometry.** Standard QR holds every corner within half a module, including under keystone (version 1, which has no alignment pattern, is held for flat and rotated captures). Micro QR and rMQR fit from a single finder: half a module flat and at right angles, about a module for an oblique rotation or a keystone, and up to a module and a half on a short rMQR symbol whose top or bottom edge is foreshortened by 3 % or more.
 - **They exist only for a successful image decode.** A matrix-level `TryDecode` has no image and a failed image decode located nothing worth reporting; both leave `Corners` at its default, and `Corners.IsEmpty` says so.
+
+[samples/Dotfiles/DecodeCorners.cs](../samples/Dotfiles/DecodeCorners.cs) runs all of this over a flat, a rotated, a mirrored and a keystoned capture, and writes each one with the reported outline drawn on it.
 
 ## 1.2.0
 
