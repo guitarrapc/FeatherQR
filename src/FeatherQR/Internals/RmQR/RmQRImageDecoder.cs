@@ -559,7 +559,12 @@ internal static class RmQRImageDecoder
         SampleGrid(luminance, width, height, threshold, transform, symbolWidth, symbolHeight, grid);
         var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
         if (status == DecodeStatus.Success)
+        {
+            // The frames already carry a mirrored capture in their axes, so the
+            // transform is in symbol order and never transposed.
+            info = info.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
             return status;
+        }
 
         TrackBestFailure(status, info, ref bestStatus, ref bestInfo);
         return status;

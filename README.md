@@ -443,9 +443,14 @@ if (QRCodeDecoder.TryDecode(qrData, out var text))
 }
 
 using var bitmap = SKBitmap.Decode("qr.png");
-if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
+if (QRCodeImageDecoder.TryDecode(bitmap, out var decoded, out var info))
 {
-    Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
+    Console.WriteLine($"{decoded} (version {info.Version}, ECC {info.EccLevel})");
+
+    // Where the symbol sits in the image: its four corners in pixel coordinates,
+    // named in the symbol's own frame, so a rotated or mirrored capture reports as such.
+    var corners = info.Corners;
+    Console.WriteLine($"top-left at ({corners.TopLeft.X}, {corners.TopLeft.Y})");
 }
 ```
 
@@ -453,7 +458,7 @@ The bitmap overloads live in `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and
 
 To decode from any other image source, convert the pixels to 8-bit luminance yourself, compositing transparent pixels against white, and call `TryDecodeImage(luminance, width, height, ...)` on the decoder.
 
-The returned decode information includes a status when decoding fails.
+The returned decode information includes a status when decoding fails. When an image decode succeeds it also carries `Corners`, the symbol's module-area corners (quiet zone excluded) in the image's continuous pixel coordinates: `TopLeft` is the corner beside the symbol's top-left finder wherever it landed, so the four points draw an outline that follows rotation, reverse their winding for a mirrored capture, and form a general quadrilateral under perspective. Matrix-level decodes have no image and report `Corners.IsEmpty`.
 
 ## Platform-Specific Considerations
 

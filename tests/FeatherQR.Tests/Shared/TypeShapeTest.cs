@@ -28,6 +28,8 @@ public class TypeShapeTest
         yield return typeof(QRCodeDecodeInfo);
         yield return typeof(MicroQRCodeDecodeInfo);
         yield return typeof(RmQRCodeDecodeInfo);
+        yield return typeof(SymbolCorners);
+        yield return typeof(ImagePoint);
     }
 
     /// <summary>
@@ -111,11 +113,13 @@ public class TypeShapeTest
         await Assert.That(names).Contains("Version");
         await Assert.That(names).Contains("EccLevel");
         await Assert.That(names).Contains("ErrorsCorrected");
+        await Assert.That(names).Contains("Corners");
         await Assert.That(names.Contains("MaskPattern")).IsEqualTo(hasMaskPattern);
-        await Assert.That(names.Length).IsEqualTo(hasMaskPattern ? 5 : 4);
+        await Assert.That(names.Length).IsEqualTo(hasMaskPattern ? 6 : 5);
 
-        // Status is the shared enum on all three; version and ECC level are per-symbology.
+        // Status and Corners are the shared types on all three; version and ECC level are per-symbology.
         await Assert.That(type.GetProperty("Status")!.PropertyType).IsEqualTo(typeof(DecodeStatus));
+        await Assert.That(type.GetProperty("Corners")!.PropertyType).IsEqualTo(typeof(SymbolCorners));
     }
 
     /// <summary>

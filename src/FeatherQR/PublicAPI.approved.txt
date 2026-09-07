@@ -1,5 +1,5 @@
 // FeatherQR
-// 33 exported types
+// 35 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
@@ -23,6 +23,12 @@ namespace FeatherQR
         Default = 0,
         Iso8859_1 = 3,
         Utf8 = 26,
+    }
+
+    public readonly struct ImagePoint : IEquatable<ImagePoint>
+    {
+        public float X { get; }
+        public float Y { get; }
     }
 
     public readonly struct MicroQRCodeCalculatedSize : IEquatable<MicroQRCodeCalculatedSize>
@@ -53,6 +59,7 @@ namespace FeatherQR
         public DecodeStatus Status { get; }
         public MicroQREccLevel EccLevel { get; }
         public MicroQRVersion Version { get; }
+        public SymbolCorners Corners { get; }
         public int ErrorsCorrected { get; }
         public int MaskPattern { get; }
     }
@@ -164,6 +171,7 @@ namespace FeatherQR
     {
         public DecodeStatus Status { get; }
         public QREccLevel EccLevel { get; }
+        public SymbolCorners Corners { get; }
         public int ErrorsCorrected { get; }
         public int MaskPattern { get; }
         public int Version { get; }
@@ -263,6 +271,7 @@ namespace FeatherQR
         public DecodeStatus Status { get; }
         public RmQREccLevel EccLevel { get; }
         public RmQRVersion Version { get; }
+        public SymbolCorners Corners { get; }
         public int ErrorsCorrected { get; }
     }
 
@@ -358,5 +367,14 @@ namespace FeatherQR
         R17x77 = 30,
         R17x99 = 31,
         R17x139 = 32,
+    }
+
+    public readonly struct SymbolCorners : IEquatable<SymbolCorners>
+    {
+        public ImagePoint BottomLeft { get; }
+        public ImagePoint BottomRight { get; }
+        public ImagePoint TopLeft { get; }
+        public ImagePoint TopRight { get; }
+        public bool IsEmpty { get; }
     }
 }

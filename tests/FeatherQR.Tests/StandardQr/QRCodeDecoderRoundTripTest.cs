@@ -147,7 +147,7 @@ public class QRCodeDecoderRoundTripTest
         var content = "0123456789";
         var calculated = Sizing.Required(content, QREccLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.Create(content, QREccLevel.M, buffer, quietZoneSize: 0);
+        QRCodeGenerator.Create(content, QREccLevel.M, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
         var destination = new char[QRCodeDecoder.GetMaxDecodedLength(calculated.Version)];
 
         // Warm-up: blocked-mask cache, ArrayPool buckets, JIT
