@@ -385,10 +385,28 @@ output {
   min-height: 1.2em;
 }
 
-/* The decoded image with the reported symbol outline stroked over it. The canvas carries the
-   image's own aspect ratio, so only a max width is imposed here. */
+/* Drop target for the decode panel. Scoped to the panel rather than the page because the logo
+   field takes dropped images too, and a page-wide target would swallow those. */
+.decode-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px dashed transparent;
+  border-radius: 10px;
+  padding: 4px;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.decode-drop.is-dragover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* The decoded image with the reported symbol outline stroked over it. The canvas is sized in CSS
+   pixels and drawn at device resolution, so the outline stays sharp whatever size the source
+   image is; see drawDecodePreview in main.js. */
 .decode-preview {
-  margin: 10px 0 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -396,8 +414,6 @@ output {
 
 .decode-preview canvas {
   max-width: 100%;
-  max-height: min(60vh, 460px);
-  height: auto;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   background: var(--panel-bg);

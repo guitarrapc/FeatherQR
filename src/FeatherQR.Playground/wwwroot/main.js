@@ -178,6 +178,9 @@ const downloadSvgBtn = document.getElementById('download-svg-btn');
 const copyImageBtn = document.getElementById('copy-image-btn');
 const permalinkBtn = document.getElementById('permalink-btn');
 const decodeFileEl = document.getElementById('decode-file');
+const decodePanelEl = document.getElementById('decode-panel');
+const decodeDropEl = document.getElementById('decode-drop');
+const decodeCornersCheck = document.getElementById('decode-corners-check');
 const decodeResultEl = document.getElementById('decode-result');
 const decodePreviewEl = document.getElementById('decode-preview');
 const decodeCanvasEl = document.getElementById('decode-canvas');
@@ -761,50 +764,81 @@ function callDecode(bytes) {
   }
 }
 
+/** Box the preview canvas is fitted into, in CSS pixels. Small symbols are scaled up into it. */
+const DECODE_PREVIEW_MAX_WIDTH = 460;
+const DECODE_PREVIEW_MAX_HEIGHT = 460;
+
+/** The image and result the preview is showing, so the corners toggle can redraw without decoding again. */
+let lastDecodeImage = null;
+let lastDecodeResult = null;
+
 /**
  * Draws the decoded image with the reported symbol outline over it.
  *
- * The decoder works on the file's raw pixels, so the bitmap here is decoded with
+ * The decoder works on the file's raw pixels, so the bitmap is decoded with
  * `imageOrientation: 'none'`: letting the browser apply EXIF rotation would move the image out
  * from under the coordinates the library returned. `imageWidth`/`imageHeight` say what the
  * decoder saw, and a mismatch means the two disagree, so the overlay is dropped rather than
  * drawn in the wrong place.
+ *
+ * The canvas is sized in CSS pixels and its backing store scaled by the device pixel ratio, with
+ * the corners mapped from image space into that space. Drawing at the image's own resolution and
+ * letting CSS resize it left the outline soft on every image that was not displayed 1:1, which is
+ * most of them.
  */
-async function drawDecodePreview(file, result) {
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'none' });
-  } catch {
-    decodePreviewEl.hidden = true;
-    return;
-  }
+async function drawDecodePreview(bitmap, result) {
+  const scale = Math.min(
+    DECODE_PREVIEW_MAX_WIDTH / bitmap.width,
+    DECODE_PREVIEW_MAX_HEIGHT / bitmap.height);
+  const cssWidth = Math.round(bitmap.width * scale);
+  const cssHeight = Math.round(bitmap.height * scale);
+  const dpr = window.devicePixelRatio || 1;
 
-  decodeCanvasEl.width = bitmap.width;
-  decodeCanvasEl.height = bitmap.height;
+  decodeCanvasEl.width = Math.round(cssWidth * dpr);
+  decodeCanvasEl.height = Math.round(cssHeight * dpr);
+  decodeCanvasEl.style.width = `${cssWidth}px`;
+  decodeCanvasEl.style.height = `${cssHeight}px`;
+
   const ctx = decodeCanvasEl.getContext('2d');
-  ctx.clearRect(0, 0, bitmap.width, bitmap.height);
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  // Upscaling a symbol: keep the module edges hard. Downscaling a photo: let it average.
+  ctx.imageSmoothingEnabled = cssWidth * dpr < bitmap.width;
+  ctx.drawImage(bitmap, 0, 0, cssWidth, cssHeight);
+
+  decodePreviewEl.hidden = false;
 
   const corners = result.corners;
-  const aligned = result.imageWidth === decodeCanvasEl.width && result.imageHeight === decodeCanvasEl.height;
+  const aligned = result.imageWidth === bitmap.width && result.imageHeight === bitmap.height;
   if (!corners || corners.length !== 8 || !aligned) {
-    decodePreviewEl.hidden = false;
     decodePreviewCaptionEl.textContent = corners && !aligned
       ? 'The browser decoded this image at a different size than the library did, so the outline is not drawn.'
       : 'No symbol was located, so there is no outline to draw.';
     return;
   }
 
-  // Scale the stroke with the image so the outline stays visible on a large photo and does not
-  // swallow a small one.
-  const stroke = Math.max(2, Math.round(Math.max(bitmap.width, bitmap.height) / 250));
-  ctx.lineWidth = stroke;
+  // y grows downward, so a symbol as printed winds clockwise (positive cross product) and a
+  // mirrored capture reverses it. That is the whole mirror test; the library exposes no flag.
+  const cross = (corners[2] - corners[0]) * (corners[7] - corners[1])
+    - (corners[3] - corners[1]) * (corners[6] - corners[0]);
+  const winding = cross < 0
+    ? 'counter-clockwise, so this capture is mirrored'
+    : 'clockwise, so this capture is not mirrored';
+
+  if (!decodeCornersCheck.checked) {
+    decodePreviewCaptionEl.textContent = `Corner winding is ${winding}.`;
+    return;
+  }
+
+  // Everything below is in CSS pixels, so the stroke is a constant on-screen weight rather than
+  // something the source image's resolution decides.
+  const at = (i) => [corners[i] * scale, corners[i + 1] * scale];
+  ctx.lineWidth = 2;
   ctx.strokeStyle = '#ff3b30';
   ctx.lineJoin = 'round';
   ctx.beginPath();
-  ctx.moveTo(corners[0], corners[1]);
-  for (let i = 2; i < 8; i += 2) ctx.lineTo(corners[i], corners[i + 1]);
+  ctx.moveTo(...at(0));
+  for (let i = 2; i < 8; i += 2) ctx.lineTo(...at(i));
   ctx.closePath();
   ctx.stroke();
 
@@ -812,23 +846,19 @@ async function drawDecodePreview(file, result) {
   // is what shows a rotation or a mirror at a glance.
   ctx.fillStyle = '#007aff';
   ctx.beginPath();
-  ctx.arc(corners[0], corners[1], stroke * 2.5, 0, Math.PI * 2);
+  ctx.arc(...at(0), 5, 0, Math.PI * 2);
   ctx.fill();
 
-  // y grows downward, so a symbol as printed winds clockwise (positive cross product) and a
-  // mirrored capture reverses it. That is the whole mirror test; the library exposes no flag.
-  const cross = (corners[2] - corners[0]) * (corners[7] - corners[1])
-    - (corners[3] - corners[1]) * (corners[6] - corners[0]);
-  decodePreviewEl.hidden = false;
   decodePreviewCaptionEl.textContent =
-    `Outline is the reported Corners; the dot is TopLeft. Winding is ${cross < 0 ? 'counter-clockwise, so this capture is mirrored' : 'clockwise, so this capture is not mirrored'}.`;
+    `Outline is the reported Corners; the dot is TopLeft. Winding is ${winding}.`;
 }
 
-decodeFileEl.addEventListener('change', async () => {
-  const file = decodeFileEl.files?.[0];
-  if (!file) return;
-
+/** Runs one image through the decoder and shows the result; shared by the file input, paste and drop. */
+async function decodeImageFile(file) {
   decodePreviewEl.hidden = true;
+  lastDecodeImage?.close();
+  lastDecodeImage = null;
+  lastDecodeResult = null;
 
   let bytes;
   try {
@@ -849,19 +879,85 @@ decodeFileEl.addEventListener('change', async () => {
     decodeResultEl.textContent = `Decode failed: ${result.error}`;
     return;
   }
+
   if (!result.ok) {
     decodeResultEl.textContent =
       `No QR code decoded (${result.status}). The built-in decoder targets clean, screen-rendered images.`;
-    await drawDecodePreview(file, result);
+  } else {
+    const decodedLabel = symbolLabel(result.symbology, result.qrVersion);
+    // rMQR has one fixed mask, so no mask pattern is reported for it.
+    const maskLabel = result.maskPattern >= 0 ? ` · mask ${result.maskPattern}` : '';
+    decodeResultEl.textContent =
+      `“${result.text}” · ${decodedLabel} · ECC ${result.ecc}${maskLabel}`
+      + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
+  }
+
+  try {
+    lastDecodeImage = await createImageBitmap(file, { imageOrientation: 'none' });
+  } catch {
     return;
   }
-  const decodedLabel = symbolLabel(result.symbology, result.qrVersion);
-  // rMQR has one fixed mask, so no mask pattern is reported for it.
-  const maskLabel = result.maskPattern >= 0 ? ` · mask ${result.maskPattern}` : '';
-  decodeResultEl.textContent =
-    `“${result.text}” · ${decodedLabel} · ECC ${result.ecc}${maskLabel}`
-    + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
-  await drawDecodePreview(file, result);
+  lastDecodeResult = result;
+  await drawDecodePreview(lastDecodeImage, result);
+}
+
+decodeFileEl.addEventListener('change', async () => {
+  const file = decodeFileEl.files?.[0];
+  if (file) await decodeImageFile(file);
+});
+
+decodeCornersCheck.addEventListener('change', async () => {
+  if (lastDecodeImage && lastDecodeResult) await drawDecodePreview(lastDecodeImage, lastDecodeResult);
+});
+
+/** Opens the decode panel so a pasted or dropped image is not decoded out of sight. */
+function revealDecodePanel() {
+  decodePanelEl.open = true;
+  decodePanelEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// Paste is page-wide: a text paste into the content field carries no image item and falls through
+// untouched, and pasting an image into a text field would do nothing useful anyway. That makes
+// "Copy image" above and this panel a round trip without going through a file on disk.
+document.addEventListener('paste', async (event) => {
+  const item = [...(event.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'));
+  const file = item?.getAsFile();
+  if (!file) return;
+  event.preventDefault();
+  revealDecodePanel();
+  decodeFileEl.value = '';
+  await decodeImageFile(file);
+});
+
+// Drop is scoped to this panel, not the page: the logo field takes dropped images too, and a
+// page-wide target would swallow those.
+for (const type of ['dragenter', 'dragover']) {
+  decodeDropEl.addEventListener(type, (event) => {
+    if (![...(event.dataTransfer?.types ?? [])].includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    decodeDropEl.classList.add('is-dragover');
+  });
+}
+
+for (const type of ['dragleave', 'dragend']) {
+  decodeDropEl.addEventListener(type, (event) => {
+    // dragleave also fires when the pointer crosses into a child, which is still inside the zone.
+    if (type === 'dragleave' && decodeDropEl.contains(event.relatedTarget)) return;
+    decodeDropEl.classList.remove('is-dragover');
+  });
+}
+
+decodeDropEl.addEventListener('drop', async (event) => {
+  const file = [...(event.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
+  event.preventDefault();
+  decodeDropEl.classList.remove('is-dragover');
+  if (!file) {
+    decodeResultEl.textContent = 'That was not an image file.';
+    return;
+  }
+  decodeFileEl.value = '';
+  await decodeImageFile(file);
 });
 
 /** Shows an inline error while keeping the last good image visible. */
