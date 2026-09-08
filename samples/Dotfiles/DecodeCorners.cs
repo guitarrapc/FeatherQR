@@ -45,7 +45,9 @@ foreach (var (name, what, matrix) in scenes)
 
     if (!QRCodeImageDecoder.TryDecode(scene, out var text, out var info))
     {
-        Console.WriteLine($"{name,-12} {what}: no decode ({info.Status})");
+        // A verification sample: a scene that stops decoding is a failure, not a note.
+        Console.WriteLine($"{name,-12} {what}: NO DECODE ({info.Status})");
+        Environment.ExitCode = 1;
         continue;
     }
 
@@ -75,10 +77,12 @@ Console.WriteLine($"Saved input and annotated images to: {outputDirectory}");
 
 static string Format(ImagePoint point) => $"({point.X,7:F1}, {point.Y,7:F1})";
 
-/// <summary>Draws the reported outline over a copy of the scene: the quadrilateral, a marker on TopLeft, and a label per corner.</summary>
+// Draws the reported outline over a copy of the scene: the quadrilateral, a marker on TopLeft,
+// and a label per corner.
 static SKBitmap Annotate(SKBitmap scene, SymbolCorners corners)
 {
-    var annotated = scene.Copy();
+    var annotated = scene.Copy()
+        ?? throw new InvalidOperationException("Could not copy the scene bitmap for annotation.");
     using var canvas = new SKCanvas(annotated);
 
     using var builder = new SKPathBuilder();
@@ -121,12 +125,8 @@ static SKBitmap Annotate(SKBitmap scene, SymbolCorners corners)
     return annotated;
 }
 
-/// <summary>
-/// Draws the flat symbol onto a white canvas through <paramref name="matrix"/>, sizing the canvas
-/// from where that matrix actually puts the symbol and leaving a <see cref="margin"/> all round:
-/// the decoder needs a light quiet zone, and the annotated copy draws its labels just outside the
-/// outline. A rotation about the centre would otherwise push two corners off the top-left edge.
-/// </summary>
+// Draws the flat symbol onto white, sized from where the matrix actually puts it plus `margin` all
+// round for the quiet zone and the labels. A rotation would otherwise run off the top-left edge.
 static SKBitmap Compose(SKBitmap flat, SKMatrix matrix)
 {
     ReadOnlySpan<SKPoint> square =
@@ -151,6 +151,14 @@ static SKBitmap Compose(SKBitmap flat, SKMatrix matrix)
     var width = (int)MathF.Ceiling(maxX - minX) + margin * 2;
     var height = (int)MathF.Ceiling(maxY - minY) + margin * 2;
 
+    // An edited matrix that collapses or explodes the symbol would otherwise fail inside SKBitmap.
+    if (!float.IsFinite(minX) || !float.IsFinite(minY) || !float.IsFinite(maxX) || !float.IsFinite(maxY)
+        || width <= margin * 2 || height <= margin * 2 || width > 4000 || height > 4000)
+    {
+        throw new InvalidOperationException(
+            $"This scene matrix maps the symbol to {width}x{height} px, which is not a usable canvas. Check the matrix.");
+    }
+
     var scene = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
     using var canvas = new SKCanvas(scene);
     canvas.Clear(SKColors.White);
@@ -160,7 +168,7 @@ static SKBitmap Compose(SKBitmap flat, SKMatrix matrix)
     return scene;
 }
 
-/// <summary>A point through a matrix, dividing by the perspective term so a keystone is honoured.</summary>
+// A point through a matrix, dividing by the perspective term so a keystone is honoured.
 static SKPoint Project(SKMatrix m, SKPoint p)
 {
     var w = m.Persp0 * p.X + m.Persp1 * p.Y + m.Persp2;
@@ -169,11 +177,8 @@ static SKPoint Project(SKMatrix m, SKPoint p)
         (m.SkewY * p.X + m.ScaleY * p.Y + m.TransY) / w);
 }
 
-/// <summary>
-/// Keystone: a perspective term in y, so the far (bottom) edge is foreshortened by
-/// <paramref name="strength"/> of its width, as when the code is tilted away from the camera.
-/// x is centred first, so the symbol narrows about its own axis instead of shearing sideways.
-/// </summary>
+// Keystone: a perspective term in y, so the bottom edge and the height both shrink to 1/(1+strength)
+// — 89 % at 0.12. x is centred first, so the symbol narrows about its own axis.
 static SKMatrix Keystone(SKBitmap flat, float strength)
 {
     float w = flat.Width, h = flat.Height;

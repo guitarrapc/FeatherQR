@@ -772,26 +772,53 @@ const DECODE_PREVIEW_MAX_HEIGHT = 460;
 let lastDecodeImage = null;
 let lastDecodeResult = null;
 
+/** Which decode is current. Without it a small image pasted second finishes first and wins the result line while the big one wins the canvas. */
+let decodeGeneration = 0;
+
 /**
- * Draws the decoded image with the reported symbol outline over it.
- *
- * The decoder works on the file's raw pixels, so the bitmap is decoded with
- * `imageOrientation: 'none'`: letting the browser apply EXIF rotation would move the image out
- * from under the coordinates the library returned. `imageWidth`/`imageHeight` say what the
- * decoder saw, and a mismatch means the two disagree, so the overlay is dropped rather than
- * drawn in the wrong place.
- *
- * The canvas is sized in CSS pixels and its backing store scaled by the device pixel ratio, with
- * the corners mapped from image space into that space. Drawing at the image's own resolution and
- * letting CSS resize it left the outline soft on every image that was not displayed 1:1, which is
- * most of them.
+ * Maps corners (TL/TR/BR/BL, x then y) from the file's stored pixels onto the picture the browser
+ * shows. No `imageOrientation` value suppresses EXIF, so the page follows the tag instead.
  */
-async function drawDecodePreview(bitmap, result) {
+function orientCorners(corners, orientation, width, height) {
+  // One line per EXIF tag, so it reads against the spec table.
+  const map = {
+    1: (x, y) => [x, y],
+    2: (x, y) => [width - x, y],
+    3: (x, y) => [width - x, height - y],
+    4: (x, y) => [x, height - y],
+    5: (x, y) => [y, x],
+    6: (x, y) => [height - y, x],
+    7: (x, y) => [height - y, width - x],
+    8: (x, y) => [y, width - x],
+  }[orientation];
+  if (!map) return corners.slice();
+
+  const out = new Array(8);
+  for (let i = 0; i < 8; i += 2) {
+    const [x, y] = map(corners[i], corners[i + 1]);
+    out[i] = x;
+    out[i + 1] = y;
+  }
+  return out;
+}
+
+/** Displayed size of an image with `orientation` applied; tags 5-8 transpose it. */
+function orientedSize(orientation, width, height) {
+  return orientation >= 5 && orientation <= 8 ? [height, width] : [width, height];
+}
+
+/**
+ * Draws the decoded image with the reported outline over it. Sized in CSS pixels and scaled by the
+ * device pixel ratio, because letting CSS resize the canvas leaves the outline soft. A size that
+ * still disagrees after applying the EXIF tag means the overlay would land wrong, so it is dropped.
+ */
+function drawDecodePreview(bitmap, result) {
   const scale = Math.min(
     DECODE_PREVIEW_MAX_WIDTH / bitmap.width,
     DECODE_PREVIEW_MAX_HEIGHT / bitmap.height);
-  const cssWidth = Math.round(bitmap.width * scale);
-  const cssHeight = Math.round(bitmap.height * scale);
+  // A very wide or tall image would otherwise round to a zero-sized canvas.
+  const cssWidth = Math.max(1, Math.round(bitmap.width * scale));
+  const cssHeight = Math.max(1, Math.round(bitmap.height * scale));
   const dpr = window.devicePixelRatio || 1;
 
   decodeCanvasEl.width = Math.round(cssWidth * dpr);
@@ -808,17 +835,23 @@ async function drawDecodePreview(bitmap, result) {
 
   decodePreviewEl.hidden = false;
 
-  const corners = result.corners;
-  const aligned = result.imageWidth === bitmap.width && result.imageHeight === bitmap.height;
-  if (!corners || corners.length !== 8 || !aligned) {
-    decodePreviewCaptionEl.textContent = corners && !aligned
+  const orientation = result.orientation || 1;
+  const [shownWidth, shownHeight] = orientedSize(orientation, result.imageWidth, result.imageHeight);
+  const aligned = shownWidth === bitmap.width && shownHeight === bitmap.height;
+  if (!result.corners || result.corners.length !== 8 || !aligned) {
+    decodePreviewCaptionEl.textContent = !aligned
       ? 'The browser decoded this image at a different size than the library did, so the outline is not drawn.'
-      : 'No symbol was located, so there is no outline to draw.';
+      : result.ok
+        ? 'The decoder reported no corner geometry for this symbol, so there is no outline to draw.'
+        : 'No symbol was located, so there is no outline to draw.';
     return;
   }
 
-  // y grows downward, so a symbol as printed winds clockwise (positive cross product) and a
-  // mirrored capture reverses it. That is the whole mirror test; the library exposes no flag.
+  // Corners arrive in stored pixels; the canvas shows the oriented picture.
+  const corners = orientCorners(result.corners, orientation, result.imageWidth, result.imageHeight);
+
+  // y grows downward, so a printed symbol winds clockwise and a mirrored one reverses it; that is
+  // the whole mirror test. Computed after orienting, so it describes the picture on screen.
   const cross = (corners[2] - corners[0]) * (corners[7] - corners[1])
     - (corners[3] - corners[1]) * (corners[6] - corners[0]);
   const winding = cross < 0
@@ -855,6 +888,10 @@ async function drawDecodePreview(bitmap, result) {
 
 /** Runs one image through the decoder and shows the result; shared by the file input, paste and drop. */
 async function decodeImageFile(file) {
+  const generation = ++decodeGeneration;
+  /** True once a newer decode started; this one must then touch nothing shared. */
+  const superseded = () => generation !== decodeGeneration;
+
   decodePreviewEl.hidden = true;
   lastDecodeImage?.close();
   lastDecodeImage = null;
@@ -864,17 +901,28 @@ async function decodeImageFile(file) {
   try {
     bytes = new Uint8Array(await file.arrayBuffer());
   } catch (e) {
+    if (superseded()) return;
     decodeResultEl.textContent = `Could not read the file: ${e?.message ?? e}`;
     return;
   }
+  if (superseded()) return;
 
   if (!runtimeAlive || !runtimeReady || !exports) {
     decodeResultEl.textContent = 'The WebAssembly runtime is still loading, try again in a moment.';
     return;
   }
 
+  // The decode blocks the main thread for seconds. One rAF resolves before the frame it schedules
+  // paints, so nest two; the timer covers a hidden tab, where rAF never fires.
+  decodeResultEl.textContent = 'Decoding…';
+  await Promise.race([
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    new Promise((resolve) => setTimeout(resolve, 50)),
+  ]);
+  if (superseded()) return;
+
   const result = callDecode(bytes);
-  if (!result) return;
+  if (!result || superseded()) return;
   if (result.error) {
     decodeResultEl.textContent = `Decode failed: ${result.error}`;
     return;
@@ -892,13 +940,29 @@ async function decodeImageFile(file) {
       + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
   }
 
+  let bitmap;
   try {
-    lastDecodeImage = await createImageBitmap(file, { imageOrientation: 'none' });
+    bitmap = await createImageBitmap(file);
   } catch {
+    if (superseded()) return;
+    // Collapse the canvas first: it still holds the previous image and its outline.
+    decodeCanvasEl.width = 0;
+    decodeCanvasEl.height = 0;
+    decodeCanvasEl.style.width = '';
+    decodeCanvasEl.style.height = '';
+    decodePreviewEl.hidden = false;
+    decodePreviewCaptionEl.textContent = 'The browser could not render this image for preview.';
     return;
   }
+  // A newer decode owns the panel; close this one's bitmap rather than leaking it.
+  if (superseded()) {
+    bitmap.close();
+    return;
+  }
+
+  lastDecodeImage = bitmap;
   lastDecodeResult = result;
-  await drawDecodePreview(lastDecodeImage, result);
+  drawDecodePreview(bitmap, result);
 }
 
 decodeFileEl.addEventListener('change', async () => {
@@ -906,8 +970,8 @@ decodeFileEl.addEventListener('change', async () => {
   if (file) await decodeImageFile(file);
 });
 
-decodeCornersCheck.addEventListener('change', async () => {
-  if (lastDecodeImage && lastDecodeResult) await drawDecodePreview(lastDecodeImage, lastDecodeResult);
+decodeCornersCheck.addEventListener('change', () => {
+  if (lastDecodeImage && lastDecodeResult) drawDecodePreview(lastDecodeImage, lastDecodeResult);
 });
 
 /** Opens the decode panel so a pasted or dropped image is not decoded out of sight. */
@@ -916,13 +980,21 @@ function revealDecodePanel() {
   decodePanelEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-// Paste is page-wide: a text paste into the content field carries no image item and falls through
-// untouched, and pasting an image into a text field would do nothing useful anyway. That makes
-// "Copy image" above and this panel a round trip without going through a file on disk.
+// Page-wide, so "Copy image" round-trips without a file on disk. Excel and Word put a bitmap on
+// the clipboard alongside the text, so an image item alone is not enough to claim the paste.
 document.addEventListener('paste', async (event) => {
   const item = [...(event.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'));
   const file = item?.getAsFile();
   if (!file) return;
+
+  // Only a target that takes typed text keeps its paste; a checkbox or range does not.
+  const target = event.target instanceof Element ? event.target : null;
+  const typedInto = target?.isContentEditable
+    || target?.closest('textarea') != null
+    || (target instanceof HTMLInputElement
+      && !/^(button|checkbox|color|file|image|radio|range|reset|submit)$/.test(target.type));
+  if (typedInto) return;
+
   event.preventDefault();
   revealDecodePanel();
   decodeFileEl.value = '';

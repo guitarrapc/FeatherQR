@@ -644,6 +644,8 @@ internal static class QRImageDecoder
     private static PerspectiveTransform MeshAnchoredTransform(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension)
     {
         // Finder centres sit at grid 3.5 / dimension − 3.5; the last lattice coordinate is dimension − 6.5.
+        // When that node was not detected the refinement rounds have already re-predicted it, so
+        // anchoring on the nearest detected node instead measured byte-identical and was dropped.
         var last = meshSize - 1;
         var lastGrid = gridCoords[last];
         var lastNode = last * meshSize + last;

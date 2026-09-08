@@ -9,20 +9,10 @@ namespace FeatherQR.Tests;
 /// the symbol's own top-left, populated when and only when the decode succeeded.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Every scene is built the same way: a symbol is rendered flat at a known pixel size
-/// with no quiet zone of its own, then drawn onto a white canvas through a matrix. The
-/// expected corners are that matrix applied to the flat symbol's corners, so the oracle
-/// is the scene, not the decoder, and rotation, mirroring and keystone are one test with
-/// different matrices.
-/// </para>
-/// <para>
-/// Continuous coordinates: (0, 0) is the top-left corner of the top-left pixel, so a
-/// symbol drawn from pixel 48 reports 48, not 48.5, and the values plot directly
-/// with SkiaSharp. The order carries orientation: seen on screen, a non-mirrored symbol's
-/// corners run clockwise (positive cross product in y-down coordinates) and a mirrored
-/// capture's run counter-clockwise.
-/// </para>
+/// Every scene renders the symbol flat, then draws it onto white through a matrix; the expected
+/// corners are that matrix applied to the flat corners, so the oracle is the scene, not the
+/// decoder. (0, 0) is the top-left corner of the top-left pixel. Seen on screen a printed symbol's
+/// corners run clockwise and a mirrored capture's counter-clockwise.
 /// </remarks>
 public class SymbolCornersTest
 {
@@ -46,13 +36,8 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// The coordinate convention, pinned to a tenth of a pixel where nothing but the
-    /// finder centres anchors the geometry: a symbol drawn from pixel 48 reports 48.0, not
-    /// 48.5 (the first implementation added half a pixel, hidden by the half-module
-    /// tolerance every other case needs). Standard QR version 1 and Micro QR are anchored
-    /// on finders alone, so all four corners are held; rMQR's top-left is finder-anchored
-    /// while its right-hand corners come from the sub-finder refinement and carry their own
-    /// sub-pixel residual, so only the top-left is held here.
+    /// The coordinate convention, to a tenth of a pixel: a symbol drawn from pixel 48 reports 48.0,
+    /// not 48.5. Only finder-anchored corners are that tight, so rMQR holds its top-left alone.
     /// </summary>
     [Test]
     public async Task AxisAligned_FinderAnchoredCorners_LandOnTheDrawnEdgeToATenthOfAPixel()
@@ -115,18 +100,11 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// Under perspective the corners come from the fitted geometry, so a version with an
-    /// alignment pattern (a true four-point fit) is held to half a module at the tilts
-    /// below (12 % on versions 2 and 5, 6 to 8 % on 7 and 10, 5 to 6 % from 14 up); this
-    /// scene (8 px per module, no quiet zone) decodes further on most of them (versions 2
-    /// and 5 to 15 to 17 %, 7 and 30 to 10 %) and holds the bound there too. From version
-    /// 14 the decoder can sample through the piecewise mesh instead of the global fit, when
-    /// it detects enough of the mesh's nodes; the 14 row stays on the global fit on this
-    /// scene, while the cases at 20, 25 and 30 take the mesh and are ones where the global
-    /// fit's bottom-right anchor locks onto a neighbouring alignment pattern (18 to 30
-    /// modules off, review finding), so they pin that the corners follow whatever mapping
-    /// actually decoded the symbol.
-    /// Version 1 has no alignment pattern and is covered by the flat and rotated cases only.
+    /// A version with an alignment pattern gets a true four-point fit, held to half a module at
+    /// each tilt below. The 20, 25 and 30 rows sample through the mesh, and are where the global
+    /// fit's anchor locks onto a neighbouring alignment pattern 18 to 30 modules away, so they pin
+    /// that the corners follow whatever mapping decoded. Version 1 has no alignment pattern and is
+    /// covered by the flat and rotated cases only.
     /// </summary>
     [Test]
     [Arguments(2, 0.08f)]
@@ -142,6 +120,71 @@ public class SymbolCornersTest
     {
         using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version);
         var matrix = Keystone(flat, tilt);
+        using var scene = Compose(flat, matrix);
+
+        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule / 2f, mirrored: false);
+    }
+
+    /// <summary>
+    /// The bottom-right corner is anchored on the alignment centre, which resolves to about a pixel
+    /// at any module size, so its error is near-constant in pixels and grows in modules as the
+    /// capture coarsens (version 2, every degree: 4.09 px at 6 px per module, 3.63 at 8, 3.94 at 12).
+    /// These rows pin the pixel bound; the half-module one holds only from 8 up.
+    /// </summary>
+    [Test]
+    [Arguments(3, 34)]
+    [Arguments(4, 74)]
+    [Arguments(5, 56)]
+    [Arguments(6, 59)]
+    public async Task QR_LowPixelDensity_CornersAreWithinAFewPixels(int pixelsPerModule, int degrees)
+    {
+        using var flat = RenderQr("CORNERS", version: 2, pixelsPerModule);
+        var matrix = Rotation(flat, degrees);
+        using var scene = Compose(flat, matrix);
+
+        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        await AssertCorners(info.Corners, Expected(matrix, flat), 5f, mirrored: false);
+    }
+
+    /// <summary>
+    /// An alignment pattern the decoder cannot find drops any version onto the finders-only fit
+    /// version 1 gets, while error correction still returns <see cref="DecodeStatus.Success"/>.
+    /// One damaged module is enough, so version 1 is not the only loose case.
+    /// </summary>
+    [Test]
+    [Arguments(2, 0.03f)]
+    [Arguments(5, 0.01f)]
+    [Arguments(6, 0.01f)]
+    public async Task QR_AlignmentPatternNotFound_CornersStayWithinAModuleAndAHalf(int version, float tilt)
+    {
+        using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version);
+        EraseBottomRightAlignmentPattern(flat, version);
+        var matrix = Keystone(flat, tilt);
+        using var scene = Compose(flat, matrix);
+
+        await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
+        var expected = Expected(matrix, flat);
+        await AssertCorners(info.Corners, expected, PixelsPerModule * 1.5f, mirrored: false);
+
+        // The upper bound alone passes even if the erase stops working (0.31 module intact against
+        // 0.59 to 1.00 erased), so assert the fallback is genuinely the path taken.
+        var bottomRight = Distance(info.Corners.BottomRight, expected.BottomRight);
+        await Assert.That(bottomRight).IsGreaterThan(PixelsPerModule * 0.5f)
+            .Because($"the finders-only fallback should be in use, but BottomRight is only {bottomRight:F2}px out — did the erase miss the alignment pattern?");
+    }
+
+    /// <summary>
+    /// The same damage on a mesh-sampled version takes the other branch: fifteen other alignment
+    /// nodes remain, so there is no fallback and the corners stay inside half a module. This is
+    /// what covers the mesh's corner anchor when its diagonal-last node is a prediction.
+    /// </summary>
+    [Test]
+    public async Task QR_MeshPath_AnchorsOnADetectedNodeWhenTheLastOneIsMissing()
+    {
+        using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version: 20);
+        EraseBottomRightAlignmentPattern(flat, version: 20);
+        var matrix = Keystone(flat, 0.05f);
         using var scene = Compose(flat, matrix);
 
         await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");
@@ -187,8 +230,14 @@ public class SymbolCornersTest
         await AssertCorners(info.Corners, Expected(matrix, flat), PixelsPerModule * toleranceModules, mirrored: false);
     }
 
+    /// <summary>
+    /// One row per mapping a mirrored Micro QR decodes through, since each carries its own
+    /// transposed flag: 0° the axis-aligned fast path, 8° the axis sweep, 30° the scale variants.
+    /// Dropping the flag at the 8° site swaps TopRight with BottomLeft by about 24 modules.
+    /// </summary>
     [Test]
     [Arguments(0, 0.5f)]
+    [Arguments(8, 1f)]
     [Arguments(30, 1f)]
     public async Task MicroQR_Mirrored_WindingReverses(int degrees, float toleranceModules)
     {
@@ -201,13 +250,9 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// Micro QR's far corners are held to a full module rather than half. The decoder
-    /// absorbs a mild keystone in its affine paths (2 % on the axis-aligned fast path, 4 %
-    /// through the scale variants) and only goes to its bounded single-finder perspective
-    /// search from about 5 %; the 5 % and 8 % rows are the ones that reach that search's
-    /// attach sites, plain and mirrored (review finding: without them those two sites were
-    /// unexercised). The mirrored 8 % row sits at 1.03 modules on this scene, past the
-    /// documented 4 % envelope, and is held to a module and a half.
+    /// Micro QR's far corners are held to a module, not half. The affine paths absorb a mild
+    /// keystone (2 % axis-aligned, 4 % scale variants); only 5 % and up reach the single-finder
+    /// perspective search, so those rows are what cover its two attach sites.
     /// </summary>
     [Test]
     [Arguments(0.02f, false, 1f)]
@@ -266,21 +311,18 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// rMQR anchors its far end on the sub-finder and recovers the remaining perspective
-    /// by a bounded search that under-recovers the lean of the column axis on short
-    /// symbols, so the two far corners carry the residual; which is worse depends on the
-    /// version and tilt. Measured at 8 px per module (review finding): on R11x59 0.9
-    /// modules at 2 % (top-right), 1.24 at 3 % and 1.22 at 4 % (bottom-left); on R7x43
-    /// 1.04 at 4 % (top-right, with even the anchors at 0.9 and 0.7); R17x139 stays under
-    /// 0.65 and a left-shrunk keystone under 0.4 everywhere. The contract states one module
-    /// at 2 % and about a module and a half from 3 % up on the short symbols, and that is
-    /// what is held here; the scene decodes on to 8 % on R11x59 with the bound still holding.
+    /// rMQR's bounded perspective search under-recovers the column-axis lean, so the two far
+    /// corners carry the residual and which is worse depends on version and tilt (R11x59: 0.9
+    /// module at 2 % on the top-right, 1.24 at 3 % on the bottom-left; R7x43 1.04 at 4 %).
     /// </summary>
     [Test]
     [Arguments(RmQRVersion.R11x59, "RMQR CORNERS", 0.02f, 1f)]
     [Arguments(RmQRVersion.R11x59, "RMQR CORNERS", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R7x43, "RMQR", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R17x139, "RMQR CORNERS ARE RECTANGULAR", 0.04f, 1f)]
+    // The two versions closest to the stated bounds: R9x43 at 1.30 modules, R13x77 at 1.05.
+    [Arguments(RmQRVersion.R9x43, "RMQR", 0.04f, 1.5f)]
+    [Arguments(RmQRVersion.R13x77, "RMQR CORNERS", 0.02f, 1.5f)]
     public async Task RmQR_Keystone_CornersAreTheWarpedQuadrilateral(RmQRVersion version, string content, float tilt, float toleranceModules)
     {
         using var flat = RenderRm(content, version);
@@ -434,10 +476,21 @@ public class SymbolCornersTest
 
     // ---- scenes -------------------------------------------------------------------------
 
-    private static SKBitmap RenderQr(string content, int version)
+    /// <summary>Paints out the bottom-right alignment pattern (5 modules across) so the search finds nothing there; white is enough, since it looks for a dark-light-dark run.</summary>
+    private static void EraseBottomRightAlignmentPattern(SKBitmap flat, int version, int pixelsPerModule = PixelsPerModule)
+    {
+        // ISO/IEC 18004 Table E.1: the last alignment coordinate is 7 modules in from the edge.
+        var centre = 17 + 4 * version - 7;
+        using var canvas = new SKCanvas(flat);
+        using var paint = new SKPaint { Color = SKColors.White };
+        canvas.DrawRect(SKRect.Create((centre - 2) * pixelsPerModule, (centre - 2) * pixelsPerModule, 5 * pixelsPerModule, 5 * pixelsPerModule), paint);
+        canvas.Flush();
+    }
+
+    private static SKBitmap RenderQr(string content, int version, int pixelsPerModule = PixelsPerModule)
     {
         var data = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
-        return RenderFlat(data.Size, data.Size, (canvas, rect) => SymbolRenderer.Render(canvas, rect, data, SKColors.Black, SKColors.White));
+        return RenderFlat(data.Size, data.Size, (canvas, rect) => SymbolRenderer.Render(canvas, rect, data, SKColors.Black, SKColors.White), pixelsPerModule);
     }
 
     private static SKBitmap RenderMicro(string content, MicroQRVersion version)
@@ -453,9 +506,9 @@ public class SymbolCornersTest
     }
 
     /// <summary>The symbol alone, module area only, at <see cref="PixelsPerModule"/>.</summary>
-    private static SKBitmap RenderFlat(int modulesWide, int modulesHigh, Action<SKCanvas, SKRect> render)
+    private static SKBitmap RenderFlat(int modulesWide, int modulesHigh, Action<SKCanvas, SKRect> render, int pixelsPerModule = PixelsPerModule)
     {
-        var bitmap = new SKBitmap(new SKImageInfo(modulesWide * PixelsPerModule, modulesHigh * PixelsPerModule, SKColorType.Bgra8888, SKAlphaType.Premul));
+        var bitmap = new SKBitmap(new SKImageInfo(modulesWide * pixelsPerModule, modulesHigh * pixelsPerModule, SKColorType.Bgra8888, SKAlphaType.Premul));
         using var canvas = new SKCanvas(bitmap);
         render(canvas, SKRect.Create(0, 0, bitmap.Width, bitmap.Height));
         canvas.Flush();
@@ -574,10 +627,15 @@ public class SymbolCornersTest
 
     private static async Task AssertNear(ImagePoint actual, SKPoint expected, float tolerance, string corner)
     {
-        var dx = actual.X - expected.X;
-        var dy = actual.Y - expected.Y;
-        var distance = MathF.Sqrt(dx * dx + dy * dy);
+        var distance = Distance(actual, expected);
         await Assert.That(distance).IsLessThanOrEqualTo(tolerance)
             .Because($"{corner}: got ({actual.X:F2}, {actual.Y:F2}), expected ({expected.X:F2}, {expected.Y:F2}), off by {distance:F2}px");
+    }
+
+    private static float Distance(ImagePoint actual, SKPoint expected)
+    {
+        var dx = actual.X - expected.X;
+        var dy = actual.Y - expected.Y;
+        return MathF.Sqrt(dx * dx + dy * dy);
     }
 }
