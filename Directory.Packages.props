@@ -19,7 +19,7 @@
     <!-- Benchmark -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="CodeGlyphX" Version="2.1.0" />
-    <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="3.1.0" />
+    <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="3.2.1" />
     <PackageVersion Include="QRCoder" Version="1.8.0" />
     <PackageVersion Include="ZXing.Net" Version="0.16.11" />
     <PackageVersion Include="ZXing.Net.Bindings.SkiaSharp.V2" Version="0.16.17" />
