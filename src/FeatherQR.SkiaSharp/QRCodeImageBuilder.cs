@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// The static methods cover the common cases in one line, such as <see cref="GetPngBytes(string, QREccLevel, int)"/>.
-/// For anything else, construct the builder and chain the options, from sizing and colors down to <see cref="WithIcon(IconData?)"/> and <see cref="WithFinderPatternShape(FinderPatternShape?)"/>.
+/// For anything else, construct the builder and chain the options, from sizing and colors down to <see cref="WithIcon(IconData?)"/> and <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape(FinderPatternShape?)"/>.
 /// </remarks>
 /// <seealso cref="QRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
@@ -23,9 +23,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     private int? _maskPattern;
     private QRSegmentation _segmentation = QRSegmentation.Single;
 
-    // rendering (Standard QR-only options; Micro QR has a single finder pattern
-    // and no ECC headroom for overlays)
-    private FinderPatternShape? _finderPatternShape;
+    // rendering (Standard QR-only option; Micro QR and rMQR have no ECC headroom for overlays)
     private IconData? _iconData;
 
     /// <summary>
@@ -426,16 +424,6 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     public QRCodeImageBuilder WithIcon(IconData? iconData)
     {
         _iconData = iconData;
-        return this;
-    }
-
-    /// <summary>
-    /// Draws the three finder patterns as a shape of their own.
-    /// </summary>
-    /// <param name="finderPatternShape">The shape to draw. When omitted the finders follow the module shape.</param>
-    public QRCodeImageBuilder WithFinderPatternShape(FinderPatternShape? finderPatternShape)
-    {
-        _finderPatternShape = finderPatternShape;
         return this;
     }
 

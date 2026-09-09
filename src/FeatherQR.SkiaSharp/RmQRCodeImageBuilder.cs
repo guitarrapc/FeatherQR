@@ -442,11 +442,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
 
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
-        SymbolRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
+        SymbolRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
     /// <summary>rMQR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>
-    private protected override bool UseCrispEdgesCore() => true;
+    private protected override bool UseCrispEdgesCore() => _finderPatternShape is null;
 
     /// <summary>Rectangular rMQR codes are letterboxed into an explicit canvas, never stretched.</summary>
     private protected override bool PreserveAspectRatio => true;

@@ -403,9 +403,9 @@ public sealed class MicroQRCodeImageBuilder : SymbolImageBuilderBase<MicroQRCode
 
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
-        SymbolRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
+        SymbolRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
     /// <summary>Micro QR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>
-    private protected override bool UseCrispEdgesCore() => true;
+    private protected override bool UseCrispEdgesCore() => _finderPatternShape is null;
 }

@@ -31,6 +31,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private protected SKColor? _clearColor;
     private protected ModuleShape? _moduleShape;
     private protected float _moduleSizePercent = 1.0f;
+    private protected FinderPatternShape? _finderPatternShape;
     private protected GradientOptions? _gradientOptions;
 
     private protected SymbolImageBuilderBase(int defaultQuietZoneSize)
@@ -160,11 +161,11 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Draws the modules as a shape other than plain squares.
     /// </summary>
     /// <remarks>
+    /// Styles the data modules only. The finder patterns keep their solid shape whatever is asked for here, because a decoder locates the symbol by scanning for their 1:1:3:1:1 run of dark and light, and gaps between modules erase it: a symbol whose finders are drawn as separated shapes is not read by anything, this library or a phone. Use <see cref="WithFinderPatternShape"/> to style them in a way that keeps them detectable.
     /// Every custom shape costs scan margin, and below 0.8 the symbol may stop scanning reliably, so test what you ship.
-    /// On Standard QR the shape reaches the finder patterns too, unless <c>WithFinderPatternShape</c> gives them one of their own.
     /// </remarks>
     /// <param name="moduleShape">The shape to draw. Squares when omitted.</param>
-    /// <param name="sizePercent">How much of its cell a module fills, 0.5 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="sizePercent">How much of its cell a data module fills, 0.5 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the size is outside 0.5 to 1.0.</exception>
     public TSelf WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1.0f)
     {
@@ -173,6 +174,19 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
 
         _moduleShape = moduleShape;
         _moduleSizePercent = sizePercent;
+        return (TSelf)this;
+    }
+
+    /// <summary>
+    /// Draws the finder patterns as a shape of their own.
+    /// </summary>
+    /// <remarks>
+    /// The built-in shapes round the corners of the concentric rings without breaking them, so they stay detectable; what a decoder needs is that the rings are continuous, not that they are square. Omitting this leaves the plain square the standards define, which is always the safest to scan.
+    /// </remarks>
+    /// <param name="finderPatternShape">The shape to draw. Plain squares when omitted.</param>
+    public TSelf WithFinderPatternShape(FinderPatternShape? finderPatternShape)
+    {
+        _finderPatternShape = finderPatternShape;
         return (TSelf)this;
     }
 
