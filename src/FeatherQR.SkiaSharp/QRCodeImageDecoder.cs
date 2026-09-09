@@ -36,7 +36,7 @@ public static class QRCodeImageDecoder
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-        /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+        /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
         /// <returns><c>true</c> when a QR code was found and decoded.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="bitmap"/> is <c>null</c>.</exception>
         public static bool TryDecode(SKBitmap bitmap, out string text, out QRCodeDecodeInfo info)

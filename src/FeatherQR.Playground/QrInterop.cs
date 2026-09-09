@@ -115,7 +115,10 @@ public static partial class QrInterop
     }
 
     /// <summary>
-    /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string: <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N}</c> on success, <c>{"ok":false,"status":"NotDetected","totalMs":N}</c> when no QR decodes, or <c>{"error":"..."}</c> on unexpected failure.
+    /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string: <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N,"corners":[x,y,...],"imageWidth":N,"imageHeight":N}</c> on success, <c>{"ok":false,"status":"NotDetected","totalMs":N,"imageWidth":N,"imageHeight":N}</c> when no QR decodes, or <c>{"error":"..."}</c> on unexpected failure.
+    /// <para>
+    /// <c>"corners"</c> is the located symbol as eight numbers (top-left, top-right, bottom-right, bottom-left, each x then y) in the decoded image's pixel space, which <c>"imageWidth"</c> and <c>"imageHeight"</c> describe so the page can scale the overlay to whatever size it displays the image at. That space is the file's <em>stored</em> pixels: <c>"orientation"</c> carries the EXIF tag (1-8) the decoder ignored, and the page must map the corners through it, because every browser decode path applies the tag to the picture it shows.
+    /// </para>
     /// <para>
     /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then rMQR (<c>"symbology"</c> reports which one matched; rMQR has a single fixed mask, so <c>"maskPattern"</c> is -1 for it): clean, screen-rendered images (arbitrary rotation, mirroring and mild perspective included).
     /// Heavily stylized codes (low-contrast colors, inverted palettes, strong decoration) may report NotDetected even when a computer-vision grade phone scanner reads them.
@@ -134,6 +137,10 @@ public static partial class QrInterop
             using var bitmap = SKBitmap.Decode(imageBytes)
                 ?? throw new ArgumentException("The file is not a decodable image (PNG/JPEG/WebP).");
 
+            // SKBitmap.Decode ignores the EXIF orientation tag, so the corners are in the stored
+            // frame; a browser applies the tag, so the page needs it to place the overlay.
+            var origin = ReadOrigin(imageBytes);
+
             var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
             if (success)
             {
@@ -147,7 +154,11 @@ public static partial class QrInterop
                     Ecc: info.EccLevel.ToString(),
                     MaskPattern: info.MaskPattern,
                     ErrorsCorrected: info.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
+                    Corners: Flatten(info.Corners),
+                    ImageWidth: bitmap.Width,
+                    ImageHeight: bitmap.Height,
+                    Orientation: origin);
                 return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
             }
 
@@ -164,7 +175,11 @@ public static partial class QrInterop
                     Ecc: microInfo.EccLevel.ToString(),
                     MaskPattern: microInfo.MaskPattern,
                     ErrorsCorrected: microInfo.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
+                    Corners: Flatten(microInfo.Corners),
+                    ImageWidth: bitmap.Width,
+                    ImageHeight: bitmap.Height,
+                    Orientation: origin);
                 return JsonSerializer.Serialize(microPayload, PlaygroundJsonContext.Default.DecodePayload);
             }
 
@@ -182,7 +197,11 @@ public static partial class QrInterop
                     Ecc: rmInfo.EccLevel.ToString(),
                     MaskPattern: -1,
                     ErrorsCorrected: rmInfo.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1))
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
+                    Corners: Flatten(rmInfo.Corners),
+                    ImageWidth: bitmap.Width,
+                    ImageHeight: bitmap.Height,
+                    Orientation: origin)
                 : new DecodePayload(
                     Ok: false,
                     Text: null,
@@ -192,12 +211,46 @@ public static partial class QrInterop
                     Ecc: null,
                     MaskPattern: info.MaskPattern,
                     ErrorsCorrected: info.ErrorsCorrected,
-                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1),
+                    ImageWidth: bitmap.Width,
+                    ImageHeight: bitmap.Height,
+                    Orientation: origin);
             return JsonSerializer.Serialize(resultPayload, PlaygroundJsonContext.Default.DecodePayload);
         }
         catch (Exception ex)
         {
             return JsonSerializer.Serialize(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
+        }
+    }
+
+    /// <summary>
+    /// The symbol's corners as eight numbers for the page to stroke, in the order the contract
+    /// names them (top-left, top-right, bottom-right, bottom-left), or null when the decode
+    /// reported none. Empty corners cannot happen on the success paths that call this, but the
+    /// check keeps the payload honest if a decoder ever stops attaching them.
+    /// </summary>
+    private static float[]? Flatten(SymbolCorners corners) => corners.IsEmpty
+        ? null
+        :
+        [
+            corners.TopLeft.X, corners.TopLeft.Y,
+            corners.TopRight.X, corners.TopRight.Y,
+            corners.BottomRight.X, corners.BottomRight.Y,
+            corners.BottomLeft.X, corners.BottomLeft.Y,
+        ];
+
+    /// <summary>The EXIF orientation tag (1-8), or 1 when absent. <see cref="SKCodec"/> parses the tag that <see cref="SKBitmap.Decode"/> ignores.</summary>
+    private static int ReadOrigin(byte[] imageBytes)
+    {
+        try
+        {
+            using var codec = SKCodec.Create(new SKMemoryStream(imageBytes));
+            return codec is null ? 1 : (int)codec.EncodedOrigin;
+        }
+        catch
+        {
+            // A format SKCodec cannot open is not worth failing the decode over.
+            return 1;
         }
     }
 
@@ -830,6 +883,15 @@ public sealed record LogoDto
 public sealed record ErrorPayload(string Error);
 
 /// <summary>Result of a <see cref="QrInterop.Decode"/> call, serialized to the page script.</summary>
+/// <param name="Corners">
+/// Where the symbol sits in the decoded image, as eight numbers: top-left, top-right, bottom-right
+/// and bottom-left, each an x followed by a y, in the symbol's own frame. Null unless the decode
+/// succeeded. A flat array rather than four objects because the page feeds it straight to a canvas
+/// path, and it keeps the serializer to primitives.
+/// </param>
+/// <param name="ImageWidth">Pixel width of the image the decoder saw, so the page can scale the overlay to however it is displaying that image.</param>
+/// <param name="ImageHeight">Pixel height of the image the decoder saw.</param>
+/// <param name="Orientation">The file's EXIF orientation tag (1-8), or 1 when it has none. The decoder ignores it but a browser applies it, so the page maps <see cref="Corners"/> through it before drawing.</param>
 public sealed record DecodePayload(
     bool Ok,
     string? Text,
@@ -839,7 +901,11 @@ public sealed record DecodePayload(
     string? Ecc,
     int MaskPattern,
     int ErrorsCorrected,
-    double TotalMs);
+    double TotalMs,
+    float[]? Corners = null,
+    int ImageWidth = 0,
+    int ImageHeight = 0,
+    int Orientation = 1);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(QrRequest))]

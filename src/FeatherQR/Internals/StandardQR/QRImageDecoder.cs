@@ -144,9 +144,17 @@ internal static class QRImageDecoder
             if (usePiecewise)
             {
                 SampleGridPiecewise(luminance, width, height, threshold, meshGridCoords.Slice(0, meshSize), meshNodeXs, meshNodeYs, meshSize, dimension, modules);
-                var meshStatus = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info);
+                var meshStatus = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var meshTransposed);
                 if (IsTerminal(meshStatus))
+                {
+                    // The corners follow the mesh, because the mesh is what decoded: the
+                    // global fit's fourth anchor is unvalidated on this path, and on large
+                    // symbols under keystone it can sit on a neighbouring alignment pattern
+                    // 18-30 modules from the truth while the mesh reads the symbol cleanly.
+                    if (meshStatus == DecodeStatus.Success)
+                        info = info.WithCorners(SymbolGeometry.FromTransform(MeshAnchoredTransform(topLeft, topRight, bottomLeft, meshGridCoords, meshNodeXs, meshNodeYs, meshSize, dimension), dimension, dimension, meshTransposed));
                     return meshStatus;
+                }
 
                 // Mesh fallback: a partially-detected mesh (unfound nodes keep
                 // extrapolated predictions) can sample worse than the single global
@@ -155,7 +163,10 @@ internal static class QRImageDecoder
             }
 
             SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
-            return DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info);
+            var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
+            if (status == DecodeStatus.Success)
+                info = info.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
+            return status;
         }
         finally
         {
@@ -166,9 +177,11 @@ internal static class QRImageDecoder
     /// <summary>
     /// Decodes the sampled matrix, retrying once transposed (mirrored capture).
     /// On non-terminal failure reports the non-mirrored attempt's diagnostics.
+    /// <paramref name="transposed"/> says which attempt produced the result, because the transpose swaps the grid's axes relative to the symbol's and the reported corners have to follow.
     /// </summary>
-    private static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out bool transposed)
     {
+        transposed = false;
         var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
         if (IsTerminal(status))
             return status;
@@ -178,6 +191,7 @@ internal static class QRImageDecoder
         if (IsTerminal(mirroredStatus))
         {
             info = mirroredInfo;
+            transposed = true;
             return mirroredStatus;
         }
 
@@ -620,6 +634,31 @@ internal static class QRImageDecoder
             nodeXs[target] = nodeXs[first] + (nodeXs[first + stride] - nodeXs[first]) * ratio;
             nodeYs[target] = nodeYs[first] + (nodeYs[first + stride] - nodeYs[first]) * ratio;
         }
+    }
+
+    /// <summary>
+    /// The geometry a mesh-sampled decode is reported with: the three finder centres plus the mesh's bottom-right lattice node as the fourth correspondence.
+    /// The same construction as the alignment branch of <see cref="BuildGridTransform"/>, but anchored on a node the decode validated (the mesh sampled through it and read the symbol) rather than on an independent search whose window can catch a neighbouring pattern.
+    /// A projective fit through four correct points puts every corner within a fraction of a module, where extrapolating the mesh's outermost bilinear cells 6.5 modules outward leaves close to a module at the far corners (measured).
+    /// </summary>
+    private static PerspectiveTransform MeshAnchoredTransform(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension)
+    {
+        // Finder centres sit at grid 3.5 / dimension − 3.5; the last lattice coordinate is dimension − 6.5.
+        // When that node was not detected the refinement rounds have already re-predicted it, so
+        // anchoring on the nearest detected node instead measured byte-identical and was dropped.
+        var last = meshSize - 1;
+        var lastGrid = gridCoords[last];
+        var lastNode = last * meshSize + last;
+
+        return PerspectiveTransform.QuadrilateralToQuadrilateral(
+            3.5f, 3.5f,
+            dimension - 3.5f, 3.5f,
+            lastGrid, lastGrid,
+            3.5f, dimension - 3.5f,
+            topLeft.X, topLeft.Y,
+            topRight.X, topRight.Y,
+            nodeXs[lastNode], nodeYs[lastNode],
+            bottomLeft.X, bottomLeft.Y);
     }
 
     /// <summary>

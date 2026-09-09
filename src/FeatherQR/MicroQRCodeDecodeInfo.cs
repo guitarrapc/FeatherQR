@@ -9,13 +9,22 @@ namespace FeatherQR;
 public readonly record struct MicroQRCodeDecodeInfo
 {
     internal MicroQRCodeDecodeInfo(DecodeStatus status, MicroQRVersion version, MicroQREccLevel eccLevel, int maskPattern, int errorsCorrected)
+        : this(status, version, eccLevel, maskPattern, errorsCorrected, default)
+    {
+    }
+
+    private MicroQRCodeDecodeInfo(DecodeStatus status, MicroQRVersion version, MicroQREccLevel eccLevel, int maskPattern, int errorsCorrected, SymbolCorners corners)
     {
         Status = status;
         Version = version;
         EccLevel = eccLevel;
         MaskPattern = maskPattern;
         ErrorsCorrected = errorsCorrected;
+        Corners = corners;
     }
+
+    /// <summary>The same result with the symbol's image position attached; the image decoder calls this on success.</summary>
+    internal MicroQRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners);
 
     /// <summary>Decode result status. <see cref="DecodeStatus.Success"/> when decoding succeeded.</summary>
     public DecodeStatus Status { get; }
@@ -31,4 +40,7 @@ public readonly record struct MicroQRCodeDecodeInfo
 
     /// <summary>Number of codeword errors corrected by Reed-Solomon decoding.</summary>
     public int ErrorsCorrected { get; }
+
+    /// <summary>Where the symbol sits in the image, when decoded from one; see <see cref="SymbolCorners"/>. Empty for a matrix-level decode or a failed one.</summary>
+    public SymbolCorners Corners { get; }
 }

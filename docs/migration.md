@@ -274,6 +274,39 @@ A `null` colour array is the one case whose *exception type* moved. It used to b
 
 **Sealed:** `QRCodeData`, `MicroQRCodeData`, `RmQRCodeData`, the three image builders, `IconData` and `GradientOptions`. None had a designed extension point. The shape hierarchies (`ModuleShape`, `FinderPatternShape`, `IconShape`) are still open and are the supported way to change how a symbol is drawn.
 
+### Symbol position in the decode result
+
+Additive: nothing to migrate, but new in 2.0.0. `QRCodeDecodeInfo`, `MicroQRCodeDecodeInfo` and `RmQRCodeDecodeInfo` gain `Corners`, a `SymbolCorners` holding the four outer corners of the symbol's module area (quiet zone excluded) as `ImagePoint`s in the input image's continuous pixel coordinates — (0, 0) is the top-left corner of the top-left pixel, so the values plot directly on the bitmap or luminance buffer you decoded.
+
+```csharp
+if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
+{
+    var c = info.Corners;
+    using var builder = new SKPathBuilder();
+    builder.MoveTo(c.TopLeft.X, c.TopLeft.Y);
+    builder.LineTo(c.TopRight.X, c.TopRight.Y);
+    builder.LineTo(c.BottomRight.X, c.BottomRight.Y);
+    builder.LineTo(c.BottomLeft.X, c.BottomLeft.Y);
+    builder.Close();
+    using var path = builder.Detach();
+    canvas.DrawPath(path, outline);
+}
+```
+
+Three things the contract fixes:
+
+- **The corners are named in the symbol's frame.** `TopLeft` is the corner beside the finder that defines the symbol's top-left, wherever the camera put it. A rotated capture reports a rotated quadrilateral; a mirrored one reports the same corners in reversed winding (counter-clockwise on screen where a symbol as printed runs clockwise), which is how you can tell:
+
+  ```csharp
+  // y grows downward, so a symbol as printed gives a positive cross product.
+  var mirrored = (c.TopRight.X - c.TopLeft.X) * (c.BottomLeft.Y - c.TopLeft.Y)
+               - (c.TopRight.Y - c.TopLeft.Y) * (c.BottomLeft.X - c.TopLeft.X) < 0;
+  ```
+- **They are estimates from the fitted geometry, at 8 pixels per module or more.** Standard QR holds every corner within half a module, including under keystone. Below 8 pixels per module, read the bound in pixels rather than modules, on every symbology: the corners sit on pattern centres that resolve to about a pixel whatever the module size is, so the error stays near four pixels while the module shrinks under it (about 0.9 module at 3 pixels per module). Separately, and at any density, if the bottom-right alignment pattern cannot be located — version 1 never has one, and on any other version a smudge over a single module is enough — the fit falls back to the three finders and that corner is held to about a module and a half, while the decode still reports `Success`. Micro QR and rMQR fit from a single finder: half a module flat and at right angles, about a module for an oblique rotation or a keystone, and up to a module and a half on an rMQR symbol whose top or bottom edge is foreshortened by 2 % or more (nine versions exceed a module at 2 %, and not only the short ones).
+- **They exist only for a successful image decode.** A matrix-level `TryDecode` has no image and a failed image decode located nothing worth reporting; both leave `Corners` at its default, and `Corners.IsEmpty` says so.
+
+[samples/Dotfiles/DecodeCorners.cs](../samples/Dotfiles/DecodeCorners.cs) runs all of this over a flat, a rotated, a mirrored and a keystoned capture, and writes each one with the reported outline drawn on it.
+
 ## 1.2.0
 
 Additive except for one decoder behaviour change. Nothing in 1.2.0 breaks source or binary compatibility; the two `[Obsolete]` warnings announce removals that land in 2.0.0.

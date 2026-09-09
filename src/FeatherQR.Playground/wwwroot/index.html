@@ -246,13 +246,24 @@
           <p class="field__hint">A logo covers part of the code, use error correction H and verify the result scans.</p>
         </details>
 
-        <details class="panel">
+        <details class="panel" id="decode-panel">
           <summary>Decode an image</summary>
-          <label class="field">
-            <span class="field__label">Image file</span>
-            <input type="file" id="decode-file" accept="image/png,image/jpeg,image/webp" />
-          </label>
-          <div id="decode-result" class="qr-stats" aria-live="polite"></div>
+          <div id="decode-drop" class="decode-drop">
+            <label class="field">
+              <span class="field__label">Image file</span>
+              <input type="file" id="decode-file" accept="image/png,image/jpeg,image/webp" />
+            </label>
+            <p class="field__hint">Or drop an image here, or paste one from the clipboard anywhere on the page.</p>
+            <label class="field field--inline field--checkbox">
+              <input type="checkbox" id="decode-corners-check" checked />
+              <span class="field__label" title="Draws the four corners the decoder reported over the image">Show detected corners</span>
+            </label>
+            <div id="decode-result" class="qr-stats" aria-live="polite"></div>
+            <figure id="decode-preview" class="decode-preview" hidden>
+              <canvas id="decode-canvas"></canvas>
+              <figcaption id="decode-preview-caption" class="field__hint"></figcaption>
+            </figure>
+          </div>
           <p class="field__hint">
             Runs FeatherQR's built-in decoders (QR Code, Micro QR, rMQR) in your browser, nothing is uploaded.
             They target clean, screen-rendered images (rotation, mirroring and mild perspective are fine);

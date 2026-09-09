@@ -134,7 +134,7 @@ public static class RmQRCodeDecoder
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners).</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info)
@@ -165,7 +165,7 @@ public static class RmQRCodeDecoder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> (with <see cref="RmQRVersion.R17x139"/> when the version is unknown) to size it.</param>
     /// <param name="charsWritten">How many characters were written.</param>
-    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners).</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)

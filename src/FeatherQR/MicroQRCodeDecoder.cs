@@ -129,7 +129,7 @@ public static class MicroQRCodeDecoder
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
     /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out MicroQRCodeDecodeInfo info)
@@ -160,7 +160,7 @@ public static class MicroQRCodeDecoder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
     /// <param name="charsWritten">How many characters were written.</param>
-    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
     /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)

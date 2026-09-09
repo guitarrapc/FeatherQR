@@ -6,12 +6,21 @@ namespace FeatherQR;
 public readonly record struct RmQRCodeDecodeInfo
 {
     internal RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected)
+        : this(status, version, eccLevel, errorsCorrected, default)
+    {
+    }
+
+    private RmQRCodeDecodeInfo(DecodeStatus status, RmQRVersion version, RmQREccLevel eccLevel, int errorsCorrected, SymbolCorners corners)
     {
         Status = status;
         Version = version;
         EccLevel = eccLevel;
         ErrorsCorrected = errorsCorrected;
+        Corners = corners;
     }
+
+    /// <summary>The same result with the symbol's image position attached; the image decoder calls this on success.</summary>
+    internal RmQRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, ErrorsCorrected, corners);
 
     /// <summary>Decode outcome; <see cref="DecodeStatus.Success"/> when text was produced.</summary>
     public DecodeStatus Status { get; }
@@ -24,4 +33,7 @@ public readonly record struct RmQRCodeDecodeInfo
 
     /// <summary>Total Reed-Solomon codeword corrections across all blocks (0 for a clean symbol).</summary>
     public int ErrorsCorrected { get; }
+
+    /// <summary>Where the symbol sits in the image, when decoded from one; see <see cref="SymbolCorners"/>. Empty for a matrix-level decode or a failed one.</summary>
+    public SymbolCorners Corners { get; }
 }

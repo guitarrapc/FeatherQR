@@ -385,6 +385,40 @@ output {
   min-height: 1.2em;
 }
 
+/* Drop target for the decode panel. Scoped to the panel rather than the page because the logo
+   field takes dropped images too, and a page-wide target would swallow those. */
+.decode-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px dashed transparent;
+  border-radius: 10px;
+  padding: 4px;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.decode-drop.is-dragover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* The decoded image with the reported symbol outline stroked over it. The canvas is sized in CSS
+   pixels and drawn at device resolution, so the outline stays sharp whatever size the source
+   image is; see drawDecodePreview in main.js. */
+.decode-preview {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.decode-preview canvas {
+  max-width: 100%;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
 .generate-error {
   color: var(--danger);
   font-size: 0.85rem;

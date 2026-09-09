@@ -186,7 +186,7 @@ internal static class MicroQRImageDecoder
                     var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
                     if (status == DecodeStatus.Success)
                     {
-                        info = attemptInfo;
+                        info = attemptInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: false));
                         return status;
                     }
                     TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
@@ -197,7 +197,7 @@ internal static class MicroQRImageDecoder
                     var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
                     if (mirroredStatus == DecodeStatus.Success)
                     {
-                        info = mirroredInfo;
+                        info = mirroredInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: true));
                         return mirroredStatus;
                     }
                     TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
@@ -289,7 +289,7 @@ internal static class MicroQRImageDecoder
                     var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
                     if (status == DecodeStatus.Success)
                     {
-                        info = attemptInfo;
+                        info = attemptInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: false));
                         return status;
                     }
                     TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
@@ -302,7 +302,7 @@ internal static class MicroQRImageDecoder
                     var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
                     if (mirroredStatus == DecodeStatus.Success)
                     {
-                        info = mirroredInfo;
+                        info = mirroredInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: true));
                         return mirroredStatus;
                     }
                     TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
@@ -419,7 +419,7 @@ internal static class MicroQRImageDecoder
                         var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
                         if (status == DecodeStatus.Success)
                         {
-                            info = attemptInfo;
+                            info = attemptInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, transposed: false));
                             return status;
                         }
                         TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
@@ -432,7 +432,7 @@ internal static class MicroQRImageDecoder
                         var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
                         if (mirroredStatus == DecodeStatus.Success)
                         {
-                            info = mirroredInfo;
+                            info = mirroredInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, transposed: true));
                             return mirroredStatus;
                         }
                         TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
@@ -506,7 +506,7 @@ internal static class MicroQRImageDecoder
                 var status = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
                 if (status == DecodeStatus.Success)
                 {
-                    info = attemptInfo;
+                    info = attemptInfo.WithCorners(SymbolGeometry.FromTransform(transform, size, size, transposed: false));
                     return status;
                 }
                 TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
@@ -519,7 +519,7 @@ internal static class MicroQRImageDecoder
                 var mirroredStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
                 if (mirroredStatus == DecodeStatus.Success)
                 {
-                    info = mirroredInfo;
+                    info = mirroredInfo.WithCorners(SymbolGeometry.FromTransform(transform, size, size, transposed: true));
                     return mirroredStatus;
                 }
                 TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
