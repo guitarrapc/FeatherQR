@@ -812,6 +812,14 @@ function orientedSize(orientation, width, height) {
  * device pixel ratio, because letting CSS resize the canvas leaves the outline soft. A size that
  * still disagrees after applying the EXIF tag means the overlay would land wrong, so it is dropped.
  */
+/** Leaves the canvas taking no space, so a caption is not shown beside a stale picture. */
+function collapseDecodeCanvas() {
+  decodeCanvasEl.width = 0;
+  decodeCanvasEl.height = 0;
+  decodeCanvasEl.style.width = '';
+  decodeCanvasEl.style.height = '';
+}
+
 function drawDecodePreview(bitmap, result) {
   const scale = Math.min(
     DECODE_PREVIEW_MAX_WIDTH / bitmap.width,
@@ -821,12 +829,21 @@ function drawDecodePreview(bitmap, result) {
   const cssHeight = Math.max(1, Math.round(bitmap.height * scale));
   const dpr = window.devicePixelRatio || 1;
 
+  // Null where the browser blocks canvas; the rest of the page does not need one, so say so
+  // rather than throwing out of an event handler.
+  const ctx = decodeCanvasEl.getContext('2d');
+  if (!ctx) {
+    collapseDecodeCanvas();
+    decodePreviewEl.hidden = false;
+    decodePreviewCaptionEl.textContent = 'This browser did not give the page a 2D canvas, so the image cannot be previewed.';
+    return;
+  }
+
   decodeCanvasEl.width = Math.round(cssWidth * dpr);
   decodeCanvasEl.height = Math.round(cssHeight * dpr);
   decodeCanvasEl.style.width = `${cssWidth}px`;
   decodeCanvasEl.style.height = `${cssHeight}px`;
 
-  const ctx = decodeCanvasEl.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssWidth, cssHeight);
   // Upscaling a symbol: keep the module edges hard. Downscaling a photo: let it average.
@@ -945,11 +962,8 @@ async function decodeImageFile(file) {
     bitmap = await createImageBitmap(file);
   } catch {
     if (superseded()) return;
-    // Collapse the canvas first: it still holds the previous image and its outline.
-    decodeCanvasEl.width = 0;
-    decodeCanvasEl.height = 0;
-    decodeCanvasEl.style.width = '';
-    decodeCanvasEl.style.height = '';
+    // Collapse it first: it still holds the previous image and its outline.
+    collapseDecodeCanvas();
     decodePreviewEl.hidden = false;
     decodePreviewCaptionEl.textContent = 'The browser could not render this image for preview.';
     return;
