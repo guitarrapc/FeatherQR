@@ -14,7 +14,7 @@ Like the Playground, the **Symbology** control switches between Standard QR (ver
 - resets version to **Auto**;
 - sets the quiet zone to the specification default (**4** modules for Standard QR, **2** for Micro QR).
 
-**Micro QR** uses `MicroQRCodeGenerator` / `MicroQRCodeImageBuilder` under the hood. The page hides **Finder pattern** and **Logo** panels (single finder, no ECC headroom for overlays — same as the Playground). Module shape, colors, and gradients remain available.
+**Micro QR** uses `MicroQRCodeGenerator` / `MicroQRCodeImageBuilder` under the hood. The page hides **Finder pattern** and **Logo** panels (no ECC headroom for overlays — same as the Playground). Module shape, colors, and gradients remain available.
 
 Capacity and version/ECC constraints are documented in the main README [Micro QR FAQ](../../README.md#does-it-support-micro-qr-or-rmqr).
 

@@ -213,7 +213,7 @@ public static class SymbolRenderer
     /// Draws a rectangular rMQR code into an area of the canvas, at a uniform module scale and centered, never stretched.
     /// </summary>
     /// <remarks>
-    /// The whole area gets the background color, not just the code itself. rMQR has one finder pattern and no error correction headroom to spare, so there are no icon or finder shape options.
+    /// The whole area gets the background color, not just the code itself. rMQR has no error correction headroom to spare, so there is no icon option.
     /// Modules are merged as for Standard QR.
     /// </remarks>
     /// <param name="canvas">The canvas to draw on.</param>
@@ -451,22 +451,12 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Draws dark modules as merged horizontal runs of full-cell rectangles.
-    /// Only valid for <see cref="RectangleModuleShape"/> at 100% module size, where adjacent modules share edges, antialiasing is always off (<see cref="RectangleModuleShape.RequiresAntialiasing"/> is false), and merging is pixel-identical to per-module drawing.
-    /// The parity holds under axis-preserving canvas transforms (translation/scale); rotated canvases may rasterize shared edges hairline-differently at sub-pixel level, inherent to non-axis-aligned rasterization, which affects per-module drawing between adjacent modules just the same.
-    /// </summary>
-    /// <summary>
     /// Which shape draws the finder patterns, or <c>null</c> to leave them to the module loop.
     /// </summary>
     /// <remarks>
-    /// The module shape and size are a styling of the <em>data</em>, and must never reach a finder
-    /// pattern. A decoder does not read the finder module by module; it scans lines looking for
-    /// the 1:1:3:1:1 run of dark and light that only a solid concentric pattern produces. Shrink
-    /// the modules by two percent and the three-module dark centre becomes three runs separated by
-    /// slivers of white, the ratio exists nowhere in the image, and the symbol is not found at all
-    /// (measured: ZXing fails on the same renders, so the symbol is at fault, not the decoder).
-    /// Full-size rectangles already draw the pattern solid, so they stay in the run-merge path,
-    /// which is both correct and the fewest draw calls; anything else gets an explicit shape.
+    /// The module shape and size style the data; a finder is located by its 1:1:3:1:1 run, which
+    /// gaps between modules erase, so it never takes them. Full-size rectangles already draw the
+    /// pattern solid and stay in the run-merge path; anything else gets an explicit shape.
     /// </remarks>
     private static FinderPatternShape? ResolveFinderShape(ModuleShape shape, float moduleSizePercent, FinderPatternShape? requested)
     {
@@ -522,6 +512,11 @@ public static class SymbolRenderer
         }
     }
 
+    /// <summary>
+    /// Draws dark modules as merged horizontal runs of full-cell rectangles.
+    /// Only valid for <see cref="RectangleModuleShape"/> at 100% module size, where adjacent modules share edges, antialiasing is always off (<see cref="RectangleModuleShape.RequiresAntialiasing"/> is false), and merging is pixel-identical to per-module drawing.
+    /// The parity holds under axis-preserving canvas transforms (translation/scale); rotated canvases may rasterize shared edges hairline-differently at sub-pixel level, inherent to non-axis-aligned rasterization, which affects per-module drawing between adjacent modules just the same.
+    /// </summary>
     private static void DrawModuleRuns<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, bool skipFinderPatterns)
         where TView : struct, IModuleMatrixView
     {

@@ -3,7 +3,7 @@ using SkiaSharp;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// How the three finder patterns, the large squares in the corners, are drawn.
+/// How the finder patterns, the large squares in the corners, are drawn: three of them on Standard QR, one on Micro QR and rMQR.
 /// </summary>
 public abstract class FinderPatternShape
 {
@@ -89,31 +89,34 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
     {
-        var moduleSize = rect.Width / 7f;
+        // Per axis: a canvas that is not square gives the symbol non-square cells, and the rings
+        // have to land on the same grid as the modules around them.
+        var moduleWidth = rect.Width / 7f;
+        var moduleHeight = rect.Height / 7f;
 
         // Draw outer ring (7×7)
         canvas.DrawRect(rect, paint);
 
         // Draw ring (5×5)
         var innerRect = SKRect.Create(
-            rect.Left + moduleSize,
-            rect.Top + moduleSize,
-            moduleSize * 5,
-            moduleSize * 5);
+            rect.Left + moduleWidth,
+            rect.Top + moduleHeight,
+            moduleWidth * 5,
+            moduleHeight * 5);
         canvas.DrawRect(innerRect, backgroundPaint);
 
         // Draw black center (3×3)
         var centerRect = SKRect.Create(
-            rect.Left + moduleSize * 2,
-            rect.Top + moduleSize * 2,
-            moduleSize * 3,
-            moduleSize * 3);
+            rect.Left + moduleWidth * 2,
+            rect.Top + moduleHeight * 2,
+            moduleWidth * 3,
+            moduleHeight * 3);
         canvas.DrawRect(centerRect, paint);
     }
 }
 
 /// <summary>
-/// Three nested circles.
+/// Three nested ovals, circles on a square area.
 /// </summary>
 public sealed class CircleFinderPatternShape : FinderPatternShape
 {
@@ -146,17 +149,19 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
     {
-        var center = new SKPoint(rect.MidX, rect.MidY);
-        var radius = Math.Min(rect.Width, rect.Height) / 2f;
+        // Ovals inscribed in the ring rects rather than circles: on a square area they are the
+        // same circles as before, and on a non-square one they keep following the module grid.
+        var moduleWidth = rect.Width / 7f;
+        var moduleHeight = rect.Height / 7f;
 
         // Draw outer ring (7x7)
-        canvas.DrawCircle(center, radius, paint);
+        canvas.DrawOval(rect, paint);
 
         // Draw ring (5x5)
-        canvas.DrawCircle(center, radius * (5f / 7f), backgroundPaint);
+        canvas.DrawOval(SKRect.Create(rect.Left + moduleWidth, rect.Top + moduleHeight, moduleWidth * 5, moduleHeight * 5), backgroundPaint);
 
         // Draw black center (3x3)
-        canvas.DrawCircle(center, radius * (3f / 7f), paint);
+        canvas.DrawOval(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3), paint);
     }
 }
 
@@ -175,7 +180,7 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
     /// <summary>
     /// Creates the shape with a corner radius of your own.
     /// </summary>
-    /// <param name="cornerRadiusPercent">The radius as a fraction of the module size, 0.0 to 1.0.</param>
+    /// <param name="cornerRadiusPercent">The corner radius as a fraction of the whole pattern, which is seven modules across, 0.0 to 1.0.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the radius is outside 0.0 to 1.0.</exception>
     public RoundedRectangleFinderPatternShape(float cornerRadiusPercent = 0.2f)
     {
@@ -205,7 +210,9 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
     {
-        var moduleSize = rect.Width / 7f;
+        // Per axis, so the rings follow the module grid when the cells are not square.
+        var moduleWidth = rect.Width / 7f;
+        var moduleHeight = rect.Height / 7f;
         var radius = Math.Min(rect.Width, rect.Height) * _cornerRadiusPercent;
 
         // Draw outer rounded rectangle (7×7)
@@ -213,24 +220,24 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
 
         // Draw ring (5×5)
         var innerRect = SKRect.Create(
-            rect.Left + moduleSize,
-            rect.Top + moduleSize,
-            moduleSize * 5,
-            moduleSize * 5);
+            rect.Left + moduleWidth,
+            rect.Top + moduleHeight,
+            moduleWidth * 5,
+            moduleHeight * 5);
         canvas.DrawRoundRect(innerRect, radius * 0.8f, radius * 0.8f, backgroundPaint);
 
         // Draw black center (3×3)
         var centerRect = SKRect.Create(
-            rect.Left + moduleSize * 2,
-            rect.Top + moduleSize * 2,
-            moduleSize * 3,
-            moduleSize * 3);
+            rect.Left + moduleWidth * 2,
+            rect.Top + moduleHeight * 2,
+            moduleWidth * 3,
+            moduleHeight * 3);
         canvas.DrawRoundRect(centerRect, radius * 0.6f, radius * 0.6f, paint);
     }
 }
 
 /// <summary>
-/// Two nested rounded rectangles around a circle.
+/// Two nested rounded rectangles around an oval, a circle on a square area.
 /// </summary>
 public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape
 {
@@ -244,7 +251,7 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
     /// <summary>
     /// Creates the shape with a corner radius of your own.
     /// </summary>
-    /// <param name="cornerRadiusPercent">The radius as a fraction of the module size, 0.0 to 1.0.</param>
+    /// <param name="cornerRadiusPercent">The corner radius as a fraction of the whole pattern, which is seven modules across, 0.0 to 1.0.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the radius is outside 0.0 to 1.0.</exception>
     public RoundedRectangleCircleFinderPatternShape(float cornerRadiusPercent = 0.3f)
     {
@@ -274,27 +281,25 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
     {
-        var center = new SKPoint(rect.MidX, rect.MidY);
-        var moduleSize = rect.Width / 7f;
+        // Per axis, so the rings follow the module grid when the cells are not square.
+        var moduleWidth = rect.Width / 7f;
+        var moduleHeight = rect.Height / 7f;
 
         // Corner radius for rounded rectangle
         var cornerRadius = Math.Min(rect.Width, rect.Height) * _cornerRadiusPercent;
-
-        // Base radius for circles (half of the rect size)
-        var baseRadius = Math.Min(rect.Width, rect.Height) / 2f;
 
         // Draw outer rounded rectangle (7×7)
         canvas.DrawRoundRect(rect, cornerRadius, cornerRadius, paint);
 
         // Draw ring (5×5)
         var innerRect = SKRect.Create(
-            rect.Left + moduleSize,
-            rect.Top + moduleSize,
-            moduleSize * 5,
-            moduleSize * 5);
+            rect.Left + moduleWidth,
+            rect.Top + moduleHeight,
+            moduleWidth * 5,
+            moduleHeight * 5);
         canvas.DrawRoundRect(innerRect, cornerRadius * 0.7f, cornerRadius * 0.7f, backgroundPaint);
 
-        // Draw black center (3×3) - 3/7 of the base radius
-        canvas.DrawCircle(center, baseRadius * (3f / 7f), paint);
+        // Draw black center (3×3), an oval so it stays on the grid; a circle on a square area.
+        canvas.DrawOval(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3), paint);
     }
 }

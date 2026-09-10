@@ -249,12 +249,12 @@ namespace FeatherQR.SkiaSharp
 
     public static class SKCanvasExtensions
     {
-        public static void Render(SKCanvas canvas, MicroQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
-        public static void Render(SKCanvas canvas, MicroQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+        public static void Render(SKCanvas canvas, MicroQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, MicroQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
         public static void Render(SKCanvas canvas, QRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
         public static void Render(SKCanvas canvas, QRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
-        public static void Render(SKCanvas canvas, RmQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
-        public static void Render(SKCanvas canvas, RmQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null);
+        public static void Render(SKCanvas canvas, RmQRCodeData data, SKRect area, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, RmQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
     }
 
     public abstract class SymbolImageBuilderBase<TSelf>

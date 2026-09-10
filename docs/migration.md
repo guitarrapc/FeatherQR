@@ -313,25 +313,25 @@ Three things the contract fixes:
 
 ```csharp
 // 1.x and 2.0.0-preview: renders, but no decoder finds this symbol. Not FeatherQR's, not ZXing's, not a phone's.
-new MicroQRCodeImageBuilder("https://example.com")
+new MicroQRCodeImageBuilder("https://githu")
     .WithModuleShape(RectangleModuleShape.Default, 0.92f)
     .ToBitmap();
 ```
 
-A decoder does not read a finder pattern module by module. It scans lines looking for the 1:1:3:1:1 run of dark and light that only a solid concentric pattern produces, and that is how it finds the symbol at all. Shrink the modules by two percent and the three-module dark centre becomes three runs with slivers of white between them, so the ratio exists nowhere in the image. The same render fails on ZXing, so the symbol was at fault rather than any one decoder.
+A decoder does not read a finder pattern module by module. It scans lines looking for the 1:1:3:1:1 run of dark and light that only a solid concentric pattern produces, and that is how it finds the symbol at all. Shrink the modules by two percent and the three-module dark centre becomes three runs with slivers of white between them, so the ratio exists nowhere in the image. The same is true of a Standard QR render, which ZXing also fails to read, so the symbol was at fault rather than any one decoder.
 
 Your calls do not change, and codes that already decoded still look the same: at 100% square modules the finder was already solid, and that path is untouched, byte for byte. What changes is that a styled symbol now keeps a solid finder instead of a decorative, undetectable one.
 
 To style the finders, ask for it and get a shape that stays detectable, now on all three builders rather than Standard QR alone:
 
 ```csharp
-new MicroQRCodeImageBuilder("https://example.com")
+new MicroQRCodeImageBuilder("https://githu")
     .WithModuleShape(CircleModuleShape.Default, 0.85f)
     .WithFinderPatternShape(CircleFinderPatternShape.Default)
     .ToBitmap();
 ```
 
-The built-in finder shapes round the corners of the rings without breaking them, so all four decode down to 75% module size. `SymbolRenderer.Render` gained the matching optional `finderPatternShape` parameter for Micro QR and rMQR. If you were relying on the old look, render the matrix yourself from `GetModuleRectangles`.
+The built-in finder shapes reshape the concentric rings without breaking them, which is the property a decoder needs, so all four decode down to 75% module size. `SymbolRenderer.Render` and the `SKCanvas.Render` extensions gained the matching optional `finderPatternShape` parameter for Micro QR and rMQR. If you were relying on the old look, read the matrix through the `[row, col]` indexer on the data type and draw it yourself.
 
 ## 1.2.0
 

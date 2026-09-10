@@ -1002,7 +1002,7 @@ Console.WriteLine();
 
 Console.WriteLine("""
     Pattern 25: Micro QR, Builder (colors, module shape, gradient)
-      - Best for: Styled Micro QR within symbology limits (no icon / finder styling)
+      - Best for: Styled Micro QR within symbology limits (no icon overlay)
       - API: new MicroQRCodeImageBuilder().WithXxx()
       - Default quiet zone is 2 modules (Standard QR uses 4)
     """);

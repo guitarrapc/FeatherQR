@@ -325,7 +325,7 @@ public static partial class QrInterop
 
     /// <summary>
     /// Builds the rMQR image builder from request options.
-    /// The requested size is the image width; the height follows the rectangular symbol. rMQR has no icon overlay or finder pattern shape options, the page hides those controls.
+    /// The requested size is the image width; the height follows the rectangular symbol. rMQR has no icon overlay, so the page hides that control; the finder shape it does take is not offered here yet.
     /// </summary>
     private static RmQRCodeImageBuilder CreateRmBuilder(QrRequest request, RmQRCodeData data)
     {
@@ -381,7 +381,7 @@ public static partial class QrInterop
 
     /// <summary>
     /// Builds the Micro QR image builder from request options.
-    /// Micro QR has no icon overlay or finder pattern shape options (single finder, no ECC headroom), so those request fields are ignored, the page hides the controls.
+    /// Micro QR has no icon overlay (no ECC headroom), so those request fields are ignored, the page hides the controls.
     /// </summary>
     private static MicroQRCodeImageBuilder CreateMicroBuilder(QrRequest request, MicroQRCodeData data)
     {
@@ -711,7 +711,7 @@ public static partial class QrInterop
         "circle" => CircleFinderPatternShape.Default,
         "rounded" => RoundedRectangleFinderPatternShape.Default,
         "roundedCircle" => RoundedRectangleCircleFinderPatternShape.Default,
-        _ => null, // auto: standard pattern, or module shape when one is set
+        _ => null, // auto: the plain square the standards define
     };
 
     private static GradientOptions? CreateGradient(GradientDto? gradient)

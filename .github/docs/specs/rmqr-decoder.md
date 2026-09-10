@@ -40,7 +40,7 @@ On success the result carries the symbol's four corners in image coordinates (`R
 ### Not supported
 
 - FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above, (all `UnsupportedContent`); Kanji cells outside the JIS X 0208 repertoire are reported separately as `UnmappedCharacter`
-- Strong perspective, uneven lighting, blur, and heavily styled symbols below about 5 px/module (rounded modules + gradients make the finder runs too fuzzy; the same styling decodes at 8+ px/module)
+- Strong perspective, uneven lighting, blur, and heavily styled symbols below about 5 px/module (gradients make the finder runs too fuzzy; the same styling decodes at 8+ px/module)
 
 ## Why
 

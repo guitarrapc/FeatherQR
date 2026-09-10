@@ -298,7 +298,7 @@ public sealed class RmQRCodeData
     /// </para>
     /// <para>
     /// The three guarantees above are contractual, but the shape and order of the decomposition are not, and may change between versions.
-    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws).
+    /// The decomposition shape and ordering are unspecified and may change between versions (currently maximal horizontal runs in row-major order, the same merge the built-in renderer draws for an unstyled symbol; a styled one draws its finder patterns as whole patterns instead).
     /// </para>
     /// </remarks>
     public ModuleRect[] GetModuleRectangles()

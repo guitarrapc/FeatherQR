@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// The static methods cover the common cases in one line, such as <see cref="GetPngBytes(string, QREccLevel, int)"/>.
-/// For anything else, construct the builder and chain the options, from sizing and colors down to <see cref="WithIcon(IconData?)"/> and <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape(FinderPatternShape?)"/>.
+/// For anything else, construct the builder and chain the options, from sizing and colors down to <see cref="WithIcon(IconData?)"/> and <c>WithFinderPatternShape</c>.
 /// </remarks>
 /// <seealso cref="QRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
@@ -450,11 +450,11 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     }
 
     /// <summary>
-    /// Custom finder shapes require antialiasing; built-in icon shapes only draw rectangles, bitmaps, and text, none of which degrade under crispEdges.
+    /// Curved finder shapes require antialiasing; a square one does not, and neither do the built-in icon shapes, which only draw rectangles, bitmaps, and text.
     /// </summary>
     private protected override bool UseCrispEdgesCore()
     {
-        return _finderPatternShape is null
+        return _finderPatternShape?.RequiresAntialiasing != true
             && (_iconData?.Icon is null or ImageIconShape or ImageTextIconShape);
     }
 }
