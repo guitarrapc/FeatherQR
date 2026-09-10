@@ -429,7 +429,7 @@ public class FinderPatternShapeColorTest
 
         using (bitmap)
         {
-            var module = Math.Min((float)canvasWidth / matrixWidth, (float)canvasHeight / matrixHeight);
+            var module = Math.Min((double)canvasWidth / matrixWidth, (double)canvasHeight / matrixHeight);
             // Mirrors the builder's own arithmetic, double and epsilon included.
             var left = Math.Max(0d, Math.Floor((canvasWidth - module * matrixWidth) / 2 + 1e-6));
             var top = Math.Max(0d, Math.Floor((canvasHeight - module * matrixHeight) / 2 + 1e-6));
@@ -475,7 +475,7 @@ public class FinderPatternShapeColorTest
             .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
             .ToBitmap();
 
-        var module = Math.Min((float)canvasWidth / data.Size, (float)canvasHeight / data.Size);
+        var module = Math.Min((double)canvasWidth / data.Size, (double)canvasHeight / data.Size);
         var left = Math.Max(0d, Math.Floor((canvasWidth - module * data.Size) / 2 + 1e-6));
         var top = Math.Max(0d, Math.Floor((canvasHeight - module * data.Size) / 2 + 1e-6));
 
