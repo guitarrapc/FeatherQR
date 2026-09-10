@@ -6,7 +6,7 @@ using System.Text;
 namespace FeatherQR.SkiaSharp;
 
 /// <summary>
-/// Shared implementation for the symbology-specific QR image builders (<see cref="QRCodeImageBuilder"/>, <see cref="MicroQRCodeImageBuilder"/>): the fluent options every symbology supports, canvas layout, and the complete raster/SVG output surface.
+/// Shared implementation for the symbology-specific QR image builders (<see cref="QRCodeImageBuilder"/>, <see cref="MicroQRCodeImageBuilder"/>, <see cref="RmQRCodeImageBuilder"/>): the fluent options every symbology supports, canvas layout, and the complete raster/SVG output surface.
 /// Symbology-specific concerns, such as error correction and version types and icon overlays, live on the derived builders.
 /// </summary>
 /// <remarks>
