@@ -340,11 +340,15 @@ The built-in finder shapes reshape the concentric rings without breaking them, w
 **Behavior change, and the second reason to upgrade.** A canvas whose width and height differ used to stretch a Standard QR or Micro QR symbol across both axes, so the modules stopped being square:
 
 ```csharp
-// 1.x and 2.0.0-preview.2: a 900x450 image that no reader finds. Ours, ZXing's or a phone's.
 new QRCodeImageBuilder("https://example.com")
     .WithSize(900, 450)
     .ToByteArray();
 ```
+
+| 1.x and 2.0.0-preview.2 | 2.0.0 |
+|---|---|
+| <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
+| No reader finds it. Not FeatherQR's, not ZXing's, not a phone's | Scans |
 
 Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular. Measured on a 33-module symbol, plain renders stopped decoding past 1.67:1 and styled ones past 1.25:1, in our decoder and in ZXing alike.
 
@@ -360,16 +364,23 @@ surface.Canvas.Render(QRCodeGenerator.Create("https://example.com", QREccLevel.M
 
 ### Padding around the symbol defaults to the background color
 
-**Behavior change.** When the canvas is larger than the symbol, the leftover is painted with `clearColor` if you set one and with `backgroundColor` otherwise. It used to be transparent when `clearColor` was omitted, which a JPEG turns into black bands and which costs the PNG its alpha-free encoding:
+**Behavior change.** When the canvas is larger than the symbol, the leftover is painted with `clearColor` if you set one and with `backgroundColor` otherwise. It used to be transparent when `clearColor` was omitted:
 
 ```csharp
 // 8-pixel modules on a 400x400 canvas leave padding around the symbol.
-// 1.x: that padding was transparent. 2.0.0: it is the background.
 new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(8)
     .WithSize(400, 400)
+    .WithFormat(SKEncodedImageFormat.Jpeg, 90)
     .ToByteArray();
 ```
+
+| 1.x and 2.0.0-preview.2 | 2.0.0 |
+|---|---|
+| <img src="images/padding-transparent.jpg" width="240" alt="A QR code with black padding"/> | <img src="images/padding-background.jpg" width="240" alt="A QR code with white padding"/> |
+| The padding was transparent, and JPEG has no alpha to carry it | The padding is the background |
+
+JPEG is the format that shows it plainly. As a PNG the old padding stayed transparent, so what you saw depended on what the image was placed on, and the file carried an alpha channel it did not need.
 
 Transparent surroundings are still available, by name:
 
@@ -381,7 +392,13 @@ new QRCodeImageBuilder("https://example.com")
     .ToByteArray();
 ```
 
+<img src="images/padding-clearcolor-transparent.png" width="240" alt="A QR code whose padding is transparent, shown over a checkerboard"/>
+
+The symbol keeps its opaque white background and only the padding is transparent, which is what you want when the image goes onto a coloured page. The checkerboard is not in the file; it is drawn behind it here because a transparent pad and a white one look the same on a white page.
+
 This also reaches rMQR, whose `WithSize` padding was transparent by default and is now the background, matching what `WithWidth` already produced.
+
+The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched render is the real old output, drawn through the low-level `SKCanvas.Render` that still fills the area it is given.
 
 ## 1.2.0
 
