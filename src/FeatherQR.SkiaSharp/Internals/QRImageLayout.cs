@@ -10,25 +10,21 @@ internal static class QRImageLayout
     /// <summary>
     /// Rectangular-aware layout.
     /// With a module pixel size the content is exactly <c>matrixWidth × matrixHeight</c> modules at that size (centered in an explicit canvas on whole pixels).
-    /// With only an explicit canvas size: when <paramref name="preserveAspectRatio"/> is false the content fills the canvas (square symbologies); when true the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox, rMQR), never stretched non-uniformly.
-    /// With neither, <paramref name="defaultSize"/> is the symbology's own aspect-derived canvas and the content rectangle is the whole canvas: the renderer paints the background over all of it and draws the symbol at a uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>), so the height rounding costs at most a few pixels of background at the sides; letterboxing here again would only turn that background into a clear-colour band and a non-opaque image.
+    /// With only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly: a symbol whose modules are not square stops being findable well before it stops being drawn.
+    /// With neither, <paramref name="defaultSize"/> is the symbology's own aspect-derived canvas and the content rectangle is the whole canvas: the renderer paints the background over all of it and draws the symbol at a uniform module scale inside (rMQR: <c>SymbolRenderer.GetLetterboxedArea</c>), so the height rounding costs at most a few pixels of background at the sides; letterboxing here again would only turn that background into a padded band on a canvas the caller never asked for.
     /// </summary>
-    internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixWidth, int matrixHeight, Vector2Slim? explicitSize, int? modulePixelSize, bool preserveAspectRatio, Vector2Slim defaultSize)
+    internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixWidth, int matrixHeight, Vector2Slim? explicitSize, int? modulePixelSize, Vector2Slim defaultSize)
     {
         if (modulePixelSize is null)
         {
             var size = explicitSize ?? defaultSize;
             var info = new SKImageInfo(size.X, size.Y);
-            if (!preserveAspectRatio || explicitSize is null)
+            if (explicitSize is null)
                 return (info, SKRect.Create(0, 0, size.X, size.Y));
 
-            // Uniform scale, centered on whole pixels; the leftover pad keeps the clear color.
-            var scale = Math.Min((float)size.X / matrixWidth, (float)size.Y / matrixHeight);
-            var contentWidth = matrixWidth * scale;
-            var contentHeight = matrixHeight * scale;
-            var padLeft = (float)Math.Floor((size.X - contentWidth) / 2);
-            var padTop = (float)Math.Floor((size.Y - contentHeight) / 2);
-            return (info, SKRect.Create(padLeft, padTop, contentWidth, contentHeight));
+            // Uniform scale, centered on whole pixels; the builder paints the leftover pad.
+            var fitted = SymbolRenderer.GetLetterboxedArea(SKRect.Create(0, 0, size.X, size.Y), matrixWidth, matrixHeight);
+            return (info, SKRect.Create((float)Math.Floor(fitted.Left), (float)Math.Floor(fitted.Top), fitted.Width, fitted.Height));
         }
 
         int contentWidthPx, contentHeightPx;

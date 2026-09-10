@@ -230,8 +230,10 @@ var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text, 
 // after
 if (!QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size))
     return;
-var (bufferSize, qrSize, version) = (size.BufferSize, size.Size, size.Version);
+// size.BufferSize, size.Size, size.Version
 ```
+
+`BufferSize` sizes the destination for the `Span<byte>` overload of `Create`, so whatever you rented or reused for it takes the new spelling and nothing else changes.
 
 **`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself (below C# 9, use the constructor described under [Older language versions](#older-language-versions)):
 
@@ -312,7 +314,7 @@ Three things the contract fixes:
 **Behavior change, and the reason to upgrade if you style your codes.** `WithModuleShape(shape, sizePercent)` now styles the data modules only. Before, it also redrew the finder patterns, and that silently produced symbols nothing could read:
 
 ```csharp
-// 1.x and 2.0.0-preview: renders, but no decoder finds this symbol. Not FeatherQR's, not ZXing's, not a phone's.
+// 1.x and 2.0.0-preview.2: renders, but no decoder finds this symbol. Not FeatherQR's, not ZXing's, not a phone's.
 new MicroQRCodeImageBuilder("https://githu")
     .WithModuleShape(RectangleModuleShape.Default, 0.92f)
     .ToBitmap();
@@ -332,6 +334,54 @@ new MicroQRCodeImageBuilder("https://githu")
 ```
 
 The built-in finder shapes reshape the concentric rings without breaking them, which is the property a decoder needs, so all four decode down to 75% module size. `SymbolRenderer.Render` and the `SKCanvas.Render` extensions gained the matching optional `finderPatternShape` parameter for Micro QR and rMQR. If you were relying on the old look, read the matrix through the `[row, col]` indexer on the data type and draw it yourself.
+
+### `WithSize(w, h)` fits the symbol instead of stretching it
+
+**Behavior change, and the second reason to upgrade.** A canvas whose width and height differ used to stretch a Standard QR or Micro QR symbol across both axes, so the modules stopped being square:
+
+```csharp
+// 1.x and 2.0.0-preview.2: a 900x450 image that no reader finds. Ours, ZXing's or a phone's.
+new QRCodeImageBuilder("https://example.com")
+    .WithSize(900, 450)
+    .ToByteArray();
+```
+
+Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular. Measured on a 33-module symbol, plain renders stopped decoding past 1.67:1 and styled ones past 1.25:1, in our decoder and in ZXing alike.
+
+The symbol is now fitted into the canvas with one uniform module scale and centered, which is what the rectangular rMQR builder always did. Square canvases are unaffected, and so are `WithModulePixelSize` and the static helpers, none of which ever took two different values.
+
+If you were passing different values to get a code that filled a non-square frame, you were not getting one. Draw the code into the part of the frame it belongs in:
+
+```csharp
+using var surface = SKSurface.Create(new SKImageInfo(900, 450));
+surface.Canvas.Clear(SKColors.White);
+surface.Canvas.Render(QRCodeGenerator.Create("https://example.com", QREccLevel.M), SKRect.Create(0, 0, 450, 450));
+```
+
+### Padding around the symbol defaults to the background color
+
+**Behavior change.** When the canvas is larger than the symbol, the leftover is painted with `clearColor` if you set one and with `backgroundColor` otherwise. It used to be transparent when `clearColor` was omitted, which a JPEG turns into black bands and which costs the PNG its alpha-free encoding:
+
+```csharp
+// 8-pixel modules on a 400x400 canvas leave padding around the symbol.
+// 1.x: that padding was transparent. 2.0.0: it is the background.
+new QRCodeImageBuilder("https://example.com")
+    .WithModulePixelSize(8)
+    .WithSize(400, 400)
+    .ToByteArray();
+```
+
+Transparent surroundings are still available, by name:
+
+```csharp
+new QRCodeImageBuilder("https://example.com")
+    .WithModulePixelSize(8)
+    .WithSize(400, 400)
+    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+    .ToByteArray();
+```
+
+This also reaches rMQR, whose `WithSize` padding was transparent by default and is now the background, matching what `WithWidth` already produced.
 
 ## 1.2.0
 

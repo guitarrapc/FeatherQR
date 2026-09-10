@@ -448,9 +448,6 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
     /// <summary>Only a custom finder shape needs antialiasing here; rMQR has no icon overlays.</summary>
     private protected override bool UseCrispEdgesCore() => _finderPatternShape?.RequiresAntialiasing != true;
 
-    /// <summary>Rectangular rMQR codes are letterboxed into an explicit canvas, never stretched.</summary>
-    private protected override bool PreserveAspectRatio => true;
-
     /// <summary>Default canvas: the configured (or 512) width, height from the rMQR code aspect ratio.</summary>
     private protected override Vector2Slim GetDefaultCanvasSize(int matrixWidth, int matrixHeight)
     {

@@ -48,12 +48,6 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private protected abstract object ResolveSymbol(out int matrixWidth, out int matrixHeight);
 
     /// <summary>
-    /// Whether an explicit canvas size fits the symbol with a uniform module scale (letterbox) instead of filling the canvas.
-    /// Square symbologies keep the historical fill behavior; rectangular symbologies must never be stretched.
-    /// </summary>
-    private protected virtual bool PreserveAspectRatio => false;
-
-    /// <summary>
     /// Canvas size used when neither <see cref="WithSize"/> nor <see cref="WithModulePixelSize"/> was called (512 × 512 for square symbologies).
     /// </summary>
     private protected virtual Vector2Slim GetDefaultCanvasSize(int matrixWidth, int matrixHeight) => new(512, 512);
@@ -73,9 +67,10 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Sets the output image size in pixels.
     /// </summary>
     /// <remarks>
-    /// On its own, the symbol fills the canvas: a square symbology divides the canvas by the matrix size, which can be fractional and shifts when the version changes, while rMQR is fitted with one uniform module scale and the leftover is padded.
-    /// Combined with <see cref="WithModulePixelSize(int)"/> this is the canvas alone, the modules decide the content size, and the content is centered with the rest padded in the clear color.
-    /// A canvas smaller than the content on either side is an error.
+    /// On its own, the symbol is fitted into the canvas with one uniform module scale and centered, whatever the canvas aspect ratio: modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The module size follows from the canvas, so it can be fractional and shifts when the version changes.
+    /// Combined with <see cref="WithModulePixelSize(int)"/> this is the canvas alone and the modules decide the content size.
+    /// Either way the content is centered and the leftover canvas is padded, in the clear color when one is set and the background color otherwise.
+    /// A canvas smaller than the content on either side is an error, but only when the module size is pinned; on its own this method has no size it cannot fit.
     /// </remarks>
     /// <param name="width">Width in pixels.</param>
     /// <param name="height">Height in pixels.</param>
@@ -96,7 +91,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <remarks>
     /// On its own the image is exactly as large as the symbol needs.
-    /// Combined with <see cref="WithSize(int, int)"/> the content is centered on that canvas and the rest padded in the clear color.
+    /// Combined with <see cref="WithSize(int, int)"/> the content is centered on that canvas and the rest padded, in the clear color when one is set and the background color otherwise.
     /// </remarks>
     /// <param name="modulePixelSize">Pixels per module.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the size is not positive.</exception>
@@ -148,7 +143,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the symbol, quiet zone included. White when omitted.</param>
-    /// <param name="clearColor">The padding around the symbol when the canvas is larger than the content. Transparent when omitted.</param>
+    /// <param name="clearColor">The padding around the symbol when the canvas is larger than the content, and the color the canvas is cleared with before the symbol is drawn. The background color when omitted, so the padding matches the symbol rather than leaving the image part transparent; pass <see cref="SKColors.Transparent"/> explicitly for transparent surroundings.</param>
     public TSelf WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null)
     {
         _codeColor = codeColor;
@@ -333,7 +328,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     private void RenderSvg(Stream output)
     {
         var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, PreserveAspectRatio, GetDefaultCanvasSize(matrixWidth, matrixHeight));
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight));
 
         var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
         var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
@@ -367,21 +362,20 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     {
         var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
 
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, PreserveAspectRatio, GetDefaultCanvasSize(matrixWidth, matrixHeight));
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, GetDefaultCanvasSize(matrixWidth, matrixHeight));
 
-        var clearColor = _clearColor ?? SKColors.Transparent;
         var contentCoversCanvas = QRImageLayout.ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
-        var clearIsOpaque = clearColor.Alpha == byte.MaxValue;
+        var padIsOpaque = PadColor().Alpha == byte.MaxValue;
 
-        // When the base layer (background fill, or the cleared canvas) is opaque
+        // When the base layer (background fill, or the padded canvas) is opaque
         // everywhere, anything drawn over it stays opaque, so the whole image is
         // opaque no matter what modules/icons/gradients are painted on top.
         // An opaque surface lets encoders skip the alpha channel and the unpremul
         // pass, PNG output becomes RGB: smaller and faster to encode.
         var isOpaque = contentCoversCanvas
-            ? backgroundIsOpaque || clearIsOpaque
-            : clearIsOpaque;
+            ? backgroundIsOpaque || padIsOpaque
+            : padIsOpaque;
         if (isOpaque)
         {
             info = info.WithAlphaType(SKAlphaType.Opaque);
@@ -399,19 +393,53 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     private void RenderContent(SKCanvas canvas, object symbol, SKImageInfo info, SKRect contentRect)
     {
-        var clearColor = _clearColor ?? SKColors.Transparent;
         var contentCoversCanvas = QRImageLayout.ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
 
-        // Clear the canvas with clearColor, then draw into contentRect; extra
-        // canvas area (pad) keeps clearColor. The clear is skipped when it cannot
-        // remain visible: a fresh canvas is already fully transparent, and an
-        // opaque background covering the whole canvas overwrites it anyway.
-        if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
+        if (_clearColor is SKColor clearColor)
         {
-            canvas.Clear(clearColor);
+            // A clear color is a canvas color: it goes under the symbol as well, so a
+            // translucent background blends over it. The clear is skipped when it cannot
+            // remain visible: a fresh canvas is already fully transparent, and an opaque
+            // background covering the whole canvas overwrites it anyway.
+            if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
+            {
+                canvas.Clear(clearColor);
+            }
+        }
+        else if (!contentCoversCanvas)
+        {
+            // The pad inherits the background. Painting it under the symbol too would put a
+            // translucent background on twice and leave the symbol box denser than the pad.
+            FillAround(canvas, contentRect, info, _backgroundColor ?? SKColors.White);
         }
 
         RenderSymbol(canvas, symbol, contentRect);
+    }
+
+    /// <summary>The pad the canvas carries where the symbol does not reach.</summary>
+    private SKColor PadColor() => _clearColor ?? _backgroundColor ?? SKColors.White;
+
+    /// <summary>
+    /// Fills the canvas outside <paramref name="contentRect"/>, in up to four bands.
+    /// </summary>
+    /// <remarks>
+    /// The bands meet the content on the exact same coordinates the renderer fills from, and
+    /// nothing here is antialiased, so the shared edges round the same way and tile without a seam.
+    /// </remarks>
+    private static void FillAround(SKCanvas canvas, SKRect contentRect, SKImageInfo info, SKColor color)
+    {
+        if (color.Alpha == 0)
+            return;
+
+        using var paint = new SKPaint { Color = color, Style = SKPaintStyle.Fill, IsAntialias = false };
+        if (contentRect.Top > 0)
+            canvas.DrawRect(SKRect.Create(0, 0, info.Width, contentRect.Top), paint);
+        if (contentRect.Bottom < info.Height)
+            canvas.DrawRect(SKRect.Create(0, contentRect.Bottom, info.Width, info.Height - contentRect.Bottom), paint);
+        if (contentRect.Left > 0)
+            canvas.DrawRect(SKRect.Create(0, contentRect.Top, contentRect.Left, contentRect.Height), paint);
+        if (contentRect.Right < info.Width)
+            canvas.DrawRect(SKRect.Create(contentRect.Right, contentRect.Top, info.Width - contentRect.Right, contentRect.Height), paint);
     }
 }
