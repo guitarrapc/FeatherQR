@@ -430,13 +430,13 @@ public class FinderPatternShapeColorTest
         using (bitmap)
         {
             var module = Math.Min((float)canvasWidth / matrixWidth, (float)canvasHeight / matrixHeight);
-            // The 1e-3 matches the slack the builder absorbs before flooring the offset.
-            var left = Math.Max(0f, MathF.Floor((canvasWidth - module * matrixWidth) / 2 + 1e-3f));
-            var top = Math.Max(0f, MathF.Floor((canvasHeight - module * matrixHeight) / 2 + 1e-3f));
+            // Mirrors the builder's own arithmetic, double and epsilon included.
+            var left = Math.Max(0d, Math.Floor((canvasWidth - module * matrixWidth) / 2 + 1e-6));
+            var top = Math.Max(0d, Math.Floor((canvasHeight - module * matrixHeight) / 2 + 1e-6));
 
-            SKColor At(float col, float row) => bitmap.GetPixel(
-                (int)MathF.Round(left + col * module),
-                (int)MathF.Round(top + row * module));
+            SKColor At(double col, double row) => bitmap.GetPixel(
+                (int)Math.Round(left + col * module),
+                (int)Math.Round(top + row * module));
 
             var ring = At(quietZone + 1.5f, quietZone + 3.5f);
             var centre = At(quietZone + 3.5f, quietZone + 3.5f);
@@ -476,12 +476,12 @@ public class FinderPatternShapeColorTest
             .ToBitmap();
 
         var module = Math.Min((float)canvasWidth / data.Size, (float)canvasHeight / data.Size);
-        var left = Math.Max(0f, MathF.Floor((canvasWidth - module * data.Size) / 2 + 1e-3f));
-        var top = Math.Max(0f, MathF.Floor((canvasHeight - module * data.Size) / 2 + 1e-3f));
+        var left = Math.Max(0d, Math.Floor((canvasWidth - module * data.Size) / 2 + 1e-6));
+        var top = Math.Max(0d, Math.Floor((canvasHeight - module * data.Size) / 2 + 1e-6));
 
-        SKColor At(float col, float row) => bitmap.GetPixel(
-            (int)MathF.Round(left + col * module),
-            (int)MathF.Round(top + row * module));
+        SKColor At(double col, double row) => bitmap.GetPixel(
+            (int)Math.Round(left + col * module),
+            (int)Math.Round(top + row * module));
 
         await Assert.That(At(quietZone + 1.5f, quietZone + 3.5f)).IsEqualTo(backgroundColor)
             .Because($"{finderPatternShape.GetType().Name} ring");

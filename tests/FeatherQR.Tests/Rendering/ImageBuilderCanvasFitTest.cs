@@ -10,25 +10,13 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/> takes a width and a height
-/// independently, and the square symbologies used to stretch the symbol across both. Module
-/// centres stayed correct, so the data was intact and nothing threw: what broke was detection,
-/// because the finder pattern is located by the 1:1:3:1:1 run of dark and light along a line and
-/// that ratio only holds on one axis once the cells stop being square. The ratio where that starts
-/// is not a constant worth pinning: measured across two symbols, four styles and both orientations
-/// it ranged from 1.25:1 to 1.8:1, which is why the cases below assert decodability at ratios well
-/// inside it rather than hunting for the edge. The builder now fits the symbol into the canvas with
-/// a uniform module scale (letterbox), as the rectangular rMQR builder always did.
+/// The square symbologies used to stretch the symbol across a non-square canvas. Module centres stayed correct and nothing threw, so what broke was detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning — measured, failures start around 1.25:1 and nothing survives past 1.8:1 — so these cases assert decodability well inside the band rather than hunting for the edge.
 /// </para>
 /// <para>
-/// Aspect ratio, not size: a canvas too small for the symbol gives it sub-pixel modules that
-/// nothing reads, and <see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/> has no lower
-/// bound. Every canvas here is large enough that the module scale is not the variable under test.
+/// Aspect ratio, not size: <see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/> has no lower bound, and a canvas too small for the symbol gives it sub-pixel modules that nothing reads. Every canvas here is large enough that the module scale is not the variable under test.
 /// </para>
 /// <para>
-/// The leftover canvas takes <c>clearColor</c> when one is set and the background colour
-/// otherwise, so the default output of every accepted canvas is opaque: a transparent default
-/// would turn into black bands the moment the image is encoded as JPEG.
+/// The leftover canvas takes <c>clearColor</c> when one is set and the background otherwise, so every accepted canvas is opaque by default: a transparent default becomes black bands the moment the image is encoded as JPEG.
 /// </para>
 /// </remarks>
 public class ImageBuilderCanvasFitTest
@@ -159,14 +147,7 @@ public class ImageBuilderCanvasFitTest
     /// <summary>
     /// A canvas the symbol fits exactly must carry no pad at all.
     /// </summary>
-    /// <remarks>
-    /// The fitted extent is computed in single precision, so <c>matrixSize * (canvas / matrixSize)</c>
-    /// can land a hair above the canvas and leave the centering offset at about -1.5e-5. Flooring
-    /// that gives -1, which offsets the symbol by a pixel and opens a one-pixel band of pad along
-    /// the far edges of a canvas that has no pad. It is invisible with the default colours, because
-    /// the pad is then the background it sits next to, so the assertion needs a clear colour that
-    /// differs, and the versions below are ones whose float ratio actually overshoots.
-    /// </remarks>
+    /// <remarks>Rounding can leave the centering offset just below zero, and flooring that gives -1: the symbol shifts a pixel and the far edges grow a band of pad. The pad is the background by default, so seeing it needs a clear colour that differs; these versions are ones whose ratio actually overshoots.</remarks>
     [Test]
     [Arguments(5, 400)]
     [Arguments(6, 450)]
@@ -412,11 +393,7 @@ public class ImageBuilderCanvasFitTest
     /// <summary>
     /// The same single-coat rule where the pad has corners.
     /// </summary>
-    /// <remarks>
-    /// A letterbox pad is two bands and no corner, so the case that pins the rule on a non-square
-    /// canvas cannot see a corner painted twice. A pinned module size inside a larger canvas is the
-    /// shape that has all four, and it is the one the side bands have to stop short for.
-    /// </remarks>
+    /// <remarks>A letterbox pad is two bands with no corner, so the non-square case cannot see a corner painted twice. A pinned module size inside a larger canvas has all four, and is what the side bands stop short for.</remarks>
     [Test]
     public async Task TranslucentBackground_PadCornersTakeOneCoatToo()
     {
@@ -438,22 +415,16 @@ public class ImageBuilderCanvasFitTest
         }
     }
 
-    /// <summary>
-    /// The slack absorbed before flooring has to stay well under the smallest gap a real offset can
-    /// leave below a whole pixel.
-    /// </summary>
-    /// <remarks>
-    /// Every legitimate offset is a multiple of <c>1 / (2 × longest matrix side)</c>, and the longest
-    /// a supported symbol reaches is 159 modules (rMQR R9x139 at the maximum quiet zone), so nothing
-    /// can sit closer than about 2.5e-3 below an integer. This geometry lands 3.1e-3 below one, which
-    /// an epsilon of 1e-2 would round up and lose.
-    /// </remarks>
+    /// <summary>The slack absorbed before flooring has to stay under the smallest gap a real offset can leave below a whole pixel, at every matrix size the data types accept.</summary>
+    /// <remarks>Offsets are multiples of <c>1 / (2 × matrix width)</c>, so a wider matrix can sit closer to a boundary; a square one never can, since both offsets land on halves. <see cref="SymbolImageBuilderBase{TSelf}.WithQuietZone(int)"/> caps at 10 modules, but the generator options and the data constructors go to 10,000, which reaches a 20,000-module matrix and a gap of about 2.5e-5. Both geometries here sit within 1e-3 of a boundary.</remarks>
     [Test]
-    public async Task WithSize_OffsetJustBelowAWholePixel_IsNotRoundedUp()
+    [Arguments(RmQRVersion.R7x139, 195, 533, 402, 0)]
+    [Arguments(RmQRVersion.R9x139, 10, 806, 661, 256)]
+    public async Task WithSize_OffsetJustBelowAWholePixel_IsNotRoundedUp(RmQRVersion version, int quietZone, int width, int height, int expectedTopPad)
     {
-        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R9x139, QuietZoneSize = 10 });
+        var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
         using var bitmap = new RmQRCodeImageBuilder(data)
-            .WithSize(806, 661)
+            .WithSize(width, height)
             .WithColors(SKColors.Black, SKColors.White, SKColors.Red)
             .ToBitmap();
 
@@ -461,8 +432,7 @@ public class ImageBuilderCanvasFitTest
         var top = 0;
         for (var y = 0; y < bitmap.Height && bitmap.GetPixel(column, y) == SKColors.Red; y++) top++;
 
-        // The exact offset is 256.9968…; flooring it is 256, and rounding it would be 257.
-        await Assert.That(top).IsEqualTo(256);
+        await Assert.That(top).IsEqualTo(expectedTopPad);
     }
 
     [Test]
@@ -515,20 +485,19 @@ public class ImageBuilderCanvasFitTest
     /// The largest rectangle with the matrix aspect ratio that fits, centered on whole pixels.
     /// </summary>
     /// <remarks>
-    /// The sub-pixel slack matches what the builder absorbs: the single-precision fit can leave the
-    /// offset a hair below its true value, and a helper that floors it raw stops describing the
-    /// grid the builder actually draws on.
+    /// The arithmetic mirrors the builder, double and all: a helper that computes the fit less
+    /// precisely stops describing the grid the builder actually draws on.
     /// </remarks>
     private static SKRect Letterbox(int canvasWidth, int canvasHeight, int matrixWidth, int matrixHeight)
     {
-        var scale = Math.Min((float)canvasWidth / matrixWidth, (float)canvasHeight / matrixHeight);
+        var scale = Math.Min((double)canvasWidth / matrixWidth, (double)canvasHeight / matrixHeight);
         var width = matrixWidth * scale;
         var height = matrixHeight * scale;
         return SKRect.Create(
-            Math.Max(0f, (float)Math.Floor((canvasWidth - width) / 2 + 1e-3f)),
-            Math.Max(0f, (float)Math.Floor((canvasHeight - height) / 2 + 1e-3f)),
-            width,
-            height);
+            Math.Max(0f, (float)Math.Floor((canvasWidth - width) / 2 + 1e-6)),
+            Math.Max(0f, (float)Math.Floor((canvasHeight - height) / 2 + 1e-6)),
+            (float)width,
+            (float)height);
     }
 
     private static SKRectI DarkBoundingBox(SKBitmap bitmap)

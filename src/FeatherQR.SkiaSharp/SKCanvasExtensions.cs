@@ -11,10 +11,8 @@ namespace FeatherQR.SkiaSharp;
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
 /// </para>
 /// <para>
-/// The area is taken literally: the square symbologies fill whatever rectangle they are given, so a rectangle that is not square gives them modules that are not square either.
-/// That is a symbol readers stop finding well before it stops being drawn, because a finder pattern is located by its 1:1:3:1:1 run along a line and that ratio survives on one axis only. Measured, failures appear from about 1.25:1 and nothing survives past about 1.8:1, the exact point moving with the payload, the styling and which axis is squeezed, so there is no safe ratio to aim at.
-/// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you instead.
-/// rMQR is the exception and fits its own rectangle into the area, since its aspect ratio is decided by the version rather than by the caller.
+/// The area is taken literally, so a rectangle that is not square gives the square symbologies modules that are not square, and readers stop finding the symbol well before it stops being drawn: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only. Measured, failures start around 1.25:1 and nothing survives past 1.8:1, so there is no safe ratio to aim at.
+/// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you. rMQR fits its own rectangle into the area, since its aspect ratio comes from the version rather than the caller.
 /// </para>
 /// </remarks>
 public static class SKCanvasExtensions

@@ -376,12 +376,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
         var padIsOpaque = PadColor().Alpha == byte.MaxValue;
 
-        // When the base layer (background fill, or the padded canvas) is opaque
-        // everywhere, anything drawn over it stays opaque, so the whole image is
-        // opaque no matter what modules/icons/gradients are painted on top.
-        // An opaque surface lets encoders skip the alpha channel and the unpremul
-        // pass, PNG output becomes RGB: measurably faster to encode (the byte count
-        // moves either way, since the pad pixels themselves change).
+        // When the base layer (background fill, or the padded canvas) is opaque everywhere, anything drawn over it stays opaque, so the whole image is opaque no matter what modules/icons/gradients are painted on top.
+        // An opaque surface lets encoders skip the alpha channel and the unpremul pass, so PNG output becomes RGB and encodes measurably faster.
         var isOpaque = contentCoversCanvas
             ? backgroundIsOpaque || padIsOpaque
             : padIsOpaque;
@@ -407,10 +403,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
 
         if (_clearColor is SKColor clearColor)
         {
-            // A clear color is a canvas color: it goes under the symbol as well, so a
-            // translucent background blends over it. The clear is skipped when it cannot
-            // remain visible: a fresh canvas is already fully transparent, and an opaque
-            // background covering the whole canvas overwrites it anyway.
+            // A clear color is a canvas color, so it goes under the symbol too and a translucent background blends over it.
+            // Skipped when it cannot remain visible: a fresh canvas is already transparent, and an opaque background covering it overwrites the clear.
             if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
             {
                 canvas.Clear(clearColor);
@@ -418,24 +412,20 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         }
         else if (!contentCoversCanvas)
         {
-            // The pad inherits the background. Painting it under the symbol too would put a
-            // translucent background on twice and leave the symbol box denser than the pad.
+            // The pad inherits the background. Painting it under the symbol too would coat a translucent background twice.
             FillAround(canvas, contentRect, info, _backgroundColor ?? SKColors.White);
         }
 
         RenderSymbol(canvas, symbol, contentRect);
     }
 
-    /// <summary>The pad the canvas carries where the symbol does not reach.</summary>
+    /// <summary>
+    /// The pad the canvas carries where the symbol does not reach.</summary>
     private SKColor PadColor() => _clearColor ?? _backgroundColor ?? SKColors.White;
 
     /// <summary>
-    /// Fills the canvas outside <paramref name="contentRect"/>, in up to four bands.
+    /// Fills the canvas outside <paramref name="contentRect"/>, in up to four bands. They meet the content on the coordinates the renderer fills from, with antialiasing off, so the shared edges tile without a seam.
     /// </summary>
-    /// <remarks>
-    /// The bands meet the content on the exact same coordinates the renderer fills from, and
-    /// nothing here is antialiased, so the shared edges round the same way and tile without a seam.
-    /// </remarks>
     private static void FillAround(SKCanvas canvas, SKRect contentRect, SKImageInfo info, SKColor color)
     {
         if (color.Alpha == 0)

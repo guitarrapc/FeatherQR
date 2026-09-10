@@ -7,11 +7,8 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// </summary>
 internal static class QRImageLayout
 {
-    /// <summary>
-    /// Sub-pixel slack absorbed before the centering offset is floored.
-    /// It sits between two measured bounds: the single-precision error is at most about 1e-5 at the canvas sizes a raster can reach, and every legitimate offset is a multiple of one over twice the longest matrix side, so the closest a real offset can come below a whole pixel is about 2.5e-3 (a 159-module rMQR at the maximum quiet zone).
-    /// </summary>
-    private const float CenteringEpsilon = 1e-3f;
+    /// <summary>Sub-pixel slack absorbed before the centering offset is floored, so a whole-number offset is not lost to the pixel below it. Sits between the arithmetic error and the closest a real offset can come to a pixel boundary, <c>1 / (2 × matrixWidth)</c>.</summary>
+    private const double CenteringEpsilon = 1e-6;
 
     /// <summary>
     /// Rectangular-aware layout.
@@ -29,21 +26,14 @@ internal static class QRImageLayout
                 return (info, SKRect.Create(0, 0, size.X, size.Y));
 
             // Uniform scale, centered on whole pixels; the builder paints the leftover pad.
-            // The offset absorbs a sub-pixel epsilon before it is floored, because the fit is
-            // computed in single precision: matrixWidth * (width / matrixWidth) can land a hair
-            // above the canvas, which leaves the offset about 1.5e-5 below its true value. Floored
-            // raw that is a whole pixel of shift every time the true offset is an integer, which
-            // is a canvas the symbol fits exactly (offset 0, so the far edges grow a band of pad
-            // the canvas should not have) or any leftover that divides evenly (bands 2px apart).
-            // Nothing legitimate lands within the epsilon of a pixel boundary in a way a viewer
-            // could tell apart, so absorbing it cannot cost accuracy.
-            var fitted = SymbolRenderer.GetLetterboxedArea(SKRect.Create(0, 0, size.X, size.Y), matrixWidth, matrixHeight);
-            // The clamp is unreachable at any canvas that can be allocated, since the epsilon is
-            // some four orders of magnitude above the error at those sizes; it stays because the
-            // SVG path has no size limit and a negative offset would be drawn, not clipped.
-            var fittedLeft = Math.Max(0f, (float)Math.Floor(fitted.Left + CenteringEpsilon));
-            var fittedTop = Math.Max(0f, (float)Math.Floor(fitted.Top + CenteringEpsilon));
-            return (info, SKRect.Create(fittedLeft, fittedTop, fitted.Width, fitted.Height));
+            // The same fit as SymbolRenderer.GetLetterboxedArea, in double: placing on integer pixels needs precision that drawing does not.
+            var scale = Math.Min((double)size.X / matrixWidth, (double)size.Y / matrixHeight);
+            var contentWidth = matrixWidth * scale;
+            var contentHeight = matrixHeight * scale;
+            // Unreachable with the epsilon in place, but a negative offset would be drawn rather than clipped.
+            var fittedLeft = Math.Max(0f, (float)Math.Floor((size.X - contentWidth) / 2 + CenteringEpsilon));
+            var fittedTop = Math.Max(0f, (float)Math.Floor((size.Y - contentHeight) / 2 + CenteringEpsilon));
+            return (info, SKRect.Create(fittedLeft, fittedTop, (float)contentWidth, (float)contentHeight));
         }
 
         int contentWidthPx, contentHeightPx;

@@ -251,12 +251,11 @@ public class StyledSymbolDecodabilityTest
     /// </remarks>
     private static async Task AssertModuleCentres(SKBitmap bitmap, int matrixWidth, int matrixHeight, Func<int, int, bool> isDark, Func<int, int, bool>? skip = null)
     {
-        // The 1e-3 matches the slack the builder absorbs before flooring; without it this grid
-        // drifts a pixel from the one the builder drew on whenever the single-precision fit
-        // overshoots the canvas.
-        var cell = Math.Min((float)bitmap.Width / matrixWidth, (float)bitmap.Height / matrixHeight);
-        var left = Math.Max(0f, MathF.Floor((bitmap.Width - cell * matrixWidth) / 2 + 1e-3f));
-        var top = Math.Max(0f, MathF.Floor((bitmap.Height - cell * matrixHeight) / 2 + 1e-3f));
+        // Mirrors the builder's own arithmetic, double and epsilon included; a grid computed less
+        // precisely drifts a pixel from the one the builder drew on.
+        var cell = Math.Min((double)bitmap.Width / matrixWidth, (double)bitmap.Height / matrixHeight);
+        var left = Math.Max(0d, Math.Floor((bitmap.Width - cell * matrixWidth) / 2 + 1e-6));
+        var top = Math.Max(0d, Math.Floor((bitmap.Height - cell * matrixHeight) / 2 + 1e-6));
 
         for (var row = 0; row < matrixHeight; row++)
         {
