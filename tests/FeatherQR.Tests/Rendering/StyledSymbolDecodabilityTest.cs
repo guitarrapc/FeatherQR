@@ -138,10 +138,10 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// A canvas that is not square gives the square symbologies non-square cells, and the finder
-    /// pattern has to follow them. Sampling every module centre against the matrix is the direct
-    /// statement of that: the finder is drawn after the modules and is not clipped, so a pattern
-    /// built from one axis paints its light ring over whatever is next to it.
+    /// A canvas that is not square is fitted, so the cells stay square and the finder pattern has
+    /// to land on them. Sampling every module centre against the matrix is the direct statement of
+    /// that: the finder is drawn after the modules and is not clipped, so a pattern built from one
+    /// axis paints its light ring over whatever is next to it.
     /// </summary>
     [Test]
     [Arguments(900, 450)]
@@ -245,10 +245,17 @@ public class StyledSymbolDecodabilityTest
     /// Every module centre in the render must carry the matrix's value for that module.
     /// <paramref name="skip"/> excludes modules a decorative shape is allowed to redraw.
     /// </summary>
+    /// <remarks>
+    /// The builder fits the symbol into the canvas with one uniform module scale and centers it,
+    /// so the grid to sample is that fitted rectangle, not the canvas.
+    /// </remarks>
     private static async Task AssertModuleCentres(SKBitmap bitmap, int matrixWidth, int matrixHeight, Func<int, int, bool> isDark, Func<int, int, bool>? skip = null)
     {
-        var cellWidth = (float)bitmap.Width / matrixWidth;
-        var cellHeight = (float)bitmap.Height / matrixHeight;
+        // Mirrors the builder's own arithmetic, double and epsilon included; a grid computed less
+        // precisely drifts a pixel from the one the builder drew on.
+        var cell = Math.Min((double)bitmap.Width / matrixWidth, (double)bitmap.Height / matrixHeight);
+        var left = Math.Max(0d, Math.Floor((bitmap.Width - cell * matrixWidth) / 2 + 1e-6));
+        var top = Math.Max(0d, Math.Floor((bitmap.Height - cell * matrixHeight) / 2 + 1e-6));
 
         for (var row = 0; row < matrixHeight; row++)
         {
@@ -257,8 +264,8 @@ public class StyledSymbolDecodabilityTest
                 if (skip is not null && skip(row, col))
                     continue;
 
-                var x = (int)((col + 0.5f) * cellWidth);
-                var y = (int)((row + 0.5f) * cellHeight);
+                var x = (int)(left + (col + 0.5f) * cell);
+                var y = (int)(top + (row + 0.5f) * cell);
                 var rendered = bitmap.GetPixel(x, y).Red < 128;
 
                 await Assert.That(rendered).IsEqualTo(isDark(row, col))

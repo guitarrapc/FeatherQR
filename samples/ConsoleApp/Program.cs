@@ -115,7 +115,7 @@ Console.WriteLine("""
     Pattern 3c: WithModulePixelSize + WithSize (centered padding)
       - Best for: Module-aligned content inside a fixed UI frame
       - API: WithModulePixelSize(n) + WithSize(w, h)  (canvas must be >= content)
-      - Extra space is centered padding using clearColor
+      - Extra space is centered padding: clearColor when set, the background colour otherwise
     """);
 {
     var path = Path.Combine(outputDir, "pattern3c_module_pixel_size_padded.png");

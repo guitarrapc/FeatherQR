@@ -349,6 +349,149 @@ public class FinderPatternShapeColorTest
         }
     }
 
+    /// <summary>
+    /// The same two defects, on the canvas shape that only became reachable when the square
+    /// symbologies started letterboxing instead of stretching.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Issue 337 is the light ring drawn dark and issue 354 is a transparent background not
+    /// showing through it. Both live in the finder's own painting, which the aspect change does
+    /// not touch, but that change moved everything around it: the symbol no longer starts at the
+    /// canvas origin, and the canvas outside it is now painted with a pad colour of its own. A
+    /// ring that read its colour from the wrong layer, or a pad painted over the symbol rather
+    /// than around it, would show up here and nowhere else in this class, whose other cases all
+    /// render onto a canvas the symbol fills.
+    /// </para>
+    /// <para>
+    /// Sampled relative to the fitted content rather than the canvas: module (1.5, 3.5) for the
+    /// ring and (3.5, 3.5) for the dark centre, as the cases above do.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [Arguments("qr", "opaque")]
+    [Arguments("qr", "transparent")]
+    [Arguments("qr", "translucent")]
+    [Arguments("microqr", "opaque")]
+    [Arguments("microqr", "transparent")]
+    [Arguments("microqr", "translucent")]
+    [Arguments("rmqr", "opaque")]
+    [Arguments("rmqr", "transparent")]
+    [Arguments("rmqr", "translucent")]
+    public async Task StyledSymbol_FinderInnerRing_CarriesTheBackground_OnANonSquareCanvas(string symbology, string background)
+    {
+        var backgroundColor = background switch
+        {
+            "transparent" => SKColors.Transparent,
+            "translucent" => new SKColor(0x00, 0x00, 0xFF, 0x80),
+            _ => new SKColor(0xFF, 0xD7, 0x00, 0xFF),
+        };
+
+        const int canvasWidth = 900;
+        const int canvasHeight = 450;
+
+        SKBitmap bitmap;
+        int quietZone, matrixWidth, matrixHeight;
+        if (symbology == "rmqr")
+        {
+            quietZone = 2;
+            matrixWidth = 59 + quietZone * 2;
+            matrixHeight = 11 + quietZone * 2;
+            var data = RmQRCodeGenerator.Create("https://githu", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59, QuietZoneSize = quietZone });
+            bitmap = new RmQRCodeImageBuilder(data)
+                .WithSize(canvasWidth, canvasHeight)
+                .WithColors(SKColors.Black, backgroundColor)
+                .WithModuleShape(RectangleModuleShape.Default, 0.9f)
+                .ToBitmap();
+        }
+        else if (symbology == "microqr")
+        {
+            quietZone = 2;
+            var data = MicroQRCodeGenerator.Create("https://githu", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            matrixWidth = matrixHeight = data.Size;
+            bitmap = new MicroQRCodeImageBuilder(data)
+                .WithSize(canvasWidth, canvasHeight)
+                .WithColors(SKColors.Black, backgroundColor)
+                .WithModuleShape(RectangleModuleShape.Default, 0.9f)
+                .ToBitmap();
+        }
+        else
+        {
+            quietZone = 4;
+            var data = QRCodeGenerator.Create("https://githu", QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            matrixWidth = matrixHeight = data.Size;
+            bitmap = new QRCodeImageBuilder(data)
+                .WithSize(canvasWidth, canvasHeight)
+                .WithColors(SKColors.Black, backgroundColor)
+                .WithModuleShape(RectangleModuleShape.Default, 0.9f)
+                .ToBitmap();
+        }
+
+        using (bitmap)
+        {
+            var module = Math.Min((double)canvasWidth / matrixWidth, (double)canvasHeight / matrixHeight);
+            // Mirrors the builder's own arithmetic, double and epsilon included.
+            var left = Math.Max(0d, Math.Floor((canvasWidth - module * matrixWidth) / 2 + 1e-6));
+            var top = Math.Max(0d, Math.Floor((canvasHeight - module * matrixHeight) / 2 + 1e-6));
+
+            SKColor At(double col, double row) => bitmap.GetPixel(
+                (int)Math.Round(left + col * module),
+                (int)Math.Round(top + row * module));
+
+            var ring = At(quietZone + 1.5f, quietZone + 3.5f);
+            var centre = At(quietZone + 3.5f, quietZone + 3.5f);
+            var quietZonePixel = At(0.5f, 0.5f);
+
+            await Assert.That(ring).IsEqualTo(quietZonePixel).Because($"{symbology} {background} finder ring");
+            await Assert.That(ring.Alpha).IsEqualTo(backgroundColor.Alpha).Because($"{symbology} {background} finder ring alpha");
+            await Assert.That(centre).IsEqualTo(SKColors.Black).Because($"{symbology} {background} finder centre");
+            // The pad takes the background when no clear colour is set, so a pad painted over the
+            // symbol instead of around it would leave the quiet zone denser than the canvas edge.
+            await Assert.That(bitmap.GetPixel(2, 2)).IsEqualTo(quietZonePixel).Because($"{symbology} {background} pad");
+        }
+    }
+
+    /// <summary>
+    /// The shape of <c>samples/Dotfiles/FinderPatternAlwaysBlack.cs</c>, the repro for issue 337,
+    /// on a canvas that letterboxes: a gradient over the modules, an explicit finder shape, an
+    /// opaque background, and transparent surroundings asked for by name. The gradient is what
+    /// made the ring come out dark, since it is a shader on the paint the finder also draws with.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(GetFinderPatternShapes))]
+    public async Task GradientStyledSymbol_FinderInnerRing_CarriesTheBackground_OnANonSquareCanvas(FinderPatternShape finderPatternShape)
+    {
+        var backgroundColor = SKColors.Yellow;
+        const int quietZone = 4;
+        const int canvasWidth = 900;
+        const int canvasHeight = 450;
+
+        var data = QRCodeGenerator.Create("Test 1", QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
+        using var bitmap = new QRCodeImageBuilder(data)
+            .WithSize(canvasWidth, canvasHeight)
+            .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+            .WithGradient(new GradientOptions([SKColors.Blue, SKColors.Purple, SKColors.Pink], GradientDirection.TopLeftToBottomRight, [0f, 0.5f, 1f]))
+            .WithFinderPatternShape(finderPatternShape)
+            .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
+            .ToBitmap();
+
+        var module = Math.Min((double)canvasWidth / data.Size, (double)canvasHeight / data.Size);
+        var left = Math.Max(0d, Math.Floor((canvasWidth - module * data.Size) / 2 + 1e-6));
+        var top = Math.Max(0d, Math.Floor((canvasHeight - module * data.Size) / 2 + 1e-6));
+
+        SKColor At(double col, double row) => bitmap.GetPixel(
+            (int)Math.Round(left + col * module),
+            (int)Math.Round(top + row * module));
+
+        await Assert.That(At(quietZone + 1.5f, quietZone + 3.5f)).IsEqualTo(backgroundColor)
+            .Because($"{finderPatternShape.GetType().Name} ring");
+        await Assert.That(At(0.5f, 0.5f)).IsEqualTo(backgroundColor)
+            .Because($"{finderPatternShape.GetType().Name} quiet zone");
+        // Transparent surroundings were asked for by name, so the pad must not take the background.
+        await Assert.That(bitmap.GetPixel(2, 2).Alpha).IsEqualTo((byte)0)
+            .Because($"{finderPatternShape.GetType().Name} pad");
+    }
+
     private sealed class BackgroundPaintFinderPatternShape : FinderPatternShape
     {
         public override bool RequiresAntialiasing => false;

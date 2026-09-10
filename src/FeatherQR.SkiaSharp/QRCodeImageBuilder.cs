@@ -419,8 +419,10 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     /// </summary>
     /// <remarks>
     /// The icon covers modules, so pair it with a high error correction level or <see cref="WithErrorCorrectionBoost(bool)"/>, and scan what you ship.
+    /// An icon that would cover more of the symbol than it can spare is refused when the image is rendered, not here, because how many modules it covers depends on the version the content selects.
     /// </remarks>
     /// <param name="iconData">The icon to draw. No icon when omitted.</param>
+    /// <exception cref="InvalidOperationException">Thrown by the rendering methods, not by this one, when the icon occupies more modules than the symbol allows.</exception>
     public QRCodeImageBuilder WithIcon(IconData? iconData)
     {
         _iconData = iconData;

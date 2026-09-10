@@ -48,6 +48,21 @@ public class QRCodeImageEndToEnd
         .WithModuleShape(CircleModuleShape.Default, 0.85f)
         .ToByteArray();
 
+    // The cases above are all square canvases the symbol fills exactly, so the canvas fit and the
+    // padding never do anything in them. These two are the shapes that exercise both: a canvas
+    // wider than it is tall, and a pinned module size inside a larger frame. Their padding is what
+    // decides whether the surface can be opaque, which is most of the PNG encode cost.
+    [Benchmark]
+    public byte[] Small_NonSquare_900x450() => new QRCodeImageBuilder(_small)
+        .WithSize(900, 450)
+        .ToByteArray();
+
+    [Benchmark]
+    public byte[] Small_ModulePixelSize_InFrame() => new QRCodeImageBuilder(_small)
+        .WithModulePixelSize(8)
+        .WithSize(400, 400)
+        .ToByteArray();
+
     private static string BuildDeterministicText(int length)
     {
         var sb = new StringBuilder(length);

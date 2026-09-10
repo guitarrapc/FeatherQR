@@ -26,7 +26,31 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     [Test]
     public async Task TransparentClearWithPadding_KeepsAlpha()
     {
-        // Pad area stays transparent, so the surface must keep its alpha channel.
+        // Transparent surroundings are asked for by name; the pad follows the background
+        // otherwise, so the surface has to keep its alpha channel only when they are.
+        const int modulePixelSize = 4;
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
+        var canvasSide = qr.Size * modulePixelSize + 40;
+
+        using var image = new QRCodeImageBuilder(qr)
+            .WithModulePixelSize(modulePixelSize)
+            .WithSize(canvasSide, canvasSide)
+            .WithColors(clearColor: SKColors.Transparent)
+            .ToImage();
+
+        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Premul);
+
+        using var bitmap = SKBitmap.FromImage(image);
+        await Assert.That(bitmap.GetPixel(0, 0).Alpha).IsEqualTo((byte)0);
+    }
+
+    /// <summary>
+    /// The same canvas without that request: the pad takes the opaque background, so the image is
+    /// opaque and a JPEG of it has no black bands where the alpha used to be.
+    /// </summary>
+    [Test]
+    public async Task DefaultClearWithPadding_ProducesOpaqueImage()
+    {
         const int modulePixelSize = 4;
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var canvasSide = qr.Size * modulePixelSize + 40;
@@ -36,10 +60,10 @@ public class QRCodeImageBuilderOpaqueEncodingTest
             .WithSize(canvasSide, canvasSide)
             .ToImage();
 
-        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Premul);
+        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Opaque);
 
         using var bitmap = SKBitmap.FromImage(image);
-        await Assert.That(bitmap.GetPixel(0, 0).Alpha).IsEqualTo((byte)0);
+        await Assert.That(bitmap.GetPixel(0, 0)).IsEqualTo(SKColors.White);
     }
 
     [Test]

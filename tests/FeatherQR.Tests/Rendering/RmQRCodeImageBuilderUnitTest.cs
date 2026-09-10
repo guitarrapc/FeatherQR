@@ -237,7 +237,9 @@ public class RmQRCodeImageBuilderUnitTest
 
         var expectedLeft = (200 - 31 * modulePixelSize) / 2;
         var expectedTop = (100 - 15 * modulePixelSize) / 2;
-        await Assert.That(bitmap.GetPixel(0, 0).Alpha).IsEqualTo((byte)0);
+        // No clear color was asked for, so the pad takes the background and the image stays opaque.
+        await Assert.That(bitmap.GetPixel(0, 0)).IsEqualTo(SKColors.White);
+        await Assert.That(bitmap.AlphaType).IsEqualTo(SKAlphaType.Opaque);
         await Assert.That(bitmap.GetPixel(expectedLeft, expectedTop)).IsEqualTo(SKColors.White);
         await Assert.That(bitmap.GetPixel(expectedLeft + 2 * modulePixelSize + 1, expectedTop + 2 * modulePixelSize + 1)).IsEqualTo(SKColors.Black); // core (0,0)
     }
