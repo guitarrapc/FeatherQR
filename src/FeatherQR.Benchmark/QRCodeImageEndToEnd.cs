@@ -33,6 +33,21 @@ public class QRCodeImageEndToEnd
     [Benchmark]
     public byte[] Large_2048px() => QRCodeImageBuilder.GetPngBytes(_large, 2048);
 
+    // Styled renders leave the merged-run fast path and draw every data module through the shape,
+    // and they are also where the finder patterns stop coming from the module loop and get drawn
+    // as three rectangles each. Version 40 is where per-module work dominates.
+    [Benchmark]
+    public byte[] Large_512px_Styled() => new QRCodeImageBuilder(_large)
+        .WithSize(512, 512)
+        .WithModuleShape(CircleModuleShape.Default, 0.85f)
+        .ToByteArray();
+
+    [Benchmark]
+    public byte[] Small_512px_Styled() => new QRCodeImageBuilder(_small)
+        .WithSize(512, 512)
+        .WithModuleShape(CircleModuleShape.Default, 0.85f)
+        .ToByteArray();
+
     private static string BuildDeterministicText(int length)
     {
         var sb = new StringBuilder(length);

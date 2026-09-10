@@ -67,7 +67,7 @@ public enum ModuleShapeKind
     Rounded,
 }
 
-/// <summary>Finder pattern choices exposed by the page. Auto follows the module shape.</summary>
+/// <summary>Finder pattern choices exposed by the page. Auto is the plain square the standards define.</summary>
 public enum FinderShapeKind
 {
     Auto,

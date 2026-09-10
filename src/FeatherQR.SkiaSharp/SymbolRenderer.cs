@@ -23,10 +23,10 @@ public static class SymbolRenderer
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
-    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder patterns are never drawn with gaps, or the symbol stops being detectable.</param>
+    /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
-    /// <param name="finderPatternShape">The shape to draw the finder patterns as. When omitted they follow the module shape.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
@@ -70,10 +70,11 @@ public static class SymbolRenderer
             darkPaint.Color = fgColor;
         }
 
-        // Draw regular modules (exclude finder patterns when a custom shape draws them).
+        // Draw regular modules (exclude finder patterns when a shape draws them).
         // Full-cell rectangles with antialiasing off touch exactly, so horizontal runs
         // of dark modules collapse into single rects, far fewer native draw calls.
-        var skipFinderPatterns = finderPatternShape is not null;
+        var finderShape = ResolveFinderShape(shape, moduleSizePercent, finderPatternShape);
+        var skipFinderPatterns = finderShape is not null;
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
             DrawModuleRuns(canvas, new StandardQrMatrixView(data), area, darkPaint, skipFinderPatterns);
@@ -84,7 +85,7 @@ public static class SymbolRenderer
         }
 
         // Draw finder patterns
-        if (finderPatternShape is not null)
+        if (finderShape is not null)
         {
             // Finder shapes draw the outer dark area before drawing the light inner
             // ring. A non-opaque light color with SrcOver cannot restore the
@@ -100,7 +101,7 @@ public static class SymbolRenderer
             // Curved finder shapes require antialiasing independently from module shapes.
             // Apply the same setting to both paints so their shared edges are rasterized
             // consistently.
-            if (finderPatternShape.RequiresAntialiasing)
+            if (finderShape.RequiresAntialiasing)
             {
                 darkPaint.IsAntialias = true;
                 lightPaint.IsAntialias = true;
@@ -112,14 +113,14 @@ public static class SymbolRenderer
                 var finderRect = GetFinderPatternRect(data, i, area);
                 if (!requiresBackgroundRestore)
                 {
-                    finderPatternShape.Draw(canvas, finderRect, darkPaint, lightPaint);
+                    finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
                     continue;
                 }
 
                 var saveCount = canvas.SaveLayer(finderRect, null);
                 try
                 {
-                    finderPatternShape.Draw(canvas, finderRect, darkPaint, lightPaint);
+                    finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
                 }
                 finally
                 {
@@ -140,7 +141,7 @@ public static class SymbolRenderer
     /// Draws a Micro QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// Micro QR has a single finder pattern and no error-correction headroom for overlays, so the Standard QR options for icons and custom finder pattern shapes are intentionally not available.
+    /// Micro QR has one finder pattern, at the top left, and no error-correction headroom for overlays, so the Standard QR icon option is intentionally not available.
     /// See <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/> for the module-run merge behavior shared with Standard QR.
     /// </remarks>
     /// <param name="canvas">The canvas to render the Micro QR code on.</param>
@@ -148,9 +149,10 @@ public static class SymbolRenderer
     /// <param name="data">The Micro QR code to draw.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
-    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
+    /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
@@ -161,7 +163,8 @@ public static class SymbolRenderer
         SKColor? backgroundColor,
         ModuleShape? moduleShape = null,
         float moduleSizePercent = 1.0f,
-        GradientOptions? gradientOptions = null)
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
@@ -191,21 +194,26 @@ public static class SymbolRenderer
             darkPaint.Color = fgColor;
         }
 
+        var finderShape = ResolveFinderShape(shape, moduleSizePercent, finderPatternShape);
+        var view = new MicroQRMatrixView(data);
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
-            DrawModuleRuns(canvas, new MicroQRMatrixView(data), area, darkPaint, skipFinderPatterns: false);
+            DrawModuleRuns(canvas, view, area, darkPaint, finderShape is not null);
         }
         else
         {
-            DrawModules(canvas, new MicroQRMatrixView(data), area, darkPaint, shape, moduleSizePercent, skipFinderPatterns: false);
+            DrawModules(canvas, view, area, darkPaint, shape, moduleSizePercent, finderShape is not null);
         }
+
+        if (finderShape is not null)
+            DrawSingleFinder(canvas, view, area, finderShape, darkPaint, lightPaint, bgColor);
     }
 
     /// <summary>
     /// Draws a rectangular rMQR code into an area of the canvas, at a uniform module scale and centered, never stretched.
     /// </summary>
     /// <remarks>
-    /// The whole area gets the background color, not just the code itself. rMQR has one finder pattern and no error correction headroom to spare, so there are no icon or finder shape options.
+    /// The whole area gets the background color, not just the code itself. rMQR has no error correction headroom to spare, so there is no icon option.
     /// Modules are merged as for Standard QR.
     /// </remarks>
     /// <param name="canvas">The canvas to draw on.</param>
@@ -213,9 +221,10 @@ public static class SymbolRenderer
     /// <param name="data">The rMQR code to draw.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
-    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
-    /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
+    /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
+    /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
@@ -226,7 +235,8 @@ public static class SymbolRenderer
         SKColor? backgroundColor,
         ModuleShape? moduleShape = null,
         float moduleSizePercent = 1.0f,
-        GradientOptions? gradientOptions = null)
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
@@ -257,14 +267,19 @@ public static class SymbolRenderer
             darkPaint.Color = fgColor;
         }
 
+        var finderShape = ResolveFinderShape(shape, moduleSizePercent, finderPatternShape);
+        var view = new RmQRMatrixView(data);
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
-            DrawModuleRuns(canvas, new RmQRMatrixView(data), symbolArea, darkPaint, skipFinderPatterns: false);
+            DrawModuleRuns(canvas, view, symbolArea, darkPaint, finderShape is not null);
         }
         else
         {
-            DrawModules(canvas, new RmQRMatrixView(data), symbolArea, darkPaint, shape, moduleSizePercent, skipFinderPatterns: false);
+            DrawModules(canvas, view, symbolArea, darkPaint, shape, moduleSizePercent, finderShape is not null);
         }
+
+        if (finderShape is not null)
+            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint, lightPaint, bgColor);
     }
 
     /// <summary>
@@ -433,6 +448,68 @@ public static class SymbolRenderer
                 finderHeight),
             _ => throw new ArgumentOutOfRangeException(nameof(patternIndex), "Pattern index must be 0 (top-left), 1 (top-right), or 2 (bottom-left)."),
         };
+    }
+
+    /// <summary>
+    /// Which shape draws the finder patterns, or <c>null</c> to leave them to the module loop.
+    /// </summary>
+    /// <remarks>
+    /// The module shape and size style the data; a finder is located by its 1:1:3:1:1 run, which
+    /// gaps between modules erase, so it never takes them. Full-size rectangles already draw the
+    /// pattern solid and stay in the run-merge path; anything else gets an explicit shape.
+    /// </remarks>
+    private static FinderPatternShape? ResolveFinderShape(ModuleShape shape, float moduleSizePercent, FinderPatternShape? requested)
+    {
+        if (requested is not null)
+            return requested;
+
+        return shape is RectangleModuleShape && moduleSizePercent == 1.0f
+            ? null
+            : RectangleFinderPatternShape.Default;
+    }
+
+    /// <summary>
+    /// Draws the single top-left finder pattern that Micro QR and rMQR share, in the same
+    /// transparent-background-safe way as the Standard QR path above.
+    /// </summary>
+    private static void DrawSingleFinder<TView>(SKCanvas canvas, TView data, SKRect area, FinderPatternShape finderShape, SKPaint darkPaint, SKPaint lightPaint, SKColor bgColor)
+        where TView : struct, IModuleMatrixView
+    {
+        var cellWidth = area.Width / data.Width;
+        var cellHeight = area.Height / data.Height;
+        var quietZoneX = (data.Width - data.CoreWidth) / 2f;
+        var quietZoneY = (data.Height - data.CoreHeight) / 2f;
+        var finderRect = SKRect.Create(
+            area.Left + quietZoneX * cellWidth,
+            area.Top + quietZoneY * cellHeight,
+            cellWidth * 7,
+            cellHeight * 7);
+
+        var requiresBackgroundRestore = bgColor.Alpha < byte.MaxValue;
+        if (requiresBackgroundRestore)
+            lightPaint.BlendMode = SKBlendMode.Clear;
+
+        if (finderShape.RequiresAntialiasing)
+        {
+            darkPaint.IsAntialias = true;
+            lightPaint.IsAntialias = true;
+        }
+
+        if (!requiresBackgroundRestore)
+        {
+            finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
+            return;
+        }
+
+        var saveCount = canvas.SaveLayer(finderRect, null);
+        try
+        {
+            finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
+        }
+        finally
+        {
+            canvas.RestoreToCount(saveCount);
+        }
     }
 
     /// <summary>

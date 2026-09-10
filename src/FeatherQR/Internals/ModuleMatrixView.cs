@@ -21,7 +21,11 @@ internal interface IModuleMatrixView
     /// <summary>Reads a core module (caller guarantees bounds).</summary>
     bool GetCoreModule(int coreRow, int coreCol);
 
-    /// <summary>Whether the core module belongs to a finder pattern.</summary>
+    /// <summary>
+    /// Whether the core module belongs to a finder pattern, which a renderer must draw as one
+    /// continuous pattern rather than as styled modules: the finder is what a decoder scans for,
+    /// by its 1:1:3:1:1 run of dark and light, and gaps between modules erase that run.
+    /// </summary>
     bool IsFinderPattern(int coreRow, int coreCol);
 }
 
@@ -42,9 +46,8 @@ internal readonly struct MicroQRMatrixView(MicroQRCodeData data) : IModuleMatrix
     public int CoreWidth => data.GetCoreSize();
     public int CoreHeight => data.GetCoreSize();
     public bool GetCoreModule(int coreRow, int coreCol) => data.GetCoreModule(coreRow, coreCol);
-    // Micro QR rendering never styles finder patterns separately, so the draw
-    // loops are always called with finder skipping disabled.
-    public bool IsFinderPattern(int coreRow, int coreCol) => false;
+    // One finder, top-left, as in every Micro QR version.
+    public bool IsFinderPattern(int coreRow, int coreCol) => coreRow < 7 && coreCol < 7;
 }
 
 internal readonly struct RmQRMatrixView(RmQRCodeData data) : IModuleMatrixView
@@ -54,6 +57,7 @@ internal readonly struct RmQRMatrixView(RmQRCodeData data) : IModuleMatrixView
     public int CoreWidth => data.GetCoreWidth();
     public int CoreHeight => data.GetCoreHeight();
     public bool GetCoreModule(int coreRow, int coreCol) => data.GetCoreModule(coreRow, coreCol);
-    // rMQR rendering never styles finder patterns separately (one finder, no ECC headroom).
-    public bool IsFinderPattern(int coreRow, int coreCol) => false;
+    // One finder, top-left. The sub-finder and corner patterns are not reported: they are located
+    // from the finder and the format information, not by the run ratio, so they survive styling.
+    public bool IsFinderPattern(int coreRow, int coreCol) => coreRow < 7 && coreCol < 7;
 }

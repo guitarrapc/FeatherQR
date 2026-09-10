@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// The static methods cover the common cases in one line, such as <see cref="GetPngBytes(string, QREccLevel, int)"/>.
-/// For anything else, construct the builder and chain the options, from sizing and colors down to <see cref="WithIcon(IconData?)"/> and <see cref="WithFinderPatternShape(FinderPatternShape?)"/>.
+/// For anything else, construct the builder and chain the options, from sizing and colors down to <see cref="WithIcon(IconData?)"/> and <c>WithFinderPatternShape</c>.
 /// </remarks>
 /// <seealso cref="QRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
@@ -23,9 +23,7 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     private int? _maskPattern;
     private QRSegmentation _segmentation = QRSegmentation.Single;
 
-    // rendering (Standard QR-only options; Micro QR has a single finder pattern
-    // and no ECC headroom for overlays)
-    private FinderPatternShape? _finderPatternShape;
+    // rendering (Standard QR-only option; Micro QR and rMQR have no ECC headroom for overlays)
     private IconData? _iconData;
 
     /// <summary>
@@ -429,16 +427,6 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
         return this;
     }
 
-    /// <summary>
-    /// Draws the three finder patterns as a shape of their own.
-    /// </summary>
-    /// <param name="finderPatternShape">The shape to draw. When omitted the finders follow the module shape.</param>
-    public QRCodeImageBuilder WithFinderPatternShape(FinderPatternShape? finderPatternShape)
-    {
-        _finderPatternShape = finderPatternShape;
-        return this;
-    }
-
     // symbology hooks
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
@@ -462,11 +450,11 @@ public sealed class QRCodeImageBuilder : SymbolImageBuilderBase<QRCodeImageBuild
     }
 
     /// <summary>
-    /// Custom finder shapes require antialiasing; built-in icon shapes only draw rectangles, bitmaps, and text, none of which degrade under crispEdges.
+    /// Curved finder shapes require antialiasing; a square one does not, and neither do the built-in icon shapes, which only draw rectangles, bitmaps, and text.
     /// </summary>
     private protected override bool UseCrispEdgesCore()
     {
-        return _finderPatternShape is null
+        return _finderPatternShape?.RequiresAntialiasing != true
             && (_iconData?.Icon is null or ImageIconShape or ImageTextIconShape);
     }
 }

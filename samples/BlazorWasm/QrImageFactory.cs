@@ -46,9 +46,9 @@ public static class QrImageFactory
     }
 
     /// <summary>
-    /// Builds the Micro QR image builder for PNG/SVG export. Micro QR has no icon
-    /// overlay or finder pattern shape options (single finder, no ECC headroom),
-    /// so the page hides those controls.
+    /// Builds the Micro QR image builder for PNG/SVG export. Micro QR has no icon overlay
+    /// (no ECC headroom), so the page hides that control. It does take a finder pattern shape,
+    /// which this page does not offer yet.
     /// </summary>
     public static MicroQRCodeImageBuilder CreateMicroBuilder(QrOptions options, MicroQRCodeData data)
     {
@@ -80,8 +80,8 @@ public static class QrImageFactory
 
     /// <summary>
     /// Builds the rMQR image builder for PNG/SVG export: the export size is the image
-    /// width, the height follows the rectangular symbol. rMQR has no icon overlay or
-    /// finder pattern shape options, so the page hides those controls.
+    /// width, the height follows the rectangular symbol. rMQR has no icon overlay, so the page
+    /// hides that control. It does take a finder pattern shape, which this page does not offer yet.
     /// </summary>
     public static RmQRCodeImageBuilder CreateRmBuilder(QrOptions options, RmQRCodeData data)
     {
@@ -119,7 +119,7 @@ public static class QrImageFactory
         _ => null,
     };
 
-    /// <summary>Returns null for Auto: standard pattern, or the module shape when one is set.</summary>
+    /// <summary>Returns null for Auto: the plain square the standards define.</summary>
     public static FinderPatternShape? CreateFinderShape(QrOptions options) => options.FinderShape switch
     {
         FinderShapeKind.Rectangle => RectangleFinderPatternShape.Default,

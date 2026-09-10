@@ -494,9 +494,9 @@ function syncDerivedControls() {
   logoSizeOut.textContent = logoSizeRange.value;
   logoBorderOut.textContent = logoBorderRange.value;
   cornerRow.hidden = moduleShapeSelect.value !== 'rounded';
-  // Micro QR has a single finder pattern and no ECC headroom for overlays —
-  // the finder shape and logo options do not apply. ECC boost is Standard QR
-  // only for the same reasons the library scopes it there.
+  // Micro QR and rMQR have no ECC headroom for overlays, so the logo options do not apply, and
+  // ECC boost is Standard QR only for the same reasons the library scopes it there. The finder
+  // shape does apply to them now; wiring the control up for both is still to do.
   eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
   finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
   logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();

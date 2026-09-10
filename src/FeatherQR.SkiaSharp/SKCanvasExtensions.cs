@@ -25,7 +25,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
-    /// <param name="finderPatternShape">The shape to draw the finder patterns as. When omitted they follow the module shape.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -57,7 +57,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
-    /// <param name="finderPatternShape">The shape to draw the finder patterns as. When omitted they follow the module shape.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -79,7 +79,7 @@ public static class SKCanvasExtensions
     /// Draws a Micro QR code filling an area of this size, with the default colors.
     /// </summary>
     /// <remarks>
-    /// Micro QR does not offer the Standard QR icon overlay or custom finder pattern shape options (single finder pattern, no error-correction headroom for overlays).
+    /// Micro QR does not offer the Standard QR icon overlay (no error-correction headroom for overlays); its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The Micro QR code to draw.</param>
@@ -91,6 +91,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -101,17 +102,18 @@ public static class SKCanvasExtensions
         SKColor? backgroundColor = null,
         ModuleShape? moduleShape = null,
         float moduleSizePercent = 1.0f,
-        GradientOptions? gradientOptions = null)
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
     {
         var area = SKRect.Create(0, 0, width, height);
-        canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
     /// Draws a Micro QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// Micro QR does not offer the Standard QR icon overlay or custom finder pattern shape options (single finder pattern, no error-correction headroom for overlays).
+    /// Micro QR does not offer the Standard QR icon overlay (no error-correction headroom for overlays); its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The Micro QR code to draw.</param>
@@ -122,6 +124,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -131,17 +134,18 @@ public static class SKCanvasExtensions
         SKColor? backgroundColor = null,
         ModuleShape? moduleShape = null,
         float moduleSizePercent = 1.0f,
-        GradientOptions? gradientOptions = null)
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
     /// Draws a rMQR code filling an area of this size, with the default colors.
     /// </summary>
     /// <remarks>
-    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has one finder pattern and no error correction headroom to spare, so there are no icon or finder shape options.
+    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has no error correction headroom to spare, so there is no icon option; its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The rMQR code to draw.</param>
@@ -153,6 +157,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -163,17 +168,18 @@ public static class SKCanvasExtensions
         SKColor? backgroundColor = null,
         ModuleShape? moduleShape = null,
         float moduleSizePercent = 1.0f,
-        GradientOptions? gradientOptions = null)
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
     {
         var area = SKRect.Create(0, 0, width, height);
-        canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
     /// Draws a rMQR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has one finder pattern and no error correction headroom to spare, so there are no icon or finder shape options.
+    /// The rMQR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color. rMQR has no error correction headroom to spare, so there is no icon option; its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The rMQR code to draw.</param>
@@ -184,6 +190,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -193,9 +200,10 @@ public static class SKCanvasExtensions
         SKColor? backgroundColor = null,
         ModuleShape? moduleShape = null,
         float moduleSizePercent = 1.0f,
-        GradientOptions? gradientOptions = null)
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 }

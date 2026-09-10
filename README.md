@@ -199,7 +199,7 @@ All generators and decoders also provide [zero-allocation APIs](#zero-allocation
 
 ### Image Builders (Recommended)
 
-Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Standard QR also supports icons and custom finder patterns.
+Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Every symbology supports custom finder patterns; icons are Standard QR only.
 
 ```csharp
 var pngBytes = QRCodeImageBuilder.GetPngBytes("content");

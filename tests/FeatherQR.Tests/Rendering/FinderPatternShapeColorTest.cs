@@ -251,6 +251,104 @@ public class FinderPatternShapeColorTest
         yield return () => RoundedRectangleCircleFinderPatternShape.Default;
     }
 
+    /// <summary>
+    /// The finder's light ring must carry the background, never the dark colour, on every
+    /// symbology and whether or not the caller asked for a shape.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The cases above are Standard QR with an explicit shape, which is all that could reach a
+    /// <see cref="FinderPatternShape"/> when they were written. Styling now routes Micro QR and
+    /// rMQR through one too, and Standard QR reaches it without being asked, so the two defects
+    /// those cases pin apply to paths they do not touch: the ring coming out dark
+    /// (issue 337) and a transparent background not showing through it (issue 354). The finder is
+    /// drawn over modules that are already there, so restoring the background under a non-opaque
+    /// one needs an isolated layer; a mutant that dropped that layer passed the whole suite.
+    /// </para>
+    /// <para>
+    /// The ring is sampled at module (1.5, 3.5) and the dark centre at (3.5, 3.5), as the
+    /// Standard QR cases above do.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [Arguments("qr", "opaque")]
+    [Arguments("qr", "transparent")]
+    [Arguments("qr", "translucent")]
+    [Arguments("microqr", "opaque")]
+    [Arguments("microqr", "transparent")]
+    [Arguments("microqr", "translucent")]
+    [Arguments("rmqr", "opaque")]
+    [Arguments("rmqr", "transparent")]
+    [Arguments("rmqr", "translucent")]
+    public async Task StyledSymbol_FinderInnerRing_CarriesTheBackground(string symbology, string background)
+    {
+        var backgroundColor = background switch
+        {
+            "transparent" => SKColors.Transparent,
+            "translucent" => new SKColor(0x00, 0x00, 0xFF, 0x80),
+            _ => new SKColor(0xFF, 0xD7, 0x00, 0xFF),
+        };
+
+        SKBitmap bitmap;
+        int quietZone, matrixWidth;
+        if (symbology == "rmqr")
+        {
+            quietZone = 2;
+            matrixWidth = 59 + quietZone * 2;
+            var data = RmQRCodeGenerator.Create("https://githu", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59, QuietZoneSize = quietZone });
+            var height = (int)((float)630 / matrixWidth * (11 + quietZone * 2));
+            bitmap = new RmQRCodeImageBuilder(data)
+                .WithSize(630, height)
+                .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+                .WithModuleShape(RectangleModuleShape.Default, 0.9f)
+                .ToBitmap();
+        }
+        else if (symbology == "microqr")
+        {
+            quietZone = 2;
+            var data = MicroQRCodeGenerator.Create("https://githu", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            matrixWidth = data.Size;
+            bitmap = new MicroQRCodeImageBuilder(data)
+                .WithSize(504, 504)
+                .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+                .WithModuleShape(RectangleModuleShape.Default, 0.9f)
+                .ToBitmap();
+        }
+        else
+        {
+            quietZone = 4;
+            var data = QRCodeGenerator.Create("https://githu", QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            matrixWidth = data.Size;
+            bitmap = new QRCodeImageBuilder(data)
+                .WithSize(800, 800)
+                .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+                .WithModuleShape(RectangleModuleShape.Default, 0.9f)
+                .ToBitmap();
+        }
+
+        using (bitmap)
+        {
+            var module = (float)bitmap.Width / matrixWidth;
+            var ring = bitmap.GetPixel(
+                (int)MathF.Round((quietZone + 1.5f) * module),
+                (int)MathF.Round((quietZone + 3.5f) * module));
+            var centre = bitmap.GetPixel(
+                (int)MathF.Round((quietZone + 3.5f) * module),
+                (int)MathF.Round((quietZone + 3.5f) * module));
+            // The quiet zone is painted with the requested background and nothing else, so it is
+            // what the ring has to match. Comparing against the requested colour instead would be
+            // reading through a premultiplied round trip that does not preserve every channel
+            // (0x33123456 comes back 0x33143255), which has nothing to do with the finder.
+            var quietZonePixel = bitmap.GetPixel((int)MathF.Round(module * 0.5f), (int)MathF.Round(module * 0.5f));
+
+            await Assert.That(ring).IsEqualTo(quietZonePixel).Because($"{symbology} {background} finder ring");
+            // Alpha does survive the round trip exactly, and it is the half of this that issue 354
+            // is about: the ring must let the background through rather than being painted over.
+            await Assert.That(ring.Alpha).IsEqualTo(backgroundColor.Alpha).Because($"{symbology} {background} finder ring alpha");
+            await Assert.That(centre).IsEqualTo(SKColors.Black).Because($"{symbology} {background} finder centre");
+        }
+    }
+
     private sealed class BackgroundPaintFinderPatternShape : FinderPatternShape
     {
         public override bool RequiresAntialiasing => false;

@@ -10,7 +10,7 @@ namespace FeatherQR.SkiaSharp;
 /// <remarks>
 /// The same shape as <see cref="QRCodeImageBuilder"/>, with rMQR versions, levels and fit strategies and the 2-module quiet zone the specification asks for.
 /// Because the rMQR code is rectangular, sizing has three modes: <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize"/> gives the matrix at an exact scale, <see cref="SymbolImageBuilderBase{TSelf}.WithSize"/> fits it into an exact canvas without stretching, and <see cref="WithWidth"/> takes a width and lets the height follow the rMQR code.
-/// Icons and custom finder shapes are not offered here: rMQR has one finder pattern and no error correction headroom to spare.
+/// Icons are not offered here: rMQR has no error correction headroom to spare. Its one finder pattern can be styled with <see cref="SymbolImageBuilderBase{TSelf}.WithFinderPatternShape"/>.
 /// </remarks>
 /// <seealso cref="RmQRCodeGenerator"/>
 /// <seealso cref="SymbolRenderer"/>
@@ -442,11 +442,11 @@ public sealed class RmQRCodeImageBuilder : SymbolImageBuilderBase<RmQRCodeImageB
 
     private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
     {
-        SymbolRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
+        SymbolRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
-    /// <summary>rMQR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>
-    private protected override bool UseCrispEdgesCore() => true;
+    /// <summary>Only a custom finder shape needs antialiasing here; rMQR has no icon overlays.</summary>
+    private protected override bool UseCrispEdgesCore() => _finderPatternShape?.RequiresAntialiasing != true;
 
     /// <summary>Rectangular rMQR codes are letterboxed into an explicit canvas, never stretched.</summary>
     private protected override bool PreserveAspectRatio => true;
