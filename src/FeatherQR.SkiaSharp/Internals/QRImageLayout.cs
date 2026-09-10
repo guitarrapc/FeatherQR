@@ -7,7 +7,7 @@ namespace FeatherQR.SkiaSharp.Internals;
 /// </summary>
 internal static class QRImageLayout
 {
-    /// <summary>Sub-pixel slack absorbed before the centering offset is floored, so a whole-number offset is not lost to the pixel below it. Sits between the arithmetic error and the closest a real offset can come to a pixel boundary, <c>1 / (2 × matrixWidth)</c>.</summary>
+    /// <summary>Sub-pixel slack absorbed before the centering offset is floored, so a whole-number offset is not lost to the pixel below it. Sits between the arithmetic error and the closest a real offset can come to a pixel boundary: only one axis is ever off-centre, and its offset is a multiple of <c>1 / (2 × the dimension that constrained the fit)</c>, so the tightest case is <c>1 / (2 × max(matrixWidth, matrixHeight))</c>.</summary>
     private const double CenteringEpsilon = 1e-6;
 
     /// <summary>

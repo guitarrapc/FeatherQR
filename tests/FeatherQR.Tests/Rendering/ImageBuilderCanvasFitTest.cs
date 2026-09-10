@@ -416,7 +416,7 @@ public class ImageBuilderCanvasFitTest
     }
 
     /// <summary>The slack absorbed before flooring has to stay under the smallest gap a real offset can leave below a whole pixel, at every matrix size the data types accept.</summary>
-    /// <remarks>Offsets are multiples of <c>1 / (2 × matrix width)</c>, so a wider matrix can sit closer to a boundary; a square one never can, since both offsets land on halves. <see cref="SymbolImageBuilderBase{TSelf}.WithQuietZone(int)"/> caps at 10 modules, but the generator options and the data constructors go to 10,000, which reaches a 20,000-module matrix and a gap of about 2.5e-5. Both geometries here sit within 1e-3 of a boundary.</remarks>
+    /// <remarks>The off-centre axis has an offset that is a multiple of <c>1 / (2 × the dimension that constrained the fit)</c>, so a larger matrix can sit closer to a boundary; a square one never can, since that makes the offsets multiples of a half. <see cref="SymbolImageBuilderBase{TSelf}.WithQuietZone(int)"/> caps at 10 modules, but the generator options and the data constructors go to 10,000, which reaches a 20,000-module matrix and a gap of about 2.5e-5. Both geometries here sit within 1e-3 of a boundary.</remarks>
     [Test]
     [Arguments(RmQRVersion.R7x139, 195, 533, 402, 0)]
     [Arguments(RmQRVersion.R9x139, 10, 806, 661, 256)]

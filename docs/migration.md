@@ -228,14 +228,21 @@ Deconstruction goes with the positional record, so read the three members by nam
 ```csharp
 // before
 var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text, ECCLevel.M);
+var written = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, destination.Slice(0, bufferSize));
 
 // after
 if (!QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var size))
     return;
-// size.BufferSize, size.Size, size.Version
+var written = QRCodeGenerator.Create(text, QREccLevel.M, destination.Slice(0, size.BufferSize));
 ```
 
-`BufferSize` sizes the destination for the `Span<byte>` overload of `Create`, so whatever you rented or reused for it takes the new spelling and nothing else changes.
+Each name maps to one member, and nothing else changes:
+
+| 1.x | 2.0.0 |
+|---|---|
+| `bufferSize` | `size.BufferSize` |
+| `qrSize` | `size.Size` |
+| `version` | `size.Version` |
 
 **`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself (below C# 9, use the constructor described under [Older language versions](#older-language-versions)):
 
