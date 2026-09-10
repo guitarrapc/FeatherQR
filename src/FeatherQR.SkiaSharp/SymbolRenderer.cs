@@ -7,6 +7,11 @@ namespace FeatherQR.SkiaSharp;
 /// Draws a QR, Micro QR or rMQR code onto a SkiaSharp canvas, with full control over colors, shapes, gradients and icon overlays.
 /// Use it when the image builders do not give you the control you need.
 /// </summary>
+/// <remarks>
+/// The area is taken literally: the square symbologies fill whatever rectangle they are given, so a rectangle that is not square gives them modules that are not square, and a symbol readers stop finding well before it stops being drawn.
+/// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you instead.
+/// rMQR fits its own rectangle into the area, since its aspect ratio comes from the version rather than from the caller.
+/// </remarks>
 public static class SymbolRenderer
 {
     /// <summary>

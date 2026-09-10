@@ -6,8 +6,16 @@ namespace FeatherQR.SkiaSharp;
 /// Draws a QR, Micro QR or rMQR code onto an <see cref="SKCanvas"/> you already have, instead of producing an image file.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Each method clears the whole canvas before drawing, so anything already on it is lost.
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
+/// </para>
+/// <para>
+/// The area is taken literally: the square symbologies fill whatever rectangle they are given, so a rectangle that is not square gives them modules that are not square either.
+/// That is a symbol readers stop finding well before it stops being drawn (past roughly 1.67:1, and 1.25:1 when the modules are styled), because a finder pattern is located by its 1:1:3:1:1 run along a line and that ratio survives on one axis only.
+/// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you instead.
+/// rMQR is the exception and fits its own rectangle into the area, since its aspect ratio is decided by the version rather than by the caller.
+/// </para>
 /// </remarks>
 public static class SKCanvasExtensions
 {
