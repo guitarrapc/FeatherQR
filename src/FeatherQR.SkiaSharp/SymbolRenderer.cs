@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// Use it when the image builders do not give you the control you need.
 /// </summary>
 /// <remarks>
-/// The area is taken literally: the square symbologies fill whatever rectangle they are given, so a rectangle that is not square gives them modules that are not square, and a symbol readers stop finding well before it stops being drawn.
+/// The area is taken literally: the square symbologies fill whatever rectangle they are given, so a rectangle that is not square gives them modules that are not square, and a symbol readers stop finding well before it stops being drawn (measured, failures appear from about 1.25:1 and nothing survives past about 1.8:1, moving with the payload, the styling and which axis is squeezed).
 /// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you instead.
 /// rMQR fits its own rectangle into the area, since its aspect ratio comes from the version rather than from the caller.
 /// </remarks>
@@ -18,6 +18,7 @@ public static class SymbolRenderer
     /// Draws a QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
+    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="QRCodeImageBuilder"/>, which fits the symbol for you.
     /// With the default rectangle shape at <paramref name="moduleSizePercent"/> 1.0, horizontal runs of dark modules are drawn as single merged rectangles (fewer native draw calls).
     /// Merged and per-module rendering are pixel-identical under axis-preserving canvas transforms (translation/scale); under rotation, shared-edge rounding may differ at sub-pixel level.
     /// Any custom module shape or a module size below 1.0 falls back to per-module drawing.
@@ -146,6 +147,7 @@ public static class SymbolRenderer
     /// Draws a Micro QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
+    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="MicroQRCodeImageBuilder"/>, which fits the symbol for you.
     /// Micro QR has one finder pattern, at the top left, and no error-correction headroom for overlays, so the Standard QR icon option is intentionally not available.
     /// See <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/> for the module-run merge behavior shared with Standard QR.
     /// </remarks>
@@ -409,8 +411,16 @@ public static class SymbolRenderer
     /// Where one of the three finder patterns lands inside a rendered QR code, so you can draw over or around it.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The finder patterns are the large squares typically located at three corners of a QR code.
     /// This method calculates their positions based on the QR code's size and quiet zone, ensuring accurate placement within the specified rendering area.
+    /// </para>
+    /// <para>
+    /// The rendering area is the rectangle the symbol was drawn into, which is the whole image only when the symbol covers it.
+    /// A <see cref="QRCodeImageBuilder"/> output has a smaller one whenever the canvas is not square, or a module pixel size was pinned inside a larger canvas.
+    /// Both are centered on whole pixels: with <see cref="SymbolImageBuilderBase{TSelf}.WithModulePixelSize(int)"/> the side is <c>matrix size × module pixel size</c>, otherwise it is <c>min(width, height)</c>, in each case offset by half the leftover, rounded down.
+    /// Passing the whole image instead puts the returned rectangle somewhere the symbol is not.
+    /// </para>
     /// </remarks>
     /// <param name="data">The QR code the finder patterns belong to.</param>
     /// <param name="patternIndex">Which pattern: 0 top-left, 1 top-right, 2 bottom-left.</param>

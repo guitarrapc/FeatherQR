@@ -203,6 +203,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <param name="output">Where to write. Left open afterwards.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public void SaveTo(Stream output)
     {
         if (output is null)
@@ -222,6 +223,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <param name="writer">Where to write.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public void SaveTo(IBufferWriter<byte> writer)
     {
         if (writer is null)
@@ -247,6 +249,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <param name="output">Where to write. Left open afterwards.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="output"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="output"/> is not writable.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public void SaveToSvg(Stream output)
     {
         if (output is null)
@@ -266,6 +269,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </remarks>
     /// <param name="writer">Where to write.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public void SaveToSvg(IBufferWriter<byte> writer)
     {
         if (writer is null)
@@ -281,6 +285,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <remarks>
     /// Renders exactly as <see cref="SaveToSvg(Stream)"/>.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public string ToSvgString()
     {
         using var stream = new MemoryStream();
@@ -291,6 +296,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Renders the symbol and returns the encoded image bytes.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public byte[] ToByteArray()
     {
         using var image = GenerateImage();
@@ -301,6 +307,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Renders the symbol as an <see cref="SKImage"/>, which the caller disposes.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public SKImage ToImage()
     {
         return GenerateImage();
@@ -309,6 +316,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Renders the symbol as an <see cref="SKBitmap"/>, which the caller disposes.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the render cannot be laid out: <see cref="WithModulePixelSize(int)"/> pins a module size the canvas given to <see cref="WithSize(int, int)"/> cannot hold, or overflows the image dimensions, or an icon is asked to occupy more modules than the symbol can spare.</exception>
     public SKBitmap ToBitmap()
     {
         using var image = GenerateImage();
@@ -372,7 +380,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
         // everywhere, anything drawn over it stays opaque, so the whole image is
         // opaque no matter what modules/icons/gradients are painted on top.
         // An opaque surface lets encoders skip the alpha channel and the unpremul
-        // pass, PNG output becomes RGB: smaller and faster to encode.
+        // pass, PNG output becomes RGB: measurably faster to encode (the byte count
+        // moves either way, since the pad pixels themselves change).
         var isOpaque = contentCoversCanvas
             ? backgroundIsOpaque || padIsOpaque
             : padIsOpaque;

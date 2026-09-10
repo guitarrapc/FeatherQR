@@ -430,8 +430,9 @@ public class FinderPatternShapeColorTest
         using (bitmap)
         {
             var module = Math.Min((float)canvasWidth / matrixWidth, (float)canvasHeight / matrixHeight);
-            var left = MathF.Floor((canvasWidth - module * matrixWidth) / 2);
-            var top = MathF.Floor((canvasHeight - module * matrixHeight) / 2);
+            // The 1e-3 matches the slack the builder absorbs before flooring the offset.
+            var left = Math.Max(0f, MathF.Floor((canvasWidth - module * matrixWidth) / 2 + 1e-3f));
+            var top = Math.Max(0f, MathF.Floor((canvasHeight - module * matrixHeight) / 2 + 1e-3f));
 
             SKColor At(float col, float row) => bitmap.GetPixel(
                 (int)MathF.Round(left + col * module),
@@ -475,8 +476,8 @@ public class FinderPatternShapeColorTest
             .ToBitmap();
 
         var module = Math.Min((float)canvasWidth / data.Size, (float)canvasHeight / data.Size);
-        var left = MathF.Floor((canvasWidth - module * data.Size) / 2);
-        var top = MathF.Floor((canvasHeight - module * data.Size) / 2);
+        var left = Math.Max(0f, MathF.Floor((canvasWidth - module * data.Size) / 2 + 1e-3f));
+        var top = Math.Max(0f, MathF.Floor((canvasHeight - module * data.Size) / 2 + 1e-3f));
 
         SKColor At(float col, float row) => bitmap.GetPixel(
             (int)MathF.Round(left + col * module),

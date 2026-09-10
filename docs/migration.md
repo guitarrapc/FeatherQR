@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas fits the symbol instead of stretching it, and padding takes the background colour rather than transparency |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -13,7 +13,9 @@ One section per release, newest first. Each section lists what changed in that r
 
 ## 2.0.0
 
-The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Nothing about encoding or decoding behavior changed; the work is in `using` lines and, if you want it, the package reference.
+The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Encoding and decoding behavior is unchanged, and most of the work is in `using` lines and, if you want it, the package reference.
+
+Rendering is where behavior changed. Three sections below are behavior changes rather than renames, and two of them alter images you already ship: [module styling no longer reaches the finder patterns](#module-styling-no-longer-reaches-the-finder-patterns), [`WithSize(w, h)` fits the symbol instead of stretching it](#withsizew-h-fits-the-symbol-instead-of-stretching-it), and [padding around the symbol defaults to the background color](#padding-around-the-symbol-defaults-to-the-background-color). Neither of the first two turns a readable symbol into an unreadable one at any sensible size, but do not read that as "nothing to check". Below roughly 1.2:1 the stretched output was readable too, so those images change without anything having been broken. And where the modules were already down to about two pixels, fitting can cost the resolution the stretch had put on the long axis, so a handful of very small non-square canvases decoded before and do not now; the fix for those is a bigger canvas, which they needed anyway. The third can change an image that was fine at any size, and is the one worth checking if you composite a QR onto something else.
 
 ### Packages
 
@@ -314,7 +316,7 @@ Three things the contract fixes:
 **Behavior change, and the reason to upgrade if you style your codes.** `WithModuleShape(shape, sizePercent)` now styles the data modules only. Before, it also redrew the finder patterns, and that silently produced symbols nothing could read:
 
 ```csharp
-// 1.x and 2.0.0-preview.2: renders, but no decoder finds this symbol. Not FeatherQR's, not ZXing's, not a phone's.
+// 1.x through 2.0.0-preview.2: renders, but no decoder finds this symbol. Not FeatherQR's, not ZXing's, not a phone's.
 new MicroQRCodeImageBuilder("https://githu")
     .WithModuleShape(RectangleModuleShape.Default, 0.92f)
     .ToBitmap();
@@ -345,21 +347,27 @@ new QRCodeImageBuilder("https://example.com")
     .ToByteArray();
 ```
 
-| 1.x and 2.0.0-preview.2 | 2.0.0 |
+| 1.x through 2.0.0-preview.2 | 2.0.0 |
 |---|---|
 | <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
 | No reader finds it. Not FeatherQR's, not ZXing's, not a phone's | Scans |
 
-Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular. Measured on a 33-module symbol, plain renders stopped decoding past 1.67:1 and styled ones past 1.25:1, in our decoder and in ZXing alike.
+Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular.
 
-The symbol is now fitted into the canvas with one uniform module scale and centered, which is what the rectangular rMQR builder always did. Square canvases are unaffected, and so are `WithModulePixelSize` and the static helpers, none of which ever took two different values.
+There is no safe ratio to quote, and that is the finding rather than a hedge. Sweeping several payloads, four stylings and both orientations, failures appear from about **1.25:1** and nothing survives past about **1.8:1**, but where a given symbol lands in between moves with the payload, with the styling and with which axis is squeezed, and the two readers disagree by direction: on wide renders this library reads many that ZXing does not, on tall ones ZXing reads many that this library does not. What is reliable is that the failure starts early, varies with content you do not control, and is never announced.
 
-If you were passing different values to get a code that filled a non-square frame, you were not getting one. Draw the code into the part of the frame it belongs in:
+The symbol is now fitted into the canvas with one uniform module scale and centered, which is what the rectangular rMQR builder always did. Square canvases are unaffected, and so is the geometry of `WithModulePixelSize` and of the static helpers, none of which ever took two different values. (`WithModulePixelSize` does change in the other way described in the next section: its padding.)
+
+If you were passing different values to get a code that filled a non-square frame, you were not getting one. Draw the code into the part of the frame it belongs in — and note that `SKCanvas.Render` clears the whole canvas itself, so hand it the colour rather than clearing first:
 
 ```csharp
 using var surface = SKSurface.Create(new SKImageInfo(900, 450));
-surface.Canvas.Clear(SKColors.White);
-surface.Canvas.Render(QRCodeGenerator.Create("https://example.com", QREccLevel.M), SKRect.Create(0, 0, 450, 450));
+var data = QRCodeGenerator.Create("https://example.com", QREccLevel.M);
+surface.Canvas.Render(data, SKRect.Create(0, 0, 450, 450), clearColor: SKColors.White);
+
+using var image = surface.Snapshot();
+using var png = image.Encode(SKEncodedImageFormat.Png, 100);
+File.WriteAllBytes("banner.png", png.ToArray());
 ```
 
 ### Padding around the symbol defaults to the background color
@@ -375,14 +383,14 @@ new QRCodeImageBuilder("https://example.com")
     .ToByteArray();
 ```
 
-| 1.x and 2.0.0-preview.2 | 2.0.0 |
+| 1.x through 2.0.0-preview.2 | 2.0.0 |
 |---|---|
 | <img src="images/padding-transparent.jpg" width="240" alt="A QR code with black padding"/> | <img src="images/padding-background.jpg" width="240" alt="A QR code with white padding"/> |
 | The padding was transparent, and JPEG has no alpha to carry it | The padding is the background |
 
 JPEG is the format that shows it plainly. As a PNG the old padding stayed transparent, so what you saw depended on what the image was placed on, and the file carried an alpha channel it did not need.
 
-Transparent surroundings are still available, by name:
+Transparent surroundings are still available, by name. Edit your existing `WithColors` call rather than adding a second one: every argument you omit is set to its default, so a later `WithColors(clearColor: …)` discards the code and background colours an earlier one set.
 
 ```csharp
 new QRCodeImageBuilder("https://example.com")
@@ -396,7 +404,9 @@ new QRCodeImageBuilder("https://example.com")
 
 The symbol keeps its opaque white background and only the padding is transparent, which is what you want when the image goes onto a coloured page. The checkerboard is not in the file; it is drawn behind it here because a transparent pad and a white one look the same on a white page.
 
-This also reaches rMQR, whose `WithSize` padding was transparent by default and is now the background, matching what `WithWidth` already produced.
+This reaches all three symbologies. rMQR's `WithSize` padding was transparent by default and is now the background, matching what `WithWidth` already produced.
+
+One subtlety if you set `clearColor` explicitly: it is a *canvas* colour, painted under the symbol as well as around it, not only a pad colour. With an opaque background you cannot tell the difference, but with a translucent one you can — writing `clearColor` equal to your background lays that colour down twice inside the symbol box and once outside it, so the box comes out denser than the pad. Leave `clearColor` unset to get the padding-matches-background behaviour; set it when you want a different canvas.
 
 The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched render is the real old output, drawn through the low-level `SKCanvas.Render` that still fills the area it is given.
 
