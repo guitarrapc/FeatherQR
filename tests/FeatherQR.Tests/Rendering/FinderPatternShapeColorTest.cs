@@ -335,14 +335,16 @@ public class FinderPatternShapeColorTest
             var centre = bitmap.GetPixel(
                 (int)MathF.Round((quietZone + 3.5f) * module),
                 (int)MathF.Round((quietZone + 3.5f) * module));
+            // The quiet zone is painted with the requested background and nothing else, so it is
+            // what the ring has to match. Comparing against the requested colour instead would be
+            // reading through a premultiplied round trip that does not preserve every channel
+            // (0x33123456 comes back 0x33143255), which has nothing to do with the finder.
+            var quietZonePixel = bitmap.GetPixel((int)MathF.Round(module * 0.5f), (int)MathF.Round(module * 0.5f));
 
-            // Fully transparent has no one encoding (the cleared pixel is 0x00000000, the
-            // requested colour 0x00FFFFFF), so it is pinned by its alpha, as the cases above do.
-            if (background == "transparent")
-                await Assert.That(ring.Alpha).IsEqualTo((byte)0).Because($"{symbology} finder ring over a transparent background");
-            else
-                await Assert.That(ring).IsEqualTo(backgroundColor).Because($"{symbology} {background} finder ring");
-
+            await Assert.That(ring).IsEqualTo(quietZonePixel).Because($"{symbology} {background} finder ring");
+            // Alpha does survive the round trip exactly, and it is the half of this that issue 354
+            // is about: the ring must let the background through rather than being painted over.
+            await Assert.That(ring.Alpha).IsEqualTo(backgroundColor.Alpha).Because($"{symbology} {background} finder ring alpha");
             await Assert.That(centre).IsEqualTo(SKColors.Black).Because($"{symbology} {background} finder centre");
         }
     }
