@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas fits the symbol instead of stretching it, and padding takes the background colour rather than transparency |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, and padding takes the background colour rather than transparency |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -15,7 +15,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Encoding and decoding behavior is unchanged, and most of the work is in `using` lines and, if you want it, the package reference.
 
-Rendering is where behavior changed. Three sections below are behavior changes rather than renames, and two of them alter images you already ship: [module styling no longer reaches the finder patterns](#module-styling-no-longer-reaches-the-finder-patterns), [`WithSize(w, h)` fits the symbol instead of stretching it](#withsizew-h-fits-the-symbol-instead-of-stretching-it), and [padding around the symbol defaults to the background color](#padding-around-the-symbol-defaults-to-the-background-color). Neither of the first two turns a readable symbol into an unreadable one at any sensible size, but do not read that as "nothing to check". Below roughly 1.2:1 the stretched output was readable too, so those images change without anything having been broken. And where the modules were already down to about two pixels, fitting can cost the resolution the stretch had put on the long axis, so a handful of very small non-square canvases decoded before and do not now; the fix for those is a bigger canvas, which they needed anyway. The third can change an image that was fine at any size, and is the one worth checking if you composite a QR onto something else.
+Rendering is where behavior changed. Four sections below are behavior changes rather than renames, and all of them can alter images you already ship: [module styling no longer reaches the finder patterns](#module-styling-no-longer-reaches-the-finder-patterns), [`WithSize(w, h)` fits the symbol instead of stretching it](#withsizew-h-fits-the-symbol-instead-of-stretching-it), [`SymbolRenderer.Render` and `SKCanvas.Render` fit the symbol into the area](#symbolrendererrender-and-skcanvasrender-fit-the-symbol-into-the-area), and [padding around the symbol defaults to the background color](#padding-around-the-symbol-defaults-to-the-background-color). None of the first three turns a readable symbol into an unreadable one at any sensible size, but do not read that as "nothing to check". Below roughly 1.2:1 the stretched output was readable too, so those images change without anything having been broken. And where the modules were already down to about two pixels, fitting can cost the resolution the stretch had put on the long axis, so a handful of very small non-square canvases decoded before and do not now; the fix for those is a bigger canvas, which they needed anyway. The fourth can change an image that was fine at any size, and is the one worth checking if you composite a QR onto something else.
 
 ### Packages
 
@@ -357,7 +357,7 @@ new QRCodeImageBuilder("https://example.com")
 | 1.x through 2.0.0-preview.2 | 2.0.0 |
 |---|---|
 | <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
-| No reader finds it. Not FeatherQR's, not ZXing's, not a phone's | Scans |
+| Stretched to 900x450. No reader finds it. Not FeatherQR's, not ZXing's, not a phone's | 450x450, centered with 225 px of padding each side. Scans |
 
 Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular.
 
@@ -375,6 +375,30 @@ surface.Canvas.Render(data, SKRect.Create(0, 0, 450, 450), clearColor: SKColors.
 using var image = surface.Snapshot();
 using var png = image.Encode(SKEncodedImageFormat.Png, 100);
 File.WriteAllBytes("banner.png", png.ToArray());
+```
+
+### `SymbolRenderer.Render` and `SKCanvas.Render` fit the symbol into the area
+
+**Behavior change.** The low-level renderer took the area literally for Standard QR and Micro QR, so a non-square area stretched the symbol exactly as `WithSize` did, with the same result: an image no reader finds, returned without complaint. It now follows the rule the builders and rMQR's overload already did. The symbol is drawn at one uniform module scale, centered in the area, and the whole area gets the background colour:
+
+```csharp
+// A 200x300 slot for the code on a card.
+var slot = SKRect.Create(40, 40, 200, 300);
+SymbolRenderer.Render(canvas, slot, data, SKColors.Black, SKColors.White);
+```
+
+| 1.x through 2.0.0-preview.2 | 2.0.0 |
+|---|---|
+| <img src="images/renderer-stretched.png" width="280" alt="A QR code stretched to fill a tall slot on a card"/> | <img src="images/renderer-fitted.png" width="280" alt="The same QR code centered in the slot with square modules"/> |
+| Stretched to 200x300. No reader finds it | 200x200 at (40, 90), with background in the 200x50 above and below. Scans |
+
+The same goes for the `SKCanvas.Render` extensions: `canvas.Render(data, 900, 450, …)` now draws a 450x450 symbol at (225, 0), which is what `WithSize(900, 450)` produces in the section above. A square area draws exactly the pixels it did before. `SymbolRenderer.GetFinderPatternRect` and `SymbolRenderer.GetIconRects` fit the same way, so hand them the area you passed to `Render` and they point at what was drawn.
+
+If you stretched on purpose, to pre-distort a symbol for a printer or marker whose dots are not square, say it with the canvas instead of the area. This reproduces the old output pixel for pixel:
+
+```csharp
+canvas.Scale(2f, 1f);   // the device's dot-pitch ratio
+canvas.Render(data, 450, 450, SKColors.White, SKColors.Black, SKColors.White);
 ```
 
 ### Padding around the symbol defaults to the background color
@@ -415,7 +439,7 @@ This reaches all three symbologies. rMQR's `WithSize` padding was transparent by
 
 One subtlety if you set `clearColor` explicitly: it is a *canvas* colour, painted under the symbol as well as around it, not only a pad colour. With an opaque background you cannot tell the difference, but with a translucent one you can — writing `clearColor` equal to your background lays that colour down twice inside the symbol box and once outside it, so the box comes out denser than the pad. Leave `clearColor` unset to get the padding-matches-background behaviour; set it when you want a different canvas.
 
-The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched render is the real old output, drawn through the low-level `SKCanvas.Render` that still fills the area it is given.
+The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched renders are the real old output, reproduced with a canvas scale over a square area, which gives the pixels the old fill did.
 
 ## 1.2.0
 

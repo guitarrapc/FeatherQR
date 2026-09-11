@@ -11,16 +11,16 @@ namespace FeatherQR.SkiaSharp;
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
 /// </para>
 /// <para>
-/// The area is taken literally, so a rectangle that is not square gives the square symbologies modules that are not square, and readers stop finding the symbol well before it stops being drawn: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only. Measured, failures start around 1.25:1 and nothing survives past 1.8:1, so there is no safe ratio to aim at.
-/// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you. rMQR fits its own rectangle into the area, since its aspect ratio comes from the version rather than the caller.
+/// Every symbology is fitted into the area at one uniform module scale and centered, and the whole area gets the background color, the rule the image builders follow: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square.
+/// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// </para>
 /// </remarks>
 public static class SKCanvasExtensions
 {
     /// <summary>
-    /// Draws a QR code filling an area of this size, with the default colors.
+    /// Draws a QR code into an area of this size, with the default colors.
     /// </summary>
-    /// <remarks>The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="QRCodeImageBuilder"/>, which fits the symbol for you.</remarks>
+    /// <remarks>The QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.</remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The QR code to draw.</param>
     /// <param name="width">Width of the area to draw into.</param>
@@ -54,7 +54,7 @@ public static class SKCanvasExtensions
     /// <summary>
     /// Draws a QR code into an area of the canvas.
     /// </summary>
-    /// <remarks>The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="QRCodeImageBuilder"/>, which fits the symbol for you.</remarks>
+    /// <remarks>The QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.</remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The QR code to draw.</param>
     /// <param name="area">Where to draw it.</param>
@@ -84,10 +84,10 @@ public static class SKCanvasExtensions
     }
 
     /// <summary>
-    /// Draws a Micro QR code filling an area of this size, with the default colors.
+    /// Draws a Micro QR code into an area of this size, with the default colors.
     /// </summary>
     /// <remarks>
-    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="MicroQRCodeImageBuilder"/>, which fits the symbol for you.
+    /// The Micro QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.
     /// Micro QR does not offer the Standard QR icon overlay (no error-correction headroom for overlays); its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
@@ -122,7 +122,7 @@ public static class SKCanvasExtensions
     /// Draws a Micro QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="MicroQRCodeImageBuilder"/>, which fits the symbol for you.
+    /// The Micro QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.
     /// Micro QR does not offer the Standard QR icon overlay (no error-correction headroom for overlays); its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>

@@ -5,13 +5,15 @@ using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
-// Generates the before/after images embedded in docs/migration.md for the two 2.0.0 rendering
+// Generates the before/after images embedded in docs/migration.md for the 2.0.0 rendering
 // changes, and checks each one as it writes it:
 // - WithSize(w, h) fits the symbol instead of stretching it across a non-square canvas.
+// - SymbolRenderer.Render fits the symbol into a non-square area instead of filling it.
 // - Canvas the symbol does not reach takes the background rather than staying transparent.
 //
-// The "before" images are the real old output, not an imitation. The stretch comes from the
-// low-level SKCanvas.Render(data, width, height), which still fills the area it is given, and the
+// The "before" images are the real old output, not an imitation. Nothing in the library stretches
+// any more, so the stretch is asked for with a canvas scale over a square area, which gives the
+// same pixels the old fill did (checked against the old renderer for both images). The
 // transparent pad is what naming clearColor still produces. If a later change alters either, the
 // decode line below flips and the pad sample stops being transparent, so regenerating says so.
 //
@@ -35,7 +37,8 @@ using (var bitmap = new SKBitmap(900, 450))
 {
     using (var canvas = new SKCanvas(bitmap))
     {
-        canvas.Render(data, 900, 450, SKColors.White, SKColors.Black, SKColors.White);
+        canvas.Scale(2f, 1f);
+        canvas.Render(data, 450, 450, SKColors.White, SKColors.Black, SKColors.White);
     }
 
     Save(bitmap, stretchedPath);
@@ -48,6 +51,33 @@ using (var bitmap = new QRCodeImageBuilder(data).WithSize(900, 450).WithColors(S
 {
     Save(bitmap, fittedPath);
     Report(fittedPath, bitmap, expectDecode: true);
+}
+
+// --- SymbolRenderer.Render into a non-square slot ------------------------------------------
+
+// A 200x300 slot for the code on a card, which is what the low-level renderer is for. The card's
+// own colour around the white slot shows where the area ends.
+var slot = SKRect.Create(40, 40, 200, 300);
+
+// Before: the slot was filled on both axes, so the modules are half again as tall as they are wide.
+var rendererStretchedPath = Path.Combine(outputDirectory, "renderer-stretched.png");
+using (var bitmap = Card(280, 380, canvas =>
+{
+    canvas.Translate(slot.Left, slot.Top);
+    canvas.Scale(1f, slot.Height / slot.Width);
+    SymbolRenderer.Render(canvas, SKRect.Create(0, 0, slot.Width, slot.Width), data, SKColors.Black, SKColors.White);
+}))
+{
+    Save(bitmap, rendererStretchedPath);
+    Report(rendererStretchedPath, bitmap, expectDecode: false);
+}
+
+// After: the same call, given the slot, centers a square symbol and gives the rest of it the background.
+var rendererFittedPath = Path.Combine(outputDirectory, "renderer-fitted.png");
+using (var bitmap = Card(280, 380, canvas => SymbolRenderer.Render(canvas, slot, data, SKColors.Black, SKColors.White)))
+{
+    Save(bitmap, rendererFittedPath);
+    Report(rendererFittedPath, bitmap, expectDecode: true);
 }
 
 // --- Padding -------------------------------------------------------------------------------
@@ -114,6 +144,18 @@ static void DrawCheckerboard(SKCanvas canvas, int width, int height)
             canvas.DrawRect(SKRect.Create(x, y, Square, Square), even ? light : dark);
         }
     }
+}
+
+// A plain card in a warm colour, with the code drawn where the caller says.
+static SKBitmap Card(int width, int height, Action<SKCanvas> drawCode)
+{
+    var bitmap = new SKBitmap(width, height);
+    using var canvas = new SKCanvas(bitmap);
+    canvas.Clear(new SKColor(0xF2, 0xEE, 0xE6));
+    canvas.Save();
+    drawCode(canvas);
+    canvas.Restore();
+    return bitmap;
 }
 
 static void Save(SKBitmap bitmap, string path)

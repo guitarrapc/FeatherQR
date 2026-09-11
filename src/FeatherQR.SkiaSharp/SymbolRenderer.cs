@@ -8,8 +8,8 @@ namespace FeatherQR.SkiaSharp;
 /// Use it when the image builders do not give you the control you need.
 /// </summary>
 /// <remarks>
-/// The area is taken literally, so a rectangle that is not square gives the square symbologies modules that are not square, and readers stop finding the symbol well before it stops being drawn (measured, failures start around 1.25:1 and nothing survives past 1.8:1).
-/// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you. rMQR fits its own rectangle into the area, since its aspect ratio comes from the version rather than the caller.
+/// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, and the background covers the whole area: modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The image builders follow the same rule.
+/// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// </remarks>
 public static class SymbolRenderer
 {
@@ -17,7 +17,7 @@ public static class SymbolRenderer
     /// Draws a QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="QRCodeImageBuilder"/>, which fits the symbol for you.
+    /// A non-square area gets the symbol at a uniform module scale, centered, with the background over the whole area. <see cref="GetFinderPatternRect"/> and <see cref="GetIconRects"/> fit the same way, so pass them the same area.
     /// With the default rectangle shape at <paramref name="moduleSizePercent"/> 1.0, horizontal runs of dark modules are drawn as single merged rectangles (fewer native draw calls).
     /// Merged and per-module rendering are pixel-identical under axis-preserving canvas transforms (translation/scale); under rotation, shared-edge rounding may differ at sub-pixel level.
     /// Any custom module shape or a module size below 1.0 falls back to per-module drawing.
@@ -55,9 +55,12 @@ public static class SymbolRenderer
         var fgColor = codeColor ?? SKColors.Black;
         var shape = moduleShape ?? RectangleModuleShape.Default;
 
-        // Draw the background at once
+        // Draw the background over the whole area at once
         using var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill };
         canvas.DrawRect(area, lightPaint);
+
+        // Fit: uniform module scale, symbol centered in the area.
+        var symbolArea = GetSquareArea(area);
 
         // Create paint with gradient or solid color
         // disable antialiasing as it causes gray border around each module.
@@ -65,7 +68,7 @@ public static class SymbolRenderer
 
         // Apply gradient if specified. The shader wrapper must be disposed here;
         // disposing the paint alone leaves the SKShader to the finalizer.
-        using var gradientShader = CreateGradientShader(area, gradientOptions);
+        using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
         if (gradientShader is not null)
         {
             darkPaint.Shader = gradientShader;
@@ -82,11 +85,11 @@ public static class SymbolRenderer
         var skipFinderPatterns = finderShape is not null;
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
-            DrawModuleRuns(canvas, new StandardQrMatrixView(data), area, darkPaint, skipFinderPatterns);
+            DrawModuleRuns(canvas, new StandardQrMatrixView(data), symbolArea, darkPaint, skipFinderPatterns);
         }
         else
         {
-            DrawModules(canvas, new StandardQrMatrixView(data), area, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
+            DrawModules(canvas, new StandardQrMatrixView(data), symbolArea, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
         }
 
         // Draw finder patterns
@@ -115,7 +118,7 @@ public static class SymbolRenderer
             // total 3 finder patterns
             for (var i = 0; i < 3; i++)
             {
-                var finderRect = GetFinderPatternRect(data, i, area);
+                var finderRect = GetFinderPatternRect(data, i, symbolArea);
                 if (!requiresBackgroundRestore)
                 {
                     finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
@@ -137,7 +140,7 @@ public static class SymbolRenderer
         // Draw the icon if provided
         if (iconData?.Icon is not null)
         {
-            var (iconRect, borderRect) = GetIconRects(data, area, iconData);
+            var (iconRect, borderRect) = GetIconRects(data, symbolArea, iconData);
             iconData.Icon.Draw(canvas, iconRect, borderRect, bgColor);
         }
     }
@@ -146,7 +149,7 @@ public static class SymbolRenderer
     /// Draws a Micro QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="MicroQRCodeImageBuilder"/>, which fits the symbol for you.
+    /// A non-square area gets the symbol at a uniform module scale, centered, with the background over the whole area.
     /// Micro QR has one finder pattern, at the top left, and no error-correction headroom for overlays, so the Standard QR icon option is intentionally not available.
     /// See <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/> for the module-run merge behavior shared with Standard QR.
     /// </remarks>
@@ -181,16 +184,19 @@ public static class SymbolRenderer
         var fgColor = codeColor ?? SKColors.Black;
         var shape = moduleShape ?? RectangleModuleShape.Default;
 
-        // Draw the background at once
+        // Draw the background over the whole area at once
         using var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill };
         canvas.DrawRect(area, lightPaint);
+
+        // Fit: uniform module scale, symbol centered in the area.
+        var symbolArea = GetSquareArea(area);
 
         // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
         // Apply gradient if specified. The shader wrapper must be disposed here;
         // disposing the paint alone leaves the SKShader to the finalizer.
-        using var gradientShader = CreateGradientShader(area, gradientOptions);
+        using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
         if (gradientShader is not null)
         {
             darkPaint.Shader = gradientShader;
@@ -204,15 +210,15 @@ public static class SymbolRenderer
         var view = new MicroQRMatrixView(data);
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
-            DrawModuleRuns(canvas, view, area, darkPaint, finderShape is not null);
+            DrawModuleRuns(canvas, view, symbolArea, darkPaint, finderShape is not null);
         }
         else
         {
-            DrawModules(canvas, view, area, darkPaint, shape, moduleSizePercent, finderShape is not null);
+            DrawModules(canvas, view, symbolArea, darkPaint, shape, moduleSizePercent, finderShape is not null);
         }
 
         if (finderShape is not null)
-            DrawSingleFinder(canvas, view, area, finderShape, darkPaint, lightPaint, bgColor);
+            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint, lightPaint, bgColor);
     }
 
     /// <summary>
@@ -302,10 +308,23 @@ public static class SymbolRenderer
     }
 
     /// <summary>
+    /// The largest square that fits inside <paramref name="area"/>, centered: the letterbox for a square symbology.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the shorter side rather than through a module scale, so a square area comes back exactly as given and fitting twice is the same as fitting once. The public geometry helpers depend on that: they fit whatever area they are handed, and the renderer hands them one it already fitted.
+    /// </remarks>
+    internal static SKRect GetSquareArea(SKRect area)
+    {
+        var side = Math.Min(area.Width, area.Height);
+        return SKRect.Create(area.Left + (area.Width - side) / 2, area.Top + (area.Height - side) / 2, side, side);
+    }
+
+    /// <summary>
     /// Works out where an icon and its border land inside a QR code.
     /// </summary>
     /// <remarks>
     /// When <see cref="IconData.IconSizeModules"/> is set, sizing is module-based and percent/pixel values are ignored.
+    /// A non-square area is fitted exactly as <c>Render</c> fits it, so pass the area you drew into.
     /// Module-based icons are validated against QR size and core occupancy at render time.
     /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
     /// </remarks>
@@ -318,6 +337,7 @@ public static class SymbolRenderer
         if (iconData is null)
             throw new ArgumentNullException(nameof(iconData));
 
+        area = GetSquareArea(area);
         var centerX = area.Left + area.Width / 2;
         var centerY = area.Top + area.Height / 2;
 
@@ -415,7 +435,9 @@ public static class SymbolRenderer
     /// This method calculates their positions based on the QR code's size and quiet zone, ensuring accurate placement within the specified rendering area.
     /// </para>
     /// <para>
-    /// The rendering area is the rectangle the symbol was drawn into, which is the whole image only when the symbol covers it: a <see cref="QRCodeImageBuilder"/> output has a smaller one whenever the canvas is not square, or a module pixel size was pinned inside a larger canvas. Its side is <c>matrix size × module pixel size</c> when one was pinned and <c>min(width, height)</c> otherwise, offset by half the leftover, rounded down. Passing the whole image instead puts the returned rectangle somewhere the symbol is not.
+    /// Pass the area you gave <c>Render</c>: a non-square one is fitted the same way, so the answer is where the pattern was drawn.
+    /// For a <see cref="QRCodeImageBuilder"/> output, the whole image works when only the canvas size was set, to within half a pixel, because the builder rounds its centering offset down to whole pixels where this fit does not.
+    /// With a module pixel size pinned inside a larger canvas the symbol is smaller than the fit, so pass its content rectangle instead: <c>matrix size × module pixel size</c> on each side, offset by half the leftover, rounded down.
     /// </para>
     /// </remarks>
     /// <param name="data">The QR code the finder patterns belong to.</param>
@@ -431,6 +453,7 @@ public static class SymbolRenderer
         if (patternIndex is < 0 or > 2)
             throw new ArgumentOutOfRangeException(nameof(patternIndex), "Pattern index must be 0 (top-left), 1 (top-right), or 2 (bottom-left).");
 
+        renderArea = GetSquareArea(renderArea);
         var size = data.Size;
         var coreSize = data.GetCoreSize();
         var cellWidth = renderArea.Width / size;

@@ -209,7 +209,7 @@ See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) ex
 
 ### SymbolRenderer (Advanced)
 
-`SymbolRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics.
+`SymbolRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics. The symbol is centered in `area` with square modules, and the background fills the rest of `area`.
 
 ```csharp
 using SkiaSharp;
