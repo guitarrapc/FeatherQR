@@ -401,6 +401,14 @@ canvas.Scale(2f, 1f);   // the device's dot-pitch ratio
 canvas.Render(data, 450, 450, SKColors.White, SKColors.Black, SKColors.White);
 ```
 
+An inverted area, one with a negative width or height, now throws `ArgumentException`, as does a negative size passed to the `SKCanvas.Render(data, width, height, …)` overloads (`ArgumentOutOfRangeException`); a zero size still draws nothing. It used to draw a mirrored Standard QR or Micro QR, and rMQR drew partly outside an area inverted vertically. For a mirrored symbol, such as a transfer print or a sticker read through glass, flip the canvas about the area:
+
+```csharp
+canvas.Translate(area.Left + area.Right, 0);
+canvas.Scale(-1f, 1f);
+SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White);
+```
+
 ### Padding around the symbol defaults to the background color
 
 **Behavior change.** When the canvas is larger than the symbol, the leftover is painted with `clearColor` if you set one and with `backgroundColor` otherwise. It used to be transparent when `clearColor` was omitted:

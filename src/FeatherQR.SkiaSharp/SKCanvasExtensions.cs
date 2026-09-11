@@ -13,6 +13,7 @@ namespace FeatherQR.SkiaSharp;
 /// <para>
 /// Every symbology is fitted into the area at one uniform module scale and centered, the fit the image builders use (given an explicit canvas size, they also round the offset to whole pixels): a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square. The whole area gets the background color.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
+/// An inverted area is refused rather than read as a mirror; for a mirrored symbol, scale the canvas by -1 about the area.
 /// </para>
 /// </remarks>
 public static class SKCanvasExtensions
@@ -33,6 +34,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -47,6 +49,11 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        if (width < 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
+        if (height < 0)
+            throw new ArgumentOutOfRangeException(nameof(height), "Height must be zero or more.");
+
         var area = SKRect.Create(0, 0, width, height);
         canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -66,6 +73,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -79,6 +87,8 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // Refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateArea(area, nameof(area));
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -101,6 +111,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -114,6 +125,11 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        if (width < 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
+        if (height < 0)
+            throw new ArgumentOutOfRangeException(nameof(height), "Height must be zero or more.");
+
         var area = SKRect.Create(0, 0, width, height);
         canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -135,6 +151,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -147,6 +164,8 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // Refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateArea(area, nameof(area));
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -168,6 +187,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -181,6 +201,11 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        if (width < 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
+        if (height < 0)
+            throw new ArgumentOutOfRangeException(nameof(height), "Height must be zero or more.");
+
         var area = SKRect.Create(0, 0, width, height);
         canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -201,6 +226,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -213,6 +239,8 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // Refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateArea(area, nameof(area));
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }

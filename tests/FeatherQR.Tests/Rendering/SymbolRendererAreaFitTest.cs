@@ -270,65 +270,159 @@ public class SymbolRendererAreaFitTest
         await Assert.That(DifferingBytes(viaExtension.Bytes, viaRenderer.Bytes)).IsEqualTo(0);
     }
 
+    public static IEnumerable<(string, string)> InvertedAreas()
+    {
+        foreach (var symbology in new[] { "qr", "microqr", "rmqr" })
+        {
+            foreach (var axis in new[] { "width", "height", "both" })
+            {
+                yield return (symbology, axis);
+            }
+        }
+    }
+
     /// <summary>
-    /// An inverted area is a caller's mistake, but it must not reach past its own bounds onto the rest
-    /// of the canvas, which the area taken literally never did.
+    /// An inverted area reads two ways, a mirror or the same bounds written backwards, and for an
+    /// asymmetric symbol the two are different pictures, so it is refused rather than guessed. All
+    /// three symbologies refuse it alike; rMQR used to draw outside an area inverted vertically.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(InvertedAreas))]
+    public async Task Render_InvertedArea_Throws(string symbology, string axis)
+    {
+        var area = Invert(SKRect.Create(100, 100, 400, 200), axis);
+        using var bitmap = new SKBitmap(600, 400);
+        using var canvas = new SKCanvas(bitmap);
+
+        await Assert.That(() => Draw(canvas, symbology, "renderer", area, SKColors.White)).Throws<ArgumentException>()
+            .Because($"{symbology} with an inverted {axis}");
+    }
+
+    [Test]
+    [Arguments(float.NaN)]
+    [Arguments(float.PositiveInfinity)]
+    [Arguments(float.NegativeInfinity)]
+    public async Task Render_NonFiniteArea_Throws(float value)
+    {
+        using var bitmap = new SKBitmap(100, 100);
+        using var canvas = new SKCanvas(bitmap);
+
+        foreach (var symbology in new[] { "qr", "microqr", "rmqr" })
+        {
+            await Assert.That(() => Draw(canvas, symbology, "renderer", new SKRect(0, 0, value, 50), SKColors.White)).Throws<ArgumentException>()
+                .Because(symbology);
+        }
+    }
+
+    /// <summary>
+    /// A zero-sized area has one reading, nothing fits, and a canvas before layout or a collapsed
+    /// panel produces it routinely, so it draws nothing rather than throwing from a paint callback.
     /// </summary>
     [Test]
     [Arguments("qr", "width")]
     [Arguments("qr", "height")]
-    [Arguments("qr", "both")]
     [Arguments("microqr", "width")]
     [Arguments("microqr", "height")]
-    [Arguments("microqr", "both")]
-    public async Task Render_InvertedArea_StaysInsideItsBounds(string symbology, string inverted)
+    [Arguments("rmqr", "width")]
+    [Arguments("rmqr", "height")]
+    public async Task Render_ZeroSizeArea_DrawsNothing(string symbology, string axis)
     {
-        var bounds = SKRect.Create(100, 100, 400, 200);
-        using var bitmap = DrawInBounds(symbology, Invert(bounds, inverted));
+        var area = axis == "width" ? SKRect.Create(50, 50, 0, 40) : SKRect.Create(50, 50, 40, 0);
+        using var bitmap = DrawInBounds(symbology, area);
 
-        var outside = 0;
+        var drawn = 0;
         for (var y = 0; y < bitmap.Height; y++)
         {
             for (var x = 0; x < bitmap.Width; x++)
             {
-                if (!bounds.Contains(x + 0.5f, y + 0.5f) && bitmap.GetPixel(x, y) != SKColors.Red) outside++;
+                if (bitmap.GetPixel(x, y) != SKColors.Red) drawn++;
             }
         }
 
-        await Assert.That(outside).IsEqualTo(0).Because($"{symbology} with an inverted {inverted}");
+        await Assert.That(drawn).IsEqualTo(0).Because($"{symbology} with a zero {axis}");
     }
 
     /// <summary>
-    /// An inverted area keeps the orientation it asks for: the render is the upright one mirrored
-    /// along each inverted axis, as it was when the area was taken literally.
+    /// The extensions refuse an inverted area before they clear the canvas, so a refused call leaves
+    /// whatever was drawn there untouched.
     /// </summary>
     [Test]
-    [Arguments("qr", "width")]
-    [Arguments("qr", "height")]
-    [Arguments("qr", "both")]
-    [Arguments("microqr", "width")]
-    [Arguments("microqr", "height")]
-    [Arguments("microqr", "both")]
-    public async Task Render_InvertedArea_MirrorsTheUprightRender(string symbology, string inverted)
+    [Arguments("qr")]
+    [Arguments("microqr")]
+    [Arguments("rmqr")]
+    public async Task CanvasExtension_InvertedArea_ThrowsBeforeClearing(string symbology)
+    {
+        var area = Invert(SKRect.Create(10, 10, 80, 40), "width");
+        using var bitmap = new SKBitmap(new SKImageInfo(100, 100, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Blue);
+
+        await Assert.That(() => RenderThroughExtension(canvas, symbology, area)).Throws<ArgumentException>();
+        await Assert.That(bitmap.GetPixel(50, 50)).IsEqualTo(SKColors.Blue);
+    }
+
+    [Test]
+    [Arguments("qr", -1, 100)]
+    [Arguments("qr", 100, -1)]
+    [Arguments("microqr", -1, 100)]
+    [Arguments("microqr", 100, -1)]
+    [Arguments("rmqr", -1, 100)]
+    [Arguments("rmqr", 100, -1)]
+    public async Task CanvasExtension_NegativeSize_Throws(string symbology, int width, int height)
+    {
+        using var bitmap = new SKBitmap(100, 100);
+        using var canvas = new SKCanvas(bitmap);
+
+        await Assert.That(() => RenderThroughExtension(canvas, symbology, width, height)).Throws<ArgumentOutOfRangeException>()
+            .Because($"{symbology} at {width}x{height}");
+    }
+
+    [Test]
+    [Arguments("width")]
+    [Arguments("height")]
+    [Arguments("both")]
+    public async Task GeometryHelpers_InvertedArea_Throw(string axis)
+    {
+        var data = QRCodeGenerator.Create(Content, QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
+        using var logo = new SKBitmap(32, 32);
+        var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 1, maxCoreOccupancyPercent: 40);
+        var area = Invert(SKRect.Create(100, 100, 400, 200), axis);
+
+        await Assert.That(() => SymbolRenderer.GetFinderPatternRect(data, 0, area)).Throws<ArgumentException>();
+        await Assert.That(() => SymbolRenderer.GetIconRects(data, area, icon)).Throws<ArgumentException>();
+    }
+
+    /// <summary>
+    /// A mirrored symbol, for a transfer print or a sticker read through glass, is asked for with the
+    /// canvas: flip it about the area and draw into the area as usual.
+    /// </summary>
+    [Test]
+    [Arguments("qr")]
+    [Arguments("microqr")]
+    [Arguments("rmqr")]
+    public async Task Render_UnderAMirroringCanvasScale_MirrorsTheUprightRender(string symbology)
     {
         var bounds = SKRect.Create(100, 100, 400, 200);
         using var upright = DrawInBounds(symbology, bounds);
-        using var mirrored = DrawInBounds(symbology, Invert(bounds, inverted));
+        using var mirrored = new SKBitmap(new SKImageInfo(600, 400, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(mirrored))
+        {
+            canvas.Clear(SKColors.Red);
+            canvas.Translate(bounds.Left + bounds.Right, 0);
+            canvas.Scale(-1f, 1f);
+            Draw(canvas, symbology, "renderer", bounds, SKColors.White);
+        }
 
-        var flipX = inverted is "width" or "both";
-        var flipY = inverted is "height" or "both";
         var differing = 0;
         for (var y = (int)bounds.Top; y < (int)bounds.Bottom; y++)
         {
             for (var x = (int)bounds.Left; x < (int)bounds.Right; x++)
             {
-                var sourceX = flipX ? (int)(bounds.Left + bounds.Right) - 1 - x : x;
-                var sourceY = flipY ? (int)(bounds.Top + bounds.Bottom) - 1 - y : y;
-                if (mirrored.GetPixel(x, y) != upright.GetPixel(sourceX, sourceY)) differing++;
+                if (mirrored.GetPixel(x, y) != upright.GetPixel((int)(bounds.Left + bounds.Right) - 1 - x, y)) differing++;
             }
         }
 
-        await Assert.That(differing).IsEqualTo(0).Because($"{symbology} with an inverted {inverted}");
+        await Assert.That(differing).IsEqualTo(0).Because(symbology);
     }
 
     // ─── Fractional areas ───
@@ -513,6 +607,26 @@ public class SymbolRendererAreaFitTest
     }
 
     private static bool IsDark(SKBitmap bitmap, float x, float y) => bitmap.GetPixel((int)x, (int)y).Red < 128;
+
+    private static void RenderThroughExtension(SKCanvas canvas, string symbology, SKRect area)
+    {
+        switch (symbology)
+        {
+            case "qr": canvas.Render(StandardQr(), area, SKColors.Red); break;
+            case "microqr": canvas.Render(MicroQr(), area, SKColors.Red); break;
+            default: canvas.Render(RmQr(), area, SKColors.Red); break;
+        }
+    }
+
+    private static void RenderThroughExtension(SKCanvas canvas, string symbology, int width, int height)
+    {
+        switch (symbology)
+        {
+            case "qr": canvas.Render(StandardQr(), width, height); break;
+            case "microqr": canvas.Render(MicroQr(), width, height); break;
+            default: canvas.Render(RmQr(), width, height); break;
+        }
+    }
 
     private static SKRect Invert(SKRect bounds, string axis) => axis switch
     {
