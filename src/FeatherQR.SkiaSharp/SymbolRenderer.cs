@@ -54,6 +54,10 @@ public static class SymbolRenderer
         if (moduleSizePercent is < 0f or > 1.0f)
             throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
 
+        // Nothing fits, so nothing is drawn, overlays sized in pixels included.
+        if (area.Width == 0 || area.Height == 0)
+            return;
+
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
         var shape = moduleShape ?? RectangleModuleShape.Default;
@@ -185,6 +189,10 @@ public static class SymbolRenderer
         if (moduleSizePercent is < 0f or > 1.0f)
             throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
 
+        // Nothing fits, so nothing is drawn, overlays sized in pixels included.
+        if (area.Width == 0 || area.Height == 0)
+            return;
+
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
         var shape = moduleShape ?? RectangleModuleShape.Default;
@@ -262,6 +270,10 @@ public static class SymbolRenderer
         if (moduleSizePercent is < 0f or > 1.0f)
             throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
 
+        // Nothing fits, so nothing is drawn, overlays sized in pixels included.
+        if (area.Width == 0 || area.Height == 0)
+            return;
+
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
         var shape = moduleShape ?? RectangleModuleShape.Default;
@@ -328,8 +340,8 @@ public static class SymbolRenderer
 
         // SKRect.Create(x, y, s, s) stores right and bottom as rounded sums, so a square at fractional
         // coordinates can come out a rounding step from square; shrinking it by that step moves module edges.
-        var magnitude = Math.Max(Math.Max(Math.Abs(area.Left), Math.Abs(area.Right)), Math.Max(Math.Abs(area.Top), Math.Abs(area.Bottom)));
-        if (Math.Abs(width - height) <= magnitude * SquareTolerance)
+        var slack = (MaxAbs(area.Left, area.Right) + MaxAbs(area.Top, area.Bottom)) * SquareTolerance;
+        if (Math.Abs(width - height) <= slack)
             return area;
 
         var side = Math.Min(width, height);
@@ -353,15 +365,20 @@ public static class SymbolRenderer
 
     private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
-    /// <summary>Relative slack for "already square": eight to sixteen float steps at the area's largest coordinate. It scales with the coordinates because float precision does; a fixed slack would refuse squares far from the origin, where rounding alone moves an edge further.</summary>
-    private const float SquareTolerance = 1e-6f;
+    private static float MaxAbs(float a, float b) => Math.Max(Math.Abs(a), Math.Abs(b));
+
+    /// <summary>
+    /// Slack for "already square", per axis, as a share of that axis's largest coordinate: two float steps there, since a float step at m is at most m / 2^23.
+    /// That is the most rounding moves one side: half a step at each edge, and up to a step more for the width or height.
+    /// </summary>
+    private const float SquareTolerance = 1f / (1 << 22);
 
     /// <summary>
     /// Works out where an icon and its border land inside a QR code.
     /// </summary>
     /// <remarks>
     /// When <see cref="IconData.IconSizeModules"/> is set, sizing is module-based and percent/pixel values are ignored.
-    /// A non-square area is fitted exactly as <c>Render</c> fits it, so pass the area you drew into.
+    /// A non-square area is fitted exactly as <c>Render</c> fits it, so pass the area you drew into. A zero-size area, where <c>Render</c> draws nothing, gives empty rectangles at its centre.
     /// Module-based icons are validated against QR size and core occupancy at render time.
     /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
     /// </remarks>
@@ -452,7 +469,8 @@ public static class SymbolRenderer
                 iconWidth,
                 iconHeight);
 
-            var borderWidth = iconData.IconBorderWidth;
+            // The border is in pixels, and a zero-size render draws no border around its zero icon.
+            var borderWidth = area.Width > 0 ? iconData.IconBorderWidth : 0;
             var borderRect = borderWidth > 0
                 ? SKRect.Create(
                     centerX - iconWidth / 2 - borderWidth,

@@ -366,6 +366,68 @@ public class SymbolRendererAreaFitTest
     }
 
     /// <summary>
+    /// Everything drawn over the modules has to come to nothing too. A percent-sized icon border is in
+    /// pixels, not a share of the symbol, so it survives a zero symbol unless the renderer stops first.
+    /// </summary>
+    [Test]
+    [Arguments("percent", "width")]
+    [Arguments("percent", "height")]
+    [Arguments("modules", "width")]
+    [Arguments("modules", "height")]
+    public async Task Render_ZeroSizeAreaWithIconAndStyledFinders_DrawsNothing(string sizing, string axis)
+    {
+        var area = axis == "width" ? SKRect.Create(50, 50, 0, 40) : SKRect.Create(50, 50, 40, 0);
+        var data = QRCodeGenerator.Create(Content, QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
+        using var logo = new SKBitmap(32, 32);
+        logo.Erase(SKColors.Blue);
+        var icon = sizing == "modules"
+            ? IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 1, maxCoreOccupancyPercent: 40)
+            : IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 2);
+        using var bitmap = new SKBitmap(new SKImageInfo(200, 200, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.Red);
+            SymbolRenderer.Render(canvas, area, data, SKColors.Black, new SKColor(0xFF, 0xFF, 0xFF, 0x80), icon, CircleModuleShape.Default, 0.8f, null, CircleFinderPatternShape.Default);
+        }
+
+        var drawn = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                if (bitmap.GetPixel(x, y) != SKColors.Red) drawn++;
+            }
+        }
+
+        await Assert.That(drawn).IsEqualTo(0).Because($"{sizing} icon with a zero {axis}");
+    }
+
+    /// <summary>
+    /// The helper describes the render, so a zero area gives empty rects at the symbol's centre, not a
+    /// border that the renderer never draws.
+    /// </summary>
+    [Test]
+    [Arguments("percent", "width")]
+    [Arguments("percent", "height")]
+    [Arguments("modules", "width")]
+    [Arguments("modules", "height")]
+    public async Task GetIconRects_ZeroSizeArea_GivesEmptyRectsAtTheCentre(string sizing, string axis)
+    {
+        var area = axis == "width" ? SKRect.Create(50, 50, 0, 40) : SKRect.Create(50, 50, 40, 0);
+        var data = QRCodeGenerator.Create(Content, QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
+        using var logo = new SKBitmap(32, 32);
+        var icon = sizing == "modules"
+            ? IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 1, maxCoreOccupancyPercent: 40)
+            : IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 2);
+
+        var (iconRect, borderRect) = SymbolRenderer.GetIconRects(data, area, icon);
+
+        var centre = new SKRect(area.MidX, area.MidY, area.MidX, area.MidY);
+        await Assert.That(iconRect).IsEqualTo(centre).Because("icon");
+        await Assert.That(borderRect).IsEqualTo(centre).Because("border");
+    }
+
+    /// <summary>
     /// The extensions refuse an inverted area before they clear the canvas, so a refused call leaves
     /// whatever was drawn there untouched.
     /// </summary>
@@ -480,6 +542,13 @@ public class SymbolRendererAreaFitTest
             var side = 50 + random.NextSingle() * 900;
             yield return SKRect.Create(-2000 + random.NextSingle() * 1000, -2000 + random.NextSingle() * 1000, side, side);
         }
+
+        // Far from the origin a float step is a pixel or more, so the slack has to follow the edges' own precision.
+        for (var i = 0; i < 500; i++)
+        {
+            var side = 50 + random.NextSingle() * 900;
+            yield return SKRect.Create(-1.2e7f + random.NextSingle() * 2.4e7f, -1.2e7f + random.NextSingle() * 2.4e7f, side, side);
+        }
     }
 
     private static IEnumerable<SKRect> FractionalRects()
@@ -492,6 +561,10 @@ public class SymbolRendererAreaFitTest
         for (var i = 0; i < 500; i++)
         {
             yield return SKRect.Create(-2000 + random.NextSingle() * 1000, -2000 + random.NextSingle() * 1000, 50 + random.NextSingle() * 900, 50 + random.NextSingle() * 900);
+        }
+        for (var i = 0; i < 500; i++)
+        {
+            yield return SKRect.Create(-1.2e7f + random.NextSingle() * 2.4e7f, -1.2e7f + random.NextSingle() * 2.4e7f, 50 + random.NextSingle() * 900, 50 + random.NextSingle() * 900);
         }
     }
 
@@ -513,11 +586,14 @@ public class SymbolRendererAreaFitTest
     /// The slack is for float rounding and nothing more. An area a hundredth of a pixel from square,
     /// far enough from the origin that a looser relative slack would swallow it, is still fitted, and
     /// so is one a whole pixel off; otherwise a later loosening would bring the stretch back unnoticed.
+    /// At 1e7 a float step is a pixel, and a slack of a few steps there still fits 5 px off.
     /// </summary>
     [Test]
     [Arguments(1000.25f, 1000.5f, 400f, 400.01f)]
     [Arguments(1000f, 1000f, 400f, 401f)]
     [Arguments(700f, 200f, 300f, 450f)]
+    [Arguments(1e7f, 1e7f, 400f, 410f)]
+    [Arguments(1e7f, 1e7f, 400f, 405f)]
     public async Task GetSquareArea_MoreThanRoundingFromSquare_IsFitted(float left, float top, float width, float height)
     {
         var area = SKRect.Create(left, top, width, height);
