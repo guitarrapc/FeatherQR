@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// Use it when the image builders do not give you the control you need.
 /// </summary>
 /// <remarks>
-/// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, and the background covers the whole area: modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The image builders follow the same rule.
+/// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, the fit the image builders use (given an explicit canvas size, they also round the offset to whole pixels): modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The background covers the whole area.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// </remarks>
 public static class SymbolRenderer
@@ -311,13 +311,30 @@ public static class SymbolRenderer
     /// The largest square that fits inside <paramref name="area"/>, centered: the letterbox for a square symbology.
     /// </summary>
     /// <remarks>
-    /// Taken from the shorter side rather than through a module scale, so a square area comes back exactly as given and fitting twice is the same as fitting once. The public geometry helpers depend on that: they fit whatever area they are handed, and the renderer hands them one it already fitted.
+    /// An area already square to within float rounding comes back exactly as given, so a square area draws what it did before the fit existed, and fitting twice is the same as fitting once. The public geometry helpers depend on the second: they fit whatever area they are handed, and the renderer hands them one it already fitted.
+    /// An inverted area keeps its orientation and stays inside its bounds, as it did when the area was taken literally.
     /// </remarks>
     internal static SKRect GetSquareArea(SKRect area)
     {
-        var side = Math.Min(area.Width, area.Height);
-        return SKRect.Create(area.Left + (area.Width - side) / 2, area.Top + (area.Height - side) / 2, side, side);
+        var width = area.Width;
+        var height = area.Height;
+        var absWidth = Math.Abs(width);
+        var absHeight = Math.Abs(height);
+
+        // SKRect.Create(x, y, s, s) stores right and bottom as rounded sums, so a square at fractional
+        // coordinates can come out a rounding step from square; shrinking it by that step moves module edges.
+        var magnitude = Math.Max(Math.Max(Math.Abs(area.Left), Math.Abs(area.Right)), Math.Max(Math.Abs(area.Top), Math.Abs(area.Bottom)));
+        if (Math.Abs(absWidth - absHeight) <= magnitude * SquareTolerance)
+            return area;
+
+        var side = Math.Min(absWidth, absHeight);
+        var sideX = width < 0 ? -side : side;
+        var sideY = height < 0 ? -side : side;
+        return SKRect.Create(area.Left + (width - sideX) / 2, area.Top + (height - sideY) / 2, sideX, sideY);
     }
+
+    /// <summary>Relative slack for "already square": a few float steps at the area's coordinates, which at ordinary canvas coordinates is far below a visible fraction of a pixel.</summary>
+    private const float SquareTolerance = 1e-6f;
 
     /// <summary>
     /// Works out where an icon and its border land inside a QR code.

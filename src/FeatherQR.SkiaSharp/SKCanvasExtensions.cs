@@ -11,7 +11,7 @@ namespace FeatherQR.SkiaSharp;
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
 /// </para>
 /// <para>
-/// Every symbology is fitted into the area at one uniform module scale and centered, and the whole area gets the background color, the rule the image builders follow: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square.
+/// Every symbology is fitted into the area at one uniform module scale and centered, the fit the image builders use (given an explicit canvas size, they also round the offset to whole pixels): a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square. The whole area gets the background color.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// </para>
 /// </remarks>
@@ -25,7 +25,7 @@ public static class SKCanvasExtensions
     /// <param name="data">The QR code to draw.</param>
     /// <param name="width">Width of the area to draw into.</param>
     /// <param name="height">Height of the area to draw into.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
@@ -58,7 +58,7 @@ public static class SKCanvasExtensions
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The QR code to draw.</param>
     /// <param name="area">Where to draw it.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
@@ -94,7 +94,7 @@ public static class SKCanvasExtensions
     /// <param name="data">The Micro QR code to draw.</param>
     /// <param name="width">Width of the area to draw into.</param>
     /// <param name="height">Height of the area to draw into.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
@@ -128,7 +128,7 @@ public static class SKCanvasExtensions
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The Micro QR code to draw.</param>
     /// <param name="area">Where to draw it.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
@@ -161,7 +161,7 @@ public static class SKCanvasExtensions
     /// <param name="data">The rMQR code to draw.</param>
     /// <param name="width">Width of the area to draw into.</param>
     /// <param name="height">Height of the area to draw into.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
@@ -194,7 +194,7 @@ public static class SKCanvasExtensions
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The rMQR code to draw.</param>
     /// <param name="area">Where to draw it.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>

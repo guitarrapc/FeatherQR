@@ -1,6 +1,8 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
 #:project ../../src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj
+#:package ZXing.Net.Bindings.SkiaSharp.V2
+#:package ZXingCpp
 using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
@@ -42,7 +44,7 @@ using (var bitmap = new SKBitmap(900, 450))
     }
 
     Save(bitmap, stretchedPath);
-    Report(stretchedPath, bitmap, expectDecode: false);
+    Report(stretchedPath, bitmap, featherQR: false, zxingNet: false, zxingCpp: true);
 }
 
 // After: fitted at one uniform module scale and centered.
@@ -50,7 +52,7 @@ var fittedPath = Path.Combine(outputDirectory, "withsize-fitted.png");
 using (var bitmap = new QRCodeImageBuilder(data).WithSize(900, 450).WithColors(SKColors.Black, SKColors.White).ToBitmap())
 {
     Save(bitmap, fittedPath);
-    Report(fittedPath, bitmap, expectDecode: true);
+    Report(fittedPath, bitmap, featherQR: true, zxingNet: true, zxingCpp: true);
 }
 
 // --- SymbolRenderer.Render into a non-square slot ------------------------------------------
@@ -69,7 +71,7 @@ using (var bitmap = Card(280, 380, canvas =>
 }))
 {
     Save(bitmap, rendererStretchedPath);
-    Report(rendererStretchedPath, bitmap, expectDecode: false);
+    Report(rendererStretchedPath, bitmap, featherQR: false, zxingNet: true, zxingCpp: true);
 }
 
 // After: the same call, given the slot, centers a square symbol and gives the rest of it the background.
@@ -77,7 +79,7 @@ var rendererFittedPath = Path.Combine(outputDirectory, "renderer-fitted.png");
 using (var bitmap = Card(280, 380, canvas => SymbolRenderer.Render(canvas, slot, data, SKColors.Black, SKColors.White)))
 {
     Save(bitmap, rendererFittedPath);
-    Report(rendererFittedPath, bitmap, expectDecode: true);
+    Report(rendererFittedPath, bitmap, featherQR: true, zxingNet: true, zxingCpp: true);
 }
 
 // --- Padding -------------------------------------------------------------------------------
@@ -166,12 +168,25 @@ static void Save(SKBitmap bitmap, string path)
     png.SaveTo(stream);
 }
 
-// The claim each image makes in the guide is whether a reader finds the symbol, so say so.
-static void Report(string path, SKBitmap bitmap, bool expectDecode)
+// The claim each image makes in the guide is which readers find the symbol, so check each one it names.
+// ZXing.Net runs with the settings the test suite's cross-checks use; zxing-cpp with its defaults.
+static void Report(string path, SKBitmap bitmap, bool featherQR, bool zxingNet, bool zxingCpp)
 {
-    var decoded = QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info);
-    var agrees = decoded == expectDecode && (!decoded || text == Content);
-    Console.WriteLine($"{(agrees ? "ok  " : "WRONG")} {Path.GetFileName(path)}: decodes={decoded} ({info.Status}), expected {expectDecode}");
+    var feather = QRCodeImageDecoder.TryDecode(bitmap, out var text, out _) && text == Content;
+
+    var netReader = new ZXing.SkiaSharp.BarcodeReader
+    {
+        AutoRotate = true,
+        Options = new ZXing.Common.DecodingOptions { TryHarder = true, TryInverted = true, PossibleFormats = [ZXing.BarcodeFormat.QR_CODE] },
+    };
+    var net = netReader.Decode(bitmap)?.Text == Content;
+
+    using var rgba = bitmap.Copy(SKColorType.Rgba8888);
+    var view = new ZXingCpp.ImageView(rgba.Bytes, rgba.Width, rgba.Height, ZXingCpp.ImageFormat.RGBA);
+    var cpp = new ZXingCpp.BarcodeReader().From(view).Any(r => r.Text == Content);
+
+    var agrees = feather == featherQR && net == zxingNet && cpp == zxingCpp;
+    Console.WriteLine($"{(agrees ? "ok  " : "WRONG")} {Path.GetFileName(path)}: FeatherQR={feather}, ZXing.Net={net}, zxing-cpp={cpp}; expected {featherQR}/{zxingNet}/{zxingCpp}");
 }
 
 // The pad claim is the pixel in the corner: black once JPEG has flattened a transparent one.

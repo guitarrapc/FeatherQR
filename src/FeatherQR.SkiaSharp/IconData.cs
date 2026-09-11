@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// <remarks>
 /// The icon covers modules, so the QR code relies on error correction to stay readable.
 /// Use the highest error correction level (<see cref="QREccLevel.H"/>) and keep the icon small.
-/// When the size is given in modules, rendering throws if the icon and its border span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes given as a percentage of the image are not checked against the QR code at all.
+/// When the size is given in modules, rendering throws if the icon and its border span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes given as a percentage of the symbol are not checked against the QR code at all.
 /// <para>
 /// Equality compares the sizing members by value and <see cref="Icon"/> by reference, so two instances built from the same <see cref="SKBitmap"/> through separate <see cref="FromImage(SKBitmap, int, int)"/> calls are not equal.
 /// <see cref="IconShape"/> is an open extension point wrapping an <see cref="SKBitmap"/>, neither of which defines value equality, so there is nothing to compare element-wise the way <see cref="GradientOptions"/> compares its colours.
@@ -67,7 +67,7 @@ public sealed record class IconData
     public required IconShape Icon { get; init; }
 
     /// <summary>
-    /// Icon size as a percentage of the image, 1 to 100. Ignored once <see cref="IconSizeModules"/> is set.
+    /// Icon size as a percentage of the symbol's side, quiet zone included, 1 to 100. Ignored once <see cref="IconSizeModules"/> is set.
     /// </summary>
     public int IconSizePercent { get; init; } = 10;
 
@@ -97,10 +97,10 @@ public sealed record class IconData
     public int MaxCoreOccupancyPercent { get; init; } = 30;
 
     /// <summary>
-    /// Creates an icon sized as a percentage of the image.
+    /// Creates an icon sized as a percentage of the symbol's side.
     /// </summary>
     /// <param name="image">The image to draw. The caller keeps ownership of it.</param>
-    /// <param name="iconSizePercent">Icon size as a percentage of the image, 1 to 100.</param>
+    /// <param name="iconSizePercent">Icon size as a percentage of the symbol's side, quiet zone included, 1 to 100.</param>
     /// <param name="iconBorderWidth">Width of the padding around the icon, in pixels.</param>
     public static IconData FromImage(SKBitmap image, int iconSizePercent = 10, int iconBorderWidth = 2)
     {

@@ -357,13 +357,13 @@ new QRCodeImageBuilder("https://example.com")
 | 1.x through 2.0.0-preview.2 | 2.0.0 |
 |---|---|
 | <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
-| Stretched to 900x450. No reader finds it. Not FeatherQR's, not ZXing's, not a phone's | 450x450, centered with 225 px of padding each side. Scans |
+| Stretched to 900x450. FeatherQR and ZXing.Net miss it; zxing-cpp reads it | 450x450, centered with 225 px of padding each side. Scans |
 
 Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular.
 
-There is no safe ratio to quote, and that is the finding rather than a hedge. Sweeping several payloads, four stylings and both orientations, failures appear from about **1.25:1** and nothing survives past about **1.8:1**, but where a given symbol lands in between moves with the payload, with the styling and with which axis is squeezed, and the two readers disagree by direction: on wide renders this library reads many that ZXing does not, on tall ones ZXing reads many that this library does not. What is reliable is that the failure starts early, varies with content you do not control, and is never announced.
+There is no safe ratio to quote, and that is the finding rather than a hedge. Sweeping several payloads, four stylings and both orientations through this library and ZXing.Net, failures appear from about **1.25:1** and neither reads anything past about **1.8:1** (zxing-cpp, which the sweep did not include, reads the 2:1 image above), but where a given symbol lands in between moves with the payload, with the styling and with which axis is squeezed, and the two readers disagree by direction: on wide renders this library reads many that ZXing does not, on tall ones ZXing reads many that this library does not. What is reliable is that the failure starts early, varies with content you do not control, and is never announced.
 
-The symbol is now fitted into the canvas with one uniform module scale and centered, which is what the rectangular rMQR builder always did. Square canvases are unaffected, and so is the geometry of `WithModulePixelSize` and of the static helpers, none of which ever took two different values. (`WithModulePixelSize` does change in the other way described in the next section: its padding.)
+The symbol is now fitted into the canvas with one uniform module scale and centered, which is what the rectangular rMQR builder always did. Square canvases are unaffected, and so is the geometry of `WithModulePixelSize` and of the static helpers, none of which ever took two different values. (`WithModulePixelSize` does change in the other way described in [the padding section](#padding-around-the-symbol-defaults-to-the-background-color).)
 
 If you were passing different values to get a code that filled a non-square frame, you were not getting one. Draw the code into the part of the frame it belongs in — and note that `SKCanvas.Render` clears the whole canvas itself, so hand it the colour rather than clearing first:
 
@@ -379,7 +379,7 @@ File.WriteAllBytes("banner.png", png.ToArray());
 
 ### `SymbolRenderer.Render` and `SKCanvas.Render` fit the symbol into the area
 
-**Behavior change.** The low-level renderer took the area literally for Standard QR and Micro QR, so a non-square area stretched the symbol exactly as `WithSize` did, with the same result: an image no reader finds, returned without complaint. It now follows the rule the builders and rMQR's overload already did. The symbol is drawn at one uniform module scale, centered in the area, and the whole area gets the background colour:
+**Behavior change.** The low-level renderer took the area literally for Standard QR and Micro QR, so a non-square area stretched the symbol exactly as `WithSize` did, with the same result: modules that are not square, found or missed depending on the aspect ratio and the reader, returned without complaint. It now follows the rule the builders and rMQR's overload already did. The symbol is drawn at one uniform module scale, centered in the area, and the whole area gets the background colour:
 
 ```csharp
 // A 200x300 slot for the code on a card.
@@ -390,11 +390,11 @@ SymbolRenderer.Render(canvas, slot, data, SKColors.Black, SKColors.White);
 | 1.x through 2.0.0-preview.2 | 2.0.0 |
 |---|---|
 | <img src="images/renderer-stretched.png" width="280" alt="A QR code stretched to fill a tall slot on a card"/> | <img src="images/renderer-fitted.png" width="280" alt="The same QR code centered in the slot with square modules"/> |
-| Stretched to 200x300. No reader finds it | 200x200 at (40, 90), with background in the 200x50 above and below. Scans |
+| Stretched to 200x300. FeatherQR misses it; ZXing.Net (with rotation and hard mode) and zxing-cpp read it | 200x200 at (40, 90), with background in the 200x50 above and below. Scans |
 
-The same goes for the `SKCanvas.Render` extensions: `canvas.Render(data, 900, 450, …)` now draws a 450x450 symbol at (225, 0), which is what `WithSize(900, 450)` produces in the section above. A square area draws exactly the pixels it did before. `SymbolRenderer.GetFinderPatternRect` and `SymbolRenderer.GetIconRects` fit the same way, so hand them the area you passed to `Render` and they point at what was drawn.
+The same goes for the `SKCanvas.Render` extensions: `canvas.Render(data, 900, 450, …)` now draws a 450x450 symbol at (225, 0), which is what `WithSize(900, 450)` produces in the section above when no clear colour is set; the extensions always paint the background over the bands beside the symbol, where a builder pads them with its clear colour. A square area draws exactly the pixels it did before. `SymbolRenderer.GetFinderPatternRect` and `SymbolRenderer.GetIconRects` fit the same way, so hand them the area you passed to `Render` and they point at what was drawn.
 
-If you stretched on purpose, to pre-distort a symbol for a printer or marker whose dots are not square, say it with the canvas instead of the area. This reproduces the old output pixel for pixel:
+If you stretched on purpose, to pre-distort a symbol for a printer or marker whose dots are not square, say it with the canvas instead of the area. With plain modules and finders in a solid colour this reproduces the old output pixel for pixel. Anything styled (shaped modules or finders, gradients, icons) is drawn in the square and stretched with it, so it can come out differently from what the old fill drew:
 
 ```csharp
 canvas.Scale(2f, 1f);   // the device's dot-pitch ratio

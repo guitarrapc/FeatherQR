@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Standard QR and Micro QR used to fill the area on both axes, so a non-square area gave the symbol non-square modules and nothing could find it, while rMQR's overload and every builder fitted. The same width and height gave a readable symbol from one entry point and an unreadable one from another.
+/// Standard QR and Micro QR used to fill the area on both axes, so a non-square area gave the symbol non-square modules, found or missed depending on the aspect ratio and the reader, while rMQR's overload and every builder fitted. The same width and height gave a readable symbol from one entry point and an unreadable one from another.
 /// </para>
 /// <para>
 /// The public geometry helpers answer for the same area the caller passed to <c>Render</c>, so they have to fit the same way, or they point beside what was drawn.
@@ -29,6 +29,8 @@ public class SymbolRendererAreaFitTest
             {
                 yield return (symbology, entry, 900, 450);
                 yield return (symbology, entry, 300, 900);
+                // This payload still decoded stretched to 1.5:1, so this row cannot catch a lost fit (the
+                // two above do); it pins that a canvas which was readable before stays readable fitted.
                 yield return (symbology, entry, 600, 400);
             }
         }
@@ -197,6 +199,257 @@ public class SymbolRendererAreaFitTest
         }
     }
 
+    public static IEnumerable<(string, string, int, int)> StyledNonSquareAreas()
+    {
+        foreach (var symbology in new[] { "qr", "microqr" })
+        {
+            foreach (var style in new[] { "circleModules", "gappedModules", "circleFinder", "gradient", "translucentFinder" })
+            {
+                yield return (symbology, style, 900, 450);
+                yield return (symbology, style, 300, 900);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every path through the renderer fits, not only the merged runs plain modules take: per-module
+    /// drawing (custom shapes, gaps), the finder shapes (including the layer a translucent background
+    /// needs) and the gradient land exactly where they would in the fitted square drawn on its own.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(StyledNonSquareAreas))]
+    public async Task Render_NonSquareArea_StyledSymbolDrawsAsInItsFittedSquare(string symbology, string style, int width, int height)
+    {
+        var area = SKRect.Create(20, 30, width, height);
+        var side = Math.Min(width, height);
+        var square = SKRect.Create(area.Left + (width - side) / 2f, area.Top + (height - side) / 2f, side, side);
+
+        using var inArea = Canvas(area, SKColors.Gray, c => DrawStyled(c, symbology, style, area));
+        using var inSquare = Canvas(area, SKColors.Gray, c => DrawStyled(c, symbology, style, square));
+
+        var differing = 0;
+        for (var y = (int)square.Top; y < (int)square.Bottom; y++)
+        {
+            for (var x = (int)square.Left; x < (int)square.Right; x++)
+            {
+                if (inArea.GetPixel(x, y) != inSquare.GetPixel(x, y)) differing++;
+            }
+        }
+
+        await Assert.That(differing).IsEqualTo(0).Because($"{symbology} {style} in {width}x{height}");
+    }
+
+    /// <summary>
+    /// The canvas extensions clear the canvas and hand the renderer the area, so their placement and
+    /// background are the renderer's: a 900x450 call draws the fitted symbol with the background across
+    /// the whole area, not a square in the corner with the clear colour beside it.
+    /// </summary>
+    [Test]
+    [Arguments("qr", "size")]
+    [Arguments("qr", "area")]
+    [Arguments("microqr", "size")]
+    [Arguments("microqr", "area")]
+    public async Task CanvasExtension_NonSquareArea_DrawsWhatTheRendererDraws(string symbology, string overload)
+    {
+        var background = new SKColor(0xFF, 0xD7, 0x00, 0xFF);
+        var area = overload == "size" ? SKRect.Create(0, 0, 900, 450) : SKRect.Create(20, 30, 900, 450);
+
+        using var viaExtension = Canvas(area, SKColors.Blue, c =>
+        {
+            switch (symbology, overload)
+            {
+                case ("qr", "size"): c.Render(StandardQr(), 900, 450, SKColors.Red, SKColors.Black, background); break;
+                case ("qr", "area"): c.Render(StandardQr(), area, SKColors.Red, SKColors.Black, background); break;
+                case ("microqr", "size"): c.Render(MicroQr(), 900, 450, SKColors.Red, SKColors.Black, background); break;
+                default: c.Render(MicroQr(), area, SKColors.Red, SKColors.Black, background); break;
+            }
+        });
+        using var viaRenderer = Canvas(area, SKColors.Red, c => Draw(c, symbology, "renderer", area, background));
+
+        // Compared in order: the same pixels moved elsewhere are a different image.
+        await Assert.That(DifferingBytes(viaExtension.Bytes, viaRenderer.Bytes)).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// An inverted area is a caller's mistake, but it must not reach past its own bounds onto the rest
+    /// of the canvas, which the area taken literally never did.
+    /// </summary>
+    [Test]
+    [Arguments("qr", "width")]
+    [Arguments("qr", "height")]
+    [Arguments("qr", "both")]
+    [Arguments("microqr", "width")]
+    [Arguments("microqr", "height")]
+    [Arguments("microqr", "both")]
+    public async Task Render_InvertedArea_StaysInsideItsBounds(string symbology, string inverted)
+    {
+        var bounds = SKRect.Create(100, 100, 400, 200);
+        using var bitmap = DrawInBounds(symbology, Invert(bounds, inverted));
+
+        var outside = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                if (!bounds.Contains(x + 0.5f, y + 0.5f) && bitmap.GetPixel(x, y) != SKColors.Red) outside++;
+            }
+        }
+
+        await Assert.That(outside).IsEqualTo(0).Because($"{symbology} with an inverted {inverted}");
+    }
+
+    /// <summary>
+    /// An inverted area keeps the orientation it asks for: the render is the upright one mirrored
+    /// along each inverted axis, as it was when the area was taken literally.
+    /// </summary>
+    [Test]
+    [Arguments("qr", "width")]
+    [Arguments("qr", "height")]
+    [Arguments("qr", "both")]
+    [Arguments("microqr", "width")]
+    [Arguments("microqr", "height")]
+    [Arguments("microqr", "both")]
+    public async Task Render_InvertedArea_MirrorsTheUprightRender(string symbology, string inverted)
+    {
+        var bounds = SKRect.Create(100, 100, 400, 200);
+        using var upright = DrawInBounds(symbology, bounds);
+        using var mirrored = DrawInBounds(symbology, Invert(bounds, inverted));
+
+        var flipX = inverted is "width" or "both";
+        var flipY = inverted is "height" or "both";
+        var differing = 0;
+        for (var y = (int)bounds.Top; y < (int)bounds.Bottom; y++)
+        {
+            for (var x = (int)bounds.Left; x < (int)bounds.Right; x++)
+            {
+                var sourceX = flipX ? (int)(bounds.Left + bounds.Right) - 1 - x : x;
+                var sourceY = flipY ? (int)(bounds.Top + bounds.Bottom) - 1 - y : y;
+                if (mirrored.GetPixel(x, y) != upright.GetPixel(sourceX, sourceY)) differing++;
+            }
+        }
+
+        await Assert.That(differing).IsEqualTo(0).Because($"{symbology} with an inverted {inverted}");
+    }
+
+    // ─── Fractional areas ───
+
+    /// <summary>
+    /// Squares built the way a caller builds them at fractional coordinates (DPI scaling gives thirds
+    /// and fifths): <c>SKRect.Create(x, y, s, s)</c> stores right and bottom as rounded sums, so the
+    /// two sides can come out a rounding step apart.
+    /// </summary>
+    private static IEnumerable<SKRect> FractionalSquares()
+    {
+        yield return SKRect.Create(177.82019f, 185.56491f, 417.3587f, 417.3587f);
+        yield return SKRect.Create(1.5021764f, 1.9307674f, 126.768936f, 126.768936f);
+        var random = new Random(20260911);
+        for (var i = 0; i < 500; i++)
+        {
+            var side = 50 + random.NextSingle() * 900;
+            yield return SKRect.Create(random.NextSingle() * 1000, random.NextSingle() * 1000, side, side);
+        }
+
+        // Near the origin the far edge is the largest coordinate, so the slack has to be measured from it.
+        for (var i = 0; i < 500; i++)
+        {
+            var side = 50 + random.NextSingle() * 900;
+            yield return SKRect.Create(random.NextSingle() * 4, random.NextSingle() * 4, side, side);
+        }
+
+        // A canvas translated to its centre or far corner puts areas at negative coordinates, where the
+        // largest coordinate is the most negative one.
+        for (var i = 0; i < 500; i++)
+        {
+            var side = 50 + random.NextSingle() * 900;
+            yield return SKRect.Create(-2000 + random.NextSingle() * 1000, -2000 + random.NextSingle() * 1000, side, side);
+        }
+    }
+
+    private static IEnumerable<SKRect> FractionalRects()
+    {
+        var random = new Random(911);
+        for (var i = 0; i < 500; i++)
+        {
+            yield return SKRect.Create(random.NextSingle() * 1000, random.NextSingle() * 1000, 50 + random.NextSingle() * 900, 50 + random.NextSingle() * 900);
+        }
+        for (var i = 0; i < 500; i++)
+        {
+            yield return SKRect.Create(-2000 + random.NextSingle() * 1000, -2000 + random.NextSingle() * 1000, 50 + random.NextSingle() * 900, 50 + random.NextSingle() * 900);
+        }
+    }
+
+    /// <summary>
+    /// A square the caller meant comes back as given, so it draws exactly the pixels it drew before
+    /// the fit existed. Shrinking it by the rounding step moved module edges by a whole pixel at some
+    /// offsets.
+    /// </summary>
+    [Test]
+    public async Task GetSquareArea_SquareAtFractionalCoordinates_ComesBackAsGiven()
+    {
+        var changed = FractionalSquares().Where(area => SymbolRenderer.GetSquareArea(area) != area).ToArray();
+
+        await Assert.That(changed.Length).IsEqualTo(0)
+            .Because(changed.Length == 0 ? "" : $"first: {changed[0]} became {SymbolRenderer.GetSquareArea(changed[0])}");
+    }
+
+    /// <summary>
+    /// The slack is for float rounding and nothing more. An area a hundredth of a pixel from square,
+    /// far enough from the origin that a looser relative slack would swallow it, is still fitted, and
+    /// so is one a whole pixel off; otherwise a later loosening would bring the stretch back unnoticed.
+    /// </summary>
+    [Test]
+    [Arguments(1000.25f, 1000.5f, 400f, 400.01f)]
+    [Arguments(1000f, 1000f, 400f, 401f)]
+    [Arguments(700f, 200f, 300f, 450f)]
+    public async Task GetSquareArea_MoreThanRoundingFromSquare_IsFitted(float left, float top, float width, float height)
+    {
+        var area = SKRect.Create(left, top, width, height);
+        var fitted = SymbolRenderer.GetSquareArea(area);
+
+        await Assert.That(fitted.Width).IsEqualTo(fitted.Height).Within(1e-3f).Because($"{area} became {fitted}");
+        await Assert.That(fitted.Height).IsEqualTo(Math.Min(area.Width, area.Height)).Within(1e-3f).Because($"{area} became {fitted}");
+        await Assert.That(fitted == area).IsFalse().Because($"{area} must not come back as given");
+    }
+
+    /// <summary>
+    /// The renderer hands the helpers an area it already fitted and a caller hands them the original,
+    /// so fitting a fitted area has to change nothing, at fractional coordinates too.
+    /// </summary>
+    [Test]
+    public async Task GetSquareArea_FittingTwice_IsFittingOnce()
+    {
+        var unstable = FractionalRects().Where(area =>
+        {
+            var once = SymbolRenderer.GetSquareArea(area);
+            return SymbolRenderer.GetSquareArea(once) != once;
+        }).ToArray();
+
+        await Assert.That(unstable.Length).IsEqualTo(0)
+            .Because(unstable.Length == 0 ? "" : $"first: {unstable[0]}");
+    }
+
+    [Test]
+    public async Task GeometryHelpers_FractionalArea_GiveTheRectsTheRendererDrawsIn()
+    {
+        var data = QRCodeGenerator.Create(Content, QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
+        using var logo = new SKBitmap(32, 32);
+        var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 1, maxCoreOccupancyPercent: 40);
+
+        var disagreeing = 0;
+        foreach (var area in FractionalRects())
+        {
+            // What Render passes its helpers: the area it drew into.
+            var drawn = SymbolRenderer.GetSquareArea(area);
+            for (var i = 0; i < 3; i++)
+            {
+                if (SymbolRenderer.GetFinderPatternRect(data, i, area) != SymbolRenderer.GetFinderPatternRect(data, i, drawn)) disagreeing++;
+            }
+            if (SymbolRenderer.GetIconRects(data, area, icon) != SymbolRenderer.GetIconRects(data, drawn, icon)) disagreeing++;
+        }
+
+        await Assert.That(disagreeing).IsEqualTo(0);
+    }
+
     // ─── Helpers ───
 
     private static QRCodeData StandardQr() => QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
@@ -227,6 +480,20 @@ public class SymbolRendererAreaFitTest
         }
     }
 
+    private static void DrawStyled(SKCanvas canvas, string symbology, string style, SKRect area)
+    {
+        ModuleShape? shape = style == "circleModules" ? CircleModuleShape.Default : null;
+        var percent = style == "gappedModules" ? 0.8f : 1f;
+        FinderPatternShape? finder = style is "circleFinder" or "translucentFinder" ? CircleFinderPatternShape.Default : null;
+        var gradient = style == "gradient" ? new GradientOptions([SKColors.Blue, SKColors.Red], GradientDirection.LeftToRight) : null;
+        var background = style == "translucentFinder" ? new SKColor(0xFF, 0xFF, 0xFF, 0x80) : SKColors.White;
+
+        if (symbology == "qr")
+            SymbolRenderer.Render(canvas, area, StandardQr(), SKColors.Black, background, null, shape, percent, gradient, finder);
+        else
+            SymbolRenderer.Render(canvas, area, MicroQr(), SKColors.Black, background, shape, percent, gradient, finder);
+    }
+
     private static bool TryDecode(string symbology, SKBitmap bitmap) => symbology switch
     {
         "qr" => QRCodeImageDecoder.TryDecode(bitmap, out var text) && text == Content,
@@ -246,6 +513,36 @@ public class SymbolRendererAreaFitTest
     }
 
     private static bool IsDark(SKBitmap bitmap, float x, float y) => bitmap.GetPixel((int)x, (int)y).Red < 128;
+
+    private static SKRect Invert(SKRect bounds, string axis) => axis switch
+    {
+        "width" => new SKRect(bounds.Right, bounds.Top, bounds.Left, bounds.Bottom),
+        "height" => new SKRect(bounds.Left, bounds.Bottom, bounds.Right, bounds.Top),
+        _ => new SKRect(bounds.Right, bounds.Bottom, bounds.Left, bounds.Top),
+    };
+
+    /// <summary>A 600x400 canvas cleared to red, with the symbol drawn into <paramref name="area"/>.</summary>
+    private static SKBitmap DrawInBounds(string symbology, SKRect area)
+    {
+        var bitmap = new SKBitmap(new SKImageInfo(600, 400, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Red);
+        Draw(canvas, symbology, "renderer", area, SKColors.White);
+        return bitmap;
+    }
+
+    private static int DifferingBytes(byte[] actual, byte[] expected)
+    {
+        if (actual.Length != expected.Length)
+            return Math.Max(actual.Length, expected.Length);
+
+        var differing = 0;
+        for (var i = 0; i < actual.Length; i++)
+        {
+            if (actual[i] != expected[i]) differing++;
+        }
+        return differing;
+    }
 
     private static SKRectI DarkBoundingBox(SKBitmap bitmap)
     {
