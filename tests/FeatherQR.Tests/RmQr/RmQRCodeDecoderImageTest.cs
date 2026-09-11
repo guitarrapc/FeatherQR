@@ -91,6 +91,11 @@ public class RmQRCodeDecoderImageTest
         await Assert.That(text).IsEqualTo(content);
     }
 
+    /// <summary>
+    /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
+    /// not square, so the two finder axes must keep independent module scales. Up to about 1.38:1
+    /// every right-angle rotation decodes; this is 1.25:1, 8 x 10 px.
+    /// </summary>
     [Test]
     [Arguments(0)]
     [Arguments(90)]
@@ -98,22 +103,43 @@ public class RmQRCodeDecoderImageTest
     [Arguments(270)]
     public async Task Decode_NonSquareModules(int degrees)
     {
-        // Rendering into a rectangle without aspect preservation stretches modules
-        // (here 8 × 12 px); the two finder axes must keep independent module scales.
         const string content = "RMQR IMAGE 123";
-        var data = Create(content, RmQREccLevel.M, RmQRVersion.R11x59);
-        using var rendered = new SKBitmap(data.Width * 8, data.Height * 12);
-        using (var canvas = new SKCanvas(rendered))
-        {
-            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, rendered.Width, rendered.Height), data, SKColors.Black, SKColors.White);
-            canvas.Flush();
-        }
+        using var rendered = RenderStretched(content, scaleX: 1f, scaleY: 1.25f);
+        var (across, down) = StretchedSymbol.FinderStoneRuns(rendered);
+        await Assert.That((float)down / across).IsEqualTo(1.25f).Within(0.05f).Because($"finder stone {across}x{down}");
         using var bitmap = Rotate(rendered, degrees);
 
         var success = RmQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
 
         await Assert.That(success).IsTrue().Because($"degrees={degrees}, status={info.Status}");
         await Assert.That(text).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// From about 1.4:1 the decoder reads modules wider than tall, to about 1.65:1, but not modules
+    /// taller than wide. This pins the half it supports, at 1.5:1 (12 x 8 px), upright and upside down.
+    /// </summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(180)]
+    public async Task Decode_NonSquareModules_WiderThanTall(int degrees)
+    {
+        const string content = "RMQR IMAGE 123";
+        using var rendered = RenderStretched(content, scaleX: 1.5f, scaleY: 1f);
+        var (across, down) = StretchedSymbol.FinderStoneRuns(rendered);
+        await Assert.That((float)across / down).IsEqualTo(1.5f).Within(0.05f).Because($"finder stone {across}x{down}");
+        using var bitmap = Rotate(rendered, degrees);
+
+        var success = RmQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"degrees={degrees}, status={info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
+    private static SKBitmap RenderStretched(string content, float scaleX, float scaleY)
+    {
+        var data = Create(content, RmQREccLevel.M, RmQRVersion.R11x59);
+        return StretchedSymbol.Render(data.Width * 8, data.Height * 8, scaleX, scaleY, (canvas, area) => SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White));
     }
 
     [Test]
