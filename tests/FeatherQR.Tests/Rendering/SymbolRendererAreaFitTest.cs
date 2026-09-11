@@ -315,6 +315,29 @@ public class SymbolRendererAreaFitTest
     }
 
     /// <summary>
+    /// Finite edges can still span more than a float holds, and an infinite width breaks the fit.
+    /// </summary>
+    [Test]
+    [Arguments("width")]
+    [Arguments("height")]
+    public async Task Render_AreaSpanningMoreThanAFloat_Throws(string axis)
+    {
+        var area = axis == "width" ? new SKRect(float.MinValue, 0, float.MaxValue, 50) : new SKRect(0, float.MinValue, 50, float.MaxValue);
+        using var bitmap = new SKBitmap(100, 100);
+        using var canvas = new SKCanvas(bitmap);
+
+        foreach (var symbology in new[] { "qr", "microqr", "rmqr" })
+        {
+            foreach (var entry in new[] { "renderer", "extensionArea" })
+            {
+                await Assert.That(() => Draw(canvas, symbology, entry, area, SKColors.White)).Throws<ArgumentException>()
+                    .Because($"{symbology} through {entry}");
+            }
+        }
+        await Assert.That(() => SymbolRenderer.GetFinderPatternRect(StandardQr(), 0, area)).Throws<ArgumentException>();
+    }
+
+    /// <summary>
     /// A zero-sized area has one reading, nothing fits, and a canvas before layout or a collapsed
     /// panel produces it routinely, so it draws nothing rather than throwing from a paint callback.
     /// </summary>

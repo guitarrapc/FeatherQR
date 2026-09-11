@@ -11,7 +11,7 @@ namespace FeatherQR.SkiaSharp;
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
 /// </para>
 /// <para>
-/// Every symbology is fitted into the area at one uniform module scale and centered, the fit the image builders use (given an explicit canvas size, they also round the offset to whole pixels): a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square. The whole area gets the background color.
+/// Every symbology is fitted into the area at one uniform module scale and centered, using the same fit as the image builders (given an explicit canvas size, they also round the offset to whole pixels): a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square. The whole area gets the background color.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// An inverted area is refused rather than read as a mirror; for a mirrored symbol, scale the canvas by -1 about the area.
 /// </para>
@@ -73,7 +73,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -151,7 +151,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -226,7 +226,7 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,

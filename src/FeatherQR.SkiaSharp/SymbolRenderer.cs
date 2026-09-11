@@ -8,7 +8,7 @@ namespace FeatherQR.SkiaSharp;
 /// Use it when the image builders do not give you the control you need.
 /// </summary>
 /// <remarks>
-/// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, the fit the image builders use (given an explicit canvas size, they also round the offset to whole pixels): modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The background covers the whole area.
+/// The symbol is fitted into the area at one uniform module scale and centered, whatever the area's aspect ratio, using the same fit as the image builders (given an explicit canvas size, they also round the offset to whole pixels): modules stay square, because a symbol whose modules are not square stops being findable well before it stops being drawn. The background covers the whole area.
 /// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
 /// An inverted area is refused rather than read as a mirror; for a mirrored symbol (a transfer print, a sticker read through glass), scale the canvas by -1 about the area.
 /// </remarks>
@@ -34,7 +34,7 @@ public static class SymbolRenderer
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. A zero size is accepted and draws nothing.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
         SKCanvas canvas,
@@ -166,7 +166,7 @@ public static class SymbolRenderer
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. A zero size is accepted and draws nothing.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
         SKCanvas canvas,
@@ -243,7 +243,7 @@ public static class SymbolRenderer
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. A zero size is accepted and draws nothing.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
     public static void Render(
         SKCanvas canvas,
@@ -344,15 +344,16 @@ public static class SymbolRenderer
     /// </remarks>
     internal static void ValidateArea(SKRect area, string paramName)
     {
-        if (!IsFinite(area.Left) || !IsFinite(area.Top) || !IsFinite(area.Right) || !IsFinite(area.Bottom))
-            throw new ArgumentException("The area must have finite coordinates.", paramName);
+        // Finite edges can still be further apart than a float holds, and a finite width or height implies finite edges.
+        if (!IsFinite(area.Width) || !IsFinite(area.Height))
+            throw new ArgumentException("The area must have finite coordinates and size.", paramName);
         if (area.Width < 0 || area.Height < 0)
             throw new ArgumentException("The area must not be inverted: its width and height must be zero or more. To mirror the symbol, scale the canvas by -1 on that axis instead.", paramName);
     }
 
     private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
-    /// <summary>Relative slack for "already square": a few float steps at the area's coordinates, which at ordinary canvas coordinates is far below a visible fraction of a pixel.</summary>
+    /// <summary>Relative slack for "already square": eight to sixteen float steps at the area's largest coordinate. It scales with the coordinates because float precision does; a fixed slack would refuse squares far from the origin, where rounding alone moves an edge further.</summary>
     private const float SquareTolerance = 1e-6f;
 
     /// <summary>
@@ -364,7 +365,7 @@ public static class SymbolRenderer
     /// Module-based icons are validated against QR size and core occupancy at render time.
     /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
     /// </remarks>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate that is not finite.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code.</exception>
     public static (SKRect iconRect, SKRect borderRect) GetIconRects(QRCodeData data, SKRect area, IconData iconData)
@@ -484,7 +485,7 @@ public static class SymbolRenderer
     /// <returns>An SKRect representing the position and size of the specified finder pattern within the rendering area.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="patternIndex"/> is not 0, 1 or 2.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="renderArea"/> is inverted (a negative width or height) or has a coordinate that is not finite.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="renderArea"/> is inverted (a negative width or height) or has a coordinate or size that is not finite.</exception>
     public static SKRect GetFinderPatternRect(QRCodeData data, int patternIndex, SKRect renderArea)
     {
         if (data is null)
