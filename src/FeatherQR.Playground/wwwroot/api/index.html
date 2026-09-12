@@ -1925,7 +1925,7 @@
       </section>
       <section class="ns">
         <h2>namespace FeatherQR.SkiaSharp</h2>
-        <article class="type" id="FeatherQR.SkiaSharp.CircleFinderPatternShape" data-name="featherqr.skiasharp.circlefinderpatternshape" data-text="featherqr.skiasharp.circlefinderpatternshape public sealed class circlefinderpatternshape : finderpatternshape three nested ovals, circles on a square area.  field public static readonly circlefinderpatternshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.CircleFinderPatternShape" data-name="featherqr.skiasharp.circlefinderpatternshape" data-text="featherqr.skiasharp.circlefinderpatternshape public sealed class circlefinderpatternshape : finderpatternshape three nested ovals, circles on a square area.  field public static readonly circlefinderpatternshape default; a ready-made instance to use as-is.  property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.CircleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.CircleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">CircleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class CircleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">Three nested ovals, circles on a square area.</p>
@@ -1935,9 +1935,9 @@
               <pre class="sig"><code>public static readonly CircleFinderPatternShape Default;</code></pre>
               <p class="doc">A ready-made instance to use as-is.</p>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
+            <div class="member" data-text="property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public override bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">On, so the curves do not come out jagged.</p>
             </div>
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
@@ -1946,7 +1946,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.CircleModuleShape" data-name="featherqr.skiasharp.circlemoduleshape" data-text="featherqr.skiasharp.circlemoduleshape public sealed class circlemoduleshape : moduleshape draws modules as circles.  field public static readonly circlemoduleshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.CircleModuleShape" data-name="featherqr.skiasharp.circlemoduleshape" data-text="featherqr.skiasharp.circlemoduleshape public sealed class circlemoduleshape : moduleshape draws modules as circles.  field public static readonly circlemoduleshape default; a ready-made instance to use as-is.  property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.CircleModuleShape" aria-label="Link to FeatherQR.SkiaSharp.CircleModuleShape">#</a><span class="kind">class</span> <span class="name">CircleModuleShape</span></h3>
           <pre class="sig"><code>public sealed class CircleModuleShape : ModuleShape</code></pre>
           <p class="doc">Draws modules as circles.</p>
@@ -1956,9 +1956,9 @@
               <pre class="sig"><code>public static readonly CircleModuleShape Default;</code></pre>
               <p class="doc">A ready-made instance to use as-is.</p>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
+            <div class="member" data-text="property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public override bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">On, so the curves do not come out jagged.</p>
             </div>
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
@@ -1967,7 +1967,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.FinderPatternShape" data-name="featherqr.skiasharp.finderpatternshape" data-text="featherqr.skiasharp.finderpatternshape public abstract class finderpatternshape how the finder patterns, the large squares in the corners, are drawn: three of them on standard qr, one on micro qr and rmqr. a shape draws the dark modules only. the light ring between them is left undrawn, so whatever the renderer put beneath the finder pattern, the background at any alpha, shows through it: nothing is painted over and nothing is erased, which is what lets raster and svg output carry the same drawing. the ring has to survive as a continuous light run: a reader locates the symbol by scanning for the finder pattern's 1:1:3:1:1 run of dark and light, so a shape that fills it, a plain drawrect over the whole area included, renders a symbol nothing can scan. constructor protected finderpatternshape();  property public bool requiresantialiasing { get; } whether the shape needs antialiasing. it decides the finder pattern's antialiasing on its own, so false turns antialiasing off even where the module shape asked for it. return true for curves, false for straight edges.  method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws the dark modules of a finder pattern. the light ring is left undrawn. ">
+        <article class="type" id="FeatherQR.SkiaSharp.FinderPatternShape" data-name="featherqr.skiasharp.finderpatternshape" data-text="featherqr.skiasharp.finderpatternshape public abstract class finderpatternshape how the finder patterns, the large squares in the corners, are drawn: three of them on standard qr, one on micro qr and rmqr. a shape draws the dark modules only. the light ring between them is left undrawn, so whatever the renderer put beneath the finder pattern, the background at any alpha, shows through it: nothing is painted over and nothing is erased, which is what lets raster and svg output carry the same drawing. the ring has to survive as a continuous light run: a reader locates the symbol by scanning for the finder pattern's 1:1:3:1:1 run of dark and light, so a shape that fills it, a plain drawrect over the whole area included, renders a symbol nothing can scan. constructor protected finderpatternshape();  property public abstract bool requiresantialiasing { get; } whether the shape needs antialiasing. it decides the finder pattern's antialiasing on its own, so false turns antialiasing off even where the module shape asked for it. return true for curves, false for straight edges.  method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws the dark modules of a finder pattern. the light ring is left undrawn. ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.FinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.FinderPatternShape">#</a><span class="kind">class</span> <span class="name">FinderPatternShape</span></h3>
           <pre class="sig"><code>public abstract class FinderPatternShape</code></pre>
           <p class="doc">How the finder patterns, the large squares in the corners, are drawn: three of them on Standard QR, one on Micro QR and rMQR.</p>
@@ -1980,9 +1980,9 @@
               <h4><span class="kind">constructor</span> <span class="name">FinderPatternShape</span></h4>
               <pre class="sig"><code>protected FinderPatternShape();</code></pre>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } whether the shape needs antialiasing. it decides the finder pattern's antialiasing on its own, so false turns antialiasing off even where the module shape asked for it. return true for curves, false for straight edges. ">
+            <div class="member" data-text="property public abstract bool requiresantialiasing { get; } whether the shape needs antialiasing. it decides the finder pattern's antialiasing on its own, so false turns antialiasing off even where the module shape asked for it. return true for curves, false for straight edges. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public abstract bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">Whether the shape needs antialiasing. It decides the finder pattern's antialiasing on its own, so false turns antialiasing off even where the module shape asked for it. Return true for curves, false for straight edges.</p>
             </div>
             <div class="member" data-text="method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws the dark modules of a finder pattern. the light ring is left undrawn. ">
@@ -2379,7 +2379,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.ModuleShape" data-name="featherqr.skiasharp.moduleshape" data-text="featherqr.skiasharp.moduleshape public abstract class moduleshape how the individual modules of a symbol are drawn.  constructor protected moduleshape();  property public bool requiresantialiasing { get; } whether the shape needs antialiasing. return true for curves, false for straight edges.  method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws one module. ">
+        <article class="type" id="FeatherQR.SkiaSharp.ModuleShape" data-name="featherqr.skiasharp.moduleshape" data-text="featherqr.skiasharp.moduleshape public abstract class moduleshape how the individual modules of a symbol are drawn.  constructor protected moduleshape();  property public abstract bool requiresantialiasing { get; } whether the shape needs antialiasing. return true for curves, false for straight edges.  method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws one module. ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.ModuleShape" aria-label="Link to FeatherQR.SkiaSharp.ModuleShape">#</a><span class="kind">class</span> <span class="name">ModuleShape</span></h3>
           <pre class="sig"><code>public abstract class ModuleShape</code></pre>
           <p class="doc">How the individual modules of a symbol are drawn.</p>
@@ -2388,9 +2388,9 @@
               <h4><span class="kind">constructor</span> <span class="name">ModuleShape</span></h4>
               <pre class="sig"><code>protected ModuleShape();</code></pre>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } whether the shape needs antialiasing. return true for curves, false for straight edges. ">
+            <div class="member" data-text="property public abstract bool requiresantialiasing { get; } whether the shape needs antialiasing. return true for curves, false for straight edges. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public abstract bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">Whether the shape needs antialiasing. Return true for curves, false for straight edges.</p>
             </div>
             <div class="member" data-text="method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws one module. ">
@@ -2574,7 +2574,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RectangleFinderPatternShape" data-name="featherqr.skiasharp.rectanglefinderpatternshape" data-text="featherqr.skiasharp.rectanglefinderpatternshape public sealed class rectanglefinderpatternshape : finderpatternshape the standard finder pattern: three nested squares.  field public static readonly rectanglefinderpatternshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } off: straight edges render cleanly without it.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RectangleFinderPatternShape" data-name="featherqr.skiasharp.rectanglefinderpatternshape" data-text="featherqr.skiasharp.rectanglefinderpatternshape public sealed class rectanglefinderpatternshape : finderpatternshape the standard finder pattern: three nested squares.  field public static readonly rectanglefinderpatternshape default; a ready-made instance to use as-is.  property public override bool requiresantialiasing { get; } off: straight edges render cleanly without it.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RectangleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RectangleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RectangleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RectangleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">The standard finder pattern: three nested squares.</p>
@@ -2584,9 +2584,9 @@
               <pre class="sig"><code>public static readonly RectangleFinderPatternShape Default;</code></pre>
               <p class="doc">A ready-made instance to use as-is.</p>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } off: straight edges render cleanly without it. ">
+            <div class="member" data-text="property public override bool requiresantialiasing { get; } off: straight edges render cleanly without it. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public override bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">Off: straight edges render cleanly without it.</p>
             </div>
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
@@ -2595,7 +2595,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RectangleModuleShape" data-name="featherqr.skiasharp.rectanglemoduleshape" data-text="featherqr.skiasharp.rectanglemoduleshape public sealed class rectanglemoduleshape : moduleshape draws modules as squares, the standard look.  field public static readonly rectanglemoduleshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } off, so neighbouring modules do not show a gray seam between them.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RectangleModuleShape" data-name="featherqr.skiasharp.rectanglemoduleshape" data-text="featherqr.skiasharp.rectanglemoduleshape public sealed class rectanglemoduleshape : moduleshape draws modules as squares, the standard look.  field public static readonly rectanglemoduleshape default; a ready-made instance to use as-is.  property public override bool requiresantialiasing { get; } off, so neighbouring modules do not show a gray seam between them.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RectangleModuleShape" aria-label="Link to FeatherQR.SkiaSharp.RectangleModuleShape">#</a><span class="kind">class</span> <span class="name">RectangleModuleShape</span></h3>
           <pre class="sig"><code>public sealed class RectangleModuleShape : ModuleShape</code></pre>
           <p class="doc">Draws modules as squares, the standard look.</p>
@@ -2605,9 +2605,9 @@
               <pre class="sig"><code>public static readonly RectangleModuleShape Default;</code></pre>
               <p class="doc">A ready-made instance to use as-is.</p>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } off, so neighbouring modules do not show a gray seam between them. ">
+            <div class="member" data-text="property public override bool requiresantialiasing { get; } off, so neighbouring modules do not show a gray seam between them. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public override bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">Off, so neighbouring modules do not show a gray seam between them.</p>
             </div>
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
@@ -2777,7 +2777,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape public sealed class roundedrectanglecirclefinderpatternshape : finderpatternshape two nested rounded rectangles around an oval, a circle on a square area.  field public static readonly roundedrectanglecirclefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglecirclefinderpatternshape(float cornerradiuspercent = 0.3); creates the shape with a corner radius of your own.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape public sealed class roundedrectanglecirclefinderpatternshape : finderpatternshape two nested rounded rectangles around an oval, a circle on a square area.  field public static readonly roundedrectanglecirclefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglecirclefinderpatternshape(float cornerradiuspercent = 0.3); creates the shape with a corner radius of your own.  property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RoundedRectangleCircleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">Two nested rounded rectangles around an oval, a circle on a square area.</p>
@@ -2792,9 +2792,9 @@
               <pre class="sig"><code>public RoundedRectangleCircleFinderPatternShape(float cornerRadiusPercent = 0.3);</code></pre>
               <p class="doc">Creates the shape with a corner radius of your own.</p>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
+            <div class="member" data-text="property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public override bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">On, so the curves do not come out jagged.</p>
             </div>
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
@@ -2803,7 +2803,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglefinderpatternshape public sealed class roundedrectanglefinderpatternshape : finderpatternshape three nested rounded rectangles.  field public static readonly roundedrectanglefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglefinderpatternshape(float cornerradiuspercent = 0.2); creates the shape with a corner radius of your own.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglefinderpatternshape public sealed class roundedrectanglefinderpatternshape : finderpatternshape three nested rounded rectangles.  field public static readonly roundedrectanglefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglefinderpatternshape(float cornerradiuspercent = 0.2); creates the shape with a corner radius of your own.  property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RoundedRectangleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">Three nested rounded rectangles.</p>
@@ -2818,9 +2818,9 @@
               <pre class="sig"><code>public RoundedRectangleFinderPatternShape(float cornerRadiusPercent = 0.2);</code></pre>
               <p class="doc">Creates the shape with a corner radius of your own.</p>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
+            <div class="member" data-text="property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public override bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">On, so the curves do not come out jagged.</p>
             </div>
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
@@ -2829,7 +2829,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleModuleShape" data-name="featherqr.skiasharp.roundedrectanglemoduleshape" data-text="featherqr.skiasharp.roundedrectanglemoduleshape public sealed class roundedrectanglemoduleshape : moduleshape draws modules as rounded squares.  field public static readonly roundedrectanglemoduleshape default; a ready-made instance to use as-is.  constructor public roundedrectanglemoduleshape(float cornerradiuspercent = 0.3); creates the shape with a corner radius of your own.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleModuleShape" data-name="featherqr.skiasharp.roundedrectanglemoduleshape" data-text="featherqr.skiasharp.roundedrectanglemoduleshape public sealed class roundedrectanglemoduleshape : moduleshape draws modules as rounded squares.  field public static readonly roundedrectanglemoduleshape default; a ready-made instance to use as-is.  constructor public roundedrectanglemoduleshape(float cornerradiuspercent = 0.3); creates the shape with a corner radius of your own.  property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RoundedRectangleModuleShape" aria-label="Link to FeatherQR.SkiaSharp.RoundedRectangleModuleShape">#</a><span class="kind">class</span> <span class="name">RoundedRectangleModuleShape</span></h3>
           <pre class="sig"><code>public sealed class RoundedRectangleModuleShape : ModuleShape</code></pre>
           <p class="doc">Draws modules as rounded squares.</p>
@@ -2844,9 +2844,9 @@
               <pre class="sig"><code>public RoundedRectangleModuleShape(float cornerRadiusPercent = 0.3);</code></pre>
               <p class="doc">Creates the shape with a corner radius of your own.</p>
             </div>
-            <div class="member" data-text="property public bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
+            <div class="member" data-text="property public override bool requiresantialiasing { get; } on, so the curves do not come out jagged. ">
               <h4><span class="kind">property</span> <span class="name">RequiresAntialiasing</span></h4>
-              <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
+              <pre class="sig"><code>public override bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">On, so the curves do not come out jagged.</p>
             </div>
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">

@@ -464,7 +464,7 @@ IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId, stri
 
         var anchor = readable ? getter! : setter!;
         var name = property.GetIndexParameters().Length > 0 ? $"this[{Parameters(anchor)}]" : property.Name;
-        lines.Add((2, property.GetIndexParameters().Length > 0 ? "indexer" : "property", name, Line(property, Access(anchor.IsPublic), anchor.IsStatic ? "static" : null, null,
+        lines.Add((2, property.GetIndexParameters().Length > 0 ? "indexer" : "property", name, Line(property, Access(anchor.IsPublic), Modifier(anchor), null,
             TypeName(property.PropertyType, PropertyNullability(property)), $"{name} {accessors}"), DocIdOfProperty(property), SourceHref(anchor)));
     }
 
@@ -478,11 +478,7 @@ IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId, stri
     foreach (var method in type.GetMethods(Scope))
     {
         if (!Visible(method.IsPublic, method.IsFamily, method.IsFamilyOrAssembly) || Generated(method) || IsAccessor(method)) continue;
-        var modifier = method.IsStatic ? "static"
-            : method.IsAbstract ? "abstract"
-            : method.GetBaseDefinition() != method ? "override"
-            : method.IsVirtual && !method.IsFinal ? "virtual"
-            : null;
+        var modifier = Modifier(method);
         var name = $"{method.Name}{GenericSuffix(method.GetGenericArguments())}({Parameters(method)})";
         lines.Add((4, method.Name.StartsWith("op_", StringComparison.Ordinal) ? "operator" : "method", method.Name, Line(method, Access(method.IsPublic), modifier, null,
             TypeName(method.ReturnType, ParameterNullability(method.ReturnParameter)), name) + ";", DocIdOfMethod(method), SourceHref(method)));
@@ -496,6 +492,14 @@ string Line(MemberInfo member, string access, string? modifier, string? readOnly
     var parts = new[] { access, modifier, readOnly, returnType, name }.Where(p => !string.IsNullOrEmpty(p));
     return (IsObsolete(member) ? "[Obsolete] " : "") + string.Join(" ", parts);
 }
+
+// Shared by methods and by a property's accessor, and matching check_public_api's own helper: the
+// two tools are expected to print the same text, and a property turning abstract is a break.
+static string? Modifier(MethodInfo accessor) => accessor.IsStatic ? "static"
+    : accessor.IsAbstract ? "abstract"
+    : accessor.GetBaseDefinition() != accessor ? "override"
+    : accessor.IsVirtual && !accessor.IsFinal ? "virtual"
+    : null;
 
 string TypeKind(Type type) => type.IsEnum ? "enum"
     : type.IsInterface ? "interface"
