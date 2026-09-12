@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The square symbologies used to stretch the symbol across a non-square canvas. Module centres stayed correct and nothing threw, so what broke was detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning — measured, failures start around 1.25:1 and nothing survives past 1.8:1 — so these cases assert decodability well inside the band rather than hunting for the edge.
+/// The square symbologies used to stretch the symbol across a non-square canvas. Module centres stayed correct and nothing threw, so what broke was detection: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio holds on one axis only once the cells stop being square. Where that starts is not a constant worth pinning — measured on Standard QR with this library and ZXing.Net, failures start around 1.25:1 and neither reads anything past 1.8:1 — so these cases assert decodability well inside the band rather than hunting for the edge.
 /// </para>
 /// <para>
 /// Aspect ratio, not size: <see cref="SymbolImageBuilderBase{TSelf}.WithSize(int, int)"/> has no lower bound, and a canvas too small for the symbol gives it sub-pixel modules that nothing reads. Every canvas here is large enough that the module scale is not the variable under test.

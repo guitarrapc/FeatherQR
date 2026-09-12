@@ -7,25 +7,26 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each method clears the whole canvas before drawing, so anything already on it is lost.
+/// Each method clears the whole canvas before drawing, so anything already on it is lost. Every argument is checked before that clear, so a refused call leaves the canvas as it was.
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
 /// </para>
 /// <para>
-/// The area is taken literally, so a rectangle that is not square gives the square symbologies modules that are not square, and readers stop finding the symbol well before it stops being drawn: a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only. Measured, failures start around 1.25:1 and nothing survives past 1.8:1, so there is no safe ratio to aim at.
-/// Pass a square area unless you are deliberately compensating for an output device whose pixels are not square; the image builders fit the symbol for you. rMQR fits its own rectangle into the area, since its aspect ratio comes from the version rather than the caller.
+/// Every symbology is fitted into the area at one uniform module scale and centered, using the same fit as the image builders (given an explicit canvas size, they also round the offset to whole pixels): a finder pattern is located by its 1:1:3:1:1 run along a line, and that ratio survives on one axis only once the modules stop being square. The whole area gets the background color.
+/// To pre-distort a symbol for an output device whose dots are not square, scale the canvas and draw into a square area.
+/// An inverted area is refused rather than read as a mirror; for a mirrored symbol, scale the canvas by -1 about the area.
 /// </para>
 /// </remarks>
 public static class SKCanvasExtensions
 {
     /// <summary>
-    /// Draws a QR code filling an area of this size, with the default colors.
+    /// Draws a QR code into an area of this size, with the default colors.
     /// </summary>
-    /// <remarks>The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="QRCodeImageBuilder"/>, which fits the symbol for you.</remarks>
+    /// <remarks>The QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.</remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The QR code to draw.</param>
     /// <param name="width">Width of the area to draw into.</param>
     /// <param name="height">Height of the area to draw into.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
@@ -33,6 +34,9 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, an <paramref name="iconData"/> size, border or occupancy limit is out of range, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code. Checked whatever the area's size, like the icon's other settings.</exception>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -47,6 +51,16 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // The canvas and the symbol are reported before the size, as they are on the area overloads.
+        if (canvas is null)
+            throw new ArgumentNullException(nameof(canvas));
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        if (width < 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
+        if (height < 0)
+            throw new ArgumentOutOfRangeException(nameof(height), "Height must be zero or more.");
+
         var area = SKRect.Create(0, 0, width, height);
         canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -54,11 +68,11 @@ public static class SKCanvasExtensions
     /// <summary>
     /// Draws a QR code into an area of the canvas.
     /// </summary>
-    /// <remarks>The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="QRCodeImageBuilder"/>, which fits the symbol for you.</remarks>
+    /// <remarks>The QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.</remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The QR code to draw.</param>
     /// <param name="area">Where to draw it.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the QR code. White when omitted.</param>
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
@@ -66,6 +80,10 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, an <paramref name="iconData"/> size, border or occupancy limit is out of range, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code. Checked whatever the area's size, like the icon's other settings.</exception>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -79,28 +97,34 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
+        if (iconData is not null)
+            SymbolRenderer.ValidateIcon(data, iconData);
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
-    /// Draws a Micro QR code filling an area of this size, with the default colors.
+    /// Draws a Micro QR code into an area of this size, with the default colors.
     /// </summary>
     /// <remarks>
-    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="MicroQRCodeImageBuilder"/>, which fits the symbol for you.
+    /// The Micro QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.
     /// Micro QR does not offer the Standard QR icon overlay (no error-correction headroom for overlays); its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The Micro QR code to draw.</param>
     /// <param name="width">Width of the area to draw into.</param>
     /// <param name="height">Height of the area to draw into.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, or <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -114,6 +138,16 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // The canvas and the symbol are reported before the size, as they are on the area overloads.
+        if (canvas is null)
+            throw new ArgumentNullException(nameof(canvas));
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        if (width < 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
+        if (height < 0)
+            throw new ArgumentOutOfRangeException(nameof(height), "Height must be zero or more.");
+
         var area = SKRect.Create(0, 0, width, height);
         canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -122,19 +156,22 @@ public static class SKCanvasExtensions
     /// Draws a Micro QR code into an area of the canvas.
     /// </summary>
     /// <remarks>
-    /// The area is taken literally, so a non-square one gives the symbol non-square modules and readers stop finding it. Pass a square area, or use <see cref="MicroQRCodeImageBuilder"/>, which fits the symbol for you.
+    /// The Micro QR code is drawn at a uniform module scale and centered, never stretched, and the whole area gets the background color.
     /// Micro QR does not offer the Standard QR icon overlay (no error-correction headroom for overlays); its one finder pattern takes a shape like any other symbology.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The Micro QR code to draw.</param>
     /// <param name="area">Where to draw it.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -147,6 +184,8 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -161,13 +200,15 @@ public static class SKCanvasExtensions
     /// <param name="data">The rMQR code to draw.</param>
     /// <param name="width">Width of the area to draw into.</param>
     /// <param name="height">Height of the area to draw into.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, or <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -181,6 +222,16 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // The canvas and the symbol are reported before the size, as they are on the area overloads.
+        if (canvas is null)
+            throw new ArgumentNullException(nameof(canvas));
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        if (width < 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
+        if (height < 0)
+            throw new ArgumentOutOfRangeException(nameof(height), "Height must be zero or more.");
+
         var area = SKRect.Create(0, 0, width, height);
         canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -194,13 +245,16 @@ public static class SKCanvasExtensions
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="data">The rMQR code to draw.</param>
     /// <param name="area">Where to draw it.</param>
-    /// <param name="clearColor">Clears the whole canvas before drawing. Transparent when omitted, unlike the image builders, whose padding falls back to the background color.</param>
+    /// <param name="clearColor">Clears the whole canvas before drawing, transparent when omitted. The background is then painted over the whole area, bands beside the symbol included, so the clear color shows outside the area and, inside it, only through a background that is not opaque; an image builder instead pads those bands with its clear color when one is set.</param>
     /// <param name="codeColor">The dark modules. Black when omitted.</param>
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -213,6 +267,8 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }

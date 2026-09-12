@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas fits the symbol instead of stretching it, and padding takes the background colour rather than transparency |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, and padding takes the background colour rather than transparency |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -15,7 +15,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Encoding and decoding behavior is unchanged, and most of the work is in `using` lines and, if you want it, the package reference.
 
-Rendering is where behavior changed. Three sections below are behavior changes rather than renames, and two of them alter images you already ship: [module styling no longer reaches the finder patterns](#module-styling-no-longer-reaches-the-finder-patterns), [`WithSize(w, h)` fits the symbol instead of stretching it](#withsizew-h-fits-the-symbol-instead-of-stretching-it), and [padding around the symbol defaults to the background color](#padding-around-the-symbol-defaults-to-the-background-color). Neither of the first two turns a readable symbol into an unreadable one at any sensible size, but do not read that as "nothing to check". Below roughly 1.2:1 the stretched output was readable too, so those images change without anything having been broken. And where the modules were already down to about two pixels, fitting can cost the resolution the stretch had put on the long axis, so a handful of very small non-square canvases decoded before and do not now; the fix for those is a bigger canvas, which they needed anyway. The third can change an image that was fine at any size, and is the one worth checking if you composite a QR onto something else.
+Rendering is where behavior changed. Four sections below are behavior changes rather than renames, and all of them can alter images you already ship: [module styling no longer reaches the finder patterns](#module-styling-no-longer-reaches-the-finder-patterns), [`WithSize(w, h)` fits the symbol instead of stretching it](#withsizew-h-fits-the-symbol-instead-of-stretching-it), [`SymbolRenderer.Render` and `SKCanvas.Render` fit the symbol into the area](#symbolrendererrender-and-skcanvasrender-fit-the-symbol-into-the-area), and [padding around the symbol defaults to the background color](#padding-around-the-symbol-defaults-to-the-background-color). None of the first three turns a readable symbol into an unreadable one at any sensible size, but do not read that as "nothing to check". Below roughly 1.2:1 the stretched output was readable too, so those images change without anything having been broken. And where the modules were already down to about two pixels, fitting can cost the resolution the stretch had put on the long axis, so a handful of very small non-square canvases decoded before and do not now; the fix for those is a bigger canvas, which they needed anyway. The fourth can change an image that was fine at any size, and is the one worth checking if you composite a QR onto something else. The third also refuses arguments that used to be accepted, so calls that compiled and ran can now throw: an inverted area, a negative width or height, a `moduleSizePercent` of `NaN`, a null canvas, and a `GradientDirection` outside the enum.
 
 ### Packages
 
@@ -357,13 +357,13 @@ new QRCodeImageBuilder("https://example.com")
 | 1.x through 2.0.0-preview.2 | 2.0.0 |
 |---|---|
 | <img src="images/withsize-stretched.png" width="380" alt="A QR code stretched to 900x450"/> | <img src="images/withsize-fitted.png" width="380" alt="The same QR code fitted into 900x450"/> |
-| No reader finds it. Not FeatherQR's, not ZXing's, not a phone's | Scans |
+| Stretched to 900x450. FeatherQR and ZXing.Net miss it; zxing-cpp reads it | 450x450, centered with 225 px of padding each side. Scans |
 
 Module centres stayed correct and nothing threw, which is what made it hard to notice: the data was intact and the image looked like a QR code. What broke was detection. A decoder finds the symbol by scanning for the 1:1:3:1:1 run of dark and light through a finder pattern, and that ratio only survives on one axis once the cells are rectangular.
 
-There is no safe ratio to quote, and that is the finding rather than a hedge. Sweeping several payloads, four stylings and both orientations, failures appear from about **1.25:1** and nothing survives past about **1.8:1**, but where a given symbol lands in between moves with the payload, with the styling and with which axis is squeezed, and the two readers disagree by direction: on wide renders this library reads many that ZXing does not, on tall ones ZXing reads many that this library does not. What is reliable is that the failure starts early, varies with content you do not control, and is never announced.
+There is no safe ratio to quote, and that is the finding rather than a hedge. Sweeping several payloads, four stylings and both orientations through this library and ZXing.Net, failures appear from about **1.25:1** and neither reads anything past about **1.8:1** (zxing-cpp, which the sweep did not include, reads the 2:1 image above), but where a given symbol lands in between moves with the payload, with the styling and with which axis is squeezed, and the two readers disagree by direction: on wide renders this library reads many that ZXing does not, on tall ones ZXing reads many that this library does not. What is reliable is that the failure starts early, varies with content you do not control, and is never announced.
 
-The symbol is now fitted into the canvas with one uniform module scale and centered, which is what the rectangular rMQR builder always did. Square canvases are unaffected, and so is the geometry of `WithModulePixelSize` and of the static helpers, none of which ever took two different values. (`WithModulePixelSize` does change in the other way described in the next section: its padding.)
+The symbol is now fitted into the canvas with one uniform module scale and centered, which is what the rectangular rMQR builder always did. Square canvases are unaffected, and so is the geometry of `WithModulePixelSize` and of the static helpers, none of which ever took two different values. (`WithModulePixelSize` does change in the other way described in [the padding section](#padding-around-the-symbol-defaults-to-the-background-color).)
 
 If you were passing different values to get a code that filled a non-square frame, you were not getting one. Draw the code into the part of the frame it belongs in — and note that `SKCanvas.Render` clears the whole canvas itself, so hand it the colour rather than clearing first:
 
@@ -376,6 +376,40 @@ using var image = surface.Snapshot();
 using var png = image.Encode(SKEncodedImageFormat.Png, 100);
 File.WriteAllBytes("banner.png", png.ToArray());
 ```
+
+### `SymbolRenderer.Render` and `SKCanvas.Render` fit the symbol into the area
+
+**Behavior change.** The low-level renderer took the area literally for Standard QR and Micro QR, so a non-square area stretched the symbol exactly as `WithSize` did, with the same result: modules that are not square, found or missed depending on the aspect ratio and the reader, returned without complaint. It now follows the rule the builders and rMQR's overload already did. The symbol is drawn at one uniform module scale, centered in the area, and the whole area gets the background colour:
+
+```csharp
+// A 200x300 slot for the code on a card.
+var slot = SKRect.Create(40, 40, 200, 300);
+SymbolRenderer.Render(canvas, slot, data, SKColors.Black, SKColors.White);
+```
+
+| 1.x through 2.0.0-preview.2 | 2.0.0 |
+|---|---|
+| <img src="images/renderer-stretched.png" width="280" alt="A QR code stretched to fill a tall slot on a card"/> | <img src="images/renderer-fitted.png" width="280" alt="The same QR code centered in the slot with square modules"/> |
+| Stretched to 200x300. FeatherQR misses it; ZXing.Net (with rotation and hard mode) and zxing-cpp read it | 200x200 at (40, 90), with background in the 200x50 above and below. Scans |
+
+The same goes for the `SKCanvas.Render` extensions: `canvas.Render(data, 900, 450, …)` now draws a 450x450 symbol at (225, 0), which is what `WithSize(900, 450)` produces in the section above when no clear colour is set; the extensions always paint the background over the bands beside the symbol, where a builder pads them with its clear colour. A square area with a size draws exactly the pixels it did before. `SymbolRenderer.GetFinderPatternRect` and `SymbolRenderer.GetIconRects` fit the same way, so hand them the area you passed to `Render` and they point at what was drawn.
+
+If you stretched on purpose, to pre-distort a symbol for a printer or marker whose dots are not square, say it with the canvas instead of the area. With plain modules and finders in a solid colour this reproduces the old output pixel for pixel. Anything styled (shaped modules or finders, gradients, icons) is drawn in the square and stretched with it, so it can come out differently from what the old fill drew:
+
+```csharp
+canvas.Scale(2f, 1f);   // the device's dot-pitch ratio
+canvas.Render(data, 450, 450, SKColors.White, SKColors.Black, SKColors.White);
+```
+
+An inverted area, one with a negative width or height, now throws `ArgumentException`, as does a negative size passed to the `SKCanvas.Render(data, width, height, …)` overloads (`ArgumentOutOfRangeException`). An inverted area used to draw a mirrored Standard QR or Micro QR, and rMQR drew partly outside an area inverted vertically. For a mirrored symbol, such as a transfer print or a sticker read through glass, flip the canvas about the area:
+
+```csharp
+canvas.Translate(area.Left + area.Right, 0);
+canvas.Scale(-1f, 1f);
+SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White);
+```
+
+Four more arguments are refused where they used to be accepted or reported late. A zero size draws nothing at all now, where it used to draw a percent-sized icon's border, a few pixels wide, around an icon with no size; the `SKCanvas.Render` extensions still clear the canvas at that size, as they do at any other. A `moduleSizePercent` of `NaN` throws `ArgumentOutOfRangeException`, where it used to pass the range check and draw the finder patterns with no data modules. A null canvas throws `ArgumentNullException` instead of `NullReferenceException`. A `GradientDirection` outside the enum throws `ArgumentOutOfRangeException` naming `gradientOptions` before anything is drawn, where it used to name `direction` after the canvas had been cleared and the background painted. An icon that does not fit is still refused whatever the area's size, a zero size included, and the extensions now refuse it before they clear rather than after. `SymbolRenderer.GetFinderPatternRect` and `SymbolRenderer.GetIconRects` refuse an inverted or non-finite area the same way, where they used to answer with negative or `NaN` rectangles.
 
 ### Padding around the symbol defaults to the background color
 
@@ -415,7 +449,7 @@ This reaches all three symbologies. rMQR's `WithSize` padding was transparent by
 
 One subtlety if you set `clearColor` explicitly: it is a *canvas* colour, painted under the symbol as well as around it, not only a pad colour. With an opaque background you cannot tell the difference, but with a translucent one you can — writing `clearColor` equal to your background lays that colour down twice inside the symbol box and once outside it, so the box comes out denser than the pad. Leave `clearColor` unset to get the padding-matches-background behaviour; set it when you want a different canvas.
 
-The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched render is the real old output, drawn through the low-level `SKCanvas.Render` that still fills the area it is given.
+The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched renders are the real old output, reproduced with a canvas scale over a square area, which gives the pixels the old fill did.
 
 ## 1.2.0
 

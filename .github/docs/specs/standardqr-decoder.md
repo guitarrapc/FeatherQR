@@ -56,7 +56,7 @@ The following are detected and reported; they are never misdecoded:
 
 ### Input envelope
 
-Image support targets clean inputs: screenshots, rendered QR codes, scans, with arbitrary rotation, mirroring, reflectance reversal (light-on-dark, one inverted retry), and mild perspective.
+Image support targets clean inputs: screenshots, rendered QR codes, scans, with arbitrary rotation, mirroring, reflectance reversal (light-on-dark, one inverted retry), and mild perspective. Non-square modules, from thermal printers and laser markers, decode within the envelope shared with the other symbologies ([qrcode-symbologies.md](qrcode-symbologies.md)).
 
 Measured keystone envelope (Tier 2):
 

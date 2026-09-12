@@ -209,7 +209,7 @@ See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) ex
 
 ### SymbolRenderer (Advanced)
 
-`SymbolRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics.
+`SymbolRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics. The symbol is centered in `area` with square modules, and the background fills the rest of `area`.
 
 ```csharp
 using SkiaSharp;
@@ -217,7 +217,11 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
+using var surface = SKSurface.Create(new SKImageInfo(400, 400));
 var canvas = surface.Canvas;
+
+// A square area is filled edge to edge; a wider or taller one gets the symbol centered in it.
+var area = SKRect.Create(50, 50, 300, 300);
 SymbolRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 ```
 

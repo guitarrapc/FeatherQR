@@ -180,9 +180,10 @@ public class StyledSymbolDecodabilityTest
 
     /// <summary>
     /// A decorative finder rounds or cuts its own corner modules, so their centres are fair game;
-    /// what it must never do is reach outside its seven-by-seven box. That is the half of the
-    /// non-square defect that corrupted data: the light ring, sized from the width alone, ran past
-    /// the bottom edge of a wide finder and over the modules below it.
+    /// what it must never do is reach outside its seven-by-seven box. On a wide canvas the light
+    /// ring once ran past the bottom edge of a stretched finder and over the modules below it.
+    /// The builder now fits the symbol, so the finder here is square; the per-axis drawing that
+    /// fixed the overrun is pinned directly by <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
     [Arguments("rectangle")]
@@ -215,9 +216,11 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// The aspect ratios a symbol still decodes at must not depend on whether it is styled. At
-    /// 900x820 the plain render decodes; before the finder was drawn per axis the styled one at
-    /// the same size did not, which is the user-visible half of the same defect.
+    /// Whether a symbol decodes must not depend on whether it is styled. These canvases were once
+    /// mild stretches, where at 900x820 the styled render failed while the plain one decoded; the
+    /// builder now fits the symbol, so they are square renders at slightly different sizes, and the
+    /// per-axis finder drawing that fixed the stretch is pinned by
+    /// <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
     [Arguments(900, 900)]
@@ -229,7 +232,7 @@ public class StyledSymbolDecodabilityTest
 
         using var plain = new QRCodeImageBuilder(data).WithSize(width, height).WithColors(SKColors.Black, SKColors.White).ToBitmap();
         if (!QRCodeImageDecoder.TryDecode(plain, out _, out _))
-            return; // Outside the decoder's aspect envelope either way; nothing to compare.
+            return; // The plain render does not decode either; nothing to compare.
 
         using var styled = new QRCodeImageBuilder(data)
             .WithSize(width, height)
@@ -367,10 +370,9 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// The circle-based finders are drawn as ovals inscribed in the ring rects, not as circles
-    /// sized from the shorter axis. On a square area the two are the same pixels, so only a
-    /// non-square one can tell them apart: a circle sized from the short axis under-draws along
-    /// the long one and the symbol stops decoding well before the grid-following oval does.
+    /// Every decorative finder decodes in a wide canvas. The builder fits the symbol, so the
+    /// finder is square here; whether the circle-based ones follow a non-square grid, which only a
+    /// direct call can ask of them now, is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
     [Arguments("rectangle")]
@@ -389,6 +391,54 @@ public class StyledSymbolDecodabilityTest
 
         await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out _, out var info)).IsTrue()
             .Because($"status={info.Status}");
+    }
+
+    /// <summary>
+    /// Drawn straight into a non-square rect, which a caller can still do, every finder keeps its
+    /// rings on that rect's own seven-by-seven grid and inside it. Across the middle row and the
+    /// middle column the cells read dark, light, three dark, light, dark whatever the shape; a ring
+    /// sized from the shorter side would leave the long axis's ring cells light, and one sized from
+    /// the longer side would spill past the short edges.
+    /// </summary>
+    [Test]
+    [Arguments("rectangle", 20, 10)]
+    [Arguments("rectangle", 10, 20)]
+    [Arguments("circle", 20, 10)]
+    [Arguments("circle", 10, 20)]
+    [Arguments("rounded", 20, 10)]
+    [Arguments("rounded", 10, 20)]
+    [Arguments("roundedCircle", 20, 10)]
+    [Arguments("roundedCircle", 10, 20)]
+    public async Task DecorativeFinder_NonSquareRect_RingsFollowTheGrid(string finder, int cellWidth, int cellHeight)
+    {
+        var rect = SKRect.Create(10, 10, 7 * cellWidth, 7 * cellHeight);
+        using var bitmap = new SKBitmap((int)rect.Right + 10, (int)rect.Bottom + 10);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.Red);
+            using var dark = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+            using var light = new SKPaint { Color = SKColors.White, IsAntialias = true };
+            FinderShapeOf(finder).Draw(canvas, rect, dark, light);
+        }
+
+        bool[] ring = [true, false, true, true, true, false, true];
+        for (var i = 0; i < 7; i++)
+        {
+            var alongRow = bitmap.GetPixel((int)(rect.Left + (i + 0.5f) * cellWidth), (int)(rect.Top + 3.5f * cellHeight));
+            var alongColumn = bitmap.GetPixel((int)(rect.Left + 3.5f * cellWidth), (int)(rect.Top + (i + 0.5f) * cellHeight));
+            await Assert.That(alongRow.Red < 128).IsEqualTo(ring[i]).Because($"{finder}, middle row, cell {i}: {alongRow}");
+            await Assert.That(alongColumn.Red < 128).IsEqualTo(ring[i]).Because($"{finder}, middle column, cell {i}: {alongColumn}");
+        }
+
+        var outside = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                if (!rect.Contains(x + 0.5f, y + 0.5f) && bitmap.GetPixel(x, y) != SKColors.Red) outside++;
+            }
+        }
+        await Assert.That(outside).IsEqualTo(0).Because($"{finder} must not draw outside its rect");
     }
 
     /// <summary>

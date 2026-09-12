@@ -100,6 +100,47 @@ public class QRCodeDecoderImageTest
         await Assert.That(decoded).IsEqualTo(content);
     }
 
+    /// <summary>
+    /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
+    /// not square, so it must keep the finder's horizontal and vertical module scales apart. Up to
+    /// about 1.38:1 every right-angle rotation decodes; this is 1.25:1, 8 x 10 px.
+    /// </summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(90)]
+    [Arguments(180)]
+    [Arguments(270)]
+    public async Task Decode_NonSquareModules(int degrees)
+    {
+        const string content = "https://example.com";
+        using var rendered = RenderStretchedQr(content, scaleX: 1f, scaleY: 1.25f);
+        var (across, down) = StretchedSymbol.FinderStoneRuns(rendered);
+        await Assert.That((float)down / across).IsEqualTo(1.25f).Within(0.05f).Because($"finder stone {across}x{down}");
+        using var bitmap = RotateRightAngle(rendered, degrees);
+
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"degrees={degrees}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// From about 1.4:1 the decoder reads modules wider than tall, to about 1.65:1, but not modules
+    /// taller than wide. This pins the half it supports, at 1.5:1 (12 x 8 px), upright and upside down.
+    /// </summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(180)]
+    public async Task Decode_NonSquareModules_WiderThanTall(int degrees)
+    {
+        const string content = "https://example.com";
+        using var rendered = RenderStretchedQr(content, scaleX: 1.5f, scaleY: 1f);
+        var (across, down) = StretchedSymbol.FinderStoneRuns(rendered);
+        await Assert.That((float)across / down).IsEqualTo(1.5f).Within(0.05f).Because($"finder stone {across}x{down}");
+        using var bitmap = RotateRightAngle(rendered, degrees);
+
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"degrees={degrees}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
     [Test]
     [Arguments(5)]
     [Arguments(-7)]
@@ -255,6 +296,26 @@ public class QRCodeDecoderImageTest
         SymbolRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.Black, SKColors.White);
         canvas.Flush();
         return bitmap;
+    }
+
+    private static SKBitmap RenderStretchedQr(string content, float scaleX, float scaleY)
+    {
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
+        var side = qr.Size * 8;
+        return StretchedSymbol.Render(side, side, scaleX, scaleY, (canvas, area) => SymbolRenderer.Render(canvas, area, qr, SKColors.Black, SKColors.White));
+    }
+
+    private static SKBitmap RotateRightAngle(SKBitmap source, int degrees)
+    {
+        var swap = degrees is 90 or 270;
+        var rotated = new SKBitmap(swap ? source.Height : source.Width, swap ? source.Width : source.Height);
+        using var canvas = new SKCanvas(rotated);
+        canvas.Clear(SKColors.White);
+        canvas.Translate(rotated.Width / 2f, rotated.Height / 2f);
+        canvas.RotateDegrees(degrees);
+        canvas.Translate(-source.Width / 2f, -source.Height / 2f);
+        canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
+        return rotated;
     }
 
     private static SKBitmap RenderRotatedQr(string content, QREccLevel eccLevel, int pixelsPerModule, float degrees)
