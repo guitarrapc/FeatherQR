@@ -139,7 +139,7 @@ Console.WriteLine();
 Console.WriteLine("""
     Pattern 4: Builder Pattern (Advanced - Custom Colors
       - Best for: Custom colors and styling
-      - API: new QRCodeImageBuilder().WithColors()
+      - API: WithColors(codeColor, backgroundColor) + WithClearColor()
     """);
 {
     var path = Path.Combine(outputDir, "pattern4_builder_colors.png");

@@ -103,7 +103,8 @@ public static class QrImageFactory
             .WithGradient(CreateGradient(options))
             .WithIcon(CreateIcon(options, customLogo));
 
-        // Auto leaves the setter uncalled, which draws the finders with the modules.
+        // Auto leaves the setter uncalled: plain full-size modules then draw the finders with the modules,
+        // and a styled module set gets the solid square the renderer substitutes for it.
         var finderShape = CreateFinderShape(options);
         return finderShape is null ? builder : builder.WithFinderPatternShape(finderShape);
     }

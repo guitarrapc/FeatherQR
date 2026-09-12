@@ -291,6 +291,25 @@ public class SymbolImageBuilderColorOptionTest
     }
 
     [Test]
+    [Arguments(float.NaN)]
+    [Arguments(float.PositiveInfinity)]
+    [Arguments(float.NegativeInfinity)]
+    [Arguments(0.49f)]
+    [Arguments(1.01f)]
+    public async Task WithModuleShape_SizeOutsideItsRange_ThrowsAtTheSetter(float sizePercent)
+    {
+        // NaN passes a `< 0.5 or > 1.0` test because both comparisons are false, so an unguarded range
+        // check would accept it here and fail later from the renderer, naming a parameter the caller
+        // never wrote. The renderer's own guard is written negated for this reason.
+        var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
+        var builder = new QRCodeImageBuilder(qr);
+
+        var thrown = await Assert.That(() => builder.WithModuleShape(CircleModuleShape.Default, sizePercent))
+            .Throws<ArgumentOutOfRangeException>();
+        await Assert.That(thrown!.ParamName).IsEqualTo("sizePercent");
+    }
+
+    [Test]
     public async Task ColorSetters_ChainOnEverySymbology()
     {
         var micro = MicroQRCodeGenerator.Create("1234", MicroQREccLevel.L);

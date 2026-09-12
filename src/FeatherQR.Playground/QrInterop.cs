@@ -430,7 +430,8 @@ public static partial class QrInterop
             .WithGradient(CreateGradient(request.Gradient))
             .WithIcon(CreateIcon(request.Logo, customLogo));
 
-        // Auto leaves the setter uncalled, which draws the finders with the modules.
+        // Auto leaves the setter uncalled: plain full-size modules then draw the finders with the modules,
+        // and a styled module set gets the solid square the renderer substitutes for it.
         var finderShape = CreateFinderShape(request.FinderShape);
         return finderShape is null ? builder : builder.WithFinderPatternShape(finderShape);
     }

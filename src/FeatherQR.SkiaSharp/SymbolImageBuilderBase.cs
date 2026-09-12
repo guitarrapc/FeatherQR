@@ -205,7 +205,9 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     {
         if (moduleShape is null)
             throw new ArgumentNullException(nameof(moduleShape));
-        if (sizePercent is < 0.5f or > 1.0f)
+        // Negated range, so NaN, which is neither below 0.5 nor above 1.0, is refused here rather than
+        // accepted and thrown back by the renderer under a parameter name the caller never wrote.
+        if (sizePercent is not (>= 0.5f and <= 1.0f))
             throw new ArgumentOutOfRangeException(nameof(sizePercent), "Module size percent must be between 0.5 and 1.0.");
 
         _moduleShape = moduleShape;
@@ -287,7 +289,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Renders the symbol as an SVG document and writes it to a stream.
     /// </summary>
     /// <remarks>
-    /// The symbol is drawn as vector shapes, so it scales without losing quality, and the colors, shapes, gradients and icons all apply, with one trap: a styled symbol needs an opaque background here, because the finder patterns are cut out of what is behind them and SVG cannot express that cut through a background that is not fully opaque. They are dropped from the document instead, and the symbol stops scanning. This reaches any <c>WithFinderPatternShape</c> and any styled module set.
+    /// The symbol is drawn as vector shapes, so it scales without losing quality, and the colors, shapes, gradients and icons all apply, with one trap: a styled symbol needs an opaque background here, because the finder patterns are cut out of what is behind them and SVG cannot express that cut through a background that is not fully opaque. They are dropped from the document instead, and the symbol stops scanning. This reaches any <see cref="WithFinderPatternShape(FinderPatternShape)"/> and any styled module set.
     /// The root element carries a <c>viewBox</c>, so the document resizes when embedded at another size.
     /// Plain square modules get <c>shape-rendering="crispEdges"</c> to avoid antialiasing seams; custom shapes keep antialiasing for smooth curves.
     /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> does not apply, since SVG is not a raster format; the size options set the viewport instead.
