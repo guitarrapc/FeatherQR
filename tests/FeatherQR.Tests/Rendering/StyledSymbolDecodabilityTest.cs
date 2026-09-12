@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Xml.Linq;
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
 
@@ -423,6 +425,392 @@ public class StyledSymbolDecodabilityTest
         // trivially true because both documents dropped it.
         await Assert.That(translucent).Contains("fill-opacity");
         await Assert.That(WithoutOpacity(translucent)).IsEqualTo(WithoutOpacity(opaque));
+    }
+
+    /// <summary>
+    /// The finder pattern is actually in the SVG document, and it is the whole pattern.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The test above compares one alpha against another, which a document that lost its finder at
+    /// both alphas satisfies just as well; this one is the positive claim behind it. Measured as
+    /// mutations that the suite did not catch before it existed: a renderer that skipped
+    /// <c>DrawSingleFinder</c> in SVG output only (Micro QR and rMQR lose their finder, raster
+    /// untouched), the curved shapes skipping the draw that carries their ring, and the square
+    /// shape dropping its four outer bands and keeping only the 3x3 centre. Each is the defect
+    /// this rule exists to prevent, and each passed.
+    /// </para>
+    /// <para>
+    /// Probed at the centre of the pattern and at the middle of each of its four outer edges, all
+    /// of which are dark in a finder pattern, plus the four light ring midpoints, which are not.
+    /// The region an element paints, never its bounding box: a bounding box says yes everywhere
+    /// inside a curved shape's outer edge, so a solid disc would answer every dark probe and the
+    /// light ones could not be asserted at all.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [Arguments("qr", "rectangle")]
+    [Arguments("qr", "circle")]
+    [Arguments("qr", "rounded")]
+    [Arguments("qr", "roundedCircle")]
+    [Arguments("microqr", "rectangle")]
+    [Arguments("microqr", "circle")]
+    [Arguments("microqr", "rounded")]
+    [Arguments("microqr", "roundedCircle")]
+    [Arguments("rmqr", "rectangle")]
+    [Arguments("rmqr", "circle")]
+    [Arguments("rmqr", "rounded")]
+    [Arguments("rmqr", "roundedCircle")]
+    [Arguments("qr", "styled")]
+    [Arguments("microqr", "styled")]
+    [Arguments("rmqr", "styled")]
+    public async Task DecorativeFinder_SvgCarriesTheWholeFinderPattern(string symbology, string finder)
+    {
+        // "styled" is the other way in: no finder-shape call at all, just styled modules, which the
+        // renderer answers by substituting the square. It is the ordinary case and the one the
+        // named-shape arms cannot see.
+        var styledRoute = finder == "styled";
+        var shape = FinderShapeOf(finder);
+        var square = styledRoute || finder == "rectangle";
+
+        foreach (var alpha in new byte[] { 255, 128, 0 })
+        {
+            var background = SKColors.White.WithAlpha(alpha);
+            var layout = LayoutOf(symbology);
+
+            TSelf Route<TSelf>(SymbolImageBuilderBase<TSelf> builder) where TSelf : SymbolImageBuilderBase<TSelf>
+                => styledRoute
+                    ? builder.WithModuleShape(CircleModuleShape.Default, 0.85f)
+                    : builder.WithFinderPatternShape(shape);
+
+            var svg = symbology switch
+            {
+                "rmqr" => Route(new RmQRCodeImageBuilder(RmQRData()).WithSize(layout.CanvasWidth, layout.CanvasHeight)
+                    .WithBackgroundColor(background)).ToSvgString(),
+                "microqr" => Route(new MicroQRCodeImageBuilder(MicroQrData()).WithSize(layout.CanvasWidth, layout.CanvasHeight)
+                    .WithBackgroundColor(background)).ToSvgString(),
+                _ => Route(new QRCodeImageBuilder(QrData()).WithSize(layout.CanvasWidth, layout.CanvasHeight)
+                    .WithBackgroundColor(background)).ToSvgString(),
+            };
+
+            var doc = XDocument.Parse(svg);
+            // Everything drawn in the code colour: the background rect names white, the finder's own
+            // elements name nothing and inherit black.
+            var dark = doc.Root!.Descendants()
+                .Where(e => !string.Equals(e.Attribute("fill")?.Value, "white", StringComparison.OrdinalIgnoreCase))
+                .Select(SvgRegion)
+                .Where(region => region is not null)
+                .ToArray();
+
+            try
+            {
+                foreach (var box in layout.FinderBoxes())
+                {
+                    var module = box.Width / 7f;
+                    var inside = dark.Where(region => Contains(box, region!.Bounds)).ToArray();
+
+                    // Present at all, and the whole pattern: the centre and all four outer edges are dark,
+                    // and the four midpoints of the light ring between them are not. Regions rather than
+                    // bounding boxes, or a solid disc would answer every dark probe and no light one.
+                    foreach (var (col, row, isDark) in new[]
+                    {
+                        (3.5f, 3.5f, true), (3.5f, 0.5f, true), (0.5f, 3.5f, true), (6.5f, 3.5f, true), (3.5f, 6.5f, true),
+                        (1.5f, 3.5f, false), (3.5f, 1.5f, false), (5.5f, 3.5f, false), (3.5f, 5.5f, false),
+                    })
+                    {
+                        var x = box.Left + col * module;
+                        var y = box.Top + row * module;
+                        await Assert.That(inside.Any(region => region!.Contains(x, y))).IsEqualTo(isDark)
+                            .Because($"{symbology} {finder} alpha {alpha}: module ({col}, {row}) of the finder at {box.Left},{box.Top} should be {(isDark ? "dark" : "the light ring")}");
+                    }
+
+                    // Five elements for the square, which is also what tells an explicitly named square
+                    // from the merged module runs that draw the same picture with fifteen rectangles.
+                    if (square)
+                        await Assert.That(inside.Length).IsEqualTo(5).Because($"{symbology} {finder} alpha {alpha}");
+                }
+            }
+            finally
+            {
+                foreach (var region in dark)
+                    region!.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The finder's antialiasing follows the finder shape, not the module shape: a square finder
+    /// beside circular modules is drawn crisp, and a curved one is not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sized so the module grid lands off whole pixels, because that is the only place the crisp
+    /// half shows: at 504 for Micro QR or 630 for rMQR the finder edges fall on pixel boundaries
+    /// and antialiasing is a no-op for straight edges, which is why the approval goldens (all
+    /// built with <c>WithModulePixelSize</c>) cannot see it and a revert to the old
+    /// "only ever turn it on" form passed the whole suite.
+    /// </para>
+    /// <para>
+    /// The curved half is the other direction, and it needs saying separately: with only the
+    /// square shape asserted, the renderer could assign a constant <see langword="false"/> instead
+    /// of the shape's answer and nothing would fail — measured as a surviving mutation on
+    /// <c>DrawSingleFinder</c>, where a Micro QR circle finder came out aliased.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [Arguments("qr")]
+    [Arguments("microqr")]
+    [Arguments("rmqr")]
+    public async Task StyledModules_FinderAntialiasing_FollowsTheFinderShape(string symbology)
+    {
+        // One pixel more than the sizes the test above uses, which are whole modules across.
+        var even = LayoutOf(symbology);
+        var layout = even with { CanvasWidth = even.CanvasWidth + 1, CanvasHeight = even.CanvasHeight + 1 };
+        var boxes = layout.FinderBoxes();
+
+        SKBitmap Render(FinderPatternShape finder) => symbology switch
+        {
+            "rmqr" => new RmQRCodeImageBuilder(RmQRData()).WithSize(layout.CanvasWidth, layout.CanvasHeight)
+                .WithColors(SKColors.Black, SKColors.White)
+                .WithModuleShape(CircleModuleShape.Default, 0.85f)
+                .WithFinderPatternShape(finder).ToBitmap(),
+            "microqr" => new MicroQRCodeImageBuilder(MicroQrData()).WithSize(layout.CanvasWidth, layout.CanvasHeight)
+                .WithColors(SKColors.Black, SKColors.White)
+                .WithModuleShape(CircleModuleShape.Default, 0.85f)
+                .WithFinderPatternShape(finder).ToBitmap(),
+            _ => new QRCodeImageBuilder(QrData()).WithSize(layout.CanvasWidth, layout.CanvasHeight)
+                .WithColors(SKColors.Black, SKColors.White)
+                .WithModuleShape(CircleModuleShape.Default, 0.85f)
+                .WithFinderPatternShape(finder).ToBitmap(),
+        };
+
+        (int InsideFinders, int Elsewhere) Count(SKBitmap bitmap)
+        {
+            static bool IsIntermediate(SKColor pixel) => pixel.Red is > 8 and < 247;
+
+            var insideFinders = 0;
+            var elsewhere = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            {
+                for (var x = 0; x < bitmap.Width; x++)
+                {
+                    if (!IsIntermediate(bitmap.GetPixel(x, y)))
+                        continue;
+                    // The finder pattern owns its whole 7x7 box: the modules under it are skipped, so
+                    // an intermediate pixel there can only come from the finder's own edges.
+                    if (boxes.Any(b => b.Contains(x + 0.5f, y + 0.5f)))
+                        insideFinders++;
+                    else
+                        elsewhere++;
+                }
+            }
+
+            return (insideFinders, elsewhere);
+        }
+
+        using (var straight = Render(RectangleFinderPatternShape.Default))
+        {
+            var counted = Count(straight);
+            await Assert.That(counted.InsideFinders).IsEqualTo(0).Because($"{symbology}: the square finder must be drawn crisp");
+            // The premise: this canvas does antialias something, so the count above is a result and
+            // not an artifact of a grid that happens to land on whole pixels.
+            await Assert.That(counted.Elsewhere).IsGreaterThan(0).Because($"{symbology}: the circular modules must still be antialiased");
+        }
+
+        using (var curved = Render(CircleFinderPatternShape.Default))
+        {
+            // And the other direction, or the renderer could answer a constant instead of the shape.
+            await Assert.That(Count(curved).InsideFinders).IsGreaterThan(0)
+                .Because($"{symbology}: a curved finder must be antialiased");
+        }
+    }
+
+    private const string FinderGeometryContent = "https://githu";
+
+    private static QRCodeData QrData()
+        => QRCodeGenerator.Create(FinderGeometryContent, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
+
+    private static MicroQRCodeData MicroQrData()
+        => MicroQRCodeGenerator.Create(FinderGeometryContent, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { QuietZoneSize = 2 });
+
+    private static RmQRCodeData RmQRData()
+        => RmQRCodeGenerator.Create(FinderGeometryContent, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59, QuietZoneSize = 2 });
+
+    /// <summary>The canvas and matrix a finder-geometry case renders on. Every canvas is a whole number of modules across, so the crisp-edge case can add one pixel and stop being one.</summary>
+    private static SvgLayout LayoutOf(string symbology) => symbology switch
+    {
+        "rmqr" => new SvgLayout(630, 160, 59 + 2 * 2, 11 + 2 * 2, 2, false),
+        "microqr" => new SvgLayout(504, 504, MicroQrData().Size, MicroQrData().Size, 2, false),
+        _ => new SvgLayout(493, 493, QrData().Size, QrData().Size, 4, true),
+    };
+
+    /// <summary>The fitted content rectangle and the finder boxes inside it, as the builder computes them.</summary>
+    private readonly record struct SvgLayout(int CanvasWidth, int CanvasHeight, int MatrixWidth, int MatrixHeight, int QuietZone, bool ThreeFinders)
+    {
+        public SKRect[] FinderBoxes()
+        {
+            // Mirrors the builder's own arithmetic, double and epsilon included.
+            var module = Math.Min((double)CanvasWidth / MatrixWidth, (double)CanvasHeight / MatrixHeight);
+            var left = Math.Max(0d, Math.Floor((CanvasWidth - module * MatrixWidth) / 2 + 1e-6));
+            var top = Math.Max(0d, Math.Floor((CanvasHeight - module * MatrixHeight) / 2 + 1e-6));
+            var quietZone = QuietZone;
+
+            SKRect Box(int col, int row) => SKRect.Create(
+                (float)(left + (quietZone + col) * module),
+                (float)(top + (quietZone + row) * module),
+                (float)(module * 7),
+                (float)(module * 7));
+
+            var coreWidth = MatrixWidth - QuietZone * 2;
+            var coreHeight = MatrixHeight - QuietZone * 2;
+            return ThreeFinders
+                ? [Box(0, 0), Box(coreWidth - 7, 0), Box(0, coreHeight - 7)]
+                : [Box(0, 0)];
+        }
+    }
+
+    /// <summary>
+    /// A circle finder reaches SVG as ovals, never as a flattened path.
+    /// </summary>
+    /// <remarks>
+    /// <c>SKSvgCanvas</c> writes an oval as one <c>&lt;ellipse&gt;</c> and a path as thousands of
+    /// quadratic segments, so the encoding is the difference between a 6 KB document and a 50 KB
+    /// one. The sizes here are the ones that catch a squareness test written too tightly: the fit
+    /// leaves two of the three finder rects a few float ulps off square, and a strict comparison
+    /// sent them down the path branch at every canvas size but one.
+    /// </remarks>
+    [Test]
+    [Arguments(512, 512)]
+    [Arguments(513, 513)]
+    [Arguments(500, 512)]
+    [Arguments(900, 450)]
+    public async Task DecorativeCircleFinder_ReachesSvgAsOvals(int width, int height)
+    {
+        var svg = new QRCodeImageBuilder(QrData()).WithSize(width, height)
+            .WithFinderPatternShape(CircleFinderPatternShape.Default)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        var ns = doc.Root!.Name.Namespace;
+
+        // Two per finder: the ring as a stroked oval, the centre as a filled one.
+        await Assert.That(doc.Root.Descendants(ns + "ellipse").Count()).IsEqualTo(6).Because($"{width}x{height}");
+        await Assert.That(doc.Root.Descendants(ns + "path").Count()).IsEqualTo(0).Because($"{width}x{height}");
+    }
+
+    /// <summary>
+    /// A shape hands the paint back as it found it, and the square one draws no seam whatever paint it is given.
+    /// </summary>
+    /// <remarks>
+    /// A shape may change the paint it is lent, which is how a ring is drawn as a stroke, so every
+    /// one of them has to put it back: the renderer reuses that paint for the next finder and the
+    /// icon. The square shape's outer ring is four abutting bands, and abutting antialiased edges
+    /// do not composite back to opaque, so it also holds the paint to the straight edges it
+    /// declares — a caller's antialiased paint, or a custom shape that declares antialiasing and
+    /// delegates here, drew a grey line across the ring before it did.
+    /// </remarks>
+    [Test]
+    [Arguments("rectangle")]
+    [Arguments("circle")]
+    [Arguments("rounded")]
+    [Arguments("roundedCircle")]
+    public async Task DecorativeFinder_DrawnWithAnAntialiasedPaint_RestoresItAndDrawsNoSeam(string finder)
+    {
+        var rect = SKRect.Create(10.3f, 10.3f, 100.5f, 100.5f);
+        using var bitmap = new SKBitmap(140, 140, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true, Style = SKPaintStyle.Fill, StrokeWidth = 3f };
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.White);
+            FinderShapeOf(finder).Draw(canvas, rect, paint);
+        }
+
+        await Assert.That(paint.IsAntialias).IsTrue().Because($"{finder} must restore IsAntialias");
+        await Assert.That(paint.Style).IsEqualTo(SKPaintStyle.Fill).Because($"{finder} must restore Style");
+        await Assert.That(paint.StrokeWidth).IsEqualTo(3f).Because($"{finder} must restore StrokeWidth");
+
+        if (finder != "rectangle")
+            return;
+
+        // Straight edges on whole-pixel-free coordinates: every pixel is either ink or ground.
+        var intermediate = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                if (bitmap.GetPixel(x, y).Red is > 8 and < 247)
+                    intermediate++;
+            }
+        }
+
+        await Assert.That(intermediate).IsEqualTo(0).Because("the square finder's abutting bands must not seam");
+    }
+
+    /// <summary>The region an SVG element actually paints, in the document's own coordinates, or <see langword="null"/> if it paints nothing.</summary>
+    /// <remarks>
+    /// The real region, not a bounding box: a bounding box says yes to every point inside a curved
+    /// shape's outer edge, so a solid disc would pass a ring test written against one.
+    /// </remarks>
+    private static SKPath? SvgRegion(XElement element)
+    {
+        float Read(string name, float fallback = 0f)
+            => float.TryParse(element.Attribute(name)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : fallback;
+
+        SKPath? region;
+        switch (element.Name.LocalName)
+        {
+            case "rect":
+                using (var builder = new SKPathBuilder())
+                {
+                    builder.AddRect(SKRect.Create(Read("x"), Read("y"), Read("width"), Read("height")));
+                    region = builder.Detach();
+                }
+                break;
+            case "ellipse":
+            case "circle":
+                // An omitted ry means "the same as rx", and a circle names one r for both.
+                var radiusX = Read("rx", Read("r"));
+                var radiusY = Read("ry", radiusX);
+                using (var builder = new SKPathBuilder())
+                {
+                    builder.AddOval(new SKRect(Read("cx") - radiusX, Read("cy") - radiusY, Read("cx") + radiusX, Read("cy") + radiusY));
+                    region = builder.Detach();
+                }
+                break;
+            case "path":
+                region = SKPath.ParseSvgPathData(element.Attribute("d")?.Value ?? string.Empty);
+                break;
+            default:
+                return null;
+        }
+
+        if (region is null)
+            return null;
+
+        if (string.Equals(element.Attribute("fill-rule")?.Value, "evenodd", StringComparison.Ordinal))
+            region.FillType = SKPathFillType.EvenOdd;
+
+        // A stroked outline paints the band along its geometry rather than the inside of it, which
+        // is how a ring reaches the document as one <ellipse>.
+        var stroke = element.Attribute("stroke")?.Value;
+        if (string.IsNullOrEmpty(stroke) || string.Equals(stroke, "none", StringComparison.OrdinalIgnoreCase))
+            return region;
+
+        using var pen = new SKPaint { Style = SKPaintStyle.Stroke, StrokeWidth = Read("stroke-width", 1f) };
+        var outline = pen.GetFillPath(region);
+        region.Dispose();
+        return outline;
+    }
+
+    /// <summary>Whether the outer rectangle contains the inner one, with a tolerance for the document's rounded coordinates.</summary>
+    private static bool Contains(SKRect outer, SKRect inner)
+    {
+        // Half a pixel: a stroked ring's outline lands on the box edge and rounds either way.
+        const float Epsilon = 0.5f;
+        return inner.Left >= outer.Left - Epsilon
+            && inner.Top >= outer.Top - Epsilon
+            && inner.Right <= outer.Right + Epsilon
+            && inner.Bottom <= outer.Bottom + Epsilon;
     }
 
     /// <summary>

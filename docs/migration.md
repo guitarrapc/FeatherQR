@@ -480,33 +480,41 @@ var shape = ShapeFor(options);                                    // null when n
 if (shape != null) builder = builder.WithFinderPatternShape(shape);
 ```
 
-`RectangleModuleShape.Default` and `RectangleFinderPatternShape.Default` are the same plain squares and are the right argument when you mean them. For `WithModuleShape` they are an exact substitute for the old `null`. For `WithFinderPatternShape` they are an exact substitute too: pixel-identical in raster output and element-identical in SVG, on any background (see [Finder shapes draw the dark modules only](#finder-shapes-draw-the-dark-modules-only) for what used to differ).
+`RectangleModuleShape.Default` and `RectangleFinderPatternShape.Default` are the same plain squares and are the right argument when you mean them. For `WithModuleShape` they are an exact substitute for the old `null`. For `WithFinderPatternShape` they are an exact substitute in raster output too, pixel-identical on any background (see [Finder shapes draw the dark modules only](#finder-shapes-draw-the-dark-modules-only) for what used to differ). The two spellings still take different paths, so an SVG is not element-identical: naming the square writes each finder as five rectangles of its own, where omitting it merges them into the module runs. The picture is the same either way.
 
 `WithGradient(null)`, `WithIcon(null)` and `WithClearColor(null)` are unchanged: there `null` means the option is absent rather than set to a default, which is the difference the change is about.
 
 ### Finder shapes draw the dark modules only
 
-**Fixed in 2.0.0, with a contract change for custom shapes.** In 1.x a finder pattern drawn as a shape of its own painted its light ring, and the renderer erased that ring through a layer whenever the background was not opaque; `SKSvgCanvas` wrote nothing for the layer, so a Standard QR SVG with `WithFinderPatternShape` on a transparent or translucent background came out with empty corners that no reader could scan. 2.0.0 draws the ring as a hole instead: the square finder is five rectangles, the curved ones one even-odd path each, and whatever is beneath shows through. A transparent or translucent background is now fine in SVG as it always was in raster, on all three symbologies, and the document written is the same at every alpha except for the background's own `fill-opacity`.
+**Fixed in 2.0.0, with a contract change for custom shapes.** In 1.x a finder pattern drawn as a shape of its own painted its light ring, and the renderer erased that ring through a layer whenever the background was not opaque; `SKSvgCanvas` wrote nothing for the layer, so a Standard QR SVG with `WithFinderPatternShape` on a transparent or translucent background came out with empty corners that no reader could scan. 2.0.0 draws the ring as a hole instead, and whatever is beneath shows through: the square finder is four bands and a centre rectangle, a circle's ring is a one-module stroke of its middle oval, and the two rounded shapes use an even-odd path. A transparent or translucent background is now fine in SVG as it always was in raster, on all three symbologies, and the document written is the same at every alpha except for the background's own `fill-opacity`.
 
-`FinderPatternShape` keeps one method, `Draw(SKCanvas, SKRect, SKPaint)`, and it draws the dark modules only. The two overloads that carried a light colour or paint, `Draw(…, SKColor backgroundColor)` and `Draw(…, SKPaint backgroundPaint)`, are gone: a shape that painted the ring could only be made right on a translucent background by erasing, and erasing is what SVG could not express. If your shape overrode either, move the dark drawing into the three-argument method and leave the ring undrawn; a shape that painted the ring white in the three-argument method was already wrong on every coloured background and needs the same edit.
+`FinderPatternShape` keeps one method, `Draw(SKCanvas, SKRect, SKPaint)`, and it draws the dark modules only. The two overloads that carried a light colour or paint, `Draw(…, SKColor backgroundColor)` and `Draw(…, SKPaint backgroundPaint)`, are gone: a shape that painted the ring could only be made right on a translucent background by erasing, and erasing is what SVG could not express. If your shape overrode either, move the dark drawing into the three-argument method and leave the ring undrawn; a shape that painted the ring white in the three-argument method was already wrong on every coloured background and needs the same edit. `RequiresAntialiasing` is `abstract` now, as `ModuleShape`'s already was, so a shape that relied on the inherited `false` no longer compiles until it answers. The `paint` a shape is handed may also be changed and restored, which is what lets a ring be drawn as a stroke; the rule is that you restore any property you change before returning, and never dispose it.
 
 ```csharp
 // before: the outer square dark, the ring light over it, the centre dark
 public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint) { … }
 
 // after: the dark parts only, as one even-odd path; the ring is what you leave undrawn
+public override bool RequiresAntialiasing => false;
+
 public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
 {
-    var module = rect.Width / 7f;
-    using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
-    path.AddRect(rect);
-    path.AddRect(SKRect.Create(rect.Left + module, rect.Top + module, module * 5, module * 5));
-    path.AddRect(SKRect.Create(rect.Left + module * 2, rect.Top + module * 2, module * 3, module * 3));
+    // Per axis: a caller may hand a shape a rect that is not square, and the rings
+    // have to stay on the same module grid as the data around them.
+    var moduleWidth = rect.Width / 7f;
+    var moduleHeight = rect.Height / 7f;
+    using var builder = new SKPathBuilder { FillType = SKPathFillType.EvenOdd };
+    builder.AddRect(rect);
+    builder.AddRect(SKRect.Create(rect.Left + moduleWidth, rect.Top + moduleHeight, moduleWidth * 5, moduleHeight * 5));
+    builder.AddRect(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3));
+    using var path = builder.Detach();
     canvas.DrawPath(path, paint);
 }
 ```
 
-Two smaller consequences. The finder's antialiasing now follows the finder shape rather than the module shape, so a square finder beside round modules is drawn crisp; a curved finder's ring edge is also rasterised once, as the edge of a hole, rather than as a light shape over a dark one, which moves its antialiased fringe by up to a quarter of full scale (measured: 1 to 1.6 % of the pixels of a 116 px render, all of them on the ring edges). And naming `RectangleFinderPatternShape.Default` is now pixel-identical to leaving the setter uncalled on every background, including a gradient over a translucent one, where the layer used to cost one step of one channel.
+Do not fill the whole 7 by 7 area: a reader locates the symbol by the finder pattern's 1:1:3:1:1 run of dark and light, so a solid square renders a symbol nothing can scan, with no exception to tell you.
+
+Two smaller consequences. The finder's antialiasing now follows the finder shape alone, `RequiresAntialiasing` deciding it in both directions, so a square finder beside round modules is drawn crisp where it used to inherit the modules' antialiasing; that changes styled raster output wherever the module grid is not whole pixels, by around 1 % of the image, all of it on finder edges (measured on Standard QR at 512x512 with circle modules at 0.85: 3,384 pixels of a 29-module matrix, 2,952 of a 33-module one and 2,397 of a 41-module one, so 1.29 % down to 0.91 % as the modules get smaller; 0 pixels when the symbol is sized with `WithModulePixelSize`, where module edges land on whole pixels). A curved finder's ring edge moves for the same kind of reason, being rasterised once as the edge of a hole rather than as a light shape over a dark one (0.9 to 1.6 % of a 116 px render). And naming `RectangleFinderPatternShape.Default` is now pixel-identical to leaving the setter uncalled on every background, including a gradient over a translucent one, where the layer used to cost one step of one channel.
 
 ## 1.2.0
 

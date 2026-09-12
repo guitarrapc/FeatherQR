@@ -8,21 +8,21 @@ namespace FeatherQR.SkiaSharp
     public sealed class CircleFinderPatternShape : FinderPatternShape
     {
         public static readonly CircleFinderPatternShape Default;
-        public bool RequiresAntialiasing { get; }
+        public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
     public sealed class CircleModuleShape : ModuleShape
     {
         public static readonly CircleModuleShape Default;
-        public bool RequiresAntialiasing { get; }
+        public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
     public abstract class FinderPatternShape
     {
         protected FinderPatternShape();
-        public bool RequiresAntialiasing { get; }
+        public abstract bool RequiresAntialiasing { get; }
         public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
@@ -120,7 +120,7 @@ namespace FeatherQR.SkiaSharp
     public abstract class ModuleShape
     {
         protected ModuleShape();
-        public bool RequiresAntialiasing { get; }
+        public abstract bool RequiresAntialiasing { get; }
         public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
@@ -165,14 +165,14 @@ namespace FeatherQR.SkiaSharp
     public sealed class RectangleFinderPatternShape : FinderPatternShape
     {
         public static readonly RectangleFinderPatternShape Default;
-        public bool RequiresAntialiasing { get; }
+        public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
     public sealed class RectangleModuleShape : ModuleShape
     {
         public static readonly RectangleModuleShape Default;
-        public bool RequiresAntialiasing { get; }
+        public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
@@ -217,7 +217,7 @@ namespace FeatherQR.SkiaSharp
     {
         public static readonly RoundedRectangleCircleFinderPatternShape Default;
         public RoundedRectangleCircleFinderPatternShape(float cornerRadiusPercent = 0.3);
-        public bool RequiresAntialiasing { get; }
+        public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
@@ -225,7 +225,7 @@ namespace FeatherQR.SkiaSharp
     {
         public static readonly RoundedRectangleFinderPatternShape Default;
         public RoundedRectangleFinderPatternShape(float cornerRadiusPercent = 0.2);
-        public bool RequiresAntialiasing { get; }
+        public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 
@@ -233,7 +233,7 @@ namespace FeatherQR.SkiaSharp
     {
         public static readonly RoundedRectangleModuleShape Default;
         public RoundedRectangleModuleShape(float cornerRadiusPercent = 0.3);
-        public bool RequiresAntialiasing { get; }
+        public override bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
     }
 

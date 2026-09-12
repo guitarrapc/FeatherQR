@@ -67,8 +67,8 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task SaveToSvg_NamedFinderShape_OpaqueBackground_KeepsTheTopLeftFinderDark()
     {
-        // The opaque case, which is the one callers are told to use. On a non-opaque background the same
-        // symbol loses its finder patterns entirely, which the test below pins.
+        // The opaque case. The same symbol on a non-opaque background keeps its finder patterns too,
+        // which the test below pins; it used to lose them, and that is what this pair guards.
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
             .WithBackgroundColor(SKColors.White)
@@ -103,8 +103,10 @@ public class QRCodeImageBuilderSvgTest
         // mode inside a layer, which SKSvgCanvas dropped whole: on any background below alpha 255 the
         // document had no finder patterns at all. The ring is a hole in the drawing now, so nothing is
         // erased and both canvas kinds get the same elements. Both routes in are covered: naming a shape,
-        // and styling the modules, which substitutes one. The named arm is also the only test that fails
-        // if ResolveFinderShape starts ignoring an explicit square, so keep it whatever else changes.
+        // and styling the modules, which substitutes one. This only asks that the finder's centre is
+        // inked; that the whole pattern is there, on every symbology and every built-in shape, is
+        // DecorativeFinder_SvgCarriesTheWholeFinderPattern, which is also what fails if
+        // ResolveFinderShape starts ignoring an explicitly named square.
         // Alpha 128 and 0 both, because at alpha 0 the background rect is omitted entirely and the
         // covering query has to hold without it.
         var builder = new QRCodeImageBuilder(TestContent)

@@ -497,6 +497,8 @@ public class FinderPatternShapeColorTest
     /// </summary>
     private sealed class CentreOnlyFinderPatternShape : FinderPatternShape
     {
+        public override bool RequiresAntialiasing => false;
+
         public int DrawCount { get; private set; }
 
         public SKColor ReceivedPaintColor { get; private set; }

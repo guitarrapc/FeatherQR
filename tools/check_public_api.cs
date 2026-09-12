@@ -400,8 +400,10 @@ static string Render(string assemblyPath)
                 : reader.GetString(property.Name);
 
             var type_ = Annotate(signature.ReturnType, Nullability(property.GetCustomAttributes(), TypeNullableContext(type)));
+            // Same modifiers a method carries, off the accessor: a property turning abstract is a
+            // break, and reading only "static" here hid one.
             lines.Add((2, Line(property.GetCustomAttributes(), Access(anchorIsPublic),
-                (anchor.Attributes & MethodAttributes.Static) != 0 ? "static" : null, null, type_, $"{name} {text}")));
+                Modifier(anchor.Attributes), null, type_, $"{name} {text}")));
         }
 
         foreach (var handle in type.GetEvents())
@@ -428,13 +430,7 @@ static string Render(string assemblyPath)
             var isOperator = name.StartsWith("op_", StringComparison.Ordinal);
             if ((method.Attributes & MethodAttributes.SpecialName) != 0 && !isOperator) continue;
 
-            var attributes = method.Attributes;
-            var modifier = (attributes & MethodAttributes.Static) != 0 ? "static"
-                : (attributes & MethodAttributes.Abstract) != 0 ? "abstract"
-                // Virtual without a new slot overrides the one it inherited.
-                : (attributes & MethodAttributes.Virtual) != 0 && (attributes & MethodAttributes.NewSlot) == 0 ? "override"
-                : (attributes & MethodAttributes.Virtual) != 0 && (attributes & MethodAttributes.Final) == 0 ? "virtual"
-                : null;
+            var modifier = Modifier(method.Attributes);
 
             var methodContext = context with { MethodParameters = [.. method.GetGenericParameters().Select(h => reader.GetString(reader.GetGenericParameter(h).Name))] };
             var signature = method.DecodeSignature(provider, methodContext);
@@ -463,6 +459,16 @@ static string Render(string assemblyPath)
     }
 
     static string Access(bool isPublic) => isPublic ? "public" : "protected";
+
+    // Shared by methods and by a property's accessor, so that abstract, virtual and override are
+    // recorded wherever they appear: any of them changing is a break a caller feels.
+    static string? Modifier(MethodAttributes attributes)
+        => (attributes & MethodAttributes.Static) != 0 ? "static"
+            : (attributes & MethodAttributes.Abstract) != 0 ? "abstract"
+            // Virtual without a new slot overrides the one it inherited.
+            : (attributes & MethodAttributes.Virtual) != 0 && (attributes & MethodAttributes.NewSlot) == 0 ? "override"
+            : (attributes & MethodAttributes.Virtual) != 0 && (attributes & MethodAttributes.Final) == 0 ? "virtual"
+            : null;
 
     // private protected is not surface. public and protected are.
     static bool IsVisibleMethod(MethodDefinition method, out bool isPublic)
