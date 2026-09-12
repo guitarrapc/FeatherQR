@@ -460,6 +460,8 @@ public class SymbolRendererAreaFitTest
     [Arguments("percentZero")]
     [Arguments("negativeBorder")]
     [Arguments("overOccupancy")]
+    [Arguments("borderModulesOverflow")]
+    [Arguments("sizeModulesOverflow")]
     public async Task Render_InvalidIcon_ThrowsEvenWhenNothingFits(string kind)
     {
         var data = QRCodeGenerator.Create(Content, QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = 4 });
@@ -468,6 +470,9 @@ public class SymbolRendererAreaFitTest
         {
             "percentZero" => IconData.FromImage(logo, iconSizePercent: 0, iconBorderWidth: 2),
             "negativeBorder" => IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: -1),
+            // Module counts near int.MaxValue: the total used to wrap negative and pass both limits.
+            "borderModulesOverflow" => IconData.FromImageByModules(logo, iconSizeModules: 1, iconBorderModules: int.MaxValue, maxCoreOccupancyPercent: 100),
+            "sizeModulesOverflow" => IconData.FromImageByModules(logo, iconSizeModules: int.MaxValue, iconBorderModules: 1, maxCoreOccupancyPercent: 100),
             _ => IconData.FromImageByModules(logo, iconSizeModules: data.GetCoreSize(), iconBorderModules: 1, maxCoreOccupancyPercent: 100),
         };
         using var bitmap = new SKBitmap(new SKImageInfo(200, 200, SKColorType.Rgba8888, SKAlphaType.Premul));
@@ -478,7 +483,7 @@ public class SymbolRendererAreaFitTest
         {
             // The type is the contract: an out-of-range setting is an argument error, an icon too big for
             // the symbol is not, and the docs name both.
-            if (kind == "overOccupancy")
+            if (kind is "overOccupancy" or "borderModulesOverflow" or "sizeModulesOverflow")
             {
                 await Assert.That(() => SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White, icon))
                     .Throws<InvalidOperationException>().Because($"the renderer with {kind} in {area.Width}x{area.Height}");
@@ -926,6 +931,24 @@ public class SymbolRendererAreaFitTest
         await Assert.That(fitted.Width).IsEqualTo(fitted.Height).Within(1e-3f).Because($"{area} became {fitted}");
         await Assert.That(fitted.Height).IsEqualTo(Math.Min(area.Width, area.Height)).Within(1e-3f).Because($"{area} became {fitted}");
         await Assert.That(fitted == area).IsFalse().Because($"{area} must not come back as given");
+    }
+
+    /// <summary>
+    /// The limit of a slack measured in float steps, written down because it looks like a defect and is
+    /// not fixable from here: at 1e9 a step is 64, so this 400x600 area is stored as 384x576 and passes
+    /// as square. Tightening cannot separate the two: a square whose edges are each scaled needs two
+    /// steps per axis (measured over three million of them), and this rectangle is one and a half steps
+    /// from square, so any slack that fits real squares admits it. Nothing renders at these coordinates
+    /// either way, since the same step quantises every module edge.
+    /// </summary>
+    [Test]
+    public async Task GetSquareArea_WhereAFloatStepDwarfsTheArea_CannotTellASquareFromARectangle()
+    {
+        var area = SKRect.Create(1e9f, 1e9f, 400f, 600f);
+
+        await Assert.That(area.Width).IsEqualTo(384f).Because("the area cannot be stored as asked at 1e9");
+        await Assert.That(area.Height).IsEqualTo(576f).Because("the area cannot be stored as asked at 1e9");
+        await Assert.That(SymbolRenderer.GetSquareArea(area)).IsEqualTo(area).Because("192 is within two float steps per axis");
     }
 
     /// <summary>

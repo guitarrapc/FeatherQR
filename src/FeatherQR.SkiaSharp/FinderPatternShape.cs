@@ -89,8 +89,9 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
     {
-        // Per axis: the renderer only hands this a square, but a caller drawing into a non-square
-        // rect still needs the rings on the same grid as the modules around them.
+        // Per axis: every renderer path hands this a square, rMQR's letterbox included, since one scale
+        // sizes both axes there. A caller drawing into a non-square rect still needs the rings on the
+        // same grid as the modules around them.
         var moduleWidth = rect.Width / 7f;
         var moduleHeight = rect.Height / 7f;
 

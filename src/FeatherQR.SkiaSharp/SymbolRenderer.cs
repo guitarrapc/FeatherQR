@@ -402,7 +402,8 @@ public static class SymbolRenderer
             if (iconData.MaxCoreOccupancyPercent is < 1 or > 100)
                 throw new ArgumentOutOfRangeException(nameof(iconData), "Max core occupancy percent must be between 1 and 100.");
 
-            var totalModules = iconData.IconSizeModules.Value + (iconBorderModules * 2);
+            // Widened: a module count near int.MaxValue overflowed the sum, and the negative total passed both limits below.
+            var totalModules = (long)iconData.IconSizeModules.Value + ((long)iconBorderModules * 2);
             var coreSize = data.GetCoreSize();
             var maxByCore = coreSize * iconData.MaxCoreOccupancyPercent / 100;
 
@@ -437,7 +438,8 @@ public static class SymbolRenderer
 
     /// <summary>
     /// Slack for "already square", per axis, as a share of that axis's largest coordinate: two float steps there, since a float step at m is at most m / 2^23.
-    /// That is the most rounding moves one side: half a step at each edge, and up to a step more for the width or height.
+    /// Two steps is what a square costs to store, not a margin: a square whose edges are each scaled, which is what a canvas scale gives, comes back two steps from square.
+    /// It follows that far from the origin, where a step is a large share of the area, a rectangle that is not square can pass as one; no symbol renders there either, since the same step quantises every module edge.
     /// </summary>
     private const float SquareTolerance = 1f / (1 << 22);
 
