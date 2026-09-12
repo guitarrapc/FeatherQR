@@ -344,6 +344,8 @@ new MicroQRCodeImageBuilder("https://githu")
 
 The built-in finder shapes reshape the concentric rings without breaking them, which is the property a decoder needs, so all four decode down to 75% module size. `SymbolRenderer.Render` and the `SKCanvas.Render` extensions gained the matching optional `finderPatternShape` parameter for Micro QR and rMQR. If you were relying on the old look, read the matrix through the `[row, col]` indexer on the data type and draw it yourself.
 
+A styled symbol like the one above needs an opaque background when the output is SVG, whatever it does in raster: see [Styled finder patterns are lost in SVG on a non-opaque background](#styled-finder-patterns-are-lost-in-svg-on-a-non-opaque-background).
+
 ### `WithSize(w, h)` fits the symbol instead of stretching it
 
 **Behavior change, and the second reason to upgrade.** A canvas whose width and height differ used to stretch a Standard QR or Micro QR symbol across both axes, so the modules stopped being square:
@@ -448,13 +450,13 @@ The symbol keeps its opaque white background and only the padding is transparent
 
 This reaches all three symbologies. rMQR's `WithSize` padding was transparent by default and is now the background, matching what `WithWidth` already produced.
 
-One subtlety if you set `clearColor` explicitly: it is a *canvas* colour, painted under the symbol as well as around it, not only a pad colour. With an opaque background you cannot tell the difference, but with a translucent one you can — writing `clearColor` equal to your background lays that colour down twice inside the symbol box and once outside it, so the box comes out denser than the pad. Leave `clearColor` unset to get the padding-matches-background behaviour; set it when you want a different canvas.
+One subtlety if you call `WithClearColor`: the clear colour is a *canvas* colour, painted under the symbol as well as around it, not only a pad colour. With an opaque background you cannot tell the difference, but with a translucent one you can — a clear colour equal to your background lays that colour down twice inside the symbol box and once outside it, so the box comes out denser than the pad. Leave the clear colour unset to get the padding-matches-background behaviour; set it when you want a different canvas.
 
 The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched renders are the real old output, reproduced with a canvas scale over a square area, which gives the pixels the old fill did.
 
 ### Builder options take values, not `null`: `WithCodeColor`, `WithBackgroundColor`, `WithClearColor`
 
-**Compile-time break, no behaviour change.** `WithColors` used to take three optional colours and assign all three on every call, so a second call reset whatever the first had set. It now takes the two colours a symbol always has, both required, and each colour also has a setter of its own.
+**Compile-time break for the colours; the shape setters also need a look, because one `null` they used to accept still compiles.** `WithColors` used to take three optional colours and assign all three on every call, so a second call reset whatever the first had set. It now takes the two colours a symbol always has, both required, and each colour also has a setter of its own.
 
 ```csharp
 // 1.x through 2.0.0-preview.2
@@ -468,15 +470,48 @@ The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samp
 
 `WithColors(codeColor, backgroundColor)` still compiles, named arguments and all; only the omitted-argument forms and the three-argument form have to be rewritten, and the compiler finds every one of them. Chaining them now does what reading them suggests, so `.WithBackgroundColor(SKColors.Yellow).WithClearColor(SKColors.Transparent)` keeps the yellow background the earlier call asked for.
 
-`WithModuleShape` and `WithFinderPatternShape` stopped accepting `null` in the same change. Pass `RectangleModuleShape.Default` and `RectangleFinderPatternShape.Default` where you passed `null`; those are the plain squares the builder starts with, and both render identically to omitting the call (measured byte for byte), so nothing about your output changes. If the `null` came from an options object where it meant "the user picked nothing", keep that meaning by leaving the setter uncalled:
+`WithModuleShape` and `WithFinderPatternShape` stopped accepting `null` in the same change, and they are the part of this migration the compiler may not hand you. Both now throw `ArgumentNullException`, and a `null` argument still compiles: with nullable reference types enabled it is a warning (CS8625 for a literal, CS8604 when the null arrives through a variable, and nothing at all when it is suppressed with `!`), and in a project with them disabled — every C# 7.3 consumer, see [Older language versions](#older-language-versions) — there is no diagnostic whatsoever. Search for these two calls by hand rather than waiting for a build error.
+
+**Replace a `null` by not calling the setter.** That is the state `null` used to ask for, it needs no substitute value, and it is what the library itself does:
 
 ```csharp
 var builder = new QRCodeImageBuilder(data).WithSize(512, 512);
 var shape = ShapeFor(options);                                    // null when nothing was picked
-if (shape is not null) builder = builder.WithFinderPatternShape(shape);
+if (shape != null) builder = builder.WithFinderPatternShape(shape);
 ```
 
+`RectangleModuleShape.Default` and `RectangleFinderPatternShape.Default` are the same plain squares and are the right argument when you mean them. For `WithModuleShape` they are an exact substitute for the old `null`. For `WithFinderPatternShape` they are an exact substitute in raster output — pixel-identical, except that a gradient over a non-opaque background can differ in tens of pixels, at some canvas sizes, by one step of one channel — and **not** in SVG: naming a finder shape moves the finder patterns onto a drawing path that `SKSvgCanvas` cannot express when the background is not fully opaque, and they are dropped from the document, leaving a symbol no reader can scan. If you emit SVG, read [Styled finder patterns are lost in SVG on a non-opaque background](#styled-finder-patterns-are-lost-in-svg-on-a-non-opaque-background) before choosing a substitute.
+
 `WithGradient(null)`, `WithIcon(null)` and `WithClearColor(null)` are unchanged: there `null` means the option is absent rather than set to a default, which is the difference the change is about.
+
+### Styled finder patterns are lost in SVG on a non-opaque background
+
+**Known limitation.** An SVG whose background is transparent or translucent loses its finder patterns whenever the finder patterns are drawn as a shape of their own: the light rings are cut out with a blend mode inside a layer, and `SKSvgCanvas` writes nothing for that layer. The symbol comes out with empty corners and no reader can scan it. Raster output is unaffected, on any background.
+
+It happens when the background alpha is below 255 and either of these is true:
+
+- `WithFinderPatternShape(…)` was called with any shape, the plain square included
+- the modules are styled (`WithModuleShape` with a shape other than the plain square, or a size percent below 1.0), which substitutes a solid square finder, because styling never reaches a finder pattern
+
+The second case is the one to watch: it needs no finder-shape call at all, so leaving the setter uncalled is not a workaround there. Any symbol styled the way the [module styling](#module-styling-no-longer-reaches-the-finder-patterns) section shows is affected, whether or not it names a finder shape.
+
+**The remedy is an opaque background.** What the finder patterns need is that the colour behind them is opaque; that colour also fills the quiet zone, so a styled SVG cannot have a transparent symbol box at all.
+
+What you can still have is a transparent *pad*, the canvas outside the symbol, when the canvas is larger than the content:
+
+```csharp
+new QRCodeImageBuilder("https://example.com")
+    .WithModulePixelSize(8)                       // content size follows the modules
+    .WithSize(512, 512)                           // larger canvas, so there is a pad
+    .WithBackgroundColor(SKColors.White)          // opaque: the finders need it
+    .WithClearColor(SKColors.Transparent)         // the pad only, not the quiet zone
+    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.85f)
+    .ToSvgString();
+```
+
+Without `WithModulePixelSize` a square symbol fills a square canvas, there is no pad, and the clear colour has nothing to paint.
+
+Raster output has no such constraint, so a transparent background is fine for PNG and WebP. Only part of this predates 2.0.0: Standard QR with an explicit finder shape behaved this way in 1.x too, while the styled-module case arrived with the 2.0.0 rule that styling never reaches a finder pattern. Micro QR and rMQR reach the defect through both routes, one of which (the setter) they gained in 2.0.0 while the other needs no setter at all.
 
 ## 1.2.0
 

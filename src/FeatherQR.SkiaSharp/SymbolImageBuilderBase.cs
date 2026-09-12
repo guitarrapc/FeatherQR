@@ -195,6 +195,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <remarks>
     /// Styles the data modules only. The finder patterns keep their solid shape whatever is asked for here, because a decoder locates the symbol by scanning for their 1:1:3:1:1 run of dark and light, and gaps between modules erase it: a symbol whose finders are drawn as separated shapes is not read by anything, this library or a phone. Use <c>WithFinderPatternShape</c> to style them in a way that keeps them detectable.
     /// Every custom shape costs scan margin, and below 0.8 the symbol may stop scanning reliably, so test what you ship.
+    /// Styling the modules substitutes a solid square finder pattern, which SVG output cannot draw over a background that is not fully opaque: give a styled SVG an opaque background, or its finder patterns are dropped and nothing can scan it.
     /// </remarks>
     /// <param name="moduleShape">The shape to draw. <see cref="RectangleModuleShape.Default"/> for the plain squares a builder starts with.</param>
     /// <param name="sizePercent">How much of its cell a data module fills, 0.5 to 1.0. The default 1.0 leaves no gaps.</param>
@@ -217,8 +218,9 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <remarks>
     /// The built-in shapes reshape the concentric rings without breaking them, so they stay detectable; what a decoder needs is that the rings are continuous, not that they are square. Not calling this leaves the plain square the standards define, which is always the safest to scan, and it is also what a styled symbol gets: a shaped module never reaches a finder pattern.
+    /// A shaped finder pattern is cut out of its background, which SVG output cannot express on a background that is not fully opaque: the finder patterns are dropped from the document and the symbol stops scanning. Give SVG output an opaque background. Not calling this is no escape, because styled modules substitute a solid square finder and reach the same path.
     /// </remarks>
-    /// <param name="finderPatternShape">The shape to draw. <see cref="RectangleFinderPatternShape.Default"/> for the plain squares a builder starts with; it renders identically, only through the finder pass rather than with the modules around it.</param>
+    /// <param name="finderPatternShape">The shape to draw. <see cref="RectangleFinderPatternShape.Default"/> for the plain squares a builder starts with; in raster output it renders as not calling this at all, drawn through the finder pass rather than with the modules around it, and pixel for pixel except where a gradient meets a background that is not fully opaque.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="finderPatternShape"/> is <see langword="null"/>.</exception>
     public TSelf WithFinderPatternShape(FinderPatternShape finderPatternShape)
     {
@@ -285,7 +287,7 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// Renders the symbol as an SVG document and writes it to a stream.
     /// </summary>
     /// <remarks>
-    /// The symbol is drawn as vector shapes, so it scales without losing quality, and every builder option applies.
+    /// The symbol is drawn as vector shapes, so it scales without losing quality, and the colors, shapes, gradients and icons all apply, with one trap: a styled symbol needs an opaque background here, because the finder patterns are cut out of what is behind them and SVG cannot express that cut through a background that is not fully opaque. They are dropped from the document instead, and the symbol stops scanning. This reaches any <c>WithFinderPatternShape</c> and any styled module set.
     /// The root element carries a <c>viewBox</c>, so the document resizes when embedded at another size.
     /// Plain square modules get <c>shape-rendering="crispEdges"</c> to avoid antialiasing seams; custom shapes keep antialiasing for smooth curves.
     /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> does not apply, since SVG is not a raster format; the size options set the viewport instead.

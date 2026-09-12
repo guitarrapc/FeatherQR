@@ -764,7 +764,7 @@ var bytes = QRCodeImageBuilder.GetImageBytes(
 
 #### SVG Output (Vector)
 
-SVG output draws the QR code as vector shapes, so it scales to any size without quality loss, ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well.
+SVG output draws the QR code as vector shapes, so it scales to any size without quality loss, ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well, with one exception noted below.
 
 ```csharp
 using SkiaSharp;
@@ -790,6 +790,9 @@ Size options define the SVG viewport rather than pixels. `WithFormat()` does not
 
 > [!TIP]
 > SVG output includes a viewBox and scales to any display size. Default rectangular modules produce compact, crisp-edged SVGs. Custom shapes and gradients increase the document size, and icons are embedded directly in the SVG.
+
+> [!WARNING]
+> Give SVG output an opaque background when you style the symbol. A finder pattern drawn as a shape of its own is cut out of its background, and SVG cannot express that cut on a background that is not fully opaque: the finder patterns are dropped and the symbol stops scanning. This covers `WithFinderPatternShape` with any shape, and any `WithModuleShape` other than full-size squares, because styled modules get a solid square finder. Raster output is unaffected.
 
 #### Choosing Image Size
 
@@ -838,13 +841,16 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 new QRCodeImageBuilder("https://example.com")
-    .WithSize(800, 800)
+    .WithModulePixelSize(16)                       // content size follows the modules
+    .WithSize(800, 800)                            // larger canvas, so there is a pad to clear
     .WithColors(
         codeColor: SKColor.Parse("#000080"),       // Navy
         backgroundColor: SKColor.Parse("#FFE4B5")) // Moccasin
     .WithClearColor(SKColors.Transparent)
     .ToByteArray();
 ```
+
+The clear color paints the canvas the symbol does not reach, so it needs a canvas larger than the content: with `WithSize` alone a square symbol fills a square canvas and there is nothing to paint.
 
 #### Gradient QR code
 
