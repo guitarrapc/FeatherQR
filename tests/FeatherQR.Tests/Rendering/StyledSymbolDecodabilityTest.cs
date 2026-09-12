@@ -370,6 +370,62 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
+    /// The background's alpha changes the background rect and nothing else in the SVG. Every
+    /// built-in finder shape used to be cut out of its background with a blend mode inside a layer
+    /// when the alpha was below 255, and <c>SKSvgCanvas</c> dropped the layer whole, so the
+    /// translucent document lost its finder patterns: 9 elements on Standard QR, 3 on the others.
+    /// The ring is a hole in the drawing now, so the two documents differ only in the
+    /// <c>fill-opacity</c> of the background.
+    /// </summary>
+    [Test]
+    [Arguments("qr", "rectangle")]
+    [Arguments("qr", "circle")]
+    [Arguments("qr", "rounded")]
+    [Arguments("qr", "roundedCircle")]
+    [Arguments("microqr", "rectangle")]
+    [Arguments("microqr", "circle")]
+    [Arguments("microqr", "rounded")]
+    [Arguments("microqr", "roundedCircle")]
+    [Arguments("rmqr", "rectangle")]
+    [Arguments("rmqr", "circle")]
+    [Arguments("rmqr", "rounded")]
+    [Arguments("rmqr", "roundedCircle")]
+    public async Task DecorativeFinder_TranslucentBackground_DrawsTheSameSvgElements(string symbology, string finder)
+    {
+        var shape = FinderShapeOf(finder);
+
+        string Svg(byte alpha)
+        {
+            var background = SKColors.White.WithAlpha(alpha);
+            return symbology switch
+            {
+                "rmqr" => new RmQRCodeImageBuilder("https://githu").WithSize(630, 160).WithVersion(RmQRVersion.R11x59)
+                    .WithBackgroundColor(background).WithFinderPatternShape(shape).ToSvgString(),
+                "microqr" => new MicroQRCodeImageBuilder("https://githu").WithSize(504, 504)
+                    .WithBackgroundColor(background).WithFinderPatternShape(shape).ToSvgString(),
+                _ => new QRCodeImageBuilder("https://githu").WithSize(512, 512)
+                    .WithBackgroundColor(background).WithFinderPatternShape(shape).ToSvgString(),
+            };
+        }
+
+        static string WithoutOpacity(string svg)
+        {
+            var doc = System.Xml.Linq.XDocument.Parse(svg);
+            foreach (var attribute in doc.Descendants().SelectMany(e => e.Attributes("fill-opacity")).ToArray())
+                attribute.Remove();
+            return doc.ToString();
+        }
+
+        var opaque = Svg(255);
+        var translucent = Svg(128);
+
+        // The premise: alpha 128 really is written as an opacity, so the comparison below is not
+        // trivially true because both documents dropped it.
+        await Assert.That(translucent).Contains("fill-opacity");
+        await Assert.That(WithoutOpacity(translucent)).IsEqualTo(WithoutOpacity(opaque));
+    }
+
+    /// <summary>
     /// Every decorative finder decodes in a wide canvas. The builder fits the symbol, so the
     /// finder is square here; whether the circle-based ones follow a non-square grid, which only a
     /// direct call can ask of them now, is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
@@ -415,10 +471,10 @@ public class StyledSymbolDecodabilityTest
         using var bitmap = new SKBitmap((int)rect.Right + 10, (int)rect.Bottom + 10);
         using (var canvas = new SKCanvas(bitmap))
         {
+            // The ring is left undrawn, so its cells read as the red the canvas was cleared to.
             canvas.Clear(SKColors.Red);
             using var dark = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-            using var light = new SKPaint { Color = SKColors.White, IsAntialias = true };
-            FinderShapeOf(finder).Draw(canvas, rect, dark, light);
+            FinderShapeOf(finder).Draw(canvas, rect, dark);
         }
 
         bool[] ring = [true, false, true, true, true, false, true];

@@ -10,8 +10,6 @@ namespace FeatherQR.SkiaSharp
         public static readonly CircleFinderPatternShape Default;
         public bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);
     }
 
     public sealed class CircleModuleShape : ModuleShape
@@ -26,8 +24,6 @@ namespace FeatherQR.SkiaSharp
         protected FinderPatternShape();
         public bool RequiresAntialiasing { get; }
         public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
-        public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);
-        public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);
     }
 
     public enum GradientDirection : int
@@ -171,8 +167,6 @@ namespace FeatherQR.SkiaSharp
         public static readonly RectangleFinderPatternShape Default;
         public bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);
     }
 
     public sealed class RectangleModuleShape : ModuleShape
@@ -225,8 +219,6 @@ namespace FeatherQR.SkiaSharp
         public RoundedRectangleCircleFinderPatternShape(float cornerRadiusPercent = 0.3);
         public bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);
     }
 
     public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
@@ -235,8 +227,6 @@ namespace FeatherQR.SkiaSharp
         public RoundedRectangleFinderPatternShape(float cornerRadiusPercent = 0.2);
         public bool RequiresAntialiasing { get; }
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);
     }
 
     public sealed class RoundedRectangleModuleShape : ModuleShape

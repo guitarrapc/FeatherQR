@@ -1925,7 +1925,7 @@
       </section>
       <section class="ns">
         <h2>namespace FeatherQR.SkiaSharp</h2>
-        <article class="type" id="FeatherQR.SkiaSharp.CircleFinderPatternShape" data-name="featherqr.skiasharp.circlefinderpatternshape" data-text="featherqr.skiasharp.circlefinderpatternshape public sealed class circlefinderpatternshape : finderpatternshape three nested ovals, circles on a square area.  field public static readonly circlefinderpatternshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.CircleFinderPatternShape" data-name="featherqr.skiasharp.circlefinderpatternshape" data-text="featherqr.skiasharp.circlefinderpatternshape public sealed class circlefinderpatternshape : finderpatternshape three nested ovals, circles on a square area.  field public static readonly circlefinderpatternshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.CircleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.CircleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">CircleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class CircleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">Three nested ovals, circles on a square area.</p>
@@ -1943,14 +1943,6 @@
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
               <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
               <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);</code></pre>
-            </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);</code></pre>
-            </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);</code></pre>
             </div>
           </div>
         </article>
@@ -1975,10 +1967,14 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.FinderPatternShape" data-name="featherqr.skiasharp.finderpatternshape" data-text="featherqr.skiasharp.finderpatternshape public abstract class finderpatternshape how the finder patterns, the large squares in the corners, are drawn: three of them on standard qr, one on micro qr and rmqr.  constructor protected finderpatternshape();  property public bool requiresantialiasing { get; } gets whether this shape requires antialiasing for smooth rendering. curved shapes such as circles and rounded rectangles should return true ; straight-edged shapes such as rectangles can return false .  method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws a finder pattern.  method public virtual void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor); draws a finder pattern, coloring its light modules too.  method public virtual void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); draws a finder pattern using the paint the renderer already holds for light modules. the default implementation preserves compatibility with custom finder shapes that override the color-based overload. built-in shapes override this overload so the renderer can reuse its background paint. the renderer may set the paint's blend mode to clear while drawing on an isolated layer so transparent and translucent light modules reveal the background rendered beneath the finder pattern. implementations should therefore draw with this paint directly instead of copying only its color. the renderer owns backgroundpaint and may reuse it across calls; implementations must not modify or dispose it. custom shapes should override this overload when they need to reuse the renderer's configured background paint or when they must support non-opaque backgrounds (blend modes). existing custom shapes may continue to override draw , but that overload cannot use the renderer's blend mode.">
+        <article class="type" id="FeatherQR.SkiaSharp.FinderPatternShape" data-name="featherqr.skiasharp.finderpatternshape" data-text="featherqr.skiasharp.finderpatternshape public abstract class finderpatternshape how the finder patterns, the large squares in the corners, are drawn: three of them on standard qr, one on micro qr and rmqr. a shape draws the dark modules only. the light ring between them is left undrawn, so whatever the renderer put beneath the finder pattern, the background at any alpha, shows through it: nothing is painted over and nothing is erased, which is what lets raster and svg output carry the same drawing. constructor protected finderpatternshape();  property public bool requiresantialiasing { get; } gets whether this shape requires antialiasing for smooth rendering. curved shapes such as circles and rounded rectangles should return true ; straight-edged shapes such as rectangles can return false .  method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws the dark modules of a finder pattern. the light ring is left undrawn. ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.FinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.FinderPatternShape">#</a><span class="kind">class</span> <span class="name">FinderPatternShape</span></h3>
           <pre class="sig"><code>public abstract class FinderPatternShape</code></pre>
           <p class="doc">How the finder patterns, the large squares in the corners, are drawn: three of them on Standard QR, one on Micro QR and rMQR.</p>
+          <details class="notes" data-text="a shape draws the dark modules only. the light ring between them is left undrawn, so whatever the renderer put beneath the finder pattern, the background at any alpha, shows through it: nothing is painted over and nothing is erased, which is what lets raster and svg output carry the same drawing.">
+            <summary>Notes</summary>
+            <p class="doc remarks">A shape draws the dark modules only. The light ring between them is left undrawn, so whatever the renderer put beneath the finder pattern, the background at any alpha, shows through it: nothing is painted over and nothing is erased, which is what lets raster and SVG output carry the same drawing.</p>
+          </details>
           <div class="members">
             <div class="member" data-text="constructor protected finderpatternshape(); ">
               <h4><span class="kind">constructor</span> <span class="name">FinderPatternShape</span></h4>
@@ -1989,24 +1985,10 @@
               <pre class="sig"><code>public bool RequiresAntialiasing { get; }</code></pre>
               <p class="doc">Gets whether this shape requires antialiasing for smooth rendering. Curved shapes such as circles and rounded rectangles should return true ; straight-edged shapes such as rectangles can return false .</p>
             </div>
-            <div class="member" data-text="method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws a finder pattern. ">
+            <div class="member" data-text="method public abstract void draw(skcanvas canvas, skrect rect, skpaint paint); draws the dark modules of a finder pattern. the light ring is left undrawn. ">
               <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
               <pre class="sig"><code>public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);</code></pre>
-              <p class="doc">Draws a finder pattern.</p>
-            </div>
-            <div class="member" data-text="method public virtual void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor); draws a finder pattern, coloring its light modules too. ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);</code></pre>
-              <p class="doc">Draws a finder pattern, coloring its light modules too.</p>
-            </div>
-            <div class="member" data-text="method public virtual void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); draws a finder pattern using the paint the renderer already holds for light modules. the default implementation preserves compatibility with custom finder shapes that override the color-based overload. built-in shapes override this overload so the renderer can reuse its background paint. the renderer may set the paint's blend mode to clear while drawing on an isolated layer so transparent and translucent light modules reveal the background rendered beneath the finder pattern. implementations should therefore draw with this paint directly instead of copying only its color. the renderer owns backgroundpaint and may reuse it across calls; implementations must not modify or dispose it. custom shapes should override this overload when they need to reuse the renderer's configured background paint or when they must support non-opaque backgrounds (blend modes). existing custom shapes may continue to override draw , but that overload cannot use the renderer's blend mode.">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);</code></pre>
-              <p class="doc">Draws a finder pattern using the paint the renderer already holds for light modules.</p>
-              <details class="notes" data-text="the default implementation preserves compatibility with custom finder shapes that override the color-based overload. built-in shapes override this overload so the renderer can reuse its background paint. the renderer may set the paint's blend mode to clear while drawing on an isolated layer so transparent and translucent light modules reveal the background rendered beneath the finder pattern. implementations should therefore draw with this paint directly instead of copying only its color. the renderer owns backgroundpaint and may reuse it across calls; implementations must not modify or dispose it. custom shapes should override this overload when they need to reuse the renderer's configured background paint or when they must support non-opaque backgrounds (blend modes). existing custom shapes may continue to override draw , but that overload cannot use the renderer's blend mode.">
-                <summary>Notes</summary>
-                <p class="doc remarks">The default implementation preserves compatibility with custom finder shapes that override the color-based overload. Built-in shapes override this overload so the renderer can reuse its background paint. The renderer may set the paint's blend mode to Clear while drawing on an isolated layer so transparent and translucent light modules reveal the background rendered beneath the finder pattern. Implementations should therefore draw with this paint directly instead of copying only its color. The renderer owns backgroundPaint and may reuse it across calls; implementations must not modify or dispose it. Custom shapes should override this overload when they need to reuse the renderer's configured background paint or when they must support non-opaque backgrounds (blend modes). Existing custom shapes may continue to override Draw , but that overload cannot use the renderer's blend mode.</p>
-              </details>
+              <p class="doc">Draws the dark modules of a finder pattern. The light ring is left undrawn.</p>
             </div>
           </div>
         </article>
@@ -2592,7 +2574,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RectangleFinderPatternShape" data-name="featherqr.skiasharp.rectanglefinderpatternshape" data-text="featherqr.skiasharp.rectanglefinderpatternshape public sealed class rectanglefinderpatternshape : finderpatternshape the standard finder pattern: three nested squares.  field public static readonly rectanglefinderpatternshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } off: straight edges render cleanly without it.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RectangleFinderPatternShape" data-name="featherqr.skiasharp.rectanglefinderpatternshape" data-text="featherqr.skiasharp.rectanglefinderpatternshape public sealed class rectanglefinderpatternshape : finderpatternshape the standard finder pattern: three nested squares.  field public static readonly rectanglefinderpatternshape default; a ready-made instance to use as-is.  property public bool requiresantialiasing { get; } off: straight edges render cleanly without it.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RectangleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RectangleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RectangleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RectangleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">The standard finder pattern: three nested squares.</p>
@@ -2610,14 +2592,6 @@
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
               <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
               <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);</code></pre>
-            </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);</code></pre>
-            </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);</code></pre>
             </div>
           </div>
         </article>
@@ -2803,7 +2777,7 @@
             </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape public sealed class roundedrectanglecirclefinderpatternshape : finderpatternshape two nested rounded rectangles around an oval, a circle on a square area.  field public static readonly roundedrectanglecirclefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglecirclefinderpatternshape(float cornerradiuspercent = 0.3); creates the shape with a corner radius of your own.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglecirclefinderpatternshape public sealed class roundedrectanglecirclefinderpatternshape : finderpatternshape two nested rounded rectangles around an oval, a circle on a square area.  field public static readonly roundedrectanglecirclefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglecirclefinderpatternshape(float cornerradiuspercent = 0.3); creates the shape with a corner radius of your own.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RoundedRectangleCircleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RoundedRectangleCircleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">Two nested rounded rectangles around an oval, a circle on a square area.</p>
@@ -2827,17 +2801,9 @@
               <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
               <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);</code></pre>
             </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);</code></pre>
-            </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);</code></pre>
-            </div>
           </div>
         </article>
-        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglefinderpatternshape public sealed class roundedrectanglefinderpatternshape : finderpatternshape three nested rounded rectangles.  field public static readonly roundedrectanglefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglefinderpatternshape(float cornerradiuspercent = 0.2); creates the shape with a corner radius of your own.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor);  method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
+        <article class="type" id="FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape" data-name="featherqr.skiasharp.roundedrectanglefinderpatternshape" data-text="featherqr.skiasharp.roundedrectanglefinderpatternshape public sealed class roundedrectanglefinderpatternshape : finderpatternshape three nested rounded rectangles.  field public static readonly roundedrectanglefinderpatternshape default; a ready-made instance to use as-is.  constructor public roundedrectanglefinderpatternshape(float cornerradiuspercent = 0.2); creates the shape with a corner radius of your own.  property public bool requiresantialiasing { get; } on, so the curves do not come out jagged.  method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
           <h3><a class="anchor" href="#FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape" aria-label="Link to FeatherQR.SkiaSharp.RoundedRectangleFinderPatternShape">#</a><span class="kind">class</span> <span class="name">RoundedRectangleFinderPatternShape</span></h3>
           <pre class="sig"><code>public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape</code></pre>
           <p class="doc">Three nested rounded rectangles.</p>
@@ -2860,14 +2826,6 @@
             <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint); ">
               <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
               <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);</code></pre>
-            </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skcolor backgroundcolor); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor);</code></pre>
-            </div>
-            <div class="member" data-text="method public override void draw(skcanvas canvas, skrect rect, skpaint paint, skpaint backgroundpaint); ">
-              <h4><span class="kind">method</span> <span class="name">Draw</span></h4>
-              <pre class="sig"><code>public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint);</code></pre>
             </div>
           </div>
         </article>

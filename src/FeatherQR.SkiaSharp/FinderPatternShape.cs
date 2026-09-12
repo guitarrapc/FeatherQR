@@ -5,6 +5,9 @@ namespace FeatherQR.SkiaSharp;
 /// <summary>
 /// How the finder patterns, the large squares in the corners, are drawn: three of them on Standard QR, one on Micro QR and rMQR.
 /// </summary>
+/// <remarks>
+/// A shape draws the dark modules only. The light ring between them is left undrawn, so whatever the renderer put beneath the finder pattern, the background at any alpha, shows through it: nothing is painted over and nothing is erased, which is what lets raster and SVG output carry the same drawing.
+/// </remarks>
 public abstract class FinderPatternShape
 {
     /// <summary>
@@ -14,45 +17,12 @@ public abstract class FinderPatternShape
     public virtual bool RequiresAntialiasing => false;
 
     /// <summary>
-    /// Draws a finder pattern.
+    /// Draws the dark modules of a finder pattern. The light ring is left undrawn.
     /// </summary>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="rect">Where to draw it: the 7 by 7 module area.</param>
-    /// <param name="paint">The paint to draw with.</param>
+    /// <param name="paint">The paint for dark modules. The renderer owns it and may reuse it across calls; do not modify or dispose it.</param>
     public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
-
-    /// <summary>
-    /// Draws a finder pattern, coloring its light modules too.
-    /// </summary>
-    /// <param name="canvas">The canvas to render on.</param>
-    /// <param name="rect">Where to draw it: the 7 by 7 module area.</param>
-    /// <param name="paint">The paint for dark modules.</param>
-    /// <param name="backgroundColor">The color for light modules.</param>
-    public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
-    {
-        Draw(canvas, rect, paint);
-    }
-
-    /// <summary>
-    /// Draws a finder pattern using the paint the renderer already holds for light modules.
-    /// </summary>
-    /// <remarks>
-    /// The default implementation preserves compatibility with custom finder shapes that override the color-based overload.
-    /// Built-in shapes override this overload so the renderer can reuse its background paint.
-    /// The renderer may set the paint's blend mode to <see cref="SKBlendMode.Clear"/> while drawing on an isolated layer so transparent and translucent light modules reveal the background rendered beneath the finder pattern.
-    /// Implementations should therefore draw with this paint directly instead of copying only its color.
-    /// The renderer owns <paramref name="backgroundPaint"/> and may reuse it across calls; implementations must not modify or dispose it.
-    /// Custom shapes should override this overload when they need to reuse the renderer's configured background paint or when they must support non-opaque backgrounds (blend modes).
-    /// Existing custom shapes may continue to override <see cref="Draw(SKCanvas, SKRect, SKPaint, SKColor)"/>, but that overload cannot use the renderer's blend mode.
-    /// </remarks>
-    /// <param name="canvas">The canvas to render on.</param>
-    /// <param name="rect">Where to draw it: the 7 by 7 module area.</param>
-    /// <param name="paint">The paint for dark modules.</param>
-    /// <param name="backgroundPaint">The renderer-owned paint to use for drawing light modules. Do not modify or dispose it.</param>
-    public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
-    {
-        Draw(canvas, rect, paint, backgroundPaint.Color);
-    }
 }
 
 /// <summary>
@@ -76,37 +46,28 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
-        Draw(canvas, rect, paint, SKColors.White);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
-    {
-        using var backgroundPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
-        Draw(canvas, rect, paint, backgroundPaint);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
-    {
         // Per axis: every renderer path hands this a square, rMQR's letterbox included, since one scale
         // sizes both axes there. A caller drawing into a non-square rect still needs the rings on the
         // same grid as the modules around them.
         var moduleWidth = rect.Width / 7f;
         var moduleHeight = rect.Height / 7f;
 
-        // Draw outer ring (7×7)
-        canvas.DrawRect(rect, paint);
-
-        // Draw ring (5×5)
+        // The 5×5 hole. Its edges are what the outer ring's bands meet, so the ring lands on the same
+        // pixels whether drawn as bands or, as it once was, as a light square over a dark one.
         var innerRect = SKRect.Create(
             rect.Left + moduleWidth,
             rect.Top + moduleHeight,
             moduleWidth * 5,
             moduleHeight * 5);
-        canvas.DrawRect(innerRect, backgroundPaint);
 
-        // Draw black center (3×3)
+        // Outer ring (7×7) as four bands around the hole, rectangles so the SVG stays rectangles:
+        // top and bottom full width, the two sides between them.
+        canvas.DrawRect(new SKRect(rect.Left, rect.Top, rect.Right, innerRect.Top), paint);
+        canvas.DrawRect(new SKRect(rect.Left, innerRect.Bottom, rect.Right, rect.Bottom), paint);
+        canvas.DrawRect(new SKRect(rect.Left, innerRect.Top, innerRect.Left, innerRect.Bottom), paint);
+        canvas.DrawRect(new SKRect(innerRect.Right, innerRect.Top, rect.Right, innerRect.Bottom), paint);
+
+        // Center (3×3)
         var centerRect = SKRect.Create(
             rect.Left + moduleWidth * 2,
             rect.Top + moduleHeight * 2,
@@ -137,32 +98,18 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
-        Draw(canvas, rect, paint, SKColors.White);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
-    {
-        using var backgroundPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
-        Draw(canvas, rect, paint, backgroundPaint);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
-    {
         // Ovals inscribed in the ring rects rather than circles: on a square area they are the
         // same circles as before, and on a non-square one they keep following the module grid.
         var moduleWidth = rect.Width / 7f;
         var moduleHeight = rect.Height / 7f;
 
-        // Draw outer ring (7x7)
-        canvas.DrawOval(rect, paint);
-
-        // Draw ring (5x5)
-        canvas.DrawOval(SKRect.Create(rect.Left + moduleWidth, rect.Top + moduleHeight, moduleWidth * 5, moduleHeight * 5), backgroundPaint);
-
-        // Draw black center (3x3)
-        canvas.DrawOval(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3), paint);
+        // One even-odd path: the outer oval (7x7) with the ring oval (5x5) as a hole, and the
+        // center oval (3x3) filled again inside it.
+        using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        path.AddOval(rect);
+        path.AddOval(SKRect.Create(rect.Left + moduleWidth, rect.Top + moduleHeight, moduleWidth * 5, moduleHeight * 5));
+        path.AddOval(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3));
+        canvas.DrawPath(path, paint);
     }
 }
 
@@ -198,42 +145,18 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
-        Draw(canvas, rect, paint, SKColors.White);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
-    {
-        using var backgroundPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
-        Draw(canvas, rect, paint, backgroundPaint);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
-    {
         // Per axis, so the rings follow the module grid when the cells are not square.
         var moduleWidth = rect.Width / 7f;
         var moduleHeight = rect.Height / 7f;
         var radius = Math.Min(rect.Width, rect.Height) * _cornerRadiusPercent;
 
-        // Draw outer rounded rectangle (7×7)
-        canvas.DrawRoundRect(rect, radius, radius, paint);
-
-        // Draw ring (5×5)
-        var innerRect = SKRect.Create(
-            rect.Left + moduleWidth,
-            rect.Top + moduleHeight,
-            moduleWidth * 5,
-            moduleHeight * 5);
-        canvas.DrawRoundRect(innerRect, radius * 0.8f, radius * 0.8f, backgroundPaint);
-
-        // Draw black center (3×3)
-        var centerRect = SKRect.Create(
-            rect.Left + moduleWidth * 2,
-            rect.Top + moduleHeight * 2,
-            moduleWidth * 3,
-            moduleHeight * 3);
-        canvas.DrawRoundRect(centerRect, radius * 0.6f, radius * 0.6f, paint);
+        // One even-odd path: the outer rounded rectangle (7×7) with the ring (5×5) as a hole, and
+        // the center (3×3) filled again inside it.
+        using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        path.AddRoundRect(rect, radius, radius);
+        path.AddRoundRect(SKRect.Create(rect.Left + moduleWidth, rect.Top + moduleHeight, moduleWidth * 5, moduleHeight * 5), radius * 0.8f, radius * 0.8f);
+        path.AddRoundRect(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3), radius * 0.6f, radius * 0.6f);
+        canvas.DrawPath(path, paint);
     }
 }
 
@@ -269,19 +192,6 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
-        Draw(canvas, rect, paint, SKColors.White);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
-    {
-        using var backgroundPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
-        Draw(canvas, rect, paint, backgroundPaint);
-    }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
-    {
         // Per axis, so the rings follow the module grid when the cells are not square.
         var moduleWidth = rect.Width / 7f;
         var moduleHeight = rect.Height / 7f;
@@ -289,18 +199,12 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         // Corner radius for rounded rectangle
         var cornerRadius = Math.Min(rect.Width, rect.Height) * _cornerRadiusPercent;
 
-        // Draw outer rounded rectangle (7×7)
-        canvas.DrawRoundRect(rect, cornerRadius, cornerRadius, paint);
-
-        // Draw ring (5×5)
-        var innerRect = SKRect.Create(
-            rect.Left + moduleWidth,
-            rect.Top + moduleHeight,
-            moduleWidth * 5,
-            moduleHeight * 5);
-        canvas.DrawRoundRect(innerRect, cornerRadius * 0.7f, cornerRadius * 0.7f, backgroundPaint);
-
-        // Draw black center (3×3), an oval so it stays on the grid; a circle on a square area.
-        canvas.DrawOval(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3), paint);
+        // One even-odd path: the outer rounded rectangle (7×7) with the ring (5×5) as a hole, and
+        // the center (3×3) filled again inside it, an oval so it stays on the grid; a circle on a square area.
+        using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        path.AddRoundRect(rect, cornerRadius, cornerRadius);
+        path.AddRoundRect(SKRect.Create(rect.Left + moduleWidth, rect.Top + moduleHeight, moduleWidth * 5, moduleHeight * 5), cornerRadius * 0.7f, cornerRadius * 0.7f);
+        path.AddOval(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3));
+        canvas.DrawPath(path, paint);
     }
 }

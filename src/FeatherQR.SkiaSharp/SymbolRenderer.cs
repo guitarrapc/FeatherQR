@@ -32,7 +32,7 @@ public static class SymbolRenderer
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder patterns are never drawn with gaps, or the symbol stops being detectable.</param>
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
-    /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted. On a background that is not fully opaque, any shape here and any styled module set draw the finder patterns by cutting their light rings out of it. A raster canvas draws that correctly; an <c>SKSvgCanvas</c> cannot express the cut, so the finder patterns are dropped from the document it writes and the symbol stops scanning.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted. A shape draws the dark modules only and leaves the light rings undrawn, so the background shows through them at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, keeps its background and draws nothing else.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, an <paramref name="iconData"/> size, border or occupancy limit is out of range, or <paramref name="gradientOptions"/> has a direction that is not defined. Icon settings are checked whatever the area's size, so a render that draws nothing still refuses an icon it could not draw.</exception>
@@ -98,48 +98,19 @@ public static class SymbolRenderer
             DrawModules(canvas, new StandardQrMatrixView(data), symbolArea, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
         }
 
-        // Draw finder patterns
+        // Draw finder patterns. A shape draws the dark modules only and leaves the light ring
+        // undrawn, so the background beneath shows through at any alpha with no layer and no
+        // blend mode, which is what lets SKSvgCanvas write the same drawing a raster surface gets.
         if (finderShape is not null)
         {
-            // Finder shapes draw the outer dark area before drawing the light inner
-            // ring. A non-opaque light color with SrcOver cannot restore the
-            // background after that dark area has been drawn. In that case, draw
-            // each finder on a temporary layer and clear its light modules to reveal
-            // the already-rendered QR background underneath.
-            var requiresBackgroundRestore = bgColor.Alpha < byte.MaxValue;
-            if (requiresBackgroundRestore)
-            {
-                lightPaint.BlendMode = SKBlendMode.Clear;
-            }
-
-            // Curved finder shapes require antialiasing independently from module shapes.
-            // Apply the same setting to both paints so their shared edges are rasterized
-            // consistently.
-            if (finderShape.RequiresAntialiasing)
-            {
-                darkPaint.IsAntialias = true;
-                lightPaint.IsAntialias = true;
-            }
+            // The finder's antialiasing follows the finder shape, not the module shape: a square
+            // finder beside round modules stays crisp, a round one beside square modules does not.
+            darkPaint.IsAntialias = finderShape.RequiresAntialiasing;
 
             // total 3 finder patterns
             for (var i = 0; i < 3; i++)
             {
-                var finderRect = GetFinderPatternRect(data, i, symbolArea);
-                if (!requiresBackgroundRestore)
-                {
-                    finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
-                    continue;
-                }
-
-                var saveCount = canvas.SaveLayer(finderRect, null);
-                try
-                {
-                    finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
-                }
-                finally
-                {
-                    canvas.RestoreToCount(saveCount);
-                }
+                finderShape.Draw(canvas, GetFinderPatternRect(data, i, symbolArea), darkPaint);
             }
         }
 
@@ -167,7 +138,7 @@ public static class SymbolRenderer
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
-    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. On a background that is not fully opaque, any shape here and any styled module set draw the finder pattern by cutting its light rings out of it. A raster canvas draws that correctly; an <c>SKSvgCanvas</c> cannot express the cut, so the finder pattern is dropped from the document it writes and the symbol stops scanning.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, keeps its background and draws nothing else.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
@@ -226,7 +197,7 @@ public static class SymbolRenderer
         }
 
         if (finderShape is not null)
-            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint, lightPaint, bgColor);
+            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint);
     }
 
     /// <summary>
@@ -244,7 +215,7 @@ public static class SymbolRenderer
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted. It styles the data modules only; the finder pattern is never drawn with gaps, or the symbol stops being detectable.</param>
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
-    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. On a background that is not fully opaque, any shape here and any styled module set draw the finder pattern by cutting its light rings out of it. A raster canvas draws that correctly; an <c>SKSvgCanvas</c> cannot express the cut, so the finder pattern is dropped from the document it writes and the symbol stops scanning.</param>
+    /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, keeps its background and draws nothing else.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
@@ -301,7 +272,7 @@ public static class SymbolRenderer
         }
 
         if (finderShape is not null)
-            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint, lightPaint, bgColor);
+            DrawSingleFinder(canvas, view, symbolArea, finderShape, darkPaint);
     }
 
     /// <summary>
@@ -612,10 +583,10 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Draws the single top-left finder pattern that Micro QR and rMQR share, in the same
-    /// transparent-background-safe way as the Standard QR path above.
+    /// Draws the single top-left finder pattern that Micro QR and rMQR share, the way the Standard
+    /// QR path above does: dark modules only, the light ring left to the background beneath.
     /// </summary>
-    private static void DrawSingleFinder<TView>(SKCanvas canvas, TView data, SKRect area, FinderPatternShape finderShape, SKPaint darkPaint, SKPaint lightPaint, SKColor bgColor)
+    private static void DrawSingleFinder<TView>(SKCanvas canvas, TView data, SKRect area, FinderPatternShape finderShape, SKPaint darkPaint)
         where TView : struct, IModuleMatrixView
     {
         var cellWidth = area.Width / data.Width;
@@ -628,31 +599,9 @@ public static class SymbolRenderer
             cellWidth * 7,
             cellHeight * 7);
 
-        var requiresBackgroundRestore = bgColor.Alpha < byte.MaxValue;
-        if (requiresBackgroundRestore)
-            lightPaint.BlendMode = SKBlendMode.Clear;
-
-        if (finderShape.RequiresAntialiasing)
-        {
-            darkPaint.IsAntialias = true;
-            lightPaint.IsAntialias = true;
-        }
-
-        if (!requiresBackgroundRestore)
-        {
-            finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
-            return;
-        }
-
-        var saveCount = canvas.SaveLayer(finderRect, null);
-        try
-        {
-            finderShape.Draw(canvas, finderRect, darkPaint, lightPaint);
-        }
-        finally
-        {
-            canvas.RestoreToCount(saveCount);
-        }
+        // Follows the finder shape, not the module shape, as on Standard QR.
+        darkPaint.IsAntialias = finderShape.RequiresAntialiasing;
+        finderShape.Draw(canvas, finderRect, darkPaint);
     }
 
     /// <summary>
