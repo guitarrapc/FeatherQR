@@ -107,11 +107,11 @@ public class SegmentDecoderStatusOrderTest
         var shortData = MicroQRCodeGenerator.Create("1", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M2 });
         using var normal = new MicroQRCodeImageBuilder(longData)
             .WithModulePixelSize(8)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
             .ToBitmap();
         using var reversed = new MicroQRCodeImageBuilder(shortData)
             .WithModulePixelSize(8)
-            .WithColors(SKColors.White, SKColors.Black, SKColors.Black)
+            .WithColors(SKColors.White, SKColors.Black).WithClearColor(SKColors.Black)
             .ToBitmap();
 
         const int gap = 32;
@@ -125,6 +125,17 @@ public class SegmentDecoderStatusOrderTest
             canvas.DrawBitmap(reversed, normal.Width + gap, 0, SKSamplingOptions.Default);
             canvas.Flush();
         }
+
+        // The reversed symbol is the bait, and a bait nobody could take proves nothing: on its own it has
+        // to decode, through the very retry this test says must not run, into the one character that would
+        // fit the short destination below.
+        var baitLuminance = new byte[reversed.Width * reversed.Height];
+        BitmapLuminanceConverter.Convert(reversed, baitLuminance);
+        var bait = new char[1];
+        var baitDecoded = MicroQRCodeDecoder.TryDecodeImage(baitLuminance, reversed.Width, reversed.Height, bait, out var baitLength, out _);
+        await Assert.That(baitDecoded).IsTrue().Because("the reversed symbol must be readable, or the scene has no opposite-polarity result to offer");
+        await Assert.That(baitLength).IsEqualTo(1);
+        await Assert.That(bait[0]).IsEqualTo('1');
 
         var luminance = new byte[width * height];
         BitmapLuminanceConverter.Convert(scene, luminance);
@@ -142,11 +153,11 @@ public class SegmentDecoderStatusOrderTest
         var shortData = QRCodeGenerator.Create("1", QREccLevel.M);
         using var normal = new QRCodeImageBuilder(longData)
             .WithModulePixelSize(6)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
             .ToBitmap();
         using var reversed = new QRCodeImageBuilder(shortData)
             .WithModulePixelSize(6)
-            .WithColors(SKColors.White, SKColors.Black, SKColors.Black)
+            .WithColors(SKColors.White, SKColors.Black).WithClearColor(SKColors.Black)
             .ToBitmap();
 
         const int gap = 32;
@@ -160,6 +171,15 @@ public class SegmentDecoderStatusOrderTest
             canvas.DrawBitmap(reversed, normal.Width + gap, 0, SKSamplingOptions.Default);
             canvas.Flush();
         }
+
+        // Same bait check as the Micro QR case: the reversed symbol has to be readable on its own.
+        var baitLuminance = new byte[reversed.Width * reversed.Height];
+        BitmapLuminanceConverter.Convert(reversed, baitLuminance);
+        var bait = new char[1];
+        var baitDecoded = QRCodeDecoder.TryDecodeImage(baitLuminance, reversed.Width, reversed.Height, bait, out var baitLength, out _);
+        await Assert.That(baitDecoded).IsTrue().Because("the reversed symbol must be readable, or the scene has no opposite-polarity result to offer");
+        await Assert.That(baitLength).IsEqualTo(1);
+        await Assert.That(bait[0]).IsEqualTo('1');
 
         var luminance = new byte[width * height];
         BitmapLuminanceConverter.Convert(scene, luminance);

@@ -61,7 +61,7 @@ public class RenderingApprovalTest
             return new QRCodeImageBuilder(StandardContent)
                 .WithErrorCorrection(QREccLevel.H)
                 .WithModulePixelSize(4)
-                .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+                .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
                 .WithIcon(IconData.FromImage(icon))
                 .ToBitmap();
         },
@@ -77,13 +77,13 @@ public class RenderingApprovalTest
             new MicroQRCodeImageBuilder("MICRO1")
                 .WithErrorCorrection(MicroQREccLevel.M)
                 .WithModulePixelSize(4)
-                .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+                .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
                 .ToBitmap(),
         ["microqr-gradient-circle"] = static () =>
             new MicroQRCodeImageBuilder("MICRO1")
                 .WithErrorCorrection(MicroQREccLevel.M)
                 .WithModulePixelSize(4)
-                .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+                .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
                 .WithModuleShape(CircleModuleShape.Default)
                 .WithGradient(new GradientOptions([SKColors.DarkSlateBlue, SKColors.Crimson], GradientDirection.LeftToRight))
                 .ToBitmap(),
@@ -93,13 +93,13 @@ public class RenderingApprovalTest
             new RmQRCodeImageBuilder("RMQR-STYLE")
                 .WithErrorCorrection(RmQREccLevel.M)
                 .WithModulePixelSize(4)
-                .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+                .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
                 .ToBitmap(),
         ["rmqr-gradient-rounded"] = static () =>
             new RmQRCodeImageBuilder("RMQR-STYLE")
                 .WithErrorCorrection(RmQREccLevel.M)
                 .WithModulePixelSize(4)
-                .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+                .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
                 .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.85f)
                 .WithGradient(new GradientOptions([SKColors.DarkGreen, SKColors.OrangeRed], GradientDirection.TopToBottom))
                 .ToBitmap(),
@@ -109,7 +109,7 @@ public class RenderingApprovalTest
         new QRCodeImageBuilder(StandardContent)
             .WithErrorCorrection(QREccLevel.M)
             .WithModulePixelSize(4)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.White);
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White);
 
     /// <summary>Deterministic icon: Skia shapes only, no fonts, no external assets.</summary>
     private static SKBitmap CreateIconBitmap()

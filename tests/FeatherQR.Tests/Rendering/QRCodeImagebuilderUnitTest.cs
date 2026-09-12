@@ -253,7 +253,7 @@ public class QRCodeImageBuilderTest
         using var bitmap = new QRCodeImageBuilder(TestContent)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasWidth, canvasHeight)
-            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White).WithClearColor(SKColors.Transparent)
             .ToBitmap();
 
         await Assert.That(bitmap.Width).IsEqualTo(canvasWidth);
@@ -314,7 +314,7 @@ public class QRCodeImageBuilderTest
         using var bitmap = new QRCodeImageBuilder(TestContent)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasSide, canvasSide)
-            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White).WithClearColor(SKColors.Transparent)
             .ToBitmap();
 
         var expectedLeft = (canvasSide - contentSide) / 2;
@@ -471,16 +471,16 @@ public class QRCodeImageBuilderTest
     public async Task WithColors_ValidColors_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
-        var result = builder.WithColors(SKColors.Blue, SKColors.Yellow, SKColors.Transparent);
+        var result = builder.WithColors(SKColors.Blue, SKColors.Yellow).WithClearColor(SKColors.Transparent);
 
         await Assert.That(result).IsSameReferenceAs(builder);
     }
 
     [Test]
-    public async Task WithColors_NullColors_ReturnsBuilder()
+    public async Task WithClearColor_NullClearColor_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
-        var result = builder.WithColors(null, null, null);
+        var result = builder.WithClearColor(null);
 
         await Assert.That(result).IsSameReferenceAs(builder);
     }
@@ -672,7 +672,7 @@ public class QRCodeImageBuilderTest
             .WithErrorCorrection(QREccLevel.H)
             .WithEciMode(EciMode.Utf8)
             .WithQuietZone(3)
-            .WithColors(SKColors.Navy, SKColors.Beige, SKColors.Transparent)
+            .WithColors(SKColors.Navy, SKColors.Beige).WithClearColor(SKColors.Transparent)
             .WithModuleShape(CircleModuleShape.Default, 0.9f)
             .WithGradient(gradientOptions)
             .WithFormat(SKEncodedImageFormat.Png, 100);

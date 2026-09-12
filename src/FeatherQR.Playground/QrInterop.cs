@@ -421,15 +421,19 @@ public static partial class QrInterop
     private static QRCodeImageBuilder CreateBuilder(QrRequest request, QRCodeData data, byte[] customLogo)
     {
         var size = Math.Clamp(request.Size, 64, 2048);
-        return new QRCodeImageBuilder(data)
+        var builder = new QRCodeImageBuilder(data)
             .WithSize(size, size)
             .WithColors(
                 ParseColor(request.Foreground, SKColors.Black),
                 ParseColor(request.Background, SKColors.White))
             .WithModuleShape(CreateModuleShape(request), Math.Clamp(request.ModuleSizePercent, 0.5f, 1.0f))
-            .WithFinderPatternShape(CreateFinderShape(request.FinderShape))
             .WithGradient(CreateGradient(request.Gradient))
             .WithIcon(CreateIcon(request.Logo, customLogo));
+
+        // Auto leaves the setter uncalled: plain full-size modules then draw the finders with the modules,
+        // and a styled module set gets the solid square the renderer substitutes for it.
+        var finderShape = CreateFinderShape(request.FinderShape);
+        return finderShape is null ? builder : builder.WithFinderPatternShape(finderShape);
     }
 
     /// <summary>
@@ -698,11 +702,11 @@ public static partial class QrInterop
         throw new ArgumentException($"Could not parse color '{value}'. Use #RRGGBB or 'transparent'.");
     }
 
-    private static ModuleShape? CreateModuleShape(QrRequest request) => request.ModuleShape switch
+    private static ModuleShape CreateModuleShape(QrRequest request) => request.ModuleShape switch
     {
         "circle" => CircleModuleShape.Default,
         "rounded" => new RoundedRectangleModuleShape(Math.Clamp(request.ModuleCornerRadius, 0f, 1f)),
-        _ => null, // rectangle (default)
+        _ => RectangleModuleShape.Default,
     };
 
     private static FinderPatternShape? CreateFinderShape(string finderShape) => finderShape switch
@@ -711,7 +715,7 @@ public static partial class QrInterop
         "circle" => CircleFinderPatternShape.Default,
         "rounded" => RoundedRectangleFinderPatternShape.Default,
         "roundedCircle" => RoundedRectangleCircleFinderPatternShape.Default,
-        _ => null, // auto: the plain square the standards define
+        _ => null, // auto: the setter is not called at all
     };
 
     private static GradientOptions? CreateGradient(GradientDto? gradient)

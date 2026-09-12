@@ -127,7 +127,7 @@ public class FinderPatternShapeColorTest
         var pngBytes = new QRCodeImageBuilder(content)
             .WithSize(800, 800)
             .WithErrorCorrection(QREccLevel.H)
-            .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+            .WithColors(SKColors.Black, backgroundColor).WithClearColor(SKColors.Transparent)
             .WithGradient(new GradientOptions(
                 [SKColors.Blue, SKColors.Purple, SKColors.Pink],
                 GradientDirection.TopLeftToBottomRight,
@@ -158,7 +158,8 @@ public class FinderPatternShapeColorTest
         var pngBytes = new QRCodeImageBuilder(content)
             .WithSize(800, 800)
             .WithErrorCorrection(QREccLevel.H)
-            .WithColors(SKColors.Black, new SKColor(0xFF, 0xFF, 0x00, 0x00), SKColors.Transparent)
+            .WithColors(SKColors.Black, new SKColor(0xFF, 0xFF, 0x00, 0x00))
+            .WithClearColor(SKColors.Transparent)
             .WithGradient(new GradientOptions(
                 [SKColors.Blue, SKColors.Purple, SKColors.Pink],
                 GradientDirection.TopLeftToBottomRight,
@@ -299,7 +300,7 @@ public class FinderPatternShapeColorTest
             var height = (int)((float)630 / matrixWidth * (11 + quietZone * 2));
             bitmap = new RmQRCodeImageBuilder(data)
                 .WithSize(630, height)
-                .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+                .WithColors(SKColors.Black, backgroundColor).WithClearColor(SKColors.Transparent)
                 .WithModuleShape(RectangleModuleShape.Default, 0.9f)
                 .ToBitmap();
         }
@@ -310,7 +311,7 @@ public class FinderPatternShapeColorTest
             matrixWidth = data.Size;
             bitmap = new MicroQRCodeImageBuilder(data)
                 .WithSize(504, 504)
-                .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+                .WithColors(SKColors.Black, backgroundColor).WithClearColor(SKColors.Transparent)
                 .WithModuleShape(RectangleModuleShape.Default, 0.9f)
                 .ToBitmap();
         }
@@ -321,7 +322,7 @@ public class FinderPatternShapeColorTest
             matrixWidth = data.Size;
             bitmap = new QRCodeImageBuilder(data)
                 .WithSize(800, 800)
-                .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+                .WithColors(SKColors.Black, backgroundColor).WithClearColor(SKColors.Transparent)
                 .WithModuleShape(RectangleModuleShape.Default, 0.9f)
                 .ToBitmap();
         }
@@ -469,7 +470,7 @@ public class FinderPatternShapeColorTest
         var data = QRCodeGenerator.Create("Test 1", QREccLevel.H, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });
         using var bitmap = new QRCodeImageBuilder(data)
             .WithSize(canvasWidth, canvasHeight)
-            .WithColors(SKColors.Black, backgroundColor, SKColors.Transparent)
+            .WithColors(SKColors.Black, backgroundColor).WithClearColor(SKColors.Transparent)
             .WithGradient(new GradientOptions([SKColors.Blue, SKColors.Purple, SKColors.Pink], GradientDirection.TopLeftToBottomRight, [0f, 0.5f, 1f]))
             .WithFinderPatternShape(finderPatternShape)
             .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)

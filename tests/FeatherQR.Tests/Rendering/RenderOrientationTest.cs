@@ -60,7 +60,7 @@ public class RenderOrientationTest
     {
         builder
             .WithModulePixelSize(PixelsPerModule)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.White);
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White);
         if (circleModules)
         {
             builder.WithModuleShape(CircleModuleShape.Default);

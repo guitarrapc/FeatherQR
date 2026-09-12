@@ -282,9 +282,13 @@ string FlattenDoc(System.Xml.Linq.XElement element)
                     // as a stray parameter type rather than the method being pointed at.
                     var paren = reference.IndexOf('(');
                     if (paren >= 0) reference = reference[..paren];
-                    var tick = reference.IndexOf('`');
-                    if (tick >= 0) reference = reference[..tick];
-                    sb.Append(' ').Append(reference[(reference.LastIndexOf('.') + 1)..]).Append(' ');
+                    // Take the member name before stripping the arity tick, not after: on a generic type
+                    // the first tick sits in the type name, so cutting there threw the member away and
+                    // every member of SymbolImageBuilderBase`1 rendered as the type itself.
+                    var name = reference[(reference.LastIndexOf('.') + 1)..];
+                    var tick = name.IndexOf('`');
+                    if (tick >= 0) name = name[..tick];
+                    sb.Append(' ').Append(name).Append(' ');
                     break;
                 case System.Xml.Linq.XElement e when e.Name == "paramref" || e.Name == "typeparamref":
                     sb.Append(' ').Append(e.Attribute("name")?.Value ?? "").Append(' ');

@@ -269,7 +269,7 @@ public class MicroQRCodeImageBuilderUnitTest
         using var bitmap = new MicroQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasWidth, canvasHeight)
-            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White).WithClearColor(SKColors.Transparent)
             .ToBitmap();
 
         await Assert.That(bitmap.Width).IsEqualTo(canvasWidth);

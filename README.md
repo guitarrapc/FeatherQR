@@ -764,7 +764,7 @@ var bytes = QRCodeImageBuilder.GetImageBytes(
 
 #### SVG Output (Vector)
 
-SVG output draws the QR code as vector shapes, so it scales to any size without quality loss, ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well.
+SVG output draws the QR code as vector shapes, so it scales to any size without quality loss, ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well, with one exception noted below.
 
 ```csharp
 using SkiaSharp;
@@ -782,7 +782,7 @@ var svg = QRCodeImageBuilder.GetSvgString("https://example.com");
 var svgString = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10)
     .WithErrorCorrection(QREccLevel.H)
-    .WithColors(codeColor: SKColor.Parse("1B9CFC"))
+    .WithCodeColor(SKColor.Parse("1B9CFC"))
     .ToSvgString(); // or SaveToSvg(stream) / SaveToSvg(bufferWriter) / GetSvgBytes(...)
 ```
 
@@ -790,6 +790,9 @@ Size options define the SVG viewport rather than pixels. `WithFormat()` does not
 
 > [!TIP]
 > SVG output includes a viewBox and scales to any display size. Default rectangular modules produce compact, crisp-edged SVGs. Custom shapes and gradients increase the document size, and icons are embedded directly in the SVG.
+
+> [!WARNING]
+> Give SVG output an opaque background when you style the symbol. A finder pattern drawn as a shape of its own is cut out of its background, and SVG cannot express that cut on a background that is not fully opaque: the finder patterns are dropped and the symbol stops scanning. This covers `WithFinderPatternShape` with any shape, and any `WithModuleShape` other than full-size squares, because styled modules get a solid square finder. Raster output is unaffected.
 
 #### Choosing Image Size
 
@@ -799,7 +802,7 @@ Size options define the SVG viewport rather than pixels. `WithFormat()` does not
 | Also fit a fixed UI frame | `WithModulePixelSize(n)` + `WithSize(w, h)` | Canvas must be `>=` content size. Too-small canvas throws. |
 | Only need a fixed pixel box | `WithSize(w, h)` | Simple, but module size may become fractional when QR version changes. |
 
-The symbol is centered in the canvas at one uniform module scale, so modules stay square whatever aspect ratio you ask for. Aspect ratio is the part that is taken care of: a canvas too small to give the symbol a few pixels per module still produces something nothing can read, so leave the shorter side enough pixels per module: our own decoder starts failing at about 2.5 of them on a clean file, and a phone camera needs more headroom than that. Leftover canvas is padded with the background color, or with `clearColor` when you set one. Pass `clearColor: SKColors.Transparent` for transparent surroundings around an opaque symbol.
+The symbol is centered in the canvas at one uniform module scale, so modules stay square whatever aspect ratio you ask for. Aspect ratio is the part that is taken care of: a canvas too small to give the symbol a few pixels per module still produces something nothing can read, so leave the shorter side enough pixels per module: our own decoder starts failing at about 2.5 of them on a clean file, and a phone camera needs more headroom than that. Leftover canvas is padded with the background color, or with the clear color when you set one. Call `WithClearColor(SKColors.Transparent)` for transparent surroundings around an opaque symbol.
 
 Use module-based sizing when sharp edges and logo alignment matter:
 
@@ -838,13 +841,16 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 new QRCodeImageBuilder("https://example.com")
-    .WithSize(800, 800)
+    .WithModulePixelSize(16)                       // content size follows the modules
+    .WithSize(800, 800)                            // larger canvas, so there is a pad to clear
     .WithColors(
-        codeColor: SKColor.Parse("#000080"),      // Navy
-        backgroundColor: SKColor.Parse("#FFE4B5"), // Moccasin
-        clearColor: SKColors.Transparent)
+        codeColor: SKColor.Parse("#000080"),       // Navy
+        backgroundColor: SKColor.Parse("#FFE4B5")) // Moccasin
+    .WithClearColor(SKColors.Transparent)
     .ToByteArray();
 ```
+
+The clear color paints the canvas the symbol does not reach, so it needs a canvas larger than the content: with `WithSize` alone a square symbol fills a square canvas and there is nothing to paint.
 
 #### Gradient QR code
 
@@ -865,7 +871,8 @@ var gradient = new GradientOptions(
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
-    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
+    .WithBackgroundColor(SKColors.White)
+    .WithClearColor(SKColors.White)
     .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
     .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
     .WithGradient(gradient);
@@ -936,7 +943,7 @@ using FeatherQR.SkiaSharp;
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
-    .WithColors(codeColor: SKColors.DarkBlue);
+    .WithCodeColor(SKColors.DarkBlue);
 
 var pngBytes = qrCode.ToByteArray();
 ```
@@ -947,7 +954,7 @@ var pngBytes = qrCode.ToByteArray();
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
     .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
-    .WithColors(codeColor: SKColors.DarkBlue);
+    .WithCodeColor(SKColors.DarkBlue);
 
 var pngBytes = qrCode.ToByteArray();
 ```

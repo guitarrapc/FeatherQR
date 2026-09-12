@@ -96,13 +96,17 @@ public static class QrImageFactory
     public static QRCodeImageBuilder CreateBuilder(QrOptions options, QRCodeData data, SKBitmap? customLogo)
     {
         var size = Math.Clamp(options.Size, 64, 2048);
-        return new QRCodeImageBuilder(data)
+        var builder = new QRCodeImageBuilder(data)
             .WithSize(size, size)
             .WithColors(GetForegroundColor(options), GetBackgroundColor(options))
             .WithModuleShape(CreateModuleShape(options), Math.Clamp(options.ModuleSizePercent, 0.5f, 1.0f))
-            .WithFinderPatternShape(CreateFinderShape(options))
             .WithGradient(CreateGradient(options))
             .WithIcon(CreateIcon(options, customLogo));
+
+        // Auto leaves the setter uncalled: plain full-size modules then draw the finders with the modules,
+        // and a styled module set gets the solid square the renderer substitutes for it.
+        var finderShape = CreateFinderShape(options);
+        return finderShape is null ? builder : builder.WithFinderPatternShape(finderShape);
     }
 
     public static SKColor GetForegroundColor(QrOptions options)
@@ -111,15 +115,14 @@ public static class QrImageFactory
     public static SKColor GetBackgroundColor(QrOptions options)
         => options.TransparentBackground ? SKColors.Transparent : ParseColor(options.Background, SKColors.White);
 
-    /// <summary>Returns null for the default rectangle shape.</summary>
-    public static ModuleShape? CreateModuleShape(QrOptions options) => options.ModuleShape switch
+    public static ModuleShape CreateModuleShape(QrOptions options) => options.ModuleShape switch
     {
         ModuleShapeKind.Circle => CircleModuleShape.Default,
         ModuleShapeKind.Rounded => new RoundedRectangleModuleShape(Math.Clamp(options.ModuleCornerRadius, 0f, 1f)),
-        _ => null,
+        _ => RectangleModuleShape.Default,
     };
 
-    /// <summary>Returns null for Auto: the plain square the standards define.</summary>
+    /// <summary>Returns null for Auto, which means the setter is not called at all.</summary>
     public static FinderPatternShape? CreateFinderShape(QrOptions options) => options.FinderShape switch
     {
         FinderShapeKind.Rectangle => RectangleFinderPatternShape.Default,

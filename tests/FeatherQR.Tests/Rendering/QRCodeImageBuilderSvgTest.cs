@@ -1,3 +1,4 @@
+using System.Globalization;
 using SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
 using System.Buffers;
@@ -61,6 +62,82 @@ public class QRCodeImageBuilderSvgTest
 
         var doc = XDocument.Parse(svg);
         await Assert.That(doc.Root!.Attribute("shape-rendering")?.Value).IsEquivalentTo("crispEdges");
+    }
+
+    [Test]
+    public async Task SaveToSvg_NamedFinderShape_OpaqueBackground_KeepsTheTopLeftFinderDark()
+    {
+        // The opaque case, which is the one callers are told to use. On a non-opaque background the same
+        // symbol loses its finder patterns entirely, which the test below pins.
+        var svg = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .WithBackgroundColor(SKColors.White)
+            .WithFinderPatternShape(RectangleFinderPatternShape.Default)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        var ns = doc.Root!.Name.Namespace;
+        // Centre of the top-left finder: 4 quiet-zone modules plus 3.5 into its 7. QRCodeData.Size already
+        // includes the quiet zone, so the module side is the canvas divided by it.
+        var modules = QRCodeGenerator.Create(TestContent, QREccLevel.M).Size;
+        var moduleSide = 512f / modules;
+        var center = (4 + 3.5f) * moduleSide;
+
+        // Size-bounded because the full-canvas background rect covers the same point, and dark because the
+        // finder's light ring covers it too: neither bound alone would make this assertion mean its name.
+        var inked = doc.Root.Descendants(ns + "rect").Any(r =>
+            Covers(r, center, center)
+            && Width(r) <= 7 * moduleSide
+            && !string.Equals(r.Attribute("fill")?.Value, "white", StringComparison.OrdinalIgnoreCase));
+        await Assert.That(inked).IsTrue();
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task SaveToSvg_StyledSymbol_NonOpaqueBackground_LosesTheFinderPatterns(bool namedFinderShape)
+    {
+        // Pins a known limitation so the documentation cannot go stale silently: a finder pattern drawn
+        // as a shape of its own is cut out of its background, and SKSvgCanvas drops the layer that does
+        // it. Both routes in are covered: naming a shape, and styling the modules, which substitutes one.
+        // When the renderer stops erasing, this test fails, and the note in docs/migration.md and in
+        // qrcode-symbologies.md goes with it. Whoever deletes it should keep something covering the named
+        // arm: it is the only test that fails if ResolveFinderShape starts ignoring an explicit square.
+        // Alpha 128 rather than 0, so the assertion covers the whole non-opaque range: at alpha 0 the
+        // background rect is omitted entirely, which would hide an unbounded query's own mistake.
+        var builder = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .WithBackgroundColor(SKColors.White.WithAlpha(128));
+        var svg = (namedFinderShape
+                ? builder.WithFinderPatternShape(RectangleFinderPatternShape.Default)
+                : builder.WithModuleShape(CircleModuleShape.Default, sizePercent: 0.85f))
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        var ns = doc.Root!.Name.Namespace;
+        var modules = QRCodeGenerator.Create(TestContent, QREccLevel.M).Size;
+        var moduleSide = 512f / modules;
+        var center = (4 + 3.5f) * moduleSide;
+
+        // Rects, because a built-in square finder is drawn as rects even when the modules around it are
+        // ellipses: when this symbol keeps its finders, the covering elements are three rects.
+        var covered = doc.Root.Descendants(ns + "rect")
+            .Any(r => Covers(r, center, center) && Width(r) <= 7 * moduleSide);
+        await Assert.That(covered).IsFalse();
+    }
+
+    [Test]
+    public async Task SaveToSvg_GappedRectModules_KeepAntialiasing()
+    {
+        // Squares below full size leave gaps, so the seam crispEdges exists to remove is not there
+        // and its jagged edges are all that is left. Shape alone does not decide this; the size does too.
+        var svg = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .WithModuleShape(RectangleModuleShape.Default, sizePercent: 0.8f)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        await Assert.That(doc.Root!.Attribute("shape-rendering")).IsNull();
     }
 
     [Test]
@@ -407,7 +484,7 @@ public class QRCodeImageBuilderSvgTest
         var svg = new QRCodeImageBuilder(qr)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasSide, canvasSide)
-            .WithColors(clearColor: SKColor.Parse("102030"))
+            .WithClearColor(SKColor.Parse("102030"))
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
@@ -424,4 +501,17 @@ public class QRCodeImageBuilderSvgTest
 
     private static XDocument ParseSvg(byte[] utf8Bytes)
         => XDocument.Parse(Encoding.UTF8.GetString(utf8Bytes));
+
+    /// <summary>Whether the rect element covers the point, in the document's own coordinates.</summary>
+    private static bool Covers(XElement rect, float x, float y)
+    {
+        var rx = Read(rect, "x");
+        var ry = Read(rect, "y");
+        return x >= rx && x <= rx + Read(rect, "width") && y >= ry && y <= ry + Read(rect, "height");
+    }
+
+    private static float Width(XElement rect) => Read(rect, "width");
+
+    private static float Read(XElement element, string name)
+        => float.TryParse(element.Attribute(name)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : 0f;
 }
