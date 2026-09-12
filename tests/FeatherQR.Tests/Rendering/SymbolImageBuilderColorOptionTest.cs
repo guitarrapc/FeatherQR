@@ -252,24 +252,26 @@ public class SymbolImageBuilderColorOptionTest
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task WithFinderPatternShape_RectangleDefault_MatchesTheOmittedShape(bool styledModules)
+    public async Task WithFinderPatternShape_RectangleDefault_MatchesTheOmittedShape()
     {
-        // Why the finder shape could stop taking null: omitting it and naming the square render the same,
-        // whether or not the modules are styled. Only the draw path differs.
+        // Why the finder shape could stop taking null: omitting it and naming the square render the same.
+        // Plain modules on purpose, because that is where the two spellings really do take different paths
+        // — omitted leaves the finders to the module runs, named sends them through the finder pass. With
+        // styled modules both spellings resolve to the same substituted square, so that case would compare
+        // one path with itself.
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
 
-        using var named = Build(qr, styledModules).WithFinderPatternShape(RectangleFinderPatternShape.Default).ToBitmap();
-        using var omitted = Build(qr, styledModules).ToBitmap();
+        using var named = new QRCodeImageBuilder(qr).WithSize(300, 300)
+            .WithFinderPatternShape(RectangleFinderPatternShape.Default)
+            .ToBitmap();
+        using var omitted = new QRCodeImageBuilder(qr).WithSize(300, 300).ToBitmap();
+        using var circle = new QRCodeImageBuilder(qr).WithSize(300, 300)
+            .WithFinderPatternShape(CircleFinderPatternShape.Default)
+            .ToBitmap();
 
         await Assert.That(SamePixels(named, omitted)).IsTrue();
-
-        static QRCodeImageBuilder Build(QRCodeData qr, bool styledModules)
-        {
-            var builder = new QRCodeImageBuilder(qr).WithSize(300, 300);
-            return styledModules ? builder.WithModuleShape(CircleModuleShape.Default, 0.85f) : builder;
-        }
+        // And the setter is not simply ignored, which would make the line above true for the wrong reason.
+        await Assert.That(SamePixels(circle, omitted)).IsFalse();
     }
 
     [Test]
