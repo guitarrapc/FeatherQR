@@ -126,6 +126,17 @@ public class SegmentDecoderStatusOrderTest
             canvas.Flush();
         }
 
+        // The reversed symbol is the bait, and a bait nobody could take proves nothing: on its own it has
+        // to decode, through the very retry this test says must not run, into the one character that would
+        // fit the short destination below.
+        var baitLuminance = new byte[reversed.Width * reversed.Height];
+        BitmapLuminanceConverter.Convert(reversed, baitLuminance);
+        var bait = new char[1];
+        var baitDecoded = MicroQRCodeDecoder.TryDecodeImage(baitLuminance, reversed.Width, reversed.Height, bait, out var baitLength, out _);
+        await Assert.That(baitDecoded).IsTrue().Because("the reversed symbol must be readable, or the scene has no opposite-polarity result to offer");
+        await Assert.That(baitLength).IsEqualTo(1);
+        await Assert.That(bait[0]).IsEqualTo('1');
+
         var luminance = new byte[width * height];
         BitmapLuminanceConverter.Convert(scene, luminance);
         var decoded = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out _, out var info);
@@ -160,6 +171,15 @@ public class SegmentDecoderStatusOrderTest
             canvas.DrawBitmap(reversed, normal.Width + gap, 0, SKSamplingOptions.Default);
             canvas.Flush();
         }
+
+        // Same bait check as the Micro QR case: the reversed symbol has to be readable on its own.
+        var baitLuminance = new byte[reversed.Width * reversed.Height];
+        BitmapLuminanceConverter.Convert(reversed, baitLuminance);
+        var bait = new char[1];
+        var baitDecoded = QRCodeDecoder.TryDecodeImage(baitLuminance, reversed.Width, reversed.Height, bait, out var baitLength, out _);
+        await Assert.That(baitDecoded).IsTrue().Because("the reversed symbol must be readable, or the scene has no opposite-polarity result to offer");
+        await Assert.That(baitLength).IsEqualTo(1);
+        await Assert.That(bait[0]).IsEqualTo('1');
 
         var luminance = new byte[width * height];
         BitmapLuminanceConverter.Convert(scene, luminance);
