@@ -35,7 +35,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
         using var image = new QRCodeImageBuilder(qr)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasSide, canvasSide)
-            .WithColors(clearColor: SKColors.Transparent)
+            .WithClearColor(SKColors.Transparent)
             .ToImage();
 
         await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Premul);
@@ -76,7 +76,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
         using var image = new QRCodeImageBuilder(qr)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasSide, canvasSide)
-            .WithColors(clearColor: SKColors.Red)
+            .WithClearColor(SKColors.Red)
             .ToImage();
 
         await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Opaque);
@@ -92,7 +92,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
 
         using var image = new QRCodeImageBuilder(qr)
             .WithSize(300, 300)
-            .WithColors(backgroundColor: translucentWhite)
+            .WithBackgroundColor(translucentWhite)
             .ToImage();
 
         await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Premul);
@@ -111,7 +111,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
 
         using var image = new QRCodeImageBuilder(qr)
             .WithSize(300, 300)
-            .WithColors(backgroundColor: translucentWhite, clearColor: SKColors.Red)
+            .WithBackgroundColor(translucentWhite).WithClearColor(SKColors.Red)
             .ToImage();
 
         await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Opaque);

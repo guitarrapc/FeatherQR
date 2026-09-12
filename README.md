@@ -782,7 +782,7 @@ var svg = QRCodeImageBuilder.GetSvgString("https://example.com");
 var svgString = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10)
     .WithErrorCorrection(QREccLevel.H)
-    .WithColors(codeColor: SKColor.Parse("1B9CFC"))
+    .WithCodeColor(SKColor.Parse("1B9CFC"))
     .ToSvgString(); // or SaveToSvg(stream) / SaveToSvg(bufferWriter) / GetSvgBytes(...)
 ```
 
@@ -799,7 +799,7 @@ Size options define the SVG viewport rather than pixels. `WithFormat()` does not
 | Also fit a fixed UI frame | `WithModulePixelSize(n)` + `WithSize(w, h)` | Canvas must be `>=` content size. Too-small canvas throws. |
 | Only need a fixed pixel box | `WithSize(w, h)` | Simple, but module size may become fractional when QR version changes. |
 
-The symbol is centered in the canvas at one uniform module scale, so modules stay square whatever aspect ratio you ask for. Aspect ratio is the part that is taken care of: a canvas too small to give the symbol a few pixels per module still produces something nothing can read, so leave the shorter side enough pixels per module: our own decoder starts failing at about 2.5 of them on a clean file, and a phone camera needs more headroom than that. Leftover canvas is padded with the background color, or with `clearColor` when you set one. Pass `clearColor: SKColors.Transparent` for transparent surroundings around an opaque symbol.
+The symbol is centered in the canvas at one uniform module scale, so modules stay square whatever aspect ratio you ask for. Aspect ratio is the part that is taken care of: a canvas too small to give the symbol a few pixels per module still produces something nothing can read, so leave the shorter side enough pixels per module: our own decoder starts failing at about 2.5 of them on a clean file, and a phone camera needs more headroom than that. Leftover canvas is padded with the background color, or with the clear color when you set one. Call `WithClearColor(SKColors.Transparent)` for transparent surroundings around an opaque symbol.
 
 Use module-based sizing when sharp edges and logo alignment matter:
 
@@ -840,9 +840,9 @@ using FeatherQR.SkiaSharp;
 new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithColors(
-        codeColor: SKColor.Parse("#000080"),      // Navy
-        backgroundColor: SKColor.Parse("#FFE4B5"), // Moccasin
-        clearColor: SKColors.Transparent)
+        codeColor: SKColor.Parse("#000080"),       // Navy
+        backgroundColor: SKColor.Parse("#FFE4B5")) // Moccasin
+    .WithClearColor(SKColors.Transparent)
     .ToByteArray();
 ```
 
@@ -865,7 +865,8 @@ var gradient = new GradientOptions(
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
-    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
+    .WithBackgroundColor(SKColors.White)
+    .WithClearColor(SKColors.White)
     .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
     .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
     .WithGradient(gradient);
@@ -936,7 +937,7 @@ using FeatherQR.SkiaSharp;
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
-    .WithColors(codeColor: SKColors.DarkBlue);
+    .WithCodeColor(SKColors.DarkBlue);
 
 var pngBytes = qrCode.ToByteArray();
 ```
@@ -947,7 +948,7 @@ var pngBytes = qrCode.ToByteArray();
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
     .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
-    .WithColors(codeColor: SKColors.DarkBlue);
+    .WithCodeColor(SKColors.DarkBlue);
 
 var pngBytes = qrCode.ToByteArray();
 ```

@@ -261,12 +261,15 @@ namespace FeatherQR.SkiaSharp
     {
         public SKBitmap ToBitmap();
         public SKImage ToImage();
-        public TSelf WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null);
-        public TSelf WithFinderPatternShape(FinderPatternShape? finderPatternShape);
+        public TSelf WithBackgroundColor(SKColor backgroundColor);
+        public TSelf WithClearColor(SKColor? clearColor);
+        public TSelf WithCodeColor(SKColor codeColor);
+        public TSelf WithColors(SKColor codeColor, SKColor backgroundColor);
+        public TSelf WithFinderPatternShape(FinderPatternShape finderPatternShape);
         public TSelf WithFormat(SKEncodedImageFormat format, int quality = 100);
         public TSelf WithGradient(GradientOptions? gradientOptions);
         public TSelf WithModulePixelSize(int modulePixelSize);
-        public TSelf WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1);
+        public TSelf WithModuleShape(ModuleShape moduleShape, float sizePercent = 1);
         public TSelf WithQuietZone(int size);
         public TSelf WithSize(int width, int height);
         public byte[] ToByteArray();

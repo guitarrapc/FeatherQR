@@ -407,7 +407,7 @@ public class QRCodeImageBuilderSvgTest
         var svg = new QRCodeImageBuilder(qr)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasSide, canvasSide)
-            .WithColors(clearColor: SKColor.Parse("102030"))
+            .WithClearColor(SKColor.Parse("102030"))
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);

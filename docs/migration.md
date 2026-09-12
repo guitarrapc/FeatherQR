@@ -431,13 +431,14 @@ new QRCodeImageBuilder("https://example.com")
 
 JPEG is the format that shows it plainly. As a PNG the old padding stayed transparent, so what you saw depended on what the image was placed on, and the file carried an alpha channel it did not need.
 
-Transparent surroundings are still available, by name. Edit your existing `WithColors` call rather than adding a second one: every argument you omit is set to its default, so a later `WithColors(clearColor: …)` discards the code and background colours an earlier one set.
+Transparent surroundings are still available, by name, and `WithClearColor` sets that one colour without touching the others:
 
 ```csharp
 new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(8)
     .WithSize(400, 400)
-    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+    .WithBackgroundColor(SKColors.White)
+    .WithClearColor(SKColors.Transparent)
     .ToByteArray();
 ```
 
@@ -450,6 +451,32 @@ This reaches all three symbologies. rMQR's `WithSize` padding was transparent by
 One subtlety if you set `clearColor` explicitly: it is a *canvas* colour, painted under the symbol as well as around it, not only a pad colour. With an opaque background you cannot tell the difference, but with a translucent one you can — writing `clearColor` equal to your background lays that colour down twice inside the symbol box and once outside it, so the box comes out denser than the pad. Leave `clearColor` unset to get the padding-matches-background behaviour; set it when you want a different canvas.
 
 The images above come from [samples/Dotfiles/MigrationImages_1.x-2.0.cs](../samples/Dotfiles/MigrationImages_1.x-2.0.cs), which writes them and checks each one as it does: the stretched renders are the real old output, reproduced with a canvas scale over a square area, which gives the pixels the old fill did.
+
+### Builder options take values, not `null`: `WithCodeColor`, `WithBackgroundColor`, `WithClearColor`
+
+**Compile-time break, no behaviour change.** `WithColors` used to take three optional colours and assign all three on every call, so a second call reset whatever the first had set. It now takes the two colours a symbol always has, both required, and each colour also has a setter of its own.
+
+```csharp
+// 1.x through 2.0.0-preview.2
+.WithColors(codeColor: SKColors.DarkBlue)
+.WithColors(backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+
+// 2.0.0
+.WithCodeColor(SKColors.DarkBlue)
+.WithBackgroundColor(SKColors.White).WithClearColor(SKColors.Transparent)
+```
+
+`WithColors(codeColor, backgroundColor)` still compiles, named arguments and all; only the omitted-argument forms and the three-argument form have to be rewritten, and the compiler finds every one of them. Chaining them now does what reading them suggests, so `.WithBackgroundColor(SKColors.Yellow).WithClearColor(SKColors.Transparent)` keeps the yellow background the earlier call asked for.
+
+`WithModuleShape` and `WithFinderPatternShape` stopped accepting `null` in the same change. Pass `RectangleModuleShape.Default` and `RectangleFinderPatternShape.Default` where you passed `null`; those are the plain squares the builder starts with, and both render identically to omitting the call (measured byte for byte), so nothing about your output changes. If the `null` came from an options object where it meant "the user picked nothing", keep that meaning by leaving the setter uncalled:
+
+```csharp
+var builder = new QRCodeImageBuilder(data).WithSize(512, 512);
+var shape = ShapeFor(options);                                    // null when nothing was picked
+if (shape is not null) builder = builder.WithFinderPatternShape(shape);
+```
+
+`WithGradient(null)`, `WithIcon(null)` and `WithClearColor(null)` are unchanged: there `null` means the option is absent rather than set to a default, which is the difference the change is about.
 
 ## 1.2.0
 

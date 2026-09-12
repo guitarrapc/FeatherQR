@@ -124,7 +124,7 @@ Console.WriteLine("""
     var pngBytes = new QRCodeImageBuilder(content)
         .WithModulePixelSize(8)
         .WithSize(512, 512)
-        .WithColors(clearColor: SKColor.Parse("E8EEF5"))
+        .WithClearColor(SKColor.Parse("E8EEF5"))
         .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
         .ToByteArray();
@@ -149,9 +149,9 @@ Console.WriteLine("""
         .WithSize(800, 800)
         .WithErrorCorrection(QREccLevel.H)
         .WithColors(
-            codeColor: SKColor.Parse("000080"),      // Navy
-            backgroundColor: SKColor.Parse("FFE4B5"), // Moccasin
-            clearColor: SKColors.Transparent)
+            codeColor: SKColor.Parse("000080"),       // Navy
+            backgroundColor: SKColor.Parse("FFE4B5")) // Moccasin
+        .WithClearColor(SKColors.Transparent)
         .SaveTo(stream);
 
     Console.WriteLine($"  ✓ Saved to: {path}");
@@ -171,7 +171,7 @@ Console.WriteLine("""
         .WithSize(800, 800)
         .WithErrorCorrection(QREccLevel.H)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
-        .WithColors(codeColor: SKColors.DarkBlue);
+        .WithCodeColor(SKColors.DarkBlue);
 
     using var image = qrBuilder.ToImage();
     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -272,7 +272,7 @@ Console.WriteLine("""
         .WithErrorCorrection(QREccLevel.H)
         .WithEciMode(EciMode.Utf8)
         .WithQuietZone(3)
-        .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+        .WithBackgroundColor(SKColors.White).WithClearColor(SKColors.Transparent)
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.92f)
         .WithGradient(gradient)
         .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
@@ -481,7 +481,7 @@ Console.WriteLine("""
         .WithModulePixelSize(12)
         .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
-        .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
+        .WithBackgroundColor(SKColors.White).WithClearColor(SKColors.White)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
         .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
         .WithGradient(instagramGradient)
@@ -744,7 +744,7 @@ Console.WriteLine("""
         .WithModulePixelSize(12)
         .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(3)
-        .WithColors(backgroundColor: SKColor.Parse("0B1320"), clearColor: SKColor.Parse("0B1320"))
+        .WithBackgroundColor(SKColor.Parse("0B1320")).WithClearColor(SKColor.Parse("0B1320"))
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.88f)
         .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
         .WithGradient(aurora)
@@ -782,7 +782,7 @@ Console.WriteLine("""
         .WithSize(640, 640)
         .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
-        .WithColors(backgroundColor: SKColors.White, clearColor: SKColor.Parse("FFF5EE"))
+        .WithBackgroundColor(SKColors.White).WithClearColor(SKColor.Parse("FFF5EE"))
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
         .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
         .WithGradient(sunset)
@@ -838,7 +838,7 @@ Console.WriteLine("""
         .WithModulePixelSize(11)
         .WithErrorCorrection(QREccLevel.H)
         .WithQuietZone(4)
-        .WithColors(backgroundColor: SKColor.Parse("111111"), clearColor: SKColor.Parse("111111"))
+        .WithBackgroundColor(SKColor.Parse("111111")).WithClearColor(SKColor.Parse("111111"))
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.85f)
         .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
         .WithGradient(neon)

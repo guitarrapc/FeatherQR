@@ -36,7 +36,7 @@ public class QRCodeImageBuilderClearBehaviorTest
         var builder = new QRCodeImageBuilder(qr)
             .WithModulePixelSize(modulePixelSize)
             .WithSize(canvasSide, canvasSide)
-            .WithColors(clearColor: SKColors.Red);
+            .WithClearColor(SKColors.Red);
 
         using var bitmap = builder.ToBitmap();
 
@@ -60,7 +60,7 @@ public class QRCodeImageBuilderClearBehaviorTest
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr)
             .WithSize(300, 300)
-            .WithColors(backgroundColor: translucentWhite, clearColor: SKColors.Red));
+            .WithBackgroundColor(translucentWhite).WithClearColor(SKColors.Red));
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
             clearColor: SKColors.Red, backgroundColor: translucentWhite);
 
@@ -76,7 +76,7 @@ public class QRCodeImageBuilderClearBehaviorTest
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr)
             .WithSize(300, 300)
-            .WithColors(clearColor: SKColors.Red));
+            .WithClearColor(SKColors.Red));
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
             clearColor: SKColors.Red, backgroundColor: null);
 

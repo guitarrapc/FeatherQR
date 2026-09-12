@@ -90,7 +90,7 @@ var transparentPadPath = Path.Combine(outputDirectory, "padding-transparent.jpg"
 File.WriteAllBytes(transparentPadPath, new QRCodeImageBuilder(data)
     .WithModulePixelSize(8)
     .WithSize(400, 400)
-    .WithColors(SKColors.Black, SKColors.White, SKColors.Transparent)
+    .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Transparent)
     .WithFormat(SKEncodedImageFormat.Jpeg, 90)
     .ToByteArray());
 ReportPad(transparentPadPath, expectTransparent: true);
@@ -112,7 +112,7 @@ var clearColorPath = Path.Combine(outputDirectory, "padding-clearcolor-transpare
     var png = new QRCodeImageBuilder(data)
         .WithModulePixelSize(8)
         .WithSize(400, 400)
-        .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+        .WithBackgroundColor(SKColors.White).WithClearColor(SKColors.Transparent)
         .ToByteArray();
 
     using var symbol = SKBitmap.Decode(png);

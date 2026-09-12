@@ -107,11 +107,11 @@ public class SegmentDecoderStatusOrderTest
         var shortData = MicroQRCodeGenerator.Create("1", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M2 });
         using var normal = new MicroQRCodeImageBuilder(longData)
             .WithModulePixelSize(8)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
             .ToBitmap();
         using var reversed = new MicroQRCodeImageBuilder(shortData)
             .WithModulePixelSize(8)
-            .WithColors(SKColors.White, SKColors.Black, SKColors.Black)
+            .WithColors(SKColors.White, SKColors.Black).WithClearColor(SKColors.Black)
             .ToBitmap();
 
         const int gap = 32;
@@ -142,11 +142,11 @@ public class SegmentDecoderStatusOrderTest
         var shortData = QRCodeGenerator.Create("1", QREccLevel.M);
         using var normal = new QRCodeImageBuilder(longData)
             .WithModulePixelSize(6)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.White)
             .ToBitmap();
         using var reversed = new QRCodeImageBuilder(shortData)
             .WithModulePixelSize(6)
-            .WithColors(SKColors.White, SKColors.Black, SKColors.Black)
+            .WithColors(SKColors.White, SKColors.Black).WithClearColor(SKColors.Black)
             .ToBitmap();
 
         const int gap = 32;

@@ -158,7 +158,7 @@ public class ImageBuilderCanvasFitTest
         var data = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 4 });
         using var bitmap = new QRCodeImageBuilder(data)
             .WithSize(canvasSide, canvasSide)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.Red)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
         var pad = 0;
@@ -193,7 +193,7 @@ public class ImageBuilderCanvasFitTest
         var data = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 4 });
         using var bitmap = new QRCodeImageBuilder(data)
             .WithSize(width, height)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.Red)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
         // The pad lands on the longer axis, so scan along that one.
@@ -229,7 +229,7 @@ public class ImageBuilderCanvasFitTest
 
         using var bitmap = new QRCodeImageBuilder(data)
             .WithSize(500, 333)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.Red)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
         var row = bitmap.Height / 2;
@@ -425,7 +425,7 @@ public class ImageBuilderCanvasFitTest
         var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
         using var bitmap = new RmQRCodeImageBuilder(data)
             .WithSize(width, height)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.Red)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
         var column = bitmap.Width / 2;
@@ -572,19 +572,19 @@ public class ImageBuilderCanvasFitTest
             {
                 case "microqr":
                     {
-                        var builder = new MicroQRCodeImageBuilder((MicroQRCodeData)_data).WithSize(width, height).WithColors(SKColors.Black, background, clear);
+                        var builder = new MicroQRCodeImageBuilder((MicroQRCodeData)_data).WithSize(width, height).WithColors(SKColors.Black, background).WithClearColor(clear);
                         if (styled) builder = builder.WithModuleShape(CircleModuleShape.Default, 0.85f).WithFinderPatternShape(CircleFinderPatternShape.Default);
                         return builder.ToBitmap();
                     }
                 case "rmqr":
                     {
-                        var builder = new RmQRCodeImageBuilder((RmQRCodeData)_data).WithSize(width, height).WithColors(SKColors.Black, background, clear);
+                        var builder = new RmQRCodeImageBuilder((RmQRCodeData)_data).WithSize(width, height).WithColors(SKColors.Black, background).WithClearColor(clear);
                         if (styled) builder = builder.WithModuleShape(CircleModuleShape.Default, 0.85f).WithFinderPatternShape(CircleFinderPatternShape.Default);
                         return builder.ToBitmap();
                     }
                 default:
                     {
-                        var builder = new QRCodeImageBuilder((QRCodeData)_data).WithSize(width, height).WithColors(SKColors.Black, background, clear);
+                        var builder = new QRCodeImageBuilder((QRCodeData)_data).WithSize(width, height).WithColors(SKColors.Black, background).WithClearColor(clear);
                         if (styled) builder = builder.WithModuleShape(CircleModuleShape.Default, 0.85f).WithFinderPatternShape(CircleFinderPatternShape.Default);
                         return builder.ToBitmap();
                     }

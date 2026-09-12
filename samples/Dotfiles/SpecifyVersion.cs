@@ -24,9 +24,8 @@ var autoVersionBuilder = new QRCodeImageBuilder(content)
     .WithQuietZone(4)
     .WithColors(
         codeColor: SKColor.Parse("ff6000"),
-        backgroundColor: SKColors.White,
-        clearColor: SKColors.White
-    )
+        backgroundColor: SKColors.White)
+    .WithClearColor(SKColors.White)
     .WithModuleShape(CircleModuleShape.Default, sizePercent: 1.0f)
     .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
     .WithIcon(icon);
@@ -38,9 +37,8 @@ var fixedVersionBuilder = new QRCodeImageBuilder(content)
     .WithQuietZone(4)
     .WithColors(
         codeColor: SKColor.Parse("ff6000"),
-        backgroundColor: SKColors.White,
-        clearColor: SKColors.White
-    )
+        backgroundColor: SKColors.White)
+    .WithClearColor(SKColors.White)
     .WithModuleShape(CircleModuleShape.Default, sizePercent: 1.0f)
     .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
     .WithIcon(icon);

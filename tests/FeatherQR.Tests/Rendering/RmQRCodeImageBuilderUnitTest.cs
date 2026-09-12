@@ -200,7 +200,7 @@ public class RmQRCodeImageBuilderUnitTest
         var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M);
         using var bitmap = new RmQRCodeImageBuilder(data)
             .WithSize(400, 400)
-            .WithColors(SKColors.Black, SKColors.White, SKColors.Red)
+            .WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red)
             .ToBitmap();
 
         await Assert.That(bitmap.Width).IsEqualTo(400);
@@ -220,7 +220,7 @@ public class RmQRCodeImageBuilderUnitTest
             }
 
         // Tall-and-narrow canvas: pad appears left/right instead.
-        using var tall = new RmQRCodeImageBuilder(data).WithSize(100, 400).WithColors(SKColors.Black, SKColors.White, SKColors.Red).ToBitmap();
+        using var tall = new RmQRCodeImageBuilder(data).WithSize(100, 400).WithColors(SKColors.Black, SKColors.White).WithClearColor(SKColors.Red).ToBitmap();
         await Assert.That(tall.GetPixel(50, 5)).IsEqualTo(SKColors.Red);
         await Assert.That(tall.GetPixel(50, 200)).IsNotEqualTo(SKColors.Red);
     }
