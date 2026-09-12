@@ -67,8 +67,8 @@ public class QRCodeImageBuilderSvgTest
     [Test]
     public async Task SaveToSvg_NamedFinderShape_OpaqueBackground_KeepsTheTopLeftFinderDark()
     {
-        // The opaque case, which is the one callers are told to use. On a non-opaque background the same
-        // symbol loses its finder patterns entirely, which the test below pins.
+        // The opaque case. The same symbol on a non-opaque background keeps its finder patterns too,
+        // which the test below pins; it used to lose them, and that is what this pair guards.
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
             .WithBackgroundColor(SKColors.White)
@@ -93,21 +93,25 @@ public class QRCodeImageBuilderSvgTest
     }
 
     [Test]
-    [Arguments(true)]
-    [Arguments(false)]
-    public async Task SaveToSvg_StyledSymbol_NonOpaqueBackground_LosesTheFinderPatterns(bool namedFinderShape)
+    [Arguments(true, 128)]
+    [Arguments(false, 128)]
+    [Arguments(true, 0)]
+    [Arguments(false, 0)]
+    public async Task SaveToSvg_StyledSymbol_NonOpaqueBackground_KeepsTheFinderPatterns(bool namedFinderShape, int alpha)
     {
-        // Pins a known limitation so the documentation cannot go stale silently: a finder pattern drawn
-        // as a shape of its own is cut out of its background, and SKSvgCanvas drops the layer that does
-        // it. Both routes in are covered: naming a shape, and styling the modules, which substitutes one.
-        // When the renderer stops erasing, this test fails, and the note in docs/migration.md and in
-        // qrcode-symbologies.md goes with it. Whoever deletes it should keep something covering the named
-        // arm: it is the only test that fails if ResolveFinderShape starts ignoring an explicit square.
-        // Alpha 128 rather than 0, so the assertion covers the whole non-opaque range: at alpha 0 the
-        // background rect is omitted entirely, which would hide an unbounded query's own mistake.
+        // A finder pattern drawn as a shape of its own used to be cut out of its background with a blend
+        // mode inside a layer, which SKSvgCanvas dropped whole: on any background below alpha 255 the
+        // document had no finder patterns at all. The ring is a hole in the drawing now, so nothing is
+        // erased and both canvas kinds get the same elements. Both routes in are covered: naming a shape,
+        // and styling the modules, which substitutes one. This only asks that the finder's centre is
+        // inked; that the whole pattern is there, on every symbology and every built-in shape, is
+        // DecorativeFinder_SvgCarriesTheWholeFinderPattern, which is also what fails if
+        // ResolveFinderShape starts ignoring an explicitly named square.
+        // Alpha 128 and 0 both, because at alpha 0 the background rect is omitted entirely and the
+        // covering query has to hold without it.
         var builder = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
-            .WithBackgroundColor(SKColors.White.WithAlpha(128));
+            .WithBackgroundColor(SKColors.White.WithAlpha((byte)alpha));
         var svg = (namedFinderShape
                 ? builder.WithFinderPatternShape(RectangleFinderPatternShape.Default)
                 : builder.WithModuleShape(CircleModuleShape.Default, sizePercent: 0.85f))
@@ -120,10 +124,13 @@ public class QRCodeImageBuilderSvgTest
         var center = (4 + 3.5f) * moduleSide;
 
         // Rects, because a built-in square finder is drawn as rects even when the modules around it are
-        // ellipses: when this symbol keeps its finders, the covering elements are three rects.
-        var covered = doc.Root.Descendants(ns + "rect")
-            .Any(r => Covers(r, center, center) && Width(r) <= 7 * moduleSide);
-        await Assert.That(covered).IsFalse();
+        // ellipses. Size-bounded so the full-canvas background rect cannot satisfy it, and dark so the
+        // element found is the finder's centre rather than anything light.
+        var inked = doc.Root.Descendants(ns + "rect").Any(r =>
+            Covers(r, center, center)
+            && Width(r) <= 7 * moduleSide
+            && !string.Equals(r.Attribute("fill")?.Value, "white", StringComparison.OrdinalIgnoreCase));
+        await Assert.That(inked).IsTrue();
     }
 
     [Test]

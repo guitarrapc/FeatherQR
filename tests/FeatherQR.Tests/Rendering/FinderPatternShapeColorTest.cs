@@ -5,48 +5,46 @@ namespace FeatherQR.Tests;
 
 public class FinderPatternShapeColorTest
 {
+    /// <summary>
+    /// The contract a custom shape is written against: it is handed the dark paint once per finder
+    /// and draws the dark modules only. The light ring is whatever it leaves undrawn, so the
+    /// background shows through it on its own, opaque or not, and the renderer neither paints the
+    /// ring nor erases it. A shape that painted the ring itself, with a light paint the renderer
+    /// used to hand it, could only be made right on a translucent background by erasing through a
+    /// layer, which SVG output cannot express; the layer is gone and so is that overload.
+    /// </summary>
     [Test]
-    public async Task CustomFinderPatternShape_ReceivesConfiguredBackgroundPaint()
+    [Arguments(255)]
+    [Arguments(128)]
+    public async Task CustomFinderPatternShape_DrawsDarkModulesOnly_RingShowsTheBackground(int alpha)
     {
-        var backgroundColor = SKColors.Yellow;
-        var qr = QRCodeGenerator.Create("finder-background-paint-test", QREccLevel.M);
+        var backgroundColor = SKColors.Yellow.WithAlpha((byte)alpha);
+        var qr = QRCodeGenerator.Create("finder-dark-only-test", QREccLevel.M);
         var imageSize = qr.Size * 10;
+        var area = SKRect.Create(0, 0, imageSize, imageSize);
         using var bitmap = new SKBitmap(imageSize, imageSize);
         using var canvas = new SKCanvas(bitmap);
-        var finderPatternShape = new BackgroundPaintFinderPatternShape();
+        canvas.Clear(SKColors.Red);
+        var finderPatternShape = new CentreOnlyFinderPatternShape();
 
-        SymbolRenderer.Render(
-            canvas,
-            SKRect.Create(0, 0, imageSize, imageSize),
-            qr,
-            SKColors.Black,
-            backgroundColor,
-            finderPatternShape: finderPatternShape);
-
-        await Assert.That(finderPatternShape.BackgroundPaintDrawCount).IsEqualTo(3);
-        await Assert.That(finderPatternShape.BackgroundColorDrawCount).IsEqualTo(0);
-        await Assert.That(finderPatternShape.ReceivedBackgroundColor).IsEqualTo(backgroundColor);
-    }
-
-    [Test]
-    public async Task LegacyCustomFinderPatternShape_ColorOverloadRemainsCompatible()
-    {
-        var backgroundColor = SKColors.Yellow;
-        var qr = QRCodeGenerator.Create("legacy-finder-shape-test", QREccLevel.M);
-        using var bitmap = new SKBitmap(qr.Size * 10, qr.Size * 10);
-        using var canvas = new SKCanvas(bitmap);
-        var finderPatternShape = new LegacyBackgroundColorFinderPatternShape();
-
-        SymbolRenderer.Render(
-            canvas,
-            SKRect.Create(0, 0, bitmap.Width, bitmap.Height),
-            qr,
-            SKColors.Black,
-            backgroundColor,
-            finderPatternShape: finderPatternShape);
+        SymbolRenderer.Render(canvas, area, qr, SKColors.Black, backgroundColor, finderPatternShape: finderPatternShape);
 
         await Assert.That(finderPatternShape.DrawCount).IsEqualTo(3);
-        await Assert.That(finderPatternShape.ReceivedBackgroundColor).IsEqualTo(backgroundColor);
+        await Assert.That(finderPatternShape.ReceivedPaintColor).IsEqualTo(SKColors.Black);
+
+        var finderRect = SymbolRenderer.GetFinderPatternRect(qr, 0, area);
+        var moduleSize = finderRect.Width / 7f;
+        SKColor At(float col, float row) => bitmap.GetPixel(
+            (int)MathF.Round(finderRect.Left + moduleSize * col),
+            (int)MathF.Round(finderRect.Top + moduleSize * row));
+
+        // The shape drew its centre and nothing else, so the ring and the outer square both carry the
+        // rendered background, which the quiet zone also carries: a layer that cleared or a renderer
+        // that painted the ring would show up as a pixel that differs from the quiet zone.
+        var quietZonePixel = bitmap.GetPixel(0, 0);
+        await Assert.That(At(3.5f, 3.5f)).IsEqualTo(SKColors.Black);
+        await Assert.That(At(1.5f, 3.5f)).IsEqualTo(quietZonePixel);
+        await Assert.That(At(0.5f, 3.5f)).IsEqualTo(quietZonePixel);
     }
 
     [Test]
@@ -262,9 +260,9 @@ public class FinderPatternShapeColorTest
     /// <see cref="FinderPatternShape"/> when they were written. Styling now routes Micro QR and
     /// rMQR through one too, and Standard QR reaches it without being asked, so the two defects
     /// those cases pin apply to paths they do not touch: the ring coming out dark
-    /// (issue 337) and a transparent background not showing through it (issue 354). The finder is
-    /// drawn over modules that are already there, so restoring the background under a non-opaque
-    /// one needs an isolated layer; a mutant that dropped that layer passed the whole suite.
+    /// (issue 337) and a transparent background not showing through it (issue 354). The ring is a
+    /// hole in the finder's drawing, so what shows through it is whatever the renderer put beneath,
+    /// which these cases hold to the rendered background on every symbology.
     /// </para>
     /// <para>
     /// The ring is sampled at module (1.5, 3.5) and the dark centre at (3.5, 3.5), as the
@@ -493,46 +491,25 @@ public class FinderPatternShapeColorTest
             .Because($"{finderPatternShape.GetType().Name} pad");
     }
 
-    private sealed class BackgroundPaintFinderPatternShape : FinderPatternShape
+    /// <summary>
+    /// Draws the 3x3 centre and nothing else: the outer square is deliberately left out so a
+    /// renderer that painted or erased around the shape would be visible in the pixels.
+    /// </summary>
+    private sealed class CentreOnlyFinderPatternShape : FinderPatternShape
     {
         public override bool RequiresAntialiasing => false;
 
-        public int BackgroundPaintDrawCount { get; private set; }
-
-        public int BackgroundColorDrawCount { get; private set; }
-
-        public SKColor ReceivedBackgroundColor { get; private set; }
-
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
-        {
-        }
-
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
-        {
-            BackgroundColorDrawCount++;
-        }
-
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint)
-        {
-            BackgroundPaintDrawCount++;
-            ReceivedBackgroundColor = backgroundPaint.Color;
-        }
-    }
-
-    private sealed class LegacyBackgroundColorFinderPatternShape : FinderPatternShape
-    {
         public int DrawCount { get; private set; }
 
-        public SKColor ReceivedBackgroundColor { get; private set; }
+        public SKColor ReceivedPaintColor { get; private set; }
 
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
         {
-        }
-
-        public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
-        {
             DrawCount++;
-            ReceivedBackgroundColor = backgroundColor;
+            ReceivedPaintColor = paint.Color;
+            var moduleWidth = rect.Width / 7f;
+            var moduleHeight = rect.Height / 7f;
+            canvas.DrawRect(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3), paint);
         }
     }
 }

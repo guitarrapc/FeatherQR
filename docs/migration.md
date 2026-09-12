@@ -344,7 +344,7 @@ new MicroQRCodeImageBuilder("https://githu")
 
 The built-in finder shapes reshape the concentric rings without breaking them, which is the property a decoder needs, so all four decode down to 75% module size. `SymbolRenderer.Render` and the `SKCanvas.Render` extensions gained the matching optional `finderPatternShape` parameter for Micro QR and rMQR. If you were relying on the old look, read the matrix through the `[row, col]` indexer on the data type and draw it yourself.
 
-A styled symbol like the one above needs an opaque background when the output is SVG, whatever it does in raster: see [Styled finder patterns are lost in SVG on a non-opaque background](#styled-finder-patterns-are-lost-in-svg-on-a-non-opaque-background).
+If you wrote a finder shape of your own, its contract changed in the same release: see [Finder shapes draw the dark modules only](#finder-shapes-draw-the-dark-modules-only).
 
 ### `WithSize(w, h)` fits the symbol instead of stretching it
 
@@ -480,38 +480,41 @@ var shape = ShapeFor(options);                                    // null when n
 if (shape != null) builder = builder.WithFinderPatternShape(shape);
 ```
 
-`RectangleModuleShape.Default` and `RectangleFinderPatternShape.Default` are the same plain squares and are the right argument when you mean them. For `WithModuleShape` they are an exact substitute for the old `null`. For `WithFinderPatternShape` they are an exact substitute in raster output — pixel-identical, except that a gradient over a non-opaque background can differ in tens of pixels, at some canvas sizes, by one step of one channel — and **not** in SVG: naming a finder shape moves the finder patterns onto a drawing path that `SKSvgCanvas` cannot express when the background is not fully opaque, and they are dropped from the document, leaving a symbol no reader can scan. If you emit SVG, read [Styled finder patterns are lost in SVG on a non-opaque background](#styled-finder-patterns-are-lost-in-svg-on-a-non-opaque-background) before choosing a substitute.
+`RectangleModuleShape.Default` and `RectangleFinderPatternShape.Default` are the same plain squares and are the right argument when you mean them. For `WithModuleShape` they are an exact substitute for the old `null`. For `WithFinderPatternShape` they are an exact substitute in raster output too, pixel-identical on any background (see [Finder shapes draw the dark modules only](#finder-shapes-draw-the-dark-modules-only) for what used to differ). The two spellings still take different paths, so an SVG is not element-identical: naming the square writes each finder as five rectangles of its own, where omitting it merges them into the module runs. The picture is the same either way.
 
 `WithGradient(null)`, `WithIcon(null)` and `WithClearColor(null)` are unchanged: there `null` means the option is absent rather than set to a default, which is the difference the change is about.
 
-### Styled finder patterns are lost in SVG on a non-opaque background
+### Finder shapes draw the dark modules only
 
-**Known limitation.** An SVG whose background is transparent or translucent loses its finder patterns whenever the finder patterns are drawn as a shape of their own: the light rings are cut out with a blend mode inside a layer, and `SKSvgCanvas` writes nothing for that layer. The symbol comes out with empty corners and no reader can scan it. Raster output is unaffected, on any background.
+**Fixed in 2.0.0, with a contract change for custom shapes.** In 1.x a finder pattern drawn as a shape of its own painted its light ring, and the renderer erased that ring through a layer whenever the background was not opaque; `SKSvgCanvas` wrote nothing for the layer, so a Standard QR SVG with `WithFinderPatternShape` on a transparent or translucent background came out with empty corners that no reader could scan. 2.0.0 draws the ring as a hole instead, and whatever is beneath shows through: the square finder is four bands and a centre rectangle, a circle's ring is a one-module stroke of its middle oval, and the two rounded shapes use an even-odd path. A transparent or translucent background is now fine in SVG as it always was in raster, on all three symbologies: the symbol is drawn the same way whatever the alpha, and only the background element differs, carrying a `fill-opacity` when it is translucent and being left out altogether when it is fully transparent.
 
-It happens when the background alpha is below 255 and either of these is true:
-
-- `WithFinderPatternShape(…)` was called with any shape, the plain square included
-- the modules are styled (`WithModuleShape` with a shape other than the plain square, or a size percent below 1.0), which substitutes a solid square finder, because styling never reaches a finder pattern
-
-The second case is the one to watch: it needs no finder-shape call at all, so leaving the setter uncalled is not a workaround there. Any symbol styled the way the [module styling](#module-styling-no-longer-reaches-the-finder-patterns) section shows is affected, whether or not it names a finder shape.
-
-**The remedy is an opaque background.** What the finder patterns need is that the colour behind them is opaque; that colour also fills the quiet zone, so a styled SVG cannot have a transparent symbol box at all.
-
-What you can still have is a transparent *pad*, the canvas outside the symbol, when the canvas is larger than the content:
+`FinderPatternShape` keeps one method, `Draw(SKCanvas, SKRect, SKPaint)`, and it draws the dark modules only. The two overloads that carried a light colour or paint, `Draw(…, SKColor backgroundColor)` and `Draw(…, SKPaint backgroundPaint)`, are gone: a shape that painted the ring could only be made right on a translucent background by erasing, and erasing is what SVG could not express. If your shape overrode either, move the dark drawing into the three-argument method and leave the ring undrawn; a shape that painted the ring white in the three-argument method was already wrong on every coloured background and needs the same edit. `RequiresAntialiasing` is `abstract` now, as `ModuleShape`'s already was, so a shape that relied on the inherited `false` no longer compiles until it answers. The `paint` a shape is handed may also be changed and restored, which is what lets a ring be drawn as a stroke; the rule is that you restore any property you change before returning, and never dispose it.
 
 ```csharp
-new QRCodeImageBuilder("https://example.com")
-    .WithModulePixelSize(8)                       // content size follows the modules
-    .WithSize(512, 512)                           // larger canvas, so there is a pad
-    .WithBackgroundColor(SKColors.White)          // opaque: the finders need it
-    .WithClearColor(SKColors.Transparent)         // the pad only, not the quiet zone
-    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.85f)
-    .ToSvgString();
+// before: the outer square dark, the ring light over it, the centre dark
+public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKPaint backgroundPaint) { … }
+
+// after: the dark parts only, as one even-odd path; the ring is what you leave undrawn
+public override bool RequiresAntialiasing => false;
+
+public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
+{
+    // Per axis: a caller may hand a shape a rect that is not square, and the rings
+    // have to stay on the same module grid as the data around them.
+    var moduleWidth = rect.Width / 7f;
+    var moduleHeight = rect.Height / 7f;
+    using var builder = new SKPathBuilder { FillType = SKPathFillType.EvenOdd };
+    builder.AddRect(rect);
+    builder.AddRect(SKRect.Create(rect.Left + moduleWidth, rect.Top + moduleHeight, moduleWidth * 5, moduleHeight * 5));
+    builder.AddRect(SKRect.Create(rect.Left + moduleWidth * 2, rect.Top + moduleHeight * 2, moduleWidth * 3, moduleHeight * 3));
+    using var path = builder.Detach();
+    canvas.DrawPath(path, paint);
+}
 ```
 
-Without `WithModulePixelSize` a square symbol fills a square canvas, there is no pad, and the clear colour has nothing to paint.
+Do not fill the whole 7 by 7 area: a reader locates the symbol by the finder pattern's 1:1:3:1:1 run of dark and light, so a solid square renders a symbol nothing can scan, with no exception to tell you.
 
-Raster output has no such constraint, so a transparent background is fine for PNG and WebP. Only part of this predates 2.0.0: Standard QR with an explicit finder shape behaved this way in 1.x too, while the styled-module case arrived with the 2.0.0 rule that styling never reaches a finder pattern. Micro QR and rMQR reach the defect through both routes, one of which (the setter) they gained in 2.0.0 while the other needs no setter at all.
+Two smaller consequences. The finder's antialiasing now follows the finder shape alone, `RequiresAntialiasing` deciding it in both directions, so a square finder beside round modules is drawn crisp where it used to inherit the modules' antialiasing; that changes styled raster output wherever the module grid is not whole pixels, by around 1 % of the image, all of it on finder edges (measured on Standard QR at 512x512 with circle modules at 0.85: 3,384 pixels of a 29-module matrix, 2,952 of a 33-module one and 2,397 of a 41-module one, so 1.29 % down to 0.91 % as the modules get smaller; 0 pixels when the symbol is sized with `WithModulePixelSize`, where module edges land on whole pixels). A curved finder's ring edge moves for the same kind of reason, being rasterised once as the edge of a hole rather than as a light shape over a dark one (0.9 to 1.2 % of a 116 px render). And naming `RectangleFinderPatternShape.Default` is now pixel-identical to leaving the setter uncalled on every background, including a gradient over a translucent one, where the layer used to cost one step of one channel.
 
 ## 1.2.0
 
