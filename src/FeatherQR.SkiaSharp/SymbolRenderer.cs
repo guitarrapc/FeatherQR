@@ -33,9 +33,10 @@ public static class SymbolRenderer
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. A zero size is accepted and draws nothing.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, keeps its background and draws nothing else.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, an <paramref name="iconData"/> size, border or occupancy limit is out of range, or <paramref name="gradientOptions"/> has a direction that is not defined. Icon settings are checked whatever the area's size, so a render that draws nothing still refuses an icon it could not draw.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code. Checked whatever the area's size, like the icon's other settings.</exception>
     public static void Render(
         SKCanvas canvas,
         SKRect area,
@@ -48,15 +49,9 @@ public static class SymbolRenderer
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
-        if (data is null)
-            throw new ArgumentNullException(nameof(data));
-        ValidateArea(area, nameof(area));
-        if (moduleSizePercent is < 0f or > 1.0f)
-            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
-
-        // Nothing fits, so nothing is drawn, overlays sized in pixels included.
-        if (area.Width == 0 || area.Height == 0)
-            return;
+        ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
+        if (iconData is not null)
+            ValidateIcon(data, iconData);
 
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
@@ -68,6 +63,10 @@ public static class SymbolRenderer
 
         // Fit: uniform module scale, symbol centered in the area.
         var symbolArea = GetSquareArea(area);
+
+        // No symbol fits, so the area keeps its background and nothing else is drawn, overlays sized in pixels included.
+        if (IsEmpty(symbolArea))
+            return;
 
         // Create paint with gradient or solid color
         // disable antialiasing as it causes gray border around each module.
@@ -169,9 +168,9 @@ public static class SymbolRenderer
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. A zero size is accepted and draws nothing.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, keeps its background and draws nothing else.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
     public static void Render(
         SKCanvas canvas,
         SKRect area,
@@ -183,15 +182,7 @@ public static class SymbolRenderer
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
-        if (data is null)
-            throw new ArgumentNullException(nameof(data));
-        ValidateArea(area, nameof(area));
-        if (moduleSizePercent is < 0f or > 1.0f)
-            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
-
-        // Nothing fits, so nothing is drawn, overlays sized in pixels included.
-        if (area.Width == 0 || area.Height == 0)
-            return;
+        ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
 
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
@@ -203,6 +194,10 @@ public static class SymbolRenderer
 
         // Fit: uniform module scale, symbol centered in the area.
         var symbolArea = GetSquareArea(area);
+
+        // No symbol fits, so the area keeps its background and nothing else is drawn, overlays sized in pixels included.
+        if (IsEmpty(symbolArea))
+            return;
 
         // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
@@ -250,9 +245,9 @@ public static class SymbolRenderer
     /// <param name="moduleSizePercent">How much of its cell a data module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. A zero size is accepted and draws nothing.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is out of range.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, keeps its background and draws nothing else.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
     public static void Render(
         SKCanvas canvas,
         SKRect area,
@@ -264,15 +259,7 @@ public static class SymbolRenderer
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
-        if (data is null)
-            throw new ArgumentNullException(nameof(data));
-        ValidateArea(area, nameof(area));
-        if (moduleSizePercent is < 0f or > 1.0f)
-            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
-
-        // Nothing fits, so nothing is drawn, overlays sized in pixels included.
-        if (area.Width == 0 || area.Height == 0)
-            return;
+        ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
 
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
@@ -284,6 +271,10 @@ public static class SymbolRenderer
 
         // Letterbox: uniform module scale, symbol centered in the area.
         var symbolArea = GetLetterboxedArea(area, data.Width, data.Height);
+
+        // No symbol fits, so the area keeps its background and nothing else is drawn, overlays sized in pixels included.
+        if (IsEmpty(symbolArea))
+            return;
 
         // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
@@ -340,7 +331,8 @@ public static class SymbolRenderer
 
         // SKRect.Create(x, y, s, s) stores right and bottom as rounded sums, so a square at fractional
         // coordinates can come out a rounding step from square; shrinking it by that step moves module edges.
-        var slack = (MaxAbs(area.Left, area.Right) + MaxAbs(area.Top, area.Bottom)) * SquareTolerance;
+        // Scaled per axis before the sum, which would overflow near the top of the float range.
+        var slack = MaxAbs(area.Left, area.Right) * SquareTolerance + MaxAbs(area.Top, area.Bottom) * SquareTolerance;
         if (Math.Abs(width - height) <= slack)
             return area;
 
@@ -349,7 +341,7 @@ public static class SymbolRenderer
     }
 
     /// <summary>
-    /// Refuses an area with a negative or non-finite size. A zero size is accepted and draws nothing.
+    /// Refuses an area with a negative or non-finite size. A zero size is accepted; the renderer keeps its background and draws nothing else.
     /// </summary>
     /// <remarks>
     /// An inverted area reads two ways, a mirror or the same bounds written backwards, and for an asymmetric symbol the two are different pictures, so neither is guessed. A mirror is asked for with the canvas.
@@ -360,10 +352,86 @@ public static class SymbolRenderer
         if (!IsFinite(area.Width) || !IsFinite(area.Height))
             throw new ArgumentException("The area must have finite coordinates and size.", paramName);
         if (area.Width < 0 || area.Height < 0)
-            throw new ArgumentException("The area must not be inverted: its width and height must be zero or more. To mirror the symbol, scale the canvas by -1 on that axis instead.", paramName);
+            throw new ArgumentException("The area must not be inverted: its width and height must be zero or more. To mirror the symbol, scale the canvas by -1 about the area instead.", paramName);
+    }
+
+    /// <summary>
+    /// Refuses what every <c>Render</c> overload takes, so the canvas extensions can refuse it before they clear the canvas.
+    /// </summary>
+    internal static void ValidateRenderArguments(SKCanvas canvas, object? data, SKRect area, float moduleSizePercent, GradientOptions? gradientOptions, string dataParamName)
+    {
+        if (canvas is null)
+            throw new ArgumentNullException(nameof(canvas));
+        if (data is null)
+            throw new ArgumentNullException(dataParamName);
+        ValidateArea(area, "area");
+        // Written as a negated range so that NaN, which is neither below 0 nor above 1, is refused as well.
+        if (moduleSizePercent is not (>= 0f and <= 1.0f))
+            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
+        // Nothing upstream checks Direction: the constructor validates only the colours and their stops.
+        if (gradientOptions is not null && !IsDefinedDirection(gradientOptions.Direction))
+            throw new ArgumentOutOfRangeException(nameof(gradientOptions), $"Direction {gradientOptions.Direction} is not a valid gradient direction.");
+    }
+
+    private static bool IsDefinedDirection(GradientDirection direction) => direction
+        is GradientDirection.None
+        or GradientDirection.LeftToRight
+        or GradientDirection.RightToLeft
+        or GradientDirection.TopToBottom
+        or GradientDirection.BottomToTop
+        or GradientDirection.TopLeftToBottomRight
+        or GradientDirection.TopRightToBottomLeft
+        or GradientDirection.BottomLeftToTopRight
+        or GradientDirection.BottomRightToTopLeft;
+
+    /// <summary>
+    /// Refuses icon settings that do not fit the QR code, whatever size the area has.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the rectangles it guards, because a render that draws nothing still refuses an icon it could never draw: a collapsed panel would otherwise hide the mistake until it opens.
+    /// </remarks>
+    internal static void ValidateIcon(QRCodeData data, IconData iconData)
+    {
+        if (iconData.IconSizeModules is not null)
+        {
+            var iconBorderModules = iconData.IconBorderModules ?? 1;
+            if (iconData.IconSizeModules.Value < 1)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon size modules must be at least 1.");
+            if (iconBorderModules < 0)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon border modules must be 0 or greater.");
+            if (iconData.MaxCoreOccupancyPercent is < 1 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Max core occupancy percent must be between 1 and 100.");
+
+            var totalModules = iconData.IconSizeModules.Value + (iconBorderModules * 2);
+            var coreSize = data.GetCoreSize();
+            var maxByCore = coreSize * iconData.MaxCoreOccupancyPercent / 100;
+
+            if (totalModules > data.Size)
+            {
+                throw new InvalidOperationException(
+                    $"Icon occupies {totalModules} modules, which exceeds QR matrix size {data.Size}.");
+            }
+
+            if (totalModules > maxByCore)
+            {
+                throw new InvalidOperationException(
+                    $"Icon occupies {totalModules} modules, but max allowed is {maxByCore} " +
+                    $"(coreSize={coreSize}, maxCoreOccupancyPercent={iconData.MaxCoreOccupancyPercent}).");
+            }
+        }
+        else
+        {
+            if (iconData.IconSizePercent is < 1 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon size percent must be between 1 and 100.");
+            if (iconData.IconBorderWidth < 0)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon border width must be 0 or greater.");
+        }
     }
 
     private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+
+    /// <summary>A fitted symbol with no size. A zero area gives one, and so does an area long enough that centering the symbol swallows its shorter side.</summary>
+    private static bool IsEmpty(SKRect symbolArea) => symbolArea.Width <= 0 || symbolArea.Height <= 0;
 
     private static float MaxAbs(float a, float b) => Math.Max(Math.Abs(a), Math.Abs(b));
 
@@ -378,13 +446,14 @@ public static class SymbolRenderer
     /// </summary>
     /// <remarks>
     /// When <see cref="IconData.IconSizeModules"/> is set, sizing is module-based and percent/pixel values are ignored.
-    /// A non-square area is fitted exactly as <c>Render</c> fits it, so pass the area you drew into. A zero-size area, where <c>Render</c> draws nothing, gives empty rectangles at its centre.
+    /// A non-square area is fitted exactly as <c>Render</c> fits it, so pass the area you drew into. An area no symbol fits in, where <c>Render</c> draws nothing, gives empty rectangles at the fitted symbol's centre.
     /// Module-based icons are validated against QR size and core occupancy at render time.
     /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
     /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> or <paramref name="iconData"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the icon size, border or occupancy limit is out of range.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code. Checked whatever the area's size, like the icon's other settings.</exception>
     public static (SKRect iconRect, SKRect borderRect) GetIconRects(QRCodeData data, SKRect area, IconData iconData)
     {
         if (data is null)
@@ -392,41 +461,21 @@ public static class SymbolRenderer
         if (iconData is null)
             throw new ArgumentNullException(nameof(iconData));
         ValidateArea(area, nameof(area));
+        ValidateIcon(data, iconData);
 
         area = GetSquareArea(area);
         var centerX = area.Left + area.Width / 2;
         var centerY = area.Top + area.Height / 2;
 
+        // The render draws nothing here, so neither the icon nor a border sized in pixels has anywhere to go.
+        if (IsEmpty(area))
+            return (new SKRect(centerX, centerY, centerX, centerY), new SKRect(centerX, centerY, centerX, centerY));
+
         if (iconData.IconSizeModules is not null)
         {
             var iconSizeModules = iconData.IconSizeModules.Value;
             var iconBorderModules = iconData.IconBorderModules ?? 1;
-            var maxCoreOccupancyPercent = iconData.MaxCoreOccupancyPercent;
-
-            if (iconSizeModules < 1)
-                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon size modules must be at least 1.");
-            if (iconBorderModules < 0)
-                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon border modules must be 0 or greater.");
-            if (maxCoreOccupancyPercent is < 1 or > 100)
-                throw new ArgumentOutOfRangeException(nameof(iconData), "Max core occupancy percent must be between 1 and 100.");
-
-            var totalModules = iconSizeModules + (iconBorderModules * 2);
             var size = data.Size;
-            var coreSize = data.GetCoreSize();
-            var maxByCore = coreSize * maxCoreOccupancyPercent / 100;
-
-            if (totalModules > size)
-            {
-                throw new InvalidOperationException(
-                    $"Icon occupies {totalModules} modules, which exceeds QR matrix size {size}.");
-            }
-
-            if (totalModules > maxByCore)
-            {
-                throw new InvalidOperationException(
-                    $"Icon occupies {totalModules} modules, but max allowed is {maxByCore} " +
-                    $"(coreSize={coreSize}, maxCoreOccupancyPercent={maxCoreOccupancyPercent}).");
-            }
 
             var cellWidth = area.Width / size;
             var cellHeight = area.Height / size;
@@ -454,11 +503,6 @@ public static class SymbolRenderer
         }
         else
         {
-            if (iconData.IconSizePercent is < 1 or > 100)
-                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon size percent must be between 1 and 100.");
-            if (iconData.IconBorderWidth < 0)
-                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon border width must be 0 or greater.");
-
             var iconSize = iconData.IconSizePercent / 100f;
             var iconWidth = area.Width * iconSize;
             var iconHeight = area.Height * iconSize;
@@ -469,8 +513,7 @@ public static class SymbolRenderer
                 iconWidth,
                 iconHeight);
 
-            // The border is in pixels, and a zero-size render draws no border around its zero icon.
-            var borderWidth = area.Width > 0 ? iconData.IconBorderWidth : 0;
+            var borderWidth = iconData.IconBorderWidth;
             var borderRect = borderWidth > 0
                 ? SKRect.Create(
                     centerX - iconWidth / 2 - borderWidth,
@@ -500,7 +543,7 @@ public static class SymbolRenderer
     /// <param name="data">The QR code the finder patterns belong to.</param>
     /// <param name="patternIndex">Which pattern: 0 top-left, 1 top-right, 2 bottom-left.</param>
     /// <param name="renderArea">The area the QR code was drawn into.</param>
-    /// <returns>An SKRect representing the position and size of the specified finder pattern within the rendering area.</returns>
+    /// <returns>An SKRect representing the position and size of the specified finder pattern within the rendering area. An area no symbol fits in, where <c>Render</c> draws nothing, gives an empty rectangle at the fitted symbol's top left corner.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="patternIndex"/> is not 0, 1 or 2.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="renderArea"/> is inverted (a negative width or height) or has a coordinate or size that is not finite.</exception>
@@ -513,6 +556,11 @@ public static class SymbolRenderer
         ValidateArea(renderArea, nameof(renderArea));
 
         renderArea = GetSquareArea(renderArea);
+
+        // No symbol was drawn, so no pattern was either; a cell of one side's size would give a rect with the other side's.
+        if (IsEmpty(renderArea))
+            return new SKRect(renderArea.Left, renderArea.Top, renderArea.Left, renderArea.Top);
+
         var size = data.Size;
         var coreSize = data.GetCoreSize();
         var cellWidth = renderArea.Width / size;

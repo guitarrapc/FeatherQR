@@ -74,6 +74,7 @@ public sealed record class IconData
     /// <summary>
     /// Width of the background-colored padding around the icon, in pixels.
     /// Ignored once <see cref="IconSizeModules"/> is set.
+    /// Being in pixels, it does not shrink with the symbol, so on a symbol only a few pixels across it reaches past the drawing area; size the icon in modules to keep the padding proportional.
     /// </summary>
     public int IconBorderWidth { get; init; } = 2;
 

@@ -217,7 +217,11 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 var qrData = QRCodeGenerator.Create("content", QREccLevel.M);
+using var surface = SKSurface.Create(new SKImageInfo(400, 400));
 var canvas = surface.Canvas;
+
+// A square area is filled edge to edge; a wider or taller one gets the symbol centered in it.
+var area = SKRect.Create(50, 50, 300, 300);
 SymbolRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 ```
 

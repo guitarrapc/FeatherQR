@@ -7,7 +7,7 @@ namespace FeatherQR.SkiaSharp;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each method clears the whole canvas before drawing, so anything already on it is lost.
+/// Each method clears the whole canvas before drawing, so anything already on it is lost. Every argument is checked before that clear, so a refused call leaves the canvas as it was.
 /// To place a code inside a larger drawing, wrap the call in <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>, or call <see cref="SymbolRenderer"/> directly, which draws only the code.
 /// </para>
 /// <para>
@@ -34,7 +34,9 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, an <paramref name="iconData"/> size, border or occupancy limit is out of range, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code. Checked whatever the area's size, like the icon's other settings.</exception>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -49,6 +51,11 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // The canvas and the symbol are reported before the size, as they are on the area overloads.
+        if (canvas is null)
+            throw new ArgumentNullException(nameof(canvas));
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
         if (width < 0)
             throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
         if (height < 0)
@@ -73,7 +80,10 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, an <paramref name="iconData"/> size, border or occupancy limit is out of range, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the icon does not fit the QR code. Checked whatever the area's size, like the icon's other settings.</exception>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -87,8 +97,10 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
-        // Refused before the clear, so a refused call leaves the canvas as it was.
-        SymbolRenderer.ValidateArea(area, nameof(area));
+        // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
+        if (iconData is not null)
+            SymbolRenderer.ValidateIcon(data, iconData);
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -111,7 +123,8 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, or <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -125,6 +138,11 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // The canvas and the symbol are reported before the size, as they are on the area overloads.
+        if (canvas is null)
+            throw new ArgumentNullException(nameof(canvas));
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
         if (width < 0)
             throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
         if (height < 0)
@@ -151,7 +169,9 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
     public static void Render(
         this SKCanvas canvas,
         MicroQRCodeData data,
@@ -164,8 +184,8 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
-        // Refused before the clear, so a refused call leaves the canvas as it was.
-        SymbolRenderer.ValidateArea(area, nameof(area));
+        // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
@@ -187,7 +207,8 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, or <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -201,6 +222,11 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
+        // The canvas and the symbol are reported before the size, as they are on the area overloads.
+        if (canvas is null)
+            throw new ArgumentNullException(nameof(canvas));
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
         if (width < 0)
             throw new ArgumentOutOfRangeException(nameof(width), "Width must be zero or more.");
         if (height < 0)
@@ -226,7 +252,9 @@ public static class SKCanvasExtensions
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
     /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite, before the canvas is cleared. A zero size is accepted and draws nothing.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined.</exception>
     public static void Render(
         this SKCanvas canvas,
         RmQRCodeData data,
@@ -239,8 +267,8 @@ public static class SKCanvasExtensions
         GradientOptions? gradientOptions = null,
         FinderPatternShape? finderPatternShape = null)
     {
-        // Refused before the clear, so a refused call leaves the canvas as it was.
-        SymbolRenderer.ValidateArea(area, nameof(area));
+        // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
+        SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
         canvas.Clear(clearColor ?? SKColors.Transparent);
         SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
