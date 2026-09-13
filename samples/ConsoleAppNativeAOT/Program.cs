@@ -75,7 +75,7 @@ var canvas = surface.Canvas;
         canvas,
         qrRect,
         qrData,
-        codeColor: null,
+        codeColor: SKColors.Black,
         backgroundColor: SKColors.White,
         moduleShape: CircleModuleShape.Default,
         moduleSizePercent: 0.95f,

@@ -274,9 +274,9 @@ namespace FeatherQR.SkiaSharp
     {
         public static SKRect GetFinderPatternRect(QRCodeData data, int patternIndex, SKRect renderArea);
         public static ValueTuple<SKRect, SKRect> GetIconRects(QRCodeData data, SKRect area, IconData iconData);
-        public static void Render(SKCanvas canvas, SKRect area, MicroQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
-        public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? codeColor, SKColor? backgroundColor, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
-        public static void Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, SKRect area, MicroQRCodeData data, SKColor codeColor, SKColor backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor codeColor, SKColor backgroundColor, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
+        public static void Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor codeColor, SKColor backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1, GradientOptions? gradientOptions = null, FinderPatternShape? finderPatternShape = null);
     }
 
     public enum TextVerticalAlignment : int

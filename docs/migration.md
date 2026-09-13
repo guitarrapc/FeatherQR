@@ -484,6 +484,24 @@ if (shape != null) builder = builder.WithFinderPatternShape(shape);
 
 `WithGradient(null)`, `WithIcon(null)` and `WithClearColor(null)` are unchanged: there `null` means the option is absent rather than set to a default, which is the difference the change is about.
 
+### `SymbolRenderer.Render` takes its colours as values
+
+**Compile-time break, and the compiler finds every site.** The two colour parameters of `SymbolRenderer.Render` were required on all three overloads yet typed `SKColor?`, so a caller who wanted black on white passed two `null`s to a method that could not omit them. They are `SKColor` now, the same rule as the builder setters above: a default that has a name is passed by name.
+
+```csharp
+// 1.x through 2.0.0-preview.2
+SymbolRenderer.Render(canvas, area, data, null, null);
+
+// 2.0.0
+SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White);
+```
+
+A `null` in either position is CS1503, so a build lists what to rewrite; a colour held in an `SKColor?` variable needs `?? SKColors.Black` at the call. Nothing else moves and nothing draws differently: the renderer used to resolve the two `null`s to exactly these two colours.
+
+The `SKCanvas.Render` extensions are unchanged. Their colours are optional parameters, which C# can only default to a constant, and `default(SKColor)` is transparent rather than black, so `SKColor?` stays the spelling of "not supplied" there and the extensions pass black and white on to the renderer when a colour is omitted.
+
+A gradient replaces the code colour, the way a shader replaces the colour of an `SKPaint`: with `gradientOptions` set, the `codeColor` you now have to write is not used, and `SKColors.Black` is the honest thing to put there. A gradient with `GradientDirection.None` paints the modules in the code colour, the same as no gradient. Both were already so; the parameter documentation now says it.
+
 ### Finder shapes draw the dark modules only
 
 **Fixed in 2.0.0, with a contract change for custom shapes.** In 1.x a finder pattern drawn as a shape of its own painted its light ring, and the renderer erased that ring through a layer whenever the background was not opaque; `SKSvgCanvas` wrote nothing for the layer, so a Standard QR SVG with `WithFinderPatternShape` on a transparent or translucent background came out with empty corners that no reader could scan. 2.0.0 draws the ring as a hole instead, and whatever is beneath shows through: the square finder is four bands and a centre rectangle, a circle's ring is a one-module stroke of its middle oval, and the two rounded shapes use an even-odd path. A transparent or translucent background is now fine in SVG as it always was in raster, on all three symbologies: the symbol is drawn the same way whatever the alpha, and only the background element differs, carrying a `fill-opacity` when it is translucent and being left out altogether when it is fully transparent.

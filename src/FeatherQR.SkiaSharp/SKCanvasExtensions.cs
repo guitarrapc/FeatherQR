@@ -32,7 +32,7 @@ public static class SKCanvasExtensions
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It replaces <paramref name="codeColor"/>, the way a shader replaces the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted. A shape draws the dark modules only and leaves the light rings undrawn, so the background shows through them at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, an <paramref name="iconData"/> size, border or occupancy limit is out of range, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
@@ -78,7 +78,7 @@ public static class SKCanvasExtensions
     /// <param name="iconData">An icon to draw over the center. None when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It replaces <paramref name="codeColor"/>, the way a shader replaces the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder patterns as. Plain squares when omitted. A shape draws the dark modules only and leaves the light rings undrawn, so the background shows through them at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
@@ -102,7 +102,7 @@ public static class SKCanvasExtensions
         if (iconData is not null)
             SymbolRenderer.ValidateIcon(data, iconData);
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
+        SymbolRenderer.Render(canvas, area, data, codeColor ?? SKColors.Black, backgroundColor ?? SKColors.White, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
@@ -121,7 +121,7 @@ public static class SKCanvasExtensions
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It replaces <paramref name="codeColor"/>, the way a shader replaces the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, or <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
@@ -167,7 +167,7 @@ public static class SKCanvasExtensions
     /// <param name="backgroundColor">Behind the Micro QR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It replaces <paramref name="codeColor"/>, the way a shader replaces the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered square rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
@@ -187,7 +187,7 @@ public static class SKCanvasExtensions
         // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
         SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
+        SymbolRenderer.Render(canvas, area, data, codeColor ?? SKColors.Black, backgroundColor ?? SKColors.White, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 
     /// <summary>
@@ -205,7 +205,7 @@ public static class SKCanvasExtensions
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It replaces <paramref name="codeColor"/>, the way a shader replaces the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="width"/> or <paramref name="height"/> is negative, or <paramref name="moduleSizePercent"/> is outside 0.0 to 1.0, or <paramref name="gradientOptions"/> has a direction that is not defined. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
@@ -250,7 +250,7 @@ public static class SKCanvasExtensions
     /// <param name="backgroundColor">Behind the rMQR code. White when omitted.</param>
     /// <param name="moduleShape">The shape to draw modules as. Squares when omitted.</param>
     /// <param name="moduleSizePercent">How much of its cell a module fills, 0.0 to 1.0. The default 1.0 leaves no gaps.</param>
-    /// <param name="gradientOptions">A gradient to paint the modules with. Solid color when omitted.</param>
+    /// <param name="gradientOptions">A gradient to paint the modules with. It replaces <paramref name="codeColor"/>, the way a shader replaces the color of an <see cref="SKPaint"/>; omitted, or with a direction of <see cref="GradientDirection.None"/>, the modules are painted in <paramref name="codeColor"/>.</param>
     /// <param name="finderPatternShape">The shape to draw the finder pattern as. A plain square when omitted. A shape draws the dark modules only and leaves the light ring undrawn, so the background shows through it at any alpha, in raster and SVG output alike.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="canvas"/> or <paramref name="data"/> is <c>null</c>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="area"/> is inverted (a negative width or height) or has a coordinate or size that is not finite. An area no symbol fits in, a zero width or height or an aspect ratio so extreme the centered rectangle rounds away, is accepted: the canvas is still cleared, the area keeps its background, and no code is drawn.</exception>
@@ -270,6 +270,6 @@ public static class SKCanvasExtensions
         // Every argument is refused before the clear, so a refused call leaves the canvas as it was.
         SymbolRenderer.ValidateRenderArguments(canvas, data, area, moduleSizePercent, gradientOptions, nameof(data));
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        SymbolRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
+        SymbolRenderer.Render(canvas, area, data, codeColor ?? SKColors.Black, backgroundColor ?? SKColors.White, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
 }

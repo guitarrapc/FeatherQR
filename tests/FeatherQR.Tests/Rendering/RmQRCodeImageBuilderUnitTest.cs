@@ -368,7 +368,7 @@ public class RmQRCodeImageBuilderUnitTest
         using (var canvas = new SKCanvas(direct))
         {
             canvas.Clear(SKColors.Red);
-            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, 200, 200), data, null, null);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, 200, 200), data, SKColors.Black, SKColors.White);
         }
         // Background covers the whole area; symbol letterboxed vertically (200/31 = 6.45 per module → 96.8 px high).
         await Assert.That(direct.GetPixel(100, 5)).IsEqualTo(SKColors.White);
@@ -390,6 +390,6 @@ public class RmQRCodeImageBuilderUnitTest
             canvas.Render(data, SKRect.Create(0, 0, 200, 200), clearColor: SKColors.Red);
         await Assert.That(viaAreaExtension.GetPixel(100, 5)).IsEqualTo(SKColors.White);
 
-        await Assert.That(() => SymbolRenderer.Render(null!, SKRect.Create(0, 0, 10, 10), (RmQRCodeData)null!, null, null)).Throws<ArgumentNullException>();
+        await Assert.That(() => SymbolRenderer.Render(null!, SKRect.Create(0, 0, 10, 10), (RmQRCodeData)null!, SKColors.Black, SKColors.White)).Throws<ArgumentNullException>();
     }
 }

@@ -443,7 +443,7 @@ public class MicroQRCodeImageBuilderUnitTest
         using var bitmap = new SKBitmap(side, side);
         using (var canvas = new SKCanvas(bitmap))
         {
-            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, side, side), data, codeColor: null, backgroundColor: null);
+            SymbolRenderer.Render(canvas, SKRect.Create(0, 0, side, side), data, SKColors.Black, SKColors.White);
         }
 
         for (var row = 0; row < data.Size; row++)
