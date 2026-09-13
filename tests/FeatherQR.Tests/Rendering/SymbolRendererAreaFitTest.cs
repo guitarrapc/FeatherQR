@@ -35,9 +35,15 @@ public class SymbolRendererAreaFitTest
             }
         }
 
-        // rMQR has always fitted; it stays in the table as the reference the others now match.
-        yield return ("rmqr", "renderer", 900, 450);
-        yield return ("rmqr", "renderer", 300, 900);
+        // rMQR has always fitted; it stays in the table as the reference the others now match. Its size rows are
+        // here because nothing else renders a non-square area through that overload: while the table paired rMQR
+        // with the renderer alone, the rMQR size overload could transpose its width and height unnoticed. The area
+        // rows come along so the three entry points are read the same way for every symbology.
+        foreach (var entry in new[] { "renderer", "extensionArea", "extensionSize" })
+        {
+            yield return ("rmqr", entry, 900, 450);
+            yield return ("rmqr", entry, 300, 900);
+        }
     }
 
     [Test]

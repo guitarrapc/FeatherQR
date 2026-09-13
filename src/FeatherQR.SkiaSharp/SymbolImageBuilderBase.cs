@@ -144,7 +144,8 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// </summary>
     /// <remarks>
     /// Both are required, so this call sets exactly the two colors it names and leaves the clear color alone.
-    /// To change one color on its own use <see cref="WithCodeColor(SKColor)"/> or <see cref="WithBackgroundColor(SKColor)"/>.
+    /// To change one color on its own use <see cref="WithCodeColor(SKColor)"/> or <see cref="WithBackgroundColor(SKColor)"/>;
+    /// the code color's interaction with <see cref="WithGradient(GradientOptions?)"/> is described there.
     /// </remarks>
     /// <param name="codeColor">The dark modules.</param>
     /// <param name="backgroundColor">Behind the symbol, quiet zone included.</param>
@@ -158,6 +159,12 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Sets the color of the dark modules, black by default.
     /// </summary>
+    /// <remarks>
+    /// A gradient set with <see cref="WithGradient(GradientOptions?)"/> takes precedence over this color whatever
+    /// the order of the two calls, so this is not the way to replace a gradient with a solid color; pass
+    /// <see langword="null"/> to <see cref="WithGradient(GradientOptions?)"/> for that, or a gradient whose
+    /// direction is <see cref="GradientDirection.None"/>, which paints this color.
+    /// </remarks>
     /// <param name="codeColor">The color to draw the dark modules in.</param>
     public TSelf WithCodeColor(SKColor codeColor)
     {
@@ -235,6 +242,11 @@ public abstract class SymbolImageBuilderBase<TSelf> where TSelf : SymbolImageBui
     /// <summary>
     /// Paints the modules with a gradient instead of one solid color.
     /// </summary>
+    /// <remarks>
+    /// A gradient takes precedence over the code color whatever the order of the calls, so a later
+    /// <see cref="WithCodeColor(SKColor)"/> does not turn it back into a solid color; this setter's own
+    /// <see langword="null"/> does, as does a gradient whose direction is <see cref="GradientDirection.None"/>.
+    /// </remarks>
     /// <param name="gradientOptions">The gradient to paint, or <see langword="null"/> for no gradient, which paints the modules in the code color.</param>
     public TSelf WithGradient(GradientOptions? gradientOptions)
     {

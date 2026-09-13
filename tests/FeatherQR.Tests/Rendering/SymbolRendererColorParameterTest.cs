@@ -5,19 +5,28 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="SymbolRenderer"/>'s <c>Render</c> takes its two colours as values, so the defaults live in the
-/// <see cref="SKCanvasExtensions"/> that can omit them.
+/// <see cref="SKCanvasExtensions"/> overloads that can omit them.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The colours are the one place where the rule "<see langword="null"/> means the option is absent, never the default value"
 /// used to be broken on the static surface: two required parameters typed <c>SKColor?</c>, where <see langword="null"/> meant black and white.
 /// The extensions keep their optional <c>SKColor?</c> parameters, because a C# optional parameter needs a constant default and
-/// <c>default(SKColor)</c> is transparent, and resolve them before forwarding. These tests pin that resolution, and the one thing
-/// a caller who now has to write a code colour needs to know about it: a gradient replaces it, the way a shader replaces <c>SKPaint.Color</c>.
+/// <c>default(SKColor)</c> is transparent, and resolve them before forwarding.
+/// </para>
+/// <para>
+/// These tests pin that resolution and the two things a caller who now has to write a code colour needs to know about it.
+/// A gradient takes precedence over it, the way a shader takes precedence over <c>SKPaint.Color</c>, except a gradient of
+/// <see cref="GradientDirection.None"/>, which paints it. And a colour is drawn as given, transparent included, because
+/// nothing is substituted for it any more.
+/// </para>
 /// </remarks>
 public class SymbolRendererColorParameterTest
 {
     private const string Content = "renderer-colour-parameters";
     private static readonly SKRect Area = SKRect.Create(10, 10, 180, 180);
+    private const int SquareSide = 200;
+    private static readonly SKRect SquareArea = SKRect.Create(0, 0, SquareSide, SquareSide);
 
     /// <summary>
     /// Omitting both colours on the extension draws exactly what naming black on white on the renderer draws.
@@ -57,6 +66,60 @@ public class SymbolRendererColorParameterTest
     }
 
     /// <summary>
+    /// The size overloads carry both colours to the area overload that resolves them.
+    /// </summary>
+    /// <remarks>
+    /// Drop either colour from any of the three size forwards and the matching case here fails. For the code
+    /// colour it is the only failure in the suite, on all three symbologies, and for rMQR's background too.
+    /// The two tests that look as though they already covered this discriminate on less than they appear to:
+    /// <c>CanvasExtension_NonSquareArea_DrawsWhatTheRendererDraws</c> compares Standard QR and Micro QR against
+    /// the renderer with <see cref="SKColors.Black"/> on a gold background, so it catches those two backgrounds
+    /// and no code colour, and <c>Render_NonSquareArea_Decodes</c>, which covers the geometry of all three,
+    /// draws black on white, the resolved defaults, so it catches neither. This test is the colours.
+    /// </remarks>
+    [Test]
+    [Arguments("qr")]
+    [Arguments("microqr")]
+    [Arguments("rmqr")]
+    public async Task CanvasExtension_SizeOverload_ForwardsBothColors(string symbology)
+    {
+        using var throughSize = SquareCanvas(c => RenderThroughSizeExtension(c, symbology, SKColors.Navy, SKColors.Yellow));
+        using var throughArea = SquareCanvas(c => RenderThroughExtension(c, symbology, SKColors.Navy, SKColors.Yellow, SquareArea));
+        using var defaults = SquareCanvas(c => RenderThroughSizeExtension(c, symbology, SKColors.Black, SKColors.White));
+
+        await Assert.That(DifferingBytes(throughSize.Bytes, throughArea.Bytes)).IsEqualTo(0)
+            .Because($"{symbology}: the size overload draws what the area overload draws for the same rectangle");
+        await Assert.That(DifferingBytes(throughSize.Bytes, defaults.Bytes)).IsNotEqualTo(0)
+            .Because($"{symbology}: navy on yellow is not black on white, or the comparison above is vacuous");
+    }
+
+    /// <summary>
+    /// A colour is drawn as given, transparent included: the renderer substitutes nothing any more.
+    /// </summary>
+    /// <remarks>
+    /// This is the contract that makes <c>default(SKColor)</c> a transparent symbol rather than a black one.
+    /// While the parameters were <c>SKColor?</c> the renderer resolved a missing colour itself, and the literal
+    /// <c>default</c> in those positions meant <see langword="null"/>, so the same source text drew black on white.
+    /// </remarks>
+    [Test]
+    [Arguments("qr")]
+    [Arguments("microqr")]
+    [Arguments("rmqr")]
+    public async Task Render_TransparentColors_AreDrawnAsGiven(string symbology)
+    {
+        // On a solid ground rather than a transparent one, or "painted with these colours" and
+        // "erased with a blend mode" would look the same and the first assertion would pass for either.
+        using var transparent = Canvas(c => RenderThroughRenderer(c, symbology, SKColors.Transparent, SKColors.Transparent), SKColors.Red);
+        using var blackOnWhite = Canvas(c => RenderThroughRenderer(c, symbology, SKColors.Black, SKColors.White), SKColors.Red);
+        using var untouched = Canvas(_ => { }, SKColors.Red);
+
+        await Assert.That(DifferingBytes(transparent.Bytes, untouched.Bytes)).IsEqualTo(0)
+            .Because($"{symbology}: two transparent colours leave the canvas as it was; nothing is substituted for them");
+        await Assert.That(DifferingBytes(blackOnWhite.Bytes, untouched.Bytes)).IsNotEqualTo(0)
+            .Because($"{symbology}: the control proves the render reaches this bitmap at all");
+    }
+
+    /// <summary>
     /// With a gradient the code colour is not used: two renders that differ only in it are byte-identical.
     /// The control against the solid render proves the gradient was drawn at all.
     /// </summary>
@@ -64,7 +127,7 @@ public class SymbolRendererColorParameterTest
     [Arguments("qr")]
     [Arguments("microqr")]
     [Arguments("rmqr")]
-    public async Task Render_Gradient_ReplacesTheCodeColor(string symbology)
+    public async Task Render_Gradient_TakesPrecedenceOverTheCodeColor(string symbology)
     {
         var gradient = new GradientOptions([SKColors.Blue, SKColors.Red], GradientDirection.LeftToRight);
 
@@ -115,24 +178,47 @@ public class SymbolRendererColorParameterTest
         }
     }
 
-    /// <summary>The area overloads; the size overloads delegate to them, so the forward is tested once.</summary>
-    private static void RenderThroughExtension(SKCanvas canvas, string symbology, SKColor? codeColor, SKColor? backgroundColor)
+    /// <summary>The area overloads, which hold the resolution the size overloads reach through them.</summary>
+    private static void RenderThroughExtension(SKCanvas canvas, string symbology, SKColor? codeColor, SKColor? backgroundColor, SKRect? area = null)
     {
+        var target = area ?? Area;
         switch (symbology)
         {
-            case "qr": canvas.Render(StandardQr(), Area, codeColor: codeColor, backgroundColor: backgroundColor); break;
-            case "microqr": canvas.Render(MicroQr(), Area, codeColor: codeColor, backgroundColor: backgroundColor); break;
-            case "rmqr": canvas.Render(RmQr(), Area, codeColor: codeColor, backgroundColor: backgroundColor); break;
+            case "qr": canvas.Render(StandardQr(), target, codeColor: codeColor, backgroundColor: backgroundColor); break;
+            case "microqr": canvas.Render(MicroQr(), target, codeColor: codeColor, backgroundColor: backgroundColor); break;
+            case "rmqr": canvas.Render(RmQr(), target, codeColor: codeColor, backgroundColor: backgroundColor); break;
             default: throw new ArgumentOutOfRangeException(nameof(symbology));
         }
     }
 
-    /// <summary>A transparent canvas around <see cref="Area"/>: the extensions clear to transparent, so both paths start from the same pixels.</summary>
-    private static SKBitmap Canvas(Action<SKCanvas> draw)
+    /// <summary>The size overloads, whose area is <see cref="SquareArea"/> by construction.</summary>
+    private static void RenderThroughSizeExtension(SKCanvas canvas, string symbology, SKColor? codeColor, SKColor? backgroundColor)
+    {
+        switch (symbology)
+        {
+            case "qr": canvas.Render(StandardQr(), SquareSide, SquareSide, codeColor: codeColor, backgroundColor: backgroundColor); break;
+            case "microqr": canvas.Render(MicroQr(), SquareSide, SquareSide, codeColor: codeColor, backgroundColor: backgroundColor); break;
+            case "rmqr": canvas.Render(RmQr(), SquareSide, SquareSide, codeColor: codeColor, backgroundColor: backgroundColor); break;
+            default: throw new ArgumentOutOfRangeException(nameof(symbology));
+        }
+    }
+
+    /// <summary>A canvas the size overloads fill exactly, so a size render and an area render over <see cref="SquareArea"/> are comparable.</summary>
+    private static SKBitmap SquareCanvas(Action<SKCanvas> draw)
+    {
+        var bitmap = new SKBitmap(new SKImageInfo(SquareSide, SquareSide, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+        draw(canvas);
+        return bitmap;
+    }
+
+    /// <summary>A canvas around <see cref="Area"/>, cleared to <paramref name="ground"/> — transparent unless a test needs to see what the renderer leaves alone.</summary>
+    private static SKBitmap Canvas(Action<SKCanvas> draw, SKColor? ground = null)
     {
         var bitmap = new SKBitmap(new SKImageInfo((int)Area.Right + 20, (int)Area.Bottom + 20, SKColorType.Rgba8888, SKAlphaType.Premul));
         using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.Transparent);
+        canvas.Clear(ground ?? SKColors.Transparent);
         draw(canvas);
         return bitmap;
     }
