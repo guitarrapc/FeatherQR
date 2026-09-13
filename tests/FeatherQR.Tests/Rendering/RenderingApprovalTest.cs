@@ -1,5 +1,4 @@
 using SkiaSharp;
-using System.Runtime.CompilerServices;
 using FeatherQR.SkiaSharp;
 
 namespace FeatherQR.Tests;
@@ -182,6 +181,21 @@ public class RenderingApprovalTest
         }
     }
 
+    /// <summary>
+    /// A deterministic build once sent the goldens to the filesystem root, because the
+    /// source path they were anchored to had been rewritten to /_/.
+    /// </summary>
+    [Test]
+    public async Task GoldenDirectory_ResolvesIntoTheSourceTree()
+    {
+        var goldenDirectory = GetGoldenDirectory();
+
+        await Assert.That(Directory.Exists(goldenDirectory)).IsTrue()
+            .Because($"goldens must resolve into the source tree, got: {goldenDirectory}");
+        await Assert.That(Directory.EnumerateFiles(goldenDirectory, "*.png").Any()).IsTrue()
+            .Because($"the committed goldens must be the ones being read, got an empty directory: {goldenDirectory}");
+    }
+
     private static void SavePng(SKBitmap bitmap, string path)
     {
         using var image = SKImage.FromBitmap(bitmap);
@@ -191,10 +205,24 @@ public class RenderingApprovalTest
     }
 
     /// <summary>
-    /// Goldens live in the source tree (anchored via CallerFilePath), not the test
-    /// output directory, so newly generated files land where they can be committed
-    /// and intentional deletions take effect without a rebuild.
+    /// Goldens live in the source tree, not the test output directory, so newly generated
+    /// files land where they can be committed and intentional deletions take effect without
+    /// a rebuild. The project is found by walking up from the binaries rather than from
+    /// CallerFilePath, which deterministic builds rewrite to /_/.
     /// </summary>
-    private static string GetGoldenDirectory([CallerFilePath] string sourceFilePath = "")
-        => Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(sourceFilePath))!, "testdata", "rendering");
+    private static string GetGoldenDirectory()
+        => Path.Combine(GetProjectDirectory(), "testdata", "rendering");
+
+    private static string GetProjectDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FeatherQR.Tests.csproj")))
+            {
+                return directory.FullName;
+            }
+        }
+
+        throw new InvalidOperationException($"FeatherQR.Tests.csproj not found above '{AppContext.BaseDirectory}'.");
+    }
 }
