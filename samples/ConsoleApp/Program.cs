@@ -311,7 +311,7 @@ Console.WriteLine("""
         canvas,
         SKRect.Create(0, 0, info.Width, info.Height),
         qrData,
-        codeColor: null, // Use gradient instead
+        codeColor: SKColors.Black,   // unused: the gradient below paints the modules
         backgroundColor: SKColors.White,
         iconData: icon,
         moduleShape: CircleModuleShape.Default,
@@ -570,7 +570,7 @@ Console.WriteLine("""
             canvas,
             qrRect,
             qrData,
-            codeColor: null,
+            codeColor: SKColors.Black,   // unused: the gradient below paints the modules
             backgroundColor: SKColors.White,
             iconData: icon,
             moduleShape: CircleModuleShape.Default,

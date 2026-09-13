@@ -20,7 +20,8 @@ using System.Text.Json;
 //
 // Write the page into the Playground's wwwroot and one output serves both ways of looking
 // at it: it is there when the Playground runs locally, and publish copies it to the Pages
-// site. That path is generated, so it is gitignored rather than committed:
+// site. That path is generated but committed, so a fresh clone and an F5 both have it, and
+// so a public API change has to regenerate it in the same commit; nothing checks that it did:
 //
 //   dotnet run tools/public_api.cs -- --html -o src/FeatherQR.Playground/wwwroot/api/index.html
 //

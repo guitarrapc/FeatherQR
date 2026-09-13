@@ -484,6 +484,39 @@ if (shape != null) builder = builder.WithFinderPatternShape(shape);
 
 `WithGradient(null)`, `WithIcon(null)` and `WithClearColor(null)` are unchanged: there `null` means the option is absent rather than set to a default, which is the difference the change is about.
 
+### `SymbolRenderer.Render` takes its colours as values
+
+**Compile-time break: the compiler finds every `null`, but not the one other spelling, `default`, which changes meaning in silence.** The two colour parameters of `SymbolRenderer.Render` were required on all three overloads yet typed `SKColor?`, so a caller who wanted black on white passed two `null`s to a method that could not omit them. They are `SKColor` now, the same rule as the builder setters above: a default that has a name is passed by name. A call that already passes real colours is untouched and compiles as it did. The type was called `QRCodeRenderer` until this release, so the "before" line below is what you are searching your own code for under [its old name](#renames).
+
+```csharp
+// 1.x through 2.0.0-preview.2
+QRCodeRenderer.Render(canvas, area, data, null, null);
+
+// 2.0.0
+SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White);
+```
+
+A `null` in either position is CS1503, so a build lists what to rewrite; a colour held in an `SKColor?` variable needs `?? SKColors.Black` at the call. Once the `null`s are rewritten, nothing moves and nothing draws differently: the renderer used to resolve them to exactly these two colours.
+
+**The one spelling the compiler cannot hand you is `default`.** It compiles both before and after and means something different each time, with no diagnostic at any warning level:
+
+```csharp
+// 1.x through 2.0.0-preview.2: default(SKColor?) is null, so black on white
+QRCodeRenderer.Render(canvas, area, data, default, default);
+
+// 2.0.0, the same source text: default(SKColor) is transparent, so nothing you can see or scan, and it still builds
+SymbolRenderer.Render(canvas, area, data, default, default);
+
+// 2.0.0, what to write instead
+SymbolRenderer.Render(canvas, area, data, SKColors.Black, SKColors.White);
+```
+
+The same goes for one `default` beside one named colour. Search for `default` in these two positions by hand, as for the shape setters above; `null` is the spelling the old documentation asked for, so there should be few or none.
+
+The `SKCanvas.Render` extensions keep their signatures. Their colours are optional parameters, which C# can only default to a constant, and `default(SKColor)` is transparent rather than black, so `SKColor?` stays the spelling of "not supplied" there; what changed is that the extensions now resolve an omitted colour to black or white themselves before calling the renderer. A caller sees no difference, `default` included, because there `default` still means `null`.
+
+A gradient takes precedence over the code colour, the way a shader does over the colour of an `SKPaint`, so with a gradient set the `codeColor` you now have to write is not used. Write one you would accept rather than a placeholder: a gradient whose direction is `GradientDirection.None` falls back to painting the modules in it.
+
 ### Finder shapes draw the dark modules only
 
 **Fixed in 2.0.0, with a contract change for custom shapes.** In 1.x a finder pattern drawn as a shape of its own painted its light ring, and the renderer erased that ring through a layer whenever the background was not opaque; `SKSvgCanvas` wrote nothing for the layer, so a Standard QR SVG with `WithFinderPatternShape` on a transparent or translucent background came out with empty corners that no reader could scan. 2.0.0 draws the ring as a hole instead, and whatever is beneath shows through: the square finder is four bands and a centre rectangle, a circle's ring is a one-module stroke of its middle oval, and the two rounded shapes use an even-odd path. A transparent or translucent background is now fine in SVG as it always was in raster, on all three symbologies: the symbol is drawn the same way whatever the alpha, and only the background element differs, carrying a `fill-opacity` when it is translucent and being left out altogether when it is fully transparent.

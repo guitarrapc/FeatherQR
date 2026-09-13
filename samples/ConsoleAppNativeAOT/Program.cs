@@ -75,7 +75,7 @@ var canvas = surface.Canvas;
         canvas,
         qrRect,
         qrData,
-        codeColor: null,
+        codeColor: SKColors.Black,   // unused: the gradient below paints the modules
         backgroundColor: SKColors.White,
         moduleShape: CircleModuleShape.Default,
         moduleSizePercent: 0.95f,
