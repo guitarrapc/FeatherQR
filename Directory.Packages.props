@@ -9,10 +9,7 @@
     <!-- Core -->
     <PackageVersion Include="PolySharp" Version="1.16.0" />
     <PackageVersion Include="SkiaSharp" Version="4.148.0" />
-    <!-- BCL shims for the netstandard targets of the core (Span, ArrayPool, Unsafe). These are
-         framework surface, not a dependency in the sense the split removes: net8.0 and net10.0
-         builds carry none. The versions match what SkiaSharp 4.148 pins, so a consumer that
-         also installs FeatherQR.SkiaSharp resolves one copy. -->
+    <!-- BCL shims for the netstandard targets of the core (Span, ArrayPool, Unsafe). -->
     <PackageVersion Include="System.Memory" Version="4.6.3" />
     <PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
@@ -36,7 +33,6 @@
     <!-- Supply chain -->
     <PackageVersion Include="Microsoft.Sbom.Targets" Version="4.1.5" />
     <!-- Tests -->
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <PackageVersion Include="TUnit" Version="1.12.111" />
     <!-- Tools (interop oracles; keep pinned. see .github/docs/specs/qrcode-test-fixtures.md) -->
     <PackageVersion Include="ZXingCpp" Version="0.5.2" />
