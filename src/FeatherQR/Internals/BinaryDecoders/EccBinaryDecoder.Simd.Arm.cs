@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
-using System.Threading;
 
 namespace FeatherQR.Internals.BinaryDecoders;
 

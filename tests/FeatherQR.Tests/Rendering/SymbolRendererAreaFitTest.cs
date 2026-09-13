@@ -1169,16 +1169,6 @@ public class SymbolRendererAreaFitTest
         }
     }
 
-    private static void RenderThroughRenderer(SKCanvas canvas, string symbology, SKRect area, SKColor background, ModuleShape shape)
-    {
-        switch (symbology)
-        {
-            case "qr": SymbolRenderer.Render(canvas, area, StandardQr(), SKColors.Black, background, null, shape); break;
-            case "microqr": SymbolRenderer.Render(canvas, area, MicroQr(), SKColors.Black, background, shape); break;
-            default: SymbolRenderer.Render(canvas, area, RmQr(), SKColors.Black, background, shape); break;
-        }
-    }
-
     private static void RenderThroughSizeExtension(SKCanvas canvas, string symbology, int width, int height, bool nullData)
     {
         switch (symbology)

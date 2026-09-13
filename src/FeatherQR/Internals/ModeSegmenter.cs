@@ -1,4 +1,7 @@
+#if !NETSTANDARD2_1_OR_GREATER && !NET5_0_OR_GREATER
+// ArrayPool is only reached from the netstandard2.0 branch of ByteUnitCount.
 using System.Buffers;
+#endif
 using System.Diagnostics;
 using System.Text;
 

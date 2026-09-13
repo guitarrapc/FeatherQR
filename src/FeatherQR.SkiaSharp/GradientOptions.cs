@@ -135,6 +135,7 @@ public sealed record class GradientOptions
     /// <summary>
     /// The record printer, written by hand: the generated one would print a <see cref="ReadOnlySpan{T}"/> member as its type name, and would have to compile against a ref struct on every target framework.
     /// </summary>
+#pragma warning disable IDE0051 // the generated ToString calls it; the analyzer does not see that
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
         // Append(Direction) binds to Append(object) and boxes the enum; no numeric overload
@@ -144,6 +145,7 @@ public sealed record class GradientOptions
             builder.Append(", ").Append(_colorPositions.Length).Append(" stops");
         return true;
     }
+#pragma warning restore IDE0051
 }
 
 /// <summary>
