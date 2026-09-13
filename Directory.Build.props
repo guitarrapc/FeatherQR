@@ -3,6 +3,8 @@
     <LangVersion>14.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!--Roslyn's MSBuildWorkspace could not then match those project references to their metadata references. (default true for 5.0+, force true for netstandard) -->
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
