@@ -41,6 +41,22 @@ public sealed record FixtureManifest
     public string? EciCharset { get; init; }
     public int QuietZoneModules { get; init; }
     public int PixelsPerModule { get; init; }
+    /// <summary>Structured Append header of this symbol; omitted when the symbol carries none.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public StructuredAppendManifest? StructuredAppend { get; init; }
+}
+
+/// <summary>
+/// The Structured Append header as it is on the wire: 0-based position, total symbols
+/// (1..16) and the parity byte. <c>SetId</c> groups the symbols of one set; the case
+/// id is <c>{setId}-{index}of{count}</c>.
+/// </summary>
+public sealed record StructuredAppendManifest
+{
+    public required string SetId { get; init; }
+    public required int Index { get; init; }
+    public required int Count { get; init; }
+    public required int Parity { get; init; }
 }
 
 /// <summary>One generated fixture: manifest plus the core module matrix (byte 0/1, row-major).</summary>

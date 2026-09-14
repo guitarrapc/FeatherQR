@@ -6,11 +6,16 @@ namespace FeatherQR;
 public readonly record struct QRCodeDecodeInfo
 {
     internal QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected)
-        : this(status, version, eccLevel, maskPattern, errorsCorrected, default)
+        : this(status, version, eccLevel, maskPattern, errorsCorrected, default, default)
     {
     }
 
-    private QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected, SymbolCorners corners)
+    internal QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected, QRStructuredAppend structuredAppend)
+        : this(status, version, eccLevel, maskPattern, errorsCorrected, default, structuredAppend)
+    {
+    }
+
+    private QRCodeDecodeInfo(DecodeStatus status, int version, QREccLevel eccLevel, int maskPattern, int errorsCorrected, SymbolCorners corners, QRStructuredAppend structuredAppend)
     {
         Status = status;
         Version = version;
@@ -18,10 +23,11 @@ public readonly record struct QRCodeDecodeInfo
         MaskPattern = maskPattern;
         ErrorsCorrected = errorsCorrected;
         Corners = corners;
+        StructuredAppend = structuredAppend;
     }
 
     /// <summary>The same result with the symbol's image position attached; the image decoders call this on success.</summary>
-    internal QRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners);
+    internal QRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners, StructuredAppend);
 
     /// <summary>Decode result status. <see cref="DecodeStatus.Success"/> when decoding succeeded.</summary>
     public DecodeStatus Status { get; }
@@ -40,4 +46,7 @@ public readonly record struct QRCodeDecodeInfo
 
     /// <summary>Where the symbol sits in the image, when decoded from one; see <see cref="SymbolCorners"/>. Empty for a matrix-level decode or a failed one.</summary>
     public SymbolCorners Corners { get; }
+
+    /// <summary>The Structured Append header, when the symbol is one of a set; see <see cref="QRStructuredAppend"/>. Empty for a symbol that carries none, or a failed decode.</summary>
+    public QRStructuredAppend StructuredAppend { get; }
 }

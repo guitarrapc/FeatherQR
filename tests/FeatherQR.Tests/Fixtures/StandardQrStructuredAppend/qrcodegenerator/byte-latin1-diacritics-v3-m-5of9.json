@@ -1,0 +1,23 @@
+{
+  "id": "byte-latin1-diacritics-v3-m-5of9",
+  "generator": "qrcodegenerator",
+  "generatorVersion": "3.2.1\u002B6d9546ee4c8fd514e9aa4a5a65ea7133ab9c19e4",
+  "symbolType": "StandardQR",
+  "version": 3,
+  "width": 29,
+  "height": 29,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 0,
+  "payloadText": "\u00E9. Cr\u00E8me br\u00FBl\u00E9e \u00E0 la carte, jalape\u00F1o,",
+  "payloadUtf8Hex": "C3A92E204372C3A86D65206272C3BB6CC3A96520C3A0206C612063617274652C206A616C617065C3B16F2C",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "byte-latin1-diacritics-v3-m",
+    "index": 5,
+    "count": 9,
+    "parity": 139
+  }
+}

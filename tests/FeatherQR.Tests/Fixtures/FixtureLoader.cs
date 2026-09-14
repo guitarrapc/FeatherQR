@@ -26,6 +26,17 @@ public sealed record FixtureManifest
     public string? EciCharset { get; init; }
     public int QuietZoneModules { get; init; }
     public int PixelsPerModule { get; init; }
+    /// <summary>Structured Append header of this symbol; null when the symbol carries none.</summary>
+    public StructuredAppendManifest? StructuredAppend { get; init; }
+}
+
+/// <summary>The Structured Append header as on the wire: 0-based index, count 1..16, parity byte; <c>SetId</c> groups one set.</summary>
+public sealed record StructuredAppendManifest
+{
+    public required string SetId { get; init; }
+    public required int Index { get; init; }
+    public required int Count { get; init; }
+    public required int Parity { get; init; }
 }
 
 /// <summary>One loadable fixture case: manifest plus sibling matrix/PNG files.</summary>

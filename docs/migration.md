@@ -318,6 +318,36 @@ Three things the contract fixes:
 
 [samples/Dotfiles/DecodeCorners.cs](../samples/Dotfiles/DecodeCorners.cs) runs all of this over a flat, a rotated, a mirrored and a keystoned capture, and writes each one with the reported outline drawn on it.
 
+### Structured Append symbols decode
+
+Additive: nothing to migrate, but new in 2.0.0. A Standard QR symbol that is one of a Structured Append set (up to sixteen symbols holding one message) used to fail with `UnsupportedContent`. It now decodes to its own part of the text, and `QRCodeDecodeInfo` gains `StructuredAppend`, a `QRStructuredAppend` with the header: `Index` (0-based, as on the wire), `Count` (1 to 16) and `Parity`. A symbol that is not part of a set leaves it at its default, and `IsEmpty` says so.
+
+```csharp
+var parts = new SortedDictionary<int, string>();
+QRStructuredAppend set = default;
+foreach (var bitmap in captures)
+{
+    if (!QRCodeDecoder.TryDecode(bitmap, out var text, out var info) || info.StructuredAppend.IsEmpty)
+        continue;
+    var header = info.StructuredAppend;
+    if (set.IsEmpty)
+        set = header;
+    else if (header.Count != set.Count || header.Parity != set.Parity)
+        continue; // a symbol from a different set
+    parts[header.Index] = text;
+}
+var complete = parts.Count == set.Count;
+var message = complete ? string.Concat(parts.Values) : null;
+```
+
+That loop is the whole contract, and there is no helper for it because the choices in it are yours: whether a missing symbol is an error or a retry, what a duplicate means, whether a parity mismatch is worth telling the user about.
+
+- **`Parity` identifies the set, not the content.** It is the XOR of the bytes of the whole message as the encoder wrote them, in whatever charset the set carries, so two symbols with different parities belong to different sets. It is not a checksum you can recompute from the reassembled text, because you do not know which bytes the encoder XORed: the same Japanese message carries one parity as UTF-8 and another in Kanji mode.
+- **The header is reported only for a successful decode**, like `Corners`. A failed decode leaves `StructuredAppend` empty even when the header was read before the failure.
+- **Micro QR and rMQR do not define Structured Append**, so their decode results have no such member and a Micro QR or rMQR stream can never carry one.
+
+Encoding a set is Phase 5b of the 2.0.0 plan and is not in this preview.
+
 ### Module styling no longer reaches the finder patterns
 
 **Behavior change, and the reason to upgrade if you style your codes.** `WithModuleShape(shape, sizePercent)` now styles the data modules only. Before, it also redrew the finder patterns, and that silently produced symbols nothing could read:

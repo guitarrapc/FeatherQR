@@ -102,8 +102,8 @@ internal static class QRMatrixDecoder
             }
 
             // 6. Bitstream → text
-            var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out charsWritten);
-            info = new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected);
+            var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out charsWritten, out var structuredAppend);
+            info = new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected, status == DecodeStatus.Success ? structuredAppend : default);
             return status;
         }
         finally

@@ -1,5 +1,5 @@
 // FeatherQR
-// 35 exported types
+// 36 exported types
 // net10.0, net8.0, netstandard2.0, netstandard2.1
 
 namespace FeatherQR
@@ -172,6 +172,7 @@ namespace FeatherQR
     {
         public DecodeStatus Status { get; }
         public QREccLevel EccLevel { get; }
+        public QRStructuredAppend StructuredAppend { get; }
         public SymbolCorners Corners { get; }
         public int ErrorsCorrected { get; }
         public int MaskPattern { get; }
@@ -221,6 +222,14 @@ namespace FeatherQR
     {
         Single = 0,
         Optimal = 1,
+    }
+
+    public readonly struct QRStructuredAppend : IEquatable<QRStructuredAppend>
+    {
+        public bool IsEmpty { get; }
+        public byte Parity { get; }
+        public int Count { get; }
+        public int Index { get; }
     }
 
     public readonly struct QRVersionRange : IEquatable<QRVersionRange>

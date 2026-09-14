@@ -62,14 +62,70 @@ if (command == "probe-kanji")
     // Backs the fixture plan for Kanji decode support.
     return KanjiProbe.Run();
 }
-if (command != "regenerate")
+if (command == "import-structured-append-samples")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|generate-kanji-table]");
+    // Copies a third-party Structured Append capture set in as image-only fixtures,
+    // manifests reader-sourced, with provenance. Args: <zxing-cpp checkout> <commit>.
+    if (args.Length != 3)
+    {
+        Console.Error.WriteLine("Usage: dotnet run --project tools/QRInteropFixtures -- import-structured-append-samples <zxing-cpp-root> <commit>");
+        return 1;
+    }
+    return StructuredAppendSampleImporter.Run(FindRepoRoot(), args[1], args[2]);
+}
+if (command != "regenerate" && command != "regenerate-structured-append")
+{
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|import-structured-append-samples|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|generate-kanji-table]");
     return 1;
 }
 
 var repoRoot = FindRepoRoot();
 var fixturesBase = Path.Combine(repoRoot, "tests", "FeatherQR.Tests", "Fixtures");
+
+// Structured Append corpus: two in-process encoder lineages (a balancing encoder and an
+// explicit-parts encoder). Every symbol passes the zxing-cpp gate, which supplies the
+// per-symbol text and parity the encoders do not expose, before it is written.
+// Third-party captures (import-structured-append-samples) live beside them and are
+// never regenerated here.
+var structuredAppendRoot = Path.Combine(fixturesBase, "StandardQrStructuredAppend");
+var structuredAppendGenerators = new IStructuredAppendFixtureGenerator[]
+{
+    new QrCodeGeneratorStructuredAppendFixtureGenerator(),
+    new CodeGlyphXStructuredAppendFixtureGenerator(),
+};
+var structuredAppendTotal = 0;
+
+foreach (var generator in structuredAppendGenerators)
+{
+    if (!generator.IsAvailable)
+    {
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine)");
+        continue;
+    }
+
+    var generatorDir = Path.Combine(structuredAppendRoot, generator.Name);
+    if (Directory.Exists(generatorDir))
+        Directory.Delete(generatorDir, recursive: true);
+    Directory.CreateDirectory(generatorDir);
+
+    foreach (var caseDefinition in StructuredAppendCorpus.Cases)
+    {
+        var set = StructuredAppendSanityGate.Verify(generator.Generate(caseDefinition), caseDefinition);
+        foreach (var fixture in set)
+        {
+            FixtureWriter.Write(generatorDir, fixture);
+            structuredAppendTotal++;
+        }
+        Console.WriteLine($"wrote: {generator.Name}/{caseDefinition.Id} ({set.Length} symbols, version {string.Join("/", set.Select(f => f.Manifest.Version).Distinct())}, {string.Join("/", set.Select(f => f.Manifest.ErrorCorrectionLevel).Distinct())}, parity {set[0].Manifest.StructuredAppend!.Parity})");
+    }
+}
+
+if (command == "regenerate-structured-append")
+{
+    Console.WriteLine($"done: {structuredAppendTotal} Structured Append fixtures under {structuredAppendRoot}");
+    return 0;
+}
+
 var standardQrRoot = Path.Combine(fixturesBase, "StandardQr");
 
 var generators = new IFixtureGenerator[]
@@ -188,7 +244,7 @@ foreach (var (generator, cases) in rmqrGenerators)
     }
 }
 
-Console.WriteLine($"done: {total} fixtures under {fixturesBase}");
+Console.WriteLine($"done: {total + structuredAppendTotal} fixtures under {fixturesBase}");
 return 0;
 
 static string FindRepoRoot()

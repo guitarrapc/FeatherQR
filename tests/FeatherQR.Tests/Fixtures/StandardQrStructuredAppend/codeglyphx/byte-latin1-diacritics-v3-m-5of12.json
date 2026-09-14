@@ -1,0 +1,23 @@
+{
+  "id": "byte-latin1-diacritics-v3-m-5of12",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 3,
+  "width": 29,
+  "height": 29,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 2,
+  "payloadText": "caf\u00E9. Cr\u00E8me br\u00FBl\u00E9e \u00E0 la car",
+  "payloadUtf8Hex": "636166C3A92E204372C3A86D65206272C3BB6CC3A96520C3A0206C6120636172",
+  "eciCharset": "UTF-8",
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "byte-latin1-diacritics-v3-m",
+    "index": 5,
+    "count": 12,
+    "parity": 8
+  }
+}

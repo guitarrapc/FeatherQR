@@ -10,6 +10,8 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
     <PackageReference Include="ZXing.Net" />
     <PackageReference Include="ZXingCpp" />
+    <PackageReference Include="Net.Codecrete.QrCodeGenerator" />
+    <PackageReference Include="CodeGlyphX" />
   </ItemGroup>
 
   <ItemGroup>

@@ -17,7 +17,6 @@ public class QRBinaryDecoderUnitTest
     // Mode indicator constants (ISO/IEC 18004 Table 2)
     private const int ModeNumeric = 0b0001;
     private const int ModeAlphanumeric = 0b0010;
-    private const int ModeStructuredAppend = 0b0011;
     private const int ModeByte = 0b0100;
     private const int ModeFnc1First = 0b0101;
     private const int ModeEci = 0b0111;
@@ -138,10 +137,10 @@ public class QRBinaryDecoderUnitTest
         await Assert.That(text).IsEquivalentTo("7");
     }
 
-    // Unsupported content (recognized but rejected, never misdecoded)
+    // Unsupported content (recognized but rejected, never misdecoded). Structured Append
+    // left this list in 2.0.0; its header rules are pinned in StructuredAppendDecodeTest.
 
     [Test]
-    [Arguments(ModeStructuredAppend)]
     [Arguments(ModeFnc1First)]
     [Arguments(ModeFnc1Second)]
     public async Task UnsupportedModes_ReturnUnsupportedContent(int mode)
@@ -378,7 +377,7 @@ public class QRBinaryDecoderUnitTest
         // Four digits require 14 payload bits, but only two remain after the header.
         var data = Build((ModeNumeric, 4), (4, 10), (0, 2));
 
-        var status = QRBinaryDecoder.DecodeBitStream(data, Version, Span<char>.Empty, out _);
+        var status = QRBinaryDecoder.DecodeBitStream(data, Version, Span<char>.Empty, out _, out _);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
@@ -409,7 +408,7 @@ public class QRBinaryDecoderUnitTest
         var data = Build((ModeNumeric, 4), (3, 10), (123, 10), (ModeTerminator, 4));
 
         Span<char> tiny = stackalloc char[2];
-        var status = QRBinaryDecoder.DecodeBitStream(data, Version, tiny, out _);
+        var status = QRBinaryDecoder.DecodeBitStream(data, Version, tiny, out _, out _);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.DestinationTooSmall);
     }
@@ -427,14 +426,14 @@ public class QRBinaryDecoderUnitTest
             random.NextBytes(data);
 
             // Any status is fine; throwing is not.
-            QRBinaryDecoder.DecodeBitStream(data, random.Next(1, 41), destination, out _);
+            QRBinaryDecoder.DecodeBitStream(data, random.Next(1, 41), destination, out _, out _);
         }
     }
 
     private static DecodeStatus Decode(byte[] data, out string text)
     {
         Span<char> destination = stackalloc char[256];
-        var status = QRBinaryDecoder.DecodeBitStream(data, Version, destination, out var charsWritten);
+        var status = QRBinaryDecoder.DecodeBitStream(data, Version, destination, out var charsWritten, out _);
         text = destination.Slice(0, charsWritten).ToString();
         return status;
     }

@@ -47,9 +47,11 @@ internal static class QRBinaryDecoder
     /// <param name="version">QR code version (1-40), determines character count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten)
+    /// <param name="structuredAppend">The Structured Append header when the stream carries one, accepted at any position; default otherwise.</param>
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten, out QRStructuredAppend structuredAppend)
     {
         charsWritten = 0;
+        structuredAppend = default;
         var reader = new BitReader(data);
         var totalBits = data.Length * 8;
         var charset = ByteSegmentCharset.Unspecified;
@@ -138,6 +140,20 @@ internal static class QRBinaryDecoder
                             break;
                         }
                     case ModeStructuredAppend:
+                        {
+                            // 4-bit position, 4-bit count-1, 8-bit parity (ISO/IEC 18004 Structured Append).
+                            // One header per stream, and a position past the count is not encodable by
+                            // a conforming encoder, so both are malformed rather than unsupported.
+                            if (totalBits - reader.BitPosition < 16 || !structuredAppend.IsEmpty)
+                                return DecodeStatus.InvalidBitstream;
+                            var index = reader.Reads(4);
+                            var count = reader.Reads(4) + 1;
+                            var parity = (byte)reader.Reads(8);
+                            if (index >= count)
+                                return DecodeStatus.InvalidBitstream;
+                            structuredAppend = new QRStructuredAppend(index, count, parity);
+                            break;
+                        }
                     case ModeFnc1First:
                     case ModeFnc1Second:
                         return DecodeStatus.UnsupportedContent;
