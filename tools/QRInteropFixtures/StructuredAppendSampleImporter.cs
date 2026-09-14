@@ -51,6 +51,7 @@ public static class StructuredAppendSampleImporter
             var setId = $"sample{group.Key}";
             var texts = new SortedDictionary<int, string>();
             var count = -1;
+            string? parityId = null;
 
             foreach (var png in group)
             {
@@ -66,9 +67,18 @@ public static class StructuredAppendSampleImporter
                 if (count >= 0 && r.SequenceSize != count)
                     throw new InvalidOperationException($"{png} reports count {r.SequenceSize}, earlier symbols {count}");
                 count = r.SequenceSize;
-                texts[r.SequenceIndex] = r.Text;
+                if (parityId is not null && r.SequenceId != parityId)
+                    throw new InvalidOperationException($"{png} reports parity {r.SequenceId}, earlier symbols {parityId}: not one set");
+                parityId = r.SequenceId;
+                if (!texts.TryAdd(r.SequenceIndex, r.Text))
+                    throw new InvalidOperationException($"{png} repeats index {r.SequenceIndex}");
 
                 var version = StructuredAppendSanityGate.ParseVersion(r.Extra("Version"));
+                if (version < 1 || version > 40)
+                    throw new InvalidOperationException($"{png}: reader reports version '{r.Extra("Version")}', not a Standard QR version");
+                // Same rule as the gate: an ECI over ASCII-only bytes has no nameable charset.
+                if (r.HasECI && r.Bytes.All(b => b < 0x80))
+                    throw new InvalidOperationException($"{png} carries an ECI header over ASCII-only bytes, so its charset cannot be named from the reader");
                 var id = $"{setId}-{r.SequenceIndex}of{r.SequenceSize}";
                 var manifest = new FixtureManifest
                 {
@@ -97,6 +107,9 @@ public static class StructuredAppendSampleImporter
                 var ours = QRCodeDecoder.TryDecode(decoded, out var text, out var info);
                 Console.WriteLine($"{id}: v{version}-{manifest.ErrorCorrectionLevel} mask {manifest.MaskPattern}, {r.SequenceIndex} of {r.SequenceSize}, parity {r.SequenceId}, {r.Text.Length} chars; FeatherQR: {(ours ? "read" : info.Status.ToString())}");
             }
+
+            if (texts.Count != count || texts.Keys.Last() != count - 1)
+                throw new InvalidOperationException($"set {setId} claims {count} symbols but indices {string.Join(",", texts.Keys)} were captured");
 
             var expectedPath = Path.Combine(sampleDir, group.Key + ".txt");
             if (File.Exists(expectedPath))

@@ -127,10 +127,10 @@ The contract to settle before writing it (D3): which four points, in which space
 
 ### Structured Append (Standard QR only)
 
-rMQR does not define it (recorded in [rmqr-encoder.md](../specs/rmqr-encoder.md)) and neither does Micro QR; both keep reporting `UnsupportedContent`. For Standard QR the work is two-sided:
+rMQR does not define it (recorded in [rmqr-encoder.md](../specs/rmqr-encoder.md)) and neither does Micro QR; neither has a mode indicator for it, so no such stream can exist for them. For Standard QR the work is two-sided:
 
-- **Decode** currently rejects the mode as `UnsupportedContent`. After this phase it reads the header and reports symbol index, total count and parity on `QRCodeDecodeInfo`, returning that symbol's own text. A caller concatenates in index order after checking that the parity bytes agree.
-- **Encode** splits content across symbols. The parity byte is the XOR of *the original input bytes*, taken before splitting — not derived from the segment plan, which is where CodeGlyphX diverges from every other encoder. QrCodeGenerator is the correct parity reference since its own bug was fixed in `5c6fdfd`.
+- **Decode** rejected the mode as `UnsupportedContent` until Phase 5a (2026-09-15); it now reads the header and reports symbol index, total count and parity on `QRCodeDecodeInfo`, returning that symbol's own text. A caller concatenates in index order after checking that the parity bytes agree.
+- **Encode** splits content across symbols. The parity byte is the XOR of the bytes of the whole input as the set writes them, in the one charset the set carries, taken once before splitting; a per-chunk computation can diverge from it when a chunk would have chosen another charset on its own, and an encoder that writes Kanji segments XORs Shift_JIS bytes, which is why the same Japanese text legitimately carries a different parity in a Kanji-mode set than in a UTF-8 one (the decode corpus holds both). QrCodeGenerator is a valid parity reference from 3.2.0 (`5c6fdfd`); 3.1.0 writes 0.
 
 Open (D4): whether the encode entry point balances the split automatically across the fewest symbols, or takes an explicit count, and whether a "combine these results" helper ships with it. The minimal surface is one method that returns the symbols plus documented rules for recombination; a helper is easy to add in a minor and impossible to remove.
 
@@ -185,7 +185,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 3 | Shape unification | `*CalculatedSize`, `*DecodeInfo` member set, `GradientOptions`, `IconData`, sealing (`Vector2Slim` went with the Phase 2 rename table) | **API-final for the cleanup.** Tag `2.0.0-preview.3` |
 | 3b | Option nullability and colour setters | The `null` rule above: non-nullable colours and `WithModuleShape`, required-argument `WithColors`, the three single-colour setters (absorbs F2), corrected docs for the nulls that stay | Reopens Phase 3's API-final point; golden pixels unchanged |
 | 4 | Symbol geometry | D3, the geometry members on all three `*DecodeInfo`, all three image decode paths | Matrix-level decode behaviour documented and tested |
-| 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over original input bytes | Round-trip plus oracle cross-check |
+| 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over the whole input's bytes as the set writes them | Round-trip plus oracle cross-check |
 | 6 | Kanji encoding | D5, D6, reverse table, segmenter state, `EncodingMode`, capacity docs | Oracle sweep green. Tag `2.0.0-preview.4` |
 | 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script; README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry); fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot simply be folded in as history; F1's renderer half landed and is already recorded in the specs) | Approved API listing frozen |
 | 8 | Release | Below | `2.0.0` on nuget.org |

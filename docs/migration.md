@@ -327,20 +327,22 @@ var parts = new SortedDictionary<int, string>();
 QRStructuredAppend set = default;
 foreach (var bitmap in captures)
 {
-    if (!QRCodeDecoder.TryDecode(bitmap, out var text, out var info) || info.StructuredAppend.IsEmpty)
+    if (!QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info) || info.StructuredAppend.IsEmpty)
         continue;
     var header = info.StructuredAppend;
     if (set.IsEmpty)
         set = header;
     else if (header.Count != set.Count || header.Parity != set.Parity)
         continue; // a symbol from a different set
-    parts[header.Index] = text;
+    if (parts.ContainsKey(header.Index))
+        continue; // the same symbol captured twice
+    parts.Add(header.Index, text);
 }
-var complete = parts.Count == set.Count;
+var complete = !set.IsEmpty && parts.Count == set.Count;
 var message = complete ? string.Concat(parts.Values) : null;
 ```
 
-That loop is the whole contract, and there is no helper for it because the choices in it are yours: whether a missing symbol is an error or a retry, what a duplicate means, whether a parity mismatch is worth telling the user about.
+That loop applies the four rules (one `Count` and one `Parity`, each index once, concatenation in index order, and `Parity` as the set's identity) and leaves `message` null until a whole set has been seen. There is no helper for it because the choices in it are yours: whether a missing symbol is an error or a retry, whether a repeated index is a rescan to ignore or a mixed set to report, whether a parity mismatch is worth telling the user about.
 
 - **`Parity` identifies the set, not the content.** It is the XOR of the bytes of the whole message as the encoder wrote them, in whatever charset the set carries, so two symbols with different parities belong to different sets. It is not a checksum you can recompute from the reassembled text, because you do not know which bytes the encoder XORed: the same Japanese message carries one parity as UTF-8 and another in Kanji mode.
 - **The header is reported only for a successful decode**, like `Corners`. A failed decode leaves `StructuredAppend` empty even when the header was read before the failure.

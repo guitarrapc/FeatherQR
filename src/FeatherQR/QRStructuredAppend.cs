@@ -23,7 +23,7 @@ public readonly record struct QRStructuredAppend
         Parity = parity;
     }
 
-    /// <summary>This symbol's position in the set, 0-based, as on the wire. Always less than <see cref="Count"/>.</summary>
+    /// <summary>This symbol's position in the set, 0-based, as on the wire. Less than <see cref="Count"/> whenever the value is not empty; both are 0 on the empty value.</summary>
     public int Index { get; }
 
     /// <summary>How many symbols the set has, 1 to 16.</summary>

@@ -39,7 +39,7 @@ On success the result carries the symbol's four corners in image coordinates (`R
 
 ### Not supported
 
-- FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above, (all `UnsupportedContent`); Kanji cells outside the JIS X 0208 repertoire are reported separately as `UnmappedCharacter`
+- ECI assignments other than the four above (`UnsupportedContent`); FNC1 and Structured Append are not defined for rMQR and have no mode indicators (the reserved indicators are `InvalidBitstream`), so no rMQR stream can carry them; Kanji cells outside the JIS X 0208 repertoire are reported separately as `UnmappedCharacter`
 - Strong perspective, uneven lighting, blur, and heavily styled symbols below about 5 px/module (gradients make the finder runs too fuzzy; the same styling decodes at 8+ px/module)
 
 ## Why

@@ -36,6 +36,10 @@ public static class StructuredAppendSanityGate
         var hasEci = ordered[0].HasECI;
         if (ordered.Any(r => r.HasECI != hasEci))
             throw new InvalidOperationException($"sanity gate: set {lineage}/{caseDefinition.Id} mixes symbols with and without an ECI header.");
+        // Pure ASCII is the same bytes in every charset, and the reader exposes only whether an
+        // ECI is present, not which; a set like that has no charset the manifest could name.
+        if (hasEci && carried.All(b => b < 0x80))
+            throw new InvalidOperationException($"sanity gate: set {lineage}/{caseDefinition.Id} carries an ECI header over ASCII-only bytes, so its charset cannot be named from the reader.");
 
         var completed = new GeneratedFixture[set.Length];
         var texts = new string[set.Length];

@@ -11,7 +11,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Inverse of <see cref="QRBinaryEncoder"/>.
 /// Supports the segments the encoder can produce, Numeric, Alphanumeric, Byte (ISO-8859-1 / UTF-8) and ECI headers, plus multi-segment streams from other encoders.
 /// Kanji mode is decoded as JIS X 0208 (decode only: this library never emits it).
-/// FNC1 and Structured Append are recognized but reported as <see cref="DecodeStatus.UnsupportedContent"/>.
+/// FNC1 is recognized but reported as <see cref="DecodeStatus.UnsupportedContent"/>; a Structured Append header is read and returned to the caller.
 /// <para>
 /// Byte segments without an ECI header have no declared charset (ISO/IEC 18004 defaults to ISO-8859-1, but UTF-8 payloads are common in the wild).
 /// The decoder uses UTF-8 when the payload validates as UTF-8 (or carries a BOM) and falls back to ISO-8859-1 otherwise, ASCII decodes identically either way.

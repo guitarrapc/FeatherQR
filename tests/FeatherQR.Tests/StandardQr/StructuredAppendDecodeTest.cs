@@ -12,7 +12,9 @@ public class StructuredAppendDecodeTest
     private const int Version = 1;
     private const int ModeTerminator = 0b0000;
     private const int ModeNumeric = 0b0001;
+    private const int ModeAlphanumeric = 0b0010;
     private const int ModeStructuredAppend = 0b0011;
+    private const int ModeByte = 0b0100;
     private const int ModeEci = 0b0111;
 
     [Test]
@@ -118,12 +120,72 @@ public class StructuredAppendDecodeTest
     [Test]
     public async Task TruncatedHeader_IsInvalidBitstream()
     {
-        // Mode indicator followed by 8 of the 16 header bits.
+        // Mode indicator followed by 8 header bits; the byte padding makes it 12 of the 16.
         var data = Build((ModeStructuredAppend, 4), (0, 4), (1, 4));
 
         var status = Decode(data, out _, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
+    }
+
+    // The 16-bit guard at its boundary. Every stream is sized to leave exactly the stated
+    // number of bits after the mode indicator, so the guard's threshold is what decides.
+
+    [Test]
+    public async Task FifteenBitsAfterTheIndicator_IsInvalidBitstreamNotAnException()
+    {
+        // Numeric "12" (4+10+7 = 21 bits), indicator at 21..24, 15 bits to the end of byte 5.
+        var data = Build((ModeNumeric, 4), (2, 10), (12, 7), (ModeStructuredAppend, 4), (0, 15));
+
+        var status = Decode(data, out _, out var header);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
+        await Assert.That(header.IsEmpty).IsTrue();
+    }
+
+    [Test]
+    public async Task HeaderThatEndsTheStream_IsReported()
+    {
+        // Byte "A" (4+8+8 = 20 bits), indicator at 20..24, exactly the 16 header bits remain.
+        var data = Build((ModeByte, 4), (1, 8), ('A', 8), (ModeStructuredAppend, 4), (0, 4), (1, 4), (0xA5, 8));
+
+        var status = Decode(data, out var text, out var header);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("A");
+        await Assert.That(header.Index).IsEqualTo(0);
+        await Assert.That(header.Count).IsEqualTo(2);
+        await Assert.That(header.Parity).IsEqualTo((byte)0xA5);
+    }
+
+    [Test]
+    public async Task HeaderFollowedByFewerThanFourBits_IsReportedAndTheStreamEnds()
+    {
+        // Alphanumeric "A" (4+9+6 = 19 bits), indicator at 19..23, header to bit 39, one bit left:
+        // fewer than four is the implicit terminator, so the header is the last thing read.
+        var data = Build((ModeAlphanumeric, 4), (1, 9), (10, 6), (ModeStructuredAppend, 4), (3, 4), (3, 4), (0x0F, 8), (0, 1));
+
+        var status = Decode(data, out var text, out var header);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("A");
+        await Assert.That(header.Index).IsEqualTo(3);
+        await Assert.That(header.Count).IsEqualTo(4);
+        await Assert.That(header.Parity).IsEqualTo((byte)0x0F);
+    }
+
+    [Test]
+    public async Task HeaderAfterASegmentWithTwoBitsLeft_IsReported()
+    {
+        // Numeric "7" (18 bits) then the header (20 bits) = 38, padded to 40: two bits after it.
+        var data = Build((ModeNumeric, 4), (1, 10), (7, 4), (ModeStructuredAppend, 4), (0, 4), (1, 4), (0x5A, 8));
+
+        var status = Decode(data, out var text, out var header);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("7");
+        await Assert.That(header.Index).IsEqualTo(0);
+        await Assert.That(header.Count).IsEqualTo(2);
     }
 
     private static DecodeStatus Decode(byte[] data, out string text, out QRStructuredAppend header)
