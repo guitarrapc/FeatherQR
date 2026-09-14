@@ -661,6 +661,18 @@ public class QRCodeImageBuilderTest
 
         await Assert.That(bytes).IsNotNull();
         await Assert.That(bytes).IsNotEmpty();
+
+        // Each option in the chain reaches the output, rather than the chain merely returning bytes:
+        // the format it named, the background it named, and a symbol a reader still accepts.
+        await Assert.That(bytes[0]).IsEqualTo((byte)0x89);
+        await Assert.That(bytes[1]).IsEqualTo((byte)0x50);
+
+        using var bitmap = SKBitmap.Decode(bytes);
+        await Assert.That(bitmap.Width).IsEqualTo(400);
+        await Assert.That(bitmap.Height).IsEqualTo(400);
+        await Assert.That(bitmap.GetPixel(0, 0)).IsEqualTo(SKColors.LightYellow);
+        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var decoded, out _)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(TestContent);
     }
 
     [Test]
@@ -682,6 +694,22 @@ public class QRCodeImageBuilderTest
         await Assert.That(bitmap).IsNotNull();
         await Assert.That(bitmap.Width).IsEqualTo(600);
         await Assert.That(bitmap.Height).IsEqualTo(600);
+        await Assert.That(bitmap.GetPixel(0, 0)).IsEqualTo(SKColors.Beige);
+        await Assert.That(QRCodeImageDecoder.TryDecode(bitmap, out var decoded, out _)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(TestContent);
+
+        // The gradient is the option that would be silently lost here, and the one the chain exists
+        // to combine: its two ends are different colors, so the dark modules are not one color.
+        using var withoutGradient = new QRCodeImageBuilder(TestContent)
+            .WithSize(600, 600)
+            .WithErrorCorrection(QREccLevel.H)
+            .WithEciMode(EciMode.Utf8)
+            .WithQuietZone(3)
+            .WithColors(SKColors.Navy, SKColors.Beige).WithClearColor(SKColors.Transparent)
+            .WithModuleShape(CircleModuleShape.Default, 0.9f)
+            .WithFormat(SKEncodedImageFormat.Png, 100)
+            .ToBitmap();
+        await Assert.That(BitmapsAreEqual(bitmap, withoutGradient)).IsFalse();
     }
 
     #endregion
