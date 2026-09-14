@@ -549,6 +549,12 @@ Do not fill the whole 7 by 7 area: a reader locates the symbol by the finder pat
 
 Two smaller consequences. The finder's antialiasing now follows the finder shape alone, `RequiresAntialiasing` deciding it in both directions, so a square finder beside round modules is drawn crisp where it used to inherit the modules' antialiasing; that changes styled raster output wherever the module grid is not whole pixels, by around 1 % of the image, all of it on finder edges (measured on Standard QR at 512x512 with circle modules at 0.85: 3,384 pixels of a 29-module matrix, 2,952 of a 33-module one and 2,397 of a 41-module one, so 1.29 % down to 0.91 % as the modules get smaller; 0 pixels when the symbol is sized with `WithModulePixelSize`, where module edges land on whole pixels). A curved finder's ring edge moves for the same kind of reason, being rasterised once as the edge of a hole rather than as a light shape over a dark one (0.9 to 1.2 % of a 116 px render). And naming `RectangleFinderPatternShape.Default` is now pixel-identical to leaving the setter uncalled on every background, including a gradient over a translucent one, where the layer used to cost one step of one channel.
 
+### A rounded shape refuses a non-finite corner radius
+
+**Run-time break, and only for an argument that never drew what it asked for.** `RoundedRectangleModuleShape`, `RoundedRectangleFinderPatternShape` and `RoundedRectangleCircleFinderPatternShape` guarded `cornerRadiusPercent` with `< 0 || > 1`, which `float.NaN` passes because both comparisons are false. Skia then drew the round rect as a plain rectangle: the caller asked for rounded corners, got square ones, and nothing said so. All three now throw `ArgumentOutOfRangeException` for NaN, as they already did for a radius outside 0.0 to 1.0.
+
+A radius reaches these constructors as a computed value more often than as a literal, and dividing by a zero size is the usual way one becomes NaN. If yours is computed, the exception is where that now surfaces.
+
 ## 1.2.0
 
 Additive except for one decoder behaviour change. Nothing in 1.2.0 breaks source or binary compatibility; the two `[Obsolete]` warnings announce removals that land in 2.0.0.

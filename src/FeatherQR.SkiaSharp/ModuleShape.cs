@@ -100,7 +100,8 @@ public sealed class RoundedRectangleModuleShape : ModuleShape
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the radius is outside 0.0 to 1.0.</exception>
     public RoundedRectangleModuleShape(float cornerRadiusPercent = 0.3f)
     {
-        if (cornerRadiusPercent < 0 || cornerRadiusPercent > 1)
+        // Negated range, so NaN is refused here rather than reaching Skia, which draws a plain rectangle for it.
+        if (cornerRadiusPercent is not (>= 0f and <= 1f))
             throw new ArgumentOutOfRangeException(nameof(cornerRadiusPercent), "Corner radius percent must be between 0 and 1.");
 
         _cornerRadiusPercent = cornerRadiusPercent;
