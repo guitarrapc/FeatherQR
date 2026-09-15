@@ -62,6 +62,12 @@ if (command == "probe-kanji")
     // Backs the fixture plan for Kanji decode support.
     return KanjiProbe.Run();
 }
+if (command == "spot-check-structured-append")
+{
+    // Reads every symbol of the sets this library writes with the three pinned readers and
+    // compares the parity with the pinned balancing encoder's. Findings go to the fixture spec.
+    return StructuredAppendSpotCheck.Run();
+}
 if (command == "import-structured-append-samples")
 {
     // Copies a third-party Structured Append capture set in as image-only fixtures,
@@ -75,7 +81,7 @@ if (command == "import-structured-append-samples")
 }
 if (command != "regenerate" && command != "regenerate-structured-append")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|import-structured-append-samples|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|generate-kanji-table]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|import-structured-append-samples|spot-check-structured-append|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|generate-kanji-table]");
     return 1;
 }
 
