@@ -144,6 +144,8 @@ The character-count width changes at versions 10 and 27:
 
 Byte-mode capacity is calculated from encoded byte count, not UTF-16 `char` count. UTF-8 BOM contributes three bytes to both capacity selection and the Byte-mode character-count indicator.
 
+Only UTF-8 is actually counted. Latin-1 is one byte per `char`, out-of-range ones included: the writer narrows each `char`, and the encoder replaces each `char` it cannot represent with one byte of its own, a surrogate pair counting as the two code units it is rather than the one scalar it spells. So a charset the caller forced over content it cannot represent still produces a well-formed symbol, which is what makes the mojibake the caller asked for readable as mojibake rather than a stream a reader takes apart wrongly. Which of the two charsets applies is what the classification pass has just decided, so it hands the answer over instead of letting the count re-derive it with a second scan of the text.
+
 The version calculation does not reserve four mandatory terminator bits: the terminator is allowed to shrink to the remaining capacity, including zero bits for an exact fit. If no version can hold the required header and payload bits, generation fails instead of truncating.
 
 When `QRCodeGeneratorOptions.Version` pins a version, automatic selection is bypassed. It is intended for callers that need a fixed symbol size and already know the payload fits.
