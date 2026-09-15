@@ -39,6 +39,16 @@ internal static class QRSegmentPlanner
     private const int MinCountBitsAny = 8;
 
     /// <summary>
+    /// Whether a mixed plan could ever cost less than the single-mode stream for content the analyser put in <paramref name="singleMode"/>.
+    /// </summary>
+    /// <remarks>
+    /// All-Numeric content is already at the optimum: no mode prices a digit below Numeric, and every extra run adds a header, so one run is it.
+    /// Numeric only, since an Alphanumeric or Byte payload can still hide a digit run worth splitting off.
+    /// Every caller skips the whole cost run on a <c>false</c>, which changes the emitted stream if the rule is ever wrong, so <c>QRSegmentPlannerUnitTest</c> pins it against the program itself.
+    /// </remarks>
+    public static bool CanPlanBeatSingleMode(EncodingMode singleMode) => singleMode != EncodingMode.Numeric;
+
+    /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="minVersion"/> through <paramref name="maxVersion"/>.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
     /// <c>false</c> means the content fits neither one mode nor a mixed plan in the window; the caller owns the error.
@@ -58,10 +68,7 @@ internal static class QRSegmentPlanner
         // characters, far over the largest Byte capacity, but fits as two runs).
         var hasSingle = QRCodeGenerator.TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, charset, utf8BOM: false, minVersion, maxVersion, out var single);
 
-        // All-Numeric content is already at the optimum: splitting a Numeric run never
-        // lowers its payload and every extra run adds a header. Numeric-only — an
-        // Alphanumeric or Byte payload can still hide a digit run worth splitting off.
-        if (analysis.EncodingMode == EncodingMode.Numeric)
+        if (!CanPlanBeatSingleMode(analysis.EncodingMode))
         {
             selected = single;
             return hasSingle;

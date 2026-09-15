@@ -50,6 +50,38 @@ public class QRSegmentPlannerUnitTest
         await Assert.That(costOverLimit).IsEqualTo(capacityBits + 4);
     }
 
+    [Test]
+    public async Task NumericContent_IsNeverPlannedCheaperThanOneRun()
+    {
+        // The rule the callers of CanPlanBeatSingleMode skip planning on. If a plan could
+        // ever come out cheaper, each of them would emit a different stream than it does,
+        // so this holds at every band, every length that lands mid packing group, and both
+        // charsets a digit can be declared in.
+        foreach (var (version, cciNumeric, cciAlnum, cciByte) in BandWidths())
+        {
+            foreach (var charset in new[] { EciMode.Default, EciMode.Utf8 })
+            {
+                foreach (var length in new[] { 1, 2, 3, 4, 5, 6, 7, 17, 100, 3000 })
+                {
+                    var digits = new string('7', length);
+                    var oneRun = 4 + cciNumeric + ModeSegmenter.PayloadBits(EncodingMode.Numeric, length);
+
+                    await Assert.That(QRSegmentPlanner.MinimumPayloadBits(digits, charset, cciNumeric, cciAlnum, cciByte)).IsEqualTo(oneRun)
+                        .Because($"{length} digits at version {version} in {charset}");
+                }
+            }
+        }
+    }
+
+    [Test]
+    public async Task CanPlanBeatSingleMode_IsNumericOnly()
+    {
+        // An Alphanumeric or Byte payload can still hide a digit run worth splitting off.
+        await Assert.That(QRSegmentPlanner.CanPlanBeatSingleMode(EncodingMode.Numeric)).IsFalse();
+        await Assert.That(QRSegmentPlanner.CanPlanBeatSingleMode(EncodingMode.Alphanumeric)).IsTrue();
+        await Assert.That(QRSegmentPlanner.CanPlanBeatSingleMode(EncodingMode.Byte)).IsTrue();
+    }
+
     /// <summary>
     /// Content whose optimum is known to require a mode switch, plus content where a
     /// switch must not happen, across the charsets.

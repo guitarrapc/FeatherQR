@@ -205,6 +205,44 @@ public class StructuredAppendEncodeTest
     }
 
     [Test]
+    [Arguments(1201, 6, QREccLevel.M)]
+    [Arguments(150, 1, QREccLevel.L)]
+    public async Task Create_OptimalSegmentation_OnDigits_IsTheSingleModeSet(int length, int maxVersion, QREccLevel ecc)
+    {
+        // One Numeric run is the optimum of all-digit content, so the set a plan would
+        // build is the set the single mode builds; the planner may skip planning it, but
+        // only while the two stay module for module identical.
+        var text = Repeat("0123456789", length);
+        var single = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(maxVersion) };
+        var optimal = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(maxVersion), Segmentation = QRSegmentation.Optimal };
+
+        var singleSymbols = QRCodeGenerator.CreateStructuredAppend(text, ecc, single);
+        var optimalSymbols = QRCodeGenerator.CreateStructuredAppend(text, ecc, optimal);
+
+        await Assert.That(optimalSymbols.Length).IsEqualTo(singleSymbols.Length);
+        for (var i = 0; i < singleSymbols.Length; i++)
+            await Assert.That(ModulesOf(optimalSymbols[i])).IsEquivalentTo(ModulesOf(singleSymbols[i])).Because($"symbol {i}");
+    }
+
+    [Test]
+    public async Task Create_OptimalSegmentation_WithBoost_OnDigits_IsTheSingleModeSet()
+    {
+        // The boost re-costs every chunk per level, which is the other place planning is
+        // skipped for digits; the boosted set must still match the single-mode one.
+        var text = Repeat("0123456789", 1201);
+        var single = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(6), BoostEccLevel = true };
+        var optimal = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(6), BoostEccLevel = true, Segmentation = QRSegmentation.Optimal };
+
+        var singleSymbols = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M, single);
+        var optimalSymbols = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M, optimal);
+
+        await Assert.That(optimalSymbols.Length).IsEqualTo(singleSymbols.Length);
+        for (var i = 0; i < singleSymbols.Length; i++)
+            await Assert.That(ModulesOf(optimalSymbols[i])).IsEquivalentTo(ModulesOf(singleSymbols[i])).Because($"symbol {i}");
+        await Assert.That(string.Concat(await DecodeSet(optimalSymbols, QREccLevel.M))).IsEqualTo(text);
+    }
+
+    [Test]
     public async Task Create_ForcedEci_IsRepeatedOnEverySymbol()
     {
         // ASCII text with a forced UTF-8 declaration: each symbol must still carry it,

@@ -124,7 +124,7 @@ internal static class StructuredAppendPlanner
         var bomApplies = utf8Bom && charset == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte;
         var bits = ModeIndicatorBits + analysis.EncodingMode.GetCountIndicatorLength(version) + ModeSegmenter.PayloadBits(analysis.EncodingMode, analysis.DataLength) + (bomApplies ? 24 : 0);
 
-        if (segmentation == QRSegmentation.Optimal && !bomApplies && chunk.Length <= QRSegmentPlanner.MaxPlannableChars)
+        if (segmentation == QRSegmentation.Optimal && !bomApplies && QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode) && chunk.Length <= QRSegmentPlanner.MaxPlannableChars)
         {
             var planned = QRSegmentPlanner.MinimumPayloadBits(chunk, charset, EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version));
             if (planned < bits)

@@ -19,8 +19,11 @@ using System.Text;
 ///   mixed-40k-any   : order lines, letters and digit runs, 14 symbols; the content a mixed
 ///                     plan is for, so the Optimal arm both plans and pays for it
 ///   utf8-15k-any    : Japanese prose behind a UTF-8 ECI, 15 symbols; multi-byte cost model
+///   *-boost         : the same prose and digits with BoostEccLevel, which re-costs every
+///                     chunk once per level it tries; the baseline encodes its symbols at
+///                     the level the boost reached, so the Ratio stays the planning overhead
 ///
-/// ECC L throughout: the largest chunks a version holds, so every search runs over the longest prefixes.
+/// ECC L is requested throughout: the largest chunks a version holds, so every search runs over the longest prefixes.
 /// Symbol counts are the ones the planner picks; they move if the capacity tables or the split rule change, and the doc comment is not a pin.
 /// </summary>
 public class QRCodeStructuredAppendEncode
@@ -29,12 +32,14 @@ public class QRCodeStructuredAppendEncode
     [
         "byte-45k-any", "byte-45k-v40", "byte-4k-max10",
         "numeric-100k-any", "mixed-40k-any", "utf8-15k-any",
+        "byte-45k-boost", "numeric-100k-boost",
     ];
 
     private string _content = default!;
     private QRCodeGeneratorOptions _single;
     private QRCodeGeneratorOptions _optimal;
     private QRCodeGeneratorOptions _chunkOptions;
+    private QREccLevel _chunkLevel;
     private string[] _chunks = default!;
 
     [ParamsSource(nameof(Shapes))]
@@ -45,28 +50,32 @@ public class QRCodeStructuredAppendEncode
     [GlobalSetup]
     public void GlobalSetup()
     {
-        (_content, var range) = Shape switch
+        (_content, var range, var boost) = Shape switch
         {
-            "byte-45k-any" => (Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRVersionRange.Any),
-            "byte-45k-v40" => (Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRVersionRange.Exactly(40)),
-            "byte-4k-max10" => (Repeat("The quick brown fox jumps over the lazy dog. ", 4_000), QRVersionRange.AtMost(10)),
-            "numeric-100k-any" => (Repeat("0123456789", 100_000), QRVersionRange.Any),
-            "mixed-40k-any" => (Repeat("order 20260915 item 0000123456 qty 42 ", 40_000), QRVersionRange.Any),
-            "utf8-15k-any" => (Repeat("こんにちは世界、QRコードの分割テストです。", 15_000), QRVersionRange.Any),
+            "byte-45k-any" => (Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRVersionRange.Any, false),
+            "byte-45k-v40" => (Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRVersionRange.Exactly(40), false),
+            "byte-4k-max10" => (Repeat("The quick brown fox jumps over the lazy dog. ", 4_000), QRVersionRange.AtMost(10), false),
+            "numeric-100k-any" => (Repeat("0123456789", 100_000), QRVersionRange.Any, false),
+            "mixed-40k-any" => (Repeat("order 20260915 item 0000123456 qty 42 ", 40_000), QRVersionRange.Any, false),
+            "utf8-15k-any" => (Repeat("こんにちは世界、QRコードの分割テストです。", 15_000), QRVersionRange.Any, false),
+            "byte-45k-boost" => (Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRVersionRange.Any, true),
+            "numeric-100k-boost" => (Repeat("0123456789", 100_000), QRVersionRange.Any, true),
             _ => throw new ArgumentOutOfRangeException(nameof(Shape), Shape, "unknown shape"),
         };
 
-        _single = new QRCodeGeneratorOptions { Version = range };
-        _optimal = new QRCodeGeneratorOptions { Version = range, Segmentation = QRSegmentation.Optimal };
+        _single = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost };
+        _optimal = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, Segmentation = QRSegmentation.Optimal };
 
-        // The chunks of the Single set, read back through the decoder, and the version
-        // every symbol of the set shares; the baseline encodes exactly these.
+        // The chunks of the Single set, read back through the decoder, with the version and
+        // level every symbol of the set shares; the baseline encodes exactly those symbols,
+        // so a boosted set is compared against symbols at the level the boost reached.
         var set = QRCodeGenerator.CreateStructuredAppend(_content.AsSpan(), QREccLevel.L, _single);
         _chunks = new string[set.Length];
         for (var i = 0; i < set.Length; i++)
         {
             if (!QRCodeDecoder.TryDecode(set[i], out _chunks[i], out var info))
                 throw new InvalidOperationException($"symbol {i} of shape {Shape} did not decode: {info.Status}");
+            _chunkLevel = info.EccLevel;
         }
         _chunkOptions = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(set[0].Version) };
     }
@@ -76,7 +85,7 @@ public class QRCodeStructuredAppendEncode
     {
         var modules = 0;
         foreach (var chunk in _chunks)
-            modules += QRCodeGenerator.Create(chunk.AsSpan(), QREccLevel.L, _chunkOptions).Size;
+            modules += QRCodeGenerator.Create(chunk.AsSpan(), _chunkLevel, _chunkOptions).Size;
         return modules;
     }
 

@@ -390,7 +390,7 @@ public static class QRCodeGenerator
             rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
 
-            if (segmentation == QRSegmentation.Optimal && !bomApplies)
+            if (segmentation == QRSegmentation.Optimal && !bomApplies && QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode))
             {
                 Span<ModeSegment> plan = chunk.Length <= QRSegmentPlanner.MaxStackSegments
                     ? stackalloc ModeSegment[QRSegmentPlanner.MaxStackSegments]
