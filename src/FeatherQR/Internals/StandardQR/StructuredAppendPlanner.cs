@@ -122,17 +122,27 @@ internal static class StructuredAppendPlanner
     {
         var analysis = TextAnalyzer.Analyze(chunk, charset);
         var bomApplies = utf8Bom && charset == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte;
-        var bits = ModeIndicatorBits + analysis.EncodingMode.GetCountIndicatorLength(version) + ModeSegmenter.PayloadBits(analysis.EncodingMode, analysis.DataLength) + (bomApplies ? 24 : 0);
+        var bits = SingleModeChunkBits(in analysis, charset, version, bomApplies);
 
         if (segmentation == QRSegmentation.Optimal && !bomApplies && QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode) && chunk.Length <= QRSegmentPlanner.MaxPlannableChars)
         {
-            var planned = QRSegmentPlanner.MinimumPayloadBits(chunk, charset, EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version));
+            var planned = HeaderBits + charset.GetStandardQrHeaderBits()
+                + QRSegmentPlanner.MinimumPayloadBits(chunk, charset, EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version));
             if (planned < bits)
                 bits = planned;
         }
 
-        return HeaderBits + charset.GetStandardQrHeaderBits() + bits;
+        return bits;
     }
+
+    /// <summary>
+    /// What <see cref="ChunkBits"/> charges the chunk's single-mode stream, from an analysis the caller already has.
+    /// </summary>
+    public static int SingleModeChunkBits(in TextAnalysisResult analysis, EciMode charset, int version, bool bomApplies)
+        => HeaderBits + charset.GetStandardQrHeaderBits()
+            + ModeIndicatorBits + analysis.EncodingMode.GetCountIndicatorLength(version)
+            + ModeSegmenter.PayloadBits(analysis.EncodingMode, analysis.DataLength)
+            + (bomApplies ? 24 : 0);
 
     /// <summary>
     /// The parity byte of a set: the XOR of the whole text's bytes in the charset the set is written in, with the byte order mark first when one is written.

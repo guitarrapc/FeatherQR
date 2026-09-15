@@ -189,6 +189,31 @@ public class StructuredAppendEncodeTest
     }
 
     [Test]
+    [Arguments(QRSegmentation.Single)]
+    [Arguments(QRSegmentation.Optimal)]
+    public async Task Create_BoostEccLevel_ClimbsEveryLevelTheSetCanTake(QRSegmentation segmentation)
+    {
+        // Two symbols at a pinned version each fill about half of it, so the boost has room
+        // to climb more than one level; that is the walk that asks every chunk again per
+        // level, and the level it stops at must not depend on how the asking is done.
+        var text = Repeat(Sentence, 280);
+        var options = new QRCodeGeneratorOptions { Version = 10, BoostEccLevel = true, Segmentation = segmentation };
+
+        var symbols = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options);
+
+        await Assert.That(symbols.Length).IsEqualTo(2);
+        var levels = new List<QREccLevel>();
+        foreach (var symbol in symbols)
+        {
+            await Assert.That(QRCodeDecoder.TryDecode(symbol, out _, out var info)).IsTrue();
+            levels.Add(info.EccLevel);
+        }
+        await Assert.That(levels.Distinct().Count()).IsEqualTo(1);
+        await Assert.That((int)levels[0]).IsGreaterThanOrEqualTo((int)QREccLevel.Q).Because("the set has room for more than one step up");
+        await Assert.That(string.Concat(await DecodeSet(symbols, levels[0]))).IsEqualTo(text);
+    }
+
+    [Test]
     public async Task Create_OptimalSegmentation_RoundTripsAndNeverNeedsMoreSymbols()
     {
         // Runs of digits and letters: a mixed plan is cheaper than one Byte-mode stream.
