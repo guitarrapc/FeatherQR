@@ -6,6 +6,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// <remarks>
 /// Every symbol pays the 20-bit header and, when the set carries a charset, its own ECI header, so a symbol's payload budget is the version's data capacity less those; a chunk's cost is what the single-mode stream needs, or under <see cref="QRSegmentation.Optimal"/> the cheaper of that and the minimal mixed plan.
 /// Cost is monotone in the chunk's length (a longer prefix never plans cheaper), so the longest chunk that fits a budget is found by binary search, and a greedy walk at a budget gives the symbol count that budget needs. The three steps of the split are three searches over that count.
+/// A walk stops once it passes the count it is asked about, and a lower bound on what any split costs (<see cref="CanHold"/>) keeps the searches off versions and budgets that cannot hold the count.
 /// Splits fall on <c>char</c> boundaries and never inside a surrogate pair. Design and the rules behind it: specs/standardqr-encoder.md.
 /// </remarks>
 internal static class StructuredAppendPlanner
@@ -17,6 +18,10 @@ internal static class StructuredAppendPlanner
     public const int MaxSymbols = 16;
 
     private const int ModeIndicatorBits = 4;
+
+    /// <summary>Narrowest count indicator of any mode at any version (Byte at versions 1-9); pinned by <c>QRSegmentPlannerUnitTest</c>.</summary>
+    private const int MinCountIndicatorBits = 8;
+
     private const int Impossible = int.MaxValue;
 
     /// <summary>
@@ -37,9 +42,15 @@ internal static class StructuredAppendPlanner
             return true;
         }
 
+        // What no split can cost less than, priced once; every search below is gated on it.
+        var cheapest = CheapestPayloadBits(text, charset);
+
         // Fewest symbols, reached at the largest version.
-        var count = CountChunks(text, eccLevel, charset, utf8Bom, segmentation, maxVersion, Capacity(maxVersion, eccLevel), chunkEnds);
-        if (count == Impossible || count > MaxSymbols)
+        var largest = Capacity(maxVersion, eccLevel);
+        if (!CanHold(largest, MaxSymbols, cheapest, charset))
+            return false;
+        var count = CountChunks(text, charset, utf8Bom, segmentation, maxVersion, largest, MaxSymbols, chunkEnds);
+        if (count > MaxSymbols)
             return false;
         if (count == 1)
         {
@@ -48,11 +59,12 @@ internal static class StructuredAppendPlanner
             return true;
         }
 
-        // Smallest version that still holds that many.
+        // Smallest version that still holds that many; a version the bound rules out is not walked.
         version = maxVersion;
         for (var candidate = minVersion; candidate < maxVersion; candidate++)
         {
-            if (CountChunks(text, eccLevel, charset, utf8Bom, segmentation, candidate, Capacity(candidate, eccLevel), chunkEnds) <= count)
+            var capacity = Capacity(candidate, eccLevel);
+            if (CanHold(capacity, count, cheapest, charset) && CountChunks(text, charset, utf8Bom, segmentation, candidate, capacity, count, chunkEnds) <= count)
             {
                 version = candidate;
                 break;
@@ -60,24 +72,45 @@ internal static class StructuredAppendPlanner
         }
 
         // Smallest per-symbol budget at that version that still holds that many: the balanced split.
-        var low = 1;
+        // The floor is the bound's: the count fits at this version, so its average share is at most the capacity.
+        var low = MinimumBudget(count, cheapest, charset);
         var high = Capacity(version, eccLevel);
         while (low < high)
         {
             var middle = low + (high - low) / 2;
-            if (CountChunks(text, eccLevel, charset, utf8Bom, segmentation, version, middle, chunkEnds) <= count)
+            if (CountChunks(text, charset, utf8Bom, segmentation, version, middle, count, chunkEnds) <= count)
                 high = middle;
             else
                 low = middle + 1;
         }
 
         budgetBits = low;
-        chunkCount = CountChunks(text, eccLevel, charset, utf8Bom, segmentation, version, low, chunkEnds);
+        chunkCount = CountChunks(text, charset, utf8Bom, segmentation, version, low, count, chunkEnds);
         return true;
     }
 
     /// <summary>Data capacity of a symbol at this version and level, in bits.</summary>
     public static int Capacity(int version, QREccLevel eccLevel) => QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
+
+    /// <summary>
+    /// Payload bits no split of the text can go below, at any version and under either segmentation: every character priced at the cheapest rate any mode gives it.
+    /// Additive over chunks, since a split never cuts a surrogate pair, so it bounds a whole set as it bounds one symbol.
+    /// </summary>
+    public static int CheapestPayloadBits(ReadOnlySpan<char> text, EciMode charset) => (ModeSegmenter.CheapestSixths(text, charset) + 5) / 6;
+
+    /// <summary>
+    /// Whether <paramref name="count"/> symbols of <paramref name="capacityBits"/> could hold the text at all: each pays the Structured Append header, the set's ECI header, a mode indicator and the narrowest count indicator, and the payloads sum to at least <paramref name="cheapestPayloadBits"/>.
+    /// A lower bound, so it only rejects; the walk decides the rest.
+    /// </summary>
+    public static bool CanHold(int capacityBits, int count, int cheapestPayloadBits, EciMode charset)
+        => (long)count * (capacityBits - ChunkFloorBits(charset)) >= cheapestPayloadBits;
+
+    /// <summary>The smallest per-symbol budget <see cref="CanHold"/> admits for the count: the floor plus the average share of the cheapest payload.</summary>
+    private static int MinimumBudget(int count, int cheapestPayloadBits, EciMode charset)
+        => ChunkFloorBits(charset) + (cheapestPayloadBits + count - 1) / count;
+
+    /// <summary>Bits every symbol of a set pays before its first payload bit, at the narrowest widths any version has.</summary>
+    private static int ChunkFloorBits(EciMode charset) => HeaderBits + charset.GetStandardQrHeaderBits() + ModeIndicatorBits + MinCountIndicatorBits;
 
     /// <summary>
     /// Bits one chunk needs as a symbol of the set: the Structured Append header, the ECI header when the set carries a charset, and the cheapest stream the segmentation allows.
@@ -157,14 +190,17 @@ internal static class StructuredAppendPlanner
 
     /// <summary>
     /// Greedy walk: how many chunks of at most <paramref name="budgetBits"/> each the text needs at this version, writing each chunk's end offset into <paramref name="chunkEnds"/> while it has room.
+    /// Stops as soon as the text needs more than <paramref name="limit"/> chunks and returns a value greater than the limit; a walk that cannot answer "at most this many" with yes has nothing left to learn.
     /// <see cref="Impossible"/> when some single character does not fit the budget.
     /// </summary>
-    private static int CountChunks(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, Span<int> chunkEnds)
+    internal static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds)
     {
         var count = 0;
         var start = 0;
         while (start < text.Length)
         {
+            if (count == limit)
+                return count + 1;
             var end = LongestChunkEnd(text, start, charset, version, segmentation, utf8Bom && start == 0, budgetBits);
             if (end < 0)
                 return Impossible;

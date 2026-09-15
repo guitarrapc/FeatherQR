@@ -9,7 +9,7 @@ using System.Text;
 /// The shapes separate the costs the planner can pay:
 ///
 ///   byte-45k-any    : ASCII prose, 16 symbols at version 40; the version range is open, so the
-///                     planner scans versions 1 to 39 for the smallest that still holds 16
+///                     planner also has to find the smallest version that still holds 16
 ///   byte-45k-v40    : the same text pinned to version 40; the scan is gone, what remains is
 ///                     the fewest-symbols walk, the balancing search and the symbols
 ///   byte-4k-max10   : ASCII prose capped at version 10 (a label-sized symbol), 15 to 16 symbols;

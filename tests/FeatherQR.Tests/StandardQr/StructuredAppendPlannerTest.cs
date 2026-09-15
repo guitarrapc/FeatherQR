@@ -53,6 +53,78 @@ public class StructuredAppendPlannerTest
     }
 
     [Test]
+    [Arguments("ascii", 600, QRSegmentation.Single)]
+    [Arguments("digits", 1201, QRSegmentation.Single)]
+    [Arguments("latin1", 329, QRSegmentation.Single)]
+    [Arguments("japanese", 67, QRSegmentation.Single)]
+    [Arguments("emoji", 120, QRSegmentation.Single)]
+    [Arguments("mixed", 600, QRSegmentation.Optimal)]
+    [Arguments("mixed", 600, QRSegmentation.Single)]
+    public async Task Bound_NeverRejectsACountTheWalkReaches(string kind, int length, QRSegmentation segmentation)
+    {
+        // The bound gates the walk, so wherever the walk reaches a count at a version, the
+        // bound must admit that count there; a bound that rejects one turns a fit into a
+        // "does not fit".
+        var text = Text(kind, length);
+        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
+        var cheapest = StructuredAppendPlanner.CheapestPayloadBits(text, charset);
+        var ends = new int[StructuredAppendPlanner.MaxSymbols];
+
+        foreach (var ecc in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+        {
+            for (var version = 1; version <= 40; version++)
+            {
+                var capacity = StructuredAppendPlanner.Capacity(version, ecc);
+                var count = StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, capacity, int.MaxValue, ends);
+                if (count == int.MaxValue)
+                    continue; // a character that fits no symbol at this version; no count exists
+                await Assert.That(StructuredAppendPlanner.CanHold(capacity, count, cheapest, charset)).IsTrue()
+                    .Because($"the walk splits {kind} into {count} chunks at version {version}-{ecc}");
+            }
+        }
+    }
+
+    [Test]
+    public async Task Bound_RejectsACountNoSplitCanReach()
+    {
+        // 600 ASCII characters cost at least 600 x 8 bits in any mode; five version 1-M
+        // symbols offer 5 x (128 - 32) bits of payload. The walk needs far more than five.
+        var text = Text("ascii", 600);
+        var cheapest = StructuredAppendPlanner.CheapestPayloadBits(text, EciMode.Default);
+
+        await Assert.That(StructuredAppendPlanner.CanHold(StructuredAppendPlanner.Capacity(1, QREccLevel.M), 5, cheapest, EciMode.Default)).IsFalse();
+        await Assert.That(StructuredAppendPlanner.CanHold(StructuredAppendPlanner.Capacity(1, QREccLevel.M), 60, cheapest, EciMode.Default)).IsTrue();
+    }
+
+    [Test]
+    [Arguments("ascii", 600, QREccLevel.M, 5, QRSegmentation.Single)]
+    [Arguments("digits", 1201, QREccLevel.M, 6, QRSegmentation.Single)]
+    [Arguments("japanese", 67, QREccLevel.M, 5, QRSegmentation.Single)]
+    [Arguments("emoji", 120, QREccLevel.M, 3, QRSegmentation.Single)]
+    [Arguments("mixed", 600, QREccLevel.M, 6, QRSegmentation.Optimal)]
+    public async Task CountChunks_StopsPastTheLimit_AndMatchesTheWalkWithinIt(string kind, int length, QREccLevel ecc, int version, QRSegmentation segmentation)
+    {
+        var text = Text(kind, length);
+        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
+        var budget = StructuredAppendPlanner.Capacity(version, ecc);
+        var referenceEnds = new List<int>();
+        var expected = GreedyCount(text, charset, segmentation, version, budget, referenceEnds);
+        await Assert.That(expected).IsBetween(2, StructuredAppendPlanner.MaxSymbols);
+
+        // At the limit: the count, and the same chunk ends the reference walk found.
+        var ends = new int[StructuredAppendPlanner.MaxSymbols];
+        await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget, expected, ends)).IsEqualTo(expected);
+        await Assert.That(ends.Take(expected)).IsEquivalentTo(referenceEnds);
+
+        // Above it: unchanged.
+        await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget, StructuredAppendPlanner.MaxSymbols, ends)).IsEqualTo(expected);
+
+        // Below it: more than the limit, and nothing more is promised.
+        await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget, expected - 1, ends)).IsGreaterThan(expected - 1);
+        await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget, 1, ends)).IsGreaterThan(1);
+    }
+
+    [Test]
     public async Task Plan_EmptyText_IsOneSymbol()
     {
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
@@ -109,7 +181,7 @@ public class StructuredAppendPlannerTest
     }
 
     /// <summary>Reference walk: extend each chunk one character at a time while it fits; surrogate pairs move together.</summary>
-    private static int GreedyCount(string text, EciMode charset, QRSegmentation segmentation, int version, int budget)
+    private static int GreedyCount(string text, EciMode charset, QRSegmentation segmentation, int version, int budget, List<int>? ends = null)
     {
         var count = 0;
         var start = 0;
@@ -126,6 +198,7 @@ public class StructuredAppendPlannerTest
             if (end == start)
                 return int.MaxValue;
             count++;
+            ends?.Add(end);
             start = end;
         }
         return count;
