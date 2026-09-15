@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// Every symbol pays the 20-bit header and, when the set carries a charset, its own ECI header, so a symbol's payload budget is the version's data capacity less those; a chunk's cost is what the single-mode stream needs, or under <see cref="QRSegmentation.Optimal"/> the cheaper of that and the minimal mixed plan.
-/// Cost is monotone in the chunk's length (a longer prefix never plans cheaper), so the longest chunk that fits a budget is found by binary search, and a greedy walk at a budget gives the symbol count that budget needs. The three steps of the split are three searches over that count.
+/// Cost is monotone in the chunk's length (a longer prefix never plans cheaper), so the longest chunk that fits a budget is well defined and found in one forward step (<see cref="LongestChunkEnd"/>), and a greedy walk at a budget gives the symbol count that budget needs. The three steps of the split are three searches over that count.
 /// A walk stops once it passes the count it is asked about, and a lower bound on what any split costs (<see cref="CanHold"/>) keeps the searches off versions and budgets that cannot hold the count.
 /// Splits fall on <c>char</c> boundaries and never inside a surrogate pair. Design and the rules behind it: specs/standardqr-encoder.md.
 /// </remarks>
@@ -214,29 +216,142 @@ internal static class StructuredAppendPlanner
     }
 
     /// <summary>
-    /// The largest end offset such that the chunk from <paramref name="start"/> fits the budget, snapped past a low surrogate so a pair is never split; -1 when not even the first character fits.
+    /// The largest end offset such that the chunk from <paramref name="start"/> fits the budget, never inside a surrogate pair; -1 when not even the first character fits.
     /// </summary>
-    private static int LongestChunkEnd(ReadOnlySpan<char> text, int start, EciMode charset, int version, QRSegmentation segmentation, bool utf8Bom, int budgetBits)
+    /// <remarks>
+    /// Found without pricing whole prefixes. The single-mode cost of a prefix is a closed form of its length once its mode is known, and the mode changes at most twice along the text (Numeric, then Alphanumeric, then Byte, each boundary the first character outside the narrower alphabet), so the end is a few arithmetic steps plus, for a UTF-8 Byte run, one pass over the run's own bytes.
+    /// Under <see cref="QRSegmentation.Optimal"/> the mixed plan holds the single-mode plan among its candidates, so its cost is what decides, and one forward pass of the program finds the prefix; except inside an all-digit run, which no split improves, and behind a byte order mark, where only the leading alphanumeric run is planned, since a chunk past it is Byte mode and carries the mark.
+    /// The definition this must agree with is <see cref="ChunkBits"/>; <c>StructuredAppendPlannerTest</c> holds the two together on every boundary budget.
+    /// </remarks>
+    internal static int LongestChunkEnd(ReadOnlySpan<char> text, int start, EciMode charset, int version, QRSegmentation segmentation, bool utf8Bom, int budgetBits)
     {
-        var low = start + 1;
-        var high = text.Length;
-        if (ChunkBits(text.Slice(start, Snap(text, low) - start), charset, version, segmentation, utf8Bom) > budgetBits)
-            return -1;
+        // No chunk is longer than the most any symbol holds, so nothing past that is a
+        // candidate; the window never ends inside a pair either.
+        var length = Math.Min(text.Length - start, QRSegmentPlanner.MaxPlannableChars);
+        if (start + length < text.Length && char.IsHighSurrogate(text[start + length - 1]) && char.IsLowSurrogate(text[start + length]))
+            length--;
+        var window = text.Slice(start, length);
+        var payloadBudget = budgetBits - HeaderBits - charset.GetStandardQrHeaderBits() - ModeIndicatorBits;
+        var bom = utf8Bom && charset == EciMode.Utf8;
 
-        // Fits(Snap(e)) is monotone in e because Snap is monotone and the cost is monotone in the length.
-        while (low < high)
+        var single = SingleModeLength(window, charset, version, bom, payloadBudget, out var digitRun, out var alnumRun);
+        if (segmentation != QRSegmentation.Optimal)
+            return single == 0 ? -1 : start + single;
+
+        // The single-mode end fell inside a digit run: one Numeric run is the optimum of
+        // all-digit content, so the plan ends where the single mode does. When the run
+        // ends exactly there, a plan may still open another run past it.
+        if (single == length || single < digitRun)
+            return single == 0 ? -1 : start + single;
+
+        // A byte order mark is written only into a Byte-mode chunk, where it costs 24 bits
+        // and forces the single-mode stream; a prefix inside the alphanumeric alphabet
+        // carries none, so under a mark that prefix is all a plan may cover.
+        var planWindow = window;
+        if (bom)
         {
-            var middle = low + (high - low + 1) / 2;
-            if (ChunkBits(text.Slice(start, Snap(text, middle) - start), charset, version, segmentation, utf8Bom) <= budgetBits)
-                low = middle;
-            else
-                high = middle - 1;
+            if (single > alnumRun)
+                return start + single;
+            planWindow = window.Slice(0, alnumRun);
         }
 
-        return Snap(text, low);
+        // The program prices each run's mode indicator itself, so its budget keeps those bits.
+        var planned = ModeSegmenter.LongestPrefixWithinBudget(planWindow, charset, ModeIndicatorBits,
+            EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version), payloadBudget + ModeIndicatorBits);
+        Debug.Assert(planned >= single, "the plan holds the single-mode stream among its candidates, so it never fits less");
+        return planned == 0 ? -1 : start + planned;
     }
 
-    /// <summary>An end offset that would split a surrogate pair moves past the pair.</summary>
-    private static int Snap(ReadOnlySpan<char> text, int end)
-        => end < text.Length && char.IsLowSurrogate(text[end]) && char.IsHighSurrogate(text[end - 1]) ? end + 1 : end;
+    /// <summary>
+    /// The longest prefix of <paramref name="window"/> whose single-mode stream (mode indicator excluded) fits <paramref name="payloadBudget"/>, in characters; 0 when the first character does not.
+    /// <paramref name="digitRun"/> and <paramref name="alnumRun"/> receive the two mode boundaries the walk crosses: how many digits the window starts with, and how many characters of it stay inside the alphanumeric alphabet.
+    /// </summary>
+    private static int SingleModeLength(ReadOnlySpan<char> window, EciMode charset, int version, bool bom, int payloadBudget, out int digitRun, out int alnumRun)
+    {
+        var n = window.Length;
+
+        // The two boundaries: the first character outside 0-9, then the first outside the
+        // 45-character alphabet. A prefix is Numeric up to the one and Alphanumeric up to
+        // the other, and Byte past it, which is how the analyser classifies it.
+        var d = 0;
+        while (d < n && CharacterSets.IsNumeric(window[d]))
+            d++;
+        var a = d;
+        while (a < n && CharacterSets.IsAlphanumeric(window[a]))
+            a++;
+        digitRun = d;
+        alnumRun = a;
+
+        if (d > 0)
+        {
+            var most = MostNumeric(payloadBudget - EncodingMode.Numeric.GetCountIndicatorLength(version));
+            if (most < d)
+                return most;
+            if (d == n)
+                return n;
+        }
+
+        if (a > d)
+        {
+            var most = MostAlphanumeric(payloadBudget - EncodingMode.Alphanumeric.GetCountIndicatorLength(version));
+            if (most < a)
+                return Math.Max(d, most);
+            if (a == n)
+                return n;
+        }
+
+        // Byte for the rest: every character costs its bytes, the byte order mark three more.
+        var bytes = (payloadBudget - EncodingMode.Byte.GetCountIndicatorLength(version) - (bom ? 24 : 0)) / 8;
+        if (bytes <= a)
+            return a; // the shortest Byte-mode prefix has a + 1 characters, so at least a + 1 bytes
+
+        if (charset != EciMode.Utf8)
+        {
+            // One byte per character; a forced ISO-8859-1 charset can still meet a pair, which is not split.
+            var end = Math.Min(n, bytes);
+            if (end < n && char.IsLowSurrogate(window[end]) && char.IsHighSurrogate(window[end - 1]))
+                end--;
+            return end;
+        }
+
+        // UTF-8 by code point, the same bytes the writer emits: the a leading characters
+        // are ASCII, then one pass over the run until the next character would overflow.
+        var used = a;
+        var i = a;
+        while (i < n)
+        {
+            var c = window[i];
+            int cost, step = 1;
+            if (c < 0x80)
+                cost = 1;
+            else if (c < 0x800)
+                cost = 2;
+            else if (char.IsHighSurrogate(c) && i + 1 < n && char.IsLowSurrogate(window[i + 1]))
+                (cost, step) = (4, 2);
+            else
+                cost = 3; // a BMP character, or a lone surrogate written as U+FFFD
+            if (used + cost > bytes)
+                break;
+            used += cost;
+            i += step;
+        }
+        return i;
+    }
+
+    /// <summary>The most digits whose Numeric payload (10 bits per 3, then 4 or 7) fits the bits; 0 when one does not.</summary>
+    private static int MostNumeric(int bits)
+    {
+        if (bits < 4)
+            return 0;
+        var rest = bits % 10;
+        return bits / 10 * 3 + (rest >= 7 ? 2 : rest >= 4 ? 1 : 0);
+    }
+
+    /// <summary>The most characters whose Alphanumeric payload (11 bits per 2, then 6) fits the bits; 0 when one does not.</summary>
+    private static int MostAlphanumeric(int bits)
+    {
+        if (bits < 6)
+            return 0;
+        return bits / 11 * 2 + (bits % 11 >= 6 ? 1 : 0);
+    }
 }

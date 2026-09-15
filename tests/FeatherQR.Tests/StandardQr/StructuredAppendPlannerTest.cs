@@ -125,6 +125,68 @@ public class StructuredAppendPlannerTest
     }
 
     [Test]
+    [Arguments("ascii", QRSegmentation.Single, false)]
+    [Arguments("ascii", QRSegmentation.Optimal, false)]
+    [Arguments("digits", QRSegmentation.Single, false)]
+    [Arguments("digits", QRSegmentation.Optimal, false)]
+    [Arguments("transitions", QRSegmentation.Single, false)]
+    [Arguments("transitions", QRSegmentation.Optimal, false)]
+    [Arguments("latin1", QRSegmentation.Single, false)]
+    [Arguments("latin1", QRSegmentation.Optimal, false)]
+    [Arguments("mixed", QRSegmentation.Single, false)]
+    [Arguments("mixed", QRSegmentation.Optimal, false)]
+    [Arguments("japanese", QRSegmentation.Single, false)]
+    [Arguments("japanese", QRSegmentation.Optimal, false)]
+    [Arguments("japanese", QRSegmentation.Single, true)]
+    [Arguments("japanese", QRSegmentation.Optimal, true)]
+    [Arguments("emoji", QRSegmentation.Single, false)]
+    [Arguments("emoji", QRSegmentation.Optimal, false)]
+    [Arguments("emoji", QRSegmentation.Single, true)]
+    [Arguments("emoji", QRSegmentation.Optimal, true)]
+    [Arguments("digitsThenJapanese", QRSegmentation.Single, false)]
+    [Arguments("digitsThenJapanese", QRSegmentation.Optimal, false)]
+    [Arguments("digitsThenJapanese", QRSegmentation.Single, true)]
+    [Arguments("digitsThenJapanese", QRSegmentation.Optimal, true)]
+    // A leading alphanumeric run a split makes cheaper, in a UTF-8 set: the chunk carries no
+    // byte order mark while it stays in that run, so the mark must not suppress the plan there.
+    [Arguments("alnumDigitsThenJapanese", QRSegmentation.Optimal, true)]
+    [Arguments("alnumDigitsThenJapanese", QRSegmentation.Optimal, false)]
+    [Arguments("alnumDigitsThenJapanese", QRSegmentation.Single, true)]
+    public async Task LongestChunkEnd_MatchesTheReferenceWalk(string kind, QRSegmentation segmentation, bool utf8Bom)
+    {
+        // The chunk end is found without pricing whole prefixes; the reference extends one
+        // character (or pair) at a time and prices each prefix with ChunkBits, the cost the
+        // split is defined by. Every budget the answer can turn on is tried: each candidate
+        // prefix's cost, and one bit below it.
+        var text = Text(kind, 120);
+        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
+
+        foreach (var version in new[] { 1, 10, 27 })
+        {
+            foreach (var start in new[] { 0, 3, text.Length / 2 })
+            {
+                var budgets = new HashSet<int> { 0, StructuredAppendPlanner.HeaderBits };
+                var end = start;
+                while (end < text.Length)
+                {
+                    end += char.IsHighSurrogate(text[end]) && end + 1 < text.Length && char.IsLowSurrogate(text[end + 1]) ? 2 : 1;
+                    var cost = StructuredAppendPlanner.ChunkBits(text.AsSpan(start, end - start), charset, version, segmentation, utf8Bom);
+                    budgets.Add(cost);
+                    budgets.Add(cost - 1);
+                }
+
+                foreach (var budget in budgets)
+                {
+                    var expected = ReferenceChunkEnd(text, start, charset, version, segmentation, utf8Bom, budget);
+
+                    await Assert.That(StructuredAppendPlanner.LongestChunkEnd(text, start, charset, version, segmentation, utf8Bom, budget)).IsEqualTo(expected)
+                        .Because($"{kind} from {start} at version {version} with budget {budget}");
+                }
+            }
+        }
+    }
+
+    [Test]
     public async Task Plan_EmptyText_IsOneSymbol()
     {
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
@@ -187,21 +249,28 @@ public class StructuredAppendPlannerTest
         var start = 0;
         while (start < text.Length)
         {
-            var end = start;
-            while (end < text.Length)
-            {
-                var next = end + (char.IsHighSurrogate(text[end]) && end + 1 < text.Length && char.IsLowSurrogate(text[end + 1]) ? 2 : 1);
-                if (StructuredAppendPlanner.ChunkBits(text.AsSpan(start, next - start), charset, version, segmentation, false) > budget)
-                    break;
-                end = next;
-            }
-            if (end == start)
+            var end = ReferenceChunkEnd(text, start, charset, segmentation: segmentation, version: version, utf8Bom: false, budget: budget);
+            if (end < 0)
                 return int.MaxValue;
             count++;
             ends?.Add(end);
             start = end;
         }
         return count;
+    }
+
+    /// <summary>Reference chunk end: extend one character (or pair) at a time while <see cref="StructuredAppendPlanner.ChunkBits"/> fits; -1 when the first does not.</summary>
+    private static int ReferenceChunkEnd(string text, int start, EciMode charset, int version, QRSegmentation segmentation, bool utf8Bom, int budget)
+    {
+        var end = start;
+        while (end < text.Length)
+        {
+            var next = end + (char.IsHighSurrogate(text[end]) && end + 1 < text.Length && char.IsLowSurrogate(text[end + 1]) ? 2 : 1);
+            if (StructuredAppendPlanner.ChunkBits(text.AsSpan(start, next - start), charset, version, segmentation, utf8Bom) > budget)
+                break;
+            end = next;
+        }
+        return end == start ? -1 : end;
     }
 
     private static string Text(string kind, int length)
@@ -213,6 +282,9 @@ public class StructuredAppendPlannerTest
             "japanese" => "こんにちは世界、QRコードの分割テストです。",
             "emoji" => "🎉🎊🎈",
             "mixed" => "order 20260915 item 0000123456 qty 42 ",
+            "transitions" => "12345ABCDE abcde 67890 FGHIJ fghij ",
+            "digitsThenJapanese" => "1234567こんにちは ",
+            "alnumDigitsThenJapanese" => "AB01234567890123456789012345678901234567890123456789こんにちは ",
             _ => "The quick brown fox jumps over the lazy dog. ",
         };
         var sb = new StringBuilder(length);

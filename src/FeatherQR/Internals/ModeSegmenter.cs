@@ -3,6 +3,7 @@
 using System.Buffers;
 #endif
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace FeatherQR.Internals;
@@ -68,76 +69,124 @@ internal static class ModeSegmenter
 
         for (var i = 0; i < text.Length; i++)
         {
-            for (var s = 0; s < StateCount; s++)
-                cur[s] = Unreachable;
-
-            var c = text[i];
-            var isNumeric = CharacterSets.IsNumeric(c);
-            var isAlnum = CharacterSets.IsAlphanumeric(c);
-            var byteBits = 8 * ByteCost(text, i, charset);
-            var parentBase = i * StateCount;
-
-            for (var from = 0; from < StateCount; from++)
-            {
-                var basis = prev[from];
-                if (basis >= Unreachable)
-                    continue;
-
-                if (isNumeric)
-                {
-                    int target, cost;
-                    if (from <= StateNumeric2)
-                    {
-                        // Continue the run: the first digit of a group costs 4 bits, the next two 3 each.
-                        cost = basis + (from == StateNumeric0 ? 4 : 3);
-                        target = from == StateNumeric2 ? StateNumeric0 : from + 1;
-                    }
-                    else
-                    {
-                        cost = basis + openNumeric + 4;
-                        target = StateNumeric1;
-                    }
-                    Relax(cur, parents, parentBase, target, cost, from, track);
-                }
-
-                if (isAlnum && allowAlnum)
-                {
-                    int target, cost;
-                    if (from is StateAlnum0 or StateAlnum1)
-                    {
-                        // 11 bits per pair: 6 for the first character of a pair, 5 for the second.
-                        cost = basis + (from == StateAlnum0 ? 6 : 5);
-                        target = from == StateAlnum0 ? StateAlnum1 : StateAlnum0;
-                    }
-                    else
-                    {
-                        cost = basis + openAlnum + 6;
-                        target = StateAlnum1;
-                    }
-                    Relax(cur, parents, parentBase, target, cost, from, track);
-                }
-
-                if (allowByte)
-                {
-                    // Byte mode encodes every character, so with Byte allowed a plan
-                    // always exists; without it, a character outside the allowed
-                    // alphabets leaves every state unreachable.
-                    var cost = from == StateByte ? basis + byteBits : basis + openByte + byteBits;
-                    Relax(cur, parents, parentBase, StateByte, cost, from, track);
-                }
-            }
-
+            Advance(text, i, charset, prev, cur, parents, track, openNumeric, openAlnum, openByte, allowAlnum, allowByte);
             cur.CopyTo(prev);
         }
 
+        return Best(prev, out finalState);
+    }
+
+    /// <summary>
+    /// The longest prefix of <paramref name="text"/> whose minimal plan costs at most <paramref name="budgetBits"/>, in characters; 0 when not even the first character fits.
+    /// </summary>
+    /// <remarks>
+    /// One forward pass of the program <see cref="ComputeCosts"/> runs: the optimum of every prefix falls out of the sweep, and it is monotone in the prefix length (a plan for a longer prefix restricted to a shorter one is a plan for the shorter at no more cost), so the pass stops at the first prefix over budget.
+    /// A prefix that cuts a surrogate pair is never a candidate; the pair is priced on its first half, so the end after its second half is the one compared.
+    /// </remarks>
+    public static int LongestPrefixWithinBudget(ReadOnlySpan<char> text, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, int budgetBits)
+    {
+        Span<int> prev = stackalloc int[StateCount];
+        Span<int> cur = stackalloc int[StateCount];
+        for (var s = 0; s < StateCount; s++)
+            prev[s] = Unreachable;
+        prev[StateStart] = 0;
+
+        var openNumeric = modeIndicatorBits + cciNumeric;
+        var openAlnum = modeIndicatorBits + cciAlnum;
+        var openByte = modeIndicatorBits + cciByte;
+
+        var fitted = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            Advance(text, i, charset, prev, cur, default, false, openNumeric, openAlnum, openByte, allowAlnum: true, allowByte: true);
+            cur.CopyTo(prev);
+
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                continue;
+
+            if (Best(prev, out _) > budgetBits)
+                return fitted;
+            fitted = i + 1;
+        }
+
+        return fitted;
+    }
+
+    /// <summary>One character of the program: the costs of reaching every state after <c>text[i]</c>, from the costs before it.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void Advance(ReadOnlySpan<char> text, int i, EciMode charset, ReadOnlySpan<int> prev, Span<int> cur, Span<byte> parents, bool track, int openNumeric, int openAlnum, int openByte, bool allowAlnum, bool allowByte)
+    {
+        for (var s = 0; s < StateCount; s++)
+            cur[s] = Unreachable;
+
+        var c = text[i];
+        var isNumeric = CharacterSets.IsNumeric(c);
+        var isAlnum = CharacterSets.IsAlphanumeric(c);
+        var byteBits = 8 * ByteCost(text, i, charset);
+        var parentBase = i * StateCount;
+
+        for (var from = 0; from < StateCount; from++)
+        {
+            var basis = prev[from];
+            if (basis >= Unreachable)
+                continue;
+
+            if (isNumeric)
+            {
+                int target, cost;
+                if (from <= StateNumeric2)
+                {
+                    // Continue the run: the first digit of a group costs 4 bits, the next two 3 each.
+                    cost = basis + (from == StateNumeric0 ? 4 : 3);
+                    target = from == StateNumeric2 ? StateNumeric0 : from + 1;
+                }
+                else
+                {
+                    cost = basis + openNumeric + 4;
+                    target = StateNumeric1;
+                }
+                Relax(cur, parents, parentBase, target, cost, from, track);
+            }
+
+            if (isAlnum && allowAlnum)
+            {
+                int target, cost;
+                if (from is StateAlnum0 or StateAlnum1)
+                {
+                    // 11 bits per pair: 6 for the first character of a pair, 5 for the second.
+                    cost = basis + (from == StateAlnum0 ? 6 : 5);
+                    target = from == StateAlnum0 ? StateAlnum1 : StateAlnum0;
+                }
+                else
+                {
+                    cost = basis + openAlnum + 6;
+                    target = StateAlnum1;
+                }
+                Relax(cur, parents, parentBase, target, cost, from, track);
+            }
+
+            if (allowByte)
+            {
+                // Byte mode encodes every character, so with Byte allowed a plan
+                // always exists; without it, a character outside the allowed
+                // alphabets leaves every state unreachable.
+                var cost = from == StateByte ? basis + byteBits : basis + openByte + byteBits;
+                Relax(cur, parents, parentBase, StateByte, cost, from, track);
+            }
+        }
+    }
+
+    /// <summary>The cheapest state to end in, and its cost; <see cref="Unreachable"/> or above when no allowed mode set encodes the content.</summary>
+    private static int Best(ReadOnlySpan<int> costs, out int state)
+    {
         var best = Unreachable;
-        finalState = StateByte;
+        state = StateByte;
         for (var s = 0; s <= StateByte; s++)
         {
-            if (prev[s] < best)
+            if (costs[s] < best)
             {
-                best = prev[s];
-                finalState = s;
+                best = costs[s];
+                state = s;
             }
         }
         return best;
