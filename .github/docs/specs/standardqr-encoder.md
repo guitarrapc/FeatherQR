@@ -59,18 +59,30 @@ The encoder exposes two output models.
 | ECC boost | Optional: the requested level becomes the minimum and is raised as far as the chosen version's capacity allows, never changing the version |
 | Segmentation | One segment in one mode by default; opt-in mixed-mode segmentation (`QRSegmentation.Optimal`) splits the content into the minimal-bit Numeric / Alphanumeric / Byte runs |
 | Quiet zone | Configurable non-negative size; span sizing/output rejects dimensions that cannot fit an `int`-sized matrix |
+| Structured Append | `CreateStructuredAppend` splits text across the fewest symbols (2 to 16) whose version stays within `QRCodeGeneratorOptions.Version`, all at one version, balanced so the fullest symbol is as empty as it can be; text that fits one symbol in the range returns the plain symbol. See [Structured Append](#structured-append) |
 | Output | Bit-packed `QRCodeData` or byte-per-module `Span<byte>` |
 
 ### Not implemented
 
 - Kanji mode
 - FNC1
-- Structured Append
 - Arbitrary ECI assignment numbers
 - Arbitrary binary payload input
 - Micro QR and rMQR
 
 By default the encoder analyzes the complete input once and emits one data segment; `QRSegmentation.Optimal` opts into the globally minimal mixed-mode split instead (see [Mixed-mode segmentation](#mixed-mode-segmentation)).
+
+### Structured Append
+
+ISO/IEC 18004 lets one message span up to sixteen symbols, each carrying a 20-bit header (mode `0011`, 4-bit position, 4-bit count minus one, 8-bit parity) ahead of its segments. `CreateStructuredAppend` writes such a set; a reader reassembles it by the rules on `QRStructuredAppend`.
+
+**What decides the symbol count is the version cap the caller already has.** "Fewest symbols" has no answer without a bound (version 40 holds 2,953 bytes, so the unbounded answer is one symbol), and the bound a caller has is the largest symbol they can print, which `QRCodeGeneratorOptions.Version` already expresses. No count parameter exists; `QRVersionRange.AtMost(n)` is the request. Text that fits one symbol in the range returns exactly what `Create` returns, with no header: a set of one costs 20 bits and tells a reader nothing.
+
+**The split is balanced, in three searches over the symbol count.** Each symbol's budget is its version's data capacity less the 20-bit header and, when the set declares a charset, the 12-bit ECI header it repeats. A chunk's cost is its single-mode stream, or under `QRSegmentation.Optimal` the cheaper of that and the minimal mixed plan; cost is monotone in the chunk's length, so the longest chunk that fits a budget is a binary search, and a greedy walk at a budget gives the count that budget needs. The planner finds the fewest symbols at the largest version, then the smallest version in the range that still holds that count, then the smallest per-symbol budget at that version that still holds it, and splits at that budget. Every symbol therefore shares one version, and no symbol is fuller than it has to be; a greedy fill would leave a set of three full symbols and one nearly empty, which on one label reads as a defect. Splits fall on `char` boundaries and never inside a surrogate pair. More than sixteen symbols at the largest version, or a single character that fits no symbol there, is `ArgumentException` on the options.
+
+**The charset is decided once and the parity is one XOR.** The whole text is analysed once, the charset that analysis chooses is forced on every chunk and declared in every symbol (a pure-ASCII chunk of a UTF-8 set still carries the UTF-8 ECI), and the parity every symbol carries is the XOR of the whole text's bytes in that charset, computed once before splitting. Any per-chunk computation can diverge from it when a chunk would have chosen another charset on its own, and a reader cannot tell which bytes an encoder XORed, so the value has to be a function of the input and the charset alone. A byte order mark, when `Utf8Bom` asks for one and the first chunk is written in Byte mode, goes into the first symbol only and is counted in the parity, since it is a prefix of the data as in the single-symbol path. `BoostEccLevel` raises the whole set to the highest level every chunk still fits at the shared version, never one symbol at a time, so a set does not come out with mixed levels. `MaskPattern` applies to every symbol; `Segmentation` and `QuietZoneSize` apply per symbol.
+
+**Each symbol is the stream `Create` would write for its chunk, behind the header.** The header precedes the ECI header, then the mode segments; the per-symbol pipeline from data codewords on is unchanged, which is what keeps every existing invariant (padding, error correction, interleaving, masking) in force for a set.
 
 ---
 

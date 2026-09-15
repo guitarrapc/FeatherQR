@@ -348,7 +348,18 @@ That loop applies the four rules (one `Count` and one `Parity`, each index once,
 - **The header is reported only for a successful decode**, like `Corners`. A failed decode leaves `StructuredAppend` empty even when the header was read before the failure.
 - **Micro QR and rMQR do not define Structured Append**, so their decode results have no such member and a Micro QR or rMQR stream can never carry one.
 
-Encoding a set is Phase 5b of the 2.0.0 plan and is not in this preview.
+Encoding a set is `QRCodeGenerator.CreateStructuredAppend`, additive as well. It takes the same arguments as `Create`; what decides the symbol count is the version range, because the size of symbol you can print is the constraint that makes a split necessary at all:
+
+```csharp
+// Split across the fewest symbols that stay at or below version 10, all at one version.
+QRCodeData[] set = QRCodeGenerator.CreateStructuredAppend(longText, QREccLevel.M,
+    new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10) });
+```
+
+- **One symbol when it fits.** Text that fits a single symbol within the range returns that one symbol, identical to `Create`'s, with no header; more than sixteen symbols at the largest version in the range is an `ArgumentException` on the options.
+- **Balanced, at one version.** The set is split so every symbol shares one version and the fullest symbol is as empty as it can be, rather than filling each symbol and leaving the remainder to the last.
+- **One charset, one parity.** The charset is decided from the whole text and declared in every symbol; the parity is the XOR of the whole text's bytes in that charset. `Utf8Bom` writes the mark in the first symbol only. `BoostEccLevel` raises the whole set to one level; `MaskPattern`, `QuietZoneSize` and `Segmentation` apply to every symbol as they do to one.
+- A set of one is never written, and no combine helper exists, for the reasons above.
 
 ### Module styling no longer reaches the finder patterns
 

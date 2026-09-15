@@ -261,7 +261,7 @@ arithmetic sits on the error path only, so the happy path stays a single indexed
 
 Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode
 segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1.
-Structured Append is read since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md)).
+Structured Append is read and written since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md) and [standardqr-encoder.md](standardqr-encoder.md)).
 
 ### Allocation contract
 
