@@ -48,6 +48,28 @@ internal static class QRSegmentPlanner
     /// </remarks>
     public static bool CanPlanBeatSingleMode(EncodingMode singleMode) => singleMode != EncodingMode.Numeric;
 
+    /// <summary>Shortest run of digits that could repay the one mode header splitting it out adds, at the version band whose headers are narrowest.</summary>
+    /// <remarks>
+    /// Splitting a run out of a surrounding Byte run is cheapest when the run sits at one end of the content, where it adds its own mode and count indicator and nothing else; versions 1 to 9 make that 4 + 10 bits.
+    /// Three digits save 24 - 10 = 14 against Byte, which only matches it; four save 32 - 14 = 18 and clear it.
+    /// Splitting digits out of an Alphanumeric run instead needs seven, so four is the binding number. Re-derive rather than nudge if the count indicator widths change.
+    /// </remarks>
+    private const int ShortestPayingNumericRun = 4;
+
+    /// <summary>Shortest run in the alphanumeric alphabet that could repay the one mode header splitting it out of a Byte run adds, at versions 1 to 9 (4 + 9 bits).</summary>
+    /// <remarks>Five characters save 40 - 28 = 12 and fall short; six save 48 - 33 = 15 and clear it.</remarks>
+    private const int ShortestPayingAlnumRun = 6;
+
+    /// <summary>
+    /// Whether a mixed plan could cost less than one run, from the longest run of each denser mode the content holds.
+    /// </summary>
+    /// <remarks>
+    /// A plan is only cheaper than one run when some run of it is in a mode denser than the whole content's, and such a run has to repay at least the one mode header it adds, so content whose densest stretches are shorter than that cannot be improved by any plan at any version.
+    /// Generous on purpose: saying yes costs a cost run that finds nothing, saying no when a plan would have won would change what the library emits, so <c>PlanCouldWinTest</c> holds this direction against the program itself.
+    /// </remarks>
+    public static bool PlanCouldBeatSingleMode(int longestNumericRun, int longestAlnumRun)
+        => longestNumericRun >= ShortestPayingNumericRun || longestAlnumRun >= ShortestPayingAlnumRun;
+
     /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="minVersion"/> through <paramref name="maxVersion"/>.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.

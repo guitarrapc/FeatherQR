@@ -47,11 +47,21 @@ internal static class StructuredAppendPlanner
         // What no split can cost less than, priced once; every search below is gated on it.
         var cheapest = CheapestPayloadBits(text, charset);
 
+        // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the
+        // two are the same number for content holding no run dense enough to repay a mode
+        // header. Deciding that once, in one pass, is what keeps the searches below off the
+        // segmentation program, whose every probe is a pass of its own: the split it would find
+        // is the split the closed-form cost finds, so the searches run as Single and the symbols
+        // are still written exactly as the caller asked.
+        var searched = segmentation == QRSegmentation.Optimal && CanPlanHelp(text, singleMode)
+            ? QRSegmentation.Optimal
+            : QRSegmentation.Single;
+
         // Fewest symbols, reached at the largest version.
         var largest = Capacity(maxVersion, eccLevel);
         if (!CanHold(largest, MaxSymbols, cheapest, charset))
             return false;
-        var count = CountChunks(text, charset, utf8Bom, segmentation, maxVersion, largest, MaxSymbols, chunkEnds);
+        var count = CountChunks(text, charset, utf8Bom, searched, maxVersion, largest, MaxSymbols, chunkEnds);
         if (count > MaxSymbols)
             return false;
         if (count == 1)
@@ -66,7 +76,7 @@ internal static class StructuredAppendPlanner
         for (var candidate = minVersion; candidate < maxVersion; candidate++)
         {
             var capacity = Capacity(candidate, eccLevel);
-            if (CanHold(capacity, count, cheapest, charset) && CountChunks(text, charset, utf8Bom, segmentation, candidate, capacity, count, chunkEnds) <= count)
+            if (CanHold(capacity, count, cheapest, charset) && CountChunks(text, charset, utf8Bom, searched, candidate, capacity, count, chunkEnds) <= count)
             {
                 version = candidate;
                 break;
@@ -77,18 +87,18 @@ internal static class StructuredAppendPlanner
         // The floor is the bound's: the count fits at this version, so its average share is at most the capacity.
         var low = MinimumBudget(count, cheapest, charset);
         var high = Capacity(version, eccLevel);
-        BracketBalancedBudget(text, charset, utf8Bom, version, count, segmentation, singleMode, ref low, ref high);
+        BracketBalancedBudget(text, charset, utf8Bom, version, count, searched, singleMode, ref low, ref high);
         while (low < high)
         {
             var middle = low + (high - low) / 2;
-            if (CountChunks(text, charset, utf8Bom, segmentation, version, middle, count, chunkEnds) <= count)
+            if (CountChunks(text, charset, utf8Bom, searched, version, middle, count, chunkEnds) <= count)
                 high = middle;
             else
                 low = middle + 1;
         }
 
         budgetBits = low;
-        chunkCount = CountChunks(text, charset, utf8Bom, segmentation, version, low, count, chunkEnds);
+        chunkCount = CountChunks(text, charset, utf8Bom, searched, version, low, count, chunkEnds);
         return true;
     }
 
@@ -111,6 +121,21 @@ internal static class StructuredAppendPlanner
     /// <summary>The smallest per-symbol budget <see cref="CanHold"/> admits for the count: the floor plus the average share of the cheapest payload.</summary>
     private static int MinimumBudget(int count, int cheapestPayloadBits, EciMode charset)
         => ChunkFloorBits(charset) + (cheapestPayloadBits + count - 1) / count;
+
+    /// <summary>
+    /// Whether any chunk of this text could be cheaper as a mixed plan than as one run, which is what decides whether the searches have to consult the segmentation program at all.
+    /// </summary>
+    /// <remarks>
+    /// One pass over the text for the longest run of each denser mode, since a chunk's runs are never longer than the whole text's; if none of them could repay the mode header splitting it out adds, then no chunk's plan beats its single-mode stream, the two costs are the same number everywhere, and the split is the same split.
+    /// </remarks>
+    private static bool CanPlanHelp(ReadOnlySpan<char> text, EncodingMode singleMode)
+    {
+        if (!QRSegmentPlanner.CanPlanBeatSingleMode(singleMode))
+            return false;
+
+        ModeSegmenter.LongestDenseRuns(text, out var numericRun, out var alnumRun);
+        return QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun);
+    }
 
     /// <summary>
     /// Narrows the bracket the balanced budget is searched in, at a known version, using the exact cost model instead of the rate bounds the version scan works from.

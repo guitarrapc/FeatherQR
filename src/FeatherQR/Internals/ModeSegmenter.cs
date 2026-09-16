@@ -324,6 +324,45 @@ internal static class ModeSegmenter
     /// The sixths sum of pricing each character at the cheapest rate any mode could give it: one O(n) pass, no table.
     /// Rounded up and topped with the cheapest possible header by the caller, it is a lower bound on any plan at any version, so it may only reject.
     /// </summary>
+    /// <summary>
+    /// The longest run of digits and the longest run of characters in the alphanumeric alphabet, in one pass.
+    /// </summary>
+    /// <remarks>
+    /// What a plan can gain over one run comes from a stretch of a denser mode, and how much it can gain is bounded by how long that stretch is, so these two numbers answer whether planning could pay before any cost run does the work of finding out.
+    /// Digits are alphanumeric, so the numeric run is never the longer of the two.
+    /// </remarks>
+    public static void LongestDenseRuns(ReadOnlySpan<char> text, out int numericRun, out int alnumRun)
+    {
+        int longestNumeric = 0, longestAlnum = 0, currentNumeric = 0, currentAlnum = 0;
+        foreach (var c in text)
+        {
+            if (CharacterSets.IsNumeric(c))
+            {
+                currentNumeric++;
+                if (currentNumeric > longestNumeric)
+                    longestNumeric = currentNumeric;
+            }
+            else
+            {
+                currentNumeric = 0;
+            }
+
+            if (CharacterSets.IsAlphanumeric(c))
+            {
+                currentAlnum++;
+                if (currentAlnum > longestAlnum)
+                    longestAlnum = currentAlnum;
+            }
+            else
+            {
+                currentAlnum = 0;
+            }
+        }
+
+        numericRun = longestNumeric;
+        alnumRun = longestAlnum;
+    }
+
     public static int CheapestSixths(ReadOnlySpan<char> text, EciMode charset)
     {
         var sixths = 0;
