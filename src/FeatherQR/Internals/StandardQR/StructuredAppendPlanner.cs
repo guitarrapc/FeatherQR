@@ -30,7 +30,7 @@ internal static class StructuredAppendPlanner
     /// Plans the split. <paramref name="chunkEnds"/> receives the end offset of each chunk (at least <see cref="MaxSymbols"/> entries); <paramref name="chunkCount"/> is 1 when the text fits one symbol within the range, in which case nothing else is planned.
     /// Returns <c>false</c> when the text needs more than sixteen symbols at <paramref name="maxVersion"/>, or some single character cannot fit a symbol there.
     /// </summary>
-    public static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits)
+    public static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits)
     {
         chunkCount = 0;
         version = 0;
@@ -77,6 +77,7 @@ internal static class StructuredAppendPlanner
         // The floor is the bound's: the count fits at this version, so its average share is at most the capacity.
         var low = MinimumBudget(count, cheapest, charset);
         var high = Capacity(version, eccLevel);
+        BracketBalancedBudget(text, charset, utf8Bom, version, count, segmentation, singleMode, ref low, ref high);
         while (low < high)
         {
             var middle = low + (high - low) / 2;
@@ -110,6 +111,51 @@ internal static class StructuredAppendPlanner
     /// <summary>The smallest per-symbol budget <see cref="CanHold"/> admits for the count: the floor plus the average share of the cheapest payload.</summary>
     private static int MinimumBudget(int count, int cheapestPayloadBits, EciMode charset)
         => ChunkFloorBits(charset) + (cheapestPayloadBits + count - 1) / count;
+
+    /// <summary>
+    /// Narrows the bracket the balanced budget is searched in, at a known version, using the exact cost model instead of the rate bounds the version scan works from.
+    /// </summary>
+    /// <remarks>
+    /// Below: the segment plans of a split concatenate into one plan for the whole text, so a split costs at least the minimal plan for the whole of it and its fullest chunk is at least the average of that, plus the headers every symbol pays. The cheapest-rate bound prices a lowercase letter as if some mode held it in five and a half bits, which on prose sits nearly two thousand bits under the answer.
+    /// Above: cutting the text into equal character counts is itself a split into this many chunks, so its fullest chunk is a budget that already holds them, and the answer is the smallest such budget. The capacity, which is where the search would otherwise start, sits a thousand bits above it, and that side is what dominates the range.
+    /// Both cost one pass over the text and together leave a bracket tens of bits wide instead of thousands, so they pay for themselves several times over. They are taken only when a probe is itself a pass: under <see cref="QRSegmentation.Single"/>, and for content no plan can beat, a probe is arithmetic and the passes would cost more than the probes they save.
+    /// </remarks>
+    private static void BracketBalancedBudget(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, int version, int count, QRSegmentation segmentation, EncodingMode singleMode, ref int low, ref int high)
+    {
+        if (segmentation != QRSegmentation.Optimal || text.IsEmpty || !QRSegmentPlanner.CanPlanBeatSingleMode(singleMode))
+            return;
+
+        var setHeaders = HeaderBits + charset.GetStandardQrHeaderBits();
+
+        var wholeText = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits,
+            EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
+            default, out _);
+        if (wholeText < ModeSegmenter.Unreachable)
+        {
+            var floor = setHeaders + (wholeText + count - 1) / count;
+            if (floor > low)
+                low = floor;
+        }
+
+        var ceiling = 0;
+        var start = 0;
+        for (var i = 1; i <= count; i++)
+        {
+            var end = i == count ? text.Length : EvenCut(text, (int)((long)text.Length * i / count));
+            if (end <= start)
+                continue;
+            var bits = ChunkBits(text.Slice(start, end - start), charset, version, segmentation, utf8Bom && start == 0);
+            if (bits > ceiling)
+                ceiling = bits;
+            start = end;
+        }
+        if (start == text.Length && ceiling > low && ceiling < high)
+            high = ceiling;
+    }
+
+    /// <summary>An even cut that would land inside a surrogate pair moves past it, so no chunk of the constructed split ever splits one.</summary>
+    private static int EvenCut(ReadOnlySpan<char> text, int end)
+        => end > 0 && end < text.Length && char.IsLowSurrogate(text[end]) && char.IsHighSurrogate(text[end - 1]) ? end + 1 : end;
 
     /// <summary>Bits every symbol of a set pays before its first payload bit, at the narrowest widths any version has.</summary>
     private static int ChunkFloorBits(EciMode charset) => HeaderBits + charset.GetStandardQrHeaderBits() + ModeIndicatorBits + MinCountIndicatorBits;

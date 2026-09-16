@@ -327,10 +327,11 @@ public static class QRCodeGenerator
 
         // The charset is decided once, from the whole text: "the bytes of the whole input" has to
         // name one byte sequence, and every symbol then declares it.
-        var charset = TextAnalyzer.Analyze(textSpan, options.EciMode).EciMode;
+        var wholeText = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        var charset = wholeText.EciMode;
 
         Span<int> chunkEnds = stackalloc int[StructuredAppendPlanner.MaxSymbols];
-        if (!StructuredAppendPlanner.TryPlan(textSpan, eccLevel, charset, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out var count, out var version, out _))
+        if (!StructuredAppendPlanner.TryPlan(textSpan, eccLevel, charset, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out var count, out var version, out _))
             throw new ArgumentException($"Content does not fit {StructuredAppendPlanner.MaxSymbols} Structured Append symbols of version {options.Version.Max} at ECC level {eccLevel}. Widen the version range or lower the ECC level.", nameof(options));
 
         if (count == 1)

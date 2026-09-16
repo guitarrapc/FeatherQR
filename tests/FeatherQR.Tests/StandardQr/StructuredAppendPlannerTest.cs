@@ -25,7 +25,7 @@ public class StructuredAppendPlannerTest
         var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
 
-        var planned = StructuredAppendPlanner.TryPlan(text, ecc, charset, false, segmentation, minVersion, maxVersion, ends, out var count, out var version, out var budget);
+        var planned = StructuredAppendPlanner.TryPlan(text, ecc, charset, TextAnalyzer.Analyze(text, charset).EncodingMode, false, segmentation, minVersion, maxVersion, ends, out var count, out var version, out var budget);
 
         await Assert.That(planned).IsTrue();
         await Assert.That(count).IsBetween(2, 16);
@@ -187,11 +187,47 @@ public class StructuredAppendPlannerTest
     }
 
     [Test]
+    [Arguments("ascii", 600)]
+    [Arguments("ascii", 2000)]
+    [Arguments("digits", 1201)]
+    [Arguments("latin1", 329)]
+    [Arguments("japanese", 67)]
+    [Arguments("emoji", 120)]
+    [Arguments("mixed", 600)]
+    [Arguments("mixed", 3000)]
+    [Arguments("transitions", 900)]
+    [Arguments("alnumDigitsThenJapanese", 400)]
+    public async Task Budget_IsTheSmallestThatHoldsTheCount(string kind, int length)
+    {
+        // The balanced split is defined by the budget being minimal, so whatever the search
+        // brackets it with has to leave that exact. A floor above the answer would raise the
+        // budget and leave a symbol fuller than it has to be, which one bit below catches.
+        var text = Text(kind, length);
+        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
+        var ends = new int[StructuredAppendPlanner.MaxSymbols];
+
+        foreach (var segmentation in new[] { QRSegmentation.Single, QRSegmentation.Optimal })
+        {
+            foreach (var ecc in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+            {
+                if (!StructuredAppendPlanner.TryPlan(text, ecc, charset, TextAnalyzer.Analyze(text, charset).EncodingMode, false, segmentation, 1, 40, ends, out var count, out var version, out var budget))
+                    continue;
+                if (count == 1)
+                    continue;
+
+                var because = $"{kind} {length} in {segmentation} at {ecc}";
+                await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget, count, ends)).IsLessThanOrEqualTo(count).Because(because);
+                await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget - 1, count, ends)).IsGreaterThan(count).Because($"{because}: one bit below must not hold the count");
+            }
+        }
+    }
+
+    [Test]
     public async Task Plan_EmptyText_IsOneSymbol()
     {
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
 
-        var planned = StructuredAppendPlanner.TryPlan("", QREccLevel.M, EciMode.Default, false, QRSegmentation.Single, 1, 40, ends, out var count, out _, out _);
+        var planned = StructuredAppendPlanner.TryPlan("", QREccLevel.M, EciMode.Default, EncodingMode.Byte, false, QRSegmentation.Single, 1, 40, ends, out var count, out _, out _);
 
         await Assert.That(planned).IsTrue();
         await Assert.That(count).IsEqualTo(1);
@@ -203,7 +239,7 @@ public class StructuredAppendPlannerTest
         // One emoji under a UTF-8 ECI at version 1-H: 20 + 12 + 4 + 8 + 32 = 76 bits against 72.
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
 
-        var planned = StructuredAppendPlanner.TryPlan("🎉", QREccLevel.H, EciMode.Utf8, false, QRSegmentation.Single, 1, 1, ends, out _, out _, out _);
+        var planned = StructuredAppendPlanner.TryPlan("🎉", QREccLevel.H, EciMode.Utf8, EncodingMode.Byte, false, QRSegmentation.Single, 1, 1, ends, out _, out _, out _);
 
         await Assert.That(planned).IsFalse();
     }
@@ -213,7 +249,7 @@ public class StructuredAppendPlannerTest
     {
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
 
-        var planned = StructuredAppendPlanner.TryPlan(Text("ascii", 600), QREccLevel.H, EciMode.Default, false, QRSegmentation.Single, 1, 1, ends, out _, out _, out _);
+        var planned = StructuredAppendPlanner.TryPlan(Text("ascii", 600), QREccLevel.H, EciMode.Default, EncodingMode.Byte, false, QRSegmentation.Single, 1, 1, ends, out _, out _, out _);
 
         await Assert.That(planned).IsFalse();
     }
