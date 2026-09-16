@@ -71,12 +71,24 @@ internal static class StructuredAppendPlanner
             return true;
         }
 
-        // Smallest version that still holds that many; a version the bound rules out is not walked.
+        // The minimal plan for the whole text, per count indicator band, taken on first use and
+        // shared by the version scan and the budget bracket.
+        Span<int> wholeTextPlans = stackalloc int[3];
+        wholeTextPlans.Fill(-1);
+
+        // Smallest version that still holds that many; a version the bounds rule out is not walked.
+        // Under Optimal a walk is a pass over the text, so a version the rate bound admits is also
+        // checked against the whole text's minimal plan, which on mixed content is thousands of
+        // bits nearer the truth and turns away the versions just below the answer.
         version = maxVersion;
         for (var candidate = minVersion; candidate < maxVersion; candidate++)
         {
             var capacity = Capacity(candidate, eccLevel);
-            if (CanHold(capacity, count, cheapest, charset) && CountChunks(text, charset, utf8Bom, searched, candidate, capacity, count, chunkEnds) <= count)
+            if (!CanHold(capacity, count, cheapest, charset))
+                continue;
+            if (searched == QRSegmentation.Optimal && !CanHoldPlanned(capacity, count, WholeTextPlanBits(text, charset, candidate, wholeTextPlans), charset))
+                continue;
+            if (CountChunks(text, charset, utf8Bom, searched, candidate, capacity, count, chunkEnds) <= count)
             {
                 version = candidate;
                 break;
@@ -87,7 +99,7 @@ internal static class StructuredAppendPlanner
         // The floor is the bound's: the count fits at this version, so its average share is at most the capacity.
         var low = MinimumBudget(count, cheapest, charset);
         var high = Capacity(version, eccLevel);
-        BracketBalancedBudget(text, charset, utf8Bom, version, count, searched, singleMode, ref low, ref high);
+        BracketBalancedBudget(text, charset, utf8Bom, version, count, searched, singleMode, wholeTextPlans, ref low, ref high);
         while (low < high)
         {
             var middle = low + (high - low) / 2;
@@ -123,6 +135,31 @@ internal static class StructuredAppendPlanner
         => ChunkFloorBits(charset) + (cheapestPayloadBits + count - 1) / count;
 
     /// <summary>
+    /// Whether <paramref name="count"/> symbols of <paramref name="capacityBits"/> could hold the text, judged by the minimal plan for the whole of it at that version's count indicator widths.
+    /// </summary>
+    /// <remarks>
+    /// The segment plans of a split concatenate into one plan for the whole text at the same widths, so the chunks' plans cost at least <paramref name="wholeTextPlanBits"/> between them, and each chunk also pays the Structured Append and ECI headers; if even that total does not fit the count, no walk at this version can.
+    /// A lower bound, so it only rejects. <c>StructuredAppendPlannerTest</c> holds it to never refusing a count the walk reaches.
+    /// </remarks>
+    public static bool CanHoldPlanned(int capacityBits, int count, int wholeTextPlanBits, EciMode charset)
+        => wholeTextPlanBits >= ModeSegmenter.Unreachable
+            || (long)count * (capacityBits - HeaderBits - charset.GetStandardQrHeaderBits()) >= wholeTextPlanBits;
+
+    /// <summary>The minimal plan for the whole text at this version's count indicator widths, computed once per band into <paramref name="cache"/>.</summary>
+    /// <remarks>The widths are constant within the three ISO/IEC 18004 bands (1-9, 10-26, 27-40), so a band's cost holds for every version in it.</remarks>
+    private static int WholeTextPlanBits(ReadOnlySpan<char> text, EciMode charset, int version, Span<int> cache)
+    {
+        var band = version < 10 ? 0 : version < 27 ? 1 : 2;
+        if (cache[band] < 0)
+        {
+            cache[band] = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits,
+                EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
+                default, out _);
+        }
+        return cache[band];
+    }
+
+    /// <summary>
     /// Whether any chunk of this text could be cheaper as a mixed plan than as one run, which is what decides whether the searches have to consult the segmentation program at all.
     /// </summary>
     /// <remarks>
@@ -145,16 +182,14 @@ internal static class StructuredAppendPlanner
     /// Above: cutting the text into equal character counts is itself a split into this many chunks, so its fullest chunk is a budget that already holds them, and the answer is the smallest such budget. The capacity, which is where the search would otherwise start, sits a thousand bits above it, and that side is what dominates the range.
     /// Both cost one pass over the text and together leave a bracket tens of bits wide instead of thousands, so they pay for themselves several times over. They are taken only when a probe is itself a pass: under <see cref="QRSegmentation.Single"/>, and for content no plan can beat, a probe is arithmetic and the passes would cost more than the probes they save.
     /// </remarks>
-    private static void BracketBalancedBudget(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, int version, int count, QRSegmentation segmentation, EncodingMode singleMode, ref int low, ref int high)
+    private static void BracketBalancedBudget(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, int version, int count, QRSegmentation segmentation, EncodingMode singleMode, Span<int> wholeTextPlans, ref int low, ref int high)
     {
         if (segmentation != QRSegmentation.Optimal || text.IsEmpty || !QRSegmentPlanner.CanPlanBeatSingleMode(singleMode))
             return;
 
         var setHeaders = HeaderBits + charset.GetStandardQrHeaderBits();
 
-        var wholeText = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits,
-            EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
-            default, out _);
+        var wholeText = WholeTextPlanBits(text, charset, version, wholeTextPlans);
         if (wholeText < ModeSegmenter.Unreachable)
         {
             var floor = setHeaders + (wholeText + count - 1) / count;

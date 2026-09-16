@@ -85,6 +85,106 @@ public class StructuredAppendPlannerTest
     }
 
     [Test]
+    [Arguments("mixed", 900, QRSegmentation.Optimal)]
+    [Arguments("mixed", 900, QRSegmentation.Single)]
+    [Arguments("transitions", 900, QRSegmentation.Optimal)]
+    [Arguments("ascii", 600, QRSegmentation.Optimal)]
+    [Arguments("digits", 1201, QRSegmentation.Optimal)]
+    [Arguments("latin1", 329, QRSegmentation.Optimal)]
+    [Arguments("japanese", 67, QRSegmentation.Optimal)]
+    [Arguments("emoji", 120, QRSegmentation.Optimal)]
+    [Arguments("alnumDigitsThenJapanese", 400, QRSegmentation.Optimal)]
+    public async Task PlannedBound_NeverRejectsACountTheWalkReaches(string kind, int length, QRSegmentation segmentation)
+    {
+        // The planned bound gates the version scan, so wherever the walk reaches a count at a
+        // version, the bound built from the whole text's minimal plan at that version's widths
+        // must admit that count there; rejecting one would move the set to a larger version.
+        var text = Text(kind, length);
+        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
+        var ends = new int[StructuredAppendPlanner.MaxSymbols];
+
+        foreach (var ecc in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+        {
+            for (var version = 1; version <= 40; version++)
+            {
+                var capacity = StructuredAppendPlanner.Capacity(version, ecc);
+                var count = StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, capacity, int.MaxValue, ends);
+                if (count == int.MaxValue)
+                    continue;
+                var wholeText = ModeSegmenter.ComputeCosts(text, charset, 4,
+                    EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
+                    default, out _);
+
+                await Assert.That(StructuredAppendPlanner.CanHoldPlanned(capacity, count, wholeText, charset)).IsTrue()
+                    .Because($"the walk splits {kind} into {count} chunks at version {version}-{ecc} under {segmentation}");
+            }
+        }
+    }
+
+    [Test]
+    public async Task PlannedBound_RejectsVersionsTheRateBoundAdmits()
+    {
+        // On digit-and-word content the rate bound prices digits as if every one sat in a full
+        // Numeric group, so it admits versions no split can hold; the planned bound is the one
+        // that turns those away without walking them.
+        var text = Text("mixed", 3000);
+        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
+        var cheapest = StructuredAppendPlanner.CheapestPayloadBits(text, charset);
+        var ends = new int[StructuredAppendPlanner.MaxSymbols];
+        const int count = 4;
+
+        var turnedAway = 0;
+        for (var version = 1; version <= 40; version++)
+        {
+            var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
+            var wholeText = ModeSegmenter.ComputeCosts(text, charset, 4,
+                EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
+                default, out _);
+            if (!StructuredAppendPlanner.CanHold(capacity, count, cheapest, charset) || StructuredAppendPlanner.CanHoldPlanned(capacity, count, wholeText, charset))
+                continue;
+
+            turnedAway++;
+            await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, capacity, count, ends)).IsGreaterThan(count)
+                .Because($"version {version} was turned away, so the walk must agree it cannot hold {count}");
+        }
+
+        await Assert.That(turnedAway).IsGreaterThan(0);
+    }
+
+    [Test]
+    [Arguments("mixed", 600)]
+    [Arguments("mixed", 3000)]
+    [Arguments("transitions", 900)]
+    [Arguments("ascii", 2000)]
+    [Arguments("digits", 1201)]
+    [Arguments("japanese", 67)]
+    [Arguments("alnumDigitsThenJapanese", 400)]
+    public async Task Version_IsTheSmallestThatHoldsTheCount(string kind, int length)
+    {
+        // Every version below the one chosen must fail to hold the count, checked by the walk
+        // itself rather than by any bound, so a gate that turns away a version able to hold it
+        // shows up as a smaller version that fits.
+        var text = Text(kind, length);
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        var ends = new int[StructuredAppendPlanner.MaxSymbols];
+
+        foreach (var segmentation in new[] { QRSegmentation.Single, QRSegmentation.Optimal })
+        {
+            foreach (var ecc in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+            {
+                if (!StructuredAppendPlanner.TryPlan(text, ecc, analysis.EciMode, analysis.EncodingMode, false, segmentation, 1, 40, ends, out var count, out var version, out _) || count == 1)
+                    continue;
+
+                for (var lower = 1; lower < version; lower++)
+                {
+                    await Assert.That(StructuredAppendPlanner.CountChunks(text, analysis.EciMode, false, segmentation, lower, StructuredAppendPlanner.Capacity(lower, ecc), count, ends)).IsGreaterThan(count)
+                        .Because($"{kind} {length} in {segmentation} at {ecc}: version {lower} holds {count} but {version} was chosen");
+                }
+            }
+        }
+    }
+
+    [Test]
     public async Task Bound_RejectsACountNoSplitCanReach()
     {
         // 600 ASCII characters cost at least 600 x 8 bits in any mode; five version 1-M
