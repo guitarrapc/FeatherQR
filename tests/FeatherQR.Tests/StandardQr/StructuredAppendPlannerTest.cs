@@ -185,6 +185,49 @@ public class StructuredAppendPlannerTest
     }
 
     [Test]
+    [Arguments("mixed", 600)]
+    [Arguments("mixed", 3000)]
+    [Arguments("transitions", 900)]
+    [Arguments("ascii", 600)]
+    [Arguments("ascii", 2000)]
+    [Arguments("digits", 1201)]
+    [Arguments("latin1", 329)]
+    [Arguments("japanese", 67)]
+    [Arguments("emoji", 120)]
+    [Arguments("alnumDigitsThenJapanese", 400)]
+    public async Task Plan_ChunkEnds_AreTheWalkAtTheReturnedBudget(string kind, int length)
+    {
+        // The split handed back has to be the one the walk produces at the budget handed back,
+        // however the planner came by it: re-walked at the end, or kept from the search probe
+        // that settled the answer. Pinned versions and narrow ranges put the answer at the top
+        // of the bracket too, where no probe settles it.
+        var text = Text(kind, length);
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        var ends = new int[StructuredAppendPlanner.MaxSymbols];
+        var reference = new int[StructuredAppendPlanner.MaxSymbols];
+
+        foreach (var segmentation in new[] { QRSegmentation.Single, QRSegmentation.Optimal })
+        {
+            foreach (var ecc in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+            {
+                foreach (var (minVersion, maxVersion) in new[] { (1, 40), (1, 10), (10, 10), (27, 27), (40, 40) })
+                {
+                    Array.Fill(ends, -1);
+                    if (!StructuredAppendPlanner.TryPlan(text, ecc, analysis.EciMode, analysis.EncodingMode, false, segmentation, minVersion, maxVersion, ends, out var count, out var version, out var budget) || count == 1)
+                        continue;
+
+                    Array.Fill(reference, -1);
+                    var expected = StructuredAppendPlanner.CountChunks(text, analysis.EciMode, false, segmentation, version, budget, count, reference);
+
+                    var because = $"{kind} {length} in {segmentation} at {ecc}, versions {minVersion}-{maxVersion}";
+                    await Assert.That(count).IsEqualTo(expected).Because(because);
+                    await Assert.That(ends.Take(count)).IsEquivalentTo(reference.Take(expected)).Because(because);
+                }
+            }
+        }
+    }
+
+    [Test]
     public async Task Bound_RejectsACountNoSplitCanReach()
     {
         // 600 ASCII characters cost at least 600 x 8 bits in any mode; five version 1-M

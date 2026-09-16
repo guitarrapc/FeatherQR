@@ -100,16 +100,37 @@ internal static class StructuredAppendPlanner
         var low = MinimumBudget(count, cheapest, charset);
         var high = Capacity(version, eccLevel);
         BracketBalancedBudget(text, charset, utf8Bom, version, count, searched, singleMode, wholeTextPlans, ref low, ref high);
+        // The probe that last lowered the ceiling walked at the budget the search ends on, so its
+        // split is the answer's; a failing probe overwrites the caller's buffer, so it is kept aside.
+        Span<int> settledEnds = stackalloc int[MaxSymbols];
+        var settledBudget = -1;
+        var settledCount = 0;
         while (low < high)
         {
             var middle = low + (high - low) / 2;
-            if (CountChunks(text, charset, utf8Bom, searched, version, middle, count, chunkEnds) <= count)
+            var probed = CountChunks(text, charset, utf8Bom, searched, version, middle, count, chunkEnds);
+            if (probed <= count)
+            {
                 high = middle;
+                chunkEnds.Slice(0, probed).CopyTo(settledEnds);
+                settledBudget = middle;
+                settledCount = probed;
+            }
             else
+            {
                 low = middle + 1;
+            }
         }
 
         budgetBits = low;
+        if (settledBudget == low)
+        {
+            settledEnds.Slice(0, settledCount).CopyTo(chunkEnds);
+            chunkCount = settledCount;
+            return true;
+        }
+
+        // No probe settled it: the answer is the ceiling the bracket started from.
         chunkCount = CountChunks(text, charset, utf8Bom, searched, version, low, count, chunkEnds);
         return true;
     }
