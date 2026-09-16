@@ -67,10 +67,23 @@ internal static class ModeSegmenter
         var openAlnum = modeIndicatorBits + cciAlnum;
         var openByte = modeIndicatorBits + cciByte;
 
+        var byteOnly = false;
         for (var i = 0; i < text.Length; i++)
         {
-            Advance(text, i, charset, prev, cur, parents, track, openNumeric, openAlnum, openByte, allowAlnum, allowByte);
+            var isAlnum = CharacterSets.IsAlphanumeric(text[i]);
+            if (byteOnly && !isAlnum)
+            {
+                // Byte is the only mode that encodes this character and, after the last one,
+                // the only state still reachable, so the whole step is one addition.
+                prev[StateByte] += 8 * ByteCost(text, i, charset);
+                if (track)
+                    parents[(i * StateCount) + StateByte] = StateByte;
+                continue;
+            }
+
+            Advance(text, i, charset, isAlnum, prev, cur, parents, track, openNumeric, openAlnum, openByte, allowAlnum, allowByte);
             cur.CopyTo(prev);
+            byteOnly = allowByte && !isAlnum && prev[StateByte] < Unreachable;
         }
 
         return Best(prev, out finalState);
@@ -96,15 +109,30 @@ internal static class ModeSegmenter
         var openByte = modeIndicatorBits + cciByte;
 
         var fitted = 0;
+        var byteOnly = false;
         for (var i = 0; i < text.Length; i++)
         {
-            Advance(text, i, charset, prev, cur, default, false, openNumeric, openAlnum, openByte, allowAlnum: true, allowByte: true);
-            cur.CopyTo(prev);
+            var isAlnum = CharacterSets.IsAlphanumeric(text[i]);
+            int best;
+            if (byteOnly && !isAlnum)
+            {
+                // Only Byte encodes this character and only Byte was left reachable, so the
+                // cheapest state to end in is the one the addition lands on.
+                prev[StateByte] += 8 * ByteCost(text, i, charset);
+                best = prev[StateByte];
+            }
+            else
+            {
+                Advance(text, i, charset, isAlnum, prev, cur, default, false, openNumeric, openAlnum, openByte, allowAlnum: true, allowByte: true);
+                cur.CopyTo(prev);
+                byteOnly = !isAlnum && prev[StateByte] < Unreachable;
+                best = Best(prev, out _);
+            }
 
             if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
                 continue;
 
-            if (Best(prev, out _) > budgetBits)
+            if (best > budgetBits)
                 return fitted;
             fitted = i + 1;
         }
@@ -114,14 +142,14 @@ internal static class ModeSegmenter
 
     /// <summary>One character of the program: the costs of reaching every state after <c>text[i]</c>, from the costs before it.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void Advance(ReadOnlySpan<char> text, int i, EciMode charset, ReadOnlySpan<int> prev, Span<int> cur, Span<byte> parents, bool track, int openNumeric, int openAlnum, int openByte, bool allowAlnum, bool allowByte)
+    private static void Advance(ReadOnlySpan<char> text, int i, EciMode charset, bool isAlnum, ReadOnlySpan<int> prev, Span<int> cur, Span<byte> parents, bool track, int openNumeric, int openAlnum, int openByte, bool allowAlnum, bool allowByte)
     {
         for (var s = 0; s < StateCount; s++)
             cur[s] = Unreachable;
 
         var c = text[i];
-        var isNumeric = CharacterSets.IsNumeric(c);
-        var isAlnum = CharacterSets.IsAlphanumeric(c);
+        // Every digit is in the alphanumeric alphabet, so a character outside it is neither.
+        var isNumeric = isAlnum && CharacterSets.IsNumeric(c);
         var byteBits = 8 * ByteCost(text, i, charset);
         var parentBase = i * StateCount;
 
