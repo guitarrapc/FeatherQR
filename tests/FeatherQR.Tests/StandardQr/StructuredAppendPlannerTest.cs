@@ -19,6 +19,23 @@ public class StructuredAppendPlannerTest
     [Arguments("japanese", 67, QREccLevel.M, 1, 5, QRSegmentation.Single)]
     [Arguments("mixed", 600, QREccLevel.M, 1, 6, QRSegmentation.Optimal)]
     [Arguments("ascii", 600, QREccLevel.Q, 3, 9, QRSegmentation.Single)]
+    // Under Optimal the count, the version and the bracket come from one walk near the plan's
+    // floor. Content whose density varies along the text, ranges that cross a count indicator
+    // band (9/10, 26/27), and content whose characters are too wide for the walk's first margin
+    // (a pair is 32 bits that cannot be cut, so the balanced budget sits 32 to 47 bits above the
+    // floor and the widening steps run) are where a shortcut that was only right on periodic
+    // content would show.
+    [Arguments("mixed", 20000, QREccLevel.L, 1, 40, QRSegmentation.Optimal)]
+    [Arguments("digitsThenMixed", 20000, QREccLevel.L, 1, 40, QRSegmentation.Optimal)]
+    [Arguments("digitsThenMixed", 3000, QREccLevel.L, 1, 10, QRSegmentation.Optimal)]
+    [Arguments("proseThenDigits", 2500, QREccLevel.L, 5, 9, QRSegmentation.Optimal)]
+    [Arguments("randomRuns", 4000, QREccLevel.L, 9, 12, QRSegmentation.Optimal)]
+    [Arguments("randomRuns", 4000, QREccLevel.H, 10, 26, QRSegmentation.Optimal)]
+    [Arguments("randomRuns", 9000, QREccLevel.L, 26, 28, QRSegmentation.Optimal)]
+    [Arguments("emojiDigits", 393, QREccLevel.H, 1, 10, QRSegmentation.Optimal)]
+    [Arguments("emojiDigits", 578, QREccLevel.H, 9, 12, QRSegmentation.Optimal)]
+    [Arguments("emojiDigits", 1022, QREccLevel.H, 1, 10, QRSegmentation.Optimal)]
+    [Arguments("emojiDigits", 1244, QREccLevel.H, 26, 28, QRSegmentation.Optimal)]
     public async Task Plan_IsFewestSymbolsAtTheSmallestVersionWithTheSmallestBudget(string kind, int length, QREccLevel ecc, int minVersion, int maxVersion, QRSegmentation segmentation)
     {
         var text = Text(kind, length);
@@ -454,8 +471,32 @@ public class StructuredAppendPlannerTest
 
     private static string Text(string kind, int length)
     {
+        // Content whose density changes along the text: an even cut by characters is far from
+        // balanced on it, so nothing that assumes periodic content survives these.
+        if (kind == "digitsThenMixed")
+            return Text("digits", length / 2) + Text("mixed", length - length / 2);
+        if (kind == "proseThenDigits")
+            return Text("ascii", length / 2) + Text("digits", length - length / 2);
+        if (kind == "randomRuns")
+        {
+            // Runs of one class each (digits, upper-case alphanumerics, lower-case and punctuation), 1 to 39 long.
+            const string alphabet = "0123456789012345678901234567ABCDEF abcdefghijklmnop.,-:";
+            var random = new Random(20260917);
+            var runs = new StringBuilder(length + 40);
+            while (runs.Length < length)
+            {
+                var run = random.Next(1, 40);
+                var from = random.Next(3) switch { 0 => 0, 1 => 28, _ => 35 };
+                var span = from == 0 ? 28 : from == 28 ? 7 : alphabet.Length - 35;
+                for (var i = 0; i < run; i++)
+                    runs.Append(alphabet[from + random.Next(span)]);
+            }
+            return runs.ToString(0, length);
+        }
+
         var unit = kind switch
         {
+            "emojiDigits" => "🎉1234",
             "digits" => "0123456789",
             "latin1" => "Crème brûlée à la carte, jalapeño, naïve café. ",
             "japanese" => "こんにちは世界、QRコードの分割テストです。",

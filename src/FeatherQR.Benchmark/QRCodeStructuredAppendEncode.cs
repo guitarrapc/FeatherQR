@@ -18,6 +18,8 @@ using System.Text;
 ///                     plan than one run, so the Optimal arm should cost what Single does
 ///   mixed-40k-any   : order lines, letters and digit runs, 14 symbols; the content a mixed
 ///                     plan is for, so the Optimal arm both plans and pays for it
+///   uneven-40k-any  : 20k digits then 20k of the same order lines, 10 symbols; content whose density
+///                     changes along the text, where a split even in characters is far from even in cost
 ///   utf8-15k-any    : Japanese prose behind a UTF-8 ECI, 15 symbols; multi-byte cost model
 ///   *-boost         : the same prose and digits with BoostEccLevel, which re-costs every
 ///                     chunk once per level it tries; the baseline encodes its symbols at
@@ -31,7 +33,7 @@ public class QRCodeStructuredAppendEncode
     private static readonly string[] shapeKeys =
     [
         "byte-45k-any", "byte-45k-v40", "byte-4k-max10",
-        "numeric-100k-any", "mixed-40k-any", "utf8-15k-any",
+        "numeric-100k-any", "mixed-40k-any", "uneven-40k-any", "utf8-15k-any",
         "byte-45k-boost", "numeric-100k-boost",
     ];
 
@@ -57,6 +59,7 @@ public class QRCodeStructuredAppendEncode
             "byte-4k-max10" => (Repeat("The quick brown fox jumps over the lazy dog. ", 4_000), QRVersionRange.AtMost(10), false),
             "numeric-100k-any" => (Repeat("0123456789", 100_000), QRVersionRange.Any, false),
             "mixed-40k-any" => (Repeat("order 20260915 item 0000123456 qty 42 ", 40_000), QRVersionRange.Any, false),
+            "uneven-40k-any" => (Repeat("0123456789", 20_000) + Repeat("order 20260915 item 0000123456 qty 42 ", 20_000), QRVersionRange.Any, false),
             "utf8-15k-any" => (Repeat("こんにちは世界、QRコードの分割テストです。", 15_000), QRVersionRange.Any, false),
             "byte-45k-boost" => (Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRVersionRange.Any, true),
             "numeric-100k-boost" => (Repeat("0123456789", 100_000), QRVersionRange.Any, true),

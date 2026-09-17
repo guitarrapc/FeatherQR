@@ -7,7 +7,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// Every symbol pays the 20-bit header and, when the set carries a charset, its own ECI header, so a symbol's payload budget is the version's data capacity less those; a chunk's cost is what the single-mode stream needs, or under <see cref="QRSegmentation.Optimal"/> the cheaper of that and the minimal mixed plan.
-/// Cost is monotone in the chunk's length (a longer prefix never plans cheaper), so the longest chunk that fits a budget is well defined and found in one forward step (<see cref="LongestChunkEnd"/>), and a greedy walk at a budget gives the symbol count that budget needs. The three steps of the split are three searches over that count.
+/// Cost is monotone in the chunk's length (a longer prefix never plans cheaper), so the longest chunk that fits a budget is well defined and found in one forward step (<see cref="LongestChunkEnd"/>), and a greedy walk at a budget gives the symbol count that budget needs. The three steps of the split are three searches over that count. Under Optimal a walk is a pass of the segmentation program, so one walk near the plan's floor settles the count, the versions of its count indicator band and the ceiling of the budget search at once.
 /// A walk stops once it passes the count it is asked about, and a lower bound on what any split costs (<see cref="CanHold"/>) keeps the searches off versions and budgets that cannot hold the count.
 /// Splits fall on <c>char</c> boundaries and never inside a surrogate pair. Design and the rules behind it: specs/standardqr-encoder.md.
 /// </remarks>
@@ -25,6 +25,15 @@ internal static class StructuredAppendPlanner
     private const int MinCountIndicatorBits = 8;
 
     private const int Impossible = int.MaxValue;
+
+    /// <summary>
+    /// How far above the plan's floor (the headers plus the count's share of the whole text's minimal plan) the walk that settles the count is placed.
+    /// </summary>
+    /// <remarks>
+    /// The balanced budget sits 3 to 22 bits above that floor on every content measured, periodic or not: what separates them is one chunk's rounding and a run header or two at the cuts, not the content. 31 keeps the bracket under it at five probes.
+    /// Not a correctness parameter: a walk that fails at it falls back to the walk at the capacity, and the search runs from there.
+    /// </remarks>
+    private const int FloorMarginBits = 31;
 
     /// <summary>
     /// Plans the split. <paramref name="chunkEnds"/> receives the end offset of each chunk (at least <see cref="MaxSymbols"/> entries); <paramref name="chunkCount"/> is 1 when the text fits one symbol within the range, in which case nothing else is planned.
@@ -57,11 +66,93 @@ internal static class StructuredAppendPlanner
             ? QRSegmentation.Optimal
             : QRSegmentation.Single;
 
-        // Fewest symbols, reached at the largest version.
         var largest = Capacity(maxVersion, eccLevel);
         if (!CanHold(largest, MaxSymbols, cheapest, charset))
             return false;
-        var count = CountChunks(text, charset, utf8Bom, searched, maxVersion, largest, MaxSymbols, chunkEnds);
+
+        // The minimal plan for the whole text, per count indicator band, taken on first use and
+        // shared by the count, the version scan and the budget search.
+        Span<int> wholeTextPlans = stackalloc int[3];
+        wholeTextPlans.Fill(-1);
+        // The walk that last held the count: its split is the answer's when the search ends on its
+        // budget; a failing probe overwrites the caller's buffer, so it is kept aside.
+        Span<int> settledEnds = stackalloc int[MaxSymbols];
+        var settledBudget = -1;
+        var settledCount = 0;
+        var settledBand = -1;
+        // A budget known not to hold refusedCount chunks at refusedBand's widths.
+        var refusedBudget = -1;
+        var refusedBand = -1;
+        var refusedCount = 0;
+        var setHeaders = HeaderBits + charset.GetStandardQrHeaderBits();
+
+        // Fewest symbols, reached at the largest version. Under Optimal a walk is a pass of the
+        // segmentation program, so the count is settled by one walk placed where it also serves
+        // the two searches after it, instead of a walk at the capacity.
+        var count = -1;
+        if (searched == QRSegmentation.Optimal)
+        {
+            // One single-mode stream that fits is the walk's own closed form; the program is never asked.
+            var bom = utf8Bom && charset == EciMode.Utf8;
+            if (text.Length <= QRSegmentPlanner.MaxPlannableChars
+                && SingleModeLength(text, charset, maxVersion, bom, largest - setHeaders - ModeIndicatorBits, out _, out _) == text.Length)
+            {
+                chunkEnds[0] = text.Length;
+                chunkCount = 1;
+                version = maxVersion;
+                return true;
+            }
+
+            // The chunks' plans cost at least the whole text's plan between them, so the count is
+            // at least fewest; a walk near the plan's floor that holds fewest chunks therefore
+            // settles it, and measured balanced budgets sit within FloorMarginBits of that floor.
+            var whole = WholeTextPlanBits(text, charset, maxVersion, wholeTextPlans);
+            var perSymbol = largest - setHeaders;
+            if (whole < ModeSegmenter.Unreachable && perSymbol > 0)
+            {
+                var fewest = (int)(((long)whole + perSymbol - 1) / perSymbol);
+                if (fewest > MaxSymbols)
+                    return false;
+                if (fewest <= 1)
+                {
+                    // One chunk's plan is the whole text's, unless a byte order mark forces its
+                    // single-mode stream or it is past what any plan covers.
+                    if (!bom && text.Length <= QRSegmentPlanner.MaxPlannableChars && whole + setHeaders <= largest)
+                    {
+                        chunkEnds[0] = text.Length;
+                        count = 1;
+                    }
+                }
+                else
+                {
+                    // Attempted only with headroom: when the bound's count leaves each symbol less than
+                    // two margins of slack, packing losses usually put it out of reach and the walk
+                    // would be wasted, so the walk at the capacity counts as it always did.
+                    var target = setHeaders + (whole + fewest - 1) / fewest + FloorMarginBits;
+                    if (target + FloorMarginBits < largest)
+                    {
+                        var probed = CountChunks(text, charset, utf8Bom, searched, maxVersion, target, fewest, chunkEnds);
+                        if (probed <= fewest)
+                        {
+                            count = probed;
+                            chunkEnds.Slice(0, probed).CopyTo(settledEnds);
+                            settledBudget = target;
+                            settledCount = probed;
+                            settledBand = Band(maxVersion);
+                        }
+                        else
+                        {
+                            refusedBudget = target;
+                            refusedBand = Band(maxVersion);
+                            refusedCount = fewest;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (count < 0)
+            count = CountChunks(text, charset, utf8Bom, searched, maxVersion, largest, MaxSymbols, chunkEnds);
         if (count > MaxSymbols)
             return false;
         if (count == 1)
@@ -71,23 +162,28 @@ internal static class StructuredAppendPlanner
             return true;
         }
 
-        // The minimal plan for the whole text, per count indicator band, taken on first use and
-        // shared by the version scan and the budget bracket.
-        Span<int> wholeTextPlans = stackalloc int[3];
-        wholeTextPlans.Fill(-1);
-
         // Smallest version that still holds that many; a version the bounds rule out is not walked.
         // Under Optimal a walk is a pass over the text, so a version the rate bound admits is also
         // checked against the whole text's minimal plan, which on mixed content is thousands of
-        // bits nearer the truth and turns away the versions just below the answer.
+        // bits nearer the truth and turns away the versions just below the answer; and a version
+        // whose capacity holds the settled walk's budget at the same count indicator widths holds
+        // that very split, so it is not walked either.
         version = maxVersion;
         for (var candidate = minVersion; candidate < maxVersion; candidate++)
         {
             var capacity = Capacity(candidate, eccLevel);
             if (!CanHold(capacity, count, cheapest, charset))
                 continue;
-            if (searched == QRSegmentation.Optimal && !CanHoldPlanned(capacity, count, WholeTextPlanBits(text, charset, candidate, wholeTextPlans), charset))
-                continue;
+            if (searched == QRSegmentation.Optimal)
+            {
+                if (!CanHoldPlanned(capacity, count, WholeTextPlanBits(text, charset, candidate, wholeTextPlans), charset))
+                    continue;
+                if (settledBudget >= 0 && settledBand == Band(candidate) && settledBudget <= capacity)
+                {
+                    version = candidate;
+                    break;
+                }
+            }
             if (CountChunks(text, charset, utf8Bom, searched, candidate, capacity, count, chunkEnds) <= count)
             {
                 version = candidate;
@@ -99,12 +195,55 @@ internal static class StructuredAppendPlanner
         // The floor is the bound's: the count fits at this version, so its average share is at most the capacity.
         var low = MinimumBudget(count, cheapest, charset);
         var high = Capacity(version, eccLevel);
-        BracketBalancedBudget(text, charset, utf8Bom, version, count, searched, singleMode, wholeTextPlans, ref low, ref high);
-        // The probe that last lowered the ceiling walked at the budget the search ends on, so its
-        // split is the answer's; a failing probe overwrites the caller's buffer, so it is kept aside.
-        Span<int> settledEnds = stackalloc int[MaxSymbols];
-        var settledBudget = -1;
-        var settledCount = 0;
+        if (searched == QRSegmentation.Optimal)
+        {
+            // Under Optimal a probe is a pass, so the bracket is the exact cost model's: below, a
+            // split costs at least the whole text's plan, so its fullest chunk is at least the
+            // average of that plus the headers every symbol pays; above, the settled walk's budget.
+            var answerBand = Band(version);
+            var wholeText = WholeTextPlanBits(text, charset, version, wholeTextPlans);
+            if (wholeText < ModeSegmenter.Unreachable)
+                low = Math.Max(low, setHeaders + (wholeText + count - 1) / count);
+
+            if (refusedBudget >= low && refusedBand == answerBand && refusedCount == count)
+                low = refusedBudget + 1;
+
+            if (settledBudget >= 0 && settledBand == answerBand && settledBudget <= high)
+            {
+                high = settledBudget;
+            }
+            else
+            {
+                settledBudget = -1;
+
+                // No walk has bracketed this band yet: the probes open from the floor, where the
+                // answer is, in widening steps, not from the middle of a bracket that ends at the
+                // capacity. Content whose characters are wide (a surrogate pair is 32 bits that
+                // cannot be cut) sits 32 to 47 bits above its floor, so the second step keeps the
+                // first margin; each step that fails raises the floor.
+                var margin = FloorMarginBits;
+                var widened = false;
+                while (low + margin < high)
+                {
+                    var target = low + margin;
+                    var probed = CountChunks(text, charset, utf8Bom, searched, version, target, count, chunkEnds);
+                    if (probed <= count)
+                    {
+                        high = target;
+                        chunkEnds.Slice(0, probed).CopyTo(settledEnds);
+                        settledBudget = target;
+                        settledCount = probed;
+                        break;
+                    }
+
+                    low = target + 1;
+                    if (widened)
+                        margin = margin * 3 + 2;
+                    widened = true;
+                }
+            }
+        }
+
         while (low < high)
         {
             var middle = low + (high - low) / 2;
@@ -170,7 +309,7 @@ internal static class StructuredAppendPlanner
     /// <remarks>The widths are constant within the three ISO/IEC 18004 bands (1-9, 10-26, 27-40), so a band's cost holds for every version in it.</remarks>
     private static int WholeTextPlanBits(ReadOnlySpan<char> text, EciMode charset, int version, Span<int> cache)
     {
-        var band = version < 10 ? 0 : version < 27 ? 1 : 2;
+        var band = Band(version);
         if (cache[band] < 0)
         {
             cache[band] = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits,
@@ -195,48 +334,8 @@ internal static class StructuredAppendPlanner
         return QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun);
     }
 
-    /// <summary>
-    /// Narrows the bracket the balanced budget is searched in, at a known version, using the exact cost model instead of the rate bounds the version scan works from.
-    /// </summary>
-    /// <remarks>
-    /// Below: the segment plans of a split concatenate into one plan for the whole text, so a split costs at least the minimal plan for the whole of it and its fullest chunk is at least the average of that, plus the headers every symbol pays. The cheapest-rate bound prices a lowercase letter as if some mode held it in five and a half bits, which on prose sits nearly two thousand bits under the answer.
-    /// Above: cutting the text into equal character counts is itself a split into this many chunks, so its fullest chunk is a budget that already holds them, and the answer is the smallest such budget. The capacity, which is where the search would otherwise start, sits a thousand bits above it, and that side is what dominates the range.
-    /// Both cost one pass over the text and together leave a bracket tens of bits wide instead of thousands, so they pay for themselves several times over. They are taken only when a probe is itself a pass: under <see cref="QRSegmentation.Single"/>, and for content no plan can beat, a probe is arithmetic and the passes would cost more than the probes they save.
-    /// </remarks>
-    private static void BracketBalancedBudget(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, int version, int count, QRSegmentation segmentation, EncodingMode singleMode, Span<int> wholeTextPlans, ref int low, ref int high)
-    {
-        if (segmentation != QRSegmentation.Optimal || text.IsEmpty || !QRSegmentPlanner.CanPlanBeatSingleMode(singleMode))
-            return;
-
-        var setHeaders = HeaderBits + charset.GetStandardQrHeaderBits();
-
-        var wholeText = WholeTextPlanBits(text, charset, version, wholeTextPlans);
-        if (wholeText < ModeSegmenter.Unreachable)
-        {
-            var floor = setHeaders + (wholeText + count - 1) / count;
-            if (floor > low)
-                low = floor;
-        }
-
-        var ceiling = 0;
-        var start = 0;
-        for (var i = 1; i <= count; i++)
-        {
-            var end = i == count ? text.Length : EvenCut(text, (int)((long)text.Length * i / count));
-            if (end <= start)
-                continue;
-            var bits = ChunkBits(text.Slice(start, end - start), charset, version, segmentation, utf8Bom && start == 0);
-            if (bits > ceiling)
-                ceiling = bits;
-            start = end;
-        }
-        if (start == text.Length && ceiling > low && ceiling < high)
-            high = ceiling;
-    }
-
-    /// <summary>An even cut that would land inside a surrogate pair moves past it, so no chunk of the constructed split ever splits one.</summary>
-    private static int EvenCut(ReadOnlySpan<char> text, int end)
-        => end > 0 && end < text.Length && char.IsLowSurrogate(text[end]) && char.IsHighSurrogate(text[end - 1]) ? end + 1 : end;
+    /// <summary>The count indicator band of a version (1-9, 10-26, 27-40): a chunk's cost depends on the version only through it, so a split priced in one band holds for every version of that band whose capacity holds its budget.</summary>
+    private static int Band(int version) => version < 10 ? 0 : version < 27 ? 1 : 2;
 
     /// <summary>Bits every symbol of a set pays before its first payload bit, at the narrowest widths any version has.</summary>
     private static int ChunkFloorBits(EciMode charset) => HeaderBits + charset.GetStandardQrHeaderBits() + ModeIndicatorBits + MinCountIndicatorBits;
