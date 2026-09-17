@@ -45,8 +45,8 @@ internal static class ModeSegmenter
     private const int StateStart = 6;
 
     // Character classes of the table below; 1 is the alphanumeric alphabet outside the digits.
-    private const int ClassOther = 0;
-    private const int ClassDigit = 2;
+    internal const int ClassOther = 0;
+    internal const int ClassDigit = 2;
 
     // Cheapest bits a single character can cost in any mode, in sixths so the numeric
     // and alphanumeric packing rates stay exact: 10 bits per 3 digits, 11 per 2
@@ -70,7 +70,7 @@ internal static class ModeSegmenter
     ];
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int ClassOf(char c) => c < characterClass.Length ? characterClass[c] : ClassOther;
+    internal static int ClassOf(char c) => c < characterClass.Length ? characterClass[c] : ClassOther;
 
     /// <summary>
     /// Minimal payload bits (excluding any ECI prefix) for the content at the given mode indicator and count indicator widths, or a value at or above <see cref="Unreachable"/> when a character has no allowed mode.
@@ -687,7 +687,7 @@ internal static class ModeSegmenter
     /// Encoded byte length of one character in Byte mode.
     /// Latin-1 charsets are one byte per character; UTF-8 mirrors what <see cref="Encoding.UTF8"/> emits, including its greedy surrogate pairing (a paired high surrogate carries all four bytes and its low surrogate none, an unpaired surrogate costs the three bytes of the replacement character).
     /// </summary>
-    private static int ByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
+    internal static int ByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
     {
         if (charset != EciMode.Utf8)
             return 1;

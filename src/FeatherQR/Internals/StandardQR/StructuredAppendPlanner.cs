@@ -11,7 +11,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// A walk stops once it passes the count it is asked about, and a lower bound on what any split costs (<see cref="CanHold"/>) keeps the searches off versions and budgets that cannot hold the count.
 /// Splits fall on <c>char</c> boundaries and never inside a surrogate pair. Design and the rules behind it: specs/standardqr-encoder.md.
 /// </remarks>
-internal static class StructuredAppendPlanner
+internal static partial class StructuredAppendPlanner
 {
     /// <summary>Mode indicator, position, count and parity (ISO/IEC 18004 Structured Append).</summary>
     public const int HeaderBits = 20;
@@ -40,6 +40,12 @@ internal static class StructuredAppendPlanner
     /// Returns <c>false</c> when the text needs more than sixteen symbols at <paramref name="maxVersion"/>, or some single character cannot fit a symbol there.
     /// </summary>
     public static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits)
+        => TryPlan(text, eccLevel, charset, singleMode, utf8Bom, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, allowLanes: true);
+
+    /// <summary>
+    /// <see cref="TryPlan(ReadOnlySpan{char}, QREccLevel, EciMode, EncodingMode, bool, QRSegmentation, int, int, Span{int}, out int, out int, out int)"/> with the choice of walking several budgets at once left to the caller; the plan is the same either way, which is what <c>StructuredAppendPlannerTest</c> holds it to.
+    /// </summary>
+    internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, bool allowLanes)
     {
         chunkCount = 0;
         version = 0;
@@ -80,11 +86,17 @@ internal static class StructuredAppendPlanner
         var settledBudget = -1;
         var settledCount = 0;
         var settledBand = -1;
-        // A budget known not to hold refusedCount chunks at refusedBand's widths.
-        var refusedBudget = -1;
-        var refusedBand = -1;
-        var refusedCount = 0;
+        // The walk that last failed to hold failedCount chunks at failedBand's widths, and its first
+        // failedCount ends: a floor for the budget, and with the settled walk what a probe between
+        // the two can skip.
+        Span<int> failedEnds = stackalloc int[MaxSymbols];
+        var failedBudget = -1;
+        var failedBand = -1;
+        var failedCount = 0;
         var setHeaders = HeaderBits + charset.GetStandardQrHeaderBits();
+        // Several budgets walked at once, where that pays: not under a byte order mark, whose
+        // first chunk is priced by its own rule.
+        var lanes = allowLanes && searched == QRSegmentation.Optimal && !(utf8Bom && charset == EciMode.Utf8);
 
         // Fewest symbols, reached at the largest version. Under Optimal a walk is a pass of the
         // segmentation program, so the count is settled by one walk placed where it also serves
@@ -128,23 +140,43 @@ internal static class StructuredAppendPlanner
                     // Attempted only with headroom: when the bound's count leaves each symbol less than
                     // two margins of slack, packing losses usually put it out of reach and the walk
                     // would be wasted, so the walk at the capacity counts as it always did.
-                    var target = setHeaders + (whole + fewest - 1) / fewest + FloorMarginBits;
+                    var floor = setHeaders + (whole + fewest - 1) / fewest;
+                    var target = floor + FloorMarginBits;
                     if (target + FloorMarginBits < largest)
                     {
-                        var probed = CountChunks(text, charset, utf8Bom, searched, maxVersion, target, fewest, chunkEnds);
-                        if (probed <= fewest)
+                        int unusedLow = floor, unusedHigh = largest;
+                        if (lanes && TryNarrowWithLanes(text, charset, maxVersion, floor, largest, fewest, ref unusedLow, ref unusedHigh, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget, fromFloor: true))
                         {
-                            count = probed;
-                            chunkEnds.Slice(0, probed).CopyTo(settledEnds);
-                            settledBudget = target;
-                            settledCount = probed;
-                            settledBand = Band(maxVersion);
+                            // Eight walks from the floor at once: the cheapest that holds the bound's
+                            // count settles it, and the one below it is the failed neighbour.
+                            if (settledBudget >= 0)
+                            {
+                                count = settledCount;
+                                settledBand = Band(maxVersion);
+                            }
                         }
                         else
                         {
-                            refusedBudget = target;
-                            refusedBand = Band(maxVersion);
-                            refusedCount = fewest;
+                            var probed = CountChunks(text, charset, utf8Bom, searched, maxVersion, target, fewest, chunkEnds);
+                            if (probed <= fewest)
+                            {
+                                count = probed;
+                                chunkEnds.Slice(0, probed).CopyTo(settledEnds);
+                                settledBudget = target;
+                                settledCount = probed;
+                                settledBand = Band(maxVersion);
+                            }
+                            else if (probed == fewest + 1)
+                            {
+                                chunkEnds.Slice(0, fewest).CopyTo(failedEnds);
+                                failedBudget = target;
+                            }
+                        }
+
+                        if (failedBudget >= 0)
+                        {
+                            failedBand = Band(maxVersion);
+                            failedCount = fewest;
                         }
                     }
                 }
@@ -205,8 +237,11 @@ internal static class StructuredAppendPlanner
             if (wholeText < ModeSegmenter.Unreachable)
                 low = Math.Max(low, setHeaders + (wholeText + count - 1) / count);
 
-            if (refusedBudget >= low && refusedBand == answerBand && refusedCount == count)
-                low = refusedBudget + 1;
+            // A failed walk is a floor for its own count and band only.
+            if (failedBand != answerBand || failedCount != count)
+                failedBudget = -1;
+            else if (failedBudget >= low)
+                low = failedBudget + 1;
 
             if (settledBudget >= 0 && settledBand == answerBand && settledBudget <= high)
             {
@@ -216,14 +251,18 @@ internal static class StructuredAppendPlanner
             {
                 settledBudget = -1;
 
-                // No walk has bracketed this band yet: the probes open from the floor, where the
-                // answer is, in widening steps, not from the middle of a bracket that ends at the
-                // capacity. Content whose characters are wide (a surrogate pair is 32 bits that
-                // cannot be cut) sits 32 to 47 bits above its floor, so the second step keeps the
-                // first margin; each step that fails raises the floor.
+                // No walk has bracketed this band yet: the bracket opens from the floor, where the
+                // answer is, not from the middle of one that ends at the capacity; in one batch of
+                // lanes where they pay, else by probes in widening steps. Content whose characters
+                // are wide (a surrogate pair is 32 bits that cannot be cut) sits 32 to 47 bits above
+                // its floor, so the second step keeps the first margin; each step that fails raises
+                // the floor.
+                if (lanes)
+                    TryNarrowWithLanes(text, charset, version, low, high, count, ref low, ref high, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget, fromFloor: true);
+
                 var margin = FloorMarginBits;
                 var widened = false;
-                while (low + margin < high)
+                while (settledBudget < 0 && low + margin < high)
                 {
                     var target = low + margin;
                     var probed = CountChunks(text, charset, utf8Bom, searched, version, target, count, chunkEnds);
@@ -236,6 +275,13 @@ internal static class StructuredAppendPlanner
                         break;
                     }
 
+                    if (probed == count + 1)
+                    {
+                        chunkEnds.Slice(0, count).CopyTo(failedEnds);
+                        failedBudget = target;
+                        failedBand = answerBand;
+                        failedCount = count;
+                    }
                     low = target + 1;
                     if (widened)
                         margin = margin * 3 + 2;
@@ -244,10 +290,34 @@ internal static class StructuredAppendPlanner
             }
         }
 
+        // Under Optimal the rest of the bracket is walked eight budgets at a time, each batch leaving
+        // at most the gap between two of its budgets; what is left of it is bisected.
+        if (lanes)
+        {
+            while (high - low >= 2
+                && TryNarrowWithLanes(text, charset, version, low, high, count, ref low, ref high, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget))
+            {
+            }
+        }
+
         while (low < high)
         {
             var middle = low + (high - low) / 2;
-            var probed = CountChunks(text, charset, utf8Bom, searched, version, middle, count, chunkEnds);
+
+            // A chunk's end is monotone in the budget, so from one start a walk between a failed
+            // budget and a held one ends its chunk between theirs: the leading chunks those two
+            // walks share are this probe's too, and it resumes after them. No chunk's cost is needed.
+            var shared = searched == QRSegmentation.Optimal
+                ? SharedChunks(settledEnds, settledBudget, settledCount, failedEnds, failedBudget, count, middle)
+                : 0;
+            var start = 0;
+            if (shared > 0)
+            {
+                settledEnds.Slice(0, shared).CopyTo(chunkEnds);
+                start = settledEnds[shared - 1];
+            }
+
+            var probed = CountChunks(text, charset, utf8Bom, searched, version, middle, count, chunkEnds, shared, start);
             if (probed <= count)
             {
                 high = middle;
@@ -258,6 +328,11 @@ internal static class StructuredAppendPlanner
             else
             {
                 low = middle + 1;
+                if (searched == QRSegmentation.Optimal && probed == count + 1)
+                {
+                    chunkEnds.Slice(0, count).CopyTo(failedEnds);
+                    failedBudget = middle;
+                }
             }
         }
 
@@ -332,6 +407,20 @@ internal static class StructuredAppendPlanner
 
         ModeSegmenter.LongestDenseRuns(text, out var numericRun, out var alnumRun);
         return QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun);
+    }
+
+    /// <summary>
+    /// How many leading chunks a walk at <paramref name="budget"/> shares with the held walk above it and the failed walk below it: those on which the two agree. 0 when either is missing.
+    /// </summary>
+    private static int SharedChunks(ReadOnlySpan<int> settledEnds, int settledBudget, int settledCount, ReadOnlySpan<int> failedEnds, int failedBudget, int count, int budget)
+    {
+        if (settledBudget < budget || failedBudget < 0 || failedBudget > budget)
+            return 0;
+        var shared = 0;
+        var limit = Math.Min(settledCount, count);
+        while (shared < limit && settledEnds[shared] == failedEnds[shared])
+            shared++;
+        return shared;
     }
 
     /// <summary>The count indicator band of a version (1-9, 10-26, 27-40): a chunk's cost depends on the version only through it, so a split priced in one band holds for every version of that band whose capacity holds its budget.</summary>
@@ -432,9 +521,11 @@ internal static class StructuredAppendPlanner
     /// <see cref="Impossible"/> when some single character does not fit the budget.
     /// </summary>
     internal static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds)
+        => CountChunks(text, charset, utf8Bom, segmentation, version, budgetBits, limit, chunkEnds, 0, 0);
+
+    /// <summary>The walk resumed: <paramref name="count"/> chunks are already in <paramref name="chunkEnds"/> and the next starts at <paramref name="start"/>.</summary>
+    private static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds, int count, int start)
     {
-        var count = 0;
-        var start = 0;
         while (start < text.Length)
         {
             if (count == limit)

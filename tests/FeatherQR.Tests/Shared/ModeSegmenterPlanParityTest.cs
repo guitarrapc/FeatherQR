@@ -23,6 +23,9 @@ public class ModeSegmenterPlanParityTest
     private const int States = 7;
     private const int Unreachable = int.MaxValue / 4;
 
+    // U+FEFF, spelled out: as a literal it is invisible in the source.
+    private static readonly string Bom = ((char)0xFEFF).ToString();
+
     public static IEnumerable<(int CciNumeric, int CciAlnum, int CciByte)> Widths() =>
     [
         (10, 9, 8),
@@ -51,7 +54,7 @@ public class ModeSegmenterPlanParityTest
             ("pair", "😀"),
             ("lone-high", "\ud83d"),
             ("lone-low", "\ude00"),
-            ("bom", "﻿"),
+            ("bom", Bom),
             ("digits", "0123456789"),
             ("alnum", "HELLO WORLD $%*+-./:"),
             ("mixed-runs", "order 20260915 item 0000123456 qty 42 "),
@@ -64,7 +67,7 @@ public class ModeSegmenterPlanParityTest
             ("digits-then-byte", "1234567890123456" + new string('z', 40)),
             ("byte-then-digits", new string('z', 40) + "1234567890123456"),
             ("runs-with-pairs", "abc😀123\ud83dABC\ude00xyz"),
-            ("bom-inside-runs", "x﻿y 123 ﻿456"),
+            ("bom-inside-runs", "x" + Bom + "y 123 " + Bom + "456"),
             ("pair-at-run-edges", "😀A😀1😀"),
             ("latin1", "Crème brûlée à la carte, jalapeño, naïve café."),
         };
@@ -72,7 +75,7 @@ public class ModeSegmenterPlanParityTest
             yield return entry;
 
         // Seeded random mixes of every class, so the tie-break is exercised on shapes nobody wrote by hand.
-        const string alphabet = "0123456789012345ABCDEF abcdefgh.,-:éあ😀﻿";
+        var alphabet = "0123456789012345ABCDEF abcdefgh.,-:éあ😀" + Bom;
         var random = new Random(20260917);
         for (var k = 0; k < 24; k++)
         {
