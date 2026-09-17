@@ -102,7 +102,7 @@ public class ModeSegmenterPlanParityTest
                     var expectedParents = new byte[text.Length * States];
                     var expected = Reference(text, charset, cciNumeric, cciAlnum, cciByte, allowAlnum, allowByte, expectedParents, out var expectedState);
 
-                    var parents = new byte[text.Length * States];
+                    var parents = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
                     var actual = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, parents, out var actualState, allowAlnum, allowByte);
                     await Assert.That(actual).IsEqualTo(expected).Because(because);
                     await Assert.That(actualState).IsEqualTo(expectedState).Because(because);
@@ -117,7 +117,7 @@ public class ModeSegmenterPlanParityTest
 
                     var expectedPlan = new ModeSegment[text.Length];
                     var actualPlan = new ModeSegment[text.Length];
-                    await Assert.That(ModeSegmenter.Reconstruct(text, expectedParents, expectedState, expectedPlan, out var expectedCount)).IsTrue().Because(because);
+                    var expectedCount = ReferenceReconstruct(text.Length, expectedParents, expectedState, expectedPlan);
                     await Assert.That(ModeSegmenter.Reconstruct(text, parents, actualState, actualPlan, out var actualCount)).IsTrue().Because(because);
                     await Assert.That(actualCount).IsEqualTo(expectedCount).Because(because);
                     for (var i = 0; i < expectedCount; i++)
@@ -320,6 +320,29 @@ public class ModeSegmenterPlanParityTest
         cur[target] = cost;
         if (track)
             parents[i * States + target] = (byte)from;
+    }
+
+    /// <summary>The reference's own walk back over its table of one predecessor per character and state, character by character.</summary>
+    private static int ReferenceReconstruct(int length, byte[] parents, int finalState, ModeSegment[] segments)
+    {
+        static int ModeOf(int state) => state <= StateNumeric2 ? 0 : state <= StateAlnum1 ? 1 : state == StateByte ? 2 : -1;
+
+        var state = finalState;
+        var end = length;
+        var count = 0;
+        for (var i = length - 1; i >= 0; i--)
+        {
+            var parent = parents[i * States + state];
+            if (parent == StateStart || ModeOf(parent) != ModeOf(state))
+            {
+                segments[count++] = new ModeSegment(ModeOf(state), i, end - i, 0);
+                end = i;
+            }
+            state = parent;
+        }
+
+        Array.Reverse(segments, 0, count);
+        return count;
     }
 
     private static bool IsAlnum(char c)

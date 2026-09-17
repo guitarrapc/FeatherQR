@@ -41,6 +41,9 @@ public static class QRCodeGenerator
     /// <summary>The internal mask-pattern value meaning "select the lowest-penalty pattern".</summary>
     private const int AutomaticMask = -1;
 
+    /// <summary>Symbols of a Structured Append set planned in one pass; <c>ModeSegmenter.Lanes</c> where that exists.</summary>
+    private const int MaxPlanLanes = 8;
+
     private static QRCodeData CreateCore(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion, int quietZoneSize, int maskPattern)
     {
         // QR code generation process:
@@ -320,6 +323,12 @@ public static class QRCodeGenerator
     /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, or when the options contradict each other.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
+        => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
+
+    /// <summary>
+    /// <see cref="CreateStructuredAppend(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> with the choice of planning the symbols of the set together left to the caller; the set is the same either way, which is what <c>StructuredAppendWriterPlanTest</c> holds it to.
+    /// </summary>
+    internal static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options, bool planTogether)
     {
         ValidateQuietZoneSize(options.QuietZoneSize);
         if (options.Segmentation != QRSegmentation.Single)
@@ -331,7 +340,7 @@ public static class QRCodeGenerator
         var charset = wholeText.EciMode;
 
         Span<int> chunkEnds = stackalloc int[StructuredAppendPlanner.MaxSymbols];
-        if (!StructuredAppendPlanner.TryPlan(textSpan, eccLevel, charset, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out var count, out var version, out _))
+        if (!StructuredAppendPlanner.TryPlan(textSpan, eccLevel, charset, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out var count, out var version, out _, out var oneRunPlans, allowLanes: true))
             throw new ArgumentException($"Content does not fit {StructuredAppendPlanner.MaxSymbols} Structured Append symbols of version {options.Version.Max} at ECC level {eccLevel}. Widen the version range or lower the ECC level.", nameof(options));
 
         if (count == 1)
@@ -348,21 +357,29 @@ public static class QRCodeGenerator
                 level += 1;
         }
 
-        var firstChunk = textSpan.Slice(0, chunkEnds[0]);
-        var bomWritten = options.Utf8Bom && charset == EciMode.Utf8 && TextAnalyzer.Analyze(firstChunk, charset).EncodingMode == EncodingMode.Byte;
+        // One analysis per symbol, taken up front: the mode, the charset it declares and the units
+        // its count indicator carries all come from it, and so does which symbols take a plan.
+        Span<TextAnalysisResult> analyses = stackalloc TextAnalysisResult[StructuredAppendPlanner.MaxSymbols];
+        for (int i = 0, from = 0; i < count; from = chunkEnds[i], i++)
+            analyses[i] = TextAnalyzer.Analyze(textSpan.Slice(from, chunkEnds[i] - from), charset);
+
+        var bomWritten = options.Utf8Bom && charset == EciMode.Utf8 && analyses[0].EncodingMode == EncodingMode.Byte;
         var parity = StructuredAppendPlanner.Parity(textSpan, charset, bomWritten);
 
         // Every symbol shares the version, so they share the size of the matrix they are
         // written through and the room a plan for the longest of them needs: both are taken
-        // once for the set rather than per symbol.
+        // once for the set rather than per symbol. Under the planner's word that every plan is
+        // one Byte run, only a chunk with no character outside the alphanumeric alphabet is
+        // planned, and the stack holds the longest such chunk there can be.
         var coreSize = QRCodeData.SizeFromVersion(version);
         var longestChunk = LongestChunk(chunkEnds.Slice(0, count));
         var symbols = new QRCodeData[count];
         byte[]? rentedWorkBuffer = null;
         ModeSegment[]? rentedPlan = null;
+        byte[]? rentedLaneTable = null;
         Span<ModeSegment> plan = options.Segmentation != QRSegmentation.Optimal
             ? default
-            : longestChunk <= QRSegmentPlanner.MaxStackSegments
+            : oneRunPlans || longestChunk <= QRSegmentPlanner.MaxStackSegments
                 ? stackalloc ModeSegment[QRSegmentPlanner.MaxStackSegments]
                 : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(longestChunk));
         try
@@ -370,11 +387,56 @@ public static class QRCodeGenerator
             rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(coreSize * coreSize);
             var workBuffer = rentedWorkBuffer.AsSpan(0, coreSize * coreSize);
 
+            // The lane each symbol was given in the pass that planned it with its neighbours, or -1
+            // for one that plans alone or not at all.
+            Span<int> laneOf = stackalloc int[StructuredAppendPlanner.MaxSymbols];
+            Span<int> laneStarts = stackalloc int[MaxPlanLanes];
+            Span<int> laneLengths = stackalloc int[MaxPlanLanes];
+            Span<int> laneBits = stackalloc int[MaxPlanLanes];
+            Span<int> laneStates = stackalloc int[MaxPlanLanes];
+            laneOf.Fill(-1);
+            var lanesToWrite = 0;
+
             var start = 0;
             for (var i = 0; i < count; i++)
             {
+#if NET8_0_OR_GREATER
+                // The plans of the next symbols, taken together: their programs have nothing to do
+                // with each other, so they run side by side, a vector lane each. Only symbols that
+                // take a plan get a lane; a lane of digits would be the longest and keep the rest waiting.
+                if (lanesToWrite == 0 && planTogether && options.Segmentation == QRSegmentation.Optimal && !oneRunPlans && ModeSegmenter.LanesAccelerated)
+                {
+                    var lanes = 0;
+                    for (int k = i, from = start; k < count && lanes < MaxPlanLanes; from = chunkEnds[k], k++)
+                    {
+                        if (!TakesPlan(in analyses[k], options.Segmentation, k == 0 && bomWritten, oneRunPlans))
+                            continue;
+                        laneOf[k] = lanes;
+                        laneStarts[lanes] = from;
+                        laneLengths[lanes] = chunkEnds[k] - from;
+                        lanes++;
+                    }
+
+                    if (lanes >= QRSegmentPlanner.MinLaneChunks)
+                    {
+                        rentedLaneTable ??= ArrayPool<byte>.Shared.Rent(longestChunk * ModeSegmenter.LaneTableBytesPerChar);
+                        QRSegmentPlanner.PlanChunks(textSpan, laneStarts.Slice(0, lanes), laneLengths.Slice(0, lanes), charset, version, rentedLaneTable, laneBits, laneStates);
+                        lanesToWrite = lanes;
+                    }
+                    else
+                    {
+                        // Too few are left to share a pass, here and from every later symbol.
+                        laneOf.Slice(i).Fill(-1);
+                        planTogether = false;
+                    }
+                }
+#endif
+                var lane = laneOf[i];
+                if (lane >= 0)
+                    lanesToWrite--;
+                ReadOnlySpan<byte> laneTable = lane >= 0 ? rentedLaneTable : default;
                 var chunk = textSpan.Slice(start, chunkEnds[i] - start);
-                symbols[i] = CreateSymbol(chunk, level, i == 0 && options.Utf8Bom, charset, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask, options.Segmentation, new QRStructuredAppend(i, count, parity), workBuffer, plan);
+                symbols[i] = CreateSymbol(chunk, in analyses[i], level, i == 0 && options.Utf8Bom, charset, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask, options.Segmentation, oneRunPlans, new QRStructuredAppend(i, count, parity), workBuffer, plan, laneTable, lane, lane >= 0 ? laneBits[lane] : 0, lane >= 0 ? laneStates[lane] : 0);
                 start = chunkEnds[i];
             }
         }
@@ -384,6 +446,8 @@ public static class QRCodeGenerator
                 ArrayPool<byte>.Shared.Return(rentedWorkBuffer, clearArray: false);
             if (rentedPlan is not null)
                 ArrayPool<ModeSegment>.Shared.Return(rentedPlan, clearArray: false);
+            if (rentedLaneTable is not null)
+                ArrayPool<byte>.Shared.Return(rentedLaneTable, clearArray: false);
         }
 
         return symbols;
@@ -418,24 +482,36 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// One symbol of a Structured Append set at a version the planner already fitted: the header first, then the same stream <see cref="Create(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> would write for the chunk alone.
+    /// Whether a symbol of a set is written from a plan of its own: under <see cref="QRSegmentation.Optimal"/>, with no byte order mark ahead of its stream, in a mode a plan can beat.
+    /// Byte content whose plan the planner settled as one Byte run is planned already; that plan is its single-mode stream.
     /// </summary>
-    private static QRCodeData CreateSymbol(ReadOnlySpan<char> chunk, QREccLevel eccLevel, bool utf8Bom, EciMode charset, int version, int quietZoneSize, int maskPattern, QRSegmentation segmentation, in QRStructuredAppend header, Span<byte> workBuffer, Span<ModeSegment> plan)
+    private static bool TakesPlan(in TextAnalysisResult analysis, QRSegmentation segmentation, bool bomApplies, bool oneRunPlans)
+        => segmentation == QRSegmentation.Optimal && !bomApplies && QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode)
+            && !(oneRunPlans && analysis.EncodingMode == EncodingMode.Byte);
+
+    /// <summary>
+    /// One symbol of a Structured Append set at a version the planner already fitted: the header first, then the same stream <see cref="Create(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> would write for the chunk alone.
+    /// <paramref name="laneTable"/> is not empty when the set planned this chunk together with its neighbours, as lane <paramref name="lane"/>, at <paramref name="laneBits"/> ending in <paramref name="laneState"/>.
+    /// </summary>
+    private static QRCodeData CreateSymbol(ReadOnlySpan<char> chunk, in TextAnalysisResult analysis, QREccLevel eccLevel, bool utf8Bom, EciMode charset, int version, int quietZoneSize, int maskPattern, QRSegmentation segmentation, bool oneRunPlans, in QRStructuredAppend header, Span<byte> workBuffer, Span<ModeSegment> plan, ReadOnlySpan<byte> laneTable, int lane, int laneBits, int laneState)
     {
-        // One analysis for the symbol: the mode, the charset it declares and the units its
-        // count indicator carries all come from it, and nothing below asks the text again.
-        var analysis = TextAnalyzer.Analyze(chunk, charset);
         var bomApplies = utf8Bom && charset == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte;
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
         var capacity = eccInfo.TotalDataCodewords * 8;
 
         var result = new QRCodeData(version, quietZoneSize);
         var coreSize = result.GetCoreSize();
-
-        if (segmentation == QRSegmentation.Optimal && !bomApplies && QRSegmentPlanner.CanPlanBeatSingleMode(analysis.EncodingMode))
+        if (TakesPlan(in analysis, segmentation, bomApplies, oneRunPlans))
         {
-            if (QRSegmentPlanner.TryBuildPlan(chunk, charset, version, eccLevel, plan, out var segmentCount)
-                && QRSegmentPlanner.MeasurePlan(version, plan.Slice(0, segmentCount)) + charset.GetStandardQrHeaderBits() + StructuredAppendPlanner.HeaderBits <= capacity)
+            int segmentCount, planBits;
+#if NET8_0_OR_GREATER
+            var built = laneTable.IsEmpty
+                ? QRSegmentPlanner.TryBuildPlan(chunk, charset, version, eccLevel, plan, out segmentCount, out planBits)
+                : QRSegmentPlanner.TryBuildPlanFromLane(chunk, charset, version, eccLevel, laneTable, lane, laneState, laneBits, plan, out segmentCount, out planBits);
+#else
+            var built = QRSegmentPlanner.TryBuildPlan(chunk, charset, version, eccLevel, plan, out segmentCount, out planBits);
+#endif
+            if (built && planBits + charset.GetStandardQrHeaderBits() + StructuredAppendPlanner.HeaderBits <= capacity)
             {
                 var planned = new QRConfiguration(version, eccLevel, analysis.EncodingMode, charset, false, eccInfo, analysis.DataLength, header);
                 WriteCoreModulesPlanned(chunk, in planned, plan.Slice(0, segmentCount), workBuffer, coreSize, maskPattern);

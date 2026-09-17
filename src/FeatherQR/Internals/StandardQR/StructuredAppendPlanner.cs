@@ -46,10 +46,17 @@ internal static partial class StructuredAppendPlanner
     /// <see cref="TryPlan(ReadOnlySpan{char}, QREccLevel, EciMode, EncodingMode, bool, QRSegmentation, int, int, Span{int}, out int, out int, out int)"/> with the choice of walking several budgets at once left to the caller; the plan is the same either way, which is what <c>StructuredAppendPlannerTest</c> holds it to.
     /// </summary>
     internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, bool allowLanes)
+        => TryPlan(text, eccLevel, charset, singleMode, utf8Bom, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, out _, allowLanes);
+
+    /// <summary>
+    /// The same, handing the writer what the pass over the text's dense runs also settles: <paramref name="oneRunPlans"/> says the minimal plan of every chunk that has a character outside the alphanumeric alphabet is one Byte run, which is its single-mode stream, so such a chunk needs no plan of its own.
+    /// </summary>
+    internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool oneRunPlans, bool allowLanes)
     {
         chunkCount = 0;
         version = 0;
         budgetBits = 0;
+        oneRunPlans = false;
 
         // Nothing to split: the single-symbol path encodes an empty Byte segment.
         if (text.IsEmpty)
@@ -68,7 +75,7 @@ internal static partial class StructuredAppendPlanner
         // segmentation program, whose every probe is a pass of its own: the split it would find
         // is the split the closed-form cost finds, so the searches run as Single and the symbols
         // are still written exactly as the caller asked.
-        var searched = segmentation == QRSegmentation.Optimal && CanPlanHelp(text, singleMode)
+        var searched = segmentation == QRSegmentation.Optimal && CanPlanHelp(text, singleMode, out oneRunPlans)
             ? QRSegmentation.Optimal
             : QRSegmentation.Single;
 
@@ -400,12 +407,15 @@ internal static partial class StructuredAppendPlanner
     /// <remarks>
     /// One pass over the text for the longest run of each denser mode, since a chunk's runs are never longer than the whole text's; if none of them could repay the mode header splitting it out adds, then no chunk's plan beats its single-mode stream, the two costs are the same number everywhere, and the split is the same split.
     /// </remarks>
-    private static bool CanPlanHelp(ReadOnlySpan<char> text, EncodingMode singleMode)
+    private static bool CanPlanHelp(ReadOnlySpan<char> text, EncodingMode singleMode, out bool oneRunPlans)
     {
+        oneRunPlans = false;
         if (!QRSegmentPlanner.CanPlanBeatSingleMode(singleMode))
             return false;
 
         ModeSegmenter.LongestDenseRuns(text, out var numericRun, out var alnumRun);
+        // The same two numbers say when the plan of every chunk is settled without the program.
+        oneRunPlans = singleMode == EncodingMode.Byte && QRSegmentPlanner.PlanIsOneByteRun(numericRun, alnumRun);
         return QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun);
     }
 

@@ -1,4 +1,3 @@
-using System.Text;
 using FeatherQR.Internals;
 
 namespace FeatherQR.Tests;
@@ -63,7 +62,7 @@ public class ModeSegmenterByteRunParityTest
                 {
                     var expectedCost = Reference(text, charset, cciNumeric, cciAlnum, cciByte, allowAlnum, allowByte, out var expectedState);
 
-                    var parents = new byte[text.Length * States];
+                    var parents = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
                     var actualCost = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, parents, out var actualState, allowAlnum, allowByte);
 
                     var because = $"{name} in {charset} at ({cciNumeric}, {cciAlnum}, {cciByte}) alnum={allowAlnum} byte={allowByte}";
@@ -86,7 +85,7 @@ public class ModeSegmenterByteRunParityTest
         {
             foreach (var (cciNumeric, cciAlnum, cciByte) in Bands())
             {
-                var parents = new byte[text.Length * States];
+                var parents = new byte[text.Length * ModeSegmenter.ParentBytesPerChar];
                 var cost = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, parents, out var finalState);
                 var segments = new ModeSegment[text.Length];
 

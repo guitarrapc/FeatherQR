@@ -70,6 +70,19 @@ internal static class QRSegmentPlanner
     public static bool PlanCouldBeatSingleMode(int longestNumericRun, int longestAlnumRun)
         => longestNumericRun >= ShortestPayingNumericRun || longestAlnumRun >= ShortestPayingAlnumRun;
 
+    /// <summary>Shortest run of digits whose split out of a Byte run can tie with leaving it in: three digits save 24 - 10 = 14 bits, the mode and count indicator of versions 1 to 9.</summary>
+    private const int ShortestTyingNumericRun = 3;
+
+    /// <summary>
+    /// Whether the minimal plan of Byte content is one Byte run whatever the tie-breaks, from the longest run of each denser mode it holds.
+    /// </summary>
+    /// <remarks>
+    /// One below <see cref="PlanCouldBeatSingleMode"/> for digits, since the program gives a tie to the split. Two digits save 9 bits and five alphanumerics 12, against a header of at least 13, so every run outside Byte costs strictly more than the bytes it replaces, at every version.
+    /// Holds for any piece of the content that has a character outside the alphanumeric alphabet, which is every piece longer than five characters.
+    /// </remarks>
+    public static bool PlanIsOneByteRun(int longestNumericRun, int longestAlnumRun)
+        => longestNumericRun < ShortestTyingNumericRun && longestAlnumRun < ShortestPayingAlnumRun;
+
     /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="minVersion"/> through <paramref name="maxVersion"/>.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
@@ -170,8 +183,13 @@ internal static class QRSegmentPlanner
     /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a relocated byte order mark), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
+        => TryBuildPlan(text, charset, version, eccLevel, segments, out segmentCount, out _);
+
+    /// <summary>The same, handing over what the plan measures (no ECI prefix), for a caller with a header of its own to add to it.</summary>
+    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount, out int planBits)
     {
         segmentCount = 0;
+        planBits = 0;
         if (text.Length is 0 or > MaxPlannableChars)
             return false;
 
@@ -179,7 +197,7 @@ internal static class QRSegmentPlanner
         var cciAlnum = EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
         var cciByte = EncodingMode.Byte.GetCountIndicatorLength(version);
 
-        var parentLength = text.Length * ModeSegmenter.StateCount;
+        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
         byte[]? rented = null;
         Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
             ? stackalloc byte[ModeSegmenter.MaxStackParents]
@@ -201,35 +219,91 @@ internal static class QRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
-        // A plan the shared byte-segment decoder would misread is worse than no
-        // plan: a split that relocates a mid-content U+FEFF to a run start loses it
-        // to the decoder's BOM consumption. The single-mode fallback keeps it.
-        if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
+        return TryAcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits);
+    }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Fewest symbols of a set worth planning together; below it each plans alone.</summary>
+    public const int MinLaneChunks = 3;
+
+    /// <summary>The program of <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int, out int)"/> for up to <see cref="ModeSegmenter.Lanes"/> chunks of one text at once; see <see cref="ModeSegmenter.ComputeCostsLanes"/>.</summary>
+    public static void PlanChunks(ReadOnlySpan<char> text, ReadOnlySpan<int> starts, ReadOnlySpan<int> lengths, EciMode charset, int version, Span<byte> table, Span<int> costs, Span<int> finalStates)
+        => ModeSegmenter.ComputeCostsLanes(text, starts, lengths, charset, ModeIndicatorBits,
+            EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
+            table, costs, finalStates);
+
+    /// <summary>The rest of the plan builder for one chunk <see cref="PlanChunks"/> planned: the walk back over its lane, then what every plan goes through.</summary>
+    public static bool TryBuildPlanFromLane(ReadOnlySpan<char> chunk, EciMode charset, int version, QREccLevel eccLevel, ReadOnlySpan<byte> table, int lane, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount, out int planBits)
+    {
+        planBits = 0;
+        if (!ModeSegmenter.ReconstructLane(chunk.Length, table, lane, finalState, segments, out segmentCount))
         {
             segmentCount = 0;
             return false;
         }
 
-        ModeSegmenter.FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
+        return TryAcceptPlan(chunk, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits);
+    }
+#endif
 
+    /// <summary>
+    /// What follows the walk back, for a plan of <paramref name="plannedBits"/>: the unit counts, the refusal of a plan the decoder would misread, and the re-measurement against the program and the capacity.
+    /// </summary>
+    private static bool TryAcceptPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, int plannedBits, Span<ModeSegment> segments, ref int segmentCount, out int planBits)
+    {
         // Re-cost the reconstructed plan from the byte counts the encoder will
         // actually emit. Disagreeing with the dynamic programming cost model is a bug
         // in the model (the version scan would have compared the wrong number against
         // a capacity), so it fails loudly in Debug and rejects the plan in Release
         // rather than becoming a stream that overruns the data codewords.
-        var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
-        Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
+        planBits = PricePlan(text, charset, version, segments.Slice(0, segmentCount));
+        Debug.Assert(planBits < 0 || planBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
-        if (measuredBits != plannedBits || measuredBits + (charset == EciMode.Default ? 0 : EciHeaderBits) > capacityBits)
+        if (planBits != plannedBits || planBits + (charset == EciMode.Default ? 0 : EciHeaderBits) > capacityBits)
         {
-            // Either the model disagreed, or this version simply cannot hold the plan
-            // (a legitimate answer for a caller that asked about a specific version).
+            // A plan the decoder would misread, a model that disagreed, or a version that
+            // simply cannot hold the plan (a legitimate answer for a caller that asked
+            // about a specific version).
             segmentCount = 0;
+            planBits = 0;
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Fills each run with the value its count indicator carries and returns what the plan measures, in one pass over the runs; -1 for a plan that relocates a mid-content U+FEFF to the start of a Byte run (see <see cref="ModeSegmenter.HasBomRelocatedToARunStart"/>), which the caller answers with the single-mode stream that keeps it interior.
+    /// </summary>
+    private static int PricePlan(ReadOnlySpan<char> text, EciMode charset, int version, Span<ModeSegment> segments)
+    {
+        var numericHeader = ModeIndicatorBits + EncodingMode.Numeric.GetCountIndicatorLength(version);
+        var alnumHeader = ModeIndicatorBits + EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
+        var byteHeader = ModeIndicatorBits + EncodingMode.Byte.GetCountIndicatorLength(version);
+        var total = 0;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            int units = segment.Length;
+            switch (segment.ModeIndex)
+            {
+                case 0:
+                    total += numericHeader + ModeSegmenter.PayloadBits(EncodingMode.Numeric, units);
+                    break;
+                case 1:
+                    total += alnumHeader + ModeSegmenter.PayloadBits(EncodingMode.Alphanumeric, units);
+                    break;
+                default:
+                    if (segment.Start > 0 && text[segment.Start] == (char)0xFEFF)
+                        return -1;
+                    units = ModeSegmenter.ByteUnitCount(text.Slice(segment.Start, segment.Length), charset);
+                    total += byteHeader + units * 8;
+                    break;
+            }
+            segments[i] = new ModeSegment(segment.ModeIndex, segment.Start, segment.Length, units);
+        }
+        return total;
     }
 
     /// <summary>Exact bit cost of a plan (excluding any ECI prefix): per run, mode indicator + count indicator + payload.</summary>

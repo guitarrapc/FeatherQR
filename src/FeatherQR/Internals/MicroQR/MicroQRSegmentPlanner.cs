@@ -103,8 +103,8 @@ internal static class MicroQRSegmentPlanner
         if (text.Length is 0 or > MaxPlannableChars)
             return false;
 
-        Span<byte> parents = stackalloc byte[MaxPlannableChars * ModeSegmenter.StateCount];
-        var window = parents.Slice(0, text.Length * ModeSegmenter.StateCount);
+        Span<byte> parents = stackalloc byte[MaxPlannableChars * ModeSegmenter.ParentBytesPerChar];
+        var window = parents.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
         var plannedBits = PlanCost(text, charset, version, window, out var finalState);
         if (plannedBits >= ModeSegmenter.Unreachable)
             return false; // a character no mode of this version encodes

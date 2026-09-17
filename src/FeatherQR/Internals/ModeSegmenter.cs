@@ -2,7 +2,6 @@
 // ArrayPool is only reached from the netstandard2.0 branch of ByteUnitCount.
 using System.Buffers;
 #endif
-using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -19,14 +18,22 @@ namespace FeatherQR.Internals;
 /// The common shapes get their own loop: a Latin charset (every character one byte) with Byte allowed, for costs, for costs with parents, and for the prefix walk; everything else (UTF-8, a Micro QR version without a mode) shares one general loop per entry point. A run outside the alphanumeric alphabet leaves only Byte reachable, so every loop steps such a run as one add per character.
 /// Micro QR restricts modes per version (M1 is Numeric-only, M2 has no Byte mode); its planner disables the missing transitions via <c>allowAlnum</c>/<c>allowByte</c>, and a character no allowed mode encodes leaves the cost at <see cref="Unreachable"/>.
 /// Ties are broken as the all-states relaxation did (the lowest predecessor state wins), so the reconstructed plan is the same plan; <c>ModeSegmenterByteRunParityTest</c> holds every loop to that reference.
+/// With parents, a state is carried as a key: its cost shifted up three bits with the state's number below it. The minimum of keys is the minimum cost and, among equal costs, the lowest state, so the predecessor is the low bits of the minimum the cost-only loop takes anyway.
+/// Only three predecessors vary (those of Numeric1, Alnum1 and Byte; the others are constants of the packing groups), so the table is two bytes a character, and the walk back steps from one place a run can begin to the one before it rather than from character to character.
 /// </remarks>
-internal static class ModeSegmenter
+internal static partial class ModeSegmenter
 {
-    /// <summary>Dynamic programming states per character; the parents table is <c>text.Length * StateCount</c> bytes.</summary>
-    public const int StateCount = 7;
+    /// <summary>Bytes of the predecessor table per character: the predecessor of Byte, then those of Numeric1 (low three bits) and Alnum1 in one byte.</summary>
+    public const int ParentBytesPerChar = 2;
 
-    /// <summary>Parent bytes that fit the stack budget (73 characters); longer content rents.</summary>
+    /// <summary>Parent bytes that fit the stack budget (256 characters); longer content rents.</summary>
     public const int MaxStackParents = 512;
+
+    /// <summary>The longest content the keyed loops take; a key is a cost times eight, and this leaves it far below the overflow.</summary>
+    private const int MaxTrackedChars = 1 << 20;
+
+    // An unreachable state as a key, below any number a few additions could overflow.
+    private const int UnreachableKey = (int.MaxValue / 16) << 3;
 
     /// <summary>
     /// Cost returned by <see cref="ComputeCosts"/> when no allowed mode set encodes the content; small enough that adding a transition cost cannot overflow.
@@ -74,11 +81,11 @@ internal static class ModeSegmenter
 
     /// <summary>
     /// Minimal payload bits (excluding any ECI prefix) for the content at the given mode indicator and count indicator widths, or a value at or above <see cref="Unreachable"/> when a character has no allowed mode.
-    /// When <paramref name="parents"/> is non-empty it receives one predecessor state per (character, state) pair for reconstruction.
+    /// When <paramref name="parents"/> is non-empty (<see cref="ParentBytesPerChar"/> bytes a character) it receives the predecessors <see cref="Reconstruct"/> walks back.
     /// </summary>
     public static int ComputeCosts(ReadOnlySpan<char> text, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, Span<byte> parents, out int finalState, bool allowAlnum = true, bool allowByte = true)
     {
-        Debug.Assert(parents.IsEmpty || parents.Length == text.Length * StateCount);
+        Debug.Assert(parents.IsEmpty || parents.Length == text.Length * ParentBytesPerChar);
 
         // Opening a run costs its headers plus its first character: 4 bits for a digit, 6 for
         // an alphanumeric, 8 per byte (added per character where the charset is UTF-8).
@@ -94,9 +101,12 @@ internal static class ModeSegmenter
                 : CostsGeneral(text, charset, openNumeric, openAlnum, openByte, allowAlnum, allowByte, out finalState);
         }
 
-        return latin
-            ? CostsTrackedLatin(text, openNumeric, openAlnum, openByte + 8, allowAlnum, parents, out finalState)
-            : CostsTrackedGeneral(text, charset, openNumeric, openAlnum, openByte, allowAlnum, allowByte, parents, out finalState);
+        Debug.Assert(text.Length <= MaxTrackedChars);
+        OpenFromStart(text, charset, openNumeric << 3, openAlnum << 3, openByte << 3, allowAlnum, allowByte, parents, out var n1, out var a1, out var b);
+        var best = latin
+            ? TrackedLatin(text, n1, a1, b, openNumeric << 3, openAlnum << 3, (openByte + 8) << 3, allowAlnum, parents, ParentBytesPerChar)
+            : TrackedGeneral(text, charset, n1, a1, b, openNumeric << 3, openAlnum << 3, openByte << 3, allowAlnum, allowByte, parents, ParentBytesPerChar);
+        return FromKey(best, out finalState);
     }
 
     /// <summary>
@@ -199,130 +209,149 @@ internal static class ModeSegmenter
         return Best(n0, n1, n2, a0, a1, b, out finalState);
     }
 
-    /// <summary>
-    /// Costs with parents, one byte per character, Byte allowed: the per-symbol plan of every Latin symbol.
-    /// The six parents of an alphanumeric character are one 8-byte store (byte 6 is the start state's slot, never read; byte 7 is the next character's first slot, which its own step overwrites), except for the last character, whose eighth byte would fall past the table.
-    /// </summary>
-    private static int CostsTrackedLatin(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> parents, out int finalState)
+    /// <summary>The keys after the first character, which whatever encodes it opens from the start; its predecessors say so. Numeric0, Numeric2 and Alnum0 are never reachable there.</summary>
+    private static void OpenFromStart(ReadOnlySpan<char> text, EciMode charset, int openNumeric, int openAlnum, int openByte, bool allowAlnum, bool allowByte, Span<byte> table, out int n1, out int a1, out int b)
     {
-        int n0 = Unreachable, n1 = Unreachable, n2 = Unreachable, a0 = Unreachable, a1 = Unreachable, b = Unreachable, start = 0;
+        var cls = ClassOf(text[0]);
+        n1 = cls == ClassDigit ? openNumeric | StateNumeric1 : UnreachableKey | StateNumeric1;
+        a1 = cls != ClassOther && allowAlnum ? openAlnum | StateAlnum1 : UnreachableKey | StateAlnum1;
+        b = allowByte ? (openByte + (ByteCost(text, 0, charset) << 6)) | StateByte : UnreachableKey | StateByte;
+        table[0] = StateStart;
+        table[1] = StateStart | (StateStart << 3);
+    }
+
+    /// <summary>The cost and the state of the cheapest key; <see cref="Unreachable"/> and Byte when no allowed mode set encodes the content, as the cost-only loops answer.</summary>
+    private static int FromKey(int key, out int state)
+    {
+        if (key >= UnreachableKey)
+        {
+            state = StateByte;
+            return Unreachable;
+        }
+
+        state = key & 7;
+        return key >> 3;
+    }
+
+    /// <summary>
+    /// Keys with parents from the second character on, one byte per character, Byte allowed: the per-symbol plan of every Latin symbol. Returns the cheapest key.
+    /// The widths are keys already (bits times eight), <paramref name="openByte"/> with its first character in; the table is read and written <paramref name="stride"/> bytes a character.
+    /// </summary>
+    private static int TrackedLatin(ReadOnlySpan<char> text, int n1, int a1, int b, int openNumeric, int openAlnum, int openByte, bool allowAlnum, Span<byte> table, int stride)
+    {
+        const int U = UnreachableKey;
+        int n0 = U | StateNumeric0, n2 = U | StateNumeric2, a0 = U | StateAlnum0;
         var length = text.Length;
-        for (var i = 0; i < length; i++)
+        for (var i = 1; i < length; i++)
         {
             var cls = ClassOf(text[i]);
-            var parentBase = i * StateCount;
+            // The cheapest state of each denser mode; a key carries its state, so the lowest wins a tie.
+            var numeric = Math.Min(Math.Min(n0, n1), n2);
+            var alnum = Math.Min(a0, a1);
+            var byteKey = Math.Min(Math.Min(numeric, alnum) + openByte, b + 64);
+            table[i * stride] = (byte)(byteKey & 7);
             if (cls == ClassOther)
             {
-                b = OpenByte(n0, n1, n2, a0, a1, b + 8, start, openByte, out var parentByte);
-                parents[parentBase + StateByte] = (byte)parentByte;
-                n0 = n1 = n2 = a0 = a1 = Unreachable;
-                start = Unreachable;
+                b = (byteKey & ~7) | StateByte;
+                n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2; a0 = U | StateAlnum0; a1 = U | StateAlnum1;
                 while (i + 1 < length && ClassOf(text[i + 1]) == ClassOther)
                 {
                     i++;
-                    b += 8;
-                    parents[i * StateCount + StateByte] = StateByte;
+                    b += 64;
+                    table[i * stride] = StateByte;
                 }
                 continue;
             }
 
-            int nn0 = Unreachable, nn1 = Unreachable, nn2 = Unreachable, na0 = Unreachable, na1 = Unreachable;
+            int nn0 = U | StateNumeric0, nn1 = U | StateNumeric1, nn2 = U | StateNumeric2, na0 = U | StateAlnum0, na1 = U | StateAlnum1;
             int parentNumeric1 = 0, parentAlnum1 = 0;
             if (cls == ClassDigit)
             {
-                nn1 = OpenNumeric(n0, a0, a1, b, start, openNumeric, out parentNumeric1);
-                nn2 = n1 + 3;
-                nn0 = n2 + 3;
+                // Continued from Numeric0 (4 bits), or opened from Alphanumeric or Byte.
+                var key = Math.Min(n0 + 32, Math.Min(alnum, b) + openNumeric);
+                parentNumeric1 = key & 7;
+                nn1 = (key & ~7) | StateNumeric1;
+                nn2 = n1 + 25; // 3 bits, and Numeric1 becomes Numeric2
+                nn0 = n2 + 22; // 3 bits, and Numeric2 becomes Numeric0
             }
             if (allowAlnum)
             {
-                na1 = OpenAlnum(n0, n1, n2, a0, b, start, openAlnum, out parentAlnum1);
-                na0 = a1 + 5;
+                // Opened from Numeric or Byte, or continued from Alnum0 (6 bits).
+                var key = Math.Min(Math.Min(numeric, b) + openAlnum, a0 + 48);
+                parentAlnum1 = key & 7;
+                na1 = (key & ~7) | StateAlnum1;
+                na0 = a1 + 39; // 5 bits, and Alnum1 becomes Alnum0
             }
-            var nb = OpenByte(n0, n1, n2, a0, a1, b + 8, start, openByte, out var parentB);
+            table[i * stride + 1] = (byte)(parentNumeric1 | (parentAlnum1 << 3));
 
-            var packed = (long)StateNumeric2 | ((long)parentNumeric1 << 8) | ((long)StateNumeric1 << 16) | ((long)StateAlnum1 << 24) | ((long)parentAlnum1 << 32) | ((long)parentB << 40);
-            if (parentBase + 8 <= parents.Length)
-            {
-                BinaryPrimitives.WriteInt64LittleEndian(parents.Slice(parentBase, 8), packed);
-            }
-            else
-            {
-                parents[parentBase + StateNumeric0] = StateNumeric2;
-                parents[parentBase + StateNumeric1] = (byte)parentNumeric1;
-                parents[parentBase + StateNumeric2] = StateNumeric1;
-                parents[parentBase + StateAlnum0] = StateAlnum1;
-                parents[parentBase + StateAlnum1] = (byte)parentAlnum1;
-                parents[parentBase + StateByte] = (byte)parentB;
-            }
-
-            n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; b = nb;
-            start = Unreachable;
+            n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; b = (byteKey & ~7) | StateByte;
         }
 
-        return Best(n0, n1, n2, a0, a1, b, out finalState);
+        return Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
     }
 
-    /// <summary>Costs with parents for the remaining shapes: a UTF-8 charset, or a Micro QR version without Byte mode.</summary>
-    private static int CostsTrackedGeneral(ReadOnlySpan<char> text, EciMode charset, int openNumeric, int openAlnum, int openByte, bool allowAlnum, bool allowByte, Span<byte> parents, out int finalState)
+    /// <summary>Keys with parents for the remaining shapes: a UTF-8 charset, or a Micro QR version without Byte mode. <paramref name="openByte"/> is without its first character, whose bytes are its own.</summary>
+    private static int TrackedGeneral(ReadOnlySpan<char> text, EciMode charset, int n1, int a1, int b, int openNumeric, int openAlnum, int openByte, bool allowAlnum, bool allowByte, Span<byte> table, int stride)
     {
-        int n0 = Unreachable, n1 = Unreachable, n2 = Unreachable, a0 = Unreachable, a1 = Unreachable, b = Unreachable, start = 0;
+        const int U = UnreachableKey;
+        int n0 = U | StateNumeric0, n2 = U | StateNumeric2, a0 = U | StateAlnum0;
         var length = text.Length;
-        for (var i = 0; i < length; i++)
+        for (var i = 1; i < length; i++)
         {
             var cls = ClassOf(text[i]);
-            var parentBase = i * StateCount;
+            var numeric = Math.Min(Math.Min(n0, n1), n2);
+            var alnum = Math.Min(a0, a1);
             if (cls == ClassOther)
             {
-                if (allowByte)
-                {
-                    var byteBits = 8 * ByteCost(text, i, charset);
-                    b = OpenByte(n0, n1, n2, a0, a1, b + byteBits, start, openByte + byteBits, out var parentByte);
-                    parents[parentBase + StateByte] = (byte)parentByte;
-                }
-                n0 = n1 = n2 = a0 = a1 = Unreachable;
-                start = Unreachable;
+                n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2; a0 = U | StateAlnum0; a1 = U | StateAlnum1;
                 if (!allowByte)
+                {
+                    b = U | StateByte;
                     continue; // nothing encodes it; every state stays unreachable from here on
+                }
 
+                var key = Math.Min(Math.Min(numeric, alnum) + openByte, b) + (ByteCost(text, i, charset) << 6);
+                table[i * stride] = (byte)(key & 7);
+                b = (key & ~7) | StateByte;
                 while (i + 1 < length && ClassOf(text[i + 1]) == ClassOther)
                 {
                     i++;
-                    b += 8 * ByteCost(text, i, charset);
-                    parents[i * StateCount + StateByte] = StateByte;
+                    b += ByteCost(text, i, charset) << 6;
+                    table[i * stride] = StateByte;
                 }
                 continue;
             }
 
             // An alphanumeric character is ASCII: one byte in every charset.
-            int nn0 = Unreachable, nn1 = Unreachable, nn2 = Unreachable, na0 = Unreachable, na1 = Unreachable, nb = Unreachable;
-            int parentNumeric1 = 0, parentAlnum1 = 0, parentB = 0;
+            int nn0 = U | StateNumeric0, nn1 = U | StateNumeric1, nn2 = U | StateNumeric2, na0 = U | StateAlnum0, na1 = U | StateAlnum1, nb = U | StateByte;
+            int parentNumeric1 = 0, parentAlnum1 = 0;
             if (cls == ClassDigit)
             {
-                nn1 = OpenNumeric(n0, a0, a1, b, start, openNumeric, out parentNumeric1);
-                nn2 = n1 + 3;
-                nn0 = n2 + 3;
+                var key = Math.Min(n0 + 32, Math.Min(alnum, b) + openNumeric);
+                parentNumeric1 = key & 7;
+                nn1 = (key & ~7) | StateNumeric1;
+                nn2 = n1 + 25;
+                nn0 = n2 + 22;
             }
             if (allowAlnum)
             {
-                na1 = OpenAlnum(n0, n1, n2, a0, b, start, openAlnum, out parentAlnum1);
-                na0 = a1 + 5;
+                var key = Math.Min(Math.Min(numeric, b) + openAlnum, a0 + 48);
+                parentAlnum1 = key & 7;
+                na1 = (key & ~7) | StateAlnum1;
+                na0 = a1 + 39;
             }
             if (allowByte)
-                nb = OpenByte(n0, n1, n2, a0, a1, b + 8, start, openByte + 8, out parentB);
-
-            parents[parentBase + StateNumeric0] = StateNumeric2;
-            parents[parentBase + StateNumeric1] = (byte)parentNumeric1;
-            parents[parentBase + StateNumeric2] = StateNumeric1;
-            parents[parentBase + StateAlnum0] = StateAlnum1;
-            parents[parentBase + StateAlnum1] = (byte)parentAlnum1;
-            parents[parentBase + StateByte] = (byte)parentB;
+            {
+                var key = Math.Min(Math.Min(numeric, alnum) + openByte, b) + 64;
+                table[i * stride] = (byte)(key & 7);
+                nb = (key & ~7) | StateByte;
+            }
+            table[i * stride + 1] = (byte)(parentNumeric1 | (parentAlnum1 << 3));
 
             n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; b = nb;
-            start = Unreachable;
         }
 
-        return Best(n0, n1, n2, a0, a1, b, out finalState);
+        return Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
     }
 
     /// <summary>The prefix walk, one byte per character.</summary>
@@ -422,66 +451,6 @@ internal static class ModeSegmenter
     private static int StoppedBefore(ReadOnlySpan<char> text, int i)
         => i > 0 && char.IsLowSurrogate(text[i]) && char.IsHighSurrogate(text[i - 1]) ? i - 1 : i;
 
-    // The three "open or continue" steps with the predecessor recorded. Candidates are tried in
-    // state order and a later one replaces an earlier one only when strictly cheaper, which is
-    // the tie-break the all-states relaxation had, so the plans reconstruct identically.
-
-    /// <summary>Numeric with one digit in the group: continued from Numeric0, or opened from Alnum0, Alnum1, Byte or the start.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int OpenNumeric(int n0, int a0, int a1, int b, int start, int openNumeric, out int parent)
-    {
-        var best = n0 + 4;
-        parent = StateNumeric0;
-        var candidate = a0 + openNumeric;
-        if (candidate < best) { best = candidate; parent = StateAlnum0; }
-        candidate = a1 + openNumeric;
-        if (candidate < best) { best = candidate; parent = StateAlnum1; }
-        candidate = b + openNumeric;
-        if (candidate < best) { best = candidate; parent = StateByte; }
-        candidate = start + openNumeric;
-        if (candidate < best) { best = candidate; parent = StateStart; }
-        return best;
-    }
-
-    /// <summary>Alphanumeric with one character in the pair: opened from the Numeric states, continued from Alnum0, or opened from Byte or the start.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int OpenAlnum(int n0, int n1, int n2, int a0, int b, int start, int openAlnum, out int parent)
-    {
-        var best = n0 + openAlnum;
-        parent = StateNumeric0;
-        var candidate = n1 + openAlnum;
-        if (candidate < best) { best = candidate; parent = StateNumeric1; }
-        candidate = n2 + openAlnum;
-        if (candidate < best) { best = candidate; parent = StateNumeric2; }
-        candidate = a0 + 6;
-        if (candidate < best) { best = candidate; parent = StateAlnum0; }
-        candidate = b + openAlnum;
-        if (candidate < best) { best = candidate; parent = StateByte; }
-        candidate = start + openAlnum;
-        if (candidate < best) { best = candidate; parent = StateStart; }
-        return best;
-    }
-
-    /// <summary>Byte: opened from every other state, or continued (<paramref name="continued"/> is the Byte state plus this character's bits).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int OpenByte(int n0, int n1, int n2, int a0, int a1, int continued, int start, int openByte, out int parent)
-    {
-        var best = n0 + openByte;
-        parent = StateNumeric0;
-        var candidate = n1 + openByte;
-        if (candidate < best) { best = candidate; parent = StateNumeric1; }
-        candidate = n2 + openByte;
-        if (candidate < best) { best = candidate; parent = StateNumeric2; }
-        candidate = a0 + openByte;
-        if (candidate < best) { best = candidate; parent = StateAlnum0; }
-        candidate = a1 + openByte;
-        if (candidate < best) { best = candidate; parent = StateAlnum1; }
-        if (continued < best) { best = continued; parent = StateByte; }
-        candidate = start + openByte;
-        if (candidate < best) { best = candidate; parent = StateStart; }
-        return best;
-    }
-
     /// <summary>The cheapest state to end in, and its cost; <see cref="Unreachable"/> exactly when no allowed mode set encodes the content. The lowest state wins a tie.</summary>
     private static int Best(int n0, int n1, int n2, int a0, int a1, int b, out int state)
     {
@@ -501,53 +470,70 @@ internal static class ModeSegmenter
     /// Returns false when the plan needs more runs than the caller lent room for.
     /// </summary>
     public static bool Reconstruct(ReadOnlySpan<char> text, ReadOnlySpan<byte> parents, int finalState, Span<ModeSegment> segments, out int segmentCount)
-    {
-        segmentCount = 0;
-        var state = finalState;
-        var end = text.Length;
-        var count = 0;
-
-        for (var i = text.Length - 1; i >= 0; i--)
-        {
-            var parent = parents[i * StateCount + state];
-            if (parent == StateStart || ModeIndexOf(parent) != ModeIndexOf(state))
-            {
-                if (count >= segments.Length)
-                    return false;
-                segments[count++] = new ModeSegment(ModeIndexOf(state), i, end - i, 0);
-                end = i;
-            }
-            state = parent;
-        }
-
-        Debug.Assert(state == StateStart, "the walk must terminate at the virtual start state");
-        segments.Slice(0, count).Reverse();
-        segmentCount = count;
-        return true;
-    }
+        => WalkBack(text.Length, parents, ParentBytesPerChar, finalState, segments, materialise: true, out segmentCount, out _, out _, out _);
 
     /// <summary>Counts the runs of each mode on the minimal-cost path, without materialising it.</summary>
     public static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte)
+        => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte);
+
+    /// <summary>
+    /// The walk back, run by run. A run of Numeric can only begin where the state is Numeric1, every third character of the run, and a run of Alphanumeric where it is Alnum1, every second; a run of Byte begins at the first entry that does not say Byte.
+    /// Each step reads whether the run continued at the place before, whose address is the position alone, so no load waits for the one before it.
+    /// The first character's predecessor is the start, which no run continues from, so every search lands at or after it.
+    /// </summary>
+    private static bool WalkBack(int length, ReadOnlySpan<byte> table, int stride, int finalState, Span<ModeSegment> segments, bool materialise, out int segmentCount, out int runsNumeric, out int runsAlnum, out int runsByte)
     {
+        segmentCount = 0;
         runsNumeric = 0;
         runsAlnum = 0;
         runsByte = 0;
-
         var state = finalState;
-        for (var i = length - 1; i >= 0; i--)
+        var end = length;
+        var count = 0;
+
+        while (end > 0)
         {
-            var parent = parents[i * StateCount + state];
-            if (parent == StateStart || ModeIndexOf(parent) != ModeIndexOf(state))
+            var i = end - 1;
+            int mode, parent;
+            if (state == StateByte)
             {
-                switch (ModeIndexOf(state))
-                {
-                    case 0: runsNumeric++; break;
-                    case 1: runsAlnum++; break;
-                    default: runsByte++; break;
-                }
+                mode = 2;
+                runsByte++;
+                while ((parent = table[i * stride]) == StateByte)
+                    i--;
             }
+            else if (state <= StateNumeric2)
+            {
+                mode = 0;
+                runsNumeric++;
+                // Back to where this group of three began.
+                i -= state == StateNumeric1 ? 0 : state == StateNumeric2 ? 1 : 2;
+                while ((parent = table[i * stride + 1] & 7) == StateNumeric0)
+                    i -= 3;
+            }
+            else
+            {
+                mode = 1;
+                runsAlnum++;
+                i -= state == StateAlnum1 ? 0 : 1;
+                while ((parent = table[i * stride + 1] >> 3) == StateAlnum0)
+                    i -= 2;
+            }
+
+            if (materialise)
+            {
+                if (count >= segments.Length)
+                    return false;
+                segments[count++] = new ModeSegment(mode, i, end - i, 0);
+            }
+            end = i;
             state = parent;
         }
+
+        Debug.Assert(state == StateStart || length == 0, "the walk must terminate at the virtual start state");
+        segments.Slice(0, count).Reverse();
+        segmentCount = count;
+        return true;
     }
 
     /// <summary>
@@ -673,15 +659,6 @@ internal static class ModeSegmenter
         }
         return sixths;
     }
-
-    /// <summary>Dense mode index of a state, or -1 for the virtual start state.</summary>
-    private static int ModeIndexOf(int state) => state switch
-    {
-        <= StateNumeric2 => 0,
-        StateAlnum0 or StateAlnum1 => 1,
-        StateByte => 2,
-        _ => -1,
-    };
 
     /// <summary>
     /// Encoded byte length of one character in Byte mode.

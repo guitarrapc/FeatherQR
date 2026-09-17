@@ -191,7 +191,7 @@ internal static class RmQRSegmentPlanner
         var cciAlnum = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
         var cciByte = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
 
-        var parentLength = text.Length * ModeSegmenter.StateCount;
+        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
         byte[]? rented = null;
         Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
             ? stackalloc byte[ModeSegmenter.MaxStackParents]
@@ -345,7 +345,7 @@ internal static class RmQRSegmentPlanner
     /// </summary>
     private static int ComputeFloor(ReadOnlySpan<char> text, EciMode charset, out int runsNumeric, out int runsAlnum, out int runsByte)
     {
-        var parentLength = text.Length * ModeSegmenter.StateCount;
+        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
         byte[]? rented = null;
         Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
             ? stackalloc byte[ModeSegmenter.MaxStackParents]
