@@ -149,18 +149,17 @@ public class QRSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_MidContentBom_EmitsTheSingleModeStream()
+    public async Task Optimal_MidContentBom_StaysInsideAByteRun()
     {
         // The byte-segment decoder consumes a leading EF BB BF of every non-Latin-1
-        // segment as a BOM; a split that relocates a mid-content U+FEFF to a run
-        // start would silently drop it, so the planner must fall back to the
-        // single-mode stream, where it sits interior and survives.
+        // segment as a BOM, so no plan opens a Byte run at a mid-content U+FEFF: the
+        // run opens a digit early and the mark sits interior, where it survives.
+        // The digits ahead of it still go to Numeric, which the version shows.
         var content = new string('1', 40) + "\uFEFF" + "a";
         var single = QRCodeGenerator.Create(content, QREccLevel.M, QRCodeGeneratorOptions.Default);
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
-        await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.Version).IsLessThan(single.Version);
 
         await Assert.That(QRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
@@ -186,20 +185,22 @@ public class QRSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_OverflowWhereEveryCheckedPlanIsMisread_ReportsDoesNotFit()
+    public async Task Optimal_TrailingBomNoSingleModeHolds_IsPlannedBehindTheDigitBeforeIt()
     {
-        // No single mode holds 5,001 characters, and the minimal-bit plan puts the
-        // trailing U+FEFF at a Byte-run start, where the decoder would consume it;
-        // the documented outcome is "does not fit" rather than a corrupted symbol.
+        // No single mode holds 5,001 characters. The unconstrained minimum opens a
+        // Byte run at the trailing U+FEFF, where the decoder would consume it; the
+        // plan takes the last digit into that run instead, eight bits dearer.
         var content = new string('1', 5000) + "\uFEFF";
         var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
 
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, options)).IsFalse();
-        Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(content, QREccLevel.L, options));
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, QRCodeGeneratorOptions.Default)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.L, out _, options)).IsTrue();
 
-        // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
-        var sibling = new string('1', 5000) + "a";
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(sibling, QREccLevel.L, out _, options)).IsTrue();
+        var sibling = QRCodeGenerator.Create(new string('1', 5000) + "a", QREccLevel.L, options);
+        var optimal = QRCodeGenerator.Create(content, QREccLevel.L, options);
+        await Assert.That(optimal.Version).IsEqualTo(sibling.Version);
+        await Assert.That(QRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
 #if !DEBUG

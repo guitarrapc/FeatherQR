@@ -23,6 +23,8 @@ using System.Text;
 ///   utf8-15k-any    : Japanese prose behind a UTF-8 ECI, 15 symbols; multi-byte cost model
 ///   utf8-15k-mixed  : Japanese sentences carrying order numbers, behind a UTF-8 ECI; three-byte characters
 ///                     with digit runs worth a Numeric segment, so the searches run the program under UTF-8
+///   marked-40k-any  : the order lines as concatenated files leave them, a U+FEFF after every line feed; no symbol
+///                     may begin with one, so cuts are moved off it, and it should cost what mixed-40k-any does
 ///   *-boost         : the same prose and digits with BoostEccLevel, which re-costs every
 ///                     chunk once per level it tries; the baseline encodes its symbols at
 ///                     the level the boost reached, so the Ratio stays the planning overhead
@@ -35,7 +37,7 @@ public class QRCodeStructuredAppendEncode
     private static readonly string[] shapeKeys =
     [
         "byte-45k-any", "byte-45k-v40", "byte-4k-max10",
-        "numeric-100k-any", "mixed-40k-any", "uneven-40k-any", "utf8-15k-any", "utf8-15k-mixed",
+        "numeric-100k-any", "mixed-40k-any", "uneven-40k-any", "utf8-15k-any", "utf8-15k-mixed", "marked-40k-any",
         "byte-45k-boost", "numeric-100k-boost",
     ];
 
@@ -64,6 +66,7 @@ public class QRCodeStructuredAppendEncode
             "uneven-40k-any" => (Repeat("0123456789", 20_000) + Repeat("order 20260915 item 0000123456 qty 42 ", 20_000), QRVersionRange.Any, false),
             "utf8-15k-any" => (Repeat("こんにちは世界、QRコードの分割テストです。", 15_000), QRVersionRange.Any, false),
             "utf8-15k-mixed" => (Repeat("ご注文番号 20260915-0000123456 の商品を 42 個、本日発送いたしました。", 15_000), QRVersionRange.Any, false),
+            "marked-40k-any" => (Repeat("order 20260915 item 0000123456 qty 42" + (char)0x0A + (char)0xFEFF, 40_000), QRVersionRange.Any, false),
             "byte-45k-boost" => (Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRVersionRange.Any, true),
             "numeric-100k-boost" => (Repeat("0123456789", 100_000), QRVersionRange.Any, true),
             _ => throw new ArgumentOutOfRangeException(nameof(Shape), Shape, "unknown shape"),

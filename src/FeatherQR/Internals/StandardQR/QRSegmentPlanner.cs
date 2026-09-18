@@ -180,7 +180,7 @@ internal static class QRSegmentPlanner
 
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
-    /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a relocated byte order mark), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
+    /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
         => TryBuildPlan(text, charset, version, eccLevel, segments, out segmentCount, out _);
@@ -274,7 +274,7 @@ internal static class QRSegmentPlanner
     }
 
     /// <summary>
-    /// Fills each run with the value its count indicator carries and returns what the plan measures, in one pass over the runs; -1 for a plan that relocates a mid-content U+FEFF to the start of a Byte run (see <see cref="ModeSegmenter.HasBomRelocatedToARunStart"/>), which the caller answers with the single-mode stream that keeps it interior.
+    /// Fills each run with the value its count indicator carries and returns what the plan measures, in one pass over the runs; -1 for a plan that opens a Byte run at a mid-content U+FEFF under UTF-8, which the program never builds (<see cref="ModeSegmenter.ByteOrderMark"/>) and the caller treats as a model that disagreed.
     /// </summary>
     private static int PricePlan(ReadOnlySpan<char> text, EciMode charset, int version, Span<ModeSegment> segments)
     {
@@ -295,8 +295,11 @@ internal static class QRSegmentPlanner
                     total += alnumHeader + ModeSegmenter.PayloadBits(EncodingMode.Alphanumeric, units);
                     break;
                 default:
-                    if (segment.Start > 0 && text[segment.Start] == (char)0xFEFF)
+                    if (charset == EciMode.Utf8 && segment.Start > 0 && text[segment.Start] == ModeSegmenter.ByteOrderMark)
+                    {
+                        Debug.Fail("the program opens no Byte run at a mid-content U+FEFF");
                         return -1;
+                    }
                     units = ModeSegmenter.ByteUnitCount(text.Slice(segment.Start, segment.Length), charset);
                     total += byteHeader + units * 8;
                     break;

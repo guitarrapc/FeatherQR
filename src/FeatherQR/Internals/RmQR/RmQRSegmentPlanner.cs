@@ -179,7 +179,7 @@ internal static class RmQRSegmentPlanner
 
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
-    /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a relocated byte order mark), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
+    /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -213,10 +213,10 @@ internal static class RmQRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
-        // A plan the shared byte-segment decoder would misread is worse than no
-        // plan: a split that relocates a mid-content U+FEFF to a run start loses it
-        // to the decoder's BOM consumption (which fires even behind an explicit
-        // UTF-8 ECI). The single-mode fallback keeps it.
+        // A plan that opens a Byte run at a mid-content U+FEFF would lose it to the
+        // decoder's BOM consumption (which fires even behind an explicit UTF-8 ECI).
+        // Under UTF-8 the program builds none, so this is the refusal of a model that
+        // disagreed; the single-mode fallback keeps the character.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
         {
             segmentCount = 0;

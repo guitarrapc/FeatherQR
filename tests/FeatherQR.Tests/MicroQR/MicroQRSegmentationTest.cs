@@ -393,36 +393,37 @@ public class MicroQRSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_MidContentBom_EmitsTheSingleModeStream()
+    public async Task Optimal_MidContentBom_StaysInsideAByteRun()
     {
-        // A split would relocate the mid-content U+FEFF to a byte-run start, where
-        // the decoder consumes it as a BOM; the single-mode stream keeps it interior
-        // and intact, so the planner must fall back.
+        // The decoder consumes a U+FEFF at a byte-run start as a BOM, so no plan
+        // opens a Byte run at a mid-content one: the run opens a digit early and the
+        // mark sits interior and intact. The digits ahead of it still go to Numeric,
+        // which the version shows.
         var content = "123456\uFEFFa";
         var single = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
         var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
-        await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That((int)optimal.Version).IsLessThan((int)single.Version);
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
     }
 
     [Test]
-    public async Task Optimal_OverflowWhereEveryCheckedPlanIsMisread_ReportsDoesNotFit()
+    public async Task Optimal_TrailingBomNoSingleModeHolds_IsPlannedBehindTheDigitBeforeIt()
     {
-        // 23 UTF-8 bytes fit no single mode, and the minimal-bit plan puts the
-        // trailing U+FEFF at a Byte-run start; the documented outcome is "does not
-        // fit" rather than a symbol that decodes with the character dropped.
+        // 23 UTF-8 bytes fit no single mode. The unconstrained minimum opens a Byte
+        // run at the trailing U+FEFF, where the decoder would consume it; the plan
+        // takes the last digit into that run instead.
         var content = new string('1', 20) + "\uFEFF";
         var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
 
-        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsFalse();
-        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options));
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, MicroQRCodeGeneratorOptions.Default)).IsFalse();
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsTrue();
 
-        // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
-        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(new string('1', 20) + "a", MicroQREccLevel.L, out _, options)).IsTrue();
+        var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, options);
+        await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
 #if !DEBUG

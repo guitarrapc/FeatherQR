@@ -36,6 +36,12 @@ internal static partial class ModeSegmenter
     private const int UnreachableKey = (int.MaxValue / 16) << 3;
 
     /// <summary>
+    /// U+FEFF, which under UTF-8 no Byte run opens at past the first character: the byte-segment decoder takes a segment's leading EF BB BF for a byte order mark and drops it, so the run the character is in opens a character early instead and keeps it interior.
+    /// At the first character the single-mode stream begins with the same bytes. Every text still has a plan, its single Byte run.
+    /// </summary>
+    internal const char ByteOrderMark = (char)0xFEFF;
+
+    /// <summary>
     /// Cost returned by <see cref="ComputeCosts"/> when no allowed mode set encodes the content; small enough that adding a transition cost cannot overflow.
     /// </summary>
     /// <remarks>An unreachable state keeps a value at or above this; the value may drift upward by a few bits per character, which the longest content any caller passes leaves far below the overflow.</remarks>
@@ -200,7 +206,7 @@ internal static partial class ModeSegmenter
                 na0 = a1 + 5;
             }
             if (allowByte)
-                nb = Math.Min(b + byteBits, cheapest + openByte + byteBits);
+                nb = c == ByteOrderMark && i > 0 ? b + byteBits : Math.Min(b + byteBits, cheapest + openByte + byteBits);
 
             n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; b = nb;
             cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
@@ -310,7 +316,7 @@ internal static partial class ModeSegmenter
                     continue; // nothing encodes it; every state stays unreachable from here on
                 }
 
-                var key = Math.Min(Math.Min(numeric, alnum) + openByte, b) + (ByteCost(text, i, charset) << 6);
+                var key = (text[i] == ByteOrderMark ? b : Math.Min(Math.Min(numeric, alnum) + openByte, b)) + (ByteCost(text, i, charset) << 6);
                 table[i * stride] = (byte)(key & 7);
                 b = (key & ~7) | StateByte;
                 while (i + 1 < length && ClassOf(text[i + 1]) == ClassOther)
@@ -432,7 +438,7 @@ internal static partial class ModeSegmenter
                 na1 = Math.Min(a0 + 6, cheapest + openAlnum);
                 na0 = a1 + 5;
             }
-            var nb = Math.Min(b + byteBits, cheapest + openByte + byteBits);
+            var nb = c == ByteOrderMark && i > 0 ? b + byteBits : Math.Min(b + byteBits, cheapest + openByte + byteBits);
 
             n0 = nn0; n1 = nn1; n2 = nn2; a0 = na0; a1 = na1; b = nb;
             cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
@@ -537,9 +543,9 @@ internal static partial class ModeSegmenter
     }
 
     /// <summary>
-    /// Whether the plan relocates a mid-content U+FEFF to the start of a Byte run.
-    /// The shared byte-segment decoder consumes a leading BOM of every segment without an explicit ISO-8859-1 declaration, so such a plan would decode with the character silently dropped — where the single-mode stream, which keeps it interior, round-trips.
-    /// Planners reject these plans and fall back to Single.
+    /// Whether the plan opens a Byte run at a mid-content U+FEFF.
+    /// The shared byte-segment decoder consumes a leading BOM of every segment without an explicit ISO-8859-1 declaration, so such a plan would decode with the character silently dropped.
+    /// Under UTF-8 the program builds no such plan (<see cref="ByteOrderMark"/>), and the rMQR and Micro QR planners keep this as the refusal of a model that disagreed; neither plans a text holding the mark under any other charset.
     /// (A run at offset 0 is exempt: there the single-mode stream starts with the same bytes and behaves identically.)
     /// </summary>
     public static bool HasBomRelocatedToARunStart(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)

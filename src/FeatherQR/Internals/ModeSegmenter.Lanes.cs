@@ -123,9 +123,12 @@ internal static partial class ModeSegmenter
                 var cls = Vector256.Create(ClassOf(c0), ClassOf(c1), ClassOf(c2), ClassOf(c3), ClassOf(c4), ClassOf(c5), ClassOf(c6), ClassOf(c7));
 
                 var byteBits = Vector256.Create(64);
+                var noOpen = Vector256<int>.Zero;
                 if (TBytes.Utf8)
                 {
                     var chars = Vector256.Create((int)c0, c1, c2, c3, c4, c5, c6, c7);
+                    // A lane at a byte order mark only continues its Byte run; past its first character it has one.
+                    noOpen = Vector256.Equals(chars, Vector256.Create((int)ByteOrderMark)) & Vector256.Create(U);
                     if (Vector256.EqualsAny(chars & Vector256.Create(0xF800), Vector256.Create(0xD800)))
                     {
                         // A surrogate in some lane: its length depends on its neighbour, asked lane by lane.
@@ -148,7 +151,10 @@ internal static partial class ModeSegmenter
                 var alnum = Vector256.Min(a0, a1);
                 var numericKey = Vector256.Min(n0 + Vector256.Create(32), Vector256.Min(alnum, b) + vOpenNumeric);
                 var alnumKey = Vector256.Min(Vector256.Min(numeric, b) + vOpenAlnum, a0 + Vector256.Create(48));
-                var byteKey = Vector256.Min(Vector256.Min(numeric, alnum) + vOpenByte, b) + byteBits;
+                var openKey = Vector256.Min(numeric, alnum) + vOpenByte;
+                if (TBytes.Utf8)
+                    openKey = Vector256.Max(openKey, noOpen);
+                var byteKey = Vector256.Min(openKey, b) + byteBits;
 
                 // Both bytes of every lane's entry in one store.
                 var parents = ((byteKey & stateBits) | ((numericKey & stateBits) << 8) | ((alnumKey & stateBits) << 11)).AsUInt32();

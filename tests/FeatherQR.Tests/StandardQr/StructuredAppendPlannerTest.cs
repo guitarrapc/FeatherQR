@@ -394,9 +394,10 @@ public class StructuredAppendPlannerTest
     }
 
     [Test]
-    public async Task Plan_CharacterThatFitsNoSymbol_IsRefused()
+    public async Task Plan_CharacterThatFitsNoSymbolOfASet_IsRefused()
     {
-        // One emoji under a UTF-8 ECI at version 1-H: 20 + 12 + 4 + 8 + 32 = 76 bits against 72.
+        // One emoji under a UTF-8 ECI at version 1-H: 20 + 12 + 4 + 8 + 32 = 76 bits against 72. Without the set
+        // header it is 56, which a single symbol holds; the generator asks that question, not the planner.
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
 
         var planned = StructuredAppendPlanner.TryPlan("🎉", QREccLevel.H, EciMode.Utf8, EncodingMode.Byte, false, QRSegmentation.Single, 1, 1, ends, out _, out _, out _);
@@ -436,6 +437,16 @@ public class StructuredAppendPlannerTest
         var text = "a\uD83Cb";
 
         await Assert.That(StructuredAppendPlanner.Parity(text, EciMode.Utf8, false)).IsEqualTo((byte)Encoding.UTF8.GetBytes(text).Aggregate(0, (p, b) => p ^ b));
+    }
+
+    [Test]
+    public async Task Parity_Latin1_CountsTheLastCharacterItHolds()
+    {
+        // U+00FF is ISO-8859-1's last character and its own byte; one past it is what the writer replaces.
+        var text = (char)0xFF + "abc" + (char)0x100;
+        var expected = (byte)(0xFF ^ 'a' ^ 'b' ^ 'c' ^ '?');
+
+        await Assert.That(StructuredAppendPlanner.Parity(text, EciMode.Iso8859_1, false)).IsEqualTo(expected);
     }
 
     /// <summary>Reference walk: extend each chunk one character at a time while it fits; surrogate pairs move together.</summary>

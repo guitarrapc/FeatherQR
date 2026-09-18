@@ -268,11 +268,11 @@ public class StructuredAppendEncodeTest
     }
 
     [Test]
-    public async Task Create_ForcedEci_IsRepeatedOnEverySymbol()
+    public async Task Create_ForcedEci_StillSplitsAndComesBack()
     {
-        // ASCII text with a forced UTF-8 declaration: each symbol must still carry it,
-        // which the decoder reports as the same text either way; pinned through the parity
-        // and the version instead (an ECI header costs 12 bits in every symbol).
+        // ASCII text with a forced UTF-8 declaration still splits and comes back; that each symbol
+        // carries the declaration cannot be seen here, since the decoder reports the same text
+        // either way, and is read off the wire in StructuredAppendStreamTest. Its 12 bits a symbol can only add symbols.
         var text = Repeat(Sentence, 300);
         var plain = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(3) };
         var forced = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(3), EciMode = EciMode.Utf8 };

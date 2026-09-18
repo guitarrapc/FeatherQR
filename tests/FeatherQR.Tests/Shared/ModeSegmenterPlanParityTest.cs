@@ -232,6 +232,9 @@ public class ModeSegmenterPlanParityTest
                 }
 
                 {
+                    // No Byte run opens at a U+FEFF past the first character: the decoder would take it for a byte order mark.
+                    if (from != StateByte && i > 0 && charset == EciMode.Utf8 && c == (char)0xFEFF)
+                        continue;
                     var cost = from == StateByte ? basis + byteBits : basis + ModeIndicatorBits + cciByte + byteBits;
                     Relax(cur, [], i, StateByte, cost, from, false);
                 }
@@ -292,6 +295,9 @@ public class ModeSegmenterPlanParityTest
 
                 if (allowByte)
                 {
+                    // No Byte run opens at a U+FEFF past the first character: the decoder would take it for a byte order mark.
+                    if (from != StateByte && i > 0 && charset == EciMode.Utf8 && c == (char)0xFEFF)
+                        continue;
                     var cost = from == StateByte ? basis + byteBits : basis + ModeIndicatorBits + cciByte + byteBits;
                     Relax(cur, parents, i, StateByte, cost, from, track);
                 }

@@ -131,7 +131,7 @@ public class StructuredAppendWriterPlanTest
         foreach (var (minVersion, maxVersion, ecc) in new[] { (1, 40, QREccLevel.L), (1, 9, QREccLevel.L), (10, 26, QREccLevel.H), (5, 20, QREccLevel.M) })
         {
             var because = $"{name} in versions {minVersion} to {maxVersion} at {ecc}";
-            if (!StructuredAppendPlanner.TryPlan(text, ecc, analysis.EciMode, analysis.EncodingMode, false, QRSegmentation.Optimal, minVersion, maxVersion, ends, out var count, out var version, out _, out var oneRunPlans, allowLanes: true))
+            if (!StructuredAppendPlanner.TryPlan(text, ecc, analysis.EciMode, analysis.EncodingMode, false, QRSegmentation.Optimal, minVersion, maxVersion, ends, out var count, out var version, out _, out var oneRunPlans, out _, allowLanes: true))
                 continue;
 
             await Assert.That(oneRunPlans).IsEqualTo(expected).Because(because);

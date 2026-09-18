@@ -284,23 +284,28 @@ public static class QRCodeGenerator
             ValidateOptimalEntry(options.Segmentation);
 
         var analysisResult = TextAnalyzer.Analyze(text, options.EciMode);
-        int version;
-        if (options.Segmentation != QRSegmentation.Single && !(options.Utf8Bom && analysisResult.EciMode == EciMode.Utf8 && analysisResult.EncodingMode == EncodingMode.Byte))
-        {
-            // Mirrors the encode path (SelectOptimalVersion + BuildPlanOrFallback),
-            // single-mode fallback included, so the version reported here is the
-            // version an encode with the same options would use.
-            if (!TryPlanOptimalVersion(text, eccLevel, in analysisResult, in options, out version))
-                return false;
-        }
-        else if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom, options.Version.Min, options.Version.Max, out version))
-        {
+        if (!TryResolveVersion(text, eccLevel, in analysisResult, in options, out var version))
             return false;
-        }
 
         var (totalSize, bufferSize) = CalculateMatrixSize(QRCodeData.SizeFromVersion(version), options.QuietZoneSize);
         size = new QRCodeCalculatedSize(bufferSize, totalSize, version);
         return true;
+    }
+
+    /// <summary>
+    /// The version an encode of this text with these options uses, or <c>false</c> when no version of the range holds it: what <see cref="Create(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> decides before it writes anything, the matrix and its quiet zone left out.
+    /// </summary>
+    private static bool TryResolveVersion(ReadOnlySpan<char> text, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, out int version)
+    {
+        if (options.Segmentation != QRSegmentation.Single && !(options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte))
+        {
+            // Mirrors the encode path (SelectOptimalVersion + BuildPlanOrFallback),
+            // single-mode fallback included, so the version reported here is the
+            // version an encode with the same options would use.
+            return TryPlanOptimalVersion(text, eccLevel, in analysis, in options, out version);
+        }
+
+        return TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, options.Utf8Bom, options.Version.Min, options.Version.Max, out version);
     }
 
     /// <summary>
@@ -312,7 +317,7 @@ public static class QRCodeGenerator
     /// Text that fits one symbol within the range returns that one symbol, exactly as <see cref="Create(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> would, with no Structured Append header.
     /// </para>
     /// <para>
-    /// The charset is decided once for the whole text and declared in every symbol, and the parity every symbol carries is the XOR of the whole text's bytes in that charset. A byte order mark, when <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for one, is written in the first symbol only. <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> raises the whole set to the level every symbol can take. Splits never fall inside a surrogate pair.
+    /// The charset is decided once for the whole text and declared in every symbol, and the parity every symbol carries is the XOR of the whole text's bytes in that charset. A byte order mark, when <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for one, is written in the first symbol only, and only when that symbol is in Byte mode: the mark heads the byte stream, and a first symbol of digits or alphanumerics has none to head, so the set then carries no mark and the parity counts none. <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> raises the whole set to the level every symbol can take. Splits never fall inside a surrogate pair, nor, in UTF-8, before a U+FEFF: a reader takes one at the head of a symbol for a byte order mark and drops it, which is also what becomes of one at the head of the text, as it does in a single symbol.
     /// Reassembly is described on <see cref="QRStructuredAppend"/>; each symbol decodes to its own part of the text.
     /// </para>
     /// </remarks>
@@ -320,10 +325,16 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">How much damage each QR code should survive; the same level for every symbol of the set.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings; the version range bounds the size of every symbol.</param>
     /// <returns>The symbols in set order: one when the text fits a single symbol, otherwise two to sixteen.</returns>
-    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), or when the options contradict each other.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
+
+    /// <summary>
+    /// What a set spends on this thread beside the planner's walks (<c>StructuredAppendPlanner.ScalarWalks</c>): the chunks the writer plans one by one, its passes that plan up to eight together, and the one-symbol questions. No set shows them; tests that pin where the work goes read them. One increment a plan or a question.
+    /// </summary>
+    [ThreadStatic]
+    internal static int ChunkPlans, LanePlanPasses, OneSymbolQuestions;
 
     /// <summary>
     /// <see cref="CreateStructuredAppend(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> with the choice of planning the symbols of the set together left to the caller; the set is the same either way, which is what <c>StructuredAppendWriterPlanTest</c> holds it to.
@@ -340,8 +351,8 @@ public static class QRCodeGenerator
         var charset = wholeText.EciMode;
 
         Span<int> chunkEnds = stackalloc int[StructuredAppendPlanner.MaxSymbols];
-        if (!StructuredAppendPlanner.TryPlan(textSpan, eccLevel, charset, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out var count, out var version, out _, out var oneRunPlans, allowLanes: true))
-            throw new ArgumentException($"Content does not fit {StructuredAppendPlanner.MaxSymbols} Structured Append symbols of version {options.Version.Max} at ECC level {eccLevel}. Widen the version range or lower the ECC level.", nameof(options));
+        if (!TryPlanSetOrSymbol(textSpan, eccLevel, in wholeText, in options, chunkEnds, out var count, out var version, out var oneRunPlans))
+            throw new ArgumentException(DoesNotFitSetMessage(textSpan, in wholeText, eccLevel, in options), nameof(options));
 
         if (count == 1)
             return [Create(textSpan, eccLevel, options)];
@@ -421,6 +432,7 @@ public static class QRCodeGenerator
                     {
                         rentedLaneTable ??= ArrayPool<byte>.Shared.Rent(longestChunk * ModeSegmenter.LaneTableBytesPerChar);
                         QRSegmentPlanner.PlanChunks(textSpan, laneStarts.Slice(0, lanes), laneLengths.Slice(0, lanes), charset, version, rentedLaneTable, laneBits, laneStates);
+                        LanePlanPasses++;
                         lanesToWrite = lanes;
                     }
                     else
@@ -451,6 +463,108 @@ public static class QRCodeGenerator
         }
 
         return symbols;
+    }
+
+    /// <summary>
+    /// The split of the text, or a count of one for a text that is not a set; false when neither sixteen symbols nor one hold it.
+    /// </summary>
+    /// <remarks>
+    /// The planner prices every chunk with the set header, so a text it splits or refuses may still be one that a single symbol holds without it, and such a text is not a set.
+    /// The planner says which texts that could be, by the measure its search ran on, and of those the question is asked the way <c>Create</c> asks it.
+    /// </remarks>
+    private static bool TryPlanSetOrSymbol(ReadOnlySpan<char> text, QREccLevel eccLevel, in TextAnalysisResult wholeText, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool oneRunPlans)
+    {
+        var planned = StructuredAppendPlanner.TryPlan(text, eccLevel, wholeText.EciMode, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out count, out version, out _, out oneRunPlans, out var mayBeOneSymbol, allowLanes: true);
+        if ((planned && count == 1) || !mayBeOneSymbol)
+            return planned;
+        OneSymbolQuestions++;
+        if (!TryResolveVersion(text, eccLevel, in wholeText, in options, out _))
+            return planned;
+
+        count = 1;
+        return true;
+    }
+
+    /// <summary>
+    /// The refusal of a text sixteen symbols do not hold, advising only what would make them hold it, which is found by planning it that way: each single change that does, or when none does the fewest changes that do together, and of the levels below the highest that does.
+    /// Off the hot path, so it may plan the text again, a change that is not open to the caller included, which fails as the text did.
+    /// </summary>
+    private static string DoesNotFitSetMessage(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
+    {
+        const int Widen = 1, Lower = 2, Plan = 4;
+        var message = $"Content does not fit {StructuredAppendPlanner.MaxSymbols} Structured Append symbols of version {options.Version.Max} at ECC level {eccLevel} " +
+            $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode}, {analysis.DataLength} data units).";
+
+        // Marks are refused however short the text is, which the size of the set does not explain: a run no symbol holds
+        // with the character ahead of it, or cuts kept off them until sixteen symbols are not enough, which the same text
+        // with an ordinary character of the same width in their place shows.
+        if (StructuredAppendPlanner.HoldsMarkRunNoSymbolHolds(text, analysis.EciMode, options.Version.Max, eccLevel, options.Utf8Bom))
+            message += " The text holds a run of U+FEFF that no symbol holds together with the character ahead of it, and no symbol after the first may begin with that character.";
+        // The stand-in is as wide as the mark, so a text past what any split holds is past it with the marks replaced too,
+        // and is not copied to be told so.
+        else if (analysis.EciMode == EciMode.Utf8 && text.Length > 1 && text.Slice(1).IndexOf(ModeSegmenter.ByteOrderMark) >= 0
+            && StructuredAppendPlanner.CanHold(StructuredAppendPlanner.Capacity(options.Version.Max, eccLevel), StructuredAppendPlanner.MaxSymbols, StructuredAppendPlanner.CheapestPayloadBits(text, analysis.EciMode), analysis.EciMode)
+            && FitsSet(WithoutMarks(text), in analysis, in options, eccLevel, options.Segmentation, options.Version.Max))
+            message += " The text holds U+FEFF, which no symbol after the first may begin with; with those characters replaced it would fit.";
+
+        // Single changes are alternatives; a larger set is advice only when no smaller one is.
+        var advice = "";
+        ReadOnlySpan<int> changes = [Widen, Lower, Plan, Widen | Lower, Widen | Plan, Lower | Plan, Widen | Lower | Plan];
+        for (var i = 0; i < changes.Length && (i < 3 || advice.Length == 0); i++)
+        {
+            var change = changes[i];
+            var maxVersion = (change & Widen) != 0 ? QRVersionRange.MaxVersion : options.Version.Max;
+            var segmentation = (change & Plan) != 0 ? QRSegmentation.Optimal : options.Segmentation;
+            var level = eccLevel;
+            var fits = false;
+            if ((change & Lower) == 0)
+                fits = FitsSet(text, in analysis, in options, level, segmentation, maxVersion);
+            else
+                while (!fits && level > QREccLevel.L)
+                    fits = FitsSet(text, in analysis, in options, --level, segmentation, maxVersion);
+
+            if (fits)
+                advice = advice.Length == 0 ? Described(change, level, i < 3 ? "" : " and ") : advice + "|" + Described(change, level, "");
+        }
+
+        if (advice.Length == 0)
+            return message;
+
+        // "a", "a or b", "a, b or c".
+        var last = advice.LastIndexOf('|');
+        if (last >= 0)
+            advice = advice.Substring(0, last).Replace("|", ", ") + " or " + advice.Substring(last + 1);
+        return message + " " + char.ToUpperInvariant(advice[0]) + advice.Substring(1) + ".";
+
+        static string Described(int change, QREccLevel level, string and)
+        {
+            var text = (change & Widen) != 0 ? "widen the version range" : "";
+            if ((change & Lower) != 0)
+                text += (text.Length == 0 ? "" : (change & Plan) != 0 ? ", " : and) + $"lower the ECC level to {level}";
+            if ((change & Plan) != 0)
+                text += (text.Length == 0 ? "" : and) + "use QRSegmentation.Optimal";
+            return text;
+        }
+    }
+
+    /// <summary>The text with every U+FEFF past the first character replaced by a character of the same width in every charset that has the mark.</summary>
+    private static string WithoutMarks(ReadOnlySpan<char> text)
+    {
+        var chars = text.ToArray();
+        for (var i = 1; i < chars.Length; i++)
+        {
+            if (chars[i] == ModeSegmenter.ByteOrderMark)
+                chars[i] = '\u3042';
+        }
+        return new string(chars);
+    }
+
+    /// <summary>Whether the text would be encoded with these changes made, as a set or as the one symbol, which is what the caller would get.</summary>
+    private static bool FitsSet(ReadOnlySpan<char> text, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, QREccLevel eccLevel, QRSegmentation segmentation, int maxVersion)
+    {
+        Span<int> ends = stackalloc int[StructuredAppendPlanner.MaxSymbols];
+        var changed = options with { Version = new QRVersionRange(options.Version.Min, maxVersion), Segmentation = segmentation };
+        return TryPlanSetOrSymbol(text, eccLevel, in analysis, in changed, ends, out _, out _, out _);
     }
 
     /// <summary>The cost of the chunk that needs the most bits, which is what decides whether a level holds the whole set.</summary>
@@ -504,6 +618,8 @@ public static class QRCodeGenerator
         if (TakesPlan(in analysis, segmentation, bomApplies, oneRunPlans))
         {
             int segmentCount, planBits;
+            if (laneTable.IsEmpty)
+                ChunkPlans++;
 #if NET8_0_OR_GREATER
             var built = laneTable.IsEmpty
                 ? QRSegmentPlanner.TryBuildPlan(chunk, charset, version, eccLevel, plan, out segmentCount, out planBits)
@@ -520,8 +636,8 @@ public static class QRCodeGenerator
             }
         }
 
-        // The planner fitted this chunk by its single-mode cost, or by a plan that could not
-        // be rebuilt, which the plan builder only does for content the single stream also holds.
+        // The planner fitted this chunk by its single-mode cost: every plan it prices a chunk by is
+        // one the builder accepts.
         if (StructuredAppendPlanner.SingleModeChunkBits(in analysis, charset, version, bomApplies) > capacity)
             throw new InvalidOperationException($"A Structured Append chunk of {chunk.Length} characters does not fit version {version} at ECC level {eccLevel} after planning.");
 

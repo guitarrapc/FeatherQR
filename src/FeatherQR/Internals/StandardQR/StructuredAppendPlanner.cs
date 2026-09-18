@@ -35,28 +35,37 @@ internal static partial class StructuredAppendPlanner
     /// </remarks>
     private const int FloorMarginBits = 31;
 
+    private const char ByteOrderMark = ModeSegmenter.ByteOrderMark;
+
     /// <summary>
-    /// Plans the split. <paramref name="chunkEnds"/> receives the end offset of each chunk (at least <see cref="MaxSymbols"/> entries); <paramref name="chunkCount"/> is 1 when the text fits one symbol within the range, in which case nothing else is planned.
+    /// The walks taken on this thread, scalar and eight budgets at once: what the search spends, which no plan shows, for tests that pin where it spends it. One increment a walk of thousands of steps.
+    /// </summary>
+    [ThreadStatic]
+    internal static int ScalarWalks, LaneBatches;
+
+    /// <summary>
+    /// Plans the split. <paramref name="chunkEnds"/> receives the end offset of each chunk (at least <see cref="MaxSymbols"/> entries); <paramref name="chunkCount"/> is 1 when the text fits one symbol within the range even with the set header every chunk is priced with, in which case nothing else is planned. Whether the text fits one symbol without that header, which is what makes it not a set, is the caller's to ask, the way <c>Create</c> asks it, of a text this splits or refuses.
     /// Returns <c>false</c> when the text needs more than sixteen symbols at <paramref name="maxVersion"/>, or some single character cannot fit a symbol there.
     /// </summary>
     public static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits)
         => TryPlan(text, eccLevel, charset, singleMode, utf8Bom, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, allowLanes: true);
 
     /// <summary>
-    /// <see cref="TryPlan(ReadOnlySpan{char}, QREccLevel, EciMode, EncodingMode, bool, QRSegmentation, int, int, Span{int}, out int, out int, out int)"/> with the choice of walking several budgets at once left to the caller; the plan is the same either way, which is what <c>StructuredAppendPlannerTest</c> holds it to.
+    /// <see cref="TryPlan(ReadOnlySpan{char}, QREccLevel, EciMode, EncodingMode, bool, QRSegmentation, int, int, Span{int}, out int, out int, out int)"/> with the choice of walking several budgets at once left to the caller; the plan is the same either way, which is what <c>StructuredAppendLaneWalkTest</c> holds it to.
     /// </summary>
     internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, bool allowLanes)
-        => TryPlan(text, eccLevel, charset, singleMode, utf8Bom, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, out _, allowLanes);
+        => TryPlan(text, eccLevel, charset, singleMode, utf8Bom, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, out _, out _, allowLanes);
 
     /// <summary>
-    /// The same, handing the writer what the pass over the text's dense runs also settles: <paramref name="oneRunPlans"/> says the minimal plan of every chunk that has a character outside the alphanumeric alphabet is one Byte run, which is its single-mode stream, so such a chunk needs no plan of its own.
+    /// The same, handing the writer what the pass over the text's dense runs also settles: <paramref name="oneRunPlans"/> says the minimal plan of every chunk that has a character outside the alphanumeric alphabet is one Byte run, which is its single-mode stream, so such a chunk needs no plan of its own. <paramref name="mayBeOneSymbol"/> says whether a symbol of the largest version could hold the text without the set header, by the measure the search ran on (the whole text's plan, or its single-mode stream): false rules the one symbol out, true leaves it to the caller to ask as <c>Create</c> does.
     /// </summary>
-    internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool oneRunPlans, bool allowLanes)
+    internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool oneRunPlans, out bool mayBeOneSymbol, bool allowLanes)
     {
         chunkCount = 0;
         version = 0;
         budgetBits = 0;
         oneRunPlans = false;
+        mayBeOneSymbol = false;
 
         // Nothing to split: the single-symbol path encodes an empty Byte segment.
         if (text.IsEmpty)
@@ -126,6 +135,9 @@ internal static partial class StructuredAppendPlanner
             // at least fewest; a walk near the plan's floor that holds fewest chunks therefore
             // settles it, and measured balanced budgets sit within FloorMarginBits of that floor.
             var whole = WholeTextPlanBits(text, charset, maxVersion, wholeTextPlans);
+            // No stream of the text costs less than its plan, so a plan the largest symbol does not hold
+            // without the set header rules the one symbol out.
+            mayBeOneSymbol = whole + charset.GetStandardQrHeaderBits() <= largest;
             var perSymbol = largest - setHeaders;
             if (whole < ModeSegmenter.Unreachable && perSymbol > 0)
             {
@@ -189,6 +201,12 @@ internal static partial class StructuredAppendPlanner
                 }
             }
         }
+
+        // Searched as single-mode streams, the one symbol is its stream's closed form, which reads the text: not one too long
+        // for a symbol at the best a mode does, ten bits on three characters.
+        if (searched == QRSegmentation.Single)
+            mayBeOneSymbol = text.Length * 10L <= largest * 3L
+                && SingleModeLength(text, charset, maxVersion, utf8Bom && charset == EciMode.Utf8, largest - charset.GetStandardQrHeaderBits() - ModeIndicatorBits, out _, out _) == text.Length;
 
         if (count < 0)
             count = CountChunks(text, charset, utf8Bom, searched, maxVersion, largest, MaxSymbols, chunkEnds);
@@ -265,7 +283,7 @@ internal static partial class StructuredAppendPlanner
                 // its floor, so the second step keeps the first margin; each step that fails raises
                 // the floor.
                 if (lanes)
-                    TryNarrowWithLanes(text, charset, version, low, high, count, ref low, ref high, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget, fromFloor: true);
+                    TryNarrowWithLanes(text, charset, version, low, high, count, ref low, ref high, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget, fromFloor: true, ceilingHolds: true);
 
                 var margin = FloorMarginBits;
                 var widened = false;
@@ -477,10 +495,10 @@ internal static partial class StructuredAppendPlanner
         var parity = utf8Bom ? 0xEF ^ 0xBB ^ 0xBF : 0;
         if (charset != EciMode.Utf8)
         {
-            // ISO-8859-1 and the default charset are the low byte of each char; the analysis
-            // that chose the charset already established every char fits it.
+            // ISO-8859-1 and the default charset are the low byte of each char. A forced charset
+            // may not hold the text; the byte is then whatever the Byte writer makes of the char.
             foreach (var c in text)
-                parity ^= (byte)c;
+                parity ^= Latin1Byte(c);
             return (byte)parity;
         }
 
@@ -525,6 +543,14 @@ internal static partial class StructuredAppendPlanner
         return (byte)parity;
     }
 
+    /// <summary>The byte <c>QRBinaryEncoder.WriteLatin1Data</c> writes for a char: the transcoder's replacement for one outside ISO-8859-1 where the writer goes through it, the low byte where it narrows.</summary>
+    private static byte Latin1Byte(char c)
+#if NET5_0_OR_GREATER
+        => c <= 0xFF ? (byte)c : (byte)'?';
+#else
+        => (byte)c;
+#endif
+
     /// <summary>
     /// Greedy walk: how many chunks of at most <paramref name="budgetBits"/> each the text needs at this version, writing each chunk's end offset into <paramref name="chunkEnds"/> while it has room.
     /// Stops as soon as the text needs more than <paramref name="limit"/> chunks and returns a value greater than the limit; a walk that cannot answer "at most this many" with yes has nothing left to learn.
@@ -536,11 +562,14 @@ internal static partial class StructuredAppendPlanner
     /// <summary>The walk resumed: <paramref name="count"/> chunks are already in <paramref name="chunkEnds"/> and the next starts at <paramref name="start"/>.</summary>
     private static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds, int count, int start)
     {
+        ScalarWalks++;
         while (start < text.Length)
         {
             if (count == limit)
                 return count + 1;
             var end = LongestChunkEnd(text, start, charset, version, segmentation, utf8Bom && start == 0, budgetBits);
+            if (end >= 0)
+                end = BeforeMark(text, charset, start, end);
             if (end < 0)
                 return Impossible;
             if (count < chunkEnds.Length)
@@ -550,6 +579,87 @@ internal static partial class StructuredAppendPlanner
         }
 
         return count;
+    }
+
+    /// <summary>
+    /// The cut moved back so that the next chunk does not begin with U+FEFF; -1 when that leaves this chunk nothing.
+    /// </summary>
+    /// <remarks>
+    /// A chunk is a symbol of its own, and the byte-segment decoder takes a segment's leading U+FEFF for a byte order mark and drops it, so a chunk that began with one would lose it; inside a chunk its plan keeps it interior to a Byte run (<see cref="ModeSegmenter.ByteOrderMark"/>).
+    /// The character ahead of the mark, a surrogate pair whole, goes to the next chunk with it, and so on back through a run of marks. A shorter chunk still fits its budget, and the end stays monotone in the budget, which the searches rely on.
+    /// Only under UTF-8: a declared ISO-8859-1 stops the decoder dropping anything, and the mark is not in that charset to begin with.
+    /// The lanes close their chunks by the same rule. A mark at the head of the text is the first symbol's, as it is a single symbol's, and is lost the same way.
+    /// </remarks>
+    private static int BeforeMark(ReadOnlySpan<char> text, EciMode charset, int start, int end)
+    {
+        if (charset != EciMode.Utf8)
+            return end;
+
+        while (end < text.Length && text[end] == ByteOrderMark)
+        {
+            end -= end - start >= 2 && char.IsLowSurrogate(text[end - 1]) && char.IsHighSurrogate(text[end - 2]) ? 2 : 1;
+            if (end <= start)
+                return -1;
+        }
+        return end;
+    }
+
+    /// <summary>
+    /// The most a cut kept off a run of U+FEFF can leave of a chunk's budget unused: the run and the character ahead of it, which move to the next chunk together (<see cref="BeforeMark"/>). Zero outside UTF-8 and for text holding no mark past its first character.
+    /// </summary>
+    internal static int KeptOffBits(ReadOnlySpan<char> text, EciMode charset)
+    {
+        if (charset != EciMode.Utf8 || text.Length < 2 || text.Slice(1).IndexOf(ByteOrderMark) < 0)
+            return 0;
+
+        // From one run to the next by a search for the mark, so a text holding a few costs a few.
+        var most = 0;
+        var i = 1;
+        while (i < text.Length)
+        {
+            var next = text.Slice(i).IndexOf(ByteOrderMark);
+            if (next < 0)
+                break;
+            i += next;
+            var ahead = i >= 2 && char.IsLowSurrogate(text[i - 1]) && char.IsHighSurrogate(text[i - 2]) ? i - 2 : i - 1;
+            var bytes = ModeSegmenter.ByteCost(text, ahead, charset);
+            for (; i < text.Length && text[i] == ByteOrderMark; i++)
+                bytes += 3;
+            most = Math.Max(most, bytes);
+        }
+        return most * 8;
+    }
+
+    /// <summary>
+    /// Whether the text holds a run of U+FEFF that no symbol of this version holds together with the character ahead of it, which no cut can part it from (<see cref="BeforeMark"/>) and no Byte run can open after (<see cref="ModeSegmenter.ByteOrderMark"/>): the least such a chunk costs is one Byte run of the two. UTF-8 only, as those rules are.
+    /// </summary>
+    internal static bool HoldsMarkRunNoSymbolHolds(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, bool utf8Bom)
+    {
+        if (charset != EciMode.Utf8)
+            return false;
+
+        var room = Capacity(version, eccLevel) - HeaderBits - charset.GetStandardQrHeaderBits() - ModeIndicatorBits - EncodingMode.Byte.GetCountIndicatorLength(version);
+        var bytes = 0;
+        for (var i = 1; i < text.Length; i++)
+        {
+            if (text[i] != ByteOrderMark)
+            {
+                bytes = 0;
+                continue;
+            }
+
+            if (bytes == 0)
+            {
+                // The character ahead, a pair whole, and the mark the first symbol begins with when it is asked for.
+                var ahead = i >= 2 && char.IsLowSurrogate(text[i - 1]) && char.IsHighSurrogate(text[i - 2]) ? i - 2 : i - 1;
+                bytes = ModeSegmenter.ByteCost(text, ahead, charset) + (utf8Bom && ahead == 0 ? 3 : 0);
+            }
+
+            bytes += 3;
+            if (bytes * 8 > room)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

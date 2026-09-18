@@ -5,7 +5,7 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each symbol of a set decodes on its own and yields its own part of the text; the header says where that part goes. To reassemble a set: every symbol must report the same <see cref="Count"/> and the same <see cref="Parity"/>; the indices <c>0</c> to <c>Count - 1</c> must each be present exactly once; the parts are concatenated in <see cref="Index"/> order.
+/// Each symbol of a set decodes on its own and yields its own part of the text; the header says where that part goes. To reassemble a set: every symbol must report the same <see cref="Count"/> and the same <see cref="Parity"/>; the indices <c>0</c> to <c>Count - 1</c> must each be present exactly once; the parts are concatenated in <see cref="Index"/> order. A part is text, so this holds for sets whose encoder cut the message between characters, as <c>QRCodeGenerator.CreateStructuredAppend</c> does; an encoder that cuts the byte stream inside a multi-byte character leaves U+FFFD at the edges of the two parts when its symbols declare UTF-8, and when they declare no charset the Byte segment on each side of the cut, no longer valid UTF-8, is read as ISO-8859-1, which is how such a set shows itself.
 /// </para>
 /// <para>
 /// <see cref="Parity"/> identifies the set, not the content. It is the XOR of the bytes of the whole message as the encoder wrote them, in whatever charset the set carries, so a reader can tell that two symbols belong to different sets; it is not a checksum a caller can recompute from the reassembled text.
