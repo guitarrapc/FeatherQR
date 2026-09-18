@@ -130,6 +130,8 @@ Each phase follows the test-first workflow, regenerates `src/FeatherQR/PublicAPI
 
 - **Lanes lose to the scalar search on long runs of U+FEFF.** 40 digits then 200 marks, repeated to 15,000 characters, L, versions 1 to 40: the lane search is 1.9 times the scalar search (1,582 against 818 us), with identical plans. Every close falls back across the run, so the lanes spend most steps apart and are stepped one at a time. Realistic text is 0.17 to 1.0 times with lanes. Candidate fix: take the scalar bisection when the longest run of marks (`KeptOffBits`) is a large share of the chunk length, measured on both sides of the threshold before it is set.
 
+- **An ECI costs a v40 decode about 15 %.** `QRCodeStructuredAppendDecode` shows ASCII sets 1.26 times the plain symbols, because a set declares its charset in every symbol. One 2,900-byte v40-L chunk: plain 130 us, the same chunk with an ISO-8859-1 or a UTF-8 ECI 150 us, the set's symbol 151 us. Twelve bits should not cost 20 us; where the time goes in `QRBinaryDecoder` / `SegmentDecoders.DecodeBytePayload` is not yet measured.
+
 ### Outside Structured Append (in `main` before this branch)
 
 - **An undefined `QREccLevel` fails deep inside.** `Create("hello", (QREccLevel)99)` throws `ArgumentException` with no `ParamName` and the message "ECC info not found for version 1, level 99"; `CreateStructuredAppend` names version 40. The type matches the documented contract (`TryGetRequiredBufferSize` promises `ArgumentException` for it); the message and the missing parameter name do not, so the fix is an up-front check that names `eccLevel`.
