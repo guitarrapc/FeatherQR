@@ -411,13 +411,9 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Module size from the dark-light-dark runs through <paramref name="from"/>'s center along the line toward <paramref name="towards"/>, walked in both directions.
+    /// Module size through <paramref name="from"/>'s center along the line toward <paramref name="towards"/>, measured by the finder axis estimator the single-finder symbologies share.
     /// Returns the module size, or NaN when the run leaves the image.
     /// </summary>
-    /// <remarks>
-    /// Only edges of the same polarity are paired: the dark ring's inner edge on one side and its outer edge on the other are 6 modules apart, twice (12 in total).
-    /// A dark-to-light edge and a light-to-dark edge move in opposite directions when grey edge pixels fall on one side of the threshold, so pairing the two outer edges (7 modules) carries that shift into the module size: one pixel of ink spread at 3 px/module is +4.8 %, a v24 symbol read as v23.
-    /// </remarks>
     private static float MeasureBothWays(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern from, in FinderPattern towards)
     {
         var dx = towards.X - from.X;
@@ -425,59 +421,8 @@ internal static class QRImageDecoder
         var length = (float)Math.Sqrt(dx * dx + dy * dy);
         if (length < 1f)
             return float.NaN;
-        dx /= length;
-        dy /= length;
 
-        if (!TryDarkLightDarkRun(luminance, width, height, threshold, from.X, from.Y, dx, dy, out var forwardInner, out var forwardOuter)
-            || !TryDarkLightDarkRun(luminance, width, height, threshold, from.X, from.Y, -dx, -dy, out var backwardInner, out var backwardOuter))
-            return float.NaN;
-
-        return (forwardInner + backwardOuter + backwardInner + forwardOuter) / 12f;
-    }
-
-    /// <summary>
-    /// Walks from a finder center along a direction through the dark-light-dark sequence (center square → light ring → dark ring → out), returning the distances to the dark ring's inner edge (≈ 2.5 modules) and outer edge (≈ 3.5 modules).
-    /// False when the image edge interrupts.
-    /// </summary>
-    /// <remarks>
-    /// The walk samples at integer pixel steps, so the first pixel past an edge overshoots it by up to one pixel.
-    /// Reporting step − 0.5 centers that error: without the correction the module size is systematically overestimated (~+0.07..+0.25 px measured), which at small pixels-per-module snaps the dimension estimate one whole version low (e.g. a 512 px version 14 render read as version 13).
-    /// </remarks>
-    private static bool TryDarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY, out float inner, out float outer)
-    {
-        inner = 0f;
-        outer = 0f;
-        var phase = 0;
-        for (var step = 1f; ; step += 1f)
-        {
-            var x = (int)(startX + dirX * step + 0.5f);
-            var y = (int)(startY + dirY * step + 0.5f);
-            if (x < 0 || x >= width || y < 0 || y >= height)
-                return false;
-
-            var dark = luminance[y * width + x] < threshold;
-            switch (phase)
-            {
-                case 0: // inside the 3-module center square
-                    if (!dark)
-                        phase = 1;
-                    break;
-                case 1: // light ring; ends at the dark ring's inner edge
-                    if (dark)
-                    {
-                        inner = step - 0.5f;
-                        phase = 2;
-                    }
-                    break;
-                default: // dark ring; run ends at the transition out of it
-                    if (!dark)
-                    {
-                        outer = step - 0.5f;
-                        return true;
-                    }
-                    break;
-            }
-        }
+        return FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, from.X, from.Y, dx / length, dy / length);
     }
 
     // Alignment lattice: at most 7 coordinates per axis (ISO/IEC 18004 Annex E)

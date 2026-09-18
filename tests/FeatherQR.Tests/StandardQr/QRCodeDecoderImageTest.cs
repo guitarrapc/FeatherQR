@@ -311,30 +311,10 @@ public class QRCodeDecoderImageTest
     public async Task Decode_HalfPixelOffsetRender_ReadsTheTrueVersion(int version, int pixelsPerModule, int edgeGray)
     {
         var content = "https://github.com/guitarrapc/FeatherQR";
-        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 4 });
-        var side = qr.Size * pixelsPerModule + 1;
-        var luminance = new byte[side * side];
-        for (var y = 0; y < side; y++)
-        {
-            for (var x = 0; x < side; x++)
-            {
-                // Two samples per axis at the pixel's quarter points, symbol shifted by half a pixel
-                var dark = 0;
-                for (var sy = 0; sy < 2; sy++)
-                {
-                    for (var sx = 0; sx < 2; sx++)
-                    {
-                        var row = (int)Math.Floor((y + 0.25f + sy * 0.5f - 0.5f) / pixelsPerModule);
-                        var col = (int)Math.Floor((x + 0.25f + sx * 0.5f - 0.5f) / pixelsPerModule);
-                        if (row >= 0 && col >= 0 && row < qr.Size && col < qr.Size && qr[row, col])
-                            dark++;
-                    }
-                }
-                luminance[y * side + x] = dark switch { 0 => (byte)255, 4 => (byte)0, _ => (byte)edgeGray };
-            }
-        }
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, width, height) = HalfPixelRenderer.Render((row, col) => qr[row, col], qr.Size, qr.Size, pixelsPerModule, (byte)edgeGray);
 
-        var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out var decoded, out var info);
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var decoded, out var info);
 
         await Assert.That(success).IsTrue().Because($"v{version} at {pixelsPerModule} px/module, edge {edgeGray}: {info.Status}, read as v{info.Version}");
         await Assert.That(decoded).IsEqualTo(content);

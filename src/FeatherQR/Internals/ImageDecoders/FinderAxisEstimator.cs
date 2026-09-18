@@ -20,8 +20,8 @@ internal readonly struct OrientationCandidate(
 }
 
 /// <summary>
-/// Local module-scale and axis recovery around a single 7×7 finder pattern, for symbologies whose orientation cannot be derived from three finder centers (Micro QR, rMQR).
-/// Measures dark-light-dark runs from the finder center: the center square (3) + light ring (1) + dark ring (1) on each side spans exactly 7 modules of the 1:1:3:1:1 structure.
+/// Local module-scale measurement through a 7×7 finder pattern, shared by all three symbologies, and axis recovery around a single finder for those whose orientation cannot be derived from three finder centers (Micro QR, rMQR).
+/// Measures dark-light-dark runs from the finder center and pairs the dark ring's inner edge on one side with its outer edge on the other (6 modules), so grey edge pixels on either side of the threshold do not scale the result.
 /// </summary>
 internal static class FinderAxisEstimator
 {
@@ -84,11 +84,22 @@ internal static class FinderAxisEstimator
             vSizes[degrees] = vSize;
         }
 
-        // The pixel-grid minimum can be a few degrees away from the true finder
-        // axis, particularly for small rotated symbols. Select several separated
-        // minima rather than filling the result with adjacent samples of one dip.
-        Span<int> selectedDegrees = stackalloc int[MaxOrientationCandidates];
+        Span<float> selectedDegrees = stackalloc float[MaxOrientationCandidates];
         var count = 0;
+
+        // First candidate: the axis fitted to the whole sweep. Near the axis the span
+        // grows only as 1/cos, so its minimum is flat and pixel noise picks it (measured
+        // 5-11 degrees off at 3 px/module); toward the corners it peaks sharply, and a
+        // fit of every direction uses both.
+        if (destination.Length > 0 && TryFitAxis(uSizes, vSizes, out var fittedDegrees, out var fittedSize))
+        {
+            if (TryMeasureFrame(luminance, width, height, threshold, candidate, fittedDegrees, fittedSize, fittedSize, maxRunLength, out destination[count]))
+                selectedDegrees[count++] = fittedDegrees;
+        }
+
+        // Then separated minima: the pixel-grid minimum can be a few degrees away from
+        // the true finder axis, particularly for small rotated symbols, so several are
+        // kept rather than filling the result with adjacent samples of one dip.
         while (count < destination.Length && count < MaxOrientationCandidates)
         {
             var bestDegree = -1;
@@ -121,27 +132,151 @@ internal static class FinderAxisEstimator
                 break;
 
             selectedDegrees[count] = bestDegree;
-            var radians = bestDegree * (Math.PI / 180d);
-            var cos = (float)Math.Cos(radians);
-            var sin = (float)Math.Sin(radians);
-            var bestUSize = uSizes[bestDegree];
-            var bestVSize = vSizes[bestDegree];
-            destination[count++] = new OrientationCandidate(
-                cos * bestUSize,
-                sin * bestUSize,
-                -sin * bestVSize,
-                cos * bestVSize,
-                bestUSize,
-                bestVSize);
+            if (TryMeasureFrame(luminance, width, height, threshold, candidate, bestDegree, uSizes[bestDegree], vSizes[bestDegree], maxRunLength, out destination[count]))
+                count++;
+            else
+                break;
         }
 
         return count;
     }
 
     /// <summary>
-    /// Module size along one axis through the finder center: forward and backward dark-light-dark runs together span 7 modules.
+    /// The grid frame along <paramref name="degrees"/>, with each axis measured on rays that took no part in choosing the direction.
+    /// </summary>
+    /// <remarks>
+    /// A direction chosen as the smallest of 90 noisy measurements came with a measurement that came out low, and a grid scaled from it shrinks toward the far side of the symbol.
+    /// </remarks>
+    private static bool TryMeasureFrame(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern candidate, float degrees, float uFallback, float vFallback, float maxRunLength, out OrientationCandidate frame)
+    {
+        var radians = degrees * (Math.PI / 180d);
+        var cos = (float)Math.Cos(radians);
+        var sin = (float)Math.Sin(radians);
+        var uSize = MeasureAxisOffCenter(luminance, width, height, threshold, candidate.X, candidate.Y, cos, sin, uFallback, maxRunLength);
+        var vSize = MeasureAxisOffCenter(luminance, width, height, threshold, candidate.X, candidate.Y, -sin, cos, vFallback, maxRunLength);
+        frame = new OrientationCandidate(cos * uSize, sin * uSize, -sin * vSize, cos * vSize, uSize, vSize);
+        return uSize >= 1f && vSize >= 1f;
+    }
+
+    /// <summary>Quarter-degree steps of the fitted axis angle.</summary>
+    private const int FitStepsPerDegree = 4;
+
+    /// <summary>
+    /// Span shape of a unit square crossed through its center at a quarter-degree offset from its axis, 1 / max(|cos|, |sin|); it repeats every 90 degrees.
+    /// </summary>
+    private static readonly float[] SquareSpanShape = CreateSquareSpanShape();
+
+    private static float[] CreateSquareSpanShape()
+    {
+        var shape = new float[90 * FitStepsPerDegree];
+        for (var i = 0; i < shape.Length; i++)
+        {
+            var radians = i * Math.PI / (180d * FitStepsPerDegree);
+            shape[i] = (float)(1d / Math.Max(Math.Abs(Math.Cos(radians)), Math.Abs(Math.Sin(radians))));
+        }
+        return shape;
+    }
+
+    /// <summary>
+    /// Least-squares fit of the square's span shape to every direction of the sweep (u at d degrees, v at d + 90), coarse whole degrees first and then quarter degrees around the best.
+    /// False when fewer than half the directions measured.
+    /// </summary>
+    private static bool TryFitAxis(ReadOnlySpan<float> uSizes, ReadOnlySpan<float> vSizes, out float degrees, out float size)
+    {
+        degrees = 0f;
+        size = 0f;
+        var valid = 0;
+        for (var d = 0; d < 90; d++)
+        {
+            if (IsMeasured(uSizes[d]))
+                valid++;
+            if (IsMeasured(vSizes[d]))
+                valid++;
+        }
+        if (valid < 90)
+            return false;
+
+        var bestStep = 0;
+        var bestResidual = float.MaxValue;
+        var bestSize = 0f;
+        for (var step = 0; step < 90 * FitStepsPerDegree; step += FitStepsPerDegree)
+            Evaluate(uSizes, vSizes, step, ref bestStep, ref bestResidual, ref bestSize);
+
+        var coarse = bestStep;
+        for (var offset = -FitStepsPerDegree + 1; offset < FitStepsPerDegree; offset++)
+        {
+            if (offset != 0)
+                Evaluate(uSizes, vSizes, (coarse + offset + 90 * FitStepsPerDegree) % (90 * FitStepsPerDegree), ref bestStep, ref bestResidual, ref bestSize);
+        }
+
+        degrees = bestStep / (float)FitStepsPerDegree;
+        size = bestSize;
+        return true;
+
+        static void Evaluate(ReadOnlySpan<float> uSizes, ReadOnlySpan<float> vSizes, int step, ref int bestStep, ref float bestResidual, ref float bestSize)
+        {
+            var period = 90 * FitStepsPerDegree;
+            float sumFG = 0f, sumGG = 0f, sumFF = 0f;
+            for (var d = 0; d < 90; d++)
+            {
+                // v at d + 90 has the same shape offset as u at d (period 90)
+                var g = SquareSpanShape[(d * FitStepsPerDegree - step + period) % period];
+                Accumulate(uSizes[d], g, ref sumFG, ref sumGG, ref sumFF);
+                Accumulate(vSizes[d], g, ref sumFG, ref sumGG, ref sumFF);
+            }
+            if (sumGG <= 0f)
+                return;
+
+            var residual = sumFF - sumFG * sumFG / sumGG;
+            if (residual < bestResidual)
+            {
+                bestResidual = residual;
+                bestStep = step;
+                bestSize = sumFG / sumGG;
+            }
+        }
+
+        static void Accumulate(float value, float g, ref float sumFG, ref float sumGG, ref float sumFF)
+        {
+            if (!IsMeasured(value))
+                return;
+            sumFG += value * g;
+            sumGG += g * g;
+            sumFF += value * value;
+        }
+    }
+
+    private static bool IsMeasured(float size) => !float.IsNaN(size) && size >= 1f;
+
+    /// <summary>
+    /// Module size along one axis from four rays parallel to it, offset sideways by ±0.5 and ±1 module: inside the 3-module center square they cross the same ring edges at right angles as the center ray.
+    /// Falls back to <paramref name="centerSize"/> when every offset ray clips.
+    /// </summary>
+    private static float MeasureAxisOffCenter(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, float dirX, float dirY, float centerSize, float maxRunLength)
+    {
+        var sum = 0f;
+        var count = 0;
+        for (var i = 0; i < 4; i++)
+        {
+            var offset = (i < 2 ? 0.5f : 1f) * (i % 2 == 0 ? 1f : -1f) * centerSize;
+            var size = MeasureAxis(luminance, width, height, threshold, centerX - dirY * offset, centerY + dirX * offset, dirX, dirY, maxRunLength);
+            if (!float.IsNaN(size) && size >= 1f)
+            {
+                sum += size;
+                count++;
+            }
+        }
+        return count == 0 ? centerSize : sum / count;
+    }
+
+    /// <summary>
+    /// Module size along one axis through the finder center, from the dark-light-dark runs walked in both directions.
     /// NaN when either run clips.
     /// </summary>
+    /// <remarks>
+    /// Only edges of the same polarity are paired: the dark ring's inner edge on one side and its outer edge on the other are 6 modules apart, twice (12 in total).
+    /// A dark-to-light edge and a light-to-dark edge move in opposite directions when grey edge pixels fall on one side of the threshold, so pairing the two outer edges (7 modules) carries that shift into the module size: one pixel of ink spread at 3 px/module is +4.8 %.
+    /// </remarks>
     public static float MeasureAxis(
         ReadOnlySpan<byte> luminance,
         int width,
@@ -153,21 +288,25 @@ internal static class FinderAxisEstimator
         float dirY,
         float maxRunLength = float.PositiveInfinity)
     {
-        var forward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, dirX, dirY, maxRunLength);
-        var backward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, -dirX, -dirY, maxRunLength);
-        if (float.IsNaN(forward) || float.IsNaN(backward))
+        if (!TryDarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, dirX, dirY, maxRunLength, out var forwardInner, out var forwardOuter)
+            || !TryDarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, -dirX, -dirY, maxRunLength, out var backwardInner, out var backwardOuter))
             return float.NaN;
 
-        return (forward + backward) / 7f;
+        return (forwardInner + backwardOuter + backwardInner + forwardOuter) / 12f;
     }
 
     /// <summary>
-    /// Walks from the finder center along a direction until the dark-light-dark sequence completes (center square → light ring → dark ring → out), returning the traveled distance (≈ 3.5 modules).
-    /// NaN when the image edge or the caller's maximum run length interrupts the sequence.
-    /// Returning step − 0.5 centers the one-pixel overshoot of the integer-step walk (same correction as the Standard QR measurement).
+    /// Walks from the finder center along a direction through the dark-light-dark sequence (center square → light ring → dark ring → out), returning the distances to the dark ring's inner edge (≈ 2.5 modules) and outer edge (≈ 3.5 modules).
+    /// False when the image edge or the caller's maximum run length interrupts the sequence.
     /// </summary>
-    public static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY, float maxRunLength)
+    /// <remarks>
+    /// The walk samples at integer pixel steps, so the first pixel past an edge overshoots it by up to one pixel.
+    /// Reporting step − 0.5 centers that error: without the correction the module size is systematically overestimated (~+0.07..+0.25 px measured), which at small pixels-per-module snaps a Standard QR dimension estimate one whole version low (e.g. a 512 px version 14 render read as version 13).
+    /// </remarks>
+    public static bool TryDarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY, float maxRunLength, out float inner, out float outer)
     {
+        inner = 0f;
+        outer = 0f;
         var phase = 0;
         for (var step = 1f; step <= maxRunLength; step += 1f)
         {
@@ -177,7 +316,10 @@ internal static class FinderAxisEstimator
             {
                 // The outer dark ring may end exactly at the image edge (zero or
                 // cropped quiet zone): the run is complete, not clipped.
-                return phase == 2 ? step - 0.5f : float.NaN;
+                if (phase != 2)
+                    return false;
+                outer = step - 0.5f;
+                return true;
             }
 
             var dark = luminance[y * width + x] < threshold;
@@ -187,17 +329,23 @@ internal static class FinderAxisEstimator
                     if (!dark)
                         phase = 1;
                     break;
-                case 1: // light ring
+                case 1: // light ring; ends at the dark ring's inner edge
                     if (dark)
+                    {
+                        inner = step - 0.5f;
                         phase = 2;
+                    }
                     break;
                 default: // dark ring; run ends at the transition out of it
                     if (!dark)
-                        return step - 0.5f;
+                    {
+                        outer = step - 0.5f;
+                        return true;
+                    }
                     break;
             }
         }
 
-        return float.NaN;
+        return false;
     }
 }

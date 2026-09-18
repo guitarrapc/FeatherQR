@@ -34,6 +34,65 @@ public class RmQRCodeDecoderImageTest
     private static string ContentFor(RmQRVersion version)
         => version == RmQRVersion.R7x43 ? "RMQR 43" : "RMQR IMAGE 123";
 
+    /// <summary>
+    /// A symbol half a pixel off the pixel grid, edge pixels grey: 64 is below the threshold
+    /// (every dark run a pixel wider), 192 above it (a pixel narrower). The finder's module
+    /// size used to be measured across its two outer edges, which move apart under ink spread,
+    /// and at 3 px/module that failed every version (regression, F12 in the 2.0.0 plan).
+    /// </summary>
+    [Test]
+    [Arguments(RmQRVersion.R7x43, 3, 64)]
+    [Arguments(RmQRVersion.R11x77, 3, 64)]
+    [Arguments(RmQRVersion.R13x99, 3, 64)]
+    [Arguments(RmQRVersion.R7x139, 3, 64)]
+    [Arguments(RmQRVersion.R15x139, 3, 64)]
+    [Arguments(RmQRVersion.R17x139, 3, 64)]
+    [Arguments(RmQRVersion.R11x77, 4, 64)]
+    [Arguments(RmQRVersion.R17x139, 5, 64)]
+    [Arguments(RmQRVersion.R7x43, 3, 192)]
+    [Arguments(RmQRVersion.R17x139, 3, 192)]
+    public async Task Decode_HalfPixelOffsetRender(RmQRVersion version, int pixelsPerModule, int edgeGray)
+    {
+        var content = ContentFor(version);
+        var data = Create(content, RmQREccLevel.M, version, quietZone: 0);
+        var (luminance, width, height) = HalfPixelRenderer.Render((row, col) => data[row, col], data.Width, data.Height, pixelsPerModule, (byte)edgeGray);
+
+        var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModule} px/module, edge {edgeGray}: {info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// Anti-aliased renders at low density and small rotations: the axis recovery took the
+    /// direction of the shortest span through the finder, a flat minimum that pixel noise
+    /// moved several degrees, and scaled the grid from the measurement that won it.
+    /// R11x77 at 8 degrees failed; the broader candidate search read the rest either way, and
+    /// they stay to pin the envelope. The estimator itself is pinned in FinderAxisEstimatorTest.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(SupersampledRotations))]
+    public async Task Decode_SupersampledRotatedRender(RmQRVersion version, int pixelsPerModule, int degrees)
+    {
+        var content = ContentFor(version);
+        var data = Create(content, RmQREccLevel.M, version, quietZone: 0);
+        var (luminance, width, height) = SupersampledRenderer.Render((row, col) => data[row, col], data.Width, data.Height, pixelsPerModule, degrees);
+
+        var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModule} px/module, {degrees} deg: {info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    public static IEnumerable<(RmQRVersion, int, int)> SupersampledRotations()
+    {
+        foreach (var version in new[] { RmQRVersion.R11x77, RmQRVersion.R17x139 })
+        {
+            foreach (var degrees in new[] { 8, 20 })
+                yield return (version, 3, degrees);
+        }
+    }
+
     #region Clean images
 
     [Test]

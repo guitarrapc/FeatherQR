@@ -8,9 +8,8 @@ namespace FeatherQR.Tests;
 /// Image-path decoding tests for <see cref="MicroQRCodeDecoder"/>: clean rendered
 /// images (all versions × ECC), the supported geometric transforms (90° rotations,
 /// mirroring, reflectance reversal, scaling, translation, quiet zone variants) and
-/// a representative degradation subset per the test strategy §7. Small-angle
-/// rotation and perspective are documented out of scope for the single-finder
-/// Micro QR tier-1 detector.
+/// a representative degradation subset per the test strategy §7. Perspective is
+/// documented out of scope for the single-finder Micro QR tier-1 detector.
 /// </summary>
 public class MicroQRCodeDecoderImageTest
 {
@@ -31,6 +30,61 @@ public class MicroQRCodeDecoderImageTest
         return new MicroQRCodeImageBuilder(data)
             .WithModulePixelSize(modulePixelSize)
             .ToBitmap();
+    }
+
+    /// <summary>
+    /// A symbol half a pixel off the pixel grid, edge pixels grey: 64 is below the threshold
+    /// (every dark run a pixel wider), 192 above it (a pixel narrower). The finder's module
+    /// size used to be measured across its two outer edges, which move apart under ink spread
+    /// (regression, F12 in the 2.0.0 plan: M3 failed at 3 px/module).
+    /// </summary>
+    [Test]
+    [Arguments(MicroQRVersion.M2, 3, 64)]
+    [Arguments(MicroQRVersion.M3, 3, 64)]
+    [Arguments(MicroQRVersion.M4, 3, 64)]
+    [Arguments(MicroQRVersion.M3, 4, 64)]
+    [Arguments(MicroQRVersion.M3, 3, 192)]
+    [Arguments(MicroQRVersion.M4, 3, 192)]
+    public async Task Decode_HalfPixelOffsetRender(MicroQRVersion version, int pixelsPerModule, int edgeGray)
+    {
+        const string content = "12345";
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, width, height) = HalfPixelRenderer.Render((row, col) => data[row, col], data.Size, data.Size, pixelsPerModule, (byte)edgeGray);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModule} px/module, edge {edgeGray}: {info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// Anti-aliased renders at low density and small rotations: the axis recovery took the
+    /// direction of the shortest span through the finder, a flat minimum that pixel noise
+    /// moved several degrees, and scaled the grid from the measurement that won it.
+    /// M4 at 20 degrees failed; the broader candidate search read the rest either way, and
+    /// they stay to pin the envelope. The estimator itself is pinned in FinderAxisEstimatorTest.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(SupersampledRotations))]
+    public async Task Decode_SupersampledRotatedRender(MicroQRVersion version, int pixelsPerModule, int degrees)
+    {
+        const string content = "12345";
+        var data = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, width, height) = SupersampledRenderer.Render((row, col) => data[row, col], data.Size, data.Size, pixelsPerModule, degrees);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModule} px/module, {degrees} deg: {info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    public static IEnumerable<(MicroQRVersion, int, int)> SupersampledRotations()
+    {
+        foreach (var version in new[] { MicroQRVersion.M2, MicroQRVersion.M3, MicroQRVersion.M4 })
+        {
+            foreach (var degrees in new[] { 8, 20 })
+                yield return (version, 3, degrees);
+        }
     }
 
     #region Clean images
