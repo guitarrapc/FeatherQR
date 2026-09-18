@@ -109,7 +109,7 @@ public class KanjiCountIndicatorWidthTest
     private static (DecodeStatus Status, string Text) Decode(byte[] data, int version)
     {
         Span<char> destination = stackalloc char[64];
-        var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out var charsWritten);
+        var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out var charsWritten, out _);
         return (status, destination.Slice(0, charsWritten).ToString());
     }
 

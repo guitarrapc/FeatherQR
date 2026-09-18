@@ -1,0 +1,23 @@
+{
+  "id": "sixteen-symbols-max-v2-l-13of16",
+  "generator": "qrcodegenerator",
+  "generatorVersion": "3.2.1\u002B6d9546ee4c8fd514e9aa4a5a65ea7133ab9c19e4",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "L",
+  "mode": "Unknown",
+  "maskPattern": 7,
+  "payloadText": " the lazy dog. The quick brown",
+  "payloadUtf8Hex": "20746865206C617A7920646F672E2054686520717569636B2062726F776E",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "sixteen-symbols-max-v2-l",
+    "index": 13,
+    "count": 16,
+    "parity": 43
+  }
+}

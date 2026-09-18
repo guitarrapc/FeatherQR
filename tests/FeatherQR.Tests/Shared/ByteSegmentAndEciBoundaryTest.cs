@@ -125,10 +125,30 @@ public class ByteSegmentAndEciBoundaryTest
             (0b0000, 4));
 
         Span<char> destination = stackalloc char[64];
-        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten);
+        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.UnsupportedContent);
         await Assert.That(charsWritten).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// With no charset declared, each Byte segment is resolved on its own bytes: valid UTF-8 "é" and then a segment
+    /// holding only a lead byte read as "éÃ", where the two read together as one payload would not be UTF-8 and would
+    /// widen to "Ã©Ã". A set whose encoder cut a character between symbols relies on this to keep the rest of each part.
+    /// </summary>
+    [Test]
+    public async Task UnspecifiedCharset_IsResolvedPerByteSegment()
+    {
+        var data = Build(
+            (0b0100, 4), (2, 8), (0xC3, 8), (0xA9, 8),
+            (0b0100, 4), (1, 8), (0xC3, 8),
+            (0b0000, 4));
+
+        var destination = new char[64];
+        var status = QRBinaryDecoder.DecodeBitStream(data, 1, destination, out var charsWritten, out _);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo("éÃ");
     }
 
     // 5. Strict UTF-8 validation.

@@ -1,0 +1,23 @@
+{
+  "id": "sixteen-symbols-max-v2-l-9of16",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "L",
+  "mode": "Unknown",
+  "maskPattern": 2,
+  "payloadText": "azy dog. The quick brown fox ",
+  "payloadUtf8Hex": "617A7920646F672E2054686520717569636B2062726F776E20666F7820",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "sixteen-symbols-max-v2-l",
+    "index": 9,
+    "count": 16,
+    "parity": 43
+  }
+}

@@ -379,6 +379,18 @@ var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L
     new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
 ```
 
+#### Structured Append (one message across several symbols)
+
+When a message is too long for the largest symbol you can print, `CreateStructuredAppend` splits it across up to sixteen Standard QR symbols that a reader joins back into one message. The version range says how large a symbol may be: the set uses the fewest symbols within it, all at one version, and text that fits one symbol comes back as that single symbol.
+
+```csharp
+var symbols = QRCodeGenerator.CreateStructuredAppend(longText, QREccLevel.M,
+    new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10) });
+// symbols.Length is 1 to 16; render each one as usual
+```
+
+Each symbol decodes to its own part of the text, and `QRCodeDecodeInfo.StructuredAppend` tells you where that part goes (index, count and parity). The rules for putting a set back together are on `QRStructuredAppend`.
+
 ### Zero-allocation APIs
 
 All three generators can write a module matrix to a caller-provided `Span<byte>`. All three decoders can read a module span and write text to a caller-provided `Span<char>`. Use these overloads when you want to pool or reuse buffers.

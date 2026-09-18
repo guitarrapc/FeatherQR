@@ -1,0 +1,23 @@
+{
+  "id": "alphanumeric-500chars-v4-l-1of5",
+  "generator": "qrcodegenerator",
+  "generatorVersion": "3.2.1\u002B6d9546ee4c8fd514e9aa4a5a65ea7133ab9c19e4",
+  "symbolType": "StandardQR",
+  "version": 4,
+  "width": 33,
+  "height": 33,
+  "errorCorrectionLevel": "L",
+  "mode": "Unknown",
+  "maskPattern": 2,
+  "payloadText": "Z1CNY0BMX:ALW/9KV.8JU-7IT\u002B6HS*5GR%4FQ$3EP 2DOZ1CNY0BMX:ALW/9KV.8JU-7IT\u002B6HS*5GR%4FQ$3EP 2DOZ1CNY0BMX:",
+  "payloadUtf8Hex": "5A31434E5930424D583A414C572F394B562E384A552D3749542B3648532A35475225344651243345502032444F5A31434E5930424D583A414C572F394B562E384A552D3749542B3648532A35475225344651243345502032444F5A31434E5930424D583A",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "alphanumeric-500chars-v4-l",
+    "index": 1,
+    "count": 5,
+    "parity": 105
+  }
+}

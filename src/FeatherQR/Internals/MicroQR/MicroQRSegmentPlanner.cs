@@ -95,7 +95,7 @@ internal static class MicroQRSegmentPlanner
 
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
-    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a relocated byte order mark, or a Latin-1 run the charset heuristic reads as UTF-8), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
+    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Latin-1 run the charset heuristic reads as UTF-8; a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -103,8 +103,8 @@ internal static class MicroQRSegmentPlanner
         if (text.Length is 0 or > MaxPlannableChars)
             return false;
 
-        Span<byte> parents = stackalloc byte[MaxPlannableChars * ModeSegmenter.StateCount];
-        var window = parents.Slice(0, text.Length * ModeSegmenter.StateCount);
+        Span<byte> parents = stackalloc byte[MaxPlannableChars * ModeSegmenter.ParentBytesPerChar];
+        var window = parents.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
         var plannedBits = PlanCost(text, charset, version, window, out var finalState);
         if (plannedBits >= ModeSegmenter.Unreachable)
             return false; // a character no mode of this version encodes
@@ -119,7 +119,8 @@ internal static class MicroQRSegmentPlanner
         // Micro QR has no ECI, so the decoder resolves each Byte run's charset
         // heuristically; two shapes lose to that once a split isolates them, and
         // both fall back to the single-mode stream:
-        //  - a relocated mid-content U+FEFF at a run start is consumed as a BOM;
+        //  - a mid-content U+FEFF at a run start is consumed as a BOM (the program
+        //    builds no such plan under UTF-8; this refuses a model that disagreed);
         //  - a Latin-1 run whose narrowed bytes read as UTF-8 (the disambiguating
         //    invalid bytes now live in another run) decodes as different text.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount))

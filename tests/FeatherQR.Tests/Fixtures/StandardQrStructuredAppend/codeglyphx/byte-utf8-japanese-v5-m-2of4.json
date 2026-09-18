@@ -1,0 +1,23 @@
+{
+  "id": "byte-utf8-japanese-v5-m-2of4",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 3,
+  "width": 29,
+  "height": 29,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 5,
+  "payloadText": "\u30B3\u30FC\u30C9\u306E\u5206\u5272\u30C6\u30B9\u30C8\u3067\u3059\u3002\u3053\u3093\u306B\u3061\u306F",
+  "payloadUtf8Hex": "E382B3E383BCE38389E381AEE58886E589B2E38386E382B9E38388E381A7E38199E38082E38193E38293E381ABE381A1E381AF",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "byte-utf8-japanese-v5-m",
+    "index": 2,
+    "count": 4,
+    "parity": 176
+  }
+}

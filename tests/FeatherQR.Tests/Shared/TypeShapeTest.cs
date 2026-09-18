@@ -248,6 +248,7 @@ public class TypeShapeTest
         yield return () => typeof(RmQRCodeDecodeInfo);
         yield return () => typeof(SymbolCorners);
         yield return () => typeof(ImagePoint);
+        yield return () => typeof(QRStructuredAppend);
     }
 
     /// <summary>
@@ -317,13 +318,14 @@ public class TypeShapeTest
     /// <summary>
     /// The three decode results report the same things under the same names, so code that
     /// reads one reads all three. rMQR is the one documented difference: ISO/IEC 23941
-    /// defines a single data mask, so there is no mask pattern to report.
+    /// defines a single data mask, so there is no mask pattern to report. Structured Append
+    /// is the other: only Standard QR defines it, so only its result carries the header.
     /// </summary>
     [Test]
-    [Arguments(typeof(QRCodeDecodeInfo), true)]
-    [Arguments(typeof(MicroQRCodeDecodeInfo), true)]
-    [Arguments(typeof(RmQRCodeDecodeInfo), false)]
-    public async Task DecodeInfo_ReportsTheSameMembers(Type type, bool hasMaskPattern)
+    [Arguments(typeof(QRCodeDecodeInfo), true, true)]
+    [Arguments(typeof(MicroQRCodeDecodeInfo), true, false)]
+    [Arguments(typeof(RmQRCodeDecodeInfo), false, false)]
+    public async Task DecodeInfo_ReportsTheSameMembers(Type type, bool hasMaskPattern, bool hasStructuredAppend)
     {
         var names = type.GetProperties(Instance).Select(p => p.Name).ToArray();
 
@@ -333,11 +335,16 @@ public class TypeShapeTest
         await Assert.That(names).Contains("ErrorsCorrected");
         await Assert.That(names).Contains("Corners");
         await Assert.That(names.Contains("MaskPattern")).IsEqualTo(hasMaskPattern);
-        await Assert.That(names.Length).IsEqualTo(hasMaskPattern ? 6 : 5);
+        await Assert.That(names.Contains("StructuredAppend")).IsEqualTo(hasStructuredAppend);
+        await Assert.That(names.Length).IsEqualTo(5 + (hasMaskPattern ? 1 : 0) + (hasStructuredAppend ? 1 : 0));
 
         // Status and Corners are the shared types on all three; version and ECC level are per-symbology.
         await Assert.That(type.GetProperty("Status")!.PropertyType).IsEqualTo(typeof(DecodeStatus));
         await Assert.That(type.GetProperty("Corners")!.PropertyType).IsEqualTo(typeof(SymbolCorners));
+        if (hasStructuredAppend)
+        {
+            await Assert.That(type.GetProperty("StructuredAppend")!.PropertyType).IsEqualTo(typeof(QRStructuredAppend));
+        }
     }
 
     /// <summary>

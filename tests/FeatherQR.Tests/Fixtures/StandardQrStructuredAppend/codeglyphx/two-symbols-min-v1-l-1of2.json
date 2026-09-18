@@ -1,0 +1,23 @@
+{
+  "id": "two-symbols-min-v1-l-1of2",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "L",
+  "mode": "Unknown",
+  "maskPattern": 2,
+  "payloadText": "PPEND 2 OF 2",
+  "payloadUtf8Hex": "5050454E442032204F462032",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "two-symbols-min-v1-l",
+    "index": 1,
+    "count": 2,
+    "parity": 22
+  }
+}

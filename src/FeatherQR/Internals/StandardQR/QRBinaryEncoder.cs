@@ -30,6 +30,20 @@ internal ref struct QRBinaryEncoder
         _writer = new BitWriter(buffer);
     }
 
+    /// <summary>ISO/IEC 18004 Structured Append mode indicator; not an <see cref="EncodingMode"/>, since it carries no data.</summary>
+    private const int StructuredAppendModeIndicator = 0b0011;
+
+    /// <summary>
+    /// Writes the Structured Append header, which precedes every other segment: mode indicator, 4-bit position, 4-bit count minus one, 8-bit parity.
+    /// </summary>
+    public void WriteStructuredAppend(in QRStructuredAppend header)
+    {
+        _writer.Write(StructuredAppendModeIndicator, 4);
+        _writer.Write(header.Index, 4);
+        _writer.Write(header.Count - 1, 4);
+        _writer.Write(header.Parity, 8);
+    }
+
     /// <summary>
     /// Writes mode indicator (4 bits) and optional ECI header (12 bits).
     /// </summary>

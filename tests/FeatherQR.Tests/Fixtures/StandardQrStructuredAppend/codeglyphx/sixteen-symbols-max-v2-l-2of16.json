@@ -1,0 +1,23 @@
+{
+  "id": "sixteen-symbols-max-v2-l-2of16",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "L",
+  "mode": "Unknown",
+  "maskPattern": 2,
+  "payloadText": "wn fox jumps over the lazy do",
+  "payloadUtf8Hex": "776E20666F78206A756D7073206F76657220746865206C617A7920646F",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "sixteen-symbols-max-v2-l",
+    "index": 2,
+    "count": 16,
+    "parity": 43
+  }
+}

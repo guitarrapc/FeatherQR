@@ -19,8 +19,6 @@ internal readonly record struct TextAnalysisResult(EncodingMode EncodingMode, Ec
 /// </summary>
 internal static class TextAnalyzer
 {
-    private static readonly Encoding Iso88591Encoding = Encoding.GetEncoding("ISO-8859-1");
-
     /// <summary>
     /// Analyzes the input text to determine the most efficient encoding mode (Numeric, Alphanumeric, Byte). If SIMD is supported, uses SIMD instructions for faster analysis.
     /// </summary>
@@ -184,7 +182,7 @@ internal static class TextAnalyzer
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
 
-        var dataLength = CalculateLength(text, encoding, actualEciMode);
+        var dataLength = CalculateLength(text, encoding, actualEciMode, hasNonIso88591);
 
         return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
@@ -347,7 +345,7 @@ internal static class TextAnalyzer
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
 
-        var dataLength = CalculateLength(text, encoding, actualEciMode);
+        var dataLength = CalculateLength(text, encoding, actualEciMode, hasNonIso88591);
 
         return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
@@ -510,7 +508,7 @@ internal static class TextAnalyzer
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
 
-        var dataLength = CalculateLength(text, encoding, actualEciMode);
+        var dataLength = CalculateLength(text, encoding, actualEciMode, hasNonIso88591);
 
         return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
@@ -632,7 +630,7 @@ internal static class TextAnalyzer
             ? DetermineEciMode(hasNonAscii, hasNonIso88591)
             : requestedEciMode;
 
-        var dataLength = CalculateLength(text, encoding, actualEciMode);
+        var dataLength = CalculateLength(text, encoding, actualEciMode, hasNonIso88591);
 
         return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
@@ -657,33 +655,37 @@ internal static class TextAnalyzer
         return EciMode.Utf8;
     }
 
-    private static int CalculateLength(ReadOnlySpan<char> text, EncodingMode encoding, EciMode eciMode)
+    private static int CalculateLength(ReadOnlySpan<char> text, EncodingMode encoding, EciMode eciMode, bool hasNonIso88591)
     {
         return encoding switch
         {
             EncodingMode.Numeric => text.Length,
             EncodingMode.Alphanumeric => text.Length,
-            EncodingMode.Byte => CalculateByteCount(text, eciMode),
+            EncodingMode.Byte => CalculateByteCount(text, eciMode, hasNonIso88591),
             _ => text.Length
         };
     }
 
-    private static int CalculateByteCount(ReadOnlySpan<char> text, EciMode eciMode)
+    /// <summary>
+    /// Bytes a Byte-mode segment carries, which is what its character count indicator declares.
+    /// </summary>
+    /// <remarks>
+    /// Only UTF-8 has to be counted. Latin-1 is one byte per <c>char</c>, out-of-range ones included, since the writer narrows each and the encoder replaces each, so the length is the count and no pass over the text is needed; the classification pass has already answered which of the two the charset resolves to, so the rescan that answer used to cost is gone with it.
+    /// Pinned against <see cref="Encoding"/> and against the bytes the writer emits, per charset and content class, by <c>TextAnalyzerByteCountTest</c>.
+    /// </remarks>
+    private static int CalculateByteCount(ReadOnlySpan<char> text, EciMode eciMode, bool hasNonIso88591)
     {
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        ReadOnlySpan<char> input = text;
-#else
-        string input = text.ToString();
-#endif
-        // ISO-8859-x encoding based on ECI mode
-        return eciMode switch
+        switch (eciMode)
         {
-            EciMode.Default => CharacterSets.IsValidISO88591(input)
-                ? Iso88591Encoding.GetByteCount(input)
-                : Encoding.UTF8.GetByteCount(input),
-            EciMode.Iso8859_1 => Iso88591Encoding.GetByteCount(input),
-            EciMode.Utf8 => Encoding.UTF8.GetByteCount(input),
-            _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
-        };
+            case EciMode.Default:
+                // Auto-detection declares Default only for ASCII, so the flag is the Latin-1 answer.
+                return hasNonIso88591 ? ModeSegmenter.ByteUnitCount(text, EciMode.Utf8) : text.Length;
+            case EciMode.Iso8859_1:
+                return text.Length;
+            case EciMode.Utf8:
+                return ModeSegmenter.ByteUnitCount(text, EciMode.Utf8);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding");
+        }
     }
 }

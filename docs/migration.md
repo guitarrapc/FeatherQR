@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, and padding takes the background colour rather than transparency |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, padding takes the background colour rather than transparency, and a finder shape draws only its dark modules. Two encode and decode changes: `Optimal` keeps a U+FEFF inside the content in its Byte run, and Structured Append symbols decode instead of failing |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -13,9 +13,9 @@ One section per release, newest first. Each section lists what changed in that r
 
 ## 2.0.0
 
-The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Encoding and decoding behavior is unchanged, and most of the work is in `using` lines and, if you want it, the package reference.
+The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Encoding and decoding behavior is unchanged but for two things: [a U+FEFF inside mixed-mode content keeps its Byte run](#a-ufeff-inside-the-content-keeps-its-byte-run), which changes what `Optimal` writes for content holding one, and [Structured Append symbols decode](#structured-append-symbols-decode) where they used to fail with `UnsupportedContent`. Most of the work is in `using` lines and, if you want it, the package reference.
 
-Rendering is where behavior changed. Four sections below are behavior changes rather than renames, and all of them can alter images you already ship: [module styling no longer reaches the finder patterns](#module-styling-no-longer-reaches-the-finder-patterns), [`WithSize(w, h)` fits the symbol instead of stretching it](#withsizew-h-fits-the-symbol-instead-of-stretching-it), [`SymbolRenderer.Render` and `SKCanvas.Render` fit the symbol into the area](#symbolrendererrender-and-skcanvasrender-fit-the-symbol-into-the-area), and [padding around the symbol defaults to the background color](#padding-around-the-symbol-defaults-to-the-background-color). None of the first three turns a readable symbol into an unreadable one at any sensible size, but do not read that as "nothing to check". Below roughly 1.2:1 the stretched output was readable too, so those images change without anything having been broken. And where the modules were already down to about two pixels, fitting can cost the resolution the stretch had put on the long axis, so a handful of very small non-square canvases decoded before and do not now; the fix for those is a bigger canvas, which they needed anyway. The fourth can change an image that was fine at any size, and is the one worth checking if you composite a QR onto something else. The third also refuses arguments that used to be accepted, so calls that compiled and ran can now throw: an inverted area, a negative width or height, a `moduleSizePercent` of `NaN`, a null canvas, and a `GradientDirection` outside the enum.
+Rendering is where most behavior changed. Four sections below are behavior changes rather than renames, and all of them can alter images you already ship: [module styling no longer reaches the finder patterns](#module-styling-no-longer-reaches-the-finder-patterns), [`WithSize(w, h)` fits the symbol instead of stretching it](#withsizew-h-fits-the-symbol-instead-of-stretching-it), [`SymbolRenderer.Render` and `SKCanvas.Render` fit the symbol into the area](#symbolrendererrender-and-skcanvasrender-fit-the-symbol-into-the-area), and [padding around the symbol defaults to the background color](#padding-around-the-symbol-defaults-to-the-background-color). None of the first three turns a readable symbol into an unreadable one at any sensible size, but do not read that as "nothing to check". Below roughly 1.2:1 the stretched output was readable too, so those images change without anything having been broken. And where the modules were already down to about two pixels, fitting can cost the resolution the stretch had put on the long axis, so a handful of very small non-square canvases decoded before and do not now; the fix for those is a bigger canvas, which they needed anyway. The fourth can change an image that was fine at any size, and is the one worth checking if you composite a QR onto something else. The third also refuses arguments that used to be accepted, so calls that compiled and ran can now throw: an inverted area, a negative width or height, a `moduleSizePercent` of `NaN`, a null canvas, and a `GradientDirection` outside the enum. Two more sections can alter images too: [finder shapes draw the dark modules only](#finder-shapes-draw-the-dark-modules-only), by about 1 % of a styled raster and in any SVG with a finder shape on a transparent or translucent background, and [`SymbolRenderer.Render` takes its colours as values](#symbolrendererrender-takes-its-colours-as-values), where `default` was passed for a colour. And the third is not the only one whose calls still compile and can now throw: so do [a rounded shape with a `NaN` corner radius](#a-rounded-shape-refuses-a-non-finite-corner-radius) and [a `null` module or finder shape](#builder-options-take-values-not-null-withcodecolor-withbackgroundcolor-withclearcolor).
 
 ### Packages
 
@@ -317,6 +317,55 @@ Three things the contract fixes:
 - **They exist only for a successful image decode.** A matrix-level `TryDecode` has no image and a failed image decode located nothing worth reporting; both leave `Corners` at its default, and `Corners.IsEmpty` says so.
 
 [samples/Dotfiles/DecodeCorners.cs](../samples/Dotfiles/DecodeCorners.cs) runs all of this over a flat, a rotated, a mirrored and a keystoned capture, and writes each one with the reported outline drawn on it.
+
+### Structured Append symbols decode
+
+Behavior change, not source or binary breaking: code that branches on `UnsupportedContent` to hand such a symbol to another reader stops taking that branch. Otherwise additive. A Standard QR symbol that is one of a Structured Append set (up to sixteen symbols holding one message) used to fail with `UnsupportedContent`. It now decodes to its own part of the text, and `QRCodeDecodeInfo` gains `StructuredAppend`, a `QRStructuredAppend` with the header: `Index` (0-based, as on the wire), `Count` (1 to 16) and `Parity`. A symbol that is not part of a set leaves it at its default, and `IsEmpty` says so.
+
+```csharp
+var parts = new SortedDictionary<int, string>();
+QRStructuredAppend set = default;
+foreach (var bitmap in captures)
+{
+    if (!QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info) || info.StructuredAppend.IsEmpty)
+        continue;
+    var header = info.StructuredAppend;
+    if (set.IsEmpty)
+        set = header;
+    else if (header.Count != set.Count || header.Parity != set.Parity)
+        continue; // a symbol from a different set
+    if (parts.ContainsKey(header.Index))
+        continue; // the same symbol captured twice
+    parts.Add(header.Index, text);
+}
+var complete = !set.IsEmpty && parts.Count == set.Count;
+var message = complete ? string.Concat(parts.Values) : null;
+```
+
+That loop applies the four rules (one `Count` and one `Parity`, each index once, concatenation in index order, and `Parity` as the set's identity) and leaves `message` null until a whole set has been seen. There is no helper for it because the choices in it are yours: whether a missing symbol is an error or a retry, whether a repeated index is a rescan to ignore or a mixed set to report, whether a parity mismatch is worth telling the user about.
+
+- **`Parity` identifies the set, not the content.** It is the XOR of the bytes of the whole message as the encoder wrote them, in whatever charset the set carries, so two symbols with different parities belong to different sets. It is not a checksum you can recompute from the reassembled text, because you do not know which bytes the encoder XORed: the same Japanese message carries one parity as UTF-8 and another in Kanji mode.
+- **The header is reported only for a successful decode**, like `Corners`. A failed decode leaves `StructuredAppend` empty even when the header was read before the failure.
+- **Micro QR and rMQR do not define Structured Append**, so their decode results have no such member and a Micro QR or rMQR stream can never carry one.
+
+Encoding a set is `QRCodeGenerator.CreateStructuredAppend`, additive as well. It takes the same arguments as `Create`; what decides the symbol count is the version range, because the size of symbol you can print is the constraint that makes a split necessary at all:
+
+```csharp
+// Split across the fewest symbols that stay at or below version 10, all at one version.
+QRCodeData[] set = QRCodeGenerator.CreateStructuredAppend(longText, QREccLevel.M,
+    new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10) });
+```
+
+- **One symbol when it fits.** Text that fits a single symbol within the range returns that one symbol, identical to `Create`'s, with no header; more than sixteen symbols at the largest version in the range is an `ArgumentException` on the options.
+- **Balanced, at one version.** The set is split so every symbol shares one version and the fullest symbol is as empty as it can be, rather than filling each symbol and leaving the remainder to the last.
+- **One charset, one parity.** The charset is decided from the whole text and declared in every symbol; the parity is the XOR of the whole text's bytes in that charset. `Utf8Bom` writes the mark in the first symbol only, and only when that symbol is in Byte mode; a set whose first symbol is digits or alphanumerics carries no mark, and its parity counts none. `BoostEccLevel` raises the whole set to one level; `MaskPattern`, `QuietZoneSize` and `Segmentation` apply to every symbol as they do to one.
+- A set of one is never written, and no combine helper exists, for the reasons above.
+
+### A U+FEFF inside the content keeps its Byte run
+
+Behavior change in every mixed-mode plan (`QRSegmentation.Optimal`, `RmQRSegmentation.Optimal`, `MicroQRSegmentation.Optimal`). A reader takes a U+FEFF at the head of a Byte segment for a byte order mark and drops it, so a plan must not open a Byte run there. From 1.2.0 through 2.0.0-preview.2 the minimal plan was built and then refused when it did, and the content fell back to its single-mode stream, or reported "does not fit" when no single mode held it. Now the plan itself never opens a Byte run at a U+FEFF past the first character of UTF-8 content: the run opens a character early and keeps the mark interior. Content whose plan was refused gets a plan that keeps the mark interior, and most content that used to report "does not fit" for this reason now encodes; that plan can cost a few bits more than the refused one, so content within those bits of the largest version allowed can still not fit. Content whose plan was never refused encodes bit for bit as before. A U+FEFF at the very head of the content is still read back as a byte order mark and dropped, as it always was.
+
+The same rule holds a Structured Append set together: no symbol after the first begins with a U+FEFF, so a split that would land before one is moved back, and a run of them that no symbol holds together with the character ahead of it is refused with that reason.
 
 ### Module styling no longer reaches the finder patterns
 

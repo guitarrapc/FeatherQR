@@ -21,7 +21,7 @@ public enum DecodeStatus
     InvalidBitstream,
 
     /// <summary>
-    /// The bitstream is well-formed but uses a feature this decoder does not support (FNC1, Structured Append, or an unsupported ECI charset).
+    /// The bitstream is well-formed but uses a feature this decoder does not support (FNC1, or an unsupported ECI charset).
     /// A property of the symbol's structure, not of its text; see <see cref="UnmappedCharacter"/> for the per-character case.
     /// </summary>
     UnsupportedContent,

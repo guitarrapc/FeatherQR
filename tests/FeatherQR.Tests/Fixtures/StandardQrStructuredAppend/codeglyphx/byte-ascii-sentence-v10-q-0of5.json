@@ -1,0 +1,23 @@
+{
+  "id": "byte-ascii-sentence-v10-q-0of5",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 9,
+  "width": 53,
+  "height": 53,
+  "errorCorrectionLevel": "Q",
+  "mode": "Unknown",
+  "maskPattern": 4,
+  "payloadText": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over",
+  "payloadUtf8Hex": "54686520717569636B2062726F776E20666F78206A756D7073206F76657220746865206C617A7920646F672E2054686520717569636B2062726F776E20666F78206A756D7073206F76657220746865206C617A7920646F672E2054686520717569636B2062726F776E20666F78206A756D7073206F766572",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "byte-ascii-sentence-v10-q",
+    "index": 0,
+    "count": 5,
+    "parity": 27
+  }
+}

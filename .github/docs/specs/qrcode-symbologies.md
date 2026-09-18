@@ -241,7 +241,7 @@ mangled exactly the characters Japanese payloads use in URLs and price strings. 
 `ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it
 are reported as `DecodeStatus.UnmappedCharacter` rather than replaced, so a corrupt symbol never
 becomes a plausible wrong answer and a caller can tell "a CP932 reader would read this" from the
-structural `UnsupportedContent` cases (FNC1, Structured Append, unmapped ECI). The
+structural `UnsupportedContent` cases (FNC1, unmapped ECI). The
 table costs 16 KB of RVA data, shared by all three symbologies, with no allocation and no static
 constructor.
 
@@ -260,8 +260,8 @@ Two failure causes are kept apart on the error path: a structurally impossible b
 arithmetic sits on the error path only, so the happy path stays a single indexed load.
 
 Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode
-segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1
-and Structured Append.
+segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1.
+Structured Append is read and written since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md) and [standardqr-encoder.md](standardqr-encoder.md)).
 
 ### Allocation contract
 

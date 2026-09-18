@@ -1,0 +1,23 @@
+{
+  "id": "byte-utf8-japanese-v5-m-2of3",
+  "generator": "qrcodegenerator",
+  "generatorVersion": "3.2.1\u002B6d9546ee4c8fd514e9aa4a5a65ea7133ab9c19e4",
+  "symbolType": "StandardQR",
+  "version": 5,
+  "width": 37,
+  "height": 37,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 0,
+  "payloadText": "\u3053\u3093\u306B\u3061\u306F\u4E16\u754C\u3001QR\u30B3\u30FC\u30C9\u306E\u5206\u5272\u30C6\u30B9\u30C8\u3067\u3059\u3002",
+  "payloadUtf8Hex": "E38193E38293E381ABE381A1E381AFE4B896E7958CE380815152E382B3E383BCE38389E381AEE58886E589B2E38386E382B9E38388E381A7E38199E38082",
+  "eciCharset": "UTF-8",
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "byte-utf8-japanese-v5-m",
+    "index": 2,
+    "count": 3,
+    "parity": 6
+  }
+}

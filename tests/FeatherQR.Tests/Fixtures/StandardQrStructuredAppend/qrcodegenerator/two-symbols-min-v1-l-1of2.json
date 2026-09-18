@@ -1,0 +1,23 @@
+{
+  "id": "two-symbols-min-v1-l-1of2",
+  "generator": "qrcodegenerator",
+  "generatorVersion": "3.2.1\u002B6d9546ee4c8fd514e9aa4a5a65ea7133ab9c19e4",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "Q",
+  "mode": "Unknown",
+  "maskPattern": 3,
+  "payloadText": "PPEND 2 OF 2",
+  "payloadUtf8Hex": "5050454E442032204F462032",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "structuredAppend": {
+    "setId": "two-symbols-min-v1-l",
+    "index": 1,
+    "count": 2,
+    "parity": 22
+  }
+}

@@ -11,7 +11,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Inverse of <see cref="QRBinaryEncoder"/>.
 /// Supports the segments the encoder can produce, Numeric, Alphanumeric, Byte (ISO-8859-1 / UTF-8) and ECI headers, plus multi-segment streams from other encoders.
 /// Kanji mode is decoded as JIS X 0208 (decode only: this library never emits it).
-/// FNC1 and Structured Append are recognized but reported as <see cref="DecodeStatus.UnsupportedContent"/>.
+/// FNC1 is recognized but reported as <see cref="DecodeStatus.UnsupportedContent"/>; a Structured Append header is read and returned to the caller.
 /// <para>
 /// Byte segments without an ECI header have no declared charset (ISO/IEC 18004 defaults to ISO-8859-1, but UTF-8 payloads are common in the wild).
 /// The decoder uses UTF-8 when the payload validates as UTF-8 (or carries a BOM) and falls back to ISO-8859-1 otherwise, ASCII decodes identically either way.
@@ -47,9 +47,11 @@ internal static class QRBinaryDecoder
     /// <param name="version">QR code version (1-40), determines character count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten)
+    /// <param name="structuredAppend">The Structured Append header when the stream carries one, accepted at any position; default otherwise.</param>
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten, out QRStructuredAppend structuredAppend)
     {
         charsWritten = 0;
+        structuredAppend = default;
         var reader = new BitReader(data);
         var totalBits = data.Length * 8;
         var charset = ByteSegmentCharset.Unspecified;
@@ -138,6 +140,20 @@ internal static class QRBinaryDecoder
                             break;
                         }
                     case ModeStructuredAppend:
+                        {
+                            // 4-bit position, 4-bit count-1, 8-bit parity (ISO/IEC 18004 Structured Append).
+                            // One header per stream, and a position past the count is not encodable by
+                            // a conforming encoder, so both are malformed rather than unsupported.
+                            if (totalBits - reader.BitPosition < 16 || !structuredAppend.IsEmpty)
+                                return DecodeStatus.InvalidBitstream;
+                            var index = reader.Reads(4);
+                            var count = reader.Reads(4) + 1;
+                            var parity = (byte)reader.Reads(8);
+                            if (index >= count)
+                                return DecodeStatus.InvalidBitstream;
+                            structuredAppend = new QRStructuredAppend(index, count, parity);
+                            break;
+                        }
                     case ModeFnc1First:
                     case ModeFnc1Second:
                         return DecodeStatus.UnsupportedContent;

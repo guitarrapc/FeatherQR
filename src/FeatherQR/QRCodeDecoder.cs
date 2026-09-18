@@ -10,7 +10,7 @@ namespace FeatherQR;
 /// Reads Numeric, Alphanumeric, Byte and Kanji mode across all versions and error correction levels.
 /// A Byte segment with no ECI header is read as UTF-8 when the bytes are valid UTF-8 (or carry a BOM), and as ISO-8859-1 otherwise.
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire, such as the circled digits CP932 adds, fails the whole QR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
-/// That status is distinct from <see cref="DecodeStatus.UnsupportedContent"/>, which marks a feature this library does not implement, such as FNC1 or Structured Append.
+/// That status is distinct from <see cref="DecodeStatus.UnsupportedContent"/>, which marks a feature this library does not implement, such as FNC1.
 /// </remarks>
 public static class QRCodeDecoder
 {
@@ -29,7 +29,7 @@ public static class QRCodeDecoder
     /// </summary>
     /// <param name="data">The QR code to decode.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>).</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecode(QRCodeData data, out string text, out QRCodeDecodeInfo info)
@@ -57,7 +57,7 @@ public static class QRCodeDecoder
     /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
     /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>).</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out QRCodeDecodeInfo info)
@@ -96,7 +96,7 @@ public static class QRCodeDecoder
     /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
     /// <param name="charsWritten">How many characters were written.</param>
-    /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>).</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
@@ -135,7 +135,7 @@ public static class QRCodeDecoder
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners) and the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>).</param>
     /// <returns><c>true</c> when a QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out QRCodeDecodeInfo info)
@@ -166,7 +166,7 @@ public static class QRCodeDecoder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
     /// <param name="charsWritten">How many characters were written.</param>
-    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
+    /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners) and the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>).</param>
     /// <returns><c>true</c> when a QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)

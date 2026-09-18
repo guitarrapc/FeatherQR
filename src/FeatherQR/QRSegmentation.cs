@@ -14,7 +14,7 @@ public enum QRSegmentation
 
     /// <summary>
     /// The mixed-mode split with the fewest total bits.
-    /// Never selects a larger version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink the symbol, and additionally encodes content that overflows every version in a single mode — unless the minimal-bit plan would be misread on decode (a relocated byte order mark), in which case it reports "does not fit" rather than emitting a stream that decodes differently.
+    /// Never selects a larger version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink the symbol, and additionally encodes content that overflows every version in a single mode. A U+FEFF inside UTF-8 content never opens a Byte run, where a reader would drop it as a byte order mark: the run opens a character early and keeps it interior.
     /// </summary>
     /// <remarks>
     /// Opt-in because it searches candidate versions; the search itself allocates nothing for typical content and rents pooled buffers for long content.

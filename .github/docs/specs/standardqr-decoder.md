@@ -43,6 +43,7 @@ Matrix-level decoding takes an exact module matrix as input, so the tiers apply 
 | Segment modes | Numeric, Alphanumeric, Byte, Kanji (JIS X 0208; decode only, the generator never emits it) |
 | ECI | ISO-8859-1, UTF-8 |
 | Text handling | UTF-8 BOM, multi-segment streams |
+| Structured Append | The header is read wherever it sits in the stream and reported as `QRCodeDecodeInfo.StructuredAppend` (0-based index, count, parity); the symbol yields its own part of the text, and reassembly is the caller's (rules on `QRStructuredAppend`). A header past its count, a second header, or a truncated one is `InvalidBitstream`. A part is text, not bytes: a set whose encoder cut the byte stream inside a multi-byte character decodes with U+FFFD at the two edges where its symbols declare UTF-8, and with the Byte segment on each side of the cut read as ISO-8859-1 where they declare nothing (the charset is resolved per Byte segment, and one that is not valid UTF-8 is read as the default charset), which is how it shows; both are the byte-segment decoder's own behaviour, held by `ByteSegmentAndEciBoundaryTest` (`DeclaredUtf8_WithInvalidBytes_SubstitutesRatherThanFallingBackToLatin1`, `InvalidUtf8_FallsBackToLatin1`, and `UnspecifiedCharset_IsResolvedPerByteSegment` for a valid and an invalid segment in one stream); this library and the pinned encoder oracles cut between characters, and returning the bytes of a part would be new public surface, added on a request rather than ahead of one |
 | Image transforms | Arbitrary rotation, mirroring, reflectance reversal (light-on-dark) |
 | Perspective (Tier 2) | Mild keystone, see [Input envelope](#input-envelope) |
 
@@ -51,7 +52,6 @@ Matrix-level decoding takes an exact module matrix as input, so the tiers apply 
 The following are detected and reported; they are never misdecoded:
 
 - FNC1
-- Structured Append
 - Other ECI charsets
 
 ### Input envelope

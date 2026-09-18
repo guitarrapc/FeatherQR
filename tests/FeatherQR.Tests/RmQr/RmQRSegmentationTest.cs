@@ -612,19 +612,20 @@ public class RmQRSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_OverflowWhereEveryCheckedPlanIsMisread_ThrowsLikeSingle()
+    public async Task Optimal_TrailingBomNoSingleModeHolds_IsPlannedBehindTheDigitBeforeIt()
     {
-        // 303 UTF-8 bytes fit no single mode, and the minimal-bit plan puts the
-        // trailing U+FEFF at a Byte-run start; the documented outcome is "does not
-        // fit" rather than a symbol that decodes with the character dropped.
+        // 303 UTF-8 bytes fit no single mode. The unconstrained minimum opens a Byte
+        // run at the trailing U+FEFF, where the decoder would consume it; the plan
+        // takes the last digit into that run instead.
         var content = new string('1', 300) + "\uFEFF";
         var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
 
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, options)).IsFalse();
-        await Assert.That(() => RmQRCodeGenerator.Create(content, RmQREccLevel.M, options)).Throws<ArgumentException>();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _)).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, options)).IsTrue();
 
-        // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(new string('1', 300) + "a", RmQREccLevel.M, out _, options)).IsTrue();
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, options);
+        await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
     [Test]
@@ -649,18 +650,18 @@ public class RmQRSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_MidContentBom_EmitsTheSingleModeStream()
+    public async Task Optimal_MidContentBom_StaysInsideAByteRun()
     {
         // The byte-segment decoder consumes a leading EF BB BF of every non-Latin-1
-        // segment as a BOM, even behind an explicit UTF-8 ECI; a split that relocates
-        // a mid-content U+FEFF to a run start would silently drop it, so the planner
-        // must fall back to the single-mode stream, where it survives.
+        // segment as a BOM, even behind an explicit UTF-8 ECI, so no plan opens a
+        // Byte run at a mid-content U+FEFF: the run opens a digit early and the mark
+        // sits interior, where it survives. The digits ahead of it still go to
+        // Numeric, which the area shows.
         var content = new string('1', 30) + "\uFEFF" + "a";
         var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
-        await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(Area(optimal)).IsLessThan(Area(single));
 
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
