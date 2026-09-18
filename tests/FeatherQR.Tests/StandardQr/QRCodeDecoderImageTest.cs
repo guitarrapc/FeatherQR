@@ -287,6 +287,74 @@ public class QRCodeDecoderImageTest
         Assert.Throws<ArgumentNullException>(() => QRCodeDecoder.TryDecode((SKBitmap)null!, out _));
     }
 
+    /// <summary>
+    /// A symbol placed half a pixel off the pixel grid: every module edge falls inside a
+    /// pixel that comes out grey. A grey darker than the threshold widens every dark run by a
+    /// pixel (ink spread), a lighter one narrows it (erosion). The finder centres do not move,
+    /// but a module size measured across the finder's outer edges does, and on a large symbol
+    /// that error, multiplied by the finder distance, used to exceed the version snap
+    /// (regression: v20-v37 at 3-4 px/module read one or two versions low).
+    /// </summary>
+    [Test]
+    [Arguments(20, 3, 64)]
+    [Arguments(24, 3, 64)]
+    [Arguments(30, 3, 64)]
+    [Arguments(40, 3, 64)]
+    [Arguments(27, 4, 64)]
+    [Arguments(40, 4, 64)]
+    [Arguments(40, 5, 64)]
+    [Arguments(24, 3, 192)]
+    [Arguments(40, 3, 192)]
+    [Arguments(40, 5, 192)]
+    [Arguments(10, 3, 64)]
+    [Arguments(10, 3, 192)]
+    public async Task Decode_HalfPixelOffsetRender_ReadsTheTrueVersion(int version, int pixelsPerModule, int edgeGray)
+    {
+        var content = "https://github.com/guitarrapc/FeatherQR";
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, width, height) = HalfPixelRenderer.Render((row, col) => qr[row, col], qr.Size, qr.Size, pixelsPerModule, (byte)edgeGray);
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"v{version} at {pixelsPerModule} px/module, edge {edgeGray}: {info.Status}, read as v{info.Version}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
+    /// <summary>
+    /// Anti-aliased renders at low density under rotation and keystone, each of which the
+    /// decoder used to miss. Large versions: pixel quantization along a near-axis ray puts
+    /// the module-size estimate two or more versions off, past the runner-up retry, and the
+    /// symbol's own version information settles it. Small versions near 45 degrees: the
+    /// alignment search checked each run against the plain module size, where a row crosses
+    /// a rotated module up to √2 times longer. The last two pass either way and stay as controls.
+    /// </summary>
+    [Test]
+    [Arguments(25, 3, 1, 0)]
+    [Arguments(30, 3, 6, 0)]
+    [Arguments(35, 4, 6, 0)]
+    [Arguments(35, 4, 45, 0)]
+    [Arguments(8, 4, 40, 0)]
+    [Arguments(8, 4, 50, 0)]
+    [Arguments(5, 4, 42, 6)]
+    [Arguments(10, 6, 46, 6)]
+    [Arguments(7, 4, 50, 3)]
+    [Arguments(8, 4, 44, 0)]
+    [Arguments(7, 3, 45, 0)]
+    [Arguments(10, 4, 30, 0)]
+    public async Task Decode_SupersampledRotatedRender_ReadsTheTrueVersion(int version, int pixelsPerModule, int degrees, int keystonePercent)
+    {
+        var content = "https://github.com/guitarrapc/FeatherQR";
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, side) = SupersampledRenderer.Render(qr, pixelsPerModule, degrees, keystonePercent / 100f);
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"v{version} at {pixelsPerModule} px/module, {degrees} deg, keystone {keystonePercent} %: {info.Status}, read as v{info.Version}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
     private static SKBitmap RenderQr(string content, QREccLevel eccLevel, int pixelsPerModule, EciMode eciMode = EciMode.Default)
     {
         var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });

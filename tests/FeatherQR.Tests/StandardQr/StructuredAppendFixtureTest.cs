@@ -25,19 +25,6 @@ public class StructuredAppendFixtureTest
     public static IEnumerable<string> SetIds() => Manifests.Value.Values.Select(SetKey).Distinct().OrderBy(k => k, StringComparer.Ordinal);
 
     /// <summary>
-    /// Symbols this library's image path cannot read today, for a reason that is not
-    /// Structured Append: the finder locator picks a false candidate three modules inside
-    /// the real top-right finder of this one symbol at 5 px/module and up (follow-up F10
-    /// in the 2.0.0 plan). The matrix path reads it. Listed here rather than skipped so
-    /// that <see cref="KnownImagePathDefect_StillReproduces"/> fails the day it is fixed.
-    /// </summary>
-    private static readonly string[] KnownImagePathDefects = ["codeglyphx/sixteen-symbols-max-v2-l-2of16"];
-
-    public static IEnumerable<string> ImageFixtureIds() => FixtureIds().Where(id => !KnownImagePathDefects.Contains(id));
-
-    public static IEnumerable<string> KnownImagePathDefectIds() => KnownImagePathDefects;
-
-    /// <summary>
     /// The shapes the contract needs, each of which a regeneration could lose without any
     /// per-symbol test noticing: both encoder lineages and the captures, the smallest and
     /// the largest set, a Kanji-mode set, and the two texts that carry a different parity
@@ -125,21 +112,7 @@ public class StructuredAppendFixtureTest
     }
 
     [Test]
-    [MethodDataSource(nameof(KnownImagePathDefectIds))]
-    public async Task KnownImagePathDefect_StillReproduces(string fixtureId)
-    {
-        var (modules, size) = FixtureLoader.ReadMatrix(MatrixPath(fixtureId));
-        using var bitmap = SKBitmap.Decode(PngPath(fixtureId));
-
-        await Assert.That(QRCodeDecoder.TryDecode(modules, size, out _, out _)).IsTrue();
-        var success = QRCodeImageDecoder.TryDecode(bitmap, out _, out var info);
-
-        await Assert.That(success).IsFalse().Because("the defect is fixed: remove the entry from KnownImagePathDefects");
-        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DataUncorrectable).Because("the failure mode changed: re-measure F10");
-    }
-
-    [Test]
-    [MethodDataSource(nameof(ImageFixtureIds))]
+    [MethodDataSource(nameof(FixtureIds))]
     public async Task Decode_ImageFixture_ReportsHeaderAndOwnText(string fixtureId)
     {
         var manifest = Manifests.Value[fixtureId];
