@@ -124,6 +124,18 @@ Each phase follows the test-first workflow, regenerates `src/FeatherQR/PublicAPI
 - Mutation checks on 5b: drop the ECI repeat in symbols after the first, compute parity per chunk instead of once, split inside a surrogate pair, boost per symbol. Each must fail a test.
 - Parity fixtures pin the byte for ASCII, Latin-1 and non-Japanese UTF-8 inputs (S8), and the 5c cross-check compares it with the encoder oracles on the same inputs, which is what proves the definition rather than the implementation.
 
+## Open follow-ups
+
+### Structured Append
+
+- **Lanes lose to the scalar search on long runs of U+FEFF.** 40 digits then 200 marks, repeated to 15,000 characters, L, versions 1 to 40: the lane search is 1.9 times the scalar search (1,582 against 818 us), with identical plans. Every close falls back across the run, so the lanes spend most steps apart and are stepped one at a time. Realistic text is 0.17 to 1.0 times with lanes. Candidate fix: take the scalar bisection when the longest run of marks (`KeptOffBits`) is a large share of the chunk length, measured on both sides of the threshold before it is set.
+
+### Outside Structured Append (in `main` before this branch)
+
+- **An undefined `QREccLevel` fails deep inside.** `Create("hello", (QREccLevel)99)` throws `ArgumentException` with no `ParamName` and the message "ECC info not found for version 1, level 99"; `CreateStructuredAppend` names version 40. The type matches the documented contract (`TryGetRequiredBufferSize` promises `ArgumentException` for it); the message and the missing parameter name do not, so the fix is an up-front check that names `eccLevel`.
+- **`QuietZoneSize` has no upper bound.** `Size` is `21 + 2 × QuietZoneSize` in `int`, so 2^30 − 1 gives −2,147,483,629 and `int.MaxValue` gives 19, both without an exception. `TryGetRequiredBufferSize` already refuses it through `CalculateMatrixSize`, and Micro QR caps it at 10,000 (`ValidateQuietZone`); `Create` checks only the sign. The fix is the same bound on the `Create` path (rMQR needs the same look).
+- **A forced `MaskPattern` is slower than the automatic choice.** 1,000 characters at M, quiet zone 0: automatic 27 us, mask 0 34 us, mask 3 41 us. The forced path applies the mask with `ModulePlacer.ApplyMaskPattern` (`ModulePlacer.Masking.cs`); the automatic path goes through `MaskCode` instead; why the forced path is the slower one is not yet measured.
+
 ## Progress log
 
 Entries are appended per phase: what was done, what was learned, and an explicit statement that no hot path moved.
