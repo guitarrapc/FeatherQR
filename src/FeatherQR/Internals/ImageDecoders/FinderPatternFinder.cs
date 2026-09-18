@@ -591,10 +591,16 @@ internal static class FinderPatternFinder
     private static bool IsDark(ReadOnlySpan<byte> luminance, int width, int x, int y, byte threshold)
         => luminance[y * width + x] < threshold;
 
+    /// <summary>Scores closer than this are a tie, broken toward the triple confirmed on more rows.</summary>
+    private const float SelectionTieTolerance = 1e-3f;
+
     /// <summary>
-    /// Picks the three candidates with the most consistent module size, preferring repeatedly confirmed ones.
+    /// Picks the three candidates that best form a finder triple: closest to a right isosceles triangle with the most consistent module size, preferring repeatedly confirmed ones on a tie.
     /// </summary>
-    private static bool TrySelectBestThree(Span<FinderPattern> candidates, Span<FinderPattern> patterns)
+    /// <remarks>
+    /// Module size alone cannot decide: a render at a whole number of pixels per module measures every candidate, false ones included, at exactly the same size.
+    /// </remarks>
+    internal static bool TrySelectBestThree(Span<FinderPattern> candidates, Span<FinderPattern> patterns)
     {
         // Confirmed candidates (seen in multiple rows) are far more trustworthy
         var confirmed = 0;
@@ -625,8 +631,8 @@ internal static class FinderPatternFinder
             return true;
         }
 
-        // More than 3: sort by module size and take the most similar window of 3,
-        // breaking ties toward higher confirmation counts.
+        // More than 3: score every triple. Sorted by module size, the size term only
+        // grows along j and k, so it bounds the loops without rejecting anything.
         // Insertion sort: netstandard2.0 has no Span.Sort, and the list is tiny (≤ 32).
         for (var i = 1; i < candidates.Length; i++)
         {
@@ -640,21 +646,70 @@ internal static class FinderPatternFinder
             candidates[j + 1] = current;
         }
 
-        var bestIndex = 0;
+        int bestI = 0, bestJ = 1, bestK = 2;
         var bestScore = float.MaxValue;
-        for (var i = 0; i + 3 <= candidates.Length; i++)
+        var bestCount = 0;
+        for (var i = 0; i < candidates.Length - 2; i++)
         {
-            var spread = candidates[i + 2].ModuleSize - candidates[i].ModuleSize;
-            var count = candidates[i].Count + candidates[i + 1].Count + candidates[i + 2].Count;
-            var score = spread / count;
-            if (score < bestScore)
+            ref readonly var a = ref candidates[i];
+            for (var j = i + 1; j < candidates.Length - 1; j++)
             {
-                bestScore = score;
-                bestIndex = i;
+                if ((candidates[j].ModuleSize - a.ModuleSize) / a.ModuleSize > bestScore + SelectionTieTolerance)
+                    break;
+
+                ref readonly var b = ref candidates[j];
+                var ab = DistanceSquared(a, b);
+                for (var k = j + 1; k < candidates.Length; k++)
+                {
+                    ref readonly var c = ref candidates[k];
+                    var sizeSpread = (c.ModuleSize - a.ModuleSize) / a.ModuleSize;
+                    if (sizeSpread > bestScore + SelectionTieTolerance)
+                        break;
+
+                    var skew = RightIsoscelesSkew(ab, DistanceSquared(a, c), DistanceSquared(b, c));
+                    if (float.IsNaN(skew))
+                        continue;
+
+                    var score = skew + sizeSpread;
+                    var count = a.Count + b.Count + c.Count;
+                    if (score < bestScore - SelectionTieTolerance || (score <= bestScore + SelectionTieTolerance && count > bestCount))
+                    {
+                        bestScore = score;
+                        bestCount = count;
+                        bestI = i;
+                        bestJ = j;
+                        bestK = k;
+                    }
+                }
             }
         }
 
-        candidates.Slice(bestIndex, 3).CopyTo(patterns);
+        patterns[0] = candidates[bestI];
+        patterns[1] = candidates[bestJ];
+        patterns[2] = candidates[bestK];
         return true;
+    }
+
+    /// <summary>
+    /// How far three points are from a right isosceles triangle, from their squared side lengths: 0 when the two short sides are equal and meet at a right angle, unchanged by rotation, mirroring and scale.
+    /// NaN for coincident points.
+    /// </summary>
+    private static float RightIsoscelesSkew(float d0, float d1, float d2)
+    {
+        // Order so that shortest <= middle <= longest
+        var longest = Math.Max(d0, Math.Max(d1, d2));
+        var shortest = Math.Min(d0, Math.Min(d1, d2));
+        var middle = d0 + d1 + d2 - longest - shortest;
+        if (!(longest > 0f))
+            return float.NaN;
+
+        return (Math.Abs(longest - 2f * shortest) + Math.Abs(longest - 2f * middle)) / longest;
+    }
+
+    private static float DistanceSquared(in FinderPattern a, in FinderPattern b)
+    {
+        var dx = a.X - b.X;
+        var dy = a.Y - b.Y;
+        return dx * dx + dy * dy;
     }
 }

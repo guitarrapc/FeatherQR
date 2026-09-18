@@ -152,7 +152,7 @@ Entries are appended per phase: what was done, what was learned, and an explicit
 
 **The gate caught an oracle.** The pinned balancing encoder at 3.1.0 wrote parity 0 on every set, the defect its 3.2.0 fixed; the pin is 3.2.1 now, and the fixture spec's oracle matrix says not to go below it.
 
-**The corpus found a defect in a different component.** One symbol of ninety-nine, `sixteen-symbols-max-v2-l-2of16` of the explicit-parts lineage, reads through the matrix path and not from its clean 8 px render: the finder locator picks a false candidate three modules inside the real top-right finder, at 5 px/module and up. Not this phase's problem and not touched here; recorded as F10 in the 2.0.0 plan with the measurements, and the fixture test lists it as a known image-path defect behind a guard that fails when the locator is fixed.
+**The corpus found a defect in a different component.** One symbol of ninety-nine, `sixteen-symbols-max-v2-l-2of16` of the explicit-parts lineage, reads through the matrix path and not from its clean 8 px render: the finder locator picks a false candidate three modules inside the real top-right finder, at 5 px/module and up. Not this phase's problem and not touched here; recorded as F10 in the 2.0.0 plan with the measurements, and the fixture test lists it as a known image-path defect behind a guard that fails when the locator is fixed. (Fixed 2026-09-19, and the diagnosis above was wrong: the locator found all three real finders, and the triple selection preferred a false one because every candidate measured the same module size. See F10.)
 
 **Benchmark delta.** Not measured: the decode path gains one `switch` case that runs only when the mode indicator is `0011`, and no hot path moved.
 
