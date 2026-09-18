@@ -591,8 +591,11 @@ internal static class FinderPatternFinder
     private static bool IsDark(ReadOnlySpan<byte> luminance, int width, int x, int y, byte threshold)
         => luminance[y * width + x] < threshold;
 
-    /// <summary>Scores closer than this are a tie, broken toward the triple confirmed on more rows.</summary>
-    private const float SelectionTieTolerance = 1e-3f;
+    /// <summary>
+    /// Scores within this of the best are a tie, broken toward the triple confirmed on more rows.
+    /// Wide enough for keystone and pixel noise, where a false candidate at the fourth corner of the square scored within 0.01 of the real triple (the four corners of a square make four right isosceles triangles), and far below the 0.33 a false candidate off the corners scores.
+    /// </summary>
+    private const float SelectionTieTolerance = 0.05f;
 
     /// <summary>
     /// Picks the three candidates that best form a finder triple: closest to a right isosceles triangle with the most consistent module size, preferring repeatedly confirmed ones on a tie.
@@ -646,39 +649,59 @@ internal static class FinderPatternFinder
             candidates[j + 1] = current;
         }
 
+        // Pass 1 finds the best score; pass 2 takes the most confirmed triple within
+        // the tolerance of it. One pass with a running tie rule could chain small
+        // differences and drift past the tolerance.
         int bestI = 0, bestJ = 1, bestK = 2;
         var bestScore = float.MaxValue;
-        var bestCount = 0;
-        for (var i = 0; i < candidates.Length - 2; i++)
+        for (var pass = 0; pass < 2; pass++)
         {
-            ref readonly var a = ref candidates[i];
-            for (var j = i + 1; j < candidates.Length - 1; j++)
+            var bound = pass == 0 ? float.MaxValue : bestScore + SelectionTieTolerance;
+            var bestCount = 0;
+            var bestTieScore = float.MaxValue;
+            for (var i = 0; i < candidates.Length - 2; i++)
             {
-                if ((candidates[j].ModuleSize - a.ModuleSize) / a.ModuleSize > bestScore + SelectionTieTolerance)
-                    break;
-
-                ref readonly var b = ref candidates[j];
-                var ab = DistanceSquared(a, b);
-                for (var k = j + 1; k < candidates.Length; k++)
+                ref readonly var a = ref candidates[i];
+                for (var j = i + 1; j < candidates.Length - 1; j++)
                 {
-                    ref readonly var c = ref candidates[k];
-                    var sizeSpread = (c.ModuleSize - a.ModuleSize) / a.ModuleSize;
-                    if (sizeSpread > bestScore + SelectionTieTolerance)
+                    if ((candidates[j].ModuleSize - a.ModuleSize) / a.ModuleSize > Math.Min(bound, bestScore + SelectionTieTolerance))
                         break;
 
-                    var skew = RightIsoscelesSkew(ab, DistanceSquared(a, c), DistanceSquared(b, c));
-                    if (float.IsNaN(skew))
-                        continue;
-
-                    var score = skew + sizeSpread;
-                    var count = a.Count + b.Count + c.Count;
-                    if (score < bestScore - SelectionTieTolerance || (score <= bestScore + SelectionTieTolerance && count > bestCount))
+                    ref readonly var b = ref candidates[j];
+                    var ab = DistanceSquared(a, b);
+                    for (var k = j + 1; k < candidates.Length; k++)
                     {
-                        bestScore = score;
-                        bestCount = count;
-                        bestI = i;
-                        bestJ = j;
-                        bestK = k;
+                        ref readonly var c = ref candidates[k];
+                        var sizeSpread = (c.ModuleSize - a.ModuleSize) / a.ModuleSize;
+                        if (sizeSpread > Math.Min(bound, bestScore + SelectionTieTolerance))
+                            break;
+
+                        var skew = RightIsoscelesSkew(ab, DistanceSquared(a, c), DistanceSquared(b, c));
+                        if (float.IsNaN(skew))
+                            continue;
+
+                        var score = skew + sizeSpread;
+                        if (pass == 0)
+                        {
+                            if (score < bestScore)
+                            {
+                                bestScore = score;
+                                bestI = i;
+                                bestJ = j;
+                                bestK = k;
+                            }
+                            continue;
+                        }
+
+                        var count = a.Count + b.Count + c.Count;
+                        if (score <= bound && (count > bestCount || (count == bestCount && score < bestTieScore)))
+                        {
+                            bestCount = count;
+                            bestTieScore = score;
+                            bestI = i;
+                            bestJ = j;
+                            bestK = k;
+                        }
                     }
                 }
             }

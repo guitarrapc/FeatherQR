@@ -34,7 +34,7 @@ internal static class AlignmentPatternFinder
     /// <param name="allowanceModules">Search half-window in modules around the prediction.</param>
     /// <param name="centerX">Found center x.</param>
     /// <param name="centerY">Found center y.</param>
-    /// <returns>True when a cross-checked alignment pattern was found in the window.</returns>
+    /// <returns>True when a cross-checked alignment pattern was found in the window; the one nearest the prediction is returned.</returns>
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
         => TryFindCore(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, forceScalar: false, out centerX, out centerY);
 
@@ -55,32 +55,113 @@ internal static class AlignmentPatternFinder
         if (maxX - minX < 3 * moduleSize || maxY - minY < 3 * moduleSize)
             return false;
 
-        // Scan rows outward from the middle of the window: the pattern is most
-        // likely at the prediction, so the first cross-checked hit wins.
+        // Scan rows outward from the middle of the window and keep the cross-checked
+        // hit nearest the prediction: data can pass every check too, and the first
+        // hit in scan order was measured to be a false one while the real pattern
+        // sat on the prediction. A row farther than the best hit plus the cross
+        // check's recentering (under a module and a pixel) cannot beat it.
         // Row stride: the pattern's center dark run is ~1 module tall, so scanning
-        // every ⌊moduleSize/2⌋-th row cannot miss it, and the vertical cross-check
+        // every half-run-th row cannot miss it, and the vertical cross-check
         // recenters exactly regardless of which row inside the run was hit
         // (measured 4x on the not-found sweep; see the AlignmentFind findings log).
-        var step = Math.Max(1, (int)(moduleSize / 2f));
+        var expected = ExpectedRuns.FromAxes(axisX, axisY, moduleSize);
+        var best = new NearestHit(expectedX, expectedY);
+        var step = Math.Max(1, (int)(expected.Column / 2f));
         var midY = (minY + maxY) / 2;
         for (var offset = 0; midY + offset <= maxY || midY - offset >= minY; offset += step)
         {
-            if (midY + offset <= maxY
-                && TryScanRow(luminance, width, height, threshold, midY + offset, minX, maxX, moduleSize, axisX, axisY, forceScalar, ref centerX, ref centerY))
-            {
-                return true;
-            }
-            if (offset != 0 && midY - offset >= minY
-                && TryScanRow(luminance, width, height, threshold, midY - offset, minX, maxX, moduleSize, axisX, axisY, forceScalar, ref centerX, ref centerY))
-            {
-                return true;
-            }
+            if (best.Found && offset - Math.Abs(midY - expectedY) - expected.Column - 1f > best.Distance)
+                break;
+
+            if (midY + offset <= maxY)
+                ScanRow(luminance, width, height, threshold, midY + offset, minX, maxX, expected, axisX, axisY, forceScalar, ref best);
+            if (offset != 0 && midY - offset >= minY)
+                ScanRow(luminance, width, height, threshold, midY - offset, minX, maxX, expected, axisX, axisY, forceScalar, ref best);
         }
 
-        return false;
+        if (!best.Found)
+            return false;
+
+        // Each row hit centers x on its own row, and a row off the pattern's middle
+        // cuts the center module short, so the nearest of them leans toward the
+        // prediction. Re-center x on the dark run of the refined center row.
+        centerX = RecenterX(luminance, width, height, threshold, best.X, best.Y, expected.Row);
+        centerY = best.Y;
+        return true;
     }
 
-    private static bool TryScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, bool forceScalar, ref float centerX, ref float centerY)
+    private static float RecenterX(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float x, float y, float rowModule)
+    {
+        var row = (int)y;
+        var column = (int)(x + 0.5f);
+        if (row < 0 || row >= height || column < 0 || column >= width || luminance[row * width + column] >= threshold)
+            return x;
+
+        var left = column;
+        while (left > 0 && luminance[row * width + left - 1] < threshold)
+            left--;
+        var right = column;
+        while (right < width - 1 && luminance[row * width + right + 1] < threshold)
+            right++;
+
+        // A run longer than two modules has merged with something: keep the row hit
+        return right - left + 1 < 2f * rowModule ? (left + right + 1) / 2f : x;
+    }
+
+    /// <summary>
+    /// Pixel length of one module crossed along an image row and along an image column through the pattern's center.
+    /// A rotated square is crossed obliquely, up to √2 modules long at 45°, so the length comes from the grid axes rather than the module size.
+    /// </summary>
+    private readonly struct ExpectedRuns(float row, float column)
+    {
+        public float Row { get; } = row;
+        public float Column { get; } = column;
+
+        public static ExpectedRuns FromAxes((float X, float Y) axisX, (float X, float Y) axisY, float moduleSize)
+        {
+            // Grid step per pixel along the image x and y axes: columns of the
+            // inverse of [axisX axisY]. A line through a unit cell's center stays
+            // inside it for 1 / max(|gx|, |gy|) pixels.
+            var determinant = axisX.X * axisY.Y - axisY.X * axisX.Y;
+            if (Math.Abs(determinant) < 1e-6f)
+                return new ExpectedRuns(moduleSize, moduleSize);
+
+            var rowGx = axisY.Y / determinant;
+            var rowGy = -axisX.Y / determinant;
+            var columnGx = -axisY.X / determinant;
+            var columnGy = axisX.X / determinant;
+            return new ExpectedRuns(
+                1f / Math.Max(Math.Abs(rowGx), Math.Abs(rowGy)),
+                1f / Math.Max(Math.Abs(columnGx), Math.Abs(columnGy)));
+        }
+    }
+
+    /// <summary>The cross-checked hit nearest the predicted center so far.</summary>
+    private struct NearestHit(float expectedX, float expectedY)
+    {
+        public bool Found;
+        public float X;
+        public float Y;
+        private float _distanceSquared = float.MaxValue;
+
+        public readonly float Distance => (float)Math.Sqrt(_distanceSquared);
+
+        public void Offer(float x, float y)
+        {
+            var dx = x - expectedX;
+            var dy = y - expectedY;
+            var distanceSquared = dx * dx + dy * dy;
+            if (distanceSquared < _distanceSquared)
+            {
+                _distanceSquared = distanceSquared;
+                X = x;
+                Y = y;
+                Found = true;
+            }
+        }
+    }
+
+    private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, bool forceScalar, ref NearestHit best)
     {
 #if NET8_0_OR_GREATER
         // SIMD path: classify pixels into a dark bitmask with vector compares
@@ -90,14 +171,15 @@ internal static class AlignmentPatternFinder
         // gate covers x64, ARM64 and WASM SIMD.
         if (!forceScalar && Vector128.IsHardwareAccelerated && maxX - minX + 1 >= 16)
         {
-            return TryScanRowMask(luminance, width, height, threshold, y, minX, maxX, moduleSize, axisX, axisY, ref centerX, ref centerY);
+            ScanRowMask(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
+            return;
         }
 #endif
         _ = forceScalar;
-        return TryScanRowScalar(luminance, width, height, threshold, y, minX, maxX, moduleSize, axisX, axisY, ref centerX, ref centerY);
+        ScanRowScalar(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
     }
 
-    private static bool TryScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, ref float centerX, ref float centerY)
+    private static void ScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
     {
         // Track the last three completed runs as [light, dark, light]; a window is
         // evaluated whenever a light run completes (light → dark transition).
@@ -137,12 +219,12 @@ internal static class AlignmentPatternFinder
             }
 
             // A window [light, dark, light] just completed (transition to dark)
-            if (IsAlignmentRatio(runs, moduleSize))
+            if (IsAlignmentRatio(runs, expected.Row))
             {
                 // Candidate center = middle of the dark run
                 var candidateX = x - runs[2] - runs[1] / 2f;
-                if (TryCrossCheck(luminance, width, height, threshold, candidateX, y, moduleSize, axisX, axisY, out centerX, out centerY))
-                    return true;
+                if (TryCrossCheck(luminance, width, height, threshold, candidateX, y, expected.Column, axisX, axisY, out var centerX, out var centerY))
+                    best.Offer(centerX, centerY);
             }
 
             // Slide: keep [dark, light] as the new [?, light]... the window must
@@ -153,8 +235,6 @@ internal static class AlignmentPatternFinder
             runs[2] = 0;
             runIndex = 1;
         }
-
-        return false;
     }
 
 #if NET8_0_OR_GREATER
@@ -165,7 +245,7 @@ internal static class AlignmentPatternFinder
     /// <summary>
     /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask; runs are walked via trailing-zero counts, evaluating the same (light, dark, light) triple at every light→dark transition as the scalar walk.
     /// </summary>
-    private static bool TryScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, ref float centerX, ref float centerY)
+    private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
     {
         var length = maxX - minX + 1;
         Span<ulong> mask = stackalloc ulong[((length + 63) >> 6) + 1];
@@ -240,12 +320,12 @@ internal static class AlignmentPatternFinder
 
             var gap = darkStart - lightStart; // light run before this dark run
             if (previousDarkLength > 0
-                && IsAlignmentRatio(previousGap, previousDarkLength, gap, moduleSize))
+                && IsAlignmentRatio(previousGap, previousDarkLength, gap, expected.Row))
             {
                 var x = minX + darkStart;
                 var candidateX = x - gap - previousDarkLength / 2f;
-                if (TryCrossCheck(luminance, width, height, threshold, candidateX, y, moduleSize, axisX, axisY, out centerX, out centerY))
-                    return true;
+                if (TryCrossCheck(luminance, width, height, threshold, candidateX, y, expected.Column, axisX, axisY, out var centerX, out var centerY))
+                    best.Offer(centerX, centerY);
             }
 
             previousGap = gap;
@@ -253,8 +333,6 @@ internal static class AlignmentPatternFinder
             lightStart = darkEnd;
             pos = darkEnd;
         }
-
-        return false;
     }
 
     /// <summary>Index of the next set (or clear) bit at or after <paramref name="from"/>, or <paramref name="length"/>.</summary>
@@ -277,29 +355,27 @@ internal static class AlignmentPatternFinder
     }
 #endif
 
-    private static bool IsAlignmentRatio(int lightBefore, int dark, int lightAfter, float moduleSize)
+    /// <summary>
+    /// Each light run plus the dark run must be within 50% of two modules, and no run longer than two.
+    /// </summary>
+    /// <remarks>
+    /// A light and a dark run together span two edges of the same polarity, which grey edge pixels on one side of the threshold shift together, so the pair keeps its length where each run on its own gains or loses a pixel: at 3 px/module and 45° a light run measured 2 px against an expected 4.2.
+    /// </remarks>
+    private static bool IsAlignmentRatio(int lightBefore, int dark, int lightAfter, float run)
     {
-        var maxVariance = moduleSize / 2f;
-        return Math.Abs(lightBefore - moduleSize) < maxVariance
-            && Math.Abs(dark - moduleSize) < maxVariance
-            && Math.Abs(lightAfter - moduleSize) < maxVariance;
+        var pair = 2f * run;
+        return Math.Abs(lightBefore + dark - pair) < run
+            && Math.Abs(dark + lightAfter - pair) < run
+            && lightBefore < pair && dark < pair && lightAfter < pair;
     }
 
-    /// <summary>
-    /// Each of the three runs (light, dark, light) must be within 50% of one module.
-    /// </summary>
-    private static bool IsAlignmentRatio(ReadOnlySpan<int> runs, float moduleSize)
-    {
-        var maxVariance = moduleSize / 2f;
-        return Math.Abs(runs[0] - moduleSize) < maxVariance
-            && Math.Abs(runs[1] - moduleSize) < maxVariance
-            && Math.Abs(runs[2] - moduleSize) < maxVariance;
-    }
+    private static bool IsAlignmentRatio(ReadOnlySpan<int> runs, float run)
+        => IsAlignmentRatio(runs[0], runs[1], runs[2], run);
 
     /// <summary>
     /// Confirms the light-dark-light signature vertically through the candidate center and refines the center's y coordinate.
     /// </summary>
-    private static bool TryCrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float candidateX, int candidateY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, out float centerX, out float centerY)
+    private static bool TryCrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float candidateX, int candidateY, float columnModule, (float X, float Y) axisX, (float X, float Y) axisY, out float centerX, out float centerY)
     {
         centerX = 0;
         centerY = 0;
@@ -308,7 +384,7 @@ internal static class AlignmentPatternFinder
         if (x < 0 || x >= width)
             return false;
 
-        var limit = (int)(moduleSize * 2f) + 1;
+        var limit = (int)(columnModule * 2f) + 1;
 
         // Middle dark run, walking up then down from the candidate row
         var up = 0;
@@ -347,22 +423,21 @@ internal static class AlignmentPatternFinder
         if (lightDown == 0)
             return false;
 
-        // The vertical dark run must also be ~1 module, and the light rings ~1 module
+        // Vertically too, each light ring plus the dark center must span ~2 modules;
+        // one module of tolerance covers pixel quantization and mild perspective.
         var vertical = up + down;
-        var maxVariance = moduleSize; // pixel quantization + mild perspective tolerance
-        if (Math.Abs(vertical - moduleSize) >= maxVariance)
-            return false;
-        if (Math.Abs(Math.Min(lightUp, lightDown) - moduleSize) >= maxVariance)
+        var pair = 2f * columnModule;
+        if (Math.Abs(lightUp + vertical - pair) >= columnModule || Math.Abs(vertical + lightDown - pair) >= columnModule)
             return false;
 
         var refinedY = candidateY + (down - up) / 2f + 0.5f;
 
-        // Border-ring check: the light-dark-light core signature also matches any
+        // Ring check: the light-dark-light core signature also matches any
         // isolated dark data module (light on all four sides), extremely common in
         // data areas, and a false positive here shears the whole sampling transform.
-        // Only the real pattern has its 5×5 dark border: all eight ring samples at
-        // ±2 modules from the center must be dark.
-        if (!IsRingDark(luminance, width, height, threshold, candidateX, refinedY, axisX, axisY))
+        // Only the real pattern has both rings around its center: the eight samples
+        // at ±1 module light and the eight at ±2 modules dark.
+        if (!IsRingPattern(luminance, width, height, threshold, candidateX, refinedY, axisX, axisY))
             return false;
 
         centerX = candidateX;
@@ -370,25 +445,27 @@ internal static class AlignmentPatternFinder
         return true;
     }
 
-    private static bool IsRingDark(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, (float X, float Y) axisX, (float X, float Y) axisY)
+    private static bool IsRingPattern(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, (float X, float Y) axisX, (float X, float Y) axisY)
+        => IsRing(luminance, width, height, threshold, centerX, centerY, axisX, axisY, 1f, dark: false)
+            && IsRing(luminance, width, height, threshold, centerX, centerY, axisX, axisY, 2f, dark: true);
+
+    private static bool IsRing(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, (float X, float Y) axisX, (float X, float Y) axisY, float distance, bool dark)
     {
         // Ring samples follow the GRID axes (from the finder geometry), not the
-        // image axes: under rotation, image-axis offsets at ±2 modules land outside
-        // the rotated 5×5 ring and reject the true pattern.
-        Span<float> steps = stackalloc float[3] { -2f, 0f, 2f };
-
-        foreach (var stepY in steps)
+        // image axes: under rotation, image-axis offsets land outside the rotated
+        // rings and reject the true pattern.
+        for (var stepY = -1; stepY <= 1; stepY++)
         {
-            foreach (var stepX in steps)
+            for (var stepX = -1; stepX <= 1; stepX++)
             {
-                if (stepX == 0f && stepY == 0f)
+                if (stepX == 0 && stepY == 0)
                     continue; // center already validated
 
-                var x = (int)(centerX + stepX * axisX.X + stepY * axisY.X + 0.5f);
-                var y = (int)(centerY + stepX * axisX.Y + stepY * axisY.Y + 0.5f);
+                var x = (int)(centerX + distance * (stepX * axisX.X + stepY * axisY.X) + 0.5f);
+                var y = (int)(centerY + distance * (stepX * axisX.Y + stepY * axisY.Y) + 0.5f);
                 if (x < 0 || x >= width || y < 0 || y >= height)
                     return false;
-                if (luminance[y * width + x] >= threshold)
+                if (luminance[y * width + x] < threshold != dark)
                     return false;
             }
         }

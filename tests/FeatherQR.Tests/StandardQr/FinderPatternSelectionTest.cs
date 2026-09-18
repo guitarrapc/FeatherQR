@@ -72,6 +72,26 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
+    /// Keystone: a false candidate near the fourth corner closes a right angle at the top-right
+    /// finder and, measured from a real render, scores 0.016 better than the real triple
+    /// (0.057 against 0.073). The real bottom-left finder was confirmed on more than three
+    /// times as many rows, and within the tie tolerance that decides.
+    /// </summary>
+    [Test]
+    public async Task Select_KeystoneFourthCornerCandidateScoresSlightlyBetter_CountDecides()
+    {
+        FinderPattern[] candidates =
+        [
+            Fp(3.74f, 3.42f, 6.143f, 19), Fp(33.26f, 3.42f, 6.143f, 19),
+            Fp(33.42f, 32.87f, 6.429f, 6), Fp(3.58f, 33.34f, 6.429f, 20),
+        ];
+
+        var selected = Select(candidates);
+
+        await Assert.That(selected).IsEquivalentTo(new[] { (3.74f, 3.42f), (33.26f, 3.42f), (3.58f, 33.34f) });
+    }
+
+    /// <summary>
     /// A candidate that would close a perfect right angle but measures twice the module size
     /// does not beat a real triple whose geometry is slightly off (keystone).
     /// </summary>
