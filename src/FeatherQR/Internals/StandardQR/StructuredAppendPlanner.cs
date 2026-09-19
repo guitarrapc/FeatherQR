@@ -720,12 +720,7 @@ internal static partial class StructuredAppendPlanner
         // The two boundaries: the first character outside 0-9, then the first outside the
         // 45-character alphabet. A prefix is Numeric up to the one and Alphanumeric up to
         // the other, and Byte past it, which is how the analyser classifies it.
-        var d = 0;
-        while (d < n && CharacterSets.IsNumeric(window[d]))
-            d++;
-        var a = d;
-        while (a < n && CharacterSets.IsAlphanumeric(window[a]))
-            a++;
+        StructuredAppendScanner.ModeBoundaries(window, out var d, out var a);
         digitRun = d;
         alnumRun = a;
 
@@ -761,28 +756,9 @@ internal static partial class StructuredAppendPlanner
             return end;
         }
 
-        // UTF-8 by code point, the same bytes the writer emits: the a leading characters
-        // are ASCII, then one pass over the run until the next character would overflow.
-        var used = a;
-        var i = a;
-        while (i < n)
-        {
-            var c = window[i];
-            int cost, step = 1;
-            if (c < 0x80)
-                cost = 1;
-            else if (c < 0x800)
-                cost = 2;
-            else if (char.IsHighSurrogate(c) && i + 1 < n && char.IsLowSurrogate(window[i + 1]))
-                (cost, step) = (4, 2);
-            else
-                cost = 3; // a BMP character, or a lone surrogate written as U+FFFD
-            if (used + cost > bytes)
-                break;
-            used += cost;
-            i += step;
-        }
-        return i;
+        // The leading alphanumeric characters are ASCII; spend their bytes before
+        // scanning the suffix, whose boundary keeps a surrogate pair together.
+        return a + StructuredAppendScanner.Utf8PrefixLength(window.Slice(a), bytes - a);
     }
 
     /// <summary>The most digits whose Numeric payload (10 bits per 3, then 4 or 7) fits the bits; 0 when one does not.</summary>
