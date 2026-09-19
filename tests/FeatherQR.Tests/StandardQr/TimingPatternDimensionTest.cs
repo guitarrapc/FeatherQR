@@ -33,6 +33,106 @@ public class TimingPatternDimensionTest
         await Assert.That(info.Version).IsEqualTo(version);
     }
 
+    /// <summary>
+    /// At versions 39 and 40 the snapped finders measure a few percent small, which puts a
+    /// 173- or 177-module symbol more than four modules past the largest version. The estimate is
+    /// refused as wild, so the count has to run without it.
+    /// </summary>
+    [Test]
+    [Arguments(39, 350)]
+    [Arguments(39, 385)]
+    [Arguments(40, 285)]
+    [Arguments(40, 320)]
+    [Arguments(40, 358)]
+    [Arguments(40, 443)]
+    [Arguments(40, 540)]
+    public async Task Decode_EstimatePastVersion40_ReadsByTheCount(int version, int sizePx)
+    {
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version });
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+
+        var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"v{version} at {sizePx} px: {info.Status}");
+        await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
+    /// <summary>
+    /// The same render with a timing module painted over: nothing counts, and an estimate that
+    /// was refused stays refused.
+    /// </summary>
+    [Test]
+    public async Task Decode_EstimatePastVersion40_NoCount_IsNotDetected()
+    {
+        const int sizePx = 540;
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        var luminance = new byte[sizePx * sizePx];
+        for (var y = 0; y < sizePx; y++)
+        {
+            for (var x = 0; x < sizePx; x++)
+                luminance[y * sizePx + x] = bitmap.GetPixel(x, y).Red;
+        }
+        // Light timing modules 9 and 11 on both lines, painted dark at the average pitch
+        // (qr.Size includes the quiet zone)
+        var pitch = sizePx / (float)qr.Size;
+        foreach (var (row, column) in new[] { (6, 9), (6, 11), (9, 6), (11, 6) })
+        {
+            for (var y = (int)((row + QuietZone) * pitch); y < (int)((row + QuietZone + 1) * pitch); y++)
+            {
+                for (var x = (int)((column + QuietZone) * pitch); x < (int)((column + QuietZone + 1) * pitch); x++)
+                    luminance[y * sizePx + x] = 0;
+            }
+        }
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out _, out var info);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
+    }
+
+    /// <summary>
+    /// Three finders and two timing lines as a version 45 symbol would draw them: the count is
+    /// exact and names no version, so the out-of-range estimate is not rescued.
+    /// </summary>
+    [Test]
+    public async Task Decode_TimingCountPastVersion40_IsNotDetected()
+    {
+        const int dimension = 17 + 4 * 45;
+        const int pixelsPerModule = 2;
+        var dark = new bool[dimension, dimension];
+        foreach (var (top, left) in new[] { (0, 0), (0, dimension - 7), (dimension - 7, 0) })
+        {
+            for (var r = 0; r < 7; r++)
+            {
+                for (var c = 0; c < 7; c++)
+                    dark[top + r, left + c] = r is 0 or 6 || c is 0 or 6 || (r is >= 2 and <= 4 && c is >= 2 and <= 4);
+            }
+        }
+        for (var i = 8; i < dimension - 8; i++)
+        {
+            dark[6, i] = i % 2 == 0;
+            dark[i, 6] = i % 2 == 0;
+        }
+        var side = (dimension + 2 * QuietZone) * pixelsPerModule;
+        var luminance = new byte[side * side];
+        for (var y = 0; y < side; y++)
+        {
+            for (var x = 0; x < side; x++)
+            {
+                var row = y / pixelsPerModule - QuietZone;
+                var column = x / pixelsPerModule - QuietZone;
+                luminance[y * side + x] = row >= 0 && column >= 0 && row < dimension && column < dimension && dark[row, column] ? (byte)0 : (byte)255;
+            }
+        }
+
+        await Assert.That(Count(luminance, side, side, pixelsPerModule)).IsEqualTo(0);
+        var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out _, out var info);
+        await Assert.That(success).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
+    }
+
     public static IEnumerable<(int, int)> VersionsAndDensities()
     {
         foreach (var pixelsPerModule in new[] { 1, 2, 3 })

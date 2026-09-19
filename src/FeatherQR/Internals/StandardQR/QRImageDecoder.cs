@@ -90,10 +90,23 @@ internal static class QRImageDecoder
 
         OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
 
+        var timingCounted = false;
+        var timingDimension = 0;
         if (!TryEstimateDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, out var dimension, out var secondaryDimension, out var moduleSize))
         {
-            info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
-            return DecodeStatus.NotDetected;
+            // Snapped finders at versions 39-40 measure a few percent small, which puts the
+            // estimate past the largest version; the count does not depend on it.
+            if (moduleSize >= 1f)
+            {
+                timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
+                timingCounted = true;
+            }
+            if (timingDimension == 0)
+            {
+                info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+                return DecodeStatus.NotDetected;
+            }
+            dimension = timingDimension;
         }
 
         var status = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, destination, out charsWritten, out info, out var versionDimension);
@@ -102,7 +115,8 @@ internal static class QRImageDecoder
 
         // The timing patterns count the modules the estimate only measures. Counted
         // only once the estimate has failed, so a successful decode never pays for it.
-        var timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
+        if (!timingCounted)
+            timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
         if (timingDimension != 0 && timingDimension != dimension)
         {
             var timingStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, timingDimension, moduleSize, destination, out var timingCharsWritten, out var timingInfo, out _);
