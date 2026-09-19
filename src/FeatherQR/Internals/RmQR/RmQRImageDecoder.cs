@@ -654,8 +654,8 @@ internal static class RmQRImageDecoder
                             for (var i = -2; i <= 2; i++)
                             {
                                 var expectedDark = i == -2 || i == 2 || j == -2 || j == 2 || (i == 0 && j == 0);
-                                var px = (int)(cx + i * uX + j * svX + 0.5f);
-                                var py = (int)(cy + i * uY + j * svY + 0.5f);
+                                var px = (int)(cx + i * uX + j * svX);
+                                var py = (int)(cy + i * uY + j * svY);
                                 if ((uint)px >= (uint)width || (uint)py >= (uint)height)
                                     continue; // outside the image counts as a mismatch
                                 var dark = luminance[py * width + px] < threshold;
@@ -735,8 +735,8 @@ internal static class RmQRImageDecoder
     {
         for (var step = 0.5f; step <= maxRun; step += 0.5f)
         {
-            var px = (int)(startX + dirX * step + 0.5f);
-            var py = (int)(startY + dirY * step + 0.5f);
+            var px = (int)(startX + dirX * step);
+            var py = (int)(startY + dirY * step);
             if ((uint)px >= (uint)width || (uint)py >= (uint)height)
                 return float.NaN;
             if (luminance[py * width + px] >= threshold)
@@ -811,8 +811,8 @@ internal static class RmQRImageDecoder
         transform.Transform(gridX, gridY, out var x, out var y);
         if (float.IsNaN(x) || float.IsNaN(y))
             return false;
-        var px = (int)(x + 0.5f);
-        var py = (int)(y + 0.5f);
+        var px = (int)x;
+        var py = (int)y;
         if (px < 0)
             px = 0;
         else if (px >= width)
@@ -870,8 +870,9 @@ internal static class RmQRImageDecoder
             for (var col = 0; col < columns; col++)
             {
                 transform.Transform(col + 0.5f, gridY, out var x, out var y);
-                var px = (int)(x + 0.5f);
-                var py = (int)(y + 0.5f);
+                // Pixel edges sit on integers, so the pixel containing a point is its floor
+                var px = (int)x;
+                var py = (int)y;
                 if (px < 0)
                     px = 0;
                 else if (px >= width)
@@ -925,7 +926,6 @@ internal static class RmQRImageDecoder
         var a31 = Vector128.Create(transform.a31);
         var a32 = Vector128.Create(transform.a32);
         var a33 = Vector128.Create(transform.a33);
-        var half = Vector128.Create(0.5f);
         var zero = Vector128<int>.Zero;
         var maxPx = Vector128.Create(width - 1);
         var maxPy = Vector128.Create(height - 1);
@@ -955,10 +955,10 @@ internal static class RmQRImageDecoder
                 var xHi = (a11 * gridXHi + rowX + a31) / denominatorHi;
                 var yHi = (a12 * gridXHi + rowY + a32) / denominatorHi;
 
-                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo + half), maxPx), zero);
-                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi + half), maxPx), zero);
+                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
 
                 // Lane extraction beats spilling the index vector to the stack: the
                 // reload was measured on the critical path of every gather.
@@ -981,8 +981,8 @@ internal static class RmQRImageDecoder
                 var x = (a11 * gridX + rowX + a31) / denominator;
                 var y = (a12 * gridX + rowY + a32) / denominator;
 
-                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x + half), maxPx), zero);
+                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;
@@ -1009,7 +1009,6 @@ internal static class RmQRImageDecoder
         var a12 = Vector128.Create(transform.a12);
         var a31 = Vector128.Create(transform.a31);
         var a32 = Vector128.Create(transform.a32);
-        var half = Vector128.Create(0.5f);
         var zero = Vector128<int>.Zero;
         var maxPx = Vector128.Create(width - 1);
         var maxPy = Vector128.Create(height - 1);
@@ -1036,10 +1035,10 @@ internal static class RmQRImageDecoder
                 var xHi = a11 * gridXHi + rowX + a31;
                 var yHi = a12 * gridXHi + rowY + a32;
 
-                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo + half), maxPx), zero);
-                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi + half), maxPx), zero);
+                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
@@ -1059,8 +1058,8 @@ internal static class RmQRImageDecoder
                 var x = a11 * gridX + rowX + a31;
                 var y = a12 * gridX + rowY + a32;
 
-                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x + half), maxPx), zero);
+                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;

@@ -735,8 +735,8 @@ internal static class QRImageDecoder
                 var x = rowXs[cellI] + (rowXs[cellI + 1] - rowXs[cellI]) * s;
                 var y = rowYs[cellI] + (rowYs[cellI + 1] - rowYs[cellI]) * s;
 
-                var px = (int)(x + 0.5f);
-                var py = (int)(y + 0.5f);
+                var px = (int)x;
+                var py = (int)y;
                 if (px < 0)
                     px = 0;
                 else if (px >= width)
@@ -848,8 +848,9 @@ internal static class QRImageDecoder
                 var x = (transform.a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (transform.a12 * gridX + rowNumeratorY) * reciprocal;
 
-                var px = (int)(x + 0.5f);
-                var py = (int)(y + 0.5f);
+                // Pixel edges sit on integers, so the pixel containing a point is its floor
+                var px = (int)x;
+                var py = (int)y;
 
                 // Clamp: mild inaccuracy at the outermost modules must not read OOB
                 if (px < 0)
@@ -873,7 +874,6 @@ internal static class QRImageDecoder
         var a11 = Vector256.Create(transform.a11);
         var a12 = Vector256.Create(transform.a12);
         var a13 = Vector256.Create(transform.a13);
-        var half = Vector256.Create(0.5f);
         var zero = Vector256<int>.Zero;
         var maxPx = Vector256.Create(width - 1);
         var maxPy = Vector256.Create(height - 1);
@@ -897,11 +897,11 @@ internal static class QRImageDecoder
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                // (int)(x + 0.5f) truncates toward zero, matching the scalar cast for
-                // every in-range value; out-of-range lanes differ from scalar
-                // saturation but are clamped into bounds either way.
-                var px = Vector256.ConvertToInt32(x + half);
-                var py = Vector256.ConvertToInt32(y + half);
+                // Truncation is the pixel containing x for every in-range (non-negative)
+                // coordinate, matching the scalar cast; out-of-range lanes differ from
+                // scalar saturation but are clamped into bounds either way.
+                var px = Vector256.ConvertToInt32(x);
+                var py = Vector256.ConvertToInt32(y);
                 px = Vector256.Max(Vector256.Min(px, maxPx), zero);
                 py = Vector256.Max(Vector256.Min(py, maxPy), zero);
 
@@ -925,8 +925,8 @@ internal static class QRImageDecoder
                 var x = (transform.a11 * gridXs + rowNX) * reciprocal;
                 var y = (transform.a12 * gridXs + rowNY) * reciprocal;
 
-                var px = (int)(x + 0.5f);
-                var py = (int)(y + 0.5f);
+                var px = (int)x;
+                var py = (int)y;
                 if (px < 0)
                     px = 0;
                 else if (px >= width)
@@ -948,7 +948,6 @@ internal static class QRImageDecoder
         var a11 = Vector128.Create(transform.a11);
         var a12 = Vector128.Create(transform.a12);
         var a13 = Vector128.Create(transform.a13);
-        var half = Vector128.Create(0.5f);
         var zero = Vector128<int>.Zero;
         var maxPx = Vector128.Create(width - 1);
         var maxPy = Vector128.Create(height - 1);
@@ -980,13 +979,13 @@ internal static class QRImageDecoder
                 var xHi = (a11 * gridXHi + rowNumeratorX) * reciprocalHi;
                 var yHi = (a12 * gridXHi + rowNumeratorY) * reciprocalHi;
 
-                // (int)(x + 0.5f) truncates toward zero, matching the scalar cast for
-                // every in-range value; out-of-range lanes differ from scalar
-                // saturation but are clamped into bounds either way.
-                var pxLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo + half), maxPx), zero);
-                var pyLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo + half), maxPy), zero);
-                var pxHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi + half), maxPx), zero);
-                var pyHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi + half), maxPy), zero);
+                // Truncation is the pixel containing x for every in-range (non-negative)
+                // coordinate, matching the scalar cast; out-of-range lanes differ from
+                // scalar saturation but are clamped into bounds either way.
+                var pxLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
+                var pyLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero);
+                var pxHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
+                var pyHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero);
 
                 (pyLo * widthVector + pxLo).CopyTo(indices);
                 (pyHi * widthVector + pxHi).CopyTo(indices.Slice(4));
@@ -1006,8 +1005,8 @@ internal static class QRImageDecoder
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                var px = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x + half), maxPx), zero);
-                var py = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y + half), maxPy), zero);
+                var px = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
+                var py = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero);
 
                 (py * widthVector + px).CopyTo(indices);
 
@@ -1029,8 +1028,8 @@ internal static class QRImageDecoder
                 var x = (transform.a11 * gridXs + rowNX) * reciprocal;
                 var y = (transform.a12 * gridXs + rowNY) * reciprocal;
 
-                var px = (int)(x + 0.5f);
-                var py = (int)(y + 0.5f);
+                var px = (int)x;
+                var py = (int)y;
                 if (px < 0)
                     px = 0;
                 else if (px >= width)

@@ -151,9 +151,13 @@ public class SymbolCornersTest
     /// An alignment pattern the decoder cannot find drops any version onto the finders-only fit
     /// version 1 gets, while error correction still returns <see cref="DecodeStatus.Success"/>.
     /// One damaged module is enough, so version 1 is not the only loose case.
+    /// The version 2 tilt is taken in both keystone directions: 3 % used to read only with the
+    /// top edge shrinking, because the sampler read half a pixel toward the bottom-right, the
+    /// same way the finders-only corner errs there.
     /// </summary>
     [Test]
-    [Arguments(2, 0.03f)]
+    [Arguments(2, 0.02f)]
+    [Arguments(2, -0.02f)]
     [Arguments(5, 0.01f)]
     [Arguments(6, 0.01f)]
     public async Task QR_AlignmentPatternNotFound_CornersStayWithinAModuleAndAHalf(int version, float tilt)

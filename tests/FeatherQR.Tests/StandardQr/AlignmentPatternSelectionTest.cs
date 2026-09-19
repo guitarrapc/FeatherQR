@@ -83,6 +83,25 @@ public class AlignmentPatternSelectionTest
         await Assert.That(y).IsEqualTo(Center(13)).Within(1f);
     }
 
+    /// <summary>
+    /// The centre is in the same coordinates as the finder centres, where integers are pixel
+    /// edges. The vertical refinement used to land half a pixel above the pattern's centre.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Find_AxisAlignedPattern_CentreIsExact(bool scalar)
+    {
+        var image = Blank();
+        DrawAlignmentPattern(image, 15, 15);
+
+        var (found, x, y) = Find(image, 15, 15, scalar);
+
+        await Assert.That(found).IsTrue();
+        await Assert.That(x).IsEqualTo(Center(15)).Within(0.01f);
+        await Assert.That(y).IsEqualTo(Center(15)).Within(0.01f);
+    }
+
     private static (bool Found, float X, float Y) Find(byte[] image, int expectedColumn, int expectedRow, bool scalar)
     {
         const int side = Modules * PixelsPerModule;

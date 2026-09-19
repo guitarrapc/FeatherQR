@@ -93,7 +93,7 @@ internal static class AlignmentPatternFinder
     private static float RecenterX(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float x, float y, float rowModule)
     {
         var row = (int)y;
-        var column = (int)(x + 0.5f);
+        var column = (int)x;
         if (row < 0 || row >= height || column < 0 || column >= width || luminance[row * width + column] >= threshold)
             return x;
 
@@ -380,7 +380,7 @@ internal static class AlignmentPatternFinder
         centerX = 0;
         centerY = 0;
 
-        var x = (int)(candidateX + 0.5f);
+        var x = (int)candidateX;
         if (x < 0 || x >= width)
             return false;
 
@@ -430,7 +430,7 @@ internal static class AlignmentPatternFinder
         if (Math.Abs(lightUp + vertical - pair) >= columnModule || Math.Abs(vertical + lightDown - pair) >= columnModule)
             return false;
 
-        var refinedY = candidateY + (down - up) / 2f + 0.5f;
+        var refinedY = candidateY + (down - up) / 2f + 1f;
 
         // Ring check: the light-dark-light core signature also matches any
         // isolated dark data module (light on all four sides), extremely common in
@@ -461,8 +461,8 @@ internal static class AlignmentPatternFinder
                 if (stepX == 0 && stepY == 0)
                     continue; // center already validated
 
-                var x = (int)(centerX + distance * (stepX * axisX.X + stepY * axisY.X) + 0.5f);
-                var y = (int)(centerY + distance * (stepX * axisX.Y + stepY * axisY.Y) + 0.5f);
+                var x = (int)(centerX + distance * (stepX * axisX.X + stepY * axisY.X));
+                var y = (int)(centerY + distance * (stepX * axisX.Y + stepY * axisY.Y));
                 if (x < 0 || x >= width || y < 0 || y >= height)
                     return false;
                 if (luminance[y * width + x] < threshold != dark)

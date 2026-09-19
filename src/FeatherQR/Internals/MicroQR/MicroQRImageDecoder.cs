@@ -618,8 +618,9 @@ internal static class MicroQRImageDecoder
             for (var u = 0; u < size; u++)
             {
                 var gridU = u + 0.5f;
-                var px = (int)(rowX + gridU * uX + 0.5f);
-                var py = (int)(rowY + gridU * uY + 0.5f);
+                // Pixel edges sit on integers, so the pixel containing a point is its floor
+                var px = (int)(rowX + gridU * uX);
+                var py = (int)(rowY + gridU * uY);
 
                 if (px < 0)
                     px = 0;
