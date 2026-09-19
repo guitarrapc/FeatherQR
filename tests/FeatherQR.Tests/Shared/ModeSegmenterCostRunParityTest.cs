@@ -30,17 +30,16 @@ public class ModeSegmenterCostRunParityTest
 
     [Test]
     [MethodDataSource(nameof(Cases))]
-    public async Task CostsGeneral_ByteRunsMatchAllStates(string text, int offset, int length)
+    public void ComputeCosts_ByteRunsMatchAllStates(string text, int offset, int length)
     {
         Check(text.AsSpan(offset, length));
-        await Assert.That(true).IsTrue();
     }
 
     [Test]
     [Arguments(7)]
     [Arguments(42)]
     [Arguments(20260920)]
-    public async Task CostsGeneral_RandomRunsMatchAllStates(int seed)
+    public void ComputeCosts_RandomRunsMatchAllStates(int seed)
     {
         var random = new Random(seed);
         const string samples = "0AZ xéλあ\uFEFF\uD800\uDC00";
@@ -54,11 +53,10 @@ public class ModeSegmenterCostRunParityTest
                 Check(buffer.AsSpan(0, length));
             }
         }
-        await Assert.That(true).IsTrue();
     }
 
     [Test]
-    public async Task CostsGeneral_AllShortClassSequencesMatchAllStates()
+    public void ComputeCosts_AllShortClassSequencesMatchAllStates()
     {
         var buffer = new char[6];
         var combinations = 1;
@@ -72,7 +70,6 @@ public class ModeSegmenterCostRunParityTest
             }
             combinations *= 4;
         }
-        await Assert.That(true).IsTrue();
     }
 
     private static void Check(ReadOnlySpan<char> text)
@@ -82,21 +79,12 @@ public class ModeSegmenterCostRunParityTest
         foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
         {
             var expected = Reference(text, charset, mode, numeric, alnum, bytes, allowAlnum, allowByte, out var expectedState);
-            // General is selected for UTF-8 or when Byte is disabled. Latin-with-Byte has its own loop.
-            if (charset == EciMode.Utf8 || !allowByte)
-            {
-                var actual = ModeSegmenter.CostsGeneral(text, charset, mode + numeric + 4, mode + alnum + 6, mode + bytes, allowAlnum, allowByte, out var state);
-                Equal(actual, state, expected, expectedState);
-            }
+            // The cost-only entry point selects General for UTF-8 or when Byte is
+            // disabled, and Latin otherwise; both are checked against the same reference.
             var cost = ModeSegmenter.ComputeCosts(text, charset, mode, numeric, alnum, bytes, default, out var finalState, allowAlnum, allowByte);
-            Equal(cost, finalState, expected, expectedState);
+            if (cost != expected || finalState != expectedState)
+                throw new InvalidOperationException($"Expected ({expected}, {expectedState}), got ({cost}, {finalState}); headers {mode}/{numeric}/{alnum}/{bytes}, allowed {allowAlnum}/{allowByte}, charset {charset}, text {Convert.ToHexString(Encoding.Unicode.GetBytes(text.ToString()))}.");
         }
-    }
-
-    private static void Equal(int cost, int state, int expected, int expectedState)
-    {
-        if (cost != expected || state != expectedState)
-            throw new InvalidOperationException($"Expected ({expected}, {expectedState}), got ({cost}, {state}).");
     }
 
     // Independent reference: relax every transition from every reachable state.
@@ -126,12 +114,16 @@ public class ModeSegmenterCostRunParityTest
                     var target = from < 3 ? (from + 1) % 3 : 1;
                     var added = from < 3 ? (from == 0 ? 4 : 3) : mode + numeric + 4;
                     current[target] = Math.Min(current[target], basis + added);
+                    current[1] = Math.Min(current[1], basis + mode + numeric + 4);
                 }
                 if (allowAlnum && Alphabet.IndexOf(c) >= 0)
                 {
                     var target = from == 4 ? 3 : 4;
                     var added = from is 3 or 4 ? (from == 3 ? 6 : 5) : mode + alnum + 6;
                     current[target] = Math.Min(current[target], basis + added);
+                    // A fresh segment may also start in the same mode. With the synthetic
+                    // zero-width headers above this can tie and change the lowest final state.
+                    current[4] = Math.Min(current[4], basis + mode + alnum + 6);
                 }
                 if (allowByte && !(charset == EciMode.Utf8 && c == '\uFEFF' && i > 0 && from != 5))
                     current[5] = Math.Min(current[5], basis + byteCount * 8 + (from == 5 ? 0 : mode + bytes));
