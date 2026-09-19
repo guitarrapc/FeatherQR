@@ -355,6 +355,29 @@ public class QRCodeDecoderImageTest
         await Assert.That(info.Version).IsEqualTo(version);
     }
 
+    /// <summary>
+    /// Fixed-size builder renders at about 2 px/module, level L. The alignment pattern's centre
+    /// is pixel-resolved, a third of a module here, and anchoring the transform on it bent the
+    /// bottom-right block by enough to exceed level L's correction; the three finders alone
+    /// sample every module right on a flat symbol, so the decoder falls back to them.
+    /// </summary>
+    [Test]
+    [Arguments(2, "jWU&0/?i6UY,P k y4A9g/_e", 64)]
+    [Arguments(2, "jWU&0/?i6UY,P k y4A9g/_e", 68)]
+    [Arguments(2, "9gM&Ax5,=rRNb?9 :,?sL", 64)]
+    [Arguments(3, "1,W", 61)]
+    public async Task Decode_LowDensityFlatRender_AlignmentCentreTooCoarse_FallsBackToTheFinders(int version, string content, int sizePx)
+    {
+        var qr = QRCodeGenerator.Create(content, QREccLevel.L, new QRCodeGeneratorOptions { Version = version });
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+
+        var success = QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"v{version} at {sizePx} px: {info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
     private static SKBitmap RenderQr(string content, QREccLevel eccLevel, int pixelsPerModule, EciMode eciMode = EciMode.Default)
     {
         var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });

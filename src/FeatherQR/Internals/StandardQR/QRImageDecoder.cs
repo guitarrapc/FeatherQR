@@ -154,7 +154,7 @@ internal static class QRImageDecoder
     private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension)
     {
         versionDimension = 0;
-        var transform = BuildGridTransform(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize);
+        var transform = BuildGridTransform(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, out var alignmentAnchored);
 
         // Version 7+ symbols carry a lattice of alignment patterns; when most of
         // them are detected, a piecewise mesh replaces the single global homography
@@ -197,10 +197,30 @@ internal static class QRImageDecoder
             var namedDimension = ReadVersionDimension(modules, dimension);
             var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
             if (status == DecodeStatus.Success)
+            {
                 info = info.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
-            else if (namedDimension != dimension)
+                return status;
+            }
+            if (namedDimension != dimension)
                 versionDimension = namedDimension;
-            return status;
+            if (IsTerminal(status) || !alignmentAnchored)
+                return status;
+
+            // Alignment fallback: the alignment centre is pixel-resolved, which at about
+            // 2 px/module is a third of a module, and the transform extrapolates that
+            // error across the bottom-right block as perspective. The finders alone are
+            // exact for a flat symbol. Failure-path cost only.
+            var parallelogram = BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension);
+            SampleGrid(luminance, width, height, threshold, parallelogram, dimension, modules);
+            var parallelogramStatus = DecodeWithMirrorRetry(modules, dimension, destination, out var parallelogramCharsWritten, out var parallelogramInfo, out var parallelogramTransposed);
+            if (!IsTerminal(parallelogramStatus))
+                return status;
+
+            charsWritten = parallelogramCharsWritten;
+            info = parallelogramStatus == DecodeStatus.Success
+                ? parallelogramInfo.WithCorners(SymbolGeometry.FromTransform(parallelogram, dimension, dimension, parallelogramTransposed))
+                : parallelogramInfo;
+            return parallelogramStatus;
         }
         finally
         {
@@ -857,8 +877,9 @@ internal static class QRImageDecoder
     /// Builds the grid-to-pixel projective transform from the three finder centers plus a fourth correspondence point: the bottom-right alignment pattern when one exists and is found, otherwise the parallelogram corner estimate (which degrades the transform to affine, exact for flat, on-axis captures).
     /// Grid coordinates put module (u, v)'s center at (u+0.5, v+0.5), so finder centers sit at 3.5 and the alignment center at dimension−6.5.
     /// </summary>
-    internal static PerspectiveTransform BuildGridTransform(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize)
+    internal static PerspectiveTransform BuildGridTransform(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, out bool alignmentAnchored)
     {
+        alignmentAnchored = false;
         // Parallelogram estimate of the bottom-right corner (grid dimension−3.5)
         var cornerX = topRight.X + bottomLeft.X - topLeft.X;
         var cornerY = topRight.Y + bottomLeft.Y - topLeft.Y;
@@ -883,6 +904,7 @@ internal static class QRImageDecoder
             {
                 if (AlignmentPatternFinder.TryFind(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowance, out var alignmentX, out var alignmentY))
                 {
+                    alignmentAnchored = true;
                     return PerspectiveTransform.QuadrilateralToQuadrilateral(
                         3.5f, 3.5f,
                         dimension - 3.5f, 3.5f,
@@ -897,16 +919,20 @@ internal static class QRImageDecoder
         }
 
         // No alignment pattern (version 1) or not found: parallelogram corner
-        return PerspectiveTransform.QuadrilateralToQuadrilateral(
+        return BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension);
+    }
+
+    /// <summary>The grid transform from the three finder centers alone, the bottom-right corner completing the parallelogram.</summary>
+    internal static PerspectiveTransform BuildParallelogramTransform(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension)
+        => PerspectiveTransform.QuadrilateralToQuadrilateral(
             3.5f, 3.5f,
             dimension - 3.5f, 3.5f,
             dimension - 3.5f, dimension - 3.5f,
             3.5f, dimension - 3.5f,
             topLeft.X, topLeft.Y,
             topRight.X, topRight.Y,
-            cornerX, cornerY,
+            topRight.X + bottomLeft.X - topLeft.X, topRight.Y + bottomLeft.Y - topLeft.Y,
             bottomLeft.X, bottomLeft.Y);
-    }
 
     /// <summary>
     /// Samples every module center through the projective grid-to-pixel transform.
