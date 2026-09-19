@@ -202,6 +202,32 @@ internal static class MicroQRImageDecoder
                     }
                     TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
                 }
+
+                // Timing frame: the finder's module size is extrapolated across the whole
+                // symbol, and a render that snaps modules to whole pixels can give the
+                // finder a size a few percent off. The timing patterns reach the far edge,
+                // so they measure the symbol itself. Failure-path cost only.
+                if (TryTimingFrame(luminance, width, height, threshold, candidate, uX, uY, vX, vY, out var timingOriginX, out var timingOriginY, out var tuX, out var tuY, out var tvX, out var tvY, out var timingSize)
+                    && SymbolFitsImage(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, width, height, samplingSlack))
+                {
+                    SampleGrid(luminance, width, height, threshold, timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, modules);
+                    var timingStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, timingSize * timingSize), timingSize, destination, out charsWritten, out var timingInfo);
+                    if (timingStatus == DecodeStatus.Success)
+                    {
+                        info = timingInfo.WithCorners(SymbolGeometry.FromAffine(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, transposed: false));
+                        return timingStatus;
+                    }
+                    TrackBestFailure(timingStatus, timingInfo, ref bestStatus, ref bestInfo);
+
+                    TransposeInPlace(modules, timingSize);
+                    var mirroredTimingStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, timingSize * timingSize), timingSize, destination, out charsWritten, out var mirroredTimingInfo);
+                    if (mirroredTimingStatus == DecodeStatus.Success)
+                    {
+                        info = mirroredTimingInfo.WithCorners(SymbolGeometry.FromAffine(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, transposed: true));
+                        return mirroredTimingStatus;
+                    }
+                    TrackBestFailure(mirroredTimingStatus, mirroredTimingInfo, ref bestStatus, ref bestInfo);
+                }
             }
 
             // The fast path above covers the overwhelmingly common axis-aligned
@@ -569,6 +595,148 @@ internal static class MicroQRImageDecoder
     /// <summary>
     /// All four grid corners must land inside the image (with one module of slack for sampling clamp tolerance); orientations pointing off the image cannot contain the symbol and are skipped before sampling.
     /// </summary>
+    /// <summary>
+    /// The grid frame measured on the timing patterns, row 0 and column 0 from the finder to the symbol's far edge, instead of extrapolated from the finder's module size.
+    /// <paramref name="uX"/>…<paramref name="vY"/> give the orientation and a first scale; the result's origin is the symbol's corner and its axes are one module long.
+    /// </summary>
+    /// <remarks>
+    /// Each line is fitted by least squares over every module boundary it crosses (the finder's outer edge, then one boundary per module from column 7 to the far edge), so the half-pixel quantization of each boundary averages out; the dark runs give the size directly.
+    /// </remarks>
+    private static bool TryTimingFrame(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern candidate, float uX, float uY, float vX, float vY, out float originX, out float originY, out float tuX, out float tuY, out float tvX, out float tvY, out int size)
+    {
+        originX = originY = tuX = tuY = tvX = tvY = 0f;
+        size = 0;
+        var uLength = (float)Math.Sqrt(uX * uX + uY * uY);
+        var vLength = (float)Math.Sqrt(vX * vX + vY * vY);
+        if (uLength < 1f || vLength < 1f)
+            return false;
+        var unitUX = uX / uLength;
+        var unitUY = uY / uLength;
+        var unitVX = vX / vLength;
+        var unitVY = vY / vLength;
+
+        // Row 0 is 3 modules from the finder's center toward -v, column 0 toward -u
+        if (!TryFitTimingLine(luminance, width, height, threshold, candidate.X - 3f * vX, candidate.Y - 3f * vY, unitUX, unitUY, uLength, out var uStart, out var uPitch, out var uSize)
+            || !TryFitTimingLine(luminance, width, height, threshold, candidate.X - 3f * uX, candidate.Y - 3f * uY, unitVX, unitVY, vLength, out var vStart, out var vPitch, out var vSize)
+            || uSize != vSize)
+            return false;
+
+        size = uSize;
+        originX = candidate.X + uStart * unitUX + vStart * unitVX;
+        originY = candidate.Y + uStart * unitUY + vStart * unitVY;
+        tuX = unitUX * uPitch;
+        tuY = unitUY * uPitch;
+        tvX = unitVX * vPitch;
+        tvY = unitVY * vPitch;
+        return true;
+    }
+
+    /// <summary>
+    /// Walks a timing line from the finder's edge row: back to the finder's outer edge, then forward across the separator and the alternating timing modules to the symbol's far edge.
+    /// Fits position = start + pitch · module index over every boundary crossed; false unless the line reads as a timing pattern (runs about one module, a size of 11-17, a pitch near the finder's).
+    /// </summary>
+    private static bool TryFitTimingLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float lineX, float lineY, float dirX, float dirY, float module, out float start, out float pitch, out int size)
+    {
+        start = pitch = 0f;
+        size = 0;
+        var step = module / 4f;
+        if (!IsDarkAt(luminance, width, height, threshold, lineX, lineY, out var dark) || !dark)
+            return false;
+
+        // Boundaries as (module index, position along the line); the finder's outer edge is index 0
+        Span<float> indices = stackalloc float[16];
+        Span<float> positions = stackalloc float[16];
+        var count = 0;
+
+        // Back to the finder's outer edge, about 3.5 modules away; the image edge counts as one
+        for (var t = -step; ; t -= step)
+        {
+            if (t < -5f * module)
+                return false;
+            if (!IsDarkAt(luminance, width, height, threshold, lineX + t * dirX, lineY + t * dirY, out dark) || !dark)
+            {
+                indices[count] = 0f;
+                positions[count++] = t + step / 2f;
+                break;
+            }
+        }
+
+        // Forward: the finder's row ends at column 7, then one boundary per module
+        var nextIndex = 7;
+        var previousDark = true;
+        var runStart = 0f;
+        var darkRuns = 1;
+        for (var t = step; ; t += step)
+        {
+            var inside = IsDarkAt(luminance, width, height, threshold, lineX + t * dirX, lineY + t * dirY, out dark);
+            if (!inside)
+                dark = false; // the image edge ends the symbol like a quiet zone
+
+            if (dark == previousDark)
+            {
+                // A light run longer than any module is the quiet zone: the symbol has ended
+                if (!dark && t - runStart > 1.6f * module)
+                    break;
+                if (!inside)
+                    break;
+                continue;
+            }
+
+            var boundary = t - step / 2f;
+            var runLength = boundary - runStart;
+            var isFinderRun = runStart == 0f;
+            var (minRun, maxRun) = isFinderRun ? (2f * module, 5f * module) : (0.4f * module, 1.6f * module);
+            if (runLength < minRun || runLength > maxRun)
+                return false;
+            if (count == indices.Length)
+                return false;
+            indices[count] = nextIndex++;
+            positions[count++] = boundary;
+            if (dark)
+                darkRuns++;
+            previousDark = dark;
+            runStart = boundary;
+            if (!inside)
+                break;
+        }
+
+        // The far edge closes the last dark timing module: size = its index, 11 to 17, odd,
+        // with the dark runs to match (the finder's row, then columns 8, 10, …, size − 1)
+        size = (int)indices[count - 1];
+        if (previousDark || size is < 11 or > 17 || size % 2 == 0 || darkRuns != 1 + (size - 7) / 2)
+            return false;
+
+        // Least squares: position = start + pitch · index
+        float sumI = 0f, sumP = 0f, sumII = 0f, sumIP = 0f;
+        for (var i = 0; i < count; i++)
+        {
+            sumI += indices[i];
+            sumP += positions[i];
+            sumII += indices[i] * indices[i];
+            sumIP += indices[i] * positions[i];
+        }
+        var denominator = count * sumII - sumI * sumI;
+        if (denominator <= 0f)
+            return false;
+        pitch = (count * sumIP - sumI * sumP) / denominator;
+        start = (sumP - pitch * sumI) / count;
+        return pitch > 0.7f * module && pitch < 1.4f * module;
+    }
+
+    /// <summary>Whether the pixel containing the point is dark; false (and not dark) outside the image.</summary>
+    private static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float x, float y, out bool dark)
+    {
+        dark = false;
+        if (x < 0f || y < 0f)
+            return false;
+        var px = (int)x;
+        var py = (int)y;
+        if (px >= width || py >= height)
+            return false;
+        dark = luminance[py * width + px] < threshold;
+        return true;
+    }
+
     private static bool SymbolFitsImage(float originX, float originY, float uX, float uY, float vX, float vY, int size, int width, int height, float moduleSize)
     {
         var slack = moduleSize;
