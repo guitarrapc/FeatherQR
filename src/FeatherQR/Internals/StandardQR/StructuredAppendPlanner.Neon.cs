@@ -79,7 +79,7 @@ internal static partial class StructuredAppendPlanner
                 {
                     // No Byte run opens at a U+FEFF past the head of a chunk (ModeSegmenter.ByteOrderMark), and only the first chunk can start at one.
                     nb = TWidth.Utf8
-                        ? AdvSimd.AddSaturate(ch == ModeSegmenter.ByteOrderMark && position > start ? b : Vector128.Min(b, AdvSimd.AddSaturate(cheapest, vOpenByte)), NeonCosts(8 * ModeSegmenter.ByteCost(text, position, charset)))
+                        ? AdvSimd.AddSaturate(ch == ModeSegmenter.ByteOrderMark && position > start ? b : Vector128.Min(b, AdvSimd.AddSaturate(cheapest, vOpenByte)), NeonCosts(8 * LaneByteCost(text, position, charset)))
                         : Vector128.Min(AdvSimd.AddSaturate(b, eight), AdvSimd.AddSaturate(cheapest, vOpenByte8));
                     if (AdvSimd.Arm64.MaxAcross(Vector128.GreaterThan(nb, vBudget)).ToScalar() == 0)
                     {
@@ -94,7 +94,7 @@ internal static partial class StructuredAppendPlanner
                             ch = Unsafe.Add(ref origin, position);
                             if (ModeSegmenter.ClassOf(ch) != ModeSegmenter.ClassOther)
                                 break;
-                            nb = TWidth.Utf8 ? AdvSimd.AddSaturate(b, NeonCosts(8 * ModeSegmenter.ByteCost(text, position, charset))) : AdvSimd.AddSaturate(b, eight);
+                            nb = TWidth.Utf8 ? AdvSimd.AddSaturate(b, NeonCosts(8 * LaneByteCost(text, position, charset))) : AdvSimd.AddSaturate(b, eight);
                             if (AdvSimd.Arm64.MaxAcross(Vector128.GreaterThan(nb, vBudget)).ToScalar() != 0)
                                 break; // some lane closes here: the step above takes it
                             b = nb;
@@ -138,8 +138,8 @@ internal static partial class StructuredAppendPlanner
                 var isAlnum = Vector128.GreaterThan(classes, Vector128<ushort>.Zero);
                 var byteBits = TWidth.Utf8
                     ? NeonCosts(
-                        8 * ModeSegmenter.ByteCost(text, p0, charset), 8 * ModeSegmenter.ByteCost(text, p1, charset), 8 * ModeSegmenter.ByteCost(text, p2, charset), 8 * ModeSegmenter.ByteCost(text, p3, charset),
-                        8 * ModeSegmenter.ByteCost(text, p4, charset), 8 * ModeSegmenter.ByteCost(text, p5, charset), 8 * ModeSegmenter.ByteCost(text, p6, charset), 8 * ModeSegmenter.ByteCost(text, p7, charset))
+                        8 * LaneByteCost(text, p0, charset), 8 * LaneByteCost(text, p1, charset), 8 * LaneByteCost(text, p2, charset), 8 * LaneByteCost(text, p3, charset),
+                        8 * LaneByteCost(text, p4, charset), 8 * LaneByteCost(text, p5, charset), 8 * LaneByteCost(text, p6, charset), 8 * LaneByteCost(text, p7, charset))
                     : eight;
 
                 nn1 = Vector128.ConditionalSelect(isDigit, Vector128.Min(AdvSimd.AddSaturate(n0, NeonCosts(4)), AdvSimd.AddSaturate(cheapest, vOpenNumeric)), unreachable);
@@ -263,7 +263,7 @@ internal static partial class StructuredAppendPlanner
             while (position < length)
             {
                 var cls = ModeSegmenter.ClassOf(text[position]);
-                var byteBits = 8 * ModeSegmenter.ByteCost(text, position, charset);
+                var byteBits = 8 * LaneByteCost(text, position, charset);
                 int t0 = unreachableCost, t1 = unreachableCost, t2 = unreachableCost, u0 = unreachableCost, u1 = unreachableCost;
                 if (cls == ModeSegmenter.ClassDigit)
                 {
@@ -319,6 +319,26 @@ internal static partial class StructuredAppendPlanner
         }
 
         return true;
+    }
+
+    // Keep this copy of ModeSegmenter.ByteCost inline in the NEON walk: a call in the
+    // UTF-8 loop makes the JIT spill live vector state around each character cost.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int LaneByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
+    {
+        if (charset != EciMode.Utf8)
+            return 1;
+
+        var c = text[index];
+        if (c < 0x80)
+            return 1;
+        if (c < 0x800)
+            return 2;
+        if (char.IsHighSurrogate(c))
+            return index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]) ? 4 : 3;
+        if (char.IsLowSurrogate(c))
+            return index > 0 && char.IsHighSurrogate(text[index - 1]) ? 0 : 3;
+        return 3;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

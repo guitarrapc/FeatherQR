@@ -13,7 +13,7 @@ if (!QRCodeDecoder.TryDecode(qr, out var decoded) || decoded != content)
 }
 
 Console.WriteLine($"OK: version {qr.Version}, {qr.Size}x{qr.Size} modules.");
-// Exercise both parity kernels through the public API after native compilation.
+// Exercise charset and segmentation paths through the public API after native compilation.
 ulong digest = 14695981039346656037;
 foreach (var (pattern, charset) in new[]
 {
@@ -22,9 +22,10 @@ foreach (var (pattern, charset) in new[]
 })
 {
     var message = string.Concat(Enumerable.Repeat(pattern, 7)) + " tail 7";
+    foreach (var segmentation in new[] { QRSegmentation.Single, QRSegmentation.Optimal })
     foreach (var bom in new[] { false, true })
     {
-        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(5), EciMode = charset, Utf8Bom = bom };
+        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(5), EciMode = charset, Utf8Bom = bom, Segmentation = segmentation };
         var symbols = QRCodeGenerator.CreateStructuredAppend(message, QREccLevel.L, options);
         if (symbols.Length < 2)
             throw new InvalidOperationException("Structured Append smoke must produce a set.");
