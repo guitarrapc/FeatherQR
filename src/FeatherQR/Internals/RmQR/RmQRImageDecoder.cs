@@ -57,6 +57,9 @@ internal static class RmQRImageDecoder
     /// <summary>Grid coordinates of the finder center.</summary>
     private const float FinderCenter = 3.5f;
 
+    /// <summary>Finder-scale corrections tried for the finder-side format read, nearest the measured scale first.</summary>
+    private static readonly float[] FormatReadScales = [1f, 0.98f, 1.02f, 0.96f, 1.04f, 0.94f, 1.06f, 0.92f, 1.08f];
+
     /// <summary>
     /// Decodes an rMQR Code from grayscale pixels.
     /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails.
@@ -304,12 +307,32 @@ internal static class RmQRImageDecoder
         ref int attemptsRemaining)
     {
         charsWritten = 0;
-        var affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, uX, uY, vX, vY, 0f, 0f);
 
-        // The finder-side format copy sits within 12 modules of the finder, so the
-        // local frame reads it reliably even before any refinement.
-        var finderSideRaw = ReadFormatCopy(luminance, width, height, threshold, affine, subFinderSide: false, 0, 0);
-        if (!RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out var version, out _, out _))
+        // The finder-side format copy sits within 12 modules of the finder, so the local
+        // frame reads it before any refinement, as long as the finder's scale is close.
+        // A render that snaps modules to whole pixels can give the finder a scale 3-6 %
+        // off, most of a pixel at column 11 below 2 px/module, so the scales nearest the
+        // measured one are tried in turn. A corrected scale must read an exact codeword:
+        // within 3 bits, a quarter of random reads match one of the 64 words, so nine
+        // tries on noise would nearly always "read" a version and pay for its searches.
+        var version = default(RmQRVersion);
+        var affine = default(PerspectiveTransform);
+        var formatRead = false;
+        foreach (var scale in FormatReadScales)
+        {
+            affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * uX, scale * uY, scale * vX, scale * vY, 0f, 0f);
+            var finderSideRaw = ReadFormatCopy(luminance, width, height, threshold, affine, subFinderSide: false, 0, 0);
+            if (RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out version, out _, out var distance) && (scale == 1f || distance == 0))
+            {
+                uX *= scale;
+                uY *= scale;
+                vX *= scale;
+                vY *= scale;
+                formatRead = true;
+                break;
+            }
+        }
+        if (!formatRead)
         {
             info = bestInfo;
             return DecodeStatus.NotDetected;
