@@ -16,6 +16,25 @@ public class StructuredAppendWriterPlanTest
 
 #if NET8_0_OR_GREATER
     [Test]
+    public async Task Set_OnArm64PlansMixedChunksTogether()
+    {
+        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+            return;
+
+        var text = Repeat("order 20260915 item 0000123456 qty 42 ", 12_000);
+        var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
+        QRCodeGenerator.LanePlanPasses = 0;
+        var together = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options, planTogether: true);
+        var passes = QRCodeGenerator.LanePlanPasses;
+        var alone = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options, planTogether: false);
+
+        await Assert.That(passes).IsGreaterThan(0);
+        await Assert.That(together.Length).IsEqualTo(alone.Length);
+        for (var i = 0; i < together.Length; i++)
+            await Assert.That(together[i].GetRawData().AsSpan().SequenceEqual(alone[i].GetRawData())).IsTrue();
+    }
+
+    [Test]
     [MethodDataSource(nameof(Corpus))]
     public async Task PlanChunks_GivesEveryChunkThePlanItBuildsAlone(string name, string text)
     {

@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 
 namespace FeatherQR.Internals;
 
@@ -12,7 +13,7 @@ namespace FeatherQR.Internals;
 /// The program is a serial recurrence, so one piece cannot be vectorised; eight pieces can, each lane at its own character. The keyed form of <see cref="ModeSegmenter"/> is what makes that cheap: the minimum of keys is one instruction a lane and the predecessor falls out of it, with no compare-and-blend chain for the tie-break.
 /// The table is the single piece's, <see cref="ParentBytesPerChar"/> bytes a character, interleaved by lane so that a step is one store; <see cref="ReconstructLane"/> walks one lane of it back by stride.
 /// Lanes end at different characters: the loop runs to the nearest end, the result of every lane that ends there is taken, and the lane goes on reading the longest piece so that it keeps reading text that exists; what it writes past its own end is never read.
-/// Portable <c>Vector256</c> only; without acceleration the caller plans piece by piece.
+/// Accelerated <c>Vector256</c> handles eight pieces; ARM64 NEON handles groups of four 32-bit keys. Without either capability the caller plans piece by piece.
 /// </remarks>
 internal static partial class ModeSegmenter
 {
@@ -23,7 +24,7 @@ internal static partial class ModeSegmenter
     internal const int LaneTableBytesPerChar = Lanes * ParentBytesPerChar;
 
     /// <summary>Whether the lanes are worth taking on this machine.</summary>
-    internal static bool LanesAccelerated => Vector256.IsHardwareAccelerated;
+    internal static bool LanesAccelerated => Vector256.IsHardwareAccelerated || AdvSimd.Arm64.IsSupported;
 
     private interface ILaneBytes
     {
@@ -51,6 +52,11 @@ internal static partial class ModeSegmenter
         var openByte = (modeIndicatorBits + cciByte) << 3;
         // A lane is running until its state is taken.
         finalStates.Slice(0, starts.Length).Fill(-1);
+        if (AdvSimd.Arm64.IsSupported)
+        {
+            ComputeCostsLanesAdvSimd(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
+            return;
+        }
         if (charset == EciMode.Utf8)
             RunLanes<Utf8Lanes>(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
         else
