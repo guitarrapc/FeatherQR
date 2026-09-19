@@ -100,9 +100,23 @@ internal static class QRImageDecoder
         if (IsTerminal(status))
             return status;
 
+        // The timing patterns count the modules the estimate only measures. Counted
+        // only once the estimate has failed, so a successful decode never pays for it.
+        var timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
+        if (timingDimension != 0 && timingDimension != dimension)
+        {
+            var timingStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, timingDimension, moduleSize, destination, out var timingCharsWritten, out var timingInfo, out _);
+            if (IsTerminal(timingStatus))
+            {
+                charsWritten = timingCharsWritten;
+                info = timingInfo;
+                return timingStatus;
+            }
+        }
+
         // Version 7+ states its own version next to two finders, where a slightly
         // wrong dimension still samples it, so it overrules the estimate.
-        if (versionDimension != 0 && versionDimension != dimension)
+        if (versionDimension != 0 && versionDimension != dimension && versionDimension != timingDimension)
         {
             var versionStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, versionDimension, moduleSize, destination, out var versionCharsWritten, out var versionInfo, out _);
             if (IsTerminal(versionStatus))
@@ -116,7 +130,7 @@ internal static class QRImageDecoder
         // The dimension estimate can land between two valid sizes (module-size
         // measurement quantizes to pixels); when a plausible runner-up exists,
         // one retry with it rescues estimates that snapped to the wrong version.
-        if (secondaryDimension != 0 && secondaryDimension != versionDimension)
+        if (secondaryDimension != 0 && secondaryDimension != versionDimension && secondaryDimension != timingDimension)
         {
             var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _);
             if (IsTerminal(secondaryStatus))
@@ -423,6 +437,94 @@ internal static class QRImageDecoder
             return float.NaN;
 
         return FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, from.X, from.Y, dx / length, dy / length);
+    }
+
+    /// <summary>
+    /// The dimension counted on both timing patterns, or 0 when either line does not read as one or the two disagree.
+    /// </summary>
+    /// <remarks>
+    /// Row 6 between the top-left and top-right finders, and column 6 between the top-left and bottom-left ones, alternate one module at a time, so the dark runs along either line number 2v + 3 (both finders' edge rows, and the 2v + 1 dark timing modules) whatever width each module happens to be drawn.
+    /// The estimate divides a distance by a module size measured at the finders, and a render that snaps each module to whole pixels (2 or 3 px at 2.13 px/module) can give the finders a size 6 % off the symbol's, which is two versions at version 29.
+    /// </remarks>
+    internal static int CountTimingDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float moduleSize)
+    {
+        var alongRow = CountTimingLine(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
+        if (alongRow == 0)
+            return 0;
+        var alongColumn = CountTimingLine(luminance, width, height, threshold, topLeft, bottomLeft, topRight, moduleSize);
+        return alongColumn == alongRow ? alongRow : 0;
+    }
+
+    /// <summary>
+    /// Counts the dark runs on the line through <paramref name="from"/>'s and <paramref name="to"/>'s centers, moved 3 modules toward <paramref name="side"/> onto the timing pattern (module row or column 6).
+    /// 0 unless the line starts and ends on the finders' dark edge rows and every run between them is about one module long.
+    /// </summary>
+    private static int CountTimingLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern from, in FinderPattern to, in FinderPattern side, float moduleSize)
+    {
+        var sideX = side.X - from.X;
+        var sideY = side.Y - from.Y;
+        var sideLength = (float)Math.Sqrt(sideX * sideX + sideY * sideY);
+        if (sideLength < 1f)
+            return 0;
+        var offsetX = sideX / sideLength * 3f * moduleSize;
+        var offsetY = sideY / sideLength * 3f * moduleSize;
+
+        var startX = from.X + offsetX;
+        var startY = from.Y + offsetY;
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var length = (float)Math.Sqrt(dx * dx + dy * dy);
+        if (length < 14f)
+            return 0; // version 1 spans 14 modules between the centers, so a module is under a pixel
+
+        // Four samples per module: enough to tell a one-module run from a merged one, and
+        // a one-pixel module crossed obliquely is still sampled
+        var step = moduleSize / 4f;
+        var steps = (int)(length / step);
+        var stepX = dx / length * step;
+        var stepY = dy / length * step;
+        var minRun = 0.4f * moduleSize;
+        var maxRun = 1.6f * moduleSize;
+
+        var darkRuns = 0;
+        var runStart = 0;
+        var previousDark = true;
+        for (var i = 0; i <= steps; i++)
+        {
+            var x = (int)(startX + i * stepX);
+            var y = (int)(startY + i * stepY);
+            if (x < 0 || x >= width || y < 0 || y >= height)
+                return 0;
+
+            var dark = luminance[y * width + x] < threshold;
+            if (i == 0)
+            {
+                if (!dark)
+                    return 0; // must start on the finder's edge row
+                darkRuns = 1;
+                continue;
+            }
+            if (dark == previousDark)
+                continue;
+
+            // A run just ended at step i; the first dark run is the finder's and is not checked
+            var runLength = (i - runStart) * step;
+            if (runStart > 0 && (runLength < minRun || runLength > maxRun))
+                return 0;
+            if (dark)
+                darkRuns++;
+            runStart = i;
+            previousDark = dark;
+        }
+
+        // Must end on the other finder's edge row
+        if (!previousDark)
+            return 0;
+
+        var version = (darkRuns - 3) / 2;
+        if ((darkRuns - 3) % 2 != 0 || version < 1 || version > 40)
+            return 0;
+        return 17 + 4 * version;
     }
 
     // Alignment lattice: at most 7 coordinates per axis (ISO/IEC 18004 Annex E)
