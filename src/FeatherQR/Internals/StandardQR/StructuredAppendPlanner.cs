@@ -423,18 +423,33 @@ internal static partial class StructuredAppendPlanner
     /// Whether any chunk of this text could be cheaper as a mixed plan than as one run, which is what decides whether the searches have to consult the segmentation program at all.
     /// </summary>
     /// <remarks>
-    /// One pass over the text for the longest run of each denser mode, since a chunk's runs are never longer than the whole text's; if none of them could repay the mode header splitting it out adds, then no chunk's plan beats its single-mode stream, the two costs are the same number everywhere, and the split is the same split.
+    /// Stops at the first run that could repay its mode header: planning may then help, and a one-Byte-run plan is no longer guaranteed.
+    /// Otherwise the whole text must be checked. A tying run also rules out the one-Byte-run proof, even when no run can save bits, so that verdict stays false after the run ends.
     /// </remarks>
-    private static bool CanPlanHelp(ReadOnlySpan<char> text, EncodingMode singleMode, out bool oneRunPlans)
+    internal static bool CanPlanHelp(ReadOnlySpan<char> text, EncodingMode singleMode, out bool oneRunPlans)
     {
         oneRunPlans = false;
         if (!QRSegmentPlanner.CanPlanBeatSingleMode(singleMode))
             return false;
 
-        ModeSegmenter.LongestDenseRuns(text, out var numericRun, out var alnumRun);
-        // The same two numbers say when the plan of every chunk is settled without the program.
-        oneRunPlans = singleMode == EncodingMode.Byte && QRSegmentPlanner.PlanIsOneByteRun(numericRun, alnumRun);
-        return QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun);
+        int numericRun = 0, alnumRun = 0;
+        var oneRun = singleMode == EncodingMode.Byte;
+        foreach (var c in text)
+        {
+            var characterClass = ModeSegmenter.ClassOf(c);
+            if (characterClass == ModeSegmenter.ClassOther)
+            {
+                numericRun = alnumRun = 0;
+                continue;
+            }
+            numericRun = characterClass == ModeSegmenter.ClassDigit ? numericRun + 1 : 0;
+            alnumRun++;
+            if (QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun))
+                return true; // both outputs are settled; oneRunPlans remains false
+            oneRun &= QRSegmentPlanner.PlanIsOneByteRun(numericRun, alnumRun);
+        }
+        oneRunPlans = oneRun;
+        return false;
     }
 
     /// <summary>
