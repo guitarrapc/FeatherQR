@@ -7,7 +7,7 @@ using System.Runtime.Intrinsics.Arm;
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
-/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, so every group of four data bytes updates every syndrome with one PMULL pair plus three table reads (measured 11-61x the scalar log-domain kernel).
+/// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, and every group of eight data bytes updates every syndrome with two PMULL pairs plus six table reads (measured 11-61x the scalar log-domain kernel as a four-byte step; the eight-byte tree below is a further 2.3x on version 40 blocks).
 /// </summary>
 /// <remarks>
 /// This is deliberately NOT a transliteration of the GFNI kernel in EccBinaryDecoder.Simd.cs.
@@ -15,10 +15,11 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// NEON has no such instruction, but PMULL/PMUL carry no fixed modulus — so ARM needs no isomorphism at all and instead pays for the reduction mod 0x11D itself.
 /// The force applies at the opposite end, and the resulting kernel shape is different:
 /// <code>
-/// acc' = Reduce(PMULL(acc, α^4i)) ^ T3[c0] ^ T2[c1] ^ T1[c2] ^ broadcast(c3)
+/// D(c0..c3) = T3[c0] ^ T2[c1] ^ T1[c2] ^ broadcast(c3)
+/// acc'      = Reduce(PMULL(acc, α^8i)) ^ Reduce(PMULL(D(c0..c3), α^4i)) ^ D(c4..c7)
 /// </code>
 /// <para>
-/// Three design points, each of which was measured against its alternative rather than assumed; the number that decided each one is quoted with it:
+/// Four design points, each of which was measured against its alternative rather than assumed; the number that decided each one is quoted with it:
 /// </para>
 /// <para>
 /// <b>Table reads, not multiplies, for the data terms.</b> <c>c·α^(k·i)</c> depends only on the byte c and the step k, so <see cref="AlphaTables"/> holds it as a ready-made 32-byte vector: three loads + three XORs replace six PMULL + six EOR.
@@ -33,8 +34,9 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// <b>The reduction tables are hoisted into locals.</b> This is load-bearing, not style: the JIT does not CSE <c>Vector128.Create</c> over a static array across the loop body, so leaving them inline makes every reduction pay two extra loads — worth up to 20% of the kernel.
 /// </para>
 /// <para>
-/// Blocks needing ≤ 16 syndromes drive only the first accumulator group.
-/// Halving the vector work buys only about 20% of the time, which is the clearest evidence that this loop is bound by the acc → PMULL → reduce → EOR chain rather than by throughput: the second group was running mostly in the first group's stall slots.
+/// <b>Eight bytes a step, as a tree.</b> With a four-byte step the loop was bound by the carried chain (acc → PMULL → UZP → TBL → EOR, about 14 cycles a step on Apple M2), not by throughput; the second accumulator group ran mostly in the first group's stall slots, which is why halving the vector work bought only about 20%.
+/// Horner re-associates: the multiply that joins two four-byte data terms depends on data alone and falls off the chain, so eight bytes cost one carried reduce instead of two. Measured 0.44x of the four-byte step on the syndrome pass alone at version 40-L blocks (148 bytes, 30 ECC) and 0.59x at 40-H (45 bytes), and through <see cref="TryCorrect"/> on a clean block 0.53x to 0.54x at 145 to 153 bytes, 0.75x to 0.83x over rMQR's 25 to 68 byte blocks, 0.76x to 0.81x at Micro QR M3 and M4, level at M2 and 1.07x (5 ns) at M1's five-byte block, Apple M2.
+/// A sixteen-byte tree (three off-chain multiplies a step) measured the same at 148 bytes and 10% slower at 45, so the loop is now throughput-bound at about 100 instructions per eight bytes, and two throughput hypotheses did not move it: pairing the two half-row loads through immediate offsets lost 10%, and pre-splitting the multiplier halves to remove the per-PMULL register copy tied.
 /// </para>
 /// </remarks>
 internal static partial class EccBinaryDecoder
@@ -48,13 +50,22 @@ internal static partial class EccBinaryDecoder
         0x8F, 0x03, 0x06, 0x0C, 0x18, 0x30, 0x60, 0xC0,
     ];
 
-    /// <summary>Lane i = α^(4i) — the four-step multiplier for the unrolled loop.</summary>
+    /// <summary>Lane i = α^(4i) — the multiplier that joins the two four-byte data terms of a step, and the one-step multiplier of the four-byte remainder.</summary>
     internal static ReadOnlySpan<byte> AdvSimdAlpha4 =>
     [
         0x01, 0x10, 0x1D, 0xCD, 0x4C, 0xB4, 0x8F, 0x18,
         0x9D, 0x25, 0x6A, 0xEE, 0x46, 0x14, 0x5D, 0xB9,
         0x5F, 0x99, 0x65, 0x1E, 0xFD, 0x6B, 0xFE, 0x5B,
         0xD9, 0x11, 0x0D, 0xD0, 0x81, 0xF8, 0x3B, 0x97,
+    ];
+
+    /// <summary>Lane i = α^(8i) — the carried Horner multiplier of the eight-byte step.</summary>
+    internal static ReadOnlySpan<byte> AdvSimdAlpha8 =>
+    [
+        0x01, 0x1D, 0x4C, 0x8F, 0x9D, 0x6A, 0x46, 0x5D,
+        0x5F, 0x65, 0xFD, 0xFE, 0xD9, 0x0D, 0x81, 0x3B,
+        0x85, 0x4F, 0xA8, 0x49, 0xE6, 0xFC, 0xE3, 0x95,
+        0x82, 0x1C, 0x51, 0xC3, 0x12, 0xF7, 0x2C, 0x1B,
     ];
 
     /// <summary>Reduction table for the low nibble of a product's high byte: n·x^8 mod 0x11D.</summary>
@@ -147,6 +158,7 @@ internal static partial class EccBinaryDecoder
         var reduceHigh = Vector128.Create<byte>(AdvSimdReduceHigh);
         var alpha1 = Vector128.Create<byte>(AdvSimdAlpha1);
         var alpha4 = Vector128.Create<byte>(AdvSimdAlpha4);
+        var alpha8 = Vector128.Create<byte>(AdvSimdAlpha8);
 
         ref var tables = ref MemoryMarshal.GetArrayDataReference(AlphaTables);
         ref var t1 = ref tables;
@@ -160,13 +172,17 @@ internal static partial class EccBinaryDecoder
 
         if (eccCount <= 16)
         {
+            for (; j + 8 <= length; j += 8)
+            {
+                var d0 = DataTerm(ref t1, ref t2, ref t3, ref cw, j, 0);
+                var d1 = DataTerm(ref t1, ref t2, ref t3, ref cw, j + 4, 0);
+                accLow = GfMulAdvSimd(accLow, alpha8, reduceLow, reduceHigh)
+                       ^ GfMulAdvSimd(d0, alpha4, reduceLow, reduceHigh)
+                       ^ d1;
+            }
             for (; j + 4 <= length; j += 4)
             {
-                accLow = GfMulAdvSimd(accLow, alpha4, reduceLow, reduceHigh)
-                       ^ Vector128.LoadUnsafe(ref t3, (nuint)Unsafe.Add(ref cw, j) * SyndromeLanes)
-                       ^ Vector128.LoadUnsafe(ref t2, (nuint)Unsafe.Add(ref cw, j + 1) * SyndromeLanes)
-                       ^ Vector128.LoadUnsafe(ref t1, (nuint)Unsafe.Add(ref cw, j + 2) * SyndromeLanes)
-                       ^ Vector128.Create(Unsafe.Add(ref cw, j + 3));
+                accLow = GfMulAdvSimd(accLow, alpha4, reduceLow, reduceHigh) ^ DataTerm(ref t1, ref t2, ref t3, ref cw, j, 0);
             }
             for (; j < length; j++)
             {
@@ -178,25 +194,26 @@ internal static partial class EccBinaryDecoder
 
         var alpha1High = Vector128.Create<byte>(AdvSimdAlpha1.Slice(16));
         var alpha4High = Vector128.Create<byte>(AdvSimdAlpha4.Slice(16));
+        var alpha8High = Vector128.Create<byte>(AdvSimdAlpha8.Slice(16));
         var accHigh = Vector128<byte>.Zero;
 
+        for (; j + 8 <= length; j += 8)
+        {
+            var d0 = DataTerm(ref t1, ref t2, ref t3, ref cw, j, 0);
+            var d1 = DataTerm(ref t1, ref t2, ref t3, ref cw, j + 4, 0);
+            var e0 = DataTerm(ref t1, ref t2, ref t3, ref cw, j, 16);
+            var e1 = DataTerm(ref t1, ref t2, ref t3, ref cw, j + 4, 16);
+            accLow = GfMulAdvSimd(accLow, alpha8, reduceLow, reduceHigh)
+                   ^ GfMulAdvSimd(d0, alpha4, reduceLow, reduceHigh)
+                   ^ d1;
+            accHigh = GfMulAdvSimd(accHigh, alpha8High, reduceLow, reduceHigh)
+                    ^ GfMulAdvSimd(e0, alpha4High, reduceLow, reduceHigh)
+                    ^ e1;
+        }
         for (; j + 4 <= length; j += 4)
         {
-            var o0 = (nuint)Unsafe.Add(ref cw, j) * SyndromeLanes;
-            var o1 = (nuint)Unsafe.Add(ref cw, j + 1) * SyndromeLanes;
-            var o2 = (nuint)Unsafe.Add(ref cw, j + 2) * SyndromeLanes;
-            var c3 = Vector128.Create(Unsafe.Add(ref cw, j + 3));
-
-            accLow = GfMulAdvSimd(accLow, alpha4, reduceLow, reduceHigh)
-                   ^ Vector128.LoadUnsafe(ref t3, o0)
-                   ^ Vector128.LoadUnsafe(ref t2, o1)
-                   ^ Vector128.LoadUnsafe(ref t1, o2)
-                   ^ c3;
-            accHigh = GfMulAdvSimd(accHigh, alpha4High, reduceLow, reduceHigh)
-                    ^ Vector128.LoadUnsafe(ref t3, o0 + 16)
-                    ^ Vector128.LoadUnsafe(ref t2, o1 + 16)
-                    ^ Vector128.LoadUnsafe(ref t1, o2 + 16)
-                    ^ c3;
+            accLow = GfMulAdvSimd(accLow, alpha4, reduceLow, reduceHigh) ^ DataTerm(ref t1, ref t2, ref t3, ref cw, j, 0);
+            accHigh = GfMulAdvSimd(accHigh, alpha4High, reduceLow, reduceHigh) ^ DataTerm(ref t1, ref t2, ref t3, ref cw, j, 16);
         }
         for (; j < length; j++)
         {
@@ -207,6 +224,17 @@ internal static partial class EccBinaryDecoder
 
         return StoreSyndromes(accLow, accHigh, eccCount, syndromes);
     }
+
+    /// <summary>
+    /// The data term of four codeword bytes for one 16-lane accumulator group: T3[c0] ^ T2[c1] ^ T1[c2] ^ broadcast(c3), read from lanes <paramref name="half"/>..+15 of each 32-byte table row.
+    /// Depends on the data alone, so the JIT is free to schedule it off the carried chain.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<byte> DataTerm(ref byte t1, ref byte t2, ref byte t3, ref byte cw, nint j, nuint half)
+        => Vector128.LoadUnsafe(ref t3, (nuint)Unsafe.Add(ref cw, j) * SyndromeLanes + half)
+         ^ Vector128.LoadUnsafe(ref t2, (nuint)Unsafe.Add(ref cw, j + 1) * SyndromeLanes + half)
+         ^ Vector128.LoadUnsafe(ref t1, (nuint)Unsafe.Add(ref cw, j + 2) * SyndromeLanes + half)
+         ^ Vector128.Create(Unsafe.Add(ref cw, j + 3));
 
     /// <summary>
     /// Stores both accumulator groups and reports whether any live syndrome is non-zero.
