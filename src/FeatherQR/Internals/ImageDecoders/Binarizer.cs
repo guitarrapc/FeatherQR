@@ -18,6 +18,12 @@ internal static class Binarizer
     /// The result is byte-identical either way, and bin order is irrelevant to a histogram, so the walk is endian-safe.
     /// </remarks>
     internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance)
+        => ComputeOtsuThreshold(luminance, out _);
+
+    /// <summary>
+    /// <see cref="ComputeOtsuThreshold(ReadOnlySpan{byte})"/>, and the grey levels of the two classes it separates, from the same histogram.
+    /// </summary>
+    internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance, out GreyLevels grey)
     {
         Span<int> histogram = stackalloc int[256];
         histogram.Clear();
@@ -83,6 +89,8 @@ internal static class Binarizer
             }
         }
 
-        return (byte)Math.Min(bestThreshold, 255);
+        var threshold = Math.Min(bestThreshold, 255);
+        grey = GreyLevels.FromHistogram(histogram, threshold);
+        return (byte)threshold;
     }
 }

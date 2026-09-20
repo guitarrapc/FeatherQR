@@ -79,10 +79,10 @@ internal static class QRImageDecoder
     {
         charsWritten = 0;
 
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
         Span<FinderPattern> patterns = stackalloc FinderPattern[3];
-        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns))
+        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey))
         {
             info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
             return DecodeStatus.NotDetected;

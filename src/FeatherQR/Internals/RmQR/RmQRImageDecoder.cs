@@ -121,9 +121,9 @@ internal static class RmQRImageDecoder
     {
         // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
         // threshold is the single most expensive step of the whole failure path.
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
-        var status = DecodeLuminanceScan(luminance, width, height, threshold, destination, out charsWritten, out info, fullSweep: false);
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false);
         // Terminal, not just successful: DestinationTooSmall is only reached after the
         // symbol has been located, sampled, RS-corrected and its segment found to fit
         // the bitstream, so the buffer is the only thing missing and a wider finder scan
@@ -133,7 +133,7 @@ internal static class RmQRImageDecoder
         if (IsTerminal(status))
             return status;
 
-        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
         // Terminal, not just successful, for the same reason as above: when the sweep
         // is the pass that reads the symbol, its DestinationTooSmall is the answer.
         if (IsTerminal(sweptStatus))
@@ -148,14 +148,14 @@ internal static class RmQRImageDecoder
         return status;
     }
 
-    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep)
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep)
     {
         charsWritten = 0;
 
         Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var candidateCount = fullSweep
-            ? FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates)
-            : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates);
+            ? FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey)
+            : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates, grey);
         if (candidateCount == 0)
         {
             info = NotDetected();
