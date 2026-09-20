@@ -239,9 +239,9 @@ public class TimingPatternDimensionTest
 
     private static int Count(byte[] luminance, int width, int height, float moduleSize)
     {
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
         Span<FinderPattern> patterns = new FinderPattern[3];
-        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns))
+        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey))
             throw new InvalidOperationException("finders not found");
         QRImageDecoder.OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
         return QRImageDecoder.CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);

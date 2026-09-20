@@ -26,6 +26,10 @@ internal struct FinderPattern
 /// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then cross-checks each hit vertically, horizontally and diagonally before accepting it as a candidate (the standard ZXing-style detection approach).
 /// Designed for Tier-1 inputs, clean, well-lit, screen-rendered or scanned images with mild rotation, not for low-contrast photos.
 /// <para>
+/// The ratio is checked on whole-pixel runs first. An anti-aliased edge leaves a grey pixel that a threshold rounds to a whole one, which at about 2 px/module is half a module, so runs that miss by less than 1.5 px, the same budget on every run, are measured again from <see cref="GreyLevels"/> and held to the strict tolerance, in the row scan and in all three cross-checks.
+/// The tolerance is what keeps data runs out of the candidate list, so it is the measurement that is repaired and never the check; with no grey in the image the second look could only repeat the whole-pixel runs and is switched off.
+/// </para>
+/// <para>
 /// Two entry points: TryFind (three patterns, Standard QR) and FindCandidates (one pattern, Micro QR and rMQR).
 /// Both stride over rows, and both are widened to a full sweep when the symbol was not read — but only TryFind can decide that for itself, because "no consistent triple" is a question about the symbol.
 /// A single candidate list cannot answer the same question, so FindCandidates has no fallback of its own and its callers re-run it strideless instead.
@@ -52,13 +56,14 @@ internal static class FinderPatternFinder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="threshold">Binarization threshold: a pixel is dark when luminance &lt; threshold.</param>
     /// <param name="patterns">Receives the three finder patterns (top-left first is NOT guaranteed).</param>
+    /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>True when at least three mutually consistent finder patterns were found.</returns>
-    public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns)
-        => TryFindCore(luminance, width, height, threshold, forceScalar: false, patterns);
+    public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
+        => TryFindCore(luminance, width, height, threshold, grey, forceScalar: false, patterns);
 
     /// <summary>Scalar-kernel entry for parity tests; behavior-identical to <see cref="TryFind"/>.</summary>
-    internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns)
-        => TryFindCore(luminance, width, height, threshold, forceScalar: true, patterns);
+    internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
+        => TryFindCore(luminance, width, height, threshold, grey, forceScalar: true, patterns);
 
     /// <summary>
     /// Row stride for <see cref="FindCandidates"/>.
@@ -83,9 +88,10 @@ internal static class FinderPatternFinder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="threshold">Binarization threshold: a pixel is dark when luminance &lt; threshold.</param>
     /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
+    /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>The number of candidates written.</returns>
-    internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates)
-        => FindCandidatesCore(luminance, width, height, threshold, candidates, CandidateRowStride);
+    internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
+        => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, CandidateRowStride);
 
     /// <summary>
     /// Every row, no stride.
@@ -96,16 +102,17 @@ internal static class FinderPatternFinder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="threshold">Binarization threshold: a pixel is dark when luminance &lt; threshold.</param>
     /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
+    /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>The number of candidates written.</returns>
-    internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates)
-        => FindCandidatesCore(luminance, width, height, threshold, candidates, stride: 1);
+    internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
+        => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, stride: 1);
 
-    private static int FindCandidatesCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, int stride)
+    private static int FindCandidatesCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, int stride)
     {
         var candidateCount = 0;
         for (var y = 0; y < height; y += stride)
         {
-            ScanRow(luminance, width, height, threshold, y, forceScalar: false, candidates, ref candidateCount);
+            ScanRow(luminance, width, height, threshold, grey, y, forceScalar: false, candidates, ref candidateCount);
         }
         return candidateCount;
     }
@@ -113,7 +120,7 @@ internal static class FinderPatternFinder
     /// <summary>Capacity to provide for <see cref="FindCandidates"/>'s candidate buffer.</summary>
     internal const int MaxFinderCandidates = MaxCandidates;
 
-    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, bool forceScalar, Span<FinderPattern> patterns)
+    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, bool forceScalar, Span<FinderPattern> patterns)
     {
         // Row stride bound: a v40 symbol filling the frame has module size height/177.
         // Its 3-module center band is 3·height/177 px tall and a stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol occupies half the frame), enough for the Count-based confirmation in TrySelectBestThree.
@@ -125,7 +132,7 @@ internal static class FinderPatternFinder
 
         for (var y = 0; y < height; y += stride)
         {
-            ScanRow(luminance, width, height, threshold, y, forceScalar, candidates, ref candidateCount);
+            ScanRow(luminance, width, height, threshold, grey, y, forceScalar, candidates, ref candidateCount);
         }
 
         if (stride > 1)
@@ -145,7 +152,7 @@ internal static class FinderPatternFinder
                 var limit = Math.Min(baseY + stride, height);
                 for (var y = baseY + 1; y < limit; y++)
                 {
-                    ScanRow(luminance, width, height, threshold, y, forceScalar, candidates, ref candidateCount);
+                    ScanRow(luminance, width, height, threshold, grey, y, forceScalar, candidates, ref candidateCount);
                 }
             }
 
@@ -187,21 +194,21 @@ internal static class FinderPatternFinder
         return modules;
     }
 
-    private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, bool forceScalar, Span<FinderPattern> candidates, ref int candidateCount)
+    private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, bool forceScalar, Span<FinderPattern> candidates, ref int candidateCount)
     {
 #if NET8_0_OR_GREATER
         // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels, result bit-identical to the scalar walk. Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
         if (!forceScalar && Vector128.IsHardwareAccelerated && width >= 16)
         {
-            ScanRowMask(luminance, width, height, threshold, y, candidates, ref candidateCount);
+            ScanRowMask(luminance, width, height, threshold, grey, y, candidates, ref candidateCount);
             return;
         }
 #endif
         _ = forceScalar;
-        ScanRowScalar(luminance, width, height, threshold, y, candidates, ref candidateCount);
+        ScanRowScalar(luminance, width, height, threshold, grey, y, candidates, ref candidateCount);
     }
 
-    private static void ScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, Span<FinderPattern> candidates, ref int candidateCount)
+    private static void ScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
         Span<int> runs = stackalloc int[5];
         var row = luminance.Slice(y * width, width);
@@ -250,9 +257,9 @@ internal static class FinderPatternFinder
             }
 
             // Window full (5 runs) and the 5th (dark) run just completed: evaluate, then shift out the oldest dark/light pair; the window still starts with a dark run and the incoming light run continues at index 3.
-            if (IsFinderRatio(runs))
+            if (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, x, y, 1, 0) || IsRepeatedNearFinderRatio(luminance, width, height, threshold, runs[0], runs[1], runs[2], runs[3], runs[4], x, y))
             {
-                TryAddCandidate(luminance, width, height, threshold, runs, x, y, candidates, ref candidateCount);
+                TryAddCandidate(luminance, width, height, threshold, grey, runs, x, y, candidates, ref candidateCount);
             }
 
             // Shift out the oldest dark/light pair; the window still starts with a dark run and the incoming light run continues at index 3.
@@ -265,9 +272,9 @@ internal static class FinderPatternFinder
         }
 
         // End of row: evaluate a complete trailing window
-        if (runIndex == 4 && IsFinderRatio(runs))
+        if (runIndex == 4 && (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, width, y, 1, 0) || IsRepeatedNearFinderRatio(luminance, width, height, threshold, runs[0], runs[1], runs[2], runs[3], runs[4], width, y)))
         {
-            TryAddCandidate(luminance, width, height, threshold, runs, width, y, candidates, ref candidateCount);
+            TryAddCandidate(luminance, width, height, threshold, grey, runs, width, y, candidates, ref candidateCount);
         }
     }
 
@@ -280,7 +287,7 @@ internal static class FinderPatternFinder
     /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px otherwise) produce a dark bitmask; runs are walked via trailing-zero counts.
     /// The 1:1:3:1:1 window is evaluated at the end of every dark run from the third onward, exactly the positions and order the scalar walk evaluates, so the result is bit-identical.
     /// </summary>
-    private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, Span<FinderPattern> candidates, ref int candidateCount)
+    private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
         // The mask covers a full row; keep the common case on the stack (512 B covers rows up to ~4000 px) and rent for wider images.
         var maskLength = ((width + 63) >> 6) + 1;
@@ -356,14 +363,19 @@ internal static class FinderPatternFinder
                 var darkEnd = NextBit(mask, darkStart, width, set: false);
                 var dCur = darkEnd - darkStart;
 
-                if (darkRuns >= 2 && IsFinderRatio(dPrev2, gPrev1, dPrev1, gCur, dCur))
+                if (darkRuns >= 2)
                 {
-                    runs[0] = dPrev2;
-                    runs[1] = gPrev1;
-                    runs[2] = dPrev1;
-                    runs[3] = gCur;
-                    runs[4] = dCur;
-                    TryAddCandidate(luminance, width, height, threshold, runs, darkEnd, y, candidates, ref candidateCount);
+                    if (IsFinderRatio(dPrev2, gPrev1, dPrev1, gCur, dCur)
+                        || (grey.IsEnabled && IsNearFinderRatio(dPrev2, gPrev1, dPrev1, gCur, dCur) && IsFinderRatioByCoverage(luminance, width, height, grey, dPrev2, gPrev1, dPrev1, gCur, dCur, darkEnd, y, 1, 0))
+                        || IsRepeatedNearFinderRatio(luminance, width, height, threshold, dPrev2, gPrev1, dPrev1, gCur, dCur, darkEnd, y))
+                    {
+                        runs[0] = dPrev2;
+                        runs[1] = gPrev1;
+                        runs[2] = dPrev1;
+                        runs[3] = gCur;
+                        runs[4] = dCur;
+                        TryAddCandidate(luminance, width, height, threshold, grey, runs, darkEnd, y, candidates, ref candidateCount);
+                    }
                 }
 
                 var nextDark = NextBit(mask, darkEnd, width, set: true);
@@ -444,23 +456,103 @@ internal static class FinderPatternFinder
     }
 
     /// <summary>
+    /// The tolerance a near miss is held to, the largest whole seventh below 1.5 px: an edge pixel on the wrong side of the threshold moves a run by one.
+    /// </summary>
+    private const int NearMissSevenths = 10;
+
+    /// <summary>
+    /// The centre run gets the same budget, not three times it. The tolerance is an absolute number of pixels, because it stands for edge pixels landing on the wrong side of the threshold, and a run has two edges however many modules wide it is.
+    /// Scaling it by the run's width, as the strict check scales its own per-module tolerance, would admit a window whose centre is nothing like three modules: a 1:1:1:1:1 run is then a near miss, and the diagonal cross-check exists to refuse exactly that.
+    /// </summary>
+    private const int NearMissCentreSevenths = NearMissSevenths;
+
+    /// <summary>
+    /// Runs within 1.5 px of the 1:1:3:1:1 ratio on every one of the five, asked only of runs that failed the half-module check.
+    /// From about 2.9 px/module half a module is the wider of the two tolerances, so nothing that failed is near: this reaches low densities only.
+    /// </summary>
+    private static bool IsNearFinderRatio(int r0, int r1, int r2, int r3, int r4)
+    {
+        var total = r0 + r1 + r2 + r3 + r4;
+        if (total < 7)
+            return false;
+
+        // In sevenths of a pixel, against a module size of total/7: |total − 7r| <= 10, the same budget on every run.
+        // Written as an unsigned range test because Math.Abs(int) has to branch for int.MinValue, and this runs on every window.
+        return (uint)(total - 7 * r0 + NearMissSevenths) <= 2 * NearMissSevenths
+            && (uint)(total - 7 * r1 + NearMissSevenths) <= 2 * NearMissSevenths
+            && (uint)(3 * total - 7 * r2 + NearMissCentreSevenths) <= 2 * NearMissCentreSevenths
+            && (uint)(total - 7 * r3 + NearMissSevenths) <= 2 * NearMissSevenths
+            && (uint)(total - 7 * r4 + NearMissSevenths) <= 2 * NearMissSevenths;
+    }
+
+    /// <summary>
+    /// The 1:1:3:1:1 check on runs measured from grey levels, for a window whose whole-pixel runs are a near miss.
+    /// The window ends just before pixel (<paramref name="endX"/>, <paramref name="endY"/>) and runs back along (<paramref name="stepX"/>, <paramref name="stepY"/>).
+    /// </summary>
+    /// <remarks>
+    /// Each edge moves from its pixel boundary by the coverage of the two pixels beside it, which is exact for an edge a box filter drew.
+    /// The tolerance stays the strict one, so a window of whole pixels measures as it did and is refused as it was.
+    /// </remarks>
+    private static bool IsFinderRatioByCoverage(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, ReadOnlySpan<int> runs, int endX, int endY, int stepX, int stepY)
+        => grey.IsEnabled
+            && runs[0] != 0 && runs[1] != 0 && runs[3] != 0 && runs[4] != 0
+            && IsNearFinderRatio(runs[0], runs[1], runs[2], runs[3], runs[4])
+            && IsFinderRatioByCoverage(luminance, width, height, grey, runs[0], runs[1], runs[2], runs[3], runs[4], endX, endY, stepX, stepY);
+
+    /// <summary>The measurement itself, for runs already known to be a near miss.</summary>
+    private static bool IsFinderRatioByCoverage(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, int r0, int r1, int r2, int r3, int r4, int endX, int endY, int stepX, int stepY)
+    {
+        var total = r0 + r1 + r2 + r3 + r4;
+
+        // Outer edges first: they give the module size every run is held to
+        var b1 = r0;
+        var b2 = b1 + r1;
+        var b3 = b2 + r2;
+        var b4 = b3 + r3;
+        var e0 = Edge(luminance, width, height, grey, endX, endY, stepX, stepY, total, 0, rising: true);
+        var e5 = Edge(luminance, width, height, grey, endX, endY, stepX, stepY, total, total, rising: false);
+        var moduleSize = (e5 - e0) / 7f;
+        var maxVariance = moduleSize / 2f;
+
+        var e1 = Edge(luminance, width, height, grey, endX, endY, stepX, stepY, total, b1, rising: false);
+        if (!(Math.Abs(moduleSize - (e1 - e0)) < maxVariance))
+            return false;
+        var e4 = Edge(luminance, width, height, grey, endX, endY, stepX, stepY, total, b4, rising: true);
+        if (!(Math.Abs(moduleSize - (e5 - e4)) < maxVariance))
+            return false;
+        var e2 = Edge(luminance, width, height, grey, endX, endY, stepX, stepY, total, b2, rising: true);
+        if (!(Math.Abs(moduleSize - (e2 - e1)) < maxVariance))
+            return false;
+        var e3 = Edge(luminance, width, height, grey, endX, endY, stepX, stepY, total, b3, rising: false);
+        return Math.Abs(3f * moduleSize - (e3 - e2)) < 3f * maxVariance
+            && Math.Abs(moduleSize - (e4 - e3)) < maxVariance;
+
+        // The edge at whole-pixel boundary `boundary` (pixels from the window's start), moved by the coverage of the pixel on each side; rising is light to dark
+        static float Edge(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, int endX, int endY, int stepX, int stepY, int total, int boundary, bool rising)
+        {
+            var back = total - boundary;
+            var after = Darkness(luminance, width, height, grey, endX - back * stepX, endY - back * stepY);
+            var before = Darkness(luminance, width, height, grey, endX - (back + 1) * stepX, endY - (back + 1) * stepY);
+            return rising ? boundary + (1f - after) - before : boundary - (1f - before) + after;
+        }
+
+        static float Darkness(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, int x, int y)
+            => x < 0 || y < 0 || x >= width || y >= height ? 0f : grey.Darkness(luminance[y * width + x]);
+    }
+
+    /// <summary>
     /// Cross-checks a horizontal hit vertically, then horizontally again, then diagonally; merges the refined center into the candidate list.
     /// </summary>
-    private static void TryAddCandidate(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<int> runs, int endX, int y, Span<FinderPattern> candidates, ref int candidateCount)
+    private static void TryAddCandidate(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<int> runs, int endX, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
         var total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
-        var centerX = endX - runs[4] - runs[3] - runs[2] / 2f;
+        var rowCenterX = endX - runs[4] - runs[3] - runs[2] / 2f;
 
-        var centerY = CrossCheck(luminance, width, height, threshold, (int)centerX, y, vertical: true, total, out _);
-        if (float.IsNaN(centerY))
+        if (!TryCrossCheck(luminance, width, height, threshold, grey, rowCenterX, y, total, out var centerX, out var centerY, out var refinedTotal)
+            && !TryCrossCheckWholePattern(luminance, width, height, threshold, runs, endX, y, out centerX, out centerY, out refinedTotal))
+        {
             return;
-
-        centerX = CrossCheck(luminance, width, height, threshold, (int)centerX, (int)centerY, vertical: false, total, out var refinedTotal);
-        if (float.IsNaN(centerX))
-            return;
-
-        if (!CrossCheckDiagonal(luminance, width, height, threshold, (int)centerX, (int)centerY))
-            return;
+        }
 
         var moduleSize = refinedTotal / 7f;
 
@@ -487,11 +579,121 @@ internal static class FinderPatternFinder
         }
     }
 
+    /// <summary>The ratio along the column, the row again and the diagonal.</summary>
+    private static bool TryCrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, float rowCenterX, int y, int total, out float centerX, out float centerY, out int refinedTotal)
+    {
+        centerX = rowCenterX;
+        refinedTotal = 0;
+        centerY = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, y, vertical: true, total, out _, default);
+        if (float.IsNaN(centerY))
+            return false;
+
+        centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY, vertical: false, total, out refinedTotal, default);
+        if (float.IsNaN(centerX))
+            return false;
+
+        return CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY);
+    }
+
+    /// <summary>
+    /// The runs a crisp finder leaves under about 1.6 px/module, where each module is 1 or 2 px wide: four single modules and a centre of 3 to 5.
+    /// The centre first: on fine noise, where this is asked of every window, few runs are that long.
+    /// </summary>
+    private static bool IsSmallCrispFinderRuns(int r0, int r1, int r2, int r3, int r4)
+        => (uint)(r2 - 3) <= 2u && (uint)(r0 - 1) <= 1u && (uint)(r1 - 1) <= 1u && (uint)(r3 - 1) <= 1u && (uint)(r4 - 1) <= 1u;
+
+    /// <summary>
+    /// A small crisp finder's runs that the row above or below repeats pixel for pixel.
+    /// A crisp finder's centre band is three rows or more of the same runs; noise does not repeat, and the comparison is what keeps it from reaching the cross-checks.
+    /// </summary>
+    private static bool IsRepeatedNearFinderRatio(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int r0, int r1, int r2, int r3, int r4, int endX, int y)
+    {
+        if (!IsSmallCrispFinderRuns(r0, r1, r2, r3, r4))
+            return false;
+
+        var start = endX - (r0 + r1 + r2 + r3 + r4);
+        return RowRepeats(luminance, width, threshold, start, endX, y, y - 1) || (y + 1 < height && RowRepeats(luminance, width, threshold, start, endX, y, y + 1));
+
+        static bool RowRepeats(ReadOnlySpan<byte> luminance, int width, byte threshold, int start, int end, int y, int otherY)
+        {
+            if (otherY < 0)
+                return false;
+            var row = luminance.Slice(y * width, width);
+            var other = luminance.Slice(otherY * width, width);
+            for (var x = start; x < end; x++)
+            {
+                if (row[x] < threshold != other[x] < threshold)
+                    return false;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The cross-check for a pattern too small for ratios: near misses on the row and the column, then all 49 modules read through the edges those two lines measured.
+    /// </summary>
+    /// <remarks>
+    /// At 1 to 1.5 px/module a crisp render draws each module 1 or 2 px wide, so a run is up to a whole module off and the half-module tolerance means nothing. The edges themselves are exact, and the pattern they frame either is a finder, module for module, or is not: a stronger test than three ratios, and independent of how wide each module came out.
+    /// </remarks>
+    private static bool TryCrossCheckWholePattern(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<int> rowRuns, int endX, int y, out float centerX, out float centerY, out int refinedTotal)
+    {
+        centerX = centerY = 0f;
+        refinedTotal = rowRuns[0] + rowRuns[1] + rowRuns[2] + rowRuns[3] + rowRuns[4];
+        if (!IsSmallCrispFinderRuns(rowRuns[0], rowRuns[1], rowRuns[2], rowRuns[3], rowRuns[4]))
+            return false;
+
+        var rowCenterX = endX - rowRuns[4] - rowRuns[3] - rowRuns[2] / 2f;
+        Span<int> columnRuns = stackalloc int[5];
+        centerY = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, y, vertical: true, refinedTotal, out _, columnRuns);
+        if (float.IsNaN(centerY))
+            return false;
+
+        // The row through the column's centre, so both lines cross the centre square
+        Span<int> centerRowRuns = stackalloc int[5];
+        centerX = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, (int)centerY, vertical: false, refinedTotal, out refinedTotal, centerRowRuns);
+        if (float.IsNaN(centerX))
+            return false;
+
+        var left = (int)(centerX + centerRowRuns[2] / 2f) - centerRowRuns[2] - centerRowRuns[1] - centerRowRuns[0];
+        var top = (int)(centerY + columnRuns[2] / 2f) - columnRuns[2] - columnRuns[1] - columnRuns[0];
+        Span<int> xs = stackalloc int[7];
+        Span<int> ys = stackalloc int[7];
+        ModuleSamples(centerRowRuns, left, xs);
+        ModuleSamples(columnRuns, top, ys);
+        for (var row = 0; row < 7; row++)
+        {
+            for (var column = 0; column < 7; column++)
+            {
+                var ring = Math.Min(Math.Min(row, column), Math.Min(6 - row, 6 - column));
+                if (IsDark(luminance, width, xs[column], ys[row], threshold) != (ring != 1))
+                    return false;
+            }
+        }
+        return true;
+
+        // One pixel inside each of the seven modules a line crosses: the four single-module runs, and the centre run in thirds
+        static void ModuleSamples(ReadOnlySpan<int> runs, int start, Span<int> samples)
+        {
+            var edge1 = start + runs[0];
+            var edge2 = edge1 + runs[1];
+            var edge5 = edge2 + runs[2];
+            var edge6 = edge5 + runs[3];
+            samples[0] = start + runs[0] / 2;
+            samples[1] = edge1 + runs[1] / 2;
+            samples[2] = edge2 + runs[2] / 6;
+            samples[3] = edge2 + runs[2] / 2;
+            samples[4] = edge2 + runs[2] * 5 / 6;
+            samples[5] = edge5 + runs[3] / 2;
+            samples[6] = edge6 + runs[4] / 2;
+        }
+    }
+
     /// <summary>
     /// Walks outwards from a supposed center along one axis and re-validates the 1:1:3:1:1 ratio.
     /// Returns the refined center coordinate on that axis, or NaN.
+    /// With <paramref name="nearMissRuns"/> the line only has to read as a small crisp finder's, and its runs are handed back for the whole-pattern check.
     /// </summary>
-    private static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, bool vertical, int expectedTotal, out int total)
+    private static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, out int total, Span<int> nearMissRuns)
     {
         total = 0;
         var limit = vertical ? height : width;
@@ -547,8 +749,16 @@ internal static class FinderPatternFinder
         if (5 * Math.Abs(total - expectedTotal) >= 2 * expectedTotal)
             return float.NaN;
 
-        if (!IsFinderRatio(runs))
+        if (!nearMissRuns.IsEmpty)
+        {
+            if (!IsSmallCrispFinderRuns(runs[0], runs[1], runs[2], runs[3], runs[4]))
+                return float.NaN;
+            runs.CopyTo(nearMissRuns);
+        }
+        else if (!IsFinderRatio(runs) && !IsFinderRatioByCoverage(luminance, width, height, grey, runs, vertical ? centerX : i, vertical ? i : centerY, vertical ? 0 : 1, vertical ? 1 : 0))
+        {
             return float.NaN;
+        }
 
         return i - runs[4] - runs[3] - runs[2] / 2f;
     }
@@ -556,7 +766,11 @@ internal static class FinderPatternFinder
     /// <summary>
     /// Validates the 1:1:3:1:1 ratio along the top-left → bottom-right diagonal, killing false positives that pass both axis checks (e.g. dense data areas).
     /// </summary>
-    private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY)
+    /// <remarks>
+    /// This one takes the second look too, because it is also what reads a real finder's diagonal once the edges are grey, but it is the weakest place to take it: it is reached only after both axes have accepted, so re-measuring can only turn a refusal into an acceptance, and a 45° walk crosses module corners, where a pixel's darkness is not the position of a single edge.
+    /// Below 2.25 px/module that is enough to admit a cross whose axes read 1:1:3:1:1 and whose diagonal does not. Measuring whole pixels here instead removes that class only below 2.05, where this is the route it comes in by, and costs real finders their decode at 2 px/module, so the repair is the corner model rather than the second look.
+    /// </remarks>
+    private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY)
     {
         Span<int> runs = stackalloc int[5];
 
@@ -600,7 +814,7 @@ internal static class FinderPatternFinder
             i++;
         }
 
-        return IsFinderRatio(runs);
+        return IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, centerX + i, centerY + i, 1, 1);
     }
 
     private static bool IsDark(ReadOnlySpan<byte> luminance, int width, int x, int y, byte threshold)

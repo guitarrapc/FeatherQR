@@ -261,7 +261,7 @@ public class FinderPatternSelectionTest
         var (luminance, side) = Render(ToModules(qr), qr.Size, pixelsPerModule);
 
         var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var found = FinderPatternFinder.FindCandidatesFullSweep(luminance, side, side, 128, candidates);
+        var found = FinderPatternFinder.FindCandidatesFullSweep(luminance, side, side, 128, candidates, default);
         await Assert.That(candidates.Take(found).Count(c => c.Count >= 2)).IsGreaterThan(3).Because("the symbol no longer carries a confirmed false finder: pick another from the sweep");
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out var text, out var info);

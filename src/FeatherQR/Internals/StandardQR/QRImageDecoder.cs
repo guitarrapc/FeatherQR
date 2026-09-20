@@ -79,10 +79,10 @@ internal static class QRImageDecoder
     {
         charsWritten = 0;
 
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
         Span<FinderPattern> patterns = stackalloc FinderPattern[3];
-        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns))
+        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey))
         {
             info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
             return DecodeStatus.NotDetected;
@@ -90,6 +90,22 @@ internal static class QRImageDecoder
 
         OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
 
+        // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth
+        // of a pixel to spare, which no grid extrapolated from the finder centres keeps. The
+        // timing patterns mark every module boundary between the finders. First, because where
+        // both grids read, this one's corners are the symbol's own edges and the other's are
+        // extrapolated to within a module; two lines that do not read cost a few hundred pixels.
+        var frameStatus = DecodeThroughTimingFrame(luminance, width, height, threshold, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
+        if (IsTerminal(frameStatus))
+            return frameStatus;
+
+        return DecodeFromFinders(luminance, width, height, threshold, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
+    }
+
+    /// <summary>The dimension candidates in turn: the estimate, the timing count, the version information, the runner-up.</summary>
+    private static DecodeStatus DecodeFromFinders(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
+        charsWritten = 0;
         var timingCounted = false;
         var timingDimension = 0;
         if (!TryEstimateDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, out var dimension, out var secondaryDimension, out var moduleSize))
@@ -158,6 +174,95 @@ internal static class QRImageDecoder
 
         // All candidates failed: report the primary attempt's diagnostics
         return status;
+    }
+
+    /// <summary>Boundaries per axis at version 40.</summary>
+    private const int MaxBoundaries = 178;
+
+    /// <summary>
+    /// Decodes an upright or right-angle symbol drawn crisp at a low density through its module boundaries (<see cref="ModuleBoundaryReader"/>).
+    /// </summary>
+    private static DecodeStatus DecodeThroughTimingFrame(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
+        charsWritten = 0;
+        info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+        Span<int> columns = stackalloc int[MaxBoundaries];
+        Span<int> rows = stackalloc int[MaxBoundaries];
+        if (topLeft.ModuleSize >= ModuleBoundaryReader.MaxModuleSize
+            || !TryReadModuleBoundaries(luminance, width, height, threshold, topLeft, topRight, bottomLeft, columns, rows, out var frame, out var dimension))
+        {
+            return DecodeStatus.NotDetected;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
+        try
+        {
+            var modules = rented.AsSpan(0, dimension * dimension);
+            ModuleBoundaryReader.Sample(luminance, width, height, threshold, frame, columns, dimension, rows, dimension, modules);
+
+            var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
+            if (status == DecodeStatus.Success)
+            {
+                frame.ToImage(columns[0], rows[0], out var x0, out var y0);
+                frame.ToImage(columns[dimension], rows[0], out var x1, out var y1);
+                frame.ToImage(columns[dimension], rows[dimension], out var x2, out var y2);
+                frame.ToImage(columns[0], rows[dimension], out var x3, out var y3);
+                var outline = PerspectiveTransform.QuadrilateralToQuadrilateral(0f, 0f, dimension, 0f, dimension, dimension, 0f, dimension, x0, y0, x1, y1, x2, y2, x3, y3);
+                info = info.WithCorners(SymbolGeometry.FromTransform(outline, dimension, dimension, transposed));
+            }
+            return status;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// The module boundaries of an axis-aligned symbol along both axes, <c>dimension + 1</c> each: module row 6 and module column 6 run from finder to finder, and the three finders' centre lines cover their own modules.
+    /// False unless both timing lines read as timing patterns and count the same dimension.
+    /// </summary>
+    internal static bool TryReadModuleBoundaries(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, Span<int> columns, Span<int> rows, out AxisAlignedFrame frame, out int dimension)
+    {
+        frame = default;
+        dimension = 0;
+        if (!ModuleBoundaryReader.TryAxisDirection(topRight.X - topLeft.X, topRight.Y - topLeft.Y, out var uX, out var uY)
+            || !ModuleBoundaryReader.TryAxisDirection(bottomLeft.X - topLeft.X, bottomLeft.Y - topLeft.Y, out var vX, out var vY)
+            || uX * vX + uY * vY != 0)
+        {
+            return false;
+        }
+
+        var centerX = (int)topLeft.X;
+        var centerY = (int)topLeft.Y;
+        var farColumn = (int)((topRight.X - topLeft.X) * uX + (topRight.Y - topLeft.Y) * uY);
+        var farRow = (int)((bottomLeft.X - topLeft.X) * vX + (bottomLeft.Y - topLeft.Y) * vY);
+
+        // From the first finder's centre to the far one's outer edge is the finder distance plus 3.5 modules, by a module size that can measure 15 % small
+        var slack = (int)(8f * topLeft.ModuleSize);
+        if (!ModuleBoundaryReader.TryFinderEdgeRow(luminance, width, height, threshold, centerX, centerY, vX, vY, out var rowOffset)
+            || !ModuleBoundaryReader.TryFinderEdgeRow(luminance, width, height, threshold, centerX, centerY, uX, uY, out var columnOffset)
+            || !ModuleBoundaryReader.TryReadTimingLine(luminance, width, height, threshold, centerX + rowOffset * vX, centerY + rowOffset * vY, uX, uY, topLeft.ModuleSize, endsOnFinder: true, allowTriples: false, farColumn + slack, columns, out dimension)
+            || !ModuleBoundaryReader.TryReadTimingLine(luminance, width, height, threshold, centerX + columnOffset * uX, centerY + columnOffset * uY, vX, vY, topLeft.ModuleSize, endsOnFinder: true, allowTriples: false, farRow + slack, rows, out var rowDimension)
+            || dimension != rowDimension
+            || dimension < 21 || dimension > 177 || (dimension - 17) % 4 != 0)
+        {
+            return false;
+        }
+
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, uX, uY, 0, columns, 0);
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, uX, uY, farColumn, columns, dimension - 7);
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, vX, vY, 0, rows, 0);
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, vX, vY, farRow, rows, dimension - 7);
+
+        // The centre squares' inner boundaries, from the modules in line with them
+        ModuleBoundaryReader.ReadRunInteriors(luminance, width, height, threshold, centerX, centerY, uX, uY, vX, vY, columns, dimension, rows, dimension);
+        ModuleBoundaryReader.ReadRunInteriors(luminance, width, height, threshold, centerX, centerY, vX, vY, uX, uY, rows, dimension, columns, dimension);
+        if (!ModuleBoundaryReader.TryFillBoundaries(columns, dimension) || !ModuleBoundaryReader.TryFillBoundaries(rows, dimension))
+            return false;
+
+        frame = new AxisAlignedFrame(centerX, centerY, uX, uY, vX, vY);
+        return true;
     }
 
     /// <summary>

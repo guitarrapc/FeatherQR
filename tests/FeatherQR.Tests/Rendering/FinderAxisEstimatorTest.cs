@@ -26,9 +26,9 @@ public class FinderAxisEstimatorTest
     {
         var data = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4, QuietZoneSize = 0 });
         var (luminance, width, height) = SupersampledRenderer.Render((row, col) => data[row, col], data.Size, data.Size, pixelsPerModule, degrees);
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
         var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var count = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates);
+        var count = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey);
         var finder = candidates.Take(count).OrderByDescending(c => c.Count).First();
 
         var orientations = new OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];

@@ -4,12 +4,18 @@ using System.Runtime.InteropServices;
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// Global image binarization, shared by the Standard QR and Micro QR image decoders.
+/// Global image binarization, shared by all three image decoders.
 /// </summary>
 internal static class Binarizer
 {
     /// <summary>
-    /// Otsu's method: picks the threshold that maximizes between-class variance of the luminance histogram.
+    /// <see cref="ComputeOtsuThreshold(ReadOnlySpan{byte}, out GreyLevels)"/> for callers with no use for the grey levels.
+    /// </summary>
+    internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance)
+        => ComputeOtsuThreshold(luminance, out _);
+
+    /// <summary>
+    /// Otsu's method: picks the threshold that maximizes between-class variance of the luminance histogram, and the grey levels of the two classes it separates, from the same histogram.
     /// Suits Tier-1 inputs with clear bimodal contrast.
     /// </summary>
     /// <remarks>
@@ -17,7 +23,10 @@ internal static class Binarizer
     /// Reading 8 pixels as one ulong and testing uniformity with a byte rotation turns a whole uniform group into a single `+= 8`; non-uniform groups (module boundaries, photos) fall back to 8 increments, measured ~8-10x on QR-like inputs, break-even to modestly slower on uniform random noise.
     /// The result is byte-identical either way, and bin order is irrelevant to a histogram, so the walk is endian-safe.
     /// </remarks>
-    internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance)
+    /// <param name="luminance">Grayscale pixels.</param>
+    /// <param name="grey">The levels a pixel between the two classes is read against; disabled when the image holds no such pixel.</param>
+    /// <returns>The threshold: a pixel is dark when its luminance is below it.</returns>
+    internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance, out GreyLevels grey)
     {
         Span<int> histogram = stackalloc int[256];
         histogram.Clear();
@@ -83,6 +92,8 @@ internal static class Binarizer
             }
         }
 
-        return (byte)Math.Min(bestThreshold, 255);
+        var threshold = Math.Min(bestThreshold, 255);
+        grey = GreyLevels.FromHistogram(histogram, threshold);
+        return (byte)threshold;
     }
 }

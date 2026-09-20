@@ -88,9 +88,9 @@ internal static class MicroQRImageDecoder
     {
         // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
         // threshold is the single most expensive step of the whole failure path.
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
-        var status = DecodeLuminanceScan(luminance, width, height, threshold, destination, out charsWritten, out info, fullSweep: false);
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false);
         // Terminal, not just successful: DestinationTooSmall is only reached after the
         // symbol has been located, sampled, RS-corrected and its segment found to fit
         // the bitstream, so the buffer is the only thing missing and a wider finder scan
@@ -100,7 +100,7 @@ internal static class MicroQRImageDecoder
         if (IsTerminal(status))
             return status;
 
-        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
         // Terminal, not just successful, for the same reason as above: when the sweep
         // is the pass that reads the symbol, its DestinationTooSmall is the answer.
         if (IsTerminal(sweptStatus))
@@ -113,14 +113,14 @@ internal static class MicroQRImageDecoder
         return status;
     }
 
-    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool fullSweep)
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool fullSweep)
     {
         charsWritten = 0;
 
         Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var candidateCount = fullSweep
-            ? FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates)
-            : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates);
+            ? FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey)
+            : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates, grey);
         if (candidateCount == 0)
         {
             info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
@@ -148,6 +148,8 @@ internal static class MicroQRImageDecoder
         var bestInfo = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
 
         Span<byte> modules = stackalloc byte[17 * 17];
+        Span<int> boundaryColumns = stackalloc int[18];
+        Span<int> boundaryRows = stackalloc int[18];
 
         var tried = Math.Min(candidateCount, MaxCandidatesToTry);
         for (var c = 0; c < tried; c++)
@@ -227,6 +229,34 @@ internal static class MicroQRImageDecoder
                         return mirroredTimingStatus;
                     }
                     TrackBestFailure(mirroredTimingStatus, mirroredTimingInfo, ref bestStatus, ref bestInfo);
+                }
+
+                // Module boundaries: under about 1.5 px/module a crisp module is 1 or 2 px wide
+                // and a sample has an eighth of a pixel to spare, which neither fitted frame keeps.
+                if (samplingSlack < ModuleBoundaryReader.MaxModuleSize
+                    && TryReadModuleBoundaries(luminance, width, height, threshold, candidate, Math.Sign(uX), Math.Sign(uY), Math.Sign(vX), Math.Sign(vY), samplingSlack, boundaryColumns, boundaryRows, out var frame, out var boundarySize))
+                {
+                    ModuleBoundaryReader.Sample(luminance, width, height, threshold, frame, boundaryColumns, boundarySize, boundaryRows, boundarySize, modules);
+                    frame.ToImage(boundaryColumns[0], boundaryRows[0], out var boundaryOriginX, out var boundaryOriginY);
+                    var pitchU = (boundaryColumns[boundarySize] - boundaryColumns[0]) / (float)boundarySize;
+                    var pitchV = (boundaryRows[boundarySize] - boundaryRows[0]) / (float)boundarySize;
+
+                    var boundaryStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, boundarySize * boundarySize), boundarySize, destination, out charsWritten, out var boundaryInfo);
+                    if (boundaryStatus == DecodeStatus.Success)
+                    {
+                        info = boundaryInfo.WithCorners(SymbolGeometry.FromAffine(boundaryOriginX, boundaryOriginY, pitchU * frame.UX, pitchU * frame.UY, pitchV * frame.VX, pitchV * frame.VY, boundarySize, transposed: false));
+                        return boundaryStatus;
+                    }
+                    TrackBestFailure(boundaryStatus, boundaryInfo, ref bestStatus, ref bestInfo);
+
+                    TransposeInPlace(modules, boundarySize);
+                    var mirroredBoundaryStatus = MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, boundarySize * boundarySize), boundarySize, destination, out charsWritten, out var mirroredBoundaryInfo);
+                    if (mirroredBoundaryStatus == DecodeStatus.Success)
+                    {
+                        info = mirroredBoundaryInfo.WithCorners(SymbolGeometry.FromAffine(boundaryOriginX, boundaryOriginY, pitchU * frame.UX, pitchU * frame.UY, pitchV * frame.VX, pitchV * frame.VY, boundarySize, transposed: true));
+                        return mirroredBoundaryStatus;
+                    }
+                    TrackBestFailure(mirroredBoundaryStatus, mirroredBoundaryInfo, ref bestStatus, ref bestInfo);
                 }
             }
 
@@ -591,6 +621,40 @@ internal static class MicroQRImageDecoder
 
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
+
+    /// <summary>
+    /// The module boundaries of an axis-aligned symbol along both axes, <c>size + 1</c> each (<see cref="ModuleBoundaryReader"/>): module row 0 and module column 0 run from the finder's edge rows to the symbol's far edges.
+    /// False unless both lines read as timing patterns and count the same valid size.
+    /// </summary>
+    internal static bool TryReadModuleBoundaries(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern candidate, int uX, int uY, int vX, int vY, float moduleSize, Span<int> columns, Span<int> rows, out AxisAlignedFrame frame, out int size)
+    {
+        frame = default;
+        var centerX = (int)candidate.X;
+        var centerY = (int)candidate.Y;
+
+        // Rows and columns 0 are the finder's first edge rows, so its last dark run walking back from the centre
+        var maxPosition = (int)(16f * 1.6f * moduleSize);
+        if (!ModuleBoundaryReader.TryFinderEdgeRow(luminance, width, height, threshold, centerX, centerY, -vX, -vY, out var rowOffset)
+            || !ModuleBoundaryReader.TryFinderEdgeRow(luminance, width, height, threshold, centerX, centerY, -uX, -uY, out var columnOffset)
+            || !ModuleBoundaryReader.TryReadTimingLine(luminance, width, height, threshold, centerX - rowOffset * vX, centerY - rowOffset * vY, uX, uY, moduleSize, endsOnFinder: false, allowTriples: false, maxPosition, columns, out size)
+            || !ModuleBoundaryReader.TryReadTimingLine(luminance, width, height, threshold, centerX - columnOffset * uX, centerY - columnOffset * uY, vX, vY, moduleSize, endsOnFinder: false, allowTriples: false, maxPosition, rows, out var rowSize)
+            || size != rowSize
+            || size < 11 || size > 17 || size % 2 == 0)
+        {
+            size = 0;
+            return false;
+        }
+
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, uX, uY, 0, columns, 0);
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, vX, vY, 0, rows, 0);
+        ModuleBoundaryReader.ReadRunInteriors(luminance, width, height, threshold, centerX, centerY, uX, uY, vX, vY, columns, size, rows, size);
+        ModuleBoundaryReader.ReadRunInteriors(luminance, width, height, threshold, centerX, centerY, vX, vY, uX, uY, rows, size, columns, size);
+        if (!ModuleBoundaryReader.TryFillBoundaries(columns, size) || !ModuleBoundaryReader.TryFillBoundaries(rows, size))
+            return false;
+
+        frame = new AxisAlignedFrame(centerX, centerY, uX, uY, vX, vY);
+        return true;
+    }
 
     /// <summary>
     /// The grid frame measured on the timing patterns, row 0 and column 0 from the finder to the symbol's far edge, instead of extrapolated from the finder's module size.

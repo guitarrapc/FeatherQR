@@ -35,8 +35,8 @@ public class FinderPatternFinderParityTest
             foreach (var (dimension, ppm, finderCount) in configs)
             {
                 var scene = BuildQrScene(dimension, ppm, finderCount, seed, out var width, out var height);
-                var simdFound = FinderPatternFinder.TryFind(scene, width, height, Threshold, simd);
-                var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, height, Threshold, scalar);
+                var simdFound = FinderPatternFinder.TryFind(scene, width, height, Threshold, simd, default);
+                var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, height, Threshold, scalar, default);
 
                 await Assert.That(simdFound == scalarFound).IsTrue().Because($"found mismatch (seed={seed}, dim={dimension}, finders={finderCount}): simd={simdFound}, scalar={scalarFound}");
                 if (simdFound)
@@ -75,8 +75,8 @@ public class FinderPatternFinderParityTest
             foreach (var (dimension, ppm, finderCount) in configs)
             {
                 var scene = BuildQrScene(dimension, ppm, finderCount, seed, out var width, out var height);
-                var simdFound = FinderPatternFinder.TryFind(scene, width, height, Threshold, simd);
-                var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, height, Threshold, scalar);
+                var simdFound = FinderPatternFinder.TryFind(scene, width, height, Threshold, simd, default);
+                var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, height, Threshold, scalar, default);
 
                 await Assert.That(simdFound == scalarFound).IsTrue().Because($"found mismatch (seed={seed}, dim={dimension}, ppm={ppm}): simd={simdFound}, scalar={scalarFound}");
                 if (simdFound)
@@ -111,15 +111,28 @@ public class FinderPatternFinderParityTest
                 var scene = new byte[width * 40];
                 random.NextBytes(scene);
 
-                var simdFound = FinderPatternFinder.TryFind(scene, width, 40, threshold, simd);
-                var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, 40, threshold, scalar);
+                // Full-range noise is grey everywhere, so the second look runs on almost every window here.
+                // The two kernels gate it differently (the scalar walk through the span overload, the mask walk inline), so both settings have to agree.
+                var histogram = new int[256];
+                foreach (var value in scene)
+                    histogram[value]++;
+                var noiseGrey = GreyLevels.FromHistogram(histogram, threshold);
 
-                await Assert.That(simdFound == scalarFound).IsTrue().Because($"found mismatch (width={width}, threshold={threshold}): simd={simdFound}, scalar={scalarFound}");
-                if (simdFound)
+                // Nothing is dark below threshold 0, so there is no dark class to take a level from and the second look is off whatever the noise looks like
+                await Assert.That(noiseGrey.IsEnabled).IsEqualTo(threshold != 0).Because($"width={width}, threshold={threshold}: this scene is not putting the kernels through the case it is here for");
+
+                foreach (var grey in new[] { default, noiseGrey })
                 {
-                    for (var i = 0; i < 3; i++)
+                    var simdFound = FinderPatternFinder.TryFind(scene, width, 40, threshold, simd, grey);
+                    var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, 40, threshold, scalar, grey);
+
+                    await Assert.That(simdFound == scalarFound).IsTrue().Because($"found mismatch (width={width}, threshold={threshold}, grey={grey.IsEnabled}): simd={simdFound}, scalar={scalarFound}");
+                    if (simdFound)
                     {
-                        await Assert.That(simd[i].X == scalar[i].X && simd[i].Y == scalar[i].Y && simd[i].ModuleSize == scalar[i].ModuleSize).IsTrue().Because($"pattern {i} mismatch (width={width}, threshold={threshold})");
+                        for (var i = 0; i < 3; i++)
+                        {
+                            await Assert.That(simd[i].X == scalar[i].X && simd[i].Y == scalar[i].Y && simd[i].ModuleSize == scalar[i].ModuleSize).IsTrue().Because($"pattern {i} mismatch (width={width}, threshold={threshold}, grey={grey.IsEnabled})");
+                        }
                     }
                 }
             }
