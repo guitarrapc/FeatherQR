@@ -257,7 +257,7 @@ internal static class FinderPatternFinder
             }
 
             // Window full (5 runs) and the 5th (dark) run just completed: evaluate, then shift out the oldest dark/light pair; the window still starts with a dark run and the incoming light run continues at index 3.
-            if (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, x, y, 1, 0))
+            if (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, x, y, 1, 0) || IsRepeatedNearFinderRatio(luminance, width, height, threshold, runs[0], runs[1], runs[2], runs[3], runs[4], x, y))
             {
                 TryAddCandidate(luminance, width, height, threshold, grey, runs, x, y, candidates, ref candidateCount);
             }
@@ -272,7 +272,7 @@ internal static class FinderPatternFinder
         }
 
         // End of row: evaluate a complete trailing window
-        if (runIndex == 4 && (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, width, y, 1, 0)))
+        if (runIndex == 4 && (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, width, y, 1, 0) || IsRepeatedNearFinderRatio(luminance, width, height, threshold, runs[0], runs[1], runs[2], runs[3], runs[4], width, y)))
         {
             TryAddCandidate(luminance, width, height, threshold, grey, runs, width, y, candidates, ref candidateCount);
         }
@@ -366,7 +366,8 @@ internal static class FinderPatternFinder
                 if (darkRuns >= 2)
                 {
                     if (IsFinderRatio(dPrev2, gPrev1, dPrev1, gCur, dCur)
-                        || (grey.IsEnabled && IsNearFinderRatio(dPrev2, gPrev1, dPrev1, gCur, dCur) && IsFinderRatioByCoverage(luminance, width, height, grey, dPrev2, gPrev1, dPrev1, gCur, dCur, darkEnd, y, 1, 0)))
+                        || (grey.IsEnabled && IsNearFinderRatio(dPrev2, gPrev1, dPrev1, gCur, dCur) && IsFinderRatioByCoverage(luminance, width, height, grey, dPrev2, gPrev1, dPrev1, gCur, dCur, darkEnd, y, 1, 0))
+                        || IsRepeatedNearFinderRatio(luminance, width, height, threshold, dPrev2, gPrev1, dPrev1, gCur, dCur, darkEnd, y))
                     {
                         runs[0] = dPrev2;
                         runs[1] = gPrev1;
@@ -545,18 +546,13 @@ internal static class FinderPatternFinder
     private static void TryAddCandidate(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<int> runs, int endX, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
         var total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
-        var centerX = endX - runs[4] - runs[3] - runs[2] / 2f;
+        var rowCenterX = endX - runs[4] - runs[3] - runs[2] / 2f;
 
-        var centerY = CrossCheck(luminance, width, height, threshold, grey, (int)centerX, y, vertical: true, total, out _);
-        if (float.IsNaN(centerY))
+        if (!TryCrossCheck(luminance, width, height, threshold, grey, rowCenterX, y, total, out var centerX, out var centerY, out var refinedTotal)
+            && !TryCrossCheckWholePattern(luminance, width, height, threshold, runs, endX, y, out centerX, out centerY, out refinedTotal))
+        {
             return;
-
-        centerX = CrossCheck(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, vertical: false, total, out var refinedTotal);
-        if (float.IsNaN(centerX))
-            return;
-
-        if (!CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY))
-            return;
+        }
 
         var moduleSize = refinedTotal / 7f;
 
@@ -583,11 +579,121 @@ internal static class FinderPatternFinder
         }
     }
 
+    /// <summary>The ratio along the column, the row again and the diagonal.</summary>
+    private static bool TryCrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, float rowCenterX, int y, int total, out float centerX, out float centerY, out int refinedTotal)
+    {
+        centerX = rowCenterX;
+        refinedTotal = 0;
+        centerY = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, y, vertical: true, total, out _, default);
+        if (float.IsNaN(centerY))
+            return false;
+
+        centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY, vertical: false, total, out refinedTotal, default);
+        if (float.IsNaN(centerX))
+            return false;
+
+        return CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY);
+    }
+
+    /// <summary>
+    /// The runs a crisp finder leaves under about 1.6 px/module, where each module is 1 or 2 px wide: four single modules and a centre of 3 to 5.
+    /// The centre first: on fine noise, where this is asked of every window, few runs are that long.
+    /// </summary>
+    private static bool IsSmallCrispFinderRuns(int r0, int r1, int r2, int r3, int r4)
+        => (uint)(r2 - 3) <= 2u && (uint)(r0 - 1) <= 1u && (uint)(r1 - 1) <= 1u && (uint)(r3 - 1) <= 1u && (uint)(r4 - 1) <= 1u;
+
+    /// <summary>
+    /// A small crisp finder's runs that the row above or below repeats pixel for pixel.
+    /// A crisp finder's centre band is three rows or more of the same runs; noise does not repeat, and the comparison is what keeps it from reaching the cross-checks.
+    /// </summary>
+    private static bool IsRepeatedNearFinderRatio(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int r0, int r1, int r2, int r3, int r4, int endX, int y)
+    {
+        if (!IsSmallCrispFinderRuns(r0, r1, r2, r3, r4))
+            return false;
+
+        var start = endX - (r0 + r1 + r2 + r3 + r4);
+        return RowRepeats(luminance, width, threshold, start, endX, y, y - 1) || (y + 1 < height && RowRepeats(luminance, width, threshold, start, endX, y, y + 1));
+
+        static bool RowRepeats(ReadOnlySpan<byte> luminance, int width, byte threshold, int start, int end, int y, int otherY)
+        {
+            if (otherY < 0)
+                return false;
+            var row = luminance.Slice(y * width, width);
+            var other = luminance.Slice(otherY * width, width);
+            for (var x = start; x < end; x++)
+            {
+                if (row[x] < threshold != other[x] < threshold)
+                    return false;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The cross-check for a pattern too small for ratios: near misses on the row and the column, then all 49 modules read through the edges those two lines measured.
+    /// </summary>
+    /// <remarks>
+    /// At 1 to 1.5 px/module a crisp render draws each module 1 or 2 px wide, so a run is up to a whole module off and the half-module tolerance means nothing. The edges themselves are exact, and the pattern they frame either is a finder, module for module, or is not: a stronger test than three ratios, and independent of how wide each module came out.
+    /// </remarks>
+    private static bool TryCrossCheckWholePattern(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<int> rowRuns, int endX, int y, out float centerX, out float centerY, out int refinedTotal)
+    {
+        centerX = centerY = 0f;
+        refinedTotal = rowRuns[0] + rowRuns[1] + rowRuns[2] + rowRuns[3] + rowRuns[4];
+        if (!IsSmallCrispFinderRuns(rowRuns[0], rowRuns[1], rowRuns[2], rowRuns[3], rowRuns[4]))
+            return false;
+
+        var rowCenterX = endX - rowRuns[4] - rowRuns[3] - rowRuns[2] / 2f;
+        Span<int> columnRuns = stackalloc int[5];
+        centerY = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, y, vertical: true, refinedTotal, out _, columnRuns);
+        if (float.IsNaN(centerY))
+            return false;
+
+        // The row through the column's centre, so both lines cross the centre square
+        Span<int> centerRowRuns = stackalloc int[5];
+        centerX = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, (int)centerY, vertical: false, refinedTotal, out refinedTotal, centerRowRuns);
+        if (float.IsNaN(centerX))
+            return false;
+
+        var left = (int)(centerX + centerRowRuns[2] / 2f) - centerRowRuns[2] - centerRowRuns[1] - centerRowRuns[0];
+        var top = (int)(centerY + columnRuns[2] / 2f) - columnRuns[2] - columnRuns[1] - columnRuns[0];
+        Span<int> xs = stackalloc int[7];
+        Span<int> ys = stackalloc int[7];
+        ModuleSamples(centerRowRuns, left, xs);
+        ModuleSamples(columnRuns, top, ys);
+        for (var row = 0; row < 7; row++)
+        {
+            for (var column = 0; column < 7; column++)
+            {
+                var ring = Math.Min(Math.Min(row, column), Math.Min(6 - row, 6 - column));
+                if (IsDark(luminance, width, xs[column], ys[row], threshold) != (ring != 1))
+                    return false;
+            }
+        }
+        return true;
+
+        // One pixel inside each of the seven modules a line crosses: the four single-module runs, and the centre run in thirds
+        static void ModuleSamples(ReadOnlySpan<int> runs, int start, Span<int> samples)
+        {
+            var edge1 = start + runs[0];
+            var edge2 = edge1 + runs[1];
+            var edge5 = edge2 + runs[2];
+            var edge6 = edge5 + runs[3];
+            samples[0] = start + runs[0] / 2;
+            samples[1] = edge1 + runs[1] / 2;
+            samples[2] = edge2 + runs[2] / 6;
+            samples[3] = edge2 + runs[2] / 2;
+            samples[4] = edge2 + runs[2] * 5 / 6;
+            samples[5] = edge5 + runs[3] / 2;
+            samples[6] = edge6 + runs[4] / 2;
+        }
+    }
+
     /// <summary>
     /// Walks outwards from a supposed center along one axis and re-validates the 1:1:3:1:1 ratio.
     /// Returns the refined center coordinate on that axis, or NaN.
+    /// With <paramref name="nearMissRuns"/> the line only has to read as a small crisp finder's, and its runs are handed back for the whole-pattern check.
     /// </summary>
-    private static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, out int total)
+    private static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, out int total, Span<int> nearMissRuns)
     {
         total = 0;
         var limit = vertical ? height : width;
@@ -643,8 +749,16 @@ internal static class FinderPatternFinder
         if (5 * Math.Abs(total - expectedTotal) >= 2 * expectedTotal)
             return float.NaN;
 
-        if (!IsFinderRatio(runs) && !IsFinderRatioByCoverage(luminance, width, height, grey, runs, vertical ? centerX : i, vertical ? i : centerY, vertical ? 0 : 1, vertical ? 1 : 0))
+        if (!nearMissRuns.IsEmpty)
+        {
+            if (!IsSmallCrispFinderRuns(runs[0], runs[1], runs[2], runs[3], runs[4]))
+                return float.NaN;
+            runs.CopyTo(nearMissRuns);
+        }
+        else if (!IsFinderRatio(runs) && !IsFinderRatioByCoverage(luminance, width, height, grey, runs, vertical ? centerX : i, vertical ? i : centerY, vertical ? 0 : 1, vertical ? 1 : 0))
+        {
             return float.NaN;
+        }
 
         return i - runs[4] - runs[3] - runs[2] / 2f;
     }

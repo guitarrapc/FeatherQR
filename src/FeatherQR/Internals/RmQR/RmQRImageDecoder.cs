@@ -324,6 +324,19 @@ internal static class RmQRImageDecoder
         // renders above the bound that read only at a corrected scale are given up.
         var moduleLength = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
         var formatRead = false;
+
+        // Module boundaries: under about 1.5 px/module a crisp module is 1 or 2 px wide and a
+        // sample has an eighth of a pixel to spare, which no frame scaled from the finder keeps.
+        // First, while the attempt budget is whole: the searches below can spend all of it on
+        // such a symbol, and two timing lines that do not read cost a few dozen pixels.
+        if (moduleLength < ModuleBoundaryReader.MaxModuleSize)
+        {
+            var boundaryStatus = TryBoundaryFrame(luminance, width, height, threshold, candidate, uX, uY, vX, vY, moduleLength, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            if (IsTerminal(boundaryStatus))
+                return boundaryStatus;
+            formatRead |= boundaryStatus != DecodeStatus.NotDetected;
+        }
+
         foreach (var scale in FormatReadScales)
         {
             if (scale != 1f && moduleLength >= FormatScaleSearchMaxModule)
@@ -355,6 +368,103 @@ internal static class RmQRImageDecoder
         charsWritten = 0;
         info = bestInfo;
         return formatRead ? bestStatus : DecodeStatus.NotDetected;
+    }
+
+    /// <summary>
+    /// Decodes an upright or right-angle symbol drawn crisp at a low density through its module boundaries (<see cref="ModuleBoundaryReader"/>): module row 0 and module column 0 run from the finder's edge rows to the symbol's far edges, over the alignment and corner patterns that sit on them.
+    /// <see cref="DecodeStatus.NotDetected"/> unless both lines read and count a size some version has.
+    /// </summary>
+    private static DecodeStatus TryBoundaryFrame(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        float uX,
+        float uY,
+        float vX,
+        float vY,
+        float moduleLength,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out RmQRCodeDecodeInfo info,
+        ref DecodeStatus bestStatus,
+        ref RmQRCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining)
+    {
+        charsWritten = 0;
+        info = bestInfo;
+        Span<int> columns = stackalloc int[MaxBoundaryColumns];
+        Span<int> rows = stackalloc int[MaxBoundaryRows];
+        if (attemptsRemaining <= 0
+            || !TryReadModuleBoundaries(luminance, width, height, threshold, candidate, uX, uY, vX, vY, moduleLength, columns, rows, out var frame, out var symbolWidth, out var symbolHeight))
+        {
+            return DecodeStatus.NotDetected;
+        }
+
+        attemptsRemaining--;
+        var grid = modules.Slice(0, symbolWidth * symbolHeight);
+        ModuleBoundaryReader.Sample(luminance, width, height, threshold, frame, columns, symbolWidth, rows, symbolHeight, grid);
+        var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
+        if (status == DecodeStatus.Success)
+        {
+            frame.ToImage(columns[0], rows[0], out var x0, out var y0);
+            frame.ToImage(columns[symbolWidth], rows[0], out var x1, out var y1);
+            frame.ToImage(columns[symbolWidth], rows[symbolHeight], out var x2, out var y2);
+            frame.ToImage(columns[0], rows[symbolHeight], out var x3, out var y3);
+            var outline = PerspectiveTransform.QuadrilateralToQuadrilateral(0f, 0f, symbolWidth, 0f, symbolWidth, symbolHeight, 0f, symbolHeight, x0, y0, x1, y1, x2, y2, x3, y3);
+            info = info.WithCorners(SymbolGeometry.FromTransform(outline, symbolWidth, symbolHeight, transposed: false));
+            return status;
+        }
+
+        TrackBestFailure(status, info, ref bestStatus, ref bestInfo);
+        return status;
+    }
+
+    /// <summary>Boundaries along the widest symbol, 139 modules, and the tallest, 17.</summary>
+    private const int MaxBoundaryColumns = 140;
+    private const int MaxBoundaryRows = 18;
+
+    /// <summary>
+    /// The module boundaries of an axis-aligned symbol, <c>width + 1</c> columns and <c>height + 1</c> rows.
+    /// False unless the frame lies along the image axes, both lines read, and they count the size of a version.
+    /// </summary>
+    internal static bool TryReadModuleBoundaries(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern candidate, float columnX, float columnY, float rowX, float rowY, float moduleSize, Span<int> columns, Span<int> rows, out AxisAlignedFrame frame, out int symbolWidth, out int symbolHeight)
+    {
+        frame = default;
+        symbolWidth = symbolHeight = 0;
+        if (!ModuleBoundaryReader.TryAxisDirection(columnX, columnY, out var uX, out var uY)
+            || !ModuleBoundaryReader.TryAxisDirection(rowX, rowY, out var vX, out var vY)
+            || uX * vX + uY * vY != 0)
+        {
+            return false;
+        }
+
+        var centerX = (int)candidate.X;
+        var centerY = (int)candidate.Y;
+
+        // Rows and columns 0 are the finder's first edge rows, so its last dark run walking back from the centre
+        var maxColumn = (int)(MaxBoundaryColumns * 1.6f * moduleSize);
+        var maxRow = (int)(MaxBoundaryRows * 1.6f * moduleSize);
+        if (!ModuleBoundaryReader.TryFinderEdgeRow(luminance, width, height, threshold, centerX, centerY, -vX, -vY, out var rowOffset)
+            || !ModuleBoundaryReader.TryFinderEdgeRow(luminance, width, height, threshold, centerX, centerY, -uX, -uY, out var columnOffset)
+            || !ModuleBoundaryReader.TryReadTimingLine(luminance, width, height, threshold, centerX - rowOffset * vX, centerY - rowOffset * vY, uX, uY, moduleSize, endsOnFinder: false, allowTriples: true, maxColumn, columns, out symbolWidth)
+            || !ModuleBoundaryReader.TryReadTimingLine(luminance, width, height, threshold, centerX - columnOffset * uX, centerY - columnOffset * uY, vX, vY, moduleSize, endsOnFinder: false, allowTriples: true, maxRow, rows, out symbolHeight)
+            || !RmQRConstants.TryGetVersion(symbolHeight, symbolWidth, out _))
+        {
+            return false;
+        }
+
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, uX, uY, 0, columns, 0);
+        ModuleBoundaryReader.ReadFinderLine(luminance, width, height, threshold, centerX, centerY, vX, vY, 0, rows, 0);
+        ModuleBoundaryReader.ReadRunInteriors(luminance, width, height, threshold, centerX, centerY, uX, uY, vX, vY, columns, symbolWidth, rows, symbolHeight);
+        ModuleBoundaryReader.ReadRunInteriors(luminance, width, height, threshold, centerX, centerY, vX, vY, uX, uY, rows, symbolHeight, columns, symbolWidth);
+        if (!ModuleBoundaryReader.TryFillBoundaries(columns, symbolWidth) || !ModuleBoundaryReader.TryFillBoundaries(rows, symbolHeight))
+            return false;
+
+        frame = new AxisAlignedFrame(centerX, centerY, uX, uY, vX, vY);
+        return true;
     }
 
     /// <summary>
