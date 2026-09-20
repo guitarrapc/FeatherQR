@@ -33,7 +33,7 @@ internal struct FinderPattern
 /// </para>
 /// <para>
 /// The scan strides over rows: the band of rows showing the 1:1:3:1:1 signature is 3 modules tall for an axis-aligned symbol (under rotation the ratios drift off-centre and it narrows — see CandidateRowStride), and although the module size is unknown before detection, the worst case (a version-40 symbol filling the frame) bounds it from below, so a stride of 3·height/(4·177) hits the band of every supported axis-aligned symbol.
-/// When TryFind's stride pass cannot select a consistent triple, the rows it skipped are scanned as a complementary pass, together exactly one full-image sweep, so its striding cannot lose a symbol a full scan would find — that fallback, not the stride arithmetic, is what makes TryFind safe under rotation too.
+/// When TryFind's stride pass cannot select a consistent triple, or selects a poor one with once-seen candidates left out, the rows it skipped are scanned as a complementary pass, together exactly one full-image sweep, so its striding cannot lose a symbol a full scan would find — that fallback, not the stride arithmetic, is what makes TryFind safe under rotation too.
 /// On net8.0+ each row is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any 128-bit acceleration) and walked run-by-run via trailing-zero counts instead of pixel-by-pixel (measured ~11x combined on the found path on x64 and 3.3-4.1x on Apple M2).
 /// </para>
 /// </remarks>
@@ -115,11 +115,9 @@ internal static class FinderPatternFinder
 
     private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, bool forceScalar, Span<FinderPattern> patterns)
     {
-        // Row stride bound: a v40 symbol filling the frame has module size
-        // height/177, so its 3-module center band is 3·height/177 px tall and a
-        // stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol
-        // occupies half the frame), enough for the Count-based confirmation in
-        // TrySelectBestThree. Smaller strides than 3 don't pay for themselves.
+        // Row stride bound: a v40 symbol filling the frame has module size height/177.
+        // Its 3-module center band is 3·height/177 px tall and a stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol occupies half the frame), enough for the Count-based confirmation in TrySelectBestThree.
+        // Smaller strides than 3 don't pay for themselves.
         var stride = Math.Max(3, 3 * height / (4 * MaxSymbolModules));
 
         Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
@@ -132,16 +130,16 @@ internal static class FinderPatternFinder
 
         if (stride > 1)
         {
-            // Select on a copy: TrySelectBestThree compacts and sorts in place,
-            // and a failed selection must leave the list intact for the rescan.
+            // Select on a copy: TrySelectBestThree compacts and sorts in place, and a failed selection must leave the list intact for the rescan.
             Span<FinderPattern> scratch = stackalloc FinderPattern[MaxCandidates];
             candidates.Slice(0, candidateCount).CopyTo(scratch);
-            if (TrySelectBestThree(scratch.Slice(0, candidateCount), patterns))
+            // A stride can hit a real finder's band once while a false candidate is confirmed; a poor triple with candidates left out is not an answer yet.
+            var strideSelected = TrySelectBestThree(scratch.Slice(0, candidateCount), patterns, out var unconfirmedLeftOut);
+            if (strideSelected && !unconfirmedLeftOut)
                 return true;
 
-            // Complementary rescan: only the rows the stride pass skipped, keeping
-            // its candidates. Covers exactly the rows of a full scan, so the
-            // detection envelope cannot regress; costs one full sweep in total.
+            // Complementary rescan: only the rows the stride pass skipped, keeping its candidates. Covers exactly the rows of a full scan, so the
+            // detection envelope cannot regress. Costs one full sweep in total.
             for (var baseY = 0; baseY < height; baseY += stride)
             {
                 var limit = Math.Min(baseY + stride, height);
@@ -150,19 +148,49 @@ internal static class FinderPatternFinder
                     ScanRow(luminance, width, height, threshold, y, forceScalar, candidates, ref candidateCount);
                 }
             }
+
+            if (strideSelected)
+            {
+                // A keystoned real triple scores poorly too, and the rows that confirm its finders confirm false candidates inside the symbol with them, over less of their height. The sweep's triple has to be confirmed over as much.
+                var strideHeight = ConfirmedHeight(candidates.Slice(0, candidateCount), patterns);
+                Span<FinderPattern> swept = stackalloc FinderPattern[3];
+                if (TrySelectBestThree(candidates.Slice(0, candidateCount), swept)
+                    && ConfirmedHeight(swept, swept) >= strideHeight)
+                {
+                    swept.CopyTo(patterns);
+                }
+                return true;
+            }
         }
 
         return TrySelectBestThree(candidates.Slice(0, candidateCount), patterns);
     }
 
+    /// <summary>
+    /// Height the full sweep confirmed a triple over, in modules: each pattern's rows are read from the swept candidate it merged into.
+    /// In modules because a false candidate of twice the module size is confirmed on as many rows as a real finder.
+    /// </summary>
+    private static float ConfirmedHeight(ReadOnlySpan<FinderPattern> candidates, ReadOnlySpan<FinderPattern> triple)
+    {
+        var modules = 0f;
+        for (var t = 0; t < 3; t++)
+        {
+            for (var i = 0; i < candidates.Length; i++)
+            {
+                if (Math.Abs(candidates[i].X - triple[t].X) <= candidates[i].ModuleSize && Math.Abs(candidates[i].Y - triple[t].Y) <= candidates[i].ModuleSize)
+                {
+                    modules += candidates[i].Count / candidates[i].ModuleSize;
+                    break;
+                }
+            }
+        }
+        return modules;
+    }
+
     private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, bool forceScalar, Span<FinderPattern> candidates, ref int candidateCount)
     {
 #if NET8_0_OR_GREATER
-        // SIMD path: classify pixels into a dark bitmask with vector compares
-        // (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then
-        // walk RUNS via tzcnt instead of pixels, result bit-identical to the
-        // scalar walk. Vector256 acceleration implies Vector128, so one gate covers
-        // x64, ARM64 and WASM SIMD.
+        // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels, result bit-identical to the scalar walk. Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
         if (!forceScalar && Vector128.IsHardwareAccelerated && width >= 16)
         {
             ScanRowMask(luminance, width, height, threshold, y, candidates, ref candidateCount);
@@ -221,16 +249,13 @@ internal static class FinderPatternFinder
                 continue;
             }
 
-            // Window full (5 runs) and the 5th (dark) run just completed: evaluate,
-            // then shift out the oldest dark/light pair; the window still starts
-            // with a dark run and the incoming light run continues at index 3.
+            // Window full (5 runs) and the 5th (dark) run just completed: evaluate, then shift out the oldest dark/light pair; the window still starts with a dark run and the incoming light run continues at index 3.
             if (IsFinderRatio(runs))
             {
                 TryAddCandidate(luminance, width, height, threshold, runs, x, y, candidates, ref candidateCount);
             }
 
-            // Shift out the oldest dark/light pair; the window still starts
-            // with a dark run and the incoming light run continues at index 3.
+            // Shift out the oldest dark/light pair; the window still starts with a dark run and the incoming light run continues at index 3.
             runs[0] = runs[2];
             runs[1] = runs[3];
             runs[2] = runs[4];
@@ -257,8 +282,7 @@ internal static class FinderPatternFinder
     /// </summary>
     private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
-        // The mask covers a full row; keep the common case on the stack (512 B
-        // covers rows up to ~4000 px) and rent for wider images.
+        // The mask covers a full row; keep the common case on the stack (512 B covers rows up to ~4000 px) and rent for wider images.
         var maskLength = ((width + 63) >> 6) + 1;
         ulong[]? rented = maskLength > 64 ? ArrayPool<ulong>.Shared.Rent(maskLength) : null;
         Span<ulong> mask = rented is null ? stackalloc ulong[64] : rented;
@@ -287,16 +311,12 @@ internal static class FinderPatternFinder
                 }
                 else
                 {
-                    // 128-bit lanes: LessThan on byte lanes is an unsigned compare
-                    // (cmhi on NEON), so no min-trick is needed.
+                    // 128-bit lanes: LessThan on byte lanes is an unsigned compare (cmhi on NEON), so no min-trick is needed.
                     var thr = Vector128.Create(threshold);
                     if (AdvSimd.Arm64.IsSupported)
                     {
-                        // NEON has no movemask; fold 64 pixels straight into one mask
-                        // word instead: 4 compares select per-byte bit weights, 3
-                        // pairwise adds reduce them (simdjson bulk-movemask shape).
-                        // Measured ~8-11% over per-16 ExtractMostSignificantBits and
-                        // 3.3-4.1x over the scalar walk on Apple M2
+                        // NEON has no movemask; fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, 3 pairwise adds reduce them (simdjson bulk-movemask shape).
+                        // Measured ~8-11% over per-16 ExtractMostSignificantBits and 3.3-4.1x over the scalar walk on Apple M2
                         for (; i + 64 <= width; i += 64)
                         {
                             var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;
@@ -322,11 +342,7 @@ internal static class FinderPatternFinder
                     mask[i >> 6] |= 1ul << (i & 63);
             }
 
-            // Walk dark runs. The scalar window is [dark, light, dark, light, dark],
-            // evaluated whenever its 5th run (a dark run) completes, at its
-            // dark→light transition or at the end of the row. That is: at the end
-            // of every dark run from the third onward, with the window being that
-            // run plus the two dark runs (and light gaps) before it.
+            // Walk dark runs. The scalar window is [dark, light, dark, light, dark], evaluated whenever its 5th run (a dark run) completes, at its dark→light transition or at the end of the row. That is: at the end of every dark run from the third onward, with the window being that run plus the two dark runs (and light gaps) before it.
             var darkStart = NextBit(mask, 0, width, set: true);
             var dPrev2 = 0; // dark run k-2
             var gPrev1 = 0; // light gap between k-2 and k-1
@@ -369,8 +385,7 @@ internal static class FinderPatternFinder
     /// <summary>Int-argument twin of the span <see cref="IsFinderRatio(ReadOnlySpan{int})"/> with identical float math.</summary>
     private static bool IsFinderRatio(int r0, int r1, int r2, int r3, int r4)
     {
-        // Runs from the mask walk are never zero (a gap between two dark runs is
-        // at least one light pixel); the total check mirrors the span version.
+        // Runs from the mask walk are never zero (a gap between two dark runs is at least one light pixel); the total check mirrors the span version.
         var total = r0 + r1 + r2 + r3 + r4;
         if (total < 7)
             return false;
@@ -604,7 +619,16 @@ internal static class FinderPatternFinder
     /// Module size alone cannot decide: a render at a whole number of pixels per module measures every candidate, false ones included, at exactly the same size.
     /// </remarks>
     internal static bool TrySelectBestThree(Span<FinderPattern> candidates, Span<FinderPattern> patterns)
+        => TrySelectBestThree(candidates, patterns, out _);
+
+    /// <summary>
+    /// <paramref name="unconfirmedLeftOut"/> is set when candidates seen on one row were dropped and the triple selected without them scores past <see cref="DoubtfulTripleScore"/>.
+    /// Under a row stride the counts are undercounts, so that is when the dropped ones deserve their rows.
+    /// </summary>
+    internal static bool TrySelectBestThree(Span<FinderPattern> candidates, Span<FinderPattern> patterns, out bool unconfirmedLeftOut)
     {
+        unconfirmedLeftOut = false;
+
         // Confirmed candidates (seen in multiple rows) are far more trustworthy
         var confirmed = 0;
         for (var i = 0; i < candidates.Length; i++)
@@ -614,7 +638,8 @@ internal static class FinderPatternFinder
         }
 
         // Compact to the confirmed subset when it is large enough to choose from
-        if (confirmed >= 3 && confirmed < candidates.Length)
+        var compacted = confirmed >= 3 && confirmed < candidates.Length;
+        if (compacted)
         {
             var w = 0;
             for (var i = 0; i < candidates.Length; i++)
@@ -625,6 +650,30 @@ internal static class FinderPatternFinder
             candidates = candidates.Slice(0, w);
         }
 
+        if (!TrySelectScored(candidates, patterns))
+            return false;
+
+        unconfirmedLeftOut = compacted && TripleScore(patterns) > DoubtfulTripleScore;
+        return true;
+    }
+
+    /// <summary>
+    /// Past this score a triple chosen with unconfirmed candidates left out is worth a full sweep.
+    /// A flat symbol's triple scores up to 0.11 and one holding a false candidate 0.33 and up; a keystoned real triple scores higher still, and then pays only the sweep.
+    /// </summary>
+    private const float DoubtfulTripleScore = 0.25f;
+
+    /// <summary>The selection score of one triple: distance from a right isosceles triangle plus relative module-size spread.</summary>
+    private static float TripleScore(ReadOnlySpan<FinderPattern> triple)
+    {
+        var smallest = Math.Min(triple[0].ModuleSize, Math.Min(triple[1].ModuleSize, triple[2].ModuleSize));
+        var largest = Math.Max(triple[0].ModuleSize, Math.Max(triple[1].ModuleSize, triple[2].ModuleSize));
+        var skew = RightIsoscelesSkew(DistanceSquared(triple[0], triple[1]), DistanceSquared(triple[0], triple[2]), DistanceSquared(triple[1], triple[2]));
+        return float.IsNaN(skew) || !(smallest > 0f) ? float.MaxValue : skew + (largest - smallest) / smallest;
+    }
+
+    private static bool TrySelectScored(Span<FinderPattern> candidates, Span<FinderPattern> patterns)
+    {
         if (candidates.Length < 3)
             return false;
 
@@ -634,8 +683,7 @@ internal static class FinderPatternFinder
             return true;
         }
 
-        // More than 3: score every triple. Sorted by module size, the size term only
-        // grows along j and k, so it bounds the loops without rejecting anything.
+        // More than 3: score every triple. Sorted by module size, the size term only grows along j and k, so it bounds the loops without rejecting anything.
         // Insertion sort: netstandard2.0 has no Span.Sort, and the list is tiny (≤ 32).
         for (var i = 1; i < candidates.Length; i++)
         {
@@ -649,9 +697,8 @@ internal static class FinderPatternFinder
             candidates[j + 1] = current;
         }
 
-        // Pass 1 finds the best score; pass 2 takes the most confirmed triple within
-        // the tolerance of it. One pass with a running tie rule could chain small
-        // differences and drift past the tolerance.
+        // Pass 1 finds the best score; pass 2 takes the most confirmed triple within the tolerance of it.
+        // One pass with a running tie rule could chain small differences and drift past the tolerance.
         int bestI = 0, bestJ = 1, bestK = 2;
         var bestScore = float.MaxValue;
         for (var pass = 0; pass < 2; pass++)
