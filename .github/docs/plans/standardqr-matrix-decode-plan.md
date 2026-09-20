@@ -27,10 +27,11 @@ None of this is Structured Append specific. The same two stages run for every St
 
 | In | Out |
 |---|---|
-| `QRMatrixDecoder.ExtractCodewords`: a table-driven fast path, the current walk kept as the reference | Reed-Solomon and deinterleave: 2 % together, already vectorized or trivially cheap |
-| `QRCodeData.GetCoreData`, routed through the encoder's vector bit expansion | A second, packed-bit extract kernel, unless phase 4 measures a reason for one |
+| `QRMatrixDecoder.ExtractCodewords`: a table-driven fast path, the current walk kept as the reference | `EccBinaryDecoder`'s correction path, its x64 and scalar tiers, and everything else the ECC decoder does. Phase 5 takes its ARM64 syndrome pass alone |
+| `QRCodeData.GetCoreData`, routed through the encoder's vector bit expansion | A second, packed-bit extract kernel, unless phase 4 measures a reason for one. It measured none |
 | The unmask step, moved out of the per-module loop | The image decoder's detection and sampling stages. They gain from the faster matrix decode without being touched |
 | `BitReader.Reads` and the Byte payload path of `SegmentDecoders` (phase 3, after the extract change makes it the largest stage) | Micro QR and rMQR extraction. rMQR has its own bit-plane kernel; Micro QR symbols are at most 17 modules a side |
+| `EccBinaryDecoder`'s ARM64 syndrome kernel, and `DeinterleaveCodewords` behind it (phase 5). The 2 % that put them out of this plan was an x64 figure; on ARM64 they are 40 % of a version 40 decode | The image decoder's own stages, and Micro QR and rMQR, which share the ECC decoder but not this plan's shapes |
 | The doc comment of `QRCodeStructuredAppendDecode`, which states the Ratio column is the header's cost | Public API. Nothing is added or changed |
 | `specs/standardqr-decoder.md`: Decisions, Lessons, and the zero-allocation paragraph | A bit-plane PEXT kernel for Standard QR unless phase 2 leaves a measured reason for one (see Approach) |
 
@@ -97,6 +98,14 @@ A tie against today's unpack, 3.6 us behind once the unpack is the vector one. W
 2. Byte payload in one pass: a copy when the payload is byte aligned, `(d[i] << s) | (d[i + 1] >> (8 - s))` otherwise. With a Structured Append header at version 10 and above the payload starts at bit 40, aligned.
 3. UTF-8 in one pass on net8.0 and later (`Utf8.ToUtf16` validates and transcodes), in place of `IsValidUtf8`, `GetCharCount` and `GetChars`.
 
+### 6. Reed-Solomon on ARM64 (phase 5, nothing prototyped yet)
+
+Phase 4 left one stage bigger than this plan assumed. `EccBinaryDecoder.TryCorrect` over clean version 40 blocks costs 5.4 us on the M2 against 1.7 on the x64 box, 28 % of what a decode now is, and `DeinterleaveCodewords` 2.5 against 1.8; together 40 % of an ARM64 version 40 decode where the x64 profile that wrote them out of Scope read 2 %.
+
+The syndrome pass is the only cost a clean block pays and the likely cause. It has three tiers (`EccBinaryDecoder.cs`): GFNI on net10.0+ x64, where one instruction is the GF(2^8) multiply; AdvSimd on ARM64, which builds the same product from table lookups and a reduction; and a scalar log-domain path elsewhere. ARM64 has no GFNI, but it has PMULL and PMULL2, which is the usual way to do GF(2^8) without it, and the current kernel does not use them. That is the first hypothesis and it is a hypothesis, not a finding: no variant has been written or measured.
+
+Two things constrain the work before it starts. The stage figure above came from a harness that timed `TryCorrect` inside a loop with a restore copy subtracted out, so phase 5 re-measures it on its own before treating it as a baseline. And a destination span shorter than the kernel's store width throws on the GFNI tier but silently corrupts the caller's stack on ARM64, which is why `EccBinaryDecoderKernelParityTest` pins the store width from the kernel side; a new kernel is held to the same pin.
+
 ### Considered and deferred: a bit-plane PEXT kernel
 
 rMQR extracts through column bit planes with one PEXT and one PDEP per column. Its columns are at most 15 data rows and fit a `ushort`; a Standard QR column is up to 177 rows, so the planes need 8-row bands and three 64-bit words a column. The paper estimate is 6 to 8 us against the 10 us the run walk already measures, for a kernel that needs a fast-PEXT gate, an ARM64 tier and a portable tier. It is reopened only if extraction is still a stage worth naming after phase 3.
@@ -121,8 +130,9 @@ Each phase follows the test-first workflow, updates the decoder spec in the same
 | 1 | **P0** | Measure | Stage profile, mask dependence, the three extract prototypes | Done, see Progress log |
 | 2 | **P0** | Extract fast path | Parity tests first (red), then the run walk with the periodic mask table; per-op setup tuned; `GetCoreData` through `ExpandBits`; `ExtractCodewords` renamed to the reference and kept; benchmark doc comment corrected | Done, see Progress log. Byte-identical streams for all 40 versions x 8 masks on random grids, on grids with non-zero dark bytes other than 1, on the all-light and all-dark grids, and with the output shortened by 0 to 20 bytes and to arbitrary lengths so the stream ends inside a run, between the two modules of a row and inside a scatter range; `GetCoreData` byte-identical to its current output for every version; every mask table entry equal to the predicate; planted faults (a run one row short, a wrong row phase step, the pair order swapped, a dropped last byte) each fail a test; allocation test unchanged and no per-version allocation added; kernel ratio and end-to-end delta reported |
 | 3 | P1 | Bit stream reader | The three reader candidates above, one hypothesis a variant | Done, see Progress log. Decoded text and status identical over the existing decoder tests and fixtures, including every malformed-stream status; truncated streams at every bit offset still return `InvalidBitstream` rather than reading past the end; ratio and delta reported |
-| 4 | P1 | ARM64 measurement | Four arms in one run on the ARM64 machine: today, byte run walk, byte run walk behind the vector unpack, packed run walk; versions 1, 10 and 39 or 40; the `QRCodeData` entry and the span entry separately | A number per arm, entry and size; the packed walk kept only if it beats the byte walk behind the vector unpack by more than a second kernel is worth, otherwise recorded as refuted |
-| 5 | P2 | Fold | Decisions and measurements into `specs/standardqr-decoder.md`; this plan deleted | The spec carries what was decided and why |
+| 4 | P1 | ARM64 measurement | Four arms in one run on the ARM64 machine: today, byte run walk, byte run walk behind the vector unpack, packed run walk; versions 1, 10 and 39 or 40; the `QRCodeData` entry and the span entry separately | Done, see Progress log. A number per arm, entry and size on an Apple M2, five processes of 15 rounds, with two arms of identical code carried as the run's noise canary; the packed run walk loses at every size and on both entries and is recorded as refuted |
+| 5 | P1 | Reed-Solomon on ARM64 | Re-measure `EccBinaryDecoder.TryCorrect` on its own over clean blocks; read the AdvSimd syndrome kernel's disassembly and say where the time goes; then one hypothesis a variant, PMULL first. `DeinterleaveCodewords` only after the syndrome question is settled either way | A same-run number per variant against the current AdvSimd kernel, with the x64 tiers read on a machine that has them and no ARM64 ratio quoted for x64 or the reverse; every variant held to the scalar log-domain path over every ECC count Standard QR, Micro QR and rMQR use, and to the store-width pin, before it is timed; a winner ships behind the existing tier gate with `EccBinaryDecoderKernelParityTest` extended, a loser is recorded as refuted with its numbers. Either way the end-to-end delta comes from `QRCodeDecodeEndToEnd` and `QRCodeStructuredAppendDecode` on ARM64 |
+| 6 | P2 | Fold | Decisions and measurements into `specs/standardqr-decoder.md`, and the ECC ones into `specs/qrcode-symbologies.md`, where the shared Reed-Solomon components are recorded; this plan deleted | The spec carries what was decided and why |
 
 ## Verification notes
 
@@ -216,3 +226,55 @@ One round of the three had an outlier on the after side (mixed-40k-opt 24.5 / 23
 Small symbols, since Micro QR and rMQR read through the same reader (same A/B, string overloads, minimum of three rounds, ns): Standard QR version 1 Numeric 309 -> 248, version 1 Alphanumeric 406 -> 280, a version 6 URL 948 -> 546; Micro QR Numeric 329 -> 303, Alphanumeric 501 -> 423, Byte 672 -> 508; rMQR Numeric 241 -> 202, Alphanumeric 368 -> 235, Byte 920 -> 377. Nothing slower. The Micro QR rows were bimodal between rounds on both sides (Alphanumeric 500 or 950), so only their minimum means anything.
 
 BenchmarkDotNet against its own phase 2 report: `QRCodeStructuredAppendDecode` byte-45k-any 696 -> 267 us a set, mixed-40k-opt 614 -> 248, numeric-100k-any 718 -> 343, utf8-15k-any 258 after (its phase 2 row was not usable), byte-4k-max10 66 -> 27; `QRCodeDecodeEndToEnd` version 40-L 43.2 -> 16.6 us, version 6 URL 1,628 -> 916 ns, version 1 Numeric 359 -> 292 ns. Allocated unchanged on every row of every class, the `Span` overloads at zero bytes in all three symbologies. Errors on this box were again a third of the mean or more, so these are for the allocation column and the order of magnitude; the A/B above is the measurement.
+
+### Phase 4, ARM64 measurement (2026-09-21)
+
+Done: the four arms in one process on an Apple M2 (macOS 26.6.2, .NET 10.0.9, arm64, 8 cores, workstation GC), through a harness that compiles the library sources and swaps nothing but the extract kernel and the unpack; versions 1, 10 and 40; the `QRCodeData` entry and the span entry separately; five processes of 15 rounds each, minimum per round, the arm order rotated every round and every arm warmed by time. The packed run walk does not exist in the tree, so it was written for this run against the same `Ops` and the same periodic mask table as the byte walk, and gated before anything was timed: its stream equals the reference walk's over 40 versions x 8 masks x 3 random grids x 5 output lengths (4,800 cases, the byte walk checked alongside it), its copy of the mask table equals the library's entry for entry, and every arm decodes every fixture to the same text through both entries. Every arm allocates zero bytes a decode on both entries. No source file changed.
+
+End to end, us per decode, minimum of 15 rounds, range over the five processes:
+
+| `QRCodeData` entry | today | byte run walk + SWAR unpack | byte run walk + vector unpack | packed run walk |
+|---|---:|---:|---:|---:|
+| version 1, Byte | 1.17 to 1.24 | 0.31 to 0.32 | 0.28 | 0.30 |
+| version 10, Byte | 9.75 to 12.72 | 2.37 to 2.39 | 2.06 to 2.08 | 2.49 to 2.54 |
+| version 40, Byte | 166.7 to 186.3 | 22.60 to 22.67 | 19.14 to 19.59 | 24.15 to 24.61 |
+| version 40, Numeric | 122.3 to 155.5 | 28.40 to 28.62 | 25.33 to 25.55 | 29.90 to 30.51 |
+
+| Span entry (no unpack) | today | run walk | run walk, second arm of the same code |
+|---|---:|---:|---:|
+| version 1, Byte | 1.12 to 1.18 | 0.26 | 0.26 to 0.27 |
+| version 10, Byte | 9.27 to 12.42 | 2.00 to 2.02 | 1.96 to 2.02 |
+| version 40, Byte | 160.0 to 181.0 | 19.03 to 19.12 | 18.84 to 19.07 |
+| version 40, Numeric | 115.8 to 152.1 | 24.67 to 24.97 | 24.61 to 24.97 |
+
+The last two columns are one arm entered twice, as the run's noise canary: their spread is 0.0 to 1.6 %, and 0.7 % or less on 18 of the 20 rows.
+
+Stages on their own, us, same runs:
+
+| | unpack SWAR | unpack vector | extract reference | extract byte run walk | extract packed run walk |
+|---|---:|---:|---:|---:|---:|
+| version 1 | 0.050 to 0.051 | 0.010 to 0.011 | 0.84 to 0.90 | 0.097 | 0.134 to 0.137 |
+| version 10 | 0.368 to 0.373 | 0.055 to 0.056 | 7.34 to 9.19 | 1.03 to 1.06 | 1.55 to 1.59 |
+| version 40 | 3.47 to 3.53 | 0.501 to 0.502 | 93.0 to 147.5 | 9.94 to 10.20 | 15.28 to 15.74 |
+
+Verdict: **the packed run walk is refuted**. It loses on every size and on the only entry it could serve, by 1.07x to 1.10x at version 1, 1.21x to 1.23x at version 10 and 1.18x to 1.28x at version 40, which is 5.0 us of a 19.6 us decode. To break even its kernel would have to fall from 15.7 to 10.7 us, a 32 % cut, and there is no slack of that size in it: it pays a variable-shift field extract per row where the byte walk pays one 16-bit load per row and shares one SWAR step and one multiply across four. Nothing gates a second kernel, so the `QRCodeData` entry keeps the byte walk behind the vector unpack, and section 4 of Approach is settled.
+
+ARM64 did not reorder the forms. Every kernel figure lands on the x64 prototype's: byte run walk 10.2 against 10.2 to 11.0, packed walk 15.7 against 14.4 to 15.1, SWAR unpack 3.5 against 3.7 to 3.9, vector unpack 0.50 against 0.37 to 0.40. The packed walk's penalty is if anything larger here, 1.47x at the kernel against x64's 1.32x.
+
+Stage profile of the shipped path on this machine, us, version 40 level L (the columns sum to within 2 % of the end-to-end figure beside them):
+
+| | vector unpack | extract | deinterleave | ECC, every block, clean | bit stream | end to end |
+|---|---:|---:|---:|---:|---:|---:|
+| version 40, Byte | 0.50 | 10.2 | 2.5 | 5.4 | 0.66 | 19.6 |
+| version 40, Numeric | 0.50 | 10.1 | 2.5 | 5.4 | 6.7 | 25.4 |
+| version 10, Byte | 0.06 | 1.05 | 0.25 | 0.49 | 0.08 | 2.07 |
+| version 1, Byte | 0.01 | 0.10 | 0.03 | 0.03 | 0.03 | 0.28 |
+
+Lessons:
+- Two arms running identical code were the most useful column in the table. Their spread is what makes a 24 % gap a verdict instead of an opinion, and it cost one enum value. Without it the only defence of a 5 us difference would have been the number of rounds behind it.
+- ARM64 changed nothing about the ordering and everything about what is left. Deinterleave and Reed-Solomon were 2 % of a decode when this plan started (1.8 and 1.7 us of 172) and were written out of Scope on that basis; on this machine they are 2.5 and 5.4 us of 19.6, 40 % together, with the ECC stage about 3x its x64 figure for the same version and level. The stage phase 1 dismissed as already vectorized is now the second largest, and it took a different back end to say so. It is phase 5.
+- A capability-gated test is evidence only on a machine with the capability. Phase 2 routed `GetCoreData` through `ModulePlacer.ExpandBits`, whose `ExpandBitsAdvSimd` parity test is gated on `AdvSimd.Arm64.IsSupported` and had therefore been skipped on every x64 run of phases 2 and 3. It executed for the first time here, and passed, as did the rest of the suite (12,013 tests Release and 12,003 Debug, net10.0; net8.0 could not run, that runtime is not installed on this machine).
+- The slowest arm was the least reproducible one. The reference walk's version 40 Numeric figure ranged 93 to 118 us across the five processes while its version 40 Byte figure held at 140 to 147, and no cause was pinned down. Nothing rests on it: every verdict here is between arms that reproduce inside 2 %.
+- The deferred PEXT kernel's reopening condition has fired and its estimate has not survived the move. Extraction is 10.2 of 19.6 us, 52 % of a version 40 decode and the largest stage, which is the "still a stage worth naming after phase 3" test. But the 6 to 8 us behind it was a PEXT estimate, and ARM64 has no PEXT; on this machine the question is what a NEON form would cost, and the rows of a run are a row apart in memory, so it would have to gather. Phase 6 decides whether to reopen it or close it.
+
+Not measured, and left that way on purpose: the index gather, which phase 1 set aside on memory rather than speed and which is not one of the four arms; and the browser check named in the Risks table, which needs the `wasm-tools` workload this machine does not have.
