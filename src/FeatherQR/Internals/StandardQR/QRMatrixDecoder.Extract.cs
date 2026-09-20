@@ -49,7 +49,8 @@ internal static partial class QRMatrixDecoder
             if (op.IsRun)
             {
                 var rows = op.Count;
-                // A run cut by the stream end may append one bit too many; it never completes a byte.
+                // Ceiling, not floor: a stream that ends between the two modules of a row still holds the right one.
+                // The left one rides along as bit totalBits and is never stored: totalBits is a multiple of 8, so it would open a new byte, and a store takes the eight bits above the pending ones.
                 if (op.Start + 2 * rows > totalBits)
                     rows = (totalBits - op.Start + 1) / 2;
 
