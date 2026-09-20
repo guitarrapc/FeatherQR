@@ -38,7 +38,7 @@ public class RmQRCodeDecoderImageTest
     /// A symbol half a pixel off the pixel grid, edge pixels grey: 64 is below the threshold
     /// (every dark run a pixel wider), 192 above it (a pixel narrower). The finder's module
     /// size used to be measured across its two outer edges, which move apart under ink spread,
-    /// and at 3 px/module that failed every version (regression, F12 in the 2.0.0 plan).
+    /// and at 3 px/module that failed every version (regression).
     /// </summary>
     [Test]
     [Arguments(RmQRVersion.R7x43, 3, 64)]

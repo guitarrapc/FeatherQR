@@ -1,4 +1,5 @@
 using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.SkiaSharp;
 
 namespace FeatherQR.Tests;
 
@@ -32,8 +33,9 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
-    /// The F10 shape: all four candidates measure the same module size, the false one is
-    /// confirmed on fewer rows, and the scan found it before the real bottom-left finder.
+    /// A whole number of pixels per module: all four candidates measure the same module size,
+    /// the false one is confirmed on fewer rows, and the scan found it before the real
+    /// bottom-left finder.
     /// </summary>
     [Test]
     public async Task Select_EqualModuleSizes_FalseCandidateScannedFirst_PicksTheRealTriple()
@@ -119,6 +121,73 @@ public class FinderPatternSelectionTest
         await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 64f), (64f, 196f) });
     }
 
+    /// <summary>
+    /// A builder render at about 1.9 px/module, as measured on v19-H at 195 px: the strided scan
+    /// hit the real bottom-left finder once and a false candidate of twice the module size
+    /// twice. The selection still
+    /// leaves the unconfirmed one out, and says so, which is what sends the scan over the
+    /// rows it skipped.
+    /// </summary>
+    [Test]
+    public async Task Select_ConfirmedThreeAreNoTriple_UnconfirmedLeftOut_IsFlagged()
+    {
+        FinderPattern[] candidates = [Fp(14.5f, 14.5f, 1.857f, 2), Fp(180.5f, 14.5f, 1.857f, 2), Fp(28f, 165f, 3.429f, 2), Fp(14.5f, 180.5f, 1.857f, 1)];
+
+        foreach (var order in Permutations([0, 1, 2, 3]))
+        {
+            var (selected, leftOut) = SelectFlagged(order.Select(i => candidates[i]).ToArray());
+            await Assert.That(selected).IsEquivalentTo(new[] { (14.5f, 14.5f), (180.5f, 14.5f), (28f, 165f) }).Because(string.Join(",", order));
+            await Assert.That(leftOut).IsTrue().Because(string.Join(",", order));
+        }
+    }
+
+    [Test]
+    public async Task Select_FourConfirmedHoldNoTriple_UnconfirmedLeftOut_IsFlagged()
+    {
+        FinderPattern[] candidates =
+        [
+            Fp(14.5f, 14.5f, 1.857f, 2), Fp(180.5f, 14.5f, 1.857f, 2), Fp(28f, 165f, 3.429f, 2), Fp(120f, 60f, 1.857f, 2),
+            Fp(14.5f, 180.5f, 1.857f, 1),
+        ];
+
+        var (_, leftOut) = SelectFlagged(candidates);
+
+        await Assert.That(leftOut).IsTrue();
+    }
+
+    /// <summary>
+    /// The bound: a confirmed triple scoring 0.24 is taken as it is, one scoring 0.33 is flagged.
+    /// Neither lets the unconfirmed candidate into the triple, perfect corner though it is.
+    /// </summary>
+    [Test]
+    [Arguments(75f, false)]
+    [Arguments(80f, true)]
+    public async Task Select_ConfirmedTripleScore_DecidesTheFlag(float skewedX, bool expected)
+    {
+        FinderPattern[] candidates = [Fp(60, 60, 8, 8), Fp(200, 60, 8, 8), Fp(skewedX, 200, 8, 8), Fp(60, 200, 8, 1)];
+
+        var (selected, leftOut) = SelectFlagged(candidates);
+
+        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 60f), (skewedX, 200f) });
+        await Assert.That(leftOut).IsEqualTo(expected);
+    }
+
+    /// <summary>
+    /// Nothing is flagged when nothing was left out, however poor the triple: every candidate
+    /// confirmed, or too few confirmed to choose from, in which case all of them were scored.
+    /// </summary>
+    [Test]
+    [Arguments(2)]
+    [Arguments(1)]
+    public async Task Select_PoorTripleWithNothingLeftOut_IsNotFlagged(int thirdAndFourthCount)
+    {
+        FinderPattern[] candidates = [Fp(100, 100, 8, 2), Fp(200, 100, 8, 2), Fp(150, 110, 8, thirdAndFourthCount), Fp(150, 90, 8, thirdAndFourthCount)];
+
+        var (_, leftOut) = SelectFlagged(candidates);
+
+        await Assert.That(leftOut).IsFalse();
+    }
+
     [Test]
     public async Task Select_TwoSymbolsInTheFrame_DoesNotMixThem()
     {
@@ -152,8 +221,9 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
-    /// The corpus symbol that exposed the defect (F10), rendered axis-aligned from its matrix
-    /// at every density: from 5 px/module up its false candidate is confirmed and used to win.
+    /// A corpus symbol whose alignment pattern and two data modules read as a finder, rendered
+    /// axis-aligned from its matrix at every density: from 5 px/module up its false candidate is
+    /// confirmed and used to win.
     /// </summary>
     [Test]
     [Arguments(3)]
@@ -193,6 +263,48 @@ public class FinderPatternSelectionTest
         var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var found = FinderPatternFinder.FindCandidatesFullSweep(luminance, side, side, 128, candidates);
         await Assert.That(candidates.Take(found).Count(c => c.Count >= 2)).IsGreaterThan(3).Because("the symbol no longer carries a confirmed false finder: pick another from the sweep");
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{info.Status}, version {info.Version}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// Builder renders at about 1.9 px/module whose real bottom-left finder the strided scan hits
+    /// on one row while a false candidate is confirmed on two: the confirmed three are not a
+    /// finder triple, and the rows the stride skipped have to be scanned before one is chosen.
+    /// </summary>
+    [Test]
+    [Arguments(19, QREccLevel.H, 195, "HELLO WORLD")]
+    [Arguments(34, QREccLevel.M, 312, "HELLO")]
+    public async Task Decode_RealFinderSeenOnOneRow_ConfirmedFalseCandidate_Reads(int version, QREccLevel eccLevel, int sizePx, string content)
+    {
+        var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { Version = version });
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+
+        var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"v{version} at {sizePx} px: {info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
+    /// <summary>
+    /// The other side of the same rule: keystoned renders whose real triple scores past the
+    /// bound, so the skipped rows are scanned, and the sweep then confirms a false candidate
+    /// inside the symbol that closes a better triangle than the real one. The stride's triple
+    /// has to stand: the sweep's must settle the doubt and be confirmed over as much height.
+    /// </summary>
+    [Test]
+    [Arguments("FQR40080", QREccLevel.L, 25, 5.8564177f, 343.29602f, 0.13052568f)]
+    [Arguments("FQR96565", QREccLevel.Q, 21, 4.240097f, 308.87686f, 0.15028752f)]
+    [Arguments("FQR83466", QREccLevel.M, 14, 4.7899146f, 174.98384f, 0.18623035f)]
+    [Arguments("FQR82781", QREccLevel.L, 24, 4.98759f, 268.47095f, 0.16650929f)]
+    public async Task Decode_KeystonedRealTripleScoresPoorly_SweptFalseCandidate_DoesNotDisplaceIt(string content, QREccLevel eccLevel, int version, float pixelsPerModule, float degrees, float keystone)
+    {
+        var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, side) = SupersampledRenderer.Render(qr, pixelsPerModule, degrees, keystone);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out var text, out var info);
 
@@ -247,6 +359,14 @@ public class FinderPatternSelectionTest
     }
 
     private static FinderPattern Fp(float x, float y, float moduleSize, int count) => new() { X = x, Y = y, ModuleSize = moduleSize, Count = count };
+
+    private static ((float X, float Y)[] Selected, bool UnconfirmedLeftOut) SelectFlagged(FinderPattern[] candidates)
+    {
+        var patterns = new FinderPattern[3];
+        if (!FinderPatternFinder.TrySelectBestThree(candidates, patterns, out var unconfirmedLeftOut))
+            throw new InvalidOperationException("no triple selected");
+        return (patterns.Select(p => (p.X, p.Y)).ToArray(), unconfirmedLeftOut);
+    }
 
     private static (float X, float Y)[] Select(FinderPattern[] candidates)
     {

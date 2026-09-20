@@ -17,8 +17,10 @@ public class RmQRFormatScaleTest
     private static string ContentFor(RmQRVersion version) => version == RmQRVersion.R7x43 ? "RMQR 43" : "RMQR 12345";
 
     /// <summary>
-    /// The renders F17 was filed on, and R11x77 at 140 px, which reads its copy exactly at a scale a
-    /// few percent off even upright; every right angle.
+    /// Builder renders at about 1.7 px/module whose finder measures 3.5-6 % over the symbol's
+    /// pitch, so the finder-side format copy does not read at the measured scale, and R11x77 at
+    /// 140 px, which reads its copy exactly at a scale a few percent off even upright; every
+    /// right angle.
     /// </summary>
     [Test]
     [Arguments(RmQRVersion.R11x77, 137)]
