@@ -58,7 +58,7 @@ Reference tests: [BinaryInterleaverParityTest](../../../tests/FeatherQR.Tests/Sh
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| - | Finder patterns, separators, timing patterns, dark module | [ModulePlacer](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.cs) (`PlaceFinderPatterns`, `ReserveSeparatorAreas`, `PlaceTimingPatterns`, `PlaceDarkModule`) |
+| - | Finder patterns, separators, timing patterns, dark module | [ModulePlacer](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.cs) (`PlaceFinderPatterns`, `ReserveSeparatorAreas`, `PlaceTimingPatterns`, `PlaceDarkModule`); the timing patterns are counted back by [QRImageDecoder.CountTimingDimension](../../../src/FeatherQR/Internals/StandardQR/QRImageDecoder.cs) to correct the image path's dimension estimate |
 | Annex E | Alignment pattern placement | [ModulePlacer.PlaceAlignmentPatterns](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.cs) |
 | Section 7.7.3 | Zigzag data placement (bottom-right, 2-column strips) | [ModulePlacer.PlaceDataWords](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.cs) (reference walk), [ModulePlacer.Layout](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.Layout.cs) (cached per-version template / mask / walk order, production path) |
 | Section 7.9 | Format information placement (two redundant copies) | [ModulePlacer.PlaceFormat](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.cs) |

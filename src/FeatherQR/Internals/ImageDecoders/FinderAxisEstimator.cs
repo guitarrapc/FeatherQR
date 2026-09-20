@@ -310,8 +310,8 @@ internal static class FinderAxisEstimator
         var phase = 0;
         for (var step = 1f; step <= maxRunLength; step += 1f)
         {
-            var x = (int)(startX + dirX * step + 0.5f);
-            var y = (int)(startY + dirY * step + 0.5f);
+            var x = (int)(startX + dirX * step);
+            var y = (int)(startY + dirY * step);
             if (x < 0 || x >= width || y < 0 || y >= height)
             {
                 // The outer dark ring may end exactly at the image edge (zero or

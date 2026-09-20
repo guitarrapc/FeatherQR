@@ -57,6 +57,12 @@ internal static class RmQRImageDecoder
     /// <summary>Grid coordinates of the finder center.</summary>
     private const float FinderCenter = 3.5f;
 
+    /// <summary>Finder-scale corrections tried for the finder-side format read, nearest the measured scale first.</summary>
+    private static readonly float[] FormatReadScales = [1f, 0.98f, 1.02f, 0.96f, 1.04f, 0.94f, 1.06f, 0.92f, 1.08f];
+
+    /// <summary>Finder module length, in pixels, from which only the measured scale is read.</summary>
+    private const float FormatScaleSearchMaxModule = 6f;
+
     /// <summary>
     /// Decodes an rMQR Code from grayscale pixels.
     /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails.
@@ -304,22 +310,83 @@ internal static class RmQRImageDecoder
         ref int attemptsRemaining)
     {
         charsWritten = 0;
-        var affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, uX, uY, vX, vY, 0f, 0f);
 
-        // The finder-side format copy sits within 12 modules of the finder, so the
-        // local frame reads it reliably even before any refinement.
-        var finderSideRaw = ReadFormatCopy(luminance, width, height, threshold, affine, subFinderSide: false, 0, 0);
-        if (!RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out var version, out _, out _))
+        // The finder-side format copy sits within 12 modules of the finder, so the local
+        // frame reads it before any refinement, as long as the finder's scale is close.
+        // A render that snaps modules to whole pixels can give the finder a scale 3-6 %
+        // off, most of a pixel at column 11 below 2 px/module, so the scales nearest the
+        // measured one are tried in turn. A corrected scale must read an exact codeword:
+        // within 3 bits, a quarter of random reads match one of the 64 words, so nine
+        // tries on noise would nearly always "read" a version and pay for its searches.
+        // Only while the larger of the finder's two axes measures under 6 px per module,
+        // a bound taken from measurement: the search buys fewer reads as the density rises
+        // and costs every other symbology's image its failure time. A trade, not a free cut (F18).
+        var moduleLength = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
+        var formatRead = false;
+        foreach (var scale in FormatReadScales)
         {
-            info = bestInfo;
-            return DecodeStatus.NotDetected;
+            if (scale != 1f && moduleLength >= FormatScaleSearchMaxModule)
+                break;
+            if (attemptsRemaining <= 0)
+                break; // nothing left to decode with: reading and searching would be waste
+            var affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * uX, scale * uY, scale * vX, scale * vY, 0f, 0f);
+            var finderSideRaw = ReadFormatCopy(luminance, width, height, threshold, affine, subFinderSide: false, 0, 0);
+            if (!RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out var version, out _, out var distance) || (scale != 1f && distance != 0))
+                continue;
+
+            formatRead = true;
+            var status = TryScaledFrame(
+                luminance, width, height, threshold, candidate,
+                scale * uX, scale * uY, scale * vX, scale * vY, version, affine,
+                modules, destination, out charsWritten, out info,
+                ref bestStatus, ref bestInfo, ref attemptsRemaining, out var anchoredStatus);
+
+            // A copy can read exactly at a scale a few percent off, and a frame built on
+            // it fails where the next scale reads; so the search goes on while frames fail.
+            // Once frames anchored on the sub-finder read format information, a failure is
+            // the data's: on a damaged symbol every later scale only repeated them.
+            if (IsTerminal(status))
+                return status;
+            if (IsPlausibleRefinement(anchoredStatus))
+                break;
         }
 
+        charsWritten = 0;
+        info = bestInfo;
+        return formatRead ? bestStatus : DecodeStatus.NotDetected;
+    }
+
+    /// <summary>
+    /// The frame at a scale whose finder-side format copy read <paramref name="version"/>: anchors the far end on the sub-finder, then decodes.
+    /// </summary>
+    private static DecodeStatus TryScaledFrame(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        float uX,
+        float uY,
+        float vX,
+        float vY,
+        RmQRVersion version,
+        in PerspectiveTransform affine,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out RmQRCodeDecodeInfo info,
+        ref DecodeStatus bestStatus,
+        ref RmQRCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining,
+        out DecodeStatus anchoredStatus)
+    {
+        charsWritten = 0;
         var symbolWidth = RmQRConstants.GetWidth(version);
         var symbolHeight = RmQRConstants.GetHeight(version);
         var samplingSlack = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
 
         var frameStatus = DecodeStatus.NotDetected;
+        anchoredStatus = DecodeStatus.NotDetected;
         var subFinderFound = TryLocateSubFinder(luminance, width, height, threshold, candidate, uX, uY, vX, vY, symbolWidth, symbolHeight, out var subX, out var subY);
         if (subFinderFound)
         {
@@ -366,7 +433,7 @@ internal static class RmQRImageDecoder
 
                 // (c) Perspective: only after an affine attempt got past format decoding
                 // (the grid is roughly right, RS still fails). Search the two projective
-                // coefficients; for each, the sub-finder fixes the Jacobian scale and the
+                // coefficients; for each, the sub-finder fixes the Jacobian column scale and the
                 // frame rotation exactly, and the sub-finder-side format copy must read
                 // back consistently before the full grid is sampled.
                 if (IsPlausibleRefinement(frameStatus))
@@ -383,9 +450,12 @@ internal static class RmQRImageDecoder
             }
         }
 
+        anchoredStatus = frameStatus;
+
         // Fallback: the unrefined local frame (small symbols, or a sub-finder hidden
         // by damage). Skipped when a refined affine grid already read the format:
-        // the coarser frame cannot do better.
+        // the coarser frame cannot do better. Run at every scale, though: each is a
+        // different grid, and on a hidden sub-finder it is the frame that reads.
         if (!IsPlausibleRefinement(frameStatus))
         {
             var status = Attempt(luminance, width, height, threshold, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -654,8 +724,8 @@ internal static class RmQRImageDecoder
                             for (var i = -2; i <= 2; i++)
                             {
                                 var expectedDark = i == -2 || i == 2 || j == -2 || j == 2 || (i == 0 && j == 0);
-                                var px = (int)(cx + i * uX + j * svX + 0.5f);
-                                var py = (int)(cy + i * uY + j * svY + 0.5f);
+                                var px = (int)(cx + i * uX + j * svX);
+                                var py = (int)(cy + i * uY + j * svY);
                                 if ((uint)px >= (uint)width || (uint)py >= (uint)height)
                                     continue; // outside the image counts as a mismatch
                                 var dark = luminance[py * width + px] < threshold;
@@ -735,8 +805,8 @@ internal static class RmQRImageDecoder
     {
         for (var step = 0.5f; step <= maxRun; step += 0.5f)
         {
-            var px = (int)(startX + dirX * step + 0.5f);
-            var py = (int)(startY + dirY * step + 0.5f);
+            var px = (int)(startX + dirX * step);
+            var py = (int)(startY + dirY * step);
             if ((uint)px >= (uint)width || (uint)py >= (uint)height)
                 return float.NaN;
             if (luminance[py * width + px] >= threshold)
@@ -811,8 +881,8 @@ internal static class RmQRImageDecoder
         transform.Transform(gridX, gridY, out var x, out var y);
         if (float.IsNaN(x) || float.IsNaN(y))
             return false;
-        var px = (int)(x + 0.5f);
-        var py = (int)(y + 0.5f);
+        var px = (int)x;
+        var py = (int)y;
         if (px < 0)
             px = 0;
         else if (px >= width)
@@ -870,8 +940,9 @@ internal static class RmQRImageDecoder
             for (var col = 0; col < columns; col++)
             {
                 transform.Transform(col + 0.5f, gridY, out var x, out var y);
-                var px = (int)(x + 0.5f);
-                var py = (int)(y + 0.5f);
+                // Pixel edges sit on integers, so the pixel containing a point is its floor
+                var px = (int)x;
+                var py = (int)y;
                 if (px < 0)
                     px = 0;
                 else if (px >= width)
@@ -925,7 +996,6 @@ internal static class RmQRImageDecoder
         var a31 = Vector128.Create(transform.a31);
         var a32 = Vector128.Create(transform.a32);
         var a33 = Vector128.Create(transform.a33);
-        var half = Vector128.Create(0.5f);
         var zero = Vector128<int>.Zero;
         var maxPx = Vector128.Create(width - 1);
         var maxPy = Vector128.Create(height - 1);
@@ -955,10 +1025,10 @@ internal static class RmQRImageDecoder
                 var xHi = (a11 * gridXHi + rowX + a31) / denominatorHi;
                 var yHi = (a12 * gridXHi + rowY + a32) / denominatorHi;
 
-                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo + half), maxPx), zero);
-                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi + half), maxPx), zero);
+                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
 
                 // Lane extraction beats spilling the index vector to the stack: the
                 // reload was measured on the critical path of every gather.
@@ -981,8 +1051,8 @@ internal static class RmQRImageDecoder
                 var x = (a11 * gridX + rowX + a31) / denominator;
                 var y = (a12 * gridX + rowY + a32) / denominator;
 
-                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x + half), maxPx), zero);
+                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;
@@ -1009,7 +1079,6 @@ internal static class RmQRImageDecoder
         var a12 = Vector128.Create(transform.a12);
         var a31 = Vector128.Create(transform.a31);
         var a32 = Vector128.Create(transform.a32);
-        var half = Vector128.Create(0.5f);
         var zero = Vector128<int>.Zero;
         var maxPx = Vector128.Create(width - 1);
         var maxPy = Vector128.Create(height - 1);
@@ -1036,10 +1105,10 @@ internal static class RmQRImageDecoder
                 var xHi = a11 * gridXHi + rowX + a31;
                 var yHi = a12 * gridXHi + rowY + a32;
 
-                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo + half), maxPx), zero);
-                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi + half), maxPx), zero);
+                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
@@ -1059,8 +1128,8 @@ internal static class RmQRImageDecoder
                 var x = a11 * gridX + rowX + a31;
                 var y = a12 * gridX + rowY + a32;
 
-                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y + half), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x + half), maxPx), zero);
+                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;
