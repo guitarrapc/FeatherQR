@@ -1,8 +1,14 @@
-#if !NETSTANDARD2_1_OR_GREATER && !NET5_0_OR_GREATER
+#if NET8_0_OR_GREATER
+// OperationStatus, for the one-pass UTF-8 transcode.
+using System.Buffers;
+using System.Text.Unicode;
+#elif !NETSTANDARD2_1_OR_GREATER
 // ArrayPool is only reached from the netstandard2.0 branch of DecodeUtf8.
 using System.Buffers;
 #endif
+#if !NET8_0_OR_GREATER
 using System.Text;
+#endif
 using FeatherQR.Internals.BinaryEncoders;
 
 namespace FeatherQR.Internals.BinaryDecoders;
@@ -171,13 +177,32 @@ internal static class SegmentDecoders
     {
         if (totalBits - reader.BitPosition < count * 8)
             return DecodeStatus.InvalidBitstream;
-        for (var i = 0; i < count; i++)
-        {
-            byteBuffer[i] = (byte)reader.Reads(8);
-        }
-
         var bytes = byteBuffer.AsSpan(0, count);
+        reader.ReadBytes(bytes);
 
+#if NET8_0_OR_GREATER
+        // A UTF-8 BOM (the encoder can emit one with utf8BOM: true) is consumed, not decoded,
+        // but an explicit ECI ISO-8859-1 declaration wins over it: there, EF BB BF is the
+        // legitimate Latin-1 text "ï»¿".
+        if (charset != ByteSegmentCharset.Iso8859_1)
+        {
+            var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+
+            // One pass: the transcoder validates as it writes. A declared charset or a BOM
+            // substitutes what is invalid; undeclared, an invalid sequence means ISO-8859-1.
+            var status = Utf8.ToUtf16(hasBom ? bytes.Slice(3) : bytes, destination.Slice(charsWritten), out _, out var written, replaceInvalidSequences: hasBom || charset == ByteSegmentCharset.Utf8);
+            if (status == OperationStatus.Done)
+            {
+                charsWritten += written;
+                return DecodeStatus.Success;
+            }
+
+            // Too small for the UTF-8 reading is too small for the ISO-8859-1 one, which needs a char per byte,
+            // so this holds before knowing whether the rest of the segment is well formed.
+            if (status == OperationStatus.DestinationTooSmall)
+                return DecodeStatus.DestinationTooSmall;
+        }
+#else
         // Resolve the effective charset. A UTF-8 BOM (the encoder can emit one with
         // utf8BOM: true) is consumed, not decoded, but an explicit ECI ISO-8859-1
         // declaration wins over the BOM heuristic: there, EF BB BF is the legitimate
@@ -195,20 +220,19 @@ internal static class SegmentDecoders
             bytes = bytes.Slice(3);
         }
 
-        if (!useUtf8)
-        {
-            // ISO-8859-1 → UTF-16 is a pure widening cast
-            if (destination.Length - charsWritten < bytes.Length)
-                return DecodeStatus.DestinationTooSmall;
-            for (var i = 0; i < bytes.Length; i++)
-            {
-                destination[charsWritten + i] = (char)bytes[i];
-            }
-            charsWritten += bytes.Length;
-            return DecodeStatus.Success;
-        }
+        if (useUtf8)
+            return DecodeUtf8(byteBuffer, bytes.Length == count ? 0 : 3, bytes.Length, destination, ref charsWritten);
+#endif
 
-        return DecodeUtf8(byteBuffer, bytes.Length == count ? 0 : 3, bytes.Length, destination, ref charsWritten);
+        // ISO-8859-1 → UTF-16 is a pure widening cast
+        if (destination.Length - charsWritten < bytes.Length)
+            return DecodeStatus.DestinationTooSmall;
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            destination[charsWritten + i] = (char)bytes[i];
+        }
+        charsWritten += bytes.Length;
+        return DecodeStatus.Success;
     }
 
     /// <summary>
@@ -219,12 +243,14 @@ internal static class SegmentDecoders
         => IsValidUtf8(bytes)
             || (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
 
+#if !NET8_0_OR_GREATER
+    // Two passes (count, then transcode); net8.0 and later transcode once in DecodeBytePayload.
     private static DecodeStatus DecodeUtf8(byte[] byteBuffer, int offset, int byteCount, Span<char> destination, ref int charsWritten)
     {
         if (byteCount == 0)
             return DecodeStatus.Success;
 
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER
         var bytes = byteBuffer.AsSpan(offset, byteCount);
         if (destination.Length - charsWritten < Encoding.UTF8.GetCharCount(bytes))
             return DecodeStatus.DestinationTooSmall;
@@ -251,6 +277,7 @@ internal static class SegmentDecoders
         }
 #endif
     }
+#endif
 
     /// <summary>
     /// Strict UTF-8 validation (RFC 3629): rejects overlongs, surrogates and values above U+10FFFF, so ISO-8859-1 payloads with high bytes fall through to the Latin-1 path instead of being mangled.
