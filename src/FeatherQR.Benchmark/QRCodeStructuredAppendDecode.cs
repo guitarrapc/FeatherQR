@@ -4,6 +4,7 @@ using System.Text;
 /// What reading a Structured Append set costs over reading the same chunks as plain symbols.
 ///
 /// The baseline arm decodes one plain symbol per chunk, each made by <c>Create</c> at the set's version and level with no header, so the Ratio column is the header's cost on the decode path: the 20 header bits and reporting them on <c>QRCodeDecodeInfo</c>.
+/// That reading holds only while no decode stage depends on the mask pattern: the two arms are separate encodes and pick their masks independently. Codeword extraction once evaluated the mask predicate per module, and this column read 1.26 for what was mask luck.
 /// Both arms decode <c>QRCodeData</c> with the default quiet zone and allocate one string per symbol.
 ///
 ///   byte-45k-any    : ASCII prose, 16 symbols at version 40

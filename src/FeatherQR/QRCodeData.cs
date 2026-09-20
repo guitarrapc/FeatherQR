@@ -466,28 +466,12 @@ public sealed class QRCodeData
         if (destination.Length < totalModules)
             throw new ArgumentException($"Destination span size too small: expected at least {totalModules} bytes (baseSize={_baseSize}), got {destination.Length} bytes");
 
-        // Unpack 8 modules per step: replicate the payload byte across a ulong,
-        // isolate each bit on its byte's diagonal, then OR-cascade down to bit 0
-        // so byte k of the ulong becomes module bit (7-k) as 0/1. The gather
-        // constants assume little-endian byte order (ulong byte k = memory
-        // offset k); reverse on big-endian targets, the check is a JIT-time
-        // constant, so little-endian codegen is unaffected.
-        ref var destRef = ref MemoryMarshal.GetReference(destination);
-        var m = 0;
-        for (; m + 8 <= totalModules; m += 8)
-        {
-            var spread = (_bits[m >> 3] * 0x0101010101010101UL) & 0x0102040810204080UL;
-            spread |= spread >> 4;
-            spread |= spread >> 2;
-            spread |= spread >> 1;
-            spread &= 0x0101010101010101UL;
-            if (!BitConverter.IsLittleEndian)
-            {
-                spread = BinaryPrimitives.ReverseEndianness(spread);
-            }
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destRef, m), spread);
-        }
-        for (; m < totalModules; m++)
+        // Same layout as the encoder's stream expansion (one 0/1 byte per bit, MSB first),
+        // so the whole bytes go through its kernel; a symbol's module count is odd, so the
+        // last byte is always partial and stays here.
+        var wholeBytes = totalModules >> 3;
+        Internals.StandardQR.ModulePlacer.ExpandBits(_bits, wholeBytes, destination);
+        for (var m = wholeBytes << 3; m < totalModules; m++)
         {
             destination[m] = (byte)((_bits[m >> 3] >> (7 - (m & 7))) & 1);
         }
