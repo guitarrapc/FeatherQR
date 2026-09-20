@@ -8,7 +8,8 @@ namespace FeatherQR.Tests;
 public class FinderRatioCoverageTest
 {
     /// <summary>
-    /// Concentric squares 2:1:3:1:2, which fail the ratio on their outer ring however finely it is measured. At 2 px per unit the whole-pixel runs are within a pixel and a half of passing, on rows, columns and the diagonal alike, so the measurement runs and has to refuse them.
+    /// Concentric squares 2:1:3:1:2, which fail the ratio on their outer ring however finely it is measured.
+    /// The renders reach the second look by both routes, four in the row scan and two in the vertical cross-check after their rows pass the whole-pixel ratio, and all six are turned away by the near-miss tolerance before anything is re-measured. That is the cheap half of the bound: a shape this far from the ratio never reaches the coverage arithmetic at all.
     /// </summary>
     [Test]
     [Arguments(2.0f, 0.5f, 0.5f)]
@@ -29,6 +30,32 @@ public class FinderRatioCoverageTest
         await Assert.That(count).IsEqualTo(0);
     }
 
+    /// <summary>
+    /// A cross whose middle row and column read 1:1:3:1:1 but whose diagonal reads 1:1:1:1:1: the shape the diagonal cross-check exists to refuse, and the one the second look must not rescue.
+    /// The near-miss tolerance is an absolute number of pixels, so holding the centre run to the same budget as the outer ones is what keeps a run of five equal modules from being a near miss.
+    /// The cases here are the densities where the shape is a clean test of it: the whole-pixel scan refuses them and the old centre budget did not. The sweep behind the 2.25 px/module boundary, and the reason the shape is still admitted below it, are in the decoder spec.
+    /// </summary>
+    [Test]
+    [Arguments(2.5f, 0.75f, 0.75f)]
+    [Arguments(2.6f, 0.5f, 0f)]
+    [Arguments(2.7f, 0.25f, 0.75f)]
+    [Arguments(2.8f, 0.75f, 0.25f)]
+    [Arguments(3.0f, 0.4f, 0.4f)]
+    [Arguments(3.0f, 0.5f, 0.5f)]
+    public async Task FindCandidates_DiagonalDecoy_AntiAliased_IsNotACandidate(float pixelsPerModule, float offsetX, float offsetY)
+    {
+        var (luminance, width, height) = AntiAliasedRenderer.Render(DiagonalDecoyPattern, 15, 15, pixelsPerModule, offsetX, offsetY);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        await Assert.That(grey.IsEnabled).IsTrue();
+
+        var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        var wholePixels = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, default);
+        var byCoverage = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey);
+
+        await Assert.That(wholePixels).IsEqualTo(0);
+        await Assert.That(byCoverage).IsEqualTo(0).Because("the second look rescued a shape whose diagonal is nothing like a finder's");
+    }
+
     /// <summary>The same squares at the true ratio, as the control: found, and only with the grey levels.</summary>
     [Test]
     [Arguments(2.1f, 0.5f, 0.5f)]
@@ -39,7 +66,7 @@ public class FinderRatioCoverageTest
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
         var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var wholePixels = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates);
+        var wholePixels = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, default);
         var byCoverage = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey);
 
         await Assert.That(wholePixels).IsEqualTo(0);
@@ -76,13 +103,13 @@ public class FinderRatioCoverageTest
         await Assert.That(grey.IsEnabled).IsFalse();
         var before = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var after = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var countBefore = FinderPatternFinder.FindCandidatesFullSweep(luminance, side, side, threshold, before);
+        var countBefore = FinderPatternFinder.FindCandidatesFullSweep(luminance, side, side, threshold, before, default);
         var countAfter = FinderPatternFinder.FindCandidatesFullSweep(luminance, side, side, threshold, after, grey);
         await Assert.That(countAfter).IsEqualTo(countBefore);
     }
 
     /// <summary>
-    /// From 3 px/module a finder's run a pixel off is inside the half-module tolerance, so the grey levels have nothing to add. What is still re-measured is short data runs such as 1:1:1:1:1, which must stay refused: no candidate appears, moves or is confirmed on another row.
+    /// From about 2.9 px/module the half-module tolerance is the wider of the two, so nothing that failed it is a near miss and the grey levels have nothing to add. The symbol's own data area is full of short runs that reach the gate and are turned away by it, and none of them may become a candidate, move one, or confirm one on another row.
     /// </summary>
     [Test]
     [Arguments(3.0f)]
@@ -97,7 +124,7 @@ public class FinderRatioCoverageTest
 
         var before = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var after = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var countBefore = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, before);
+        var countBefore = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, before, default);
         var countAfter = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, after, grey);
 
         await Assert.That(countAfter).IsEqualTo(countBefore);
@@ -185,6 +212,21 @@ public class FinderRatioCoverageTest
         await Assert.That(grey.Darkness(255)).IsEqualTo(0f);
         await Assert.That(Math.Abs(grey.Darkness(128) - 0.5f)).IsLessThan(0.01f);
         await Assert.That(Math.Abs(grey.Darkness(64) - 0.75f)).IsLessThan(0.01f);
+    }
+
+    // 4 quiet modules, then a cross whose middle row and column read 1:1:3:1:1 and whose diagonal reads 1:1:1:1:1
+    private static bool DiagonalDecoyPattern(int row, int column)
+    {
+        var r = row - 4;
+        var c = column - 4;
+        if (r < 0 || c < 0 || r >= 7 || c >= 7)
+            return false;
+        // The two bars carry the finder's own run pattern, so only the diagonal tells this apart from a finder
+        if (r == 3)
+            return c is 0 or 2 or 3 or 4 or 6;
+        if (c == 3)
+            return r is 0 or 2 or 3 or 4 or 6;
+        return r == c && (r == 1 || r == 5);
     }
 
     // 4 quiet units, then rings 2:1:3:1:2

@@ -1,3 +1,5 @@
+using FeatherQR.Internals.ImageDecoders;
+
 namespace FeatherQR.Tests;
 
 /// <summary>
@@ -20,12 +22,25 @@ public class AntiAliasedEdgeDecodeTest
         }
     }
 
+    /// <summary>
+    /// Which edges a case renders follows from its geometry, not from the platform: a whole scale at a whole offset puts every module edge on a pixel boundary and comes out crisp, and every other case is anti-aliased.
+    /// Both directions are asserted, so a renderer that stopped anti-aliasing cannot quietly retire this class, and the crisp case of each symbology stays a decode on the whole-pixel path.
+    /// </summary>
+    private static async Task AssertExpectedEdges(byte[] luminance, float pixelsPerModule, float offsetX, float offsetY)
+    {
+        var crisp = pixelsPerModule % 1f == 0f && offsetX == 0f && offsetY == 0f;
+        Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        await Assert.That(grey.IsEnabled).IsEqualTo(!crisp).Because($"{pixelsPerModule} px/module at ({offsetX}, {offsetY}) did not render the edges this case is for");
+    }
+
     [Test]
     [MethodDataSource(nameof(ScalesAndOffsets))]
     public async Task StandardQR_AntiAliasedAtLowDensity_Decodes(float pixelsPerModule, float offsetX, float offsetY)
     {
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
         var (luminance, width, height) = AntiAliasedRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, offsetX, offsetY);
+
+        await AssertExpectedEdges(luminance, pixelsPerModule, offsetX, offsetY);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -40,6 +55,8 @@ public class AntiAliasedEdgeDecodeTest
         var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
         var (luminance, width, height) = AntiAliasedRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, offsetX, offsetY);
 
+        await AssertExpectedEdges(luminance, pixelsPerModule, offsetX, offsetY);
+
         var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
         await Assert.That(success).IsTrue().Because($"{pixelsPerModule} px/module at ({offsetX}, {offsetY}): {info.Status}");
@@ -52,6 +69,8 @@ public class AntiAliasedEdgeDecodeTest
     {
         var qr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
         var (luminance, width, height) = AntiAliasedRenderer.Render((row, column) => qr[row, column], qr.Width, qr.Height, pixelsPerModule, offsetX, offsetY);
+
+        await AssertExpectedEdges(luminance, pixelsPerModule, offsetX, offsetY);
 
         var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 

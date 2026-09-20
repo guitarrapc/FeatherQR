@@ -26,6 +26,10 @@ internal struct FinderPattern
 /// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then cross-checks each hit vertically, horizontally and diagonally before accepting it as a candidate (the standard ZXing-style detection approach).
 /// Designed for Tier-1 inputs, clean, well-lit, screen-rendered or scanned images with mild rotation, not for low-contrast photos.
 /// <para>
+/// The ratio is checked on whole-pixel runs first. An anti-aliased edge leaves a grey pixel that a threshold rounds to a whole one, which at about 2 px/module is half a module, so runs that miss by less than 1.5 px, the same budget on every run, are measured again from <see cref="GreyLevels"/> and held to the strict tolerance, in the row scan and in all three cross-checks.
+/// The tolerance is what keeps data runs out of the candidate list, so it is the measurement that is repaired and never the check; with no grey in the image the second look could only repeat the whole-pixel runs and is switched off.
+/// </para>
+/// <para>
 /// Two entry points: TryFind (three patterns, Standard QR) and FindCandidates (one pattern, Micro QR and rMQR).
 /// Both stride over rows, and both are widened to a full sweep when the symbol was not read — but only TryFind can decide that for itself, because "no consistent triple" is a question about the symbol.
 /// A single candidate list cannot answer the same question, so FindCandidates has no fallback of its own and its callers re-run it strideless instead.
@@ -54,11 +58,11 @@ internal static class FinderPatternFinder
     /// <param name="patterns">Receives the three finder patterns (top-left first is NOT guaranteed).</param>
     /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>True when at least three mutually consistent finder patterns were found.</returns>
-    public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey = default)
+    public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
         => TryFindCore(luminance, width, height, threshold, grey, forceScalar: false, patterns);
 
     /// <summary>Scalar-kernel entry for parity tests; behavior-identical to <see cref="TryFind"/>.</summary>
-    internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey = default)
+    internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
         => TryFindCore(luminance, width, height, threshold, grey, forceScalar: true, patterns);
 
     /// <summary>
@@ -86,7 +90,7 @@ internal static class FinderPatternFinder
     /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
     /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>The number of candidates written.</returns>
-    internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey = default)
+    internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
         => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, CandidateRowStride);
 
     /// <summary>
@@ -100,7 +104,7 @@ internal static class FinderPatternFinder
     /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
     /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>The number of candidates written.</returns>
-    internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey = default)
+    internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
         => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, stride: 1);
 
     private static int FindCandidatesCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, int stride)
@@ -451,13 +455,19 @@ internal static class FinderPatternFinder
     }
 
     /// <summary>
-    /// The tolerance a near miss is held to, 1.5 px, in whole sevenths of a pixel: an edge pixel on the wrong side of the threshold moves a run by one.
+    /// The tolerance a near miss is held to, the largest whole seventh below 1.5 px: an edge pixel on the wrong side of the threshold moves a run by one.
     /// </summary>
     private const int NearMissSevenths = 10;
 
     /// <summary>
-    /// Runs within 1.5 px of the 1:1:3:1:1 ratio, asked only of runs that failed the half-module check.
-    /// From 3 px/module half a module is 1.5 px or more, so nothing that failed is near: this reaches low densities only.
+    /// The centre run gets the same budget, not three times it. The tolerance is an absolute number of pixels, because it stands for edge pixels landing on the wrong side of the threshold, and a run has two edges however many modules wide it is.
+    /// Scaling it by the run's width, as the strict check scales its own per-module tolerance, would admit a window whose centre is nothing like three modules: a 1:1:1:1:1 run is then a near miss, and the diagonal cross-check exists to refuse exactly that.
+    /// </summary>
+    private const int NearMissCentreSevenths = NearMissSevenths;
+
+    /// <summary>
+    /// Runs within 1.5 px of the 1:1:3:1:1 ratio on every one of the five, asked only of runs that failed the half-module check.
+    /// From about 2.9 px/module half a module is the wider of the two tolerances, so nothing that failed is near: this reaches low densities only.
     /// </summary>
     private static bool IsNearFinderRatio(int r0, int r1, int r2, int r3, int r4)
     {
@@ -465,12 +475,13 @@ internal static class FinderPatternFinder
         if (total < 7)
             return false;
 
-        // In sevenths of a pixel, where the module size is the total: |total − 7r| < 10.5, and three times that for the centre
-        return Math.Abs(total - 7 * r0) <= NearMissSevenths
-            && Math.Abs(total - 7 * r1) <= NearMissSevenths
-            && Math.Abs(3 * total - 7 * r2) <= 3 * NearMissSevenths + 1
-            && Math.Abs(total - 7 * r3) <= NearMissSevenths
-            && Math.Abs(total - 7 * r4) <= NearMissSevenths;
+        // In sevenths of a pixel, against a module size of total/7: |total − 7r| <= 10, the same budget on every run.
+        // Written as an unsigned range test because Math.Abs(int) has to branch for int.MinValue, and this runs on every window.
+        return (uint)(total - 7 * r0 + NearMissSevenths) <= 2 * NearMissSevenths
+            && (uint)(total - 7 * r1 + NearMissSevenths) <= 2 * NearMissSevenths
+            && (uint)(3 * total - 7 * r2 + NearMissCentreSevenths) <= 2 * NearMissCentreSevenths
+            && (uint)(total - 7 * r3 + NearMissSevenths) <= 2 * NearMissSevenths
+            && (uint)(total - 7 * r4 + NearMissSevenths) <= 2 * NearMissSevenths;
     }
 
     /// <summary>
@@ -641,6 +652,10 @@ internal static class FinderPatternFinder
     /// <summary>
     /// Validates the 1:1:3:1:1 ratio along the top-left → bottom-right diagonal, killing false positives that pass both axis checks (e.g. dense data areas).
     /// </summary>
+    /// <remarks>
+    /// This one takes the second look too, because it is also what reads a real finder's diagonal once the edges are grey, but it is the weakest place to take it: it is reached only after both axes have accepted, so re-measuring can only turn a refusal into an acceptance, and a 45° walk crosses module corners, where a pixel's darkness is not the position of a single edge.
+    /// Below 2.25 px/module that is enough to admit a cross whose axes read 1:1:3:1:1 and whose diagonal does not. Measuring whole pixels here instead removes that class only below 2.05, where this is the route it comes in by, and costs real finders their decode at 2 px/module, so the repair is the corner model rather than the second look.
+    /// </remarks>
     private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY)
     {
         Span<int> runs = stackalloc int[5];

@@ -24,6 +24,7 @@ internal readonly struct GreyLevels
         _scale = scale;
     }
 
+    /// <summary>False for <c>default</c> and for an image the levels say nothing about, where every caller must read whole pixels.</summary>
     public bool IsEnabled => _scale > 0f;
 
     /// <summary>The share of the pixel that is dark, 0 to 1.</summary>
@@ -37,6 +38,8 @@ internal readonly struct GreyLevels
     /// Levels from a luminance histogram split at <paramref name="threshold"/>: the mean of each class's outer half.
     /// The inner halves hold the edge pixels being measured, and would pull the levels toward each other.
     /// </summary>
+    /// <param name="histogram">Counts per luminance, 256 bins.</param>
+    /// <param name="threshold">The split the caller binarizes on, dark below it, as <see cref="Binarizer.ComputeOtsuThreshold(ReadOnlySpan{byte}, out GreyLevels)"/> returns it.</param>
     public static GreyLevels FromHistogram(ReadOnlySpan<int> histogram, int threshold)
     {
         long darkWeight = 0;

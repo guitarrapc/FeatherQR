@@ -28,14 +28,15 @@ public class FinderCandidatesStrideTest
 {
     public static IEnumerable<int> ModulePixelSizes() => [3, 4, 5, 8, 13];
 
-    private static (byte[] Luminance, int Width, int Height, byte Threshold) ToLuminance(SKBitmap bitmap)
+    private static (byte[] Luminance, int Width, int Height, byte Threshold, GreyLevels Grey) ToLuminance(SKBitmap bitmap)
     {
         var luminance = new byte[bitmap.Width * bitmap.Height];
         BitmapLuminanceConverter.Convert(bitmap, luminance);
-        return (luminance, bitmap.Width, bitmap.Height, Binarizer.ComputeOtsuThreshold(luminance));
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        return (luminance, bitmap.Width, bitmap.Height, threshold, grey);
     }
 
-    private static (byte[] Luminance, int Width, int Height, byte Threshold) Render(RmQRCodeData data, int modulePixelSize)
+    private static (byte[] Luminance, int Width, int Height, byte Threshold, GreyLevels Grey) Render(RmQRCodeData data, int modulePixelSize)
     {
         using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
         return ToLuminance(bitmap);
@@ -137,13 +138,13 @@ public class FinderCandidatesStrideTest
 
         foreach (var data in symbols)
         {
-            var (luminance, width, height, threshold) = Render(data, modulePixelSize);
+            var (luminance, width, height, threshold, grey) = Render(data, modulePixelSize);
 
             var full = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, full);
+            var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, full, grey);
 
             var strided = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, strided);
+            var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, strided, grey);
 
             await Assert.That(fullCount).IsGreaterThan(0)
                 .Because($"{data.Version} at {modulePixelSize} px/module must have a findable finder at all");
@@ -172,13 +173,13 @@ public class FinderCandidatesStrideTest
         for (var degrees = 0; degrees < 90; degrees++)
         {
             using var bitmap = RenderRotated(data, modulePixelSize, degrees, withDecoys: true);
-            var (luminance, width, height, threshold) = ToLuminance(bitmap);
+            var (luminance, width, height, threshold, grey) = ToLuminance(bitmap);
 
             var full = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, full);
+            var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, full, grey);
 
             var strided = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, strided);
+            var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, strided, grey);
 
             // Looser than the axis-aligned case: under rotation the strided pass merges
             // a shorter run of rows, so the centre of gravity moves further.
@@ -203,13 +204,13 @@ public class FinderCandidatesStrideTest
             using var withDecoys = RenderRotated(data, 3, degrees, withDecoys: true);
             using var withoutDecoys = RenderRotated(data, 3, degrees, withDecoys: false);
 
-            var (lumA, wA, hA, tA) = ToLuminance(withoutDecoys);
+            var (lumA, wA, hA, tA, greyA) = ToLuminance(withoutDecoys);
             var alone = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var aloneCount = FinderPatternFinder.FindCandidates(lumA, wA, hA, tA, alone);
+            var aloneCount = FinderPatternFinder.FindCandidates(lumA, wA, hA, tA, alone, greyA);
 
-            var (lumB, wB, hB, tB) = ToLuminance(withDecoys);
+            var (lumB, wB, hB, tB, greyB) = ToLuminance(withDecoys);
             var mixed = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-            var mixedCount = FinderPatternFinder.FindCandidates(lumB, wB, hB, tB, mixed);
+            var mixedCount = FinderPatternFinder.FindCandidates(lumB, wB, hB, tB, mixed, greyB);
 
             for (var i = 0; i < aloneCount; i++)
             {
@@ -251,14 +252,14 @@ public class FinderCandidatesStrideTest
         for (var degrees = 0; degrees < 90; degrees++)
         {
             using var alone = RenderRotated(data, modulePixelSize, degrees, withDecoys: false);
-            var (lumA, wA, hA, _) = ToLuminance(alone);
+            var (lumA, wA, hA, _, _) = ToLuminance(alone);
             var decodesAlone = RmQRCodeDecoder.TryDecodeImage(lumA, wA, hA, buffer, out var aloneChars, out _);
 
             if (!decodesAlone)
                 continue; // outside what this render can express at all; nothing to preserve
 
             using var mixed = RenderRotated(data, modulePixelSize, degrees, withDecoys: true);
-            var (lumB, wB, hB, _) = ToLuminance(mixed);
+            var (lumB, wB, hB, _, _) = ToLuminance(mixed);
             var decodesMixed = RmQRCodeDecoder.TryDecodeImage(lumB, wB, hB, buffer, out var mixedChars, out var mixedInfo);
 
             await Assert.That(decodesMixed).IsTrue()
@@ -277,10 +278,10 @@ public class FinderCandidatesStrideTest
         luminance.AsSpan().Fill(255);
 
         var full = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, 128, full);
+        var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, 128, full, default);
 
         var strided = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, 128, strided);
+        var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, 128, strided, default);
 
         await Assert.That(fullCount).IsEqualTo(0);
         await Assert.That(stridedCount).IsEqualTo(0);
@@ -303,11 +304,18 @@ public class FinderCandidatesStrideTest
             luminance[i] = (byte)(state >> 24);
         }
 
+        // Full-range noise is the input the grey levels are live on, which is where the two scans' gating differs
+        var histogram = new int[256];
+        foreach (var value in luminance)
+            histogram[value]++;
+        var grey = GreyLevels.FromHistogram(histogram, 128);
+        await Assert.That(grey.IsEnabled).IsTrue();
+
         var full = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, 128, full);
+        var fullCount = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, 128, full, grey);
 
         var strided = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, 128, strided);
+        var stridedCount = FinderPatternFinder.FindCandidates(luminance, width, height, 128, strided, grey);
 
         for (var i = 0; i < stridedCount; i++)
         {
