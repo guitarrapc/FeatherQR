@@ -27,7 +27,8 @@ None of this is Structured Append specific. The same two stages run for every St
 
 | In | Out |
 |---|---|
-| `QRMatrixDecoder.ExtractCodewords`: a table-driven fast path, the current walk kept as the reference | Reed-Solomon, deinterleave, `GetCoreData`: 5 % together, already vectorized or trivially cheap |
+| `QRMatrixDecoder.ExtractCodewords`: a table-driven fast path, the current walk kept as the reference | Reed-Solomon and deinterleave: 2 % together, already vectorized or trivially cheap |
+| `QRCodeData.GetCoreData`, routed through the encoder's vector bit expansion | A second, packed-bit extract kernel, unless phase 4 measures a reason for one |
 | The unmask step, moved out of the per-module loop | The image decoder's detection and sampling stages. They gain from the faster matrix decode without being touched |
 | `BitReader.Reads` and the Byte payload path of `SegmentDecoders` (phase 3, after the extract change makes it the largest stage) | Micro QR and rMQR extraction. rMQR has its own bit-plane kernel; Micro QR symbols are at most 17 modules a side |
 | The doc comment of `QRCodeStructuredAppendDecode`, which states the Ratio column is the header's cost | Public API. Nothing is added or changed |
@@ -53,7 +54,7 @@ The constraint that shaped this section: the fast path may not add resident memo
 | Tables read per version 40 decode | 3.9 KB blocked mask | 59 KB index + 3.7 KB mask stream | 6.5 KB of ops + 206 index entries + 144 B | same as the run walk |
 | Module data read per version 40 decode | 31 KB grid | 31 KB grid | 31 KB grid | 3.9 KB packed bits |
 
-All three remove the mask dependence. Projected end to end at version 40: about 172 us to about 43 us.
+All three remove the mask dependence. Projected end to end at version 40 on x64: about 172 us to about 43 us, about 40 with the vector unpack of section 3.
 
 ### 1. Run walk over the encoder's ops (chosen)
 
@@ -63,17 +64,32 @@ Four rows of a run are one output byte: four 16-bit loads a row apart, a SWAR st
 
 The mask never reaches the per-module level either. Every mask predicate repeats every 12 rows and every 6 columns, so the eight mask bits under one output byte of a run depend only on the pattern, the walk direction, the column phase and the row phase: 8 x 2 x 6 x 12 = 1,152 bytes cover every version. That table is the only memory this adds, and it can be a static data blob rather than a heap array.
 
-It measured 10 to 15 % behind the index gather on a desktop part with a 1 MB L2, where the index gather's 94 KB per decode is free. It is chosen anyway: the gap is about 1.5 us of a 43 us decode, and it buys zero per-version memory and a table footprint a ninth the size, which is where a browser or a small core is expected to reverse the order. The per-op setup (one division, two loop exits per op) is the known slack and is phase 2 tuning, not a reason to change form.
+It measured 10 to 15 % behind the index gather on the x64 box. It is chosen anyway, and for one reason that does not need another machine to hold: it adds no memory that grows with the versions and masks seen, and the index gather does. The gap is about 1.5 us of a 43 us decode. The smaller table footprint is a fact (6.5 KB against 63 KB per decode); what it is worth in time is not known anywhere, and no ordering on ARM64 or in the browser is claimed from it. Apple silicon's L1 is larger than the measuring box's, so the footprint argument may well be worth nothing there. The per-op setup (one division, two loop exits per op) is the known slack and is phase 2 tuning, not a reason to change form.
+
+Nothing in the kernel is x64 specific. It is 16-bit loads, shifts and one 64-bit multiply, so ARM64 runs the same code; the rows of a run are a row apart in memory, so a NEON form would have to gather first and is not planned.
 
 ### 2. Index gather (measured, not chosen)
 
 Reading `PlacementLayout.Index` in order, eight modules a byte, with a cached mask stream per (version, mask). Fastest of the three here by a small margin and the simplest loop. Not chosen because the mask streams are new resident memory that grows with every version and mask seen, and because each decode streams 59 KB of index beside the 31 KB grid. Unmasking the grid with periodic tiles instead would remove the mask streams but needs a writable copy of the grid on the span path, and leaves the index footprint as it is.
 
-### 3. Run walk straight off the packed bits (deferred)
+### 3. The unpack in front of the walk
 
-`QRCodeData` stores the core matrix bit-packed, 3.9 KB at version 40, and `TryDecode(QRCodeData)` unpacks it into a rented 31 KB grid only so that the walk can read bytes. The run walk can read the packed bits directly: slower per byte, but the unpack and the rental disappear, the total is a tie (14.9 us against 10.9 + 3.8), and the whole working set of the extract fits in L1. It is deferred, not dropped: it only pays if the matrix decoder's input becomes packed bits for every entry point (the span overloads and the image decoder would pack first, one vector pass that also normalizes non-zero to 1), and that is a change to the decoder's internal seam rather than to one stage. Reopened after phase 3 with the image path measured.
+`TryDecode(QRCodeData)` unpacks the 3.9 KB of packed bits into a rented 31 KB grid through `QRCodeData.GetCoreData`, a SWAR loop at 3.7 to 3.9 us for version 40. Once the extract is 11 us that is a quarter of the two together. The encoder's `ModulePlacer.ExpandBits` writes the same layout (one 0/1 byte per bit, MSB first) with AVX2, SSSE3 and AdvSimd tiers, and measured 0.37 to 0.40 us for the same grid, output equal to `GetCoreData`'s. Routing `GetCoreData` through it (whole bytes through the kernel, the last few modules scalar) is part of phase 2.
 
-### 4. The bit stream reader
+### 4. Run walk straight off the packed bits (measured, not chosen)
+
+The run walk can also read `QRCodeData`'s packed bits directly and skip the unpack and the 31 KB rental. It is slower per byte (bit position arithmetic and a shift per row), and what it is compared against is the byte walk plus the unpack in front of it:
+
+| `QRCodeData` entry, version 40, us | Unpack | Extract | Together |
+|---|---:|---:|---:|
+| Today | 3.8 | 115 to 145 | 119 to 149 |
+| Byte run walk | 3.8 | 10.9 | 14.7 |
+| Byte run walk behind the vector unpack | 0.4 | 10.9 | 11.3 |
+| Packed run walk | none | 14.9 to 15.1 | 14.9 to 15.1 |
+
+A tie against today's unpack, 3.6 us behind once the unpack is the vector one. What is left in its favour is the rental, which is pooled and not an allocation. Not chosen on x64. It would apply to the `QRCodeData` entry alone (the span overloads and the image decoder keep the byte walk, everything after the extract is shared), so it does not need the decoder's input format to change; an earlier draft of this plan said it did, and that was wrong. The price is a second extract kernel to keep in parity. It stays in the ARM64 comparison of phase 4 and is dropped there unless it wins by more than that price.
+
+### 5. The bit stream reader
 
 `BitReader.Reads` calls a bounds-checked `Read` once per bit, about 1.2 ns a bit, and after phase 2 it is two thirds of what is left. Candidates, in the order they are expected to pay:
 
@@ -90,11 +106,11 @@ rMQR extracts through column bit planes with one PEXT and one PDEP per column. I
 | Risk | Why it matters | Answer |
 |---|---|---|
 | Encoder and decoder share one table | Wrong `Ops` would round-trip cleanly and fail against other readers | Reference walk kept independent; parity over all 40 versions x 8 masks; third-party fixtures |
-| Remainder bits and the stream end | Free modules exceed 8 x codewords by 0, 3, 4 or 7 bits depending on version, and the stream can end inside a run or between the two modules of a row. The prototype only ran versions 10, 39 and 40, all with 0 | The all-version parity test covers every remainder class; a level H symbol per version moves the stream end |
+| Remainder bits and the stream end | Free modules exceed 8 x codewords by 0, 3, 4 or 7 bits depending on version, and the stream can end inside a run or between the two modules of a row. The error correction level does not move the end: data plus ECC codewords are one total per version | All 40 versions cover every remainder class; the cut itself is driven by handing the kernel a shorter output than the version's total, which the reference walk also honours. The prototypes passed 37,440 such cases (40 versions x 8 masks x 3 random grids x 39 output lengths) |
 | The periodic mask table | One wrong entry corrupts one byte in 144 positions, easy to miss with a few fixtures | The table is checked against the predicate for every entry, and the parity grids are random so every phase is hit |
 | Byte order | The pair load reads the right module from the high byte | Little-endian read helper, as `GetCoreData` already does for its big-endian branch |
 | Unchecked reads | The walk drops bounds checks | Safe only behind the existing `modules.Length >= size * size` check and tables built by this assembly; stated at the kernel, and the safe form ships if it is within noise |
-| Small-cache targets unmeasured | The choice of the run walk over the index gather rests on an expectation about ARM64 and the browser, not a number | Both prototypes are kept until one of those targets has been measured; the Playground is the browser check |
+| ARM64 and the browser unmeasured | The x64 ratios say nothing about another JIT back end or another cache. The choice of form does not rest on them, but the quoted gains do | Phase 4 measures four arms in one run on ARM64; the Playground is the browser check. No ratio is quoted for a target before it has one |
 
 ## Phases
 
@@ -103,9 +119,9 @@ Each phase follows the test-first workflow, updates the decoder spec in the same
 | # | Priority | Phase | Contents | Exit |
 |---|---|---|---|---|
 | 1 | **P0** | Measure | Stage profile, mask dependence, the three extract prototypes | Done, see Progress log |
-| 2 | **P0** | Extract fast path | Parity tests first (red), then the run walk with the periodic mask table; per-op setup tuned; `ExtractCodewords` renamed to the reference and kept; benchmark doc comment corrected | Byte-identical streams for all 40 versions x 8 masks on random grids, on grids with non-zero dark bytes other than 1, on the all-light and all-dark grids, and at level L and H of each version so the stream ends in different places; every mask table entry equal to the predicate; planted faults (a run one row short, a wrong row phase step, the pair order swapped, a dropped last byte) each fail a test; allocation test unchanged and no per-version allocation added; kernel ratio and end-to-end delta reported |
+| 2 | **P0** | Extract fast path | Parity tests first (red), then the run walk with the periodic mask table; per-op setup tuned; `GetCoreData` through `ExpandBits`; `ExtractCodewords` renamed to the reference and kept; benchmark doc comment corrected | Byte-identical streams for all 40 versions x 8 masks on random grids, on grids with non-zero dark bytes other than 1, on the all-light and all-dark grids, and with the output shortened by 0 to 20 bytes and to arbitrary lengths so the stream ends inside a run, between the two modules of a row and inside a scatter range; `GetCoreData` byte-identical to its current output for every version; every mask table entry equal to the predicate; planted faults (a run one row short, a wrong row phase step, the pair order swapped, a dropped last byte) each fail a test; allocation test unchanged and no per-version allocation added; kernel ratio and end-to-end delta reported |
 | 3 | P1 | Bit stream reader | The three reader candidates above, one hypothesis a variant | Decoded text and status identical over the existing decoder tests and fixtures, including every malformed-stream status; truncated streams at every bit offset still return `InvalidBitstream` rather than reading past the end; ratio and delta reported |
-| 4 | P2 | Packed input, decide | The image path's stage profile; the packed run walk with a pack pass in front of the span and image entry points | A number for each entry point, and a go or a recorded no |
+| 4 | P1 | ARM64 measurement | Four arms in one run on the ARM64 machine: today, byte run walk, byte run walk behind the vector unpack, packed run walk; versions 1, 10 and 39 or 40; the `QRCodeData` entry and the span entry separately | A number per arm, entry and size; the packed walk kept only if it beats the byte walk behind the vector unpack by more than a second kernel is worth, otherwise recorded as refuted |
 | 5 | P2 | Fold | Decisions and measurements into `specs/standardqr-decoder.md`; this plan deleted | The spec carries what was decided and why |
 
 ## Verification notes
@@ -132,4 +148,14 @@ Addendum, same day: the index gather was set aside for its memory (a mask stream
 Lessons:
 - The second table was also already there. `Ops` was built to make the encoder's stores cheap; read backwards it makes the decoder's loads cheap, and it is a ninth the size of the index.
 - A mask stream per version is a cache of something periodic. Asking what the mask bits under one output byte depend on (pattern, direction, column phase, row phase) turned 441 KB into 1,152 bytes.
-- Fastest on the measuring box is not the choice when the box is the friendliest target there is. The index gather won by 1.5 us on a part with a 1 MB L2, and a 1 MB L2 is what the smaller targets do not have.
+- The index gather won by 1.5 us and lost on memory. That is a sufficient reason by itself, and it is the only one that was measured.
+
+Addendum 2, after a review from the ARM64 side (2026-09-20). Three corrections, each checked on x64 before it went in:
+- "A smaller footprint will reverse the order on ARM64" was a prediction written as a reason. Apple silicon has more L1 than the box that produced the numbers. The choice now rests on memory alone, and phase 4 measures the rest.
+- The packed walk was compared against the wrong arm. Its rival is the byte walk plus the unpack, and the unpack was the slow SWAR one: `ModulePlacer.ExpandBits` does the same job in 0.37 to 0.40 us against 3.7 to 3.9. Behind that unpack the byte walk totals 11.3 us and the packed walk 14.9 to 15.1. The claim that a packed walk needs every entry point packed was also wrong; it can serve the `QRCodeData` entry alone.
+- "Level L and H move the stream end" was false: data plus ECC is one total per version. The cut is driven by a shortened output instead, and the prototypes were run that way over all 40 versions x 8 masks x 3 random grids x 39 lengths, 37,440 cases, both walks equal to the reference. That also closes the remainder-bit gap the first round left open (versions 10, 39 and 40 only).
+
+Lessons:
+- Before removing a stage, check whether it is slow or merely unoptimized. The unpack looked like a cost worth designing around and was one call away from a tenth of its time.
+- An exit criterion is a claim about the format and gets checked like one. "Level H moves the end" read plausibly and tested nothing.
+- In this harness a fast kernel's first shape read 2x to 8x slow, run after run (index gather 24 us, then 9.4 on every later shape). The cause was not pinned down; a kernel this short can finish its rounds before the JIT has promoted it. Every figure quoted here is from a later shape, and a harness for phase 2 warms by time, not by count.
