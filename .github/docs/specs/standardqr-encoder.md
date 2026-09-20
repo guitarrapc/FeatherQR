@@ -291,6 +291,8 @@ Reserved modules are represented by a compact bit mask. Both the painted functio
 
 Interleaved bits are then consumed MSB-first in the standard two-column zigzag from bottom-right to top-left, skipping column 6 and every reserved module. The reference walk keeps up to 64 pending stream bits in a register and handles both modules of a strip row together; the production placement uses the cached walk (core index per stream bit, rows where both strip modules are free as runs): the stream is expanded to one byte per bit and each run row is a single 16-bit store, everything else an index-table scatter (parity-tested against the reference walk for every version).
 
+Bit expansion uses AVX2 or SSSE3 on x86 and ARM64 NEON on .NET 8+ when supported. Every backend preserves MSB-first order and writes exactly eight 0/1 bytes per input byte; short streams and final vector blocks stay within the logical spans rather than requiring scratch-buffer slack. The ARM64 path also handles short vectors and may align a large output stream with a scalar prefix; this is only a performance hint, so an unaligned buffer or a moving GC does not change the result. The portable fallback uses arithmetic for short streams and a lazily initialized 2 KiB lookup table for longer streams, with no per-call allocation. Direct expansion parity tests cover every byte value, vector and alignment thresholds, offset buffers, and dirty output guards in addition to the placement tests for all 40 versions.
+
 ### 8. Evaluate all eight masks
 
 The encoder tests every Standard QR mask pattern and chooses the lowest ISO/IEC 18004 penalty score:

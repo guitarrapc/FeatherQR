@@ -2,10 +2,6 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if NET8_0_OR_GREATER
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
-#endif
 
 namespace FeatherQR.Internals.StandardQR;
 
@@ -140,7 +136,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Fast data placement (same result as <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/> with the version's canonical blocked mask): the stream is expanded to one byte per bit (AVX2 / SSSE3, scalar otherwise), runs of both-free rows are written as one byte-swapped 16-bit store per row, the remaining free modules through the index table.
+    /// Fast data placement (same result as <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/> with the version's canonical blocked mask): the stream is expanded to one byte per bit (AVX2 / SSSE3 / ARM64 NEON, scalar otherwise), runs of both-free rows are written as one byte-swapped 16-bit store per row, the remaining free modules through the index table.
     /// Modules beyond the stream end are not written (the caller's buffer already holds the template zeros there).
     /// </summary>
     /// <param name="buffer">Core matrix (size × size bytes) with the function template in place.</param>
@@ -182,57 +178,6 @@ internal static partial class ModulePlacer
 
     private const int StackBitBudget = 512;
     private const int VectorSlack = 32; // the AVX2 expand step stores 32 bytes per 4 stream bytes
-
-    /// <summary>bits[8k + j] = bit (7 - j) of message[k] for k &lt; byteCount (MSB first).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ExpandBits(ReadOnlySpan<byte> message, int byteCount, Span<byte> bits)
-    {
-        ref var src = ref MemoryMarshal.GetReference(message);
-        ref var dst = ref MemoryMarshal.GetReference(bits);
-        var k = 0;
-#if NET8_0_OR_GREATER
-        if (Avx2.IsSupported)
-        {
-            // 4 message bytes -> 32 module bytes per step: broadcast the 4 bytes, in-lane
-            // shuffle replicates byte j over lanes 8j..8j+7, AND with the per-lane bit
-            // mask + compare-equal yields 0/1 bytes
-            var sel = Vector256.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3);
-            var bitm = Vector256.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
-            var one = Vector256.Create((byte)1);
-            for (; k + 4 <= byteCount; k += 4)
-            {
-                var v = Vector256.Create(Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref src, k))).AsByte();
-                var m = Avx2.Shuffle(v, sel) & bitm;
-                (Vector256.Equals(m, bitm) & one).StoreUnsafe(ref dst, (nuint)(k * 8));
-            }
-        }
-        if (Ssse3.IsSupported)
-        {
-            var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
-            var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
-            var one = Vector128.Create((byte)1);
-            for (; k + 2 <= byteCount; k += 2)
-            {
-                var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
-                var m = Ssse3.Shuffle(v, sel) & bitm;
-                (Vector128.Equals(m, bitm) & one).StoreUnsafe(ref dst, (nuint)(k * 8));
-            }
-        }
-#endif
-        for (; k < byteCount; k++)
-        {
-            int b = Unsafe.Add(ref src, k);
-            ref var d = ref Unsafe.Add(ref dst, k * 8);
-            d = (byte)((b >> 7) & 1);
-            Unsafe.Add(ref d, 1) = (byte)((b >> 6) & 1);
-            Unsafe.Add(ref d, 2) = (byte)((b >> 5) & 1);
-            Unsafe.Add(ref d, 3) = (byte)((b >> 4) & 1);
-            Unsafe.Add(ref d, 4) = (byte)((b >> 3) & 1);
-            Unsafe.Add(ref d, 5) = (byte)((b >> 2) & 1);
-            Unsafe.Add(ref d, 6) = (byte)((b >> 1) & 1);
-            Unsafe.Add(ref d, 7) = (byte)(b & 1);
-        }
-    }
 
     /// <summary>Store pass over the walk segments; stops at the stream end (segments are in stream order).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
