@@ -33,8 +33,9 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
-    /// The F10 shape: all four candidates measure the same module size, the false one is
-    /// confirmed on fewer rows, and the scan found it before the real bottom-left finder.
+    /// A whole number of pixels per module: all four candidates measure the same module size,
+    /// the false one is confirmed on fewer rows, and the scan found it before the real
+    /// bottom-left finder.
     /// </summary>
     [Test]
     public async Task Select_EqualModuleSizes_FalseCandidateScannedFirst_PicksTheRealTriple()
@@ -121,8 +122,9 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
-    /// The F18 shape, as measured on v19-H at 195 px: the strided scan hit the real bottom-left
-    /// finder once and a false candidate of twice the module size twice. The selection still
+    /// A builder render at about 1.9 px/module, as measured on v19-H at 195 px: the strided scan
+    /// hit the real bottom-left finder once and a false candidate of twice the module size
+    /// twice. The selection still
     /// leaves the unconfirmed one out, and says so, which is what sends the scan over the
     /// rows it skipped.
     /// </summary>
@@ -219,8 +221,9 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
-    /// The corpus symbol that exposed the defect (F10), rendered axis-aligned from its matrix
-    /// at every density: from 5 px/module up its false candidate is confirmed and used to win.
+    /// A corpus symbol whose alignment pattern and two data modules read as a finder, rendered
+    /// axis-aligned from its matrix at every density: from 5 px/module up its false candidate is
+    /// confirmed and used to win.
     /// </summary>
     [Test]
     [Arguments(3)]
@@ -270,7 +273,7 @@ public class FinderPatternSelectionTest
     /// <summary>
     /// Builder renders at about 1.9 px/module whose real bottom-left finder the strided scan hits
     /// on one row while a false candidate is confirmed on two: the confirmed three are not a
-    /// finder triple, and the unconfirmed candidate has to be scored with them (F18).
+    /// finder triple, and the rows the stride skipped have to be scanned before one is chosen.
     /// </summary>
     [Test]
     [Arguments(19, QREccLevel.H, 195, "HELLO WORLD")]

@@ -320,7 +320,8 @@ internal static class RmQRImageDecoder
         // tries on noise would nearly always "read" a version and pay for its searches.
         // Only while the larger of the finder's two axes measures under 6 px per module,
         // a bound taken from measurement: the search buys fewer reads as the density rises
-        // and costs every other symbology's image its failure time. A trade, not a free cut (F18).
+        // and costs every other symbology's image its failure time. A trade, not a free cut:
+        // renders above the bound that read only at a corrected scale are given up.
         var moduleLength = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
         var formatRead = false;
         foreach (var scale in FormatReadScales)

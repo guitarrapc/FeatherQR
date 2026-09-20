@@ -51,7 +51,7 @@ Two detection primitives were lifted from `Internals.StandardQR` to the shared `
 
 - `Binarizer.ComputeOtsuThreshold`, generic binarization (moved out of `QRImageDecoder`)
 - `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR and rMQR use the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
-- `FinderAxisEstimator`, the finder-local module scale for all three symbologies (dark-light-dark runs that pair edges of the same polarity, so ink spread and erosion do not scale it) and single-finder axis recovery for Micro QR and rMQR (an axis fitted to a 90-direction sweep, then the sweep's separated minima); lifted from the Micro QR image decoder when rMQR image detection (Phase 7) became its second consumer, and the Standard QR finder-to-finder measurement folded into it in 2026-09 (F12)
+- `FinderAxisEstimator`, the finder-local module scale for all three symbologies (dark-light-dark runs that pair edges of the same polarity, so ink spread and erosion do not scale it) and single-finder axis recovery for Micro QR and rMQR (an axis fitted to a 90-direction sweep, then the sweep's separated minima); lifted from the Micro QR image decoder when rMQR image detection (Phase 7) became its second consumer, and the Standard QR finder-to-finder measurement folded into it in 2026-09
 
 ### Package architecture
 
