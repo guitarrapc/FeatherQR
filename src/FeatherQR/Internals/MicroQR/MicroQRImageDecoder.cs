@@ -593,9 +593,6 @@ internal static class MicroQRImageDecoder
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 
     /// <summary>
-    /// All four grid corners must land inside the image (with one module of slack for sampling clamp tolerance); orientations pointing off the image cannot contain the symbol and are skipped before sampling.
-    /// </summary>
-    /// <summary>
     /// The grid frame measured on the timing patterns, row 0 and column 0 from the finder to the symbol's far edge, instead of extrapolated from the finder's module size.
     /// <paramref name="uX"/>…<paramref name="vY"/> give the orientation and a first scale; the result's origin is the symbol's corner and its axes are one module long.
     /// </summary>
@@ -635,7 +632,7 @@ internal static class MicroQRImageDecoder
     /// Walks a timing line from the finder's edge row: back to the finder's outer edge, then forward across the separator and the alternating timing modules to the symbol's far edge.
     /// Fits position = start + pitch · module index over every boundary crossed; false unless the line reads as a timing pattern (runs about one module, a size of 11-17, a pitch near the finder's).
     /// </summary>
-    private static bool TryFitTimingLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float lineX, float lineY, float dirX, float dirY, float module, out float start, out float pitch, out int size)
+    internal static bool TryFitTimingLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float lineX, float lineY, float dirX, float dirY, float module, out float start, out float pitch, out int size)
     {
         start = pitch = 0f;
         size = 0;
@@ -737,6 +734,9 @@ internal static class MicroQRImageDecoder
         return true;
     }
 
+    /// <summary>
+    /// All four grid corners must land inside the image (with one module of slack for sampling clamp tolerance); orientations pointing off the image cannot contain the symbol and are skipped before sampling.
+    /// </summary>
     private static bool SymbolFitsImage(float originX, float originY, float uX, float uY, float vX, float vY, int size, int width, int height, float moduleSize)
     {
         var slack = moduleSize;

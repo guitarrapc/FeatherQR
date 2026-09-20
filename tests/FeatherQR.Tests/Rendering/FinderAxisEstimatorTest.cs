@@ -42,4 +42,41 @@ public class FinderAxisEstimatorTest
         await Assert.That(first.USize).IsEqualTo(pixelsPerModule).Within(0.05f * pixelsPerModule);
         await Assert.That(first.VSize).IsEqualTo(pixelsPerModule).Within(0.05f * pixelsPerModule);
     }
+
+    /// <summary>
+    /// One direction of the walk from the centre of a pixel-aligned finder: the dark ring's inner
+    /// edge 2.5 modules out and its outer edge 3.5. The module size pairs a forward walk with a
+    /// backward one, so a probe half a pixel off shifts the two the opposite way and cancels there;
+    /// each walk on its own does not.
+    /// </summary>
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    [Arguments(3)]
+    public async Task DarkLightDarkRun_PixelAlignedFinder_FindsTheRingEdges(int pixelsPerModule)
+    {
+        const int quietZone = 2;
+        var side = (7 + 2 * quietZone) * pixelsPerModule;
+        var luminance = new byte[side * side];
+        for (var y = 0; y < side; y++)
+        {
+            for (var x = 0; x < side; x++)
+            {
+                var row = y / pixelsPerModule - quietZone;
+                var column = x / pixelsPerModule - quietZone;
+                var ring = Math.Max(Math.Abs(row - 3), Math.Abs(column - 3));
+                luminance[y * side + x] = row is >= 0 and < 7 && column is >= 0 and < 7 && ring != 2 ? (byte)0 : (byte)255;
+            }
+        }
+        var center = (quietZone + 3.5f) * pixelsPerModule;
+
+        foreach (var (dirX, dirY) in new[] { (1f, 0f), (-1f, 0f), (0f, 1f), (0f, -1f) })
+        {
+            var found = FinderAxisEstimator.TryDarkLightDarkRun(luminance, side, side, 128, center, center, dirX, dirY, float.PositiveInfinity, out var inner, out var outer);
+
+            await Assert.That(found).IsTrue().Because($"direction ({dirX}, {dirY})");
+            await Assert.That(inner).IsEqualTo(2.5f * pixelsPerModule).Within(0.5f).Because($"inner, direction ({dirX}, {dirY})");
+            await Assert.That(outer).IsEqualTo(3.5f * pixelsPerModule).Within(0.5f).Because($"outer, direction ({dirX}, {dirY})");
+        }
+    }
 }

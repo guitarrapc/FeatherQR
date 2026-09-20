@@ -160,6 +160,8 @@ public class SymbolCornersTest
     [Arguments(2, -0.02f)]
     [Arguments(5, 0.01f)]
     [Arguments(6, 0.01f)]
+    [Arguments(10, 0.0075f)]
+    [Arguments(10, -0.0075f)]
     public async Task QR_AlignmentPatternNotFound_CornersStayWithinAModuleAndAHalf(int version, float tilt)
     {
         using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version);

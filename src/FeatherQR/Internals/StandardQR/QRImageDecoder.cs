@@ -143,10 +143,11 @@ internal static class QRImageDecoder
 
         // The dimension estimate can land between two valid sizes (module-size
         // measurement quantizes to pixels); when a plausible runner-up exists,
-        // one retry with it rescues estimates that snapped to the wrong version.
+        // one retry with it rescues estimates that snapped to the wrong version. A guess
+        // gets no finder fallback: on a wrong size it only doubles the failure's cost.
         if (secondaryDimension != 0 && secondaryDimension != versionDimension && secondaryDimension != timingDimension)
         {
-            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _);
+            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _, finderFallback: false);
             if (IsTerminal(secondaryStatus))
             {
                 charsWritten = secondaryCharsWritten;
@@ -164,8 +165,9 @@ internal static class QRImageDecoder
     /// The mirror retry triggers on any non-terminal decode failure; a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
     /// DestinationTooSmall is terminal because the non-mirrored symbol has already been read successfully through RS correction.
     /// On failure, versionDimension is the dimension the sampled version information names when it differs from the one sampled, else 0.
+    /// <paramref name="finderFallback"/> allows the resample through the finders alone when the alignment-anchored grid fails; off for a dimension that is only a guess.
     /// </summary>
-    private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension)
+    private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
     {
         versionDimension = 0;
         var transform = BuildGridTransform(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, out var alignmentAnchored);
@@ -217,7 +219,7 @@ internal static class QRImageDecoder
             }
             if (namedDimension != dimension)
                 versionDimension = namedDimension;
-            if (IsTerminal(status) || !alignmentAnchored)
+            if (IsTerminal(status) || !alignmentAnchored || !finderFallback)
                 return status;
 
             // Alignment fallback: the alignment centre is pixel-resolved, which at about
@@ -225,16 +227,33 @@ internal static class QRImageDecoder
             // error across the bottom-right block as perspective. The finders alone are
             // exact for a flat symbol. Failure-path cost only.
             var parallelogram = BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension);
-            SampleGrid(luminance, width, height, threshold, parallelogram, dimension, modules);
-            var parallelogramStatus = DecodeWithMirrorRetry(modules, dimension, destination, out var parallelogramCharsWritten, out var parallelogramInfo, out var parallelogramTransposed);
-            if (!IsTerminal(parallelogramStatus))
-                return status;
+            var rentedParallelogram = ArrayPool<byte>.Shared.Rent(dimension * dimension);
+            try
+            {
+                var parallelogramModules = rentedParallelogram.AsSpan(0, dimension * dimension);
+                SampleGrid(luminance, width, height, threshold, parallelogram, dimension, parallelogramModules);
 
-            charsWritten = parallelogramCharsWritten;
-            info = parallelogramStatus == DecodeStatus.Success
-                ? parallelogramInfo.WithCorners(SymbolGeometry.FromTransform(parallelogram, dimension, dimension, parallelogramTransposed))
-                : parallelogramInfo;
-            return parallelogramStatus;
+                // The same modules decode the same way: an alignment centre found where the
+                // finders put it samples identically, as on any symbol whose data is damaged.
+                // The mirror retry above left the first sampling transposed.
+                TransposeInPlace(modules, dimension);
+                if (parallelogramModules.SequenceEqual(modules))
+                    return status;
+
+                var parallelogramStatus = DecodeWithMirrorRetry(parallelogramModules, dimension, destination, out var parallelogramCharsWritten, out var parallelogramInfo, out var parallelogramTransposed);
+                if (!IsTerminal(parallelogramStatus))
+                    return status;
+
+                charsWritten = parallelogramCharsWritten;
+                info = parallelogramStatus == DecodeStatus.Success
+                    ? parallelogramInfo.WithCorners(SymbolGeometry.FromTransform(parallelogram, dimension, dimension, parallelogramTransposed))
+                    : parallelogramInfo;
+                return parallelogramStatus;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rentedParallelogram, clearArray: false);
+            }
         }
         finally
         {

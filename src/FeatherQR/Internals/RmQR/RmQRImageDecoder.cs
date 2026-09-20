@@ -60,6 +60,9 @@ internal static class RmQRImageDecoder
     /// <summary>Finder-scale corrections tried for the finder-side format read, nearest the measured scale first.</summary>
     private static readonly float[] FormatReadScales = [1f, 0.98f, 1.02f, 0.96f, 1.04f, 0.94f, 1.06f, 0.92f, 1.08f];
 
+    /// <summary>Finder module length, in pixels, from which only the measured scale is read.</summary>
+    private const float FormatScaleSearchMaxModule = 6f;
+
     /// <summary>
     /// Decodes an rMQR Code from grayscale pixels.
     /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails.
@@ -315,34 +318,75 @@ internal static class RmQRImageDecoder
         // measured one are tried in turn. A corrected scale must read an exact codeword:
         // within 3 bits, a quarter of random reads match one of the 64 words, so nine
         // tries on noise would nearly always "read" a version and pay for its searches.
-        var version = default(RmQRVersion);
-        var affine = default(PerspectiveTransform);
+        // Only while the larger of the finder's two axes measures under 6 px per module,
+        // a bound taken from measurement: the search buys fewer reads as the density rises
+        // and costs every other symbology's image its failure time. A trade, not a free cut (F18).
+        var moduleLength = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
         var formatRead = false;
         foreach (var scale in FormatReadScales)
         {
-            affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * uX, scale * uY, scale * vX, scale * vY, 0f, 0f);
-            var finderSideRaw = ReadFormatCopy(luminance, width, height, threshold, affine, subFinderSide: false, 0, 0);
-            if (RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out version, out _, out var distance) && (scale == 1f || distance == 0))
-            {
-                uX *= scale;
-                uY *= scale;
-                vX *= scale;
-                vY *= scale;
-                formatRead = true;
+            if (scale != 1f && moduleLength >= FormatScaleSearchMaxModule)
                 break;
-            }
-        }
-        if (!formatRead)
-        {
-            info = bestInfo;
-            return DecodeStatus.NotDetected;
+            if (attemptsRemaining <= 0)
+                break; // nothing left to decode with: reading and searching would be waste
+            var affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * uX, scale * uY, scale * vX, scale * vY, 0f, 0f);
+            var finderSideRaw = ReadFormatCopy(luminance, width, height, threshold, affine, subFinderSide: false, 0, 0);
+            if (!RmQRFormatInformationDecoder.TryDecodeCopy(finderSideRaw, subFinderSide: false, out var version, out _, out var distance) || (scale != 1f && distance != 0))
+                continue;
+
+            formatRead = true;
+            var status = TryScaledFrame(
+                luminance, width, height, threshold, candidate,
+                scale * uX, scale * uY, scale * vX, scale * vY, version, affine,
+                modules, destination, out charsWritten, out info,
+                ref bestStatus, ref bestInfo, ref attemptsRemaining, out var anchoredStatus);
+
+            // A copy can read exactly at a scale a few percent off, and a frame built on
+            // it fails where the next scale reads; so the search goes on while frames fail.
+            // Once frames anchored on the sub-finder read format information, a failure is
+            // the data's: on a damaged symbol every later scale only repeated them.
+            if (IsTerminal(status))
+                return status;
+            if (IsPlausibleRefinement(anchoredStatus))
+                break;
         }
 
+        charsWritten = 0;
+        info = bestInfo;
+        return formatRead ? bestStatus : DecodeStatus.NotDetected;
+    }
+
+    /// <summary>
+    /// The frame at a scale whose finder-side format copy read <paramref name="version"/>: anchors the far end on the sub-finder, then decodes.
+    /// </summary>
+    private static DecodeStatus TryScaledFrame(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        float uX,
+        float uY,
+        float vX,
+        float vY,
+        RmQRVersion version,
+        in PerspectiveTransform affine,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out RmQRCodeDecodeInfo info,
+        ref DecodeStatus bestStatus,
+        ref RmQRCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining,
+        out DecodeStatus anchoredStatus)
+    {
+        charsWritten = 0;
         var symbolWidth = RmQRConstants.GetWidth(version);
         var symbolHeight = RmQRConstants.GetHeight(version);
         var samplingSlack = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
 
         var frameStatus = DecodeStatus.NotDetected;
+        anchoredStatus = DecodeStatus.NotDetected;
         var subFinderFound = TryLocateSubFinder(luminance, width, height, threshold, candidate, uX, uY, vX, vY, symbolWidth, symbolHeight, out var subX, out var subY);
         if (subFinderFound)
         {
@@ -389,7 +433,7 @@ internal static class RmQRImageDecoder
 
                 // (c) Perspective: only after an affine attempt got past format decoding
                 // (the grid is roughly right, RS still fails). Search the two projective
-                // coefficients; for each, the sub-finder fixes the Jacobian scale and the
+                // coefficients; for each, the sub-finder fixes the Jacobian column scale and the
                 // frame rotation exactly, and the sub-finder-side format copy must read
                 // back consistently before the full grid is sampled.
                 if (IsPlausibleRefinement(frameStatus))
@@ -406,9 +450,12 @@ internal static class RmQRImageDecoder
             }
         }
 
+        anchoredStatus = frameStatus;
+
         // Fallback: the unrefined local frame (small symbols, or a sub-finder hidden
         // by damage). Skipped when a refined affine grid already read the format:
-        // the coarser frame cannot do better.
+        // the coarser frame cannot do better. Run at every scale, though: each is a
+        // different grid, and on a hidden sub-finder it is the frame that reads.
         if (!IsPlausibleRefinement(frameStatus))
         {
             var status = Attempt(luminance, width, height, threshold, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);

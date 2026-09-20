@@ -376,6 +376,7 @@ public class QRCodeDecoderImageTest
         await Assert.That(success).IsTrue().Because($"v{version} at {sizePx} px: {info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
         await Assert.That(info.Version).IsEqualTo(version);
+        await DrawnCorners.AssertMatch(bitmap, info.Corners, 17 + 4 * version, 0.5f);
     }
 
     private static SKBitmap RenderQr(string content, QREccLevel eccLevel, int pixelsPerModule, EciMode eciMode = EciMode.Default)

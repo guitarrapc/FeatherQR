@@ -1,6 +1,7 @@
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.StandardQR;
 using FeatherQR.SkiaSharp;
+using SkiaSharp;
 
 namespace FeatherQR.Tests;
 
@@ -31,6 +32,7 @@ public class TimingPatternDimensionTest
         await Assert.That(success).IsTrue().Because($"v{version} at {sizePx} px: {info.Status}, read as v{info.Version}");
         await Assert.That(text).IsEqualTo(Content);
         await Assert.That(info.Version).IsEqualTo(version);
+        await DrawnCorners.AssertMatch(bitmap, info.Corners, 17 + 4 * version, 0.75f);
     }
 
     /// <summary>
@@ -56,6 +58,32 @@ public class TimingPatternDimensionTest
         await Assert.That(success).IsTrue().Because($"v{version} at {sizePx} px: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
         await Assert.That(info.Version).IsEqualTo(version);
+        await DrawnCorners.AssertMatch(bitmap, info.Corners, 17 + 4 * version, 0.75f);
+    }
+
+    /// <summary>
+    /// The same render with its data painted over: the count still finds the symbol, so the
+    /// failure is reported where it happened, in the data, not as a symbol that was never found.
+    /// </summary>
+    [Test]
+    public async Task Decode_EstimatePastVersion40_DataDestroyed_ReportsTheDataFailure()
+    {
+        const int sizePx = 540;
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        var luminance = Luminance(bitmap);
+        // Modules 20-110 on both axes: data only, clear of the finders, timing lines and version blocks
+        var pitch = sizePx / (float)qr.Size;
+        for (var y = (int)((20 + QuietZone) * pitch); y < (int)((110 + QuietZone) * pitch); y++)
+        {
+            for (var x = (int)((20 + QuietZone) * pitch); x < (int)((110 + QuietZone) * pitch); x++)
+                luminance[y * sizePx + x] = 0;
+        }
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out _, out var info);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DataUncorrectable);
     }
 
     /// <summary>
@@ -68,12 +96,7 @@ public class TimingPatternDimensionTest
         const int sizePx = 540;
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
         using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
-        var luminance = new byte[sizePx * sizePx];
-        for (var y = 0; y < sizePx; y++)
-        {
-            for (var x = 0; x < sizePx; x++)
-                luminance[y * sizePx + x] = bitmap.GetPixel(x, y).Red;
-        }
+        var luminance = Luminance(bitmap);
         // Light timing modules 9 and 11 on both lines, painted dark at the average pitch
         // (qr.Size includes the quiet zone)
         var pitch = sizePx / (float)qr.Size;
@@ -154,7 +177,8 @@ public class TimingPatternDimensionTest
 
     /// <summary>
     /// Off-axis and degraded renders may not count, but a count that is given is never wrong:
-    /// the count goes first, and a wrong one would cost a decode attempt on every image.
+    /// a wrong one would cost a failing image one more decode attempt, and a refused estimate
+    /// has nothing else to fall back on.
     /// </summary>
     [Test]
     [Arguments(5, 3, 0)]
@@ -201,6 +225,17 @@ public class TimingPatternDimensionTest
     }
 
     private const int QuietZone = 4;
+
+    private static byte[] Luminance(SKBitmap bitmap)
+    {
+        var luminance = new byte[bitmap.Width * bitmap.Height];
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+                luminance[y * bitmap.Width + x] = bitmap.GetPixel(x, y).Red;
+        }
+        return luminance;
+    }
 
     private static int Count(byte[] luminance, int width, int height, float moduleSize)
     {

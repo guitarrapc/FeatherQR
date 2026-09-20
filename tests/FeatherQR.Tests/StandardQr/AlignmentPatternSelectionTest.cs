@@ -102,45 +102,66 @@ public class AlignmentPatternSelectionTest
         await Assert.That(y).IsEqualTo(Center(15)).Within(0.01f);
     }
 
-    private static (bool Found, float X, float Y) Find(byte[] image, int expectedColumn, int expectedRow, bool scalar)
+    /// <summary>
+    /// At one and two pixels per module a probe half a pixel off the convention lands in the
+    /// neighbouring module: the ring checks read the wrong ring and the pattern is missed.
+    /// </summary>
+    [Test]
+    [Arguments(false, 1)]
+    [Arguments(true, 1)]
+    [Arguments(false, 2)]
+    [Arguments(true, 2)]
+    public async Task Find_LowDensity_CentreIsExact(bool scalar, int pixelsPerModule)
     {
-        const int side = Modules * PixelsPerModule;
-        (float, float) axisX = (PixelsPerModule, 0f);
-        (float, float) axisY = (0f, PixelsPerModule);
+        var image = Blank(pixelsPerModule);
+        DrawAlignmentPattern(image, 15, 15, pixelsPerModule);
+
+        var (found, x, y) = Find(image, 15, 15, scalar, pixelsPerModule);
+
+        await Assert.That(found).IsTrue();
+        await Assert.That(x).IsEqualTo(Center(15, pixelsPerModule)).Within(0.01f);
+        await Assert.That(y).IsEqualTo(Center(15, pixelsPerModule)).Within(0.01f);
+    }
+
+    private static (bool Found, float X, float Y) Find(byte[] image, int expectedColumn, int expectedRow, bool scalar, int pixelsPerModule = PixelsPerModule)
+    {
+        var side = Modules * pixelsPerModule;
+        (float, float) axisX = (pixelsPerModule, 0f);
+        (float, float) axisY = (0f, pixelsPerModule);
         float x, y;
         var found = scalar
-            ? AlignmentPatternFinder.TryFindScalar(image, side, side, 128, Center(expectedColumn), Center(expectedRow), PixelsPerModule, axisX, axisY, 8f, out x, out y)
-            : AlignmentPatternFinder.TryFind(image, side, side, 128, Center(expectedColumn), Center(expectedRow), PixelsPerModule, axisX, axisY, 8f, out x, out y);
+            ? AlignmentPatternFinder.TryFindScalar(image, side, side, 128, Center(expectedColumn, pixelsPerModule), Center(expectedRow, pixelsPerModule), pixelsPerModule, axisX, axisY, 8f, out x, out y)
+            : AlignmentPatternFinder.TryFind(image, side, side, 128, Center(expectedColumn, pixelsPerModule), Center(expectedRow, pixelsPerModule), pixelsPerModule, axisX, axisY, 8f, out x, out y);
         return (found, x, y);
     }
 
-    private static float Center(int module) => (module + 0.5f) * PixelsPerModule;
+    private static float Center(int module, int pixelsPerModule = PixelsPerModule) => (module + 0.5f) * pixelsPerModule;
 
-    private static byte[] Blank()
+    private static byte[] Blank(int pixelsPerModule = PixelsPerModule)
     {
-        var image = new byte[Modules * PixelsPerModule * Modules * PixelsPerModule];
+        var image = new byte[Modules * pixelsPerModule * Modules * pixelsPerModule];
         Array.Fill(image, (byte)255);
         return image;
     }
 
-    private static void DrawAlignmentPattern(byte[] image, int centerColumn, int centerRow)
+    private static void DrawAlignmentPattern(byte[] image, int centerColumn, int centerRow, int pixelsPerModule = PixelsPerModule)
     {
         for (var dy = -2; dy <= 2; dy++)
         {
             for (var dx = -2; dx <= 2; dx++)
             {
                 var ring = Math.Max(Math.Abs(dx), Math.Abs(dy));
-                SetModule(image, centerColumn + dx, centerRow + dy, dark: ring != 1);
+                SetModule(image, centerColumn + dx, centerRow + dy, dark: ring != 1, pixelsPerModule);
             }
         }
     }
 
-    private static void SetModule(byte[] image, int column, int row, bool dark)
+    private static void SetModule(byte[] image, int column, int row, bool dark, int pixelsPerModule = PixelsPerModule)
     {
-        const int side = Modules * PixelsPerModule;
-        for (var y = row * PixelsPerModule; y < (row + 1) * PixelsPerModule; y++)
+        var side = Modules * pixelsPerModule;
+        for (var y = row * pixelsPerModule; y < (row + 1) * pixelsPerModule; y++)
         {
-            for (var x = column * PixelsPerModule; x < (column + 1) * PixelsPerModule; x++)
+            for (var x = column * pixelsPerModule; x < (column + 1) * pixelsPerModule; x++)
                 image[y * side + x] = dark ? (byte)0 : (byte)255;
         }
     }

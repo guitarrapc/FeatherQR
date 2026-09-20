@@ -26,11 +26,32 @@ public class MicroQRTimingFrameTest
 
         await Assert.That(success).IsTrue().Because($"{version} at {sizePx} px: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
+        await DrawnCorners.AssertMatch(bitmap, info.Corners, 2 * (int)version + 9, 0.5f);
+    }
+
+    /// <summary>
+    /// The same renders flipped left to right: the timing frame reads the grid transposed, and the
+    /// corners must follow the symbol, not the image.
+    /// </summary>
+    [Test]
+    [Arguments(MicroQRVersion.M3, 37)]
+    [Arguments(MicroQRVersion.M4, 41)]
+    public async Task Decode_SnappedModuleWidths_Mirrored_Decodes(MicroQRVersion version, int sizePx)
+    {
+        var data = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version });
+        using var drawn = new MicroQRCodeImageBuilder(data).WithSize(sizePx, sizePx).ToBitmap();
+        using var bitmap = DrawnCorners.MirrorLeftToRight(drawn);
+
+        var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {sizePx} px, mirrored: {info.Status}");
+        await Assert.That(text).IsEqualTo(Content);
+        await DrawnCorners.AssertMatch(bitmap, info.Corners, 2 * (int)version + 9, 0.5f, mirrored: true);
     }
 
     public static IEnumerable<(MicroQRVersion, int)> EveryFractionalSize()
     {
-        foreach (var version in new[] { MicroQRVersion.M2, MicroQRVersion.M3, MicroQRVersion.M4 })
+        foreach (var version in new[] { MicroQRVersion.M1, MicroQRVersion.M2, MicroQRVersion.M3, MicroQRVersion.M4 })
         {
             var size = (int)version * 2 + 9 + 4;
             for (var px = size * 3 / 2; px <= size * 3; px++)
@@ -43,7 +64,9 @@ public class MicroQRTimingFrameTest
     [MethodDataSource(nameof(EveryFractionalSize))]
     public async Task Decode_EveryFractionalBuilderSize_Decodes(MicroQRVersion version, int sizePx)
     {
-        var data = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version });
+        // M1 has error detection only, and so the least protection against a misread grid
+        var eccLevel = version == MicroQRVersion.M1 ? MicroQREccLevel.ErrorDetectionOnly : MicroQREccLevel.L;
+        var data = MicroQRCodeGenerator.Create(Content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version });
         using var bitmap = new MicroQRCodeImageBuilder(data).WithSize(sizePx, sizePx).ToBitmap();
 
         foreach (var degrees in new[] { 0, 90, 180, 270 })
