@@ -2,24 +2,29 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 #endif
 
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// The planner's greedy walk at up to eight budgets at once: one budget per lane of a 256-bit vector, one vector per state of the segmentation program.
+/// The planner's greedy walk at up to eight budgets at once: one budget per vector lane, one vector per state of the segmentation program.
 /// </summary>
 /// <remarks>
 /// The probes of a budget search walk the same text from the same start and differ only in the budget they close their chunks at, so they are independent instances of one program and share its control: while every lane is at the same character, which is nearly always, a step is the scalar loop's class lookup and branches over vector adds and mins, at about the cost of one scalar step for the eight of them.
 /// A lane whose chunk closes re-reads the character that did not fit as the first of its next chunk, so it falls behind the others: by one step, by two when it closed on the second half of a pair, by more when the cut is kept off a U+FEFF. While the lanes are apart they are stepped with the class and the byte cost taken per lane in scalar code, and the lanes ahead wait, keeping their states, until the one furthest behind is level with them; left apart, lanes whose closes cost them differently never share a character again. Closing a chunk is itself scalar code, a dozen times per lane in a walk of thousands of steps.
 /// A lane that has failed keeps closing chunks at its own budget, unrecorded: one that stopped would run ahead for good and the lanes would never share a character again.
 /// The walk prices exactly what <see cref="CountChunks(ReadOnlySpan{char}, EciMode, bool, QRSegmentation, int, int, int, Span{int})"/> prices (the single-mode shortcuts of <see cref="LongestChunkEnd"/> are the program's own answers on the content they apply to), which <c>StructuredAppendLaneWalkTest</c> holds lane by lane. The byte order mark <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for is not handled here, since its chunk is priced by another rule; the caller keeps those walks scalar.
-/// Only the portable surface of <c>Vector256</c> is used. Where 256-bit vectors are not accelerated, or a chunk averages under <see cref="MinLaneChunkChars"/> characters (the lanes then spend too many steps apart), nothing here runs and the caller's scalar probes do.
+/// The eight 32-bit lanes use accelerated <c>Vector256</c>; ARM64 uses eight saturating 16-bit NEON lanes. Without either capability, or when a chunk averages under the backend's minimum length (the lanes then spend too many steps apart), nothing here runs and the caller's scalar probes do.
 /// </remarks>
 internal static partial class StructuredAppendPlanner
 {
     /// <summary>Shortest average chunk, in characters, the lanes are used for: below it chunks close so often, a step or two apart, that the lanes are rarely at one character.</summary>
     private const int MinLaneChunkChars = 128;
+
+    // NEON's compact cost state pays on much shorter chunks. Twenty characters is a
+    // conservative cutoff: setup and frequent divergent steps can outweigh batching below it.
+    private const int MinNeonLaneChunkChars = 20;
 
 #if NET8_0_OR_GREATER
     private const int Lanes = 8;
@@ -54,7 +59,8 @@ internal static partial class StructuredAppendPlanner
     internal static bool TryNarrowWithLanes(ReadOnlySpan<char> text, EciMode charset, int version, int floor, int ceiling, int limit, ref int low, ref int high, Span<int> settledEnds, ref int settledBudget, ref int settledCount, Span<int> failedEnds, ref int failedBudget, bool fromFloor = false, bool ceilingHolds = false)
     {
 #if NET8_0_OR_GREATER
-        if (!Vector256.IsHardwareAccelerated || text.Length < limit * MinLaneChunkChars)
+        if ((!Vector256.IsHardwareAccelerated && !AdvSimd.Arm64.IsSupported)
+            || text.Length < limit * (AdvSimd.Arm64.IsSupported ? MinNeonLaneChunkChars : MinLaneChunkChars))
             return false;
 
         Span<int> budgets = stackalloc int[Lanes];
@@ -142,9 +148,28 @@ internal static partial class StructuredAppendPlanner
     internal static bool WalkLanes(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps)
     {
         LaneBatches++;
+        // The search supplies QR capacities. Keep the 32-bit reference for direct walks
+        // outside the 16-bit cost domain, including budgets smaller than the set headers.
+        if (AdvSimd.Arm64.IsSupported && NeonBudgetsFit(budgets, charset))
+        {
+            return charset == EciMode.Utf8
+                ? WalkLanesNeon<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
+                : WalkLanesNeon<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
+        }
         return charset == EciMode.Utf8
             ? WalkLanes<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
             : WalkLanes<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
+    }
+
+    private static bool NeonBudgetsFit(ReadOnlySpan<int> budgets, EciMode charset)
+    {
+        var headers = HeaderBits + charset.GetStandardQrHeaderBits();
+        foreach (var budget in budgets)
+        {
+            if ((uint)(budget - headers) >= ushort.MaxValue)
+                return false;
+        }
+        return true;
     }
 
     // A pair needs no rule of its own while stepping: it is priced whole on its first half, so a

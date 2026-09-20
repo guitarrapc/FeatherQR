@@ -423,18 +423,33 @@ internal static partial class StructuredAppendPlanner
     /// Whether any chunk of this text could be cheaper as a mixed plan than as one run, which is what decides whether the searches have to consult the segmentation program at all.
     /// </summary>
     /// <remarks>
-    /// One pass over the text for the longest run of each denser mode, since a chunk's runs are never longer than the whole text's; if none of them could repay the mode header splitting it out adds, then no chunk's plan beats its single-mode stream, the two costs are the same number everywhere, and the split is the same split.
+    /// Stops at the first run that could repay its mode header: planning may then help, and a one-Byte-run plan is no longer guaranteed.
+    /// Otherwise the whole text must be checked. A tying run also rules out the one-Byte-run proof, even when no run can save bits, so that verdict stays false after the run ends.
     /// </remarks>
-    private static bool CanPlanHelp(ReadOnlySpan<char> text, EncodingMode singleMode, out bool oneRunPlans)
+    internal static bool CanPlanHelp(ReadOnlySpan<char> text, EncodingMode singleMode, out bool oneRunPlans)
     {
         oneRunPlans = false;
         if (!QRSegmentPlanner.CanPlanBeatSingleMode(singleMode))
             return false;
 
-        ModeSegmenter.LongestDenseRuns(text, out var numericRun, out var alnumRun);
-        // The same two numbers say when the plan of every chunk is settled without the program.
-        oneRunPlans = singleMode == EncodingMode.Byte && QRSegmentPlanner.PlanIsOneByteRun(numericRun, alnumRun);
-        return QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun);
+        int numericRun = 0, alnumRun = 0;
+        var oneRun = singleMode == EncodingMode.Byte;
+        foreach (var c in text)
+        {
+            var characterClass = ModeSegmenter.ClassOf(c);
+            if (characterClass == ModeSegmenter.ClassOther)
+            {
+                numericRun = alnumRun = 0;
+                continue;
+            }
+            numericRun = characterClass == ModeSegmenter.ClassDigit ? numericRun + 1 : 0;
+            alnumRun++;
+            if (QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun))
+                return true; // both outputs are settled; oneRunPlans remains false
+            oneRun &= QRSegmentPlanner.PlanIsOneByteRun(numericRun, alnumRun);
+        }
+        oneRunPlans = oneRun;
+        return false;
     }
 
     /// <summary>
@@ -486,70 +501,6 @@ internal static partial class StructuredAppendPlanner
             + ModeIndicatorBits + analysis.EncodingMode.GetCountIndicatorLength(version)
             + ModeSegmenter.PayloadBits(analysis.EncodingMode, analysis.DataLength)
             + (bomApplies ? 24 : 0);
-
-    /// <summary>
-    /// The parity byte of a set: the XOR of the whole text's bytes in the charset the set is written in, with the byte order mark first when one is written.
-    /// </summary>
-    public static byte Parity(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom)
-    {
-        var parity = utf8Bom ? 0xEF ^ 0xBB ^ 0xBF : 0;
-        if (charset != EciMode.Utf8)
-        {
-            // ISO-8859-1 and the default charset are the low byte of each char. A forced charset
-            // may not hold the text; the byte is then whatever the Byte writer makes of the char.
-            foreach (var c in text)
-                parity ^= Latin1Byte(c);
-            return (byte)parity;
-        }
-
-        // UTF-8 per code point, without an encoder: the same bytes the Byte-mode writer
-        // produces, a lone surrogate included (it becomes U+FFFD there too).
-        for (var i = 0; i < text.Length; i++)
-        {
-            int codePoint = text[i];
-            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-            {
-                codePoint = char.ConvertToUtf32(text[i], text[i + 1]);
-                i++;
-            }
-            else if (char.IsSurrogate(text[i]))
-            {
-                codePoint = 0xFFFD;
-            }
-
-            if (codePoint < 0x80)
-            {
-                parity ^= codePoint;
-            }
-            else if (codePoint < 0x800)
-            {
-                parity ^= 0xC0 | (codePoint >> 6);
-                parity ^= 0x80 | (codePoint & 0x3F);
-            }
-            else if (codePoint < 0x10000)
-            {
-                parity ^= 0xE0 | (codePoint >> 12);
-                parity ^= 0x80 | ((codePoint >> 6) & 0x3F);
-                parity ^= 0x80 | (codePoint & 0x3F);
-            }
-            else
-            {
-                parity ^= 0xF0 | (codePoint >> 18);
-                parity ^= 0x80 | ((codePoint >> 12) & 0x3F);
-                parity ^= 0x80 | ((codePoint >> 6) & 0x3F);
-                parity ^= 0x80 | (codePoint & 0x3F);
-            }
-        }
-        return (byte)parity;
-    }
-
-    /// <summary>The byte <c>QRBinaryEncoder.WriteLatin1Data</c> writes for a char: the transcoder's replacement for one outside ISO-8859-1 where the writer goes through it, the low byte where it narrows.</summary>
-    private static byte Latin1Byte(char c)
-#if NET5_0_OR_GREATER
-        => c <= 0xFF ? (byte)c : (byte)'?';
-#else
-        => (byte)c;
-#endif
 
     /// <summary>
     /// Greedy walk: how many chunks of at most <paramref name="budgetBits"/> each the text needs at this version, writing each chunk's end offset into <paramref name="chunkEnds"/> while it has room.
@@ -720,12 +671,7 @@ internal static partial class StructuredAppendPlanner
         // The two boundaries: the first character outside 0-9, then the first outside the
         // 45-character alphabet. A prefix is Numeric up to the one and Alphanumeric up to
         // the other, and Byte past it, which is how the analyser classifies it.
-        var d = 0;
-        while (d < n && CharacterSets.IsNumeric(window[d]))
-            d++;
-        var a = d;
-        while (a < n && CharacterSets.IsAlphanumeric(window[a]))
-            a++;
+        StructuredAppendScanner.ModeBoundaries(window, out var d, out var a);
         digitRun = d;
         alnumRun = a;
 
@@ -761,28 +707,9 @@ internal static partial class StructuredAppendPlanner
             return end;
         }
 
-        // UTF-8 by code point, the same bytes the writer emits: the a leading characters
-        // are ASCII, then one pass over the run until the next character would overflow.
-        var used = a;
-        var i = a;
-        while (i < n)
-        {
-            var c = window[i];
-            int cost, step = 1;
-            if (c < 0x80)
-                cost = 1;
-            else if (c < 0x800)
-                cost = 2;
-            else if (char.IsHighSurrogate(c) && i + 1 < n && char.IsLowSurrogate(window[i + 1]))
-                (cost, step) = (4, 2);
-            else
-                cost = 3; // a BMP character, or a lone surrogate written as U+FFFD
-            if (used + cost > bytes)
-                break;
-            used += cost;
-            i += step;
-        }
-        return i;
+        // The leading alphanumeric characters are ASCII; spend their bytes before
+        // scanning the suffix, whose boundary keeps a surrogate pair together.
+        return a + StructuredAppendScanner.Utf8PrefixLength(window.Slice(a), bytes - a);
     }
 
     /// <summary>The most digits whose Numeric payload (10 bits per 3, then 4 or 7) fits the bits; 0 when one does not.</summary>

@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net10.0</TargetFrameworks>
     <RootNamespace>FeatherQR</RootNamespace>
+    <!-- ARM64 bit expansion reads a destination address only to choose an alignment hint. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- NuGet -->
     <IsPackable>true</IsPackable>

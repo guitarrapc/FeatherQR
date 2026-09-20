@@ -50,10 +50,36 @@ public class StructuredAppendLaneWalkTest
     }
 
     [Test]
+    [Arguments(9_000, 40)]
+    [Arguments(900, 5)]
+    [Arguments(180, 2)]
+    public async Task Plan_UsesParallelBudgetsOnArm64_AndMatchesScalarCuts(int length, int maxVersion)
+    {
+        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+            return;
+        var text = Repeat("order 20260915 item 0000123456 qty 42 ", length);
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        var expected = new int[StructuredAppendPlanner.MaxSymbols];
+        var actual = new int[StructuredAppendPlanner.MaxSymbols];
+        var scalar = StructuredAppendPlanner.TryPlan(text, QREccLevel.L, analysis.EciMode, analysis.EncodingMode,
+            false, QRSegmentation.Optimal, 1, maxVersion, expected, out var expectedCount, out var expectedVersion, out var expectedBudget, allowLanes: false);
+        var before = StructuredAppendPlanner.LaneBatches;
+        var parallel = StructuredAppendPlanner.TryPlan(text, QREccLevel.L, analysis.EciMode, analysis.EncodingMode,
+            false, QRSegmentation.Optimal, 1, maxVersion, actual, out var count, out var version, out var budget, allowLanes: true);
+        var batches = StructuredAppendPlanner.LaneBatches - before;
+        await Assert.That(scalar && parallel).IsTrue();
+        await Assert.That(count).IsEqualTo(expectedCount);
+        await Assert.That(version).IsEqualTo(expectedVersion);
+        await Assert.That(budget).IsEqualTo(expectedBudget);
+        await Assert.That(actual.AsSpan(0, count).ToArray()).IsEquivalentTo(expected.AsSpan(0, count).ToArray());
+        await Assert.That(batches).IsGreaterThan(0);
+    }
+
+    [Test]
     [MethodDataSource(nameof(Corpus))]
     public async Task WalkLanes_EndsEveryChunkWhereTheScalarWalkDoes(string name, string text)
     {
-        if (!Vector256.IsHardwareAccelerated)
+        if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
         var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
         var scalarEnds = new int[StructuredAppendPlanner.MaxSymbols];
@@ -120,7 +146,7 @@ public class StructuredAppendLaneWalkTest
         // The lanes that fell behind finish the text one by one, from their own states. Runs of marks make a lane that
         // closes inside one fall far behind, and the text ends in digits and a mark, where a Byte run must not open:
         // the filler walks each lane's last chunk across its budget, and the shifts put every budget within the few bits that opening one would save.
-        if (!Vector256.IsHardwareAccelerated)
+        if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
         var mark = (char)0xFEFF;
         var scalarEnds = new int[StructuredAppendPlanner.MaxSymbols];
@@ -159,7 +185,7 @@ public class StructuredAppendLaneWalkTest
     {
         // The plan is the same with or without the second batch, so what is pinned here is where each batch lands against
         // the balanced budget B the scalar search finds: a budget holds exactly when it is at least B.
-        if (!Vector256.IsHardwareAccelerated)
+        if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
         var text = Repeat("0123456789012345678901234567890123456789" + new string((char)0xFEFF, 6), 15_000);
         var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
@@ -237,7 +263,7 @@ public class StructuredAppendLaneWalkTest
         // count is asked below a capacity that does not hold it (the set needs one symbol more), and a second batch there
         // would be walked and repeated by the walk at the capacity; in the second the bracket's ceiling holds the count and
         // the batch saves scalar probes. A change of search that moves these must say why, with a measurement.
-        if (!Vector256.IsHardwareAccelerated)
+        if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
         var digits = marks == 20 ? "0123456789012345678901234567890123456789" : "01234567890123456789";
         var text = Repeat(digits + new string((char)0xFEFF, marks), length);
