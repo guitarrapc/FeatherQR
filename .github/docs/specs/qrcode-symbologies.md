@@ -290,7 +290,14 @@ below it, with reasons: Otsu histogramming (serial histogram updates, already ne
 measured per-pixel floor), sub-finder and perspective search (branchy, data-dependent and
 failure-path dominated), rendering and PNG encode (Skia/native-code dominated), and the
 1.3-8.3 ns version selector. Reopen ARM work only with a new profile naming a different
-mechanism.
+mechanism. That happened once (2026-09-21): a stage profile of the Standard QR matrix decode
+on Apple M2 named the syndrome pass's carried dependency chain, and the shared AdvSimd kernel
+was re-associated to eight bytes a step (see the Performance lessons in
+[standardqr-decoder.md](standardqr-decoder.md)); the queue is closed again behind it.
+The Otsu entry above is the next one a profile questions: on x64 the histogram fill read as
+the largest stage of a large symbol's image decode, because its uniform-group fold stops
+paying at 3 pixels a module (same Performance lessons). That is an x64 figure on synthetic
+renders; nothing was re-measured on ARM64, and the entry stands until it is.
 
 ## Scope decisions
 

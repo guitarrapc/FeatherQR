@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using FeatherQR.Internals.BinaryDecoders;
 
 namespace FeatherQR.Internals.StandardQR;
@@ -11,17 +12,17 @@ namespace FeatherQR.Internals.StandardQR;
 /// <code>
 /// 1. Version from matrix size (size = 17 + 4·version)
 /// 2. Format information → ECC level + mask pattern (BCH, two redundant copies)
-/// 3. Codeword extraction: inverse zigzag walk, unmasking on the fly
+/// 3. Codeword extraction: the encoder's placement runs read backwards, unmasked a byte at a time
 /// 4. Deinterleave codewords into Reed-Solomon blocks
 /// 5. Reed-Solomon error correction per block
 /// 6. Bitstream decoding (mode segments → text)
 /// </code>
 /// The function-pattern layout comes from the encoder's own per-version placement tables (<see cref="ModulePlacer.GetLayout"/>, built by <see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>), so the decoder can never disagree with the encoder about which modules carry data.
 /// </remarks>
-internal static class QRMatrixDecoder
+internal static partial class QRMatrixDecoder
 {
     // Steady-state decode allocates nothing: buffers are stackalloc/pooled and the
-    // blocked-module mask comes from the encoder's per-version placement tables.
+    // walk reads the encoder's per-version placement tables.
     private const int StackAllocThreshold = 512;
 
     /// <summary>
@@ -68,11 +69,11 @@ internal static class QRMatrixDecoder
         {
             var interleaved = work.Slice(0, totalCodewords);
             var blocks = work.Slice(totalCodewords, totalCodewords);
-            interleaved.Clear();
 
-            // 3. Extract codewords (inverse zigzag + unmask)
-            var blockedMask = GetBlockedMask(version, size);
-            ExtractCodewords(modules, size, blockedMask, maskPattern, interleaved);
+            // 3. Extract codewords (inverse zigzag + unmask); writes every byte, so no clear
+            var layout = ModulePlacer.GetLayout(version);
+            Debug.Assert(totalCodewords == layout.FreeModules / 8, "a version's codewords fill its free modules up to the remainder bits");
+            ExtractCodewords(modules, layout, maskPattern, interleaved);
 
             // 4. Deinterleave into per-block [data | ecc] codewords
             DeinterleaveCodewords(interleaved, blocks, eccInfo);
@@ -160,10 +161,13 @@ internal static class QRMatrixDecoder
     }
 
     /// <summary>
-    /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="ModulePlacer.PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>), unmasking each module on the fly.
-    /// Remainder bits beyond the output capacity are ignored.
+    /// Reference walk: reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="ModulePlacer.PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>), unmasking each module on the fly.
+    /// Remainder bits beyond the output capacity are ignored. ORs into <paramref name="output"/>, which the caller clears.
     /// </summary>
-    private static void ExtractCodewords(ReadOnlySpan<byte> modules, int size, ReadOnlySpan<byte> blockedMask, int maskPattern, Span<byte> output)
+    /// <remarks>
+    /// Not on the decode path. It is the source of truth the run walk (<see cref="ExtractCodewords"/>) is held to, and it must stay independent of the placement tables that walk reads: it takes the blocked-module bitmask only.
+    /// </remarks>
+    internal static void ExtractCodewordsReference(ReadOnlySpan<byte> modules, int size, ReadOnlySpan<byte> blockedMask, int maskPattern, Span<byte> output)
     {
         var bitPos = 0;
         var totalBits = output.Length * 8;
@@ -209,7 +213,7 @@ internal static class QRMatrixDecoder
     /// Mask predicates (ISO/IEC 18004 7.8.2), row = y, col = x.
     /// Must match the encoder's mask templates (see ModulePlacer.Masking).
     /// </summary>
-    private static bool GetMaskBit(int pattern, int row, int col) => pattern switch
+    internal static bool GetMaskBit(int pattern, int row, int col) => pattern switch
     {
         0 => ((row + col) & 1) == 0,
         1 => (row & 1) == 0,
@@ -268,16 +272,5 @@ internal static class QRMatrixDecoder
             for (var b = 0; b < g2Blocks; b++)
                 blocks[group2Base + b * g2BlockLength + g2Cw + e] = interleaved[pos++];
         }
-    }
-
-    /// <summary>
-    /// Gets the blocked-module bitmask for a version: the encoder's cached placement tables (<see cref="ModulePlacer.GetLayout"/>), built by its own function-pattern placement, so the decoder can never disagree with the encoder.
-    /// </summary>
-    private static byte[] GetBlockedMask(int version, int size)
-    {
-        var layout = ModulePlacer.GetLayout(version);
-        if (layout.Size != size)
-            throw new ArgumentException($"size {size} does not match version {version} ({layout.Size} modules)", nameof(size));
-        return layout.BlockedMask;
     }
 }

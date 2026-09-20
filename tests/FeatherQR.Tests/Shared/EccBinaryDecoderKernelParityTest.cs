@@ -270,7 +270,8 @@ public class EccBinaryDecoderKernelParityTest
 
     /// <summary>
     /// Boundary sweep: every ECC count the symbologies use, block lengths straddling
-    /// the x4 unrolled step and its scalar tail, the 16-lane dispatch boundary, and the
+    /// the eight-byte tree step, its four-byte remainder and its scalar tail (every
+    /// length mod 8, through eccCount + 1..+9), the 16-lane dispatch boundary, and the
     /// degenerate all-light / all-dark codewords. The has-error flag matters as much as
     /// the bytes: lanes past eccCount are non-zero even for a clean block, so a missing
     /// lane mask would report errors on a perfect symbol.
@@ -286,7 +287,7 @@ public class EccBinaryDecoderKernelParityTest
 
         for (var eccCount = 1; eccCount <= 30; eccCount++)
         {
-            foreach (var length in new[] { eccCount + 1, eccCount + 2, eccCount + 3, eccCount + 4, eccCount + 5, 13, 39, 47, 58, 149, 255 })
+            foreach (var length in new[] { eccCount + 1, eccCount + 2, eccCount + 3, eccCount + 4, eccCount + 5, eccCount + 6, eccCount + 7, eccCount + 8, eccCount + 9, 13, 39, 40, 47, 48, 58, 149, 152, 153, 255 })
             {
                 if (length <= eccCount || length > 255)
                     continue;
@@ -322,6 +323,7 @@ public class EccBinaryDecoderKernelParityTest
         {
             await Assert.That(EccBinaryDecoder.AdvSimdAlpha1[i]).IsEquivalentTo(GaloisField.Exp[i % 255]);
             await Assert.That(EccBinaryDecoder.AdvSimdAlpha4[i]).IsEquivalentTo(GaloisField.Exp[(4 * i) % 255]);
+            await Assert.That(EccBinaryDecoder.AdvSimdAlpha8[i]).IsEquivalentTo(GaloisField.Exp[(8 * i) % 255]);
         }
 
         // x^8 = 0x1D in GF(2^8)/0x11D, so reducing a high byte h means multiplying it
