@@ -1058,9 +1058,10 @@ internal static class QRImageDecoder
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                // Truncation is the pixel containing x for every in-range (non-negative)
-                // coordinate, matching the scalar cast; out-of-range lanes differ from
-                // scalar saturation but are clamped into bounds either way.
+                // ConvertToInt32 truncates toward zero like the scalar cast, so both take
+                // the pixel containing the point (ConvertToInt32Native is the one that
+                // follows the platform's rounding); out-of-range lanes differ from scalar
+                // saturation but are clamped into bounds either way.
                 var px = Vector256.ConvertToInt32(x);
                 var py = Vector256.ConvertToInt32(y);
                 px = Vector256.Max(Vector256.Min(px, maxPx), zero);
@@ -1140,9 +1141,10 @@ internal static class QRImageDecoder
                 var xHi = (a11 * gridXHi + rowNumeratorX) * reciprocalHi;
                 var yHi = (a12 * gridXHi + rowNumeratorY) * reciprocalHi;
 
-                // Truncation is the pixel containing x for every in-range (non-negative)
-                // coordinate, matching the scalar cast; out-of-range lanes differ from
-                // scalar saturation but are clamped into bounds either way.
+                // ConvertToInt32 truncates toward zero like the scalar cast, so both take
+                // the pixel containing the point (ConvertToInt32Native is the one that
+                // follows the platform's rounding); out-of-range lanes differ from scalar
+                // saturation but are clamped into bounds either way.
                 var pxLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
                 var pyLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero);
                 var pxHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);

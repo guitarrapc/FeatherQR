@@ -1025,6 +1025,8 @@ internal static class RmQRImageDecoder
                 var xHi = (a11 * gridXHi + rowX + a31) / denominatorHi;
                 var yHi = (a12 * gridXHi + rowY + a32) / denominatorHi;
 
+                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel
+                // containing the point, not the nearest one.
                 var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
                     + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
                 var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
@@ -1105,6 +1107,8 @@ internal static class RmQRImageDecoder
                 var xHi = a11 * gridXHi + rowX + a31;
                 var yHi = a12 * gridXHi + rowY + a32;
 
+                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel
+                // containing the point, not the nearest one.
                 var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
                     + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
                 var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
