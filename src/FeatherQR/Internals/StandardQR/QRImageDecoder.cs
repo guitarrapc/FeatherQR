@@ -24,7 +24,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// </code>
 /// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, uneven lighting (global threshold only), blur, and multiple QR codes per image.
 /// </remarks>
-internal static class QRImageDecoder
+internal static partial class QRImageDecoder
 {
     /// <summary>
     /// Decodes a QR code from grayscale pixels.
@@ -961,11 +961,12 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Samples every module center through the piecewise-bilinear mesh.
+    /// Reference sampler: every module center through the piecewise-bilinear mesh, one module at a time.
+    /// Not on the decode path; it is what the tiers behind <see cref="SampleGridPiecewise"/> are held to, pixel for pixel.
     /// Bilinear interpolation is exact at the nodes, continuous across cell edges (adjacent cells share the same edge interpolation, unlike per-cell homographies), and division-free; within ~20-module cells its deviation from the true projective map is second-order small.
     /// Modules outside the lattice (borders, ≤ 6 modules) extrapolate the nearest cell.
     /// </summary>
-    internal static void SampleGridPiecewise(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
+    internal static void SampleGridPiecewiseScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
         var cells = meshSize - 1;
         Span<float> rowXs = stackalloc float[MaxMeshNodes];
