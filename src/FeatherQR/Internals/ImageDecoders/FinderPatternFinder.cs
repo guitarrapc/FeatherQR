@@ -433,7 +433,7 @@ internal static partial class FinderPatternFinder
     /// <summary>
     /// Checks the 1:1:3:1:1 ratio with 50% per-module tolerance.
     /// </summary>
-    private static bool IsFinderRatio(ReadOnlySpan<int> runs)
+    internal static bool IsFinderRatio(ReadOnlySpan<int> runs)
     {
         var total = 0;
         for (var i = 0; i < 5; i++)
@@ -469,7 +469,7 @@ internal static partial class FinderPatternFinder
     /// Runs within 1.5 px of the 1:1:3:1:1 ratio on every one of the five, asked only of runs that failed the half-module check.
     /// From about 2.9 px/module half a module is the wider of the two tolerances, so nothing that failed is near: this reaches low densities only.
     /// </summary>
-    private static bool IsNearFinderRatio(int r0, int r1, int r2, int r3, int r4)
+    internal static bool IsNearFinderRatio(int r0, int r1, int r2, int r3, int r4)
     {
         var total = r0 + r1 + r2 + r3 + r4;
         if (total < 7)
@@ -598,7 +598,7 @@ internal static partial class FinderPatternFinder
     /// The runs a crisp finder leaves under about 1.6 px/module, where each module is 1 or 2 px wide: four single modules and a centre of 3 to 5.
     /// The centre first: on fine noise, where this is asked of every window, few runs are that long.
     /// </summary>
-    private static bool IsSmallCrispFinderRuns(int r0, int r1, int r2, int r3, int r4)
+    internal static bool IsSmallCrispFinderRuns(int r0, int r1, int r2, int r3, int r4)
         => (uint)(r2 - 3) <= 2u && (uint)(r0 - 1) <= 1u && (uint)(r1 - 1) <= 1u && (uint)(r3 - 1) <= 1u && (uint)(r4 - 1) <= 1u;
 
     /// <summary>
@@ -692,16 +692,16 @@ internal static partial class FinderPatternFinder
     /// Returns the refined center coordinate on that axis, or NaN.
     /// With <paramref name="nearMissRuns"/> the line only has to read as a small crisp finder's, and its runs are handed back for the whole-pattern check.
     /// </summary>
-    private static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, bool referenceWalk, out int total, Span<int> nearMissRuns)
+    internal static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, bool referenceWalk, out int total, Span<int> nearMissRuns)
     {
         total = 0;
 
-        // Each side run is followed no further than the expected total
+        // The walk gives up where the verdict below is already certain to refuse, in either mode
         Span<int> runs = stackalloc int[5];
         int end;
         var measured = referenceWalk
             ? MeasureAxisRunsReference(luminance, width, height, threshold, centerX, centerY, vertical, expectedTotal, runs, out end)
-            : MeasureRuns(luminance, width, height, threshold, centerX, centerY, vertical ? 0 : 1, vertical ? 1 : 0, expectedTotal, runs, out end);
+            : MeasureRunsBounded(luminance, width, height, threshold, centerX, centerY, vertical ? 0 : 1, vertical ? 1 : 0, expectedTotal, runs, out end);
         if (!measured)
             return float.NaN;
 
