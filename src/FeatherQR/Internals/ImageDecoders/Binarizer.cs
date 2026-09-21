@@ -89,7 +89,7 @@ internal static class Binarizer
 
     /// <summary>
     /// Turns an image's histogram into its negative's, in place: a pixel of value v is 255 − v there, so bin i moves to 255 − i.
-    /// The inverted retry thresholds from this instead of counting the negative's pixels.
+    /// The inverted retry gets its thresholds from this instead of counting the negative's pixels.
     /// </summary>
     /// <remarks>
     /// The threshold is searched again on the result, not mirrored: splits that tie keep the first one found, and the first from the other end is a different split.
