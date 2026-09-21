@@ -31,11 +31,24 @@ internal static class Binarizer
     {
         Span<int> histogram = stackalloc int[HistogramBins];
         FillHistogram(luminance, histogram);
+        return ComputeOtsuThresholdFromHistogram(histogram, out grey);
+    }
 
-        var total = luminance.Length;
+    /// <summary>
+    /// The threshold and the grey levels of <see cref="ComputeOtsuThreshold(ReadOnlySpan{byte}, out GreyLevels)"/> from a histogram already filled: both are functions of the bins alone.
+    /// </summary>
+    /// <param name="histogram">Counts per luminance, as <see cref="FillHistogram"/> leaves them.</param>
+    /// <param name="grey">The levels a pixel between the two classes is read against; disabled when the image holds no such pixel.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="histogram"/> holds fewer than 256 bins.</exception>
+    internal static byte ComputeOtsuThresholdFromHistogram(ReadOnlySpan<int> histogram, out GreyLevels grey)
+    {
+        histogram = histogram.Slice(0, HistogramBins);
+
+        long total = 0;
         long sumAll = 0;
         for (var i = 0; i < 256; i++)
         {
+            total += histogram[i];
             sumAll += (long)i * histogram[i];
         }
 
@@ -71,7 +84,19 @@ internal static class Binarizer
         return (byte)threshold;
     }
 
-    private const int HistogramBins = 256;
+    /// <summary>Bins in a luminance histogram; what a caller that keeps one between two calls allocates.</summary>
+    internal const int HistogramBins = 256;
+
+    /// <summary>
+    /// Turns an image's histogram into its negative's, in place: a pixel of value v is 255 − v there, so bin i moves to 255 − i.
+    /// The inverted retry thresholds from this instead of counting the negative's pixels.
+    /// </summary>
+    /// <remarks>
+    /// The threshold is searched again on the result, not mirrored: splits that tie keep the first one found, and the first from the other end is a different split.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="histogram"/> holds fewer than 256 bins.</exception>
+    internal static void InvertHistogram(Span<int> histogram)
+        => histogram.Slice(0, HistogramBins).Reverse();
 
     /// <summary>
     /// Counts the pixels per luminance into <paramref name="histogram"/>, overwriting its first 256 bins.

@@ -77,7 +77,10 @@ internal static class RmQRImageDecoder
         }
 
         luminance = luminance.Slice(0, pixelCount);
-        var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
+        // One count serves both polarities: the negative's histogram is this one mirrored
+        Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
         if (IsTerminal(status))
             return status;
 
@@ -88,8 +91,9 @@ internal static class RmQRImageDecoder
         {
             var inverted = rented.AsSpan(0, pixelCount);
             LuminanceInverter.Invert(luminance, inverted);
+            Binarizer.InvertHistogram(histogram);
 
-            var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
+            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo);
             if (IsTerminal(invertedStatus))
             {
                 // Success, or the symbol was read but the caller's destination is too
@@ -117,11 +121,10 @@ internal static class RmQRImageDecoder
     /// The scan itself cannot ask it: every signal inside a flat candidate list is a statement about the image, so a second QR code or a noise artefact would answer it in the real symbol's place and suppress the sweep the symbol needed.
     /// Paid only on images that fail, and it makes the detection envelope a superset of a full sweep's: the symbol is read if either pass reads it.
     /// </remarks>
-    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
-        // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
-        // threshold is the single most expensive step of the whole failure path.
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        // Hoisted: the two scans binarize the same buffer
+        var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
         var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false);
         // Terminal, not just successful: DestinationTooSmall is only reached after the
