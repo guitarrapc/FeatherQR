@@ -23,29 +23,29 @@ foreach (var (pattern, charset) in new[]
 {
     var message = string.Concat(Enumerable.Repeat(pattern, 7)) + " tail 7";
     foreach (var segmentation in new[] { QRSegmentation.Single, QRSegmentation.Optimal })
-    foreach (var bom in new[] { false, true })
-    {
-        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(5), EciMode = charset, Utf8Bom = bom, Segmentation = segmentation };
-        var symbols = QRCodeGenerator.CreateStructuredAppend(message, QREccLevel.L, options);
-        if (symbols.Length < 2)
-            throw new InvalidOperationException("Structured Append smoke must produce a set.");
-        var bytes = charset == EciMode.Utf8 ? Encoding.UTF8.GetBytes(message) : Encoding.Latin1.GetBytes(message);
-        byte parity = (byte)(bom && charset == EciMode.Utf8 ? 0xEF ^ 0xBB ^ 0xBF : 0);
-        foreach (var b in bytes)
-            parity ^= b;
-        var restored = new StringBuilder();
-        foreach (var symbol in symbols)
+        foreach (var bom in new[] { false, true })
         {
-            if (!QRCodeDecoder.TryDecode(symbol, out var part, out var info)
-                || info.StructuredAppend.IsEmpty || info.StructuredAppend.Parity != parity)
-                throw new InvalidOperationException("Structured Append parity/round-trip failed.");
-            restored.Append(part);
-            foreach (var b in symbol.GetRawData())
-                digest = unchecked((digest ^ b) * 1099511628211UL);
+            var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(5), EciMode = charset, Utf8Bom = bom, Segmentation = segmentation };
+            var symbols = QRCodeGenerator.CreateStructuredAppend(message, QREccLevel.L, options);
+            if (symbols.Length < 2)
+                throw new InvalidOperationException("Structured Append smoke must produce a set.");
+            var bytes = charset == EciMode.Utf8 ? Encoding.UTF8.GetBytes(message) : Encoding.Latin1.GetBytes(message);
+            byte parity = (byte)(bom && charset == EciMode.Utf8 ? 0xEF ^ 0xBB ^ 0xBF : 0);
+            foreach (var b in bytes)
+                parity ^= b;
+            var restored = new StringBuilder();
+            foreach (var symbol in symbols)
+            {
+                if (!QRCodeDecoder.TryDecode(symbol, out var part, out var info)
+                    || info.StructuredAppend.IsEmpty || info.StructuredAppend.Parity != parity)
+                    throw new InvalidOperationException("Structured Append parity/round-trip failed.");
+                restored.Append(part);
+                foreach (var b in symbol.GetRawData())
+                    digest = unchecked((digest ^ b) * 1099511628211UL);
+            }
+            if (restored.ToString() != message)
+                throw new InvalidOperationException("Structured Append text differs.");
         }
-        if (restored.ToString() != message)
-            throw new InvalidOperationException("Structured Append text differs.");
-    }
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
 return 0;

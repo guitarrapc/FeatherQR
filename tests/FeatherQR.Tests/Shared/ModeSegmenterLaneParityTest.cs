@@ -27,8 +27,8 @@ public class ModeSegmenterLaneParityTest
             var chunks = lengths.Select(length => new string(Enumerable.Range(0, length)
                 .Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray())).ToArray();
             foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
-            foreach (var (mode, numeric, alnum, bytes) in new[] { (4, 10, 9, 8), (4, 12, 11, 16), (4, 14, 13, 16), (2, 5, 4, 4) })
-                await Check(chunks, charset, mode, numeric, alnum, bytes);
+                foreach (var (mode, numeric, alnum, bytes) in new[] { (4, 10, 9, 8), (4, 12, 11, 16), (4, 14, 13, 16), (2, 5, 4, 4) })
+                    await Check(chunks, charset, mode, numeric, alnum, bytes);
         }
     }
 
@@ -46,8 +46,8 @@ public class ModeSegmenterLaneParityTest
             [new string('x', 3000), new string('あ', 2900), new string('0', 6000), new string('A', 4000)],
         ];
         foreach (var chunks in cases)
-        foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
-            await Check(chunks, charset, 4, 14, 13, 16);
+            foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+                await Check(chunks, charset, 4, 14, 13, 16);
     }
 
     [Test]
