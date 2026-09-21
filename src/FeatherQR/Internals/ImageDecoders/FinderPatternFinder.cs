@@ -20,6 +20,24 @@ internal struct FinderPattern
 }
 
 /// <summary>
+/// Which row kernel the finder search runs. Everything but <see cref="Auto"/> exists for the parity tests: the three kernels leave the same candidates behind.
+/// </summary>
+internal enum FinderRowKernel
+{
+    /// <summary>The fastest kernel the machine and the row width allow.</summary>
+    Auto,
+
+    /// <summary>The pixel-by-pixel row walk, and the reference walks in the cross-checks: the reference for the whole search.</summary>
+    Scalar,
+
+    /// <summary>The run-by-run walk over a dark bitmask; the scalar walk on rows too narrow for it.</summary>
+    MaskWalk,
+
+    /// <summary>All edges of the row at once and sixteen windows a step; the mask walk where <see cref="FinderPatternFinder.IsEdgeListKernelSupported"/> is false or the row is too wide or too narrow for it.</summary>
+    EdgeList,
+}
+
+/// <summary>
 /// Locates the three 7×7 finder patterns in a binarized luminance image.
 /// </summary>
 /// <remarks>
@@ -59,11 +77,15 @@ internal static partial class FinderPatternFinder
     /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>True when at least three mutually consistent finder patterns were found.</returns>
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
-        => TryFindCore(luminance, width, height, threshold, grey, forceScalar: false, patterns);
+        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, patterns);
 
     /// <summary>Reference entry for parity tests: the scalar row walk and the reference cross-check walks; behavior-identical to <see cref="TryFind"/>.</summary>
     internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
-        => TryFindCore(luminance, width, height, threshold, grey, forceScalar: true, patterns);
+        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Scalar, patterns);
+
+    /// <summary>Kernel-selecting entry for parity tests; behavior-identical to <see cref="TryFind"/> under every kernel.</summary>
+    internal static bool TryFindWith(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey, FinderRowKernel kernel)
+        => TryFindCore(luminance, width, height, threshold, grey, kernel, patterns);
 
     /// <summary>
     /// Row stride for <see cref="FindCandidates"/>.
@@ -91,7 +113,7 @@ internal static partial class FinderPatternFinder
     /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>The number of candidates written.</returns>
     internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
-        => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, CandidateRowStride);
+        => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, CandidateRowStride, FinderRowKernel.Auto);
 
     /// <summary>
     /// Every row, no stride.
@@ -105,22 +127,48 @@ internal static partial class FinderPatternFinder
     /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>The number of candidates written.</returns>
     internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey)
-        => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, stride: 1);
+        => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, stride: 1, FinderRowKernel.Auto);
 
-    private static int FindCandidatesCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, int stride)
+    /// <summary>Stride- and kernel-selecting entry for parity tests.</summary>
+    internal static int FindCandidatesWith(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates, in GreyLevels grey, int stride, FinderRowKernel kernel)
+        => FindCandidatesCore(luminance, width, height, threshold, grey, candidates, stride, kernel);
+
+    private static int FindCandidatesCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, int stride, FinderRowKernel kernel)
     {
-        var candidateCount = 0;
-        for (var y = 0; y < height; y += stride)
+        var rentedEdges = RentEdgeBuffer(kernel, width);
+        try
         {
-            ScanRow(luminance, width, height, threshold, grey, y, forceScalar: false, candidates, ref candidateCount);
+            var candidateCount = 0;
+            for (var y = 0; y < height; y += stride)
+            {
+                ScanRow(luminance, width, height, threshold, grey, y, kernel, rentedEdges, candidates, ref candidateCount);
+            }
+            return candidateCount;
         }
-        return candidateCount;
+        finally
+        {
+            ReturnEdgeBuffer(rentedEdges);
+        }
     }
 
     /// <summary>Capacity to provide for <see cref="FindCandidates"/>'s candidate buffer.</summary>
     internal const int MaxFinderCandidates = MaxCandidates;
 
-    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, bool forceScalar, Span<FinderPattern> patterns)
+    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<FinderPattern> patterns)
+    {
+        // One rental a search, not a row: the edge-list kernel's buffer
+        var rentedEdges = RentEdgeBuffer(kernel, width);
+        try
+        {
+            return TryFindRows(luminance, width, height, threshold, grey, kernel, rentedEdges, patterns);
+        }
+        finally
+        {
+            ReturnEdgeBuffer(rentedEdges);
+        }
+    }
+
+    private static bool TryFindRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> patterns)
     {
         // Row stride bound: a v40 symbol filling the frame has module size height/177.
         // Its 3-module center band is 3·height/177 px tall and a stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol occupies half the frame), enough for the Count-based confirmation in TrySelectBestThree.
@@ -132,7 +180,7 @@ internal static partial class FinderPatternFinder
 
         for (var y = 0; y < height; y += stride)
         {
-            ScanRow(luminance, width, height, threshold, grey, y, forceScalar, candidates, ref candidateCount);
+            ScanRow(luminance, width, height, threshold, grey, y, kernel, edges, candidates, ref candidateCount);
         }
 
         if (stride > 1)
@@ -152,7 +200,7 @@ internal static partial class FinderPatternFinder
                 var limit = Math.Min(baseY + stride, height);
                 for (var y = baseY + 1; y < limit; y++)
                 {
-                    ScanRow(luminance, width, height, threshold, grey, y, forceScalar, candidates, ref candidateCount);
+                    ScanRow(luminance, width, height, threshold, grey, y, kernel, edges, candidates, ref candidateCount);
                 }
             }
 
@@ -194,17 +242,24 @@ internal static partial class FinderPatternFinder
         return modules;
     }
 
-    private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, bool forceScalar, Span<FinderPattern> candidates, ref int candidateCount)
+    private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> candidates, ref int candidateCount)
     {
 #if NET8_0_OR_GREATER
+        // A buffer means the search chose the edge-list kernel for this width
+        if (!edges.IsEmpty)
+        {
+            ScanRowEdges(luminance, width, height, threshold, grey, y, edges, candidates, ref candidateCount);
+            return;
+        }
+
         // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels, result bit-identical to the scalar walk. Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
-        if (!forceScalar && Vector128.IsHardwareAccelerated && width >= 16)
+        if (kernel != FinderRowKernel.Scalar && Vector128.IsHardwareAccelerated && width >= 16)
         {
             ScanRowMask(luminance, width, height, threshold, grey, y, candidates, ref candidateCount);
             return;
         }
 #endif
-        ScanRowScalar(luminance, width, height, threshold, grey, y, forceScalar, candidates, ref candidateCount);
+        ScanRowScalar(luminance, width, height, threshold, grey, y, referenceWalk: kernel == FinderRowKernel.Scalar, candidates, ref candidateCount);
     }
 
     private static void ScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, bool referenceWalk, Span<FinderPattern> candidates, ref int candidateCount)
