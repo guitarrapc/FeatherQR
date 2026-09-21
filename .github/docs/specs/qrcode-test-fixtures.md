@@ -26,9 +26,11 @@ tests/FeatherQR.Tests/Fixtures/
 ├── MicroQR/
 │   ├── zint-libzint/           (same three files; PNG quiet zone 2 per the Micro QR spec)
 │   └── qrtool/
-└── RmQr/
-    ├── zint-libzint/           (same three files; rectangular matrix / PNG, quiet zone 2 per ISO/IEC 23941)
-    └── qrtool/
+├── RmQr/
+│   ├── zint-libzint/           (same three files; rectangular matrix / PNG, quiet zone 2 per ISO/IEC 23941)
+│   └── qrtool/
+└── RealImages/
+    └── zxing-cpp-samples/      (third-party photographs, scans and renders: image + .txt with its text, one directory per sample set; PROVENANCE.md + LICENSE beside them; measured, not asserted, see "Image decode sweep")
 ```
 
 ### Manifest schema (case-name.json, camelCase)
@@ -114,6 +116,32 @@ The same tool carries the oracle probes, which are run by hand and whose finding
 
 The tool wipes and rewrites each available generator's directory. Fixture updates must be committed as an explicit, reviewed change, a generator-version bump that silently alters fixtures is exactly what the corpus is meant to catch.
 
+### Image decode sweep
+
+The fixtures above prove that a foreign symbol decodes from its matrix and from a clean render at 8 px/module. They say nothing about how the image decoders hold up as the image gets harder, and until 2026-09-21 every sweep that asked that question drew this library's own symbols. `tools/QRImageDecodeSweep` asks it against other readers, image for image, and its number is the **gap**: images zxing-cpp reads and this library does not get through.
+
+```bash
+# Synthetic renders: every encoder's symbol of the same payload through the same render, 23 kinds
+dotnet run -c Release --project tools/QRImageDecodeSweep -- sweep [qr|micro|rmqr|all] [cases] [outDir]
+
+# The committed real images, each at the four right angles
+dotnet run -c Release --project tools/QRImageDecodeSweep -- corpus [outDir]
+
+# Two result files of the same run from two trees, image for image: gained, lost, and every lost image by name
+dotnet run -c Release --project tools/QRImageDecodeSweep -- compare <before.csv> <after.csv>
+
+# Third-party images, never regenerated: re-import from a zxing-cpp checkout, recording its commit
+dotnet run -c Release --project tools/QRImageDecodeSweep -- import-corpus <zxing-cpp-root> <commit>
+```
+
+- **Encoders**: this library, ZXing.Net, QRCoder, QrCodeGenerator, CodeGlyphX, libzint and qrtool for Standard QR; this library, libzint and qrtool for Micro QR and rMQR. A case fixes the payload (ASCII, so that a failure is an image failure and not a character-set convention), the level and the version; every encoder gets the same one.
+- **Kinds**: the test suite's own renderers, linked from `tests/FeatherQR.Tests/Shared` (crisp nearest-neighbour and anti-aliased path at a fractional scale and random sub-pixel offset, supersampled at any rotation with and without keystone), plus bilinear upscales, mip-mapped downscales, right-angle turns, mirrors, a JPEG round trip, and each library's own image writer. A kind measured here is a kind a test draws.
+- **Readers**: this library, zxing-cpp and ZXing.Net, each given the same grayscale buffer and told the symbology.
+- **Pairing**: render parameters are seeded by arithmetic on the case and kind indices, so two runs write byte-identical result files, and two trees can be compared render for render. The default case counts (400 / 400 / 640: ten per Standard QR version, a hundred per Micro QR version, twenty per rMQR version) are the ones every recorded table uses.
+- **Content is not gap**: an image this library decodes into another text, or whose bit stream it refuses (`InvalidBitstream`, `UnsupportedContent`, `UnmappedCharacter`), was located, sampled and error-corrected. It is counted in its own column. In the real-image sets that column is Byte-mode Shift_JIS without an ECI header (eleven images, which zxing-cpp reads by guessing the character set), one GS1 symbol, and one symbol whose bit stream is refused and which neither other reader reads.
+
+It is a measurement, run by hand: it needs the native oracles, takes minutes, and its result is a table to compare, not a condition to assert. What a change to a decoder owes the test suite is still a render of the failing class with its geometry asserted.
+
 ## Oracle capability matrix
 
 Status meaning, **verified**: exercised in this repository; **documented**: capability confirmed from project documentation, not yet run here.
@@ -174,3 +202,6 @@ PR CI stays self-contained and deterministic (no Rust/C++/Python toolchains), an
 - The public `QRCodeWriter.encode` path scales and pads to a requested pixel size; extracting the core matrix from it is lossy. Generating from the internal encoder and rendering PNGs ourselves keeps the matrix and the image pixel-exact for a known quiet zone and module size.
 - Requested ECC is honored (never downgraded) by ZXing's encoder, so the manifest can record the requested level as the expected decode result without reading it back from the symbol.
 - A committed external symbol is not automatically a byte-exact oracle: qrtool's rMQR output carries a systematic tail defect (last h − 10 placement modules never written) that zxing-cpp corrects silently, so the sanity gate (payload + metadata equality) passed 36/36 while the encoder-side final-message comparison found 12 mismatches. Where the reader can correct, cross-lineage agreement (libzint byte-exact, qrtool differing only in the last codeword's low bits, both consistent with the ISO codeword counts that qrtool's layout could not even hold) is what arbitrates; the corpus keeps the qrtool symbols as real-world "one corrupted ECC codeword" decoder cases with the defect documented, rather than dropping them.
+- qrtool 0.13.2 has a second rMQR defect, and this one is not correctable: R17x43 at level M comes out with about 88 modules different from libzint's and this library's matrices, which agree byte for byte, and no reader decodes it. Level H of the same version carries only the tail defect. The image decode sweep found it as ten cases failing in every render kind, the library's own 8 px/module writer included; a failure that does not move with the render is the encoder's. The sweep leaves R17x43 out of the qrtool lineage.
+- libzint's creator in the pinned ZXingCpp package dies with an access violation on some payloads, some of the time: Standard QR case 301 of the sweep (523 byte-mode characters at level Q) kills it about one run in three, in a process that does nothing else. It was first read as a threading fault, because the first crashes came with readers running on other threads and a serial scan of the same cases passed; a lock changed nothing, a run with a collector thread forcing finalizers changed nothing, and then a serial pass crashed on the same case. A managed process cannot catch it, so the sweep runs the creator in a worker process, retries the case the worker died on, and leaves a case out only after eight deaths in a row, which keeps two runs identical. The fixture generator has not met it (its payloads are short), but a new long-payload libzint case should be generated more than once before it is trusted.
+- The zxing-cpp sample sets are small because that repository recompressed them (240 px WebP for most photographs); all eight sets are 1.1 MB, so they are committed rather than fetched.
