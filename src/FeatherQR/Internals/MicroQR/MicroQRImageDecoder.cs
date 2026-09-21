@@ -48,7 +48,10 @@ internal static class MicroQRImageDecoder
         }
 
         luminance = luminance.Slice(0, pixelCount);
-        var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
+        // One count serves both polarities: the negative's histogram is this one mirrored
+        Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
         if (IsTerminal(status))
             return status;
 
@@ -60,8 +63,9 @@ internal static class MicroQRImageDecoder
         {
             var inverted = rented.AsSpan(0, pixelCount);
             LuminanceInverter.Invert(luminance, inverted);
+            Binarizer.InvertHistogram(histogram);
 
-            var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
+            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo);
             if (IsTerminal(invertedStatus))
             {
                 info = invertedInfo;
@@ -84,11 +88,10 @@ internal static class MicroQRImageDecoder
     /// Mirrors the rMQR image decoder: the widening trigger has to be a question about the symbol, and only the caller can ask it.
     /// See <see cref="FinderPatternFinder.FindCandidates"/>.
     /// </remarks>
-    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
-        // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
-        // threshold is the single most expensive step of the whole failure path.
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        // Hoisted: the two scans binarize the same buffer
+        var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
         var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false);
         // Terminal, not just successful: DestinationTooSmall is only reached after the

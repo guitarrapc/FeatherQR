@@ -46,7 +46,10 @@ internal static class QRImageDecoder
         }
 
         luminance = luminance.Slice(0, pixelCount);
-        var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
+        // One count serves both polarities: the negative's histogram is this one mirrored
+        Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
         if (IsTerminal(status))
             return status;
 
@@ -58,8 +61,9 @@ internal static class QRImageDecoder
         {
             var inverted = rented.AsSpan(0, pixelCount);
             LuminanceInverter.Invert(luminance, inverted);
+            Binarizer.InvertHistogram(histogram);
 
-            var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
+            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo);
             if (IsTerminal(invertedStatus))
             {
                 info = invertedInfo;
@@ -75,11 +79,11 @@ internal static class QRImageDecoder
         }
     }
 
-    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
         Span<FinderPattern> patterns = stackalloc FinderPattern[3];
         if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey))
