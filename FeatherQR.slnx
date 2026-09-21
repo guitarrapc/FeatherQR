@@ -23,6 +23,7 @@
     <Project Path="tests/FeatherQR.Tests/FeatherQR.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/QRImageDecodeSweep/QRImageDecodeSweep.csproj" />
     <Project Path="tools/QRInteropFixtures/QRInteropFixtures.csproj" />
   </Folder>
 </Solution>

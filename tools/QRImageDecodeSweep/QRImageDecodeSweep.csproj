@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <PackageReference Include="ZXing.Net" />
+    <PackageReference Include="ZXing.Net.Bindings.SkiaSharp.V2" />
+    <PackageReference Include="ZXingCpp" />
+    <PackageReference Include="Net.Codecrete.QrCodeGenerator" />
+    <PackageReference Include="CodeGlyphX" />
+    <PackageReference Include="QRCoder" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
+  </ItemGroup>
+
+  <!-- The renders are the test suite's own, so a kind measured here is the kind a test draws. -->
+  <ItemGroup>
+    <Compile Include="..\..\tests\FeatherQR.Tests\Shared\AntiAliasedRenderer.cs" Link="Renderers\AntiAliasedRenderer.cs" />
+    <Compile Include="..\..\tests\FeatherQR.Tests\Shared\NearestNeighbourRenderer.cs" Link="Renderers\NearestNeighbourRenderer.cs" />
+    <Compile Include="..\..\tests\FeatherQR.Tests\Shared\SupersampledRenderer.cs" Link="Renderers\SupersampledRenderer.cs" />
+  </ItemGroup>
+
+</Project>
