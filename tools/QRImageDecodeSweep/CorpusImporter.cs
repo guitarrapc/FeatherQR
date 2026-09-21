@@ -23,9 +23,35 @@ internal static class CorpusImporter
             return 1;
         }
 
+        var missing = sets.Where(set => !Directory.Exists(Path.Combine(samples, set))).ToList();
+        if (missing.Count > 0)
+        {
+            Console.Error.WriteLine($"missing sample sets under {samples}: {string.Join(", ", missing)}");
+            return 1;
+        }
+
+        // Built beside the committed corpus and swapped in whole, so an import that fails leaves the last good one as it was
         var target = Path.Combine(repoRoot, Corpus.RelativeRoot, LineageName);
-        if (Directory.Exists(target))
-            Directory.Delete(target, recursive: true);
+        var staging = target + ".importing";
+        if (Directory.Exists(staging))
+            Directory.Delete(staging, recursive: true);
+        try
+        {
+            Stage(samples, license, sourceCommit, staging);
+            if (Directory.Exists(target))
+                Directory.Delete(target, recursive: true);
+            Directory.Move(staging, target);
+            return 0;
+        }
+        finally
+        {
+            if (Directory.Exists(staging))
+                Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    private static void Stage(string samples, string license, string sourceCommit, string target)
+    {
         Directory.CreateDirectory(target);
         File.Copy(license, Path.Combine(target, "LICENSE"));
 
@@ -42,12 +68,6 @@ internal static class CorpusImporter
         foreach (var set in sets)
         {
             var source = Path.Combine(samples, set);
-            if (!Directory.Exists(source))
-            {
-                Console.Error.WriteLine($"missing sample set {source}");
-                return 1;
-            }
-
             var destination = Path.Combine(target, set);
             Directory.CreateDirectory(destination);
             var count = 0;
@@ -69,6 +89,5 @@ internal static class CorpusImporter
         }
 
         File.WriteAllText(Path.Combine(target, "PROVENANCE.md"), provenance.ToString().ReplaceLineEndings("\n"), new UTF8Encoding(false));
-        return 0;
     }
 }

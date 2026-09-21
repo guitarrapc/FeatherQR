@@ -23,6 +23,14 @@ switch (command)
         {
             var which = args.Length > 1 ? args[1] : "all";
             var outDir = args.Length > 3 ? args[3] : defaultOut;
+
+            // A typo must not pass for a run that measured nothing
+            var caseCount = 0;
+            if ((which != "all" && !Symbologies.All.Contains(which)) || (args.Length > 2 && (!int.TryParse(args[2], out caseCount) || caseCount < 1)))
+            {
+                Console.Error.WriteLine($"sweep takes one of all, {string.Join(", ", Symbologies.All)}, then a positive case count; got '{string.Join(' ', args.Skip(1).Take(2))}'");
+                return 1;
+            }
             Qrtool.Locate(repoRoot);
 
             var markdown = new StringBuilder();
@@ -31,7 +39,7 @@ switch (command)
             {
                 if (which != "all" && which != symbology)
                     continue;
-                var cases = args.Length > 2 ? int.Parse(args[2]) : Symbologies.DefaultCases(symbology);
+                var cases = args.Length > 2 ? caseCount : Symbologies.DefaultCases(symbology);
                 var rows = Sweep.Run(symbology, cases);
                 incomplete |= rows.Any(static r => r.Status.EndsWith(Libzint.DiedStatus, StringComparison.Ordinal));
                 var csv = Path.Combine(outDir, $"sweep-{symbology}.csv");
