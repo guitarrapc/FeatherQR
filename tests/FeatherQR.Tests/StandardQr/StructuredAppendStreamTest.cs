@@ -381,6 +381,10 @@ public class StructuredAppendStreamTest
     {
         var unit = new string('7', 20) + Mark + "abc";
         yield return ("plan-opens-a-byte-run-at-the-mark", unit + unit, QREccLevel.L, QRVersionRange.AtMost(1), false);
+        // A mark every unit, at lengths no single-mode stream holds: the plan the search priced the text by is the one the writer has to accept, or nothing fits.
+        yield return ("mark-a-unit-one-symbol", Repeat(unit, 3_000), QREccLevel.L, QRVersionRange.Any, false);
+        yield return ("mark-a-unit-a-set", Repeat(unit, 9_000), QREccLevel.L, QRVersionRange.Any, false);
+        yield return ("mark-a-unit-below-the-band", Repeat(unit, 3_000), QREccLevel.L, QRVersionRange.AtMost(12), false);
         yield return ("one-symbol-by-its-plan-only", new string('7', 3000) + Mark + "abcdefghij", QREccLevel.L, QRVersionRange.Any, false);
         yield return ("boost-priced-by-a-plan-around-the-mark", Repeat("12345678901234567890" + Mark + "abcdefghijkl", 400), QREccLevel.L, QRVersionRange.Exactly(10), true);
         yield return ("long", Repeat(new string('7', 28) + Mark, 9000), QREccLevel.M, QRVersionRange.Any, false);
