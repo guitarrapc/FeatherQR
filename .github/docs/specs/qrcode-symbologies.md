@@ -298,6 +298,10 @@ The Otsu entry above is the next one a profile questions: on x64 the histogram f
 the largest stage of a large symbol's image decode, because its uniform-group fold stops
 paying at 3 pixels a module (same Performance lessons). That is an x64 figure on synthetic
 renders; nothing was re-measured on ARM64, and the entry stands until it is.
+The x64 side of that has since shipped as a 256-bit histogram tier (same Performance lessons). ARM64 and
+WASM did not get a vector tier with it: the 128-bit form measured on x64 says nothing about targets
+where the mask extraction is a different sequence of instructions, so they run the scalar walk, which
+changed only in how it indexes the bins, and the entry still stands for them.
 
 ## Scope decisions
 
