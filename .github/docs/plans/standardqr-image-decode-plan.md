@@ -78,7 +78,49 @@ Versions 14 and up sample through the piecewise mesh, and `SampleGridPiecewise` 
 
 ### 4. Finder search (phase 4)
 
-8 to 33 % of a version 40 decode, and nearly all of a no-symbol noise image that the threshold is not (1,190 to 1,210 of 1,350 us a polarity at 740 x 740). It is already a strided SIMD mask walk, so what is left in it is not known, and nothing is proposed here until the code has been read and its own stages timed. The matrix plan's fifth phase is on record for what a hypothesis written before that is worth.
+Phase 1 put it at 8 to 33 % of a version 40 decode and nearly all of a no-symbol noise image that the threshold is not, and proposed nothing until the code had been read and its own stages timed. That was done after phase 3 shipped (2026-09-22), and the ranking had moved: with the threshold and the mesh sampler out of the way, the search is the largest stage of every rendered version 40 decode.
+
+One version 40 Structured Append symbol (the first of a 45,000 character byte set at level L), the phase 1 harness on the tree after phase 3, x64, us, minimum per arm:
+
+| | Total | Otsu | Finder | Mesh build | Sampling | Matrix | Finder share |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 3 px hard | 128 | 11 | 72 | 10 | 19 | 14 | 56 % |
+| 3.4 px fractional | 152 | 14 | 89 | 12 | 18 | 14 | 59 % |
+| 4 px hard | 173 | 19 | 111 | 7 | 19 | 14 | 64 % |
+| 4.4 px fractional | 208 | 23 | 138 | 9 | 19 | 14 | 66 % |
+| 8 px hard | 285 | 77 | 160 | 9 | 19 | 14 | 56 % |
+| 4 px soft | 367 | 170 | 127 | 7 | 19 | 14 | 35 % |
+| 4 px rot | 453 | 124 | 160 | 9 | 19 | 21 | 35 %, 50 % timed inside a decode |
+| No symbol, noise 740 x 740 | 2,584 | 159 x 2 | 1,194 x 2 | | | | 92 % |
+
+The label-sized set (version 10, the global transform) reads 14 to 45 us on the rendered classes with the search at 47 to 64 %. The threshold is still the largest stage on the soft class at every size and on the 8 px rotated image, where it runs the scalar bins; phase 2 closed that with its refutations and nothing here reopens it.
+
+The isolated finder arm under-reads the rotated class. With timestamps between the stages of one decode body, the search costs 1.4x to 1.7x its isolated figure on the three rotated images (79 to 135, 152 to 224, 162 to 251 us) and 1.2x on the 8 px soft one, while the hard and fractional classes read within 10 % either way. Looped on its own, the search runs the same rows in the same order and its branches are learnt; in a decode they are not. The ladder below is judged end to end per class for that reason, and a kernel ratio alone does not close a rung.
+
+What the search does, counted through an instrumented copy (counts are exact; its timestamps inflate the stage by a third, so the times are from uninstrumented copies of each part):
+
+- Only the stride pass runs. The complementary rescan fired on no symbol input, only on the gradient. A third of the rows are scanned, a sixth at 8 px a module.
+- A version 40 symbol is 7,800 to 12,200 dark runs over 185 to 309 rows. 280 to 800 windows pass the 1:1:3:1:1 check and go to the cross-checks, and 6 to 21 survive: 97 to 98 % of cross-checks are refusals, all of them on data modules.
+- Version 40, hard, 3 / 4 / 8 px, us: the row masks 3 / 5 / 9 (already vector compares, about 5 % of the search); the run walk with its ratio checks 29 / 40 / 41; the cross-checks and what follows them the remaining 40 / 67 / 110. The vertical check alone is 25 / 44 / 82, walking 32 / 43 / 86 pixels a hit for a window 21 / 28 / 56 pixels long.
+- The noise image is 45,700 runs and 2,350 cross-checks a polarity: 554 us of walk at 12 ns a run, against 4 ns a run on a symbol, which is what unpredictable run lengths cost the run-by-run walk and its five chained float compares.
+
+The ladder, in the order the measured ceilings put it. Each rung is one hypothesis on its parent, gated for identity before it is timed:
+
+| # | Hypothesis | Evidence so far | Open |
+|---|---|---|---|
+| 1 | The cross-check walks pay for their generality, not for the pixels: one method serves both axes and picks the axis per pixel, every pixel is a checked two-dimensional index, and the runs live in a stack buffer. One walker per axis over a stepped reference, the runs in locals, reads the same pixels in the same order | Prototype, vertical check only, runs identical on every hit of every input: 0.37 to 0.52 at 3 and 4 px a module (version 40: 24.5 to 9.1 us, 44.4 to 21.4), 0.58 to 0.66 at 8 px (81.8 to 52.2), noise 0.60 | Shipped, see Progress log: the search gained 0.83 to 0.92 on rendered symbols, about two thirds of what this prototype's walk promised, and nothing on noise |
+| 2 | Most of a refused walk is past the point where it could still be accepted. A side run is followed up to the whole expected width, but an accepted cross section is within 40 % of that width and holds each side run to a module and a half of it, so a side run of about a third of the expected width already decides the refusal. A cap derived from the accept conditions, the near-miss and small-crisp ones included, is exact | None; the pixels walked a hit (32 to 86 against windows of 21 to 56) say the walks run long. The only rung that shortens the 8 px case, which is bound by loads a row apart and not by instructions | The bound itself, proved against all three accept paths and held by a test that compares verdicts, not runs |
+| 3 | The run walk is bound by its branches. All edges of a row taken from the mask at once, then the windows classified eight at a time (strict ratio, near miss, small crisp runs) with only the flagged ones handled, in order, by the code that handles them now | Prototype: 0.53 to 0.58 on every symbol input (version 40: 29 to 51 us down to 17 to 27), 0.19 on noise (554 to 107), the flagged windows identical in count and checksum on every input. It rests on the ratio check in integers, which agreed with the float form on all 40^5 run combinations up to 40 px and on 40 million windows placed at the tolerance edge: the two can only differ where the float division is inexact, and equality in the check needs a total divisible by 14, where it is exact | The portable tier and ARM64: the scalar form of the same idea lost (below), so those targets may keep the shipped walk |
+
+Refuted before the phase starts, with the numbers:
+
+- The same classification in scalar code with non-short-circuit integer compares: 1.22x to 2.04x slower than the shipped walk on every input. The shipped float check refuses most windows on its first compare, and doing all of them to avoid the branch costs more than the branch.
+- Remembering refused cross-checks across rows: the stride scales with the image height, so a render at 8 px a module hits exactly the windows a render at 4 px does (683 and 683), and no row revisits a module row.
+- Refusing early on the centre run alone: a centre one module long already satisfies the loosest bound the accept conditions give.
+
+Out of scope by the rule in "What has to stay true": a different stride, or a search region narrowed after the first finders. Either changes which rows confirm a candidate, the candidate's averaged centre moves with them, and the finder positions are part of the result held bit for bit.
+
+Ceiling if rungs 1 and 3 hold end to end, from isolated parts and therefore an upper bound: version 40 at 3 px 128 to about 100 us, at 4 px 173 to about 135, the noise image 2,584 to about 1,650. The not-found path gains the most, which is the path this plan only promised not to slow. `FindCandidates` shares the row scan and the cross-checks, so Micro QR and rMQR image decodes are arms of every measurement here.
 
 ## Risks
 
@@ -100,7 +142,7 @@ Each phase follows the test-first workflow, updates the decoder spec in the same
 | 1 | **P0** | Measure | A stage harness over `DecodeLuminance` with a canary arm: threshold, finder search, dimension estimate, mesh, sampling, matrix decode, and the number of `SampleAndDecode` attempts; versions 6, 20 and 40; 3, 4 and 8 px a module; hard edges, the real renderer's anti-aliased output, a photo-like degradation; upright and rotated; the `SKBitmap` entry beside the luminance one; `NotDetected` on noise and a gradient; a large-symbol image shape added to the benchmark project | Done, see Progress log. A ceiling per stage per input class, stated as a number with its spread; the attempts count explained wherever it is above one; a stage under about 5 % everywhere is dropped from the plan with that number recorded |
 | 2 | **P0** | Otsu histogram | The variant ladder of Approach 2, the mirrored histogram for the second polarity as a variant of its own; the winner per tier with runtime dispatch; parity tests first | Done, see the two Progress log entries. Histogram, threshold and `GreyLevels` identical to the shipped walk over random images, two-valued images at every module size from 1 to 16 px, images with no extremes, all-one-value images and lengths that are not a multiple of the vector width; planted faults each red; no input class slower, noise and the gradient included; the second polarity's threshold and `GreyLevels` identical to a recomputation over the inverted pixels; kernel ratio and end-to-end delta per class, `QRCodeImageDecodeEndToEnd` against its phase 1 baselines |
 | 3 | P1 | Piecewise sampling | A vector form of `SampleGridPiecewise` after the global sampler's, the scalar loop kept as the reference; parity tests first | Done, see Progress log. The sampled grid identical to the scalar loop's, module for module, over every version that uses the mesh, upright, rotated and under keystone, with mesh nodes found and with nodes left at their predictions, and at image edges where a sample clamps; planted faults each red; kernel ratio and end-to-end delta per class |
-| 4 | P1 | Finder search | Read `FinderPatternFinder.TryFind`, time its own stages on the large and the no-symbol inputs, and only then write the hypotheses into this row | A stage profile of the search with its spread, and either a variant ladder or a recorded reason there is none |
+| 4 | **P0** | Finder search | Read and timed, see Approach 4: the search is 56 to 66 % of a rendered version 40 decode and 92 % of a no-symbol noise image. The ladder of Approach 4 in its order: per-axis cross-check walkers, exact run caps, the edge list with vector window classification; the shipped walk and cross-checks kept as the reference; parity tests first | The candidate list identical to the reference's, every centre, module size and count bit for bit, and so the same three patterns, over the image fixtures, the clean-image sweep, the perspective and rotation tests, noise, gradients, rows narrower than a vector step and runs that reach either end of a row; for the run caps, the verdict of every cross-check identical over random and adversarial cross sections; planted faults each red; no input class slower end to end, the not-found inputs and the rotated class timed inside a decode included; Micro QR and rMQR image decodes as arms; kernel ratio and end-to-end delta per class against `QRCodeImageDecodeEndToEnd` |
 | 5 | P1 | ARM64 measurement | The phase 1 profile and the shipped candidates on the ARM64 machine, same harness | A number per arm and class; anything that loses there is gated or reverted |
 | 6 | P2 | Fold | Decisions and measurements into `specs/standardqr-decoder.md`, the shared binarizer's into `specs/qrcode-symbologies.md`; this plan deleted | The spec carries what was decided and why |
 
@@ -281,3 +323,38 @@ Benchmark delta, end to end: `QRCodeImageDecodeEndToEnd` in `src/FeatherQR.Bench
 | none-noise (no sampling) | 2,646 / 2,622 | 2,569 / 2,652 | 2,680 / 2,713 | 2,643 / 2,699 |
 
 The three rows that never reach the mesh sampler are the run's noise: within 1 to 14 % of each other across sides, in both directions. The four version 40 rows moved by 100 to 135 us, 17 to 47 %, which is more than the 75 to 95 us the kernel gave up on its own; a sampler that leaves less of the image and its own tables in the way of the matrix decode behind it is the likely reason, and it was not separated out. Allocated unchanged on every row, the span rows at zero.
+
+### Phase 4, Finder search: the cross-check walk (2026-09-22)
+
+Scope of this entry: rung 1 of Approach 4, the run measurement of the cross-checks. The run caps and the row walk are not started.
+
+Done: `FinderPatternFinder.MeasureRuns` (new file `FinderPatternFinder.RunWalk.cs`), one walk for the column, the row and the diagonal, and the two cross-checks reduced to calling it and judging the runs as before. The line's step and the pixels available on each side of the centre are worked out once, the loops count down over an integer offset that becomes a reference only after the count says the pixel exists, the runs are locals, and the one check in front of the walk is that the centre is inside the image and the image inside its buffer. The loops it replaced were moved verbatim into `MeasureAxisRunsReference` and `MeasureDiagonalRunsReference`, and `TryFindScalar` now runs them, so it is the reference for the whole search and not only for the row scan. Tests first: `FinderRunWalkParityTest` failed to compile (four missing members); then passed with the loops moved and `MeasureRuns` still delegating to them; then stayed green with the stepped walk. It compares the runs and the end of the walk, not the verdict, from every pixel of block scenes with levels on both sides of the threshold and next to it, along all three lines, under caps from 0 to 1,000, on images taller than wide, wider than tall and one pixel across, on uniform images, on finders from 1 to 8 px a module, onto dirty buffers; and `TryFind` against `TryFindScalar`, all four fields of the three patterns, on real symbols placed off-centre on canvases that are not square, crisp and blurred. Full suite green on net8.0 and net10.0 (25,163 run, none failed), the finder classes again in Debug for the assertion in the walk. Spec and spec map updated.
+
+Planted faults, a counted green baseline first: 18, every one red in the end, 17 on the tests as first written: the back step's sign, either cap compared with `<`, the centre pixel not counted, the pixels before the centre taken from the far side, either diagonal limit taken from one dimension only, either border refusal removed, the light compare as `>`, the end one short, the row step taken from the height, the row limit taken from the height, a run not written, the forward walk starting on the centre, and in the callers the two axes swapped and the end added to the wrong coordinate. One survived: the diagonal walk given a cap of 7. No test symbol was large enough for a finder's diagonal side runs to pass a cap, and at 10 px a module the capped runs still hold the ratio; a version 1 symbol at 20 px a module was added and the fault is red.
+
+Hits that go past the first walk, counted on the twelve version 40 inputs: 6 to 9 % of the windows that pass the row check also pass the column check. The row and diagonal walks are therefore a tenth of the walking, nearly all of this rung's gain is the column, and the vector form of the row walk that was held in reserve is not worth a rung.
+
+Benchmark delta, x64. The search alone, the committed tree exported beside the working one and one harness built against each, the two binaries checked to differ, alternating, minimum of 21 rounds an arm over two passes a side for the search and 7 rounds over two passes for the decode; us:
+
+| | Finder before | after | Image decode before | after |
+|---|---:|---:|---:|---:|
+| Version 40, 3 px hard | 69 | 58 | 126 | 104 to 123 |
+| 3.4 px fractional | 88 | 76 | 153 | 138 to 141 |
+| 4 px hard | 110 | 97 | 172 | 157 to 161 |
+| 4.4 px fractional | 134 | 117 | 209 | 193 to 204 |
+| 8 px hard | 158 | 140 | 286 | 258 to 266 |
+| 8.4 px fractional | 176 | 157 | 313 | 284 to 297 |
+| 3 / 4 / 8 px soft | 60 / 120 / 188 | 55 / 109 / 171 | 203 / 345 / 930 | 197 / 308 to 349 / 896 to 932 |
+| 3 / 4 / 8 px rot | 78 / 153 / 162 | 74 / 152 / 157 | 348 / 444 / 855 | 346 to 351 / 441 to 444 / 854 to 863 |
+| Version 10 (the label-sized set), 3 to 8 px, rendered | 6.1 to 27.9 | 5.6 to 23.1 | 13.7 to 45.1 | 13.0 to 39.7 |
+| No symbol, noise 740 x 740 | 1,156 | 1,155 | 2,514 | 2,490 to 2,505 |
+| No symbol, gradient 740 x 740 | 24.0 | 25.1 | 315 | 317 to 320 |
+
+The search 0.83 to 0.92 on the rendered classes, 0.84 to 0.95 soft, 0.89 to 0.99 rotated; the decode 0.83 to 0.95 rendered, 0.89 to 0.98 soft, 0.94 to 1.00 rotated; the no-symbol inputs level. On the rotated class the search timed inside a decode read 0.96 to 1.06 where its isolated arm read 0.89 to 0.99, and the totals did not move: that class is bound by what the rung did not touch. `QRCodeImageDecodeEndToEnd` was not re-run for one rung; it is the phase's closing measurement.
+
+Lessons:
+- The prototype's baseline was not the shipped code, again. It timed the old and the new walk as two functions of nine and eight arguments, 0.37 to 0.52 at 3 and 4 px a module. The shipped loops were inline in the cross-check and paid no call, so the copy was slower than what it stood for, and the search gained about two thirds of what the walk alone promised (version 40 at 4 px: 23 us promised, 13 to 15 delivered). Phase 2 wrote the rule after the same mistake with a span parameter: a faithful copy is one whose disassembly matches. It was read and not applied, because the copy looked too simple to get wrong.
+- Moving the old loops first, with the new entry point delegating to them, was worth its one build. Two of the new tests failed at that step, against code that had not changed: a payload too long for version 1, and a 3 x 3 blur at 2 px a module, which the shipped finder does not read either. Found one step later, both would have been read as faults of the walk.
+- A plain call against inlining the walk into its two callers: within 2 % on every row over four passes, the inlined form ahead on most (0.96 to 0.99), so it is the one kept. The throw moved into a helper either way.
+- One reading is worth little on this machine: four passes of the same binary on the same input read 56 to 66 us, one row read 84 once and 109 to 114 three times, and the gradient, which makes no cross-check at all, read 24 against 25. Every figure above is the minimum over passes, and a class is called slower only when all its inputs agree.
+- The count of hits reaching the second walk was promised at the start of the rung and taken at its end. Taken first it would have settled the row walk's vector form before it was discussed.
