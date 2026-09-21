@@ -7,10 +7,14 @@ namespace QRImageDecodeSweep;
 /// <summary>
 /// libzint through the pinned ZXingCpp package's creator.
 /// The creator dies with an access violation on some payloads, some of the time (Standard QR case 301, a 523-character byte payload at level Q, about one run in three), and a managed process cannot catch that.
-/// So it runs in a worker process that appends each finished case to a file; when the worker dies the case it died on is tried again, and only after eight deaths in a row is it left out and reported, so that a run does not differ from the next by a case.
+/// So it runs in a worker process that appends each finished case to a file; when the worker dies the case it died on is tried again, and only after eight deaths in a row is it given up.
+/// Eight makes a dropped case rare, not impossible, so a drop is never silent: the case gets a row of its own saying so, and the run ends with a failing exit code, because its row set is no longer the one other runs have.
 /// </summary>
 internal static class Libzint
 {
+    public const string Name = "libzint";
+    public const string DiedStatus = " creator died on every attempt";
+
     private const string WorkerCommand = "libzint-worker";
     private const int Attempts = 8;
 
@@ -24,9 +28,10 @@ internal static class Libzint
 
     public static bool IsWorker(string[] args) => args.Length == 6 && args[0] == WorkerCommand;
 
-    /// <summary>Creates every case's symbol and its own-writer image. <paramref name="nativeKindIndex"/> seeds the image as the sweep would have.</summary>
-    public static void Fill(string symbology, int caseCount, int nativeKindIndex)
+    /// <summary>Creates every case's symbol and its own-writer image, and returns the cases it had to give up. <paramref name="nativeKindIndex"/> seeds the image as the sweep would have.</summary>
+    public static List<int> Fill(string symbology, int caseCount, int nativeKindIndex)
     {
+        var givenUp = new List<int>();
         var file = Path.Combine(Path.GetTempPath(), "qr-sweep-libzint-" + Guid.NewGuid().ToString("N") + ".txt");
         try
         {
@@ -46,6 +51,7 @@ internal static class Libzint
                 if (deaths == Attempts)
                 {
                     Console.WriteLine($"libzint: {symbology} case {died} killed the creator {Attempts} times and is left out");
+                    givenUp.Add(died);
                     next++;
                     deaths = 0;
                 }
@@ -55,6 +61,7 @@ internal static class Libzint
         {
             File.Delete(file);
         }
+        return givenUp;
     }
 
     /// <summary>The worker: cases <c>from</c> to <c>to</c>, each appended and flushed as it finishes.</summary>

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using FeatherQR;
 
 namespace QRImageDecodeSweep;
@@ -80,8 +81,11 @@ internal static class Readers
         var misread = text is not null && text != expected;
         var cpp = Array.IndexOf(ZXingCpp(symbology, image), expected) >= 0;
         var net = symbology == Symbologies.StandardQr && ZXingNet(image) == expected;
-        return new ResultRow(key, misread ? "Misread" : status, text == expected, misread, cpp, net, misread ? Difference(expected, text!) : null);
+        return new ResultRow(key, Digest(image), misread ? "Misread" : status, text == expected, misread, cpp, net, misread ? Difference(expected, text!) : null);
     }
+
+    /// <summary>The pixels only; the size is in the key.</summary>
+    private static string Digest(Rendered image) => Convert.ToHexString(SHA256.HashData(image.Luminance), 0, 8);
 
     private static string Difference(string expected, string actual)
     {

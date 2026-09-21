@@ -6,45 +6,45 @@ The clean-image work of the 2.0.0 plan (F13 to F18) was driven by this library's
 
 This plan replaces that loop with an outside yardstick. The target is the set of images **another reader decodes and this library does not**, counted render for render on the same image, over symbols from every encoder the repository can run. The count is called the gap. It cannot be moved by changing a test, it says where the decoder is behind rather than where it is merely imperfect, and it has an end: zero, or a residual that is explained.
 
-A sweep on `main` at a874f5e (2026-09-21) showed the yardstick is usable and where the gap is.
+A sweep on `main` (2026-09-21) showed the yardstick is usable and where the gap is.
 
-- **The encoder does not matter.** Seven Standard QR encoders (this library, ZXing.Net, QRCoder, QrCodeGenerator, CodeGlyphX, libzint, qrtool), three for Micro QR and rMQR. Same payload and same render parameters per case. Per render kind the read rate differs between encoders by at most 1.5 points (6 of 400), which is mask choice: 40 to 50 % of the QrCodeGenerator, libzint and qrtool matrices differ from this library's, 6 % of ZXing.Net's, 1.5 % of QRCoder's and CodeGlyphX's. Every library's own image writer reads 100 %. 135,000 decodes, no misread.
-- **The gap is Standard QR.** zxing-cpp reads 1,870 Standard QR renders this library does not, 1,755 of them in five kinds. For Micro QR and rMQR it is the other way round by a wide margin (rMQR at any rotation: 5 to 16 % against 100 %), so those two have no outside yardstick and are tracked by their absolute rate.
+- **The encoder does not matter.** Seven Standard QR encoders (this library, ZXing.Net, QRCoder, QrCodeGenerator, CodeGlyphX, libzint, qrtool), three for Micro QR and rMQR. Same payload and same render parameters per case. Per render kind the read rate differs between encoders by at most 2.5 points (10 of 400), which is mask choice: 40 to 50 % of the QrCodeGenerator, libzint and qrtool matrices differ from this library's, 6 % of ZXing.Net's, 1.5 % of QRCoder's and CodeGlyphX's. Every library's own image writer reads 100 %. 135,000 decodes, no misread.
+- **The gap is Standard QR.** zxing-cpp reads 2,002 Standard QR renders this library does not, 1,907 of them in five kinds. For Micro QR and rMQR it is the other way round by a wide margin (rMQR at any rotation: 5 to 16 % against 100 %), so those two have no outside yardstick and are tracked by their absolute rate.
 - **ZXing.Net's reader is behind this library in every kind** and is not a target. It stays in the table as a second reference.
 
 ## Baseline
 
-`main` at a874f5e. 400 Standard QR cases (ten per version, random level, numeric / alphanumeric / URL-like byte payload filled to 75-100 % of the version), 400 Micro QR (M1-M4), 640 rMQR (twenty per version); every case through every encoder and every kind. Density in px/module. "Gap" is renders zxing-cpp reads and this library does not; "reverse" is the opposite. qrtool's R17x43 symbols are excluded (see Verification notes).
+The library as of `main` at 416a3b1, which reads as a874f5e did (the first baseline, taken there, reproduced image for image). 400 Standard QR cases (ten per version, random level, numeric / alphanumeric / URL-like byte payload, longer than the version below holds so that the version is the one asked for), 400 Micro QR (M1-M4, the version pinned), 640 rMQR (twenty per version, pinned); every case through every encoder and every kind. Density in px/module. "Gap" is renders zxing-cpp reads and this library does not; "reverse" is the opposite. qrtool's R17x43 symbols are excluded (see Verification notes). The Standard QR table was taken again after the PR review of phase 1 found the first payload rule putting 230 of 400 cases under their version (Progress log); Micro QR and rMQR did not move by a row.
 
 ### Standard QR (2,800 renders per kind, 2,000 for the last)
 
 | Kind | FeatherQR | zxing-cpp | ZXing.Net | Gap | Reverse |
 |---|---|---|---|---|---|
-| Crisp nearest-neighbour, random offset, 1.0-1.25 | 2,800 | 625 | 137 | 0 | 2,175 |
-| Crisp, 1.25-1.5 | 2,800 | 2,486 | 914 | 0 | 314 |
-| Crisp, 1.5-2 | 2,800 | 2,757 | 2,248 | 0 | 43 |
-| Crisp, 2-3 | 2,800 | 2,786 | 2,597 | 0 | 14 |
-| Crisp, 3-6 | 2,800 | 2,800 | 2,758 | 0 | 0 |
-| Anti-aliased path, 1.0-1.25 | 52 | 58 | 1 | 37 | 31 |
-| **Anti-aliased path, 1.25-1.5** | 1,506 | 1,933 | 584 | **627** | 200 |
-| **Anti-aliased path, 1.5-2** | 2,691 | 2,718 | 1,142 | **95** | 68 |
-| Anti-aliased path, 2-3 | 2,800 | 2,800 | 2,044 | 0 | 0 |
-| Anti-aliased path, 3-6 | 2,800 | 2,800 | 2,619 | 0 | 0 |
-| **Bilinear upscale of a 1 px/module image, 1.5-2** | 2,013 | 2,581 | 625 | **668** | 100 |
-| Bilinear upscale, 2-2.5 | 2,772 | 2,793 | 1,552 | 28 | 7 |
-| Bilinear upscale, 2.5-3.5 | 2,791 | 2,786 | 1,879 | 9 | 14 |
-| Downscale of an 8 px/module image, 1.5-2.5 | 2,779 | 2,793 | 1,724 | 21 | 7 |
-| Downscale, 2.5-4 | 2,800 | 2,792 | 2,366 | 0 | 8 |
-| Right-angle turn, crisp, 1.5-3 | 2,800 | 2,800 | 2,431 | 0 | 0 |
-| Mirrored, crisp, 1.5-3 | 2,800 | 2,793 | 2,373 | 0 | 7 |
-| **Supersampled, any rotation, 2-3** | 2,749 | 2,748 | 1,326 | **50** | 51 |
-| Supersampled, any rotation, 3-6 | 2,794 | 2,800 | 2,347 | 6 | 0 |
-| Supersampled, any rotation, keystone up to 6 %, 2-6 | 2,786 | 2,793 | 1,822 | 14 | 7 |
-| **Supersampled, any rotation, keystone 6-20 %, 3-6** | 2,485 | 2,800 | 1,018 | **315** | 0 |
-| JPEG quality 50-90, crisp, 2-4 | 2,800 | 2,800 | 2,570 | 0 | 0 |
-| The encoder library's own image writer | 2,000 | 1,992 | 1,638 | 0 | 8 |
+| Crisp nearest-neighbour, random offset, 1.0-1.25 | 2,800 | 654 | 130 | 0 | 2,146 |
+| Crisp, 1.25-1.5 | 2,800 | 2,424 | 886 | 0 | 376 |
+| Crisp, 1.5-2 | 2,800 | 2,765 | 2,213 | 0 | 35 |
+| Crisp, 2-3 | 2,800 | 2,784 | 2,549 | 0 | 16 |
+| Crisp, 3-6 | 2,800 | 2,800 | 2,737 | 0 | 0 |
+| Anti-aliased path, 1.0-1.25 | 41 | 49 | 7 | 39 | 31 |
+| **Anti-aliased path, 1.25-1.5** | 1,487 | 1,926 | 516 | **688** | 249 |
+| **Anti-aliased path, 1.5-2** | 2,637 | 2,718 | 1,149 | **149** | 68 |
+| Anti-aliased path, 2-3 | 2,800 | 2,799 | 1,949 | 0 | 1 |
+| Anti-aliased path, 3-6 | 2,800 | 2,800 | 2,598 | 0 | 0 |
+| **Bilinear upscale of a 1 px/module image, 1.5-2** | 2,022 | 2,583 | 641 | **644** | 83 |
+| Bilinear upscale, 2-2.5 | 2,775 | 2,791 | 1,536 | 25 | 9 |
+| Bilinear upscale, 2.5-3.5 | 2,797 | 2,783 | 1,922 | 3 | 17 |
+| Downscale of an 8 px/module image, 1.5-2.5 | 2,789 | 2,793 | 1,678 | 11 | 7 |
+| Downscale, 2.5-4 | 2,800 | 2,800 | 2,333 | 0 | 0 |
+| Right-angle turn, crisp, 1.5-3 | 2,800 | 2,800 | 2,395 | 0 | 0 |
+| Mirrored, crisp, 1.5-3 | 2,800 | 2,793 | 2,401 | 0 | 7 |
+| **Supersampled, any rotation, 2-3** | 2,735 | 2,746 | 1,336 | **65** | 54 |
+| Supersampled, any rotation, 3-6 | 2,794 | 2,800 | 2,243 | 6 | 0 |
+| Supersampled, any rotation, keystone up to 6 %, 2-6 | 2,789 | 2,800 | 1,712 | 11 | 0 |
+| **Supersampled, any rotation, keystone 6-20 %, 3-6** | 2,439 | 2,800 | 1,009 | **361** | 0 |
+| JPEG quality 50-90, crisp, 2-4 | 2,800 | 2,793 | 2,520 | 0 | 7 |
+| The encoder library's own image writer | 2,000 | 1,995 | 1,631 | 0 | 5 |
 
-Where the five gap kinds fail. Below 2 px/module the status is `DataUncorrectable` almost throughout (bilinear 1.5-2: 772 of 787; anti-aliased 1.25-1.5: 1,283 of 1,294): the finders are found and the sampling is lost, which is what F18(a) left. Keystone 6-20 % splits by version: v10-20 reads 826 of 826, v1-9 595 of 651, v21-30 592 of 727, v31-40 472 of 596, and density barely matters (3-4: 802 of 924, 5-6: 829 of 945).
+Where the five gap kinds fail. Below 2 px/module the status is `DataUncorrectable` almost throughout (bilinear 1.5-2: 771 of 778; anti-aliased 1.25-1.5: 1,308 of 1,313): the finders are found and the sampling is lost, which is what F18(a) left. Keystone 6-20 % splits by version: v10-20 reads 764 of 771, v1-9 574 of 629, v21-30 582 of 699, v31-40 519 of 701, and density barely matters (3-4: 811 of 924, 5-6: 812 of 945).
 
 ### Micro QR (1,200 per kind) and rMQR (1,899 per kind)
 
@@ -84,7 +84,7 @@ zxing-cpp's black-box sample sets at commit 7e51e7b, 156 images, each read uprig
 | `microqrcode-1` | 16 | 60/64 | 59 | | 3 | 4 | 0 |
 | `rmqrcode-1` | 3 | 12/12 | 12 | | 0 | 0 | 0 |
 
-On photographs this library reads 54 % of what is there and zxing-cpp 89 %; ZXing.Net, behind in every synthetic kind, is ahead here (67 %). The gap is 28 % of the Standard QR reads, against 2.9 % in the synthetic sweep, and it is of another kind:
+On photographs this library reads 54 % of what is there and zxing-cpp 89 %; ZXing.Net, behind in every synthetic kind, is ahead here (67 %). The gap is 28 % of the Standard QR reads, against 3.1 % in the synthetic sweep, and it is of another kind:
 
 - **`qrcode-5` and `qrcode-1` are the threshold.** Every failure in `qrcode-5` is `NotDetected` (35 of 35) on photographs with a shading gradient across the symbol, where one global threshold puts a whole side of the symbol in one class. A diagnostic run that binarized each image against its local mean before the decoder saw it (not a candidate, a probe: window a tenth of the image, 8 % under the mean) read 63 of 64 there and 32 of 32 in `qrcode-1`, 42 of the 43 gap reads of the two sets. Over the whole corpus it moved Standard QR 295 → 335 (+54, −14) and Micro QR 60 → 63; the 14 it lost say it cannot simply replace the global threshold.
 - **`qrcode-3` and `qrcode-4` are not the threshold** (the probe moved them 44 → 44 and 36 → 37). They are larger versions at 2.5 to 3 px/module, turned and keystoned, some already binarized by the camera, and blurred photographs: the same classes as the synthetic rotation, keystone and low-density kinds, failing as `DataUncorrectable` with the finders found.
@@ -118,9 +118,9 @@ Diagnose before repairing, with a column the earlier rounds lacked until F18(e):
 Candidates, by the kind they are expected to move. None is chosen yet; each gets one hypothesis, one measurement, and a recorded verdict.
 
 0. **The threshold under uneven lighting** (real images: `qrcode-5`, `qrcode-1`, part of `qrcode-2`). A second binarization tried when the global one finds no symbol, so that an evenly lit image pays nothing: a threshold per block from the block's own range with flat blocks taking their neighbours' (what ZXing's hybrid binarizer and zxing-cpp's local-average one do), or the global method run per tile and interpolated. What it has to be measured against is this plan's own history: every loosening of what reaches the finder has paid in candidates on noise, the finder's grey-level second look needs the dark and light levels the global histogram gives, and the image-path speed plan holds the binarizer bit-identical, so a local pass is an added path and not a change to the first one.
-1. **Pixels below 2 px/module** (anti-aliased 1.25-2, bilinear 1.5-2.5: a gap of about 1,400, and the Micro QR / rMQR cells beside them). The threshold sits near 144 because edge greys fall in the dark class; the midpoint of the two class levels gave bilinear upscales +21 to +54 of 300 in the F18(a) prototype and nothing on anti-aliased edges. Reading a module as the mean over its footprint instead of one pixel. A threshold local to the symbol once the finders are known. A 2x resample of the symbol's own area, which the F18(a) round measured as the best reader and rejected only because it ran on the whole image of every failure.
-2. **Keystone 6-20 %** (gap 315, zxing-cpp 100 %). The version split says the frame: v1 has no alignment pattern and v2-6 one, and from v21 up there are many and the decoder anchors on one. A mesh over several alignment patterns; corners from the finders' outer edges and the timing lines where there is no pattern to anchor on.
-3. **Rotation at 2-3 px/module** (gap 50, reverse 51) and the small cells (bilinear 2-2.5, downscale 1.5-2.5). Diagnosed after 1, which probably moves them.
+1. **Pixels below 2 px/module** (anti-aliased 1.25-2, bilinear 1.5-2.5: a gap of about 1,500, and the Micro QR / rMQR cells beside them). The threshold sits near 144 because edge greys fall in the dark class; the midpoint of the two class levels gave bilinear upscales +21 to +54 of 300 in the F18(a) prototype and nothing on anti-aliased edges. Reading a module as the mean over its footprint instead of one pixel. A threshold local to the symbol once the finders are known. A 2x resample of the symbol's own area, which the F18(a) round measured as the best reader and rejected only because it ran on the whole image of every failure.
+2. **Keystone 6-20 %** (gap 361, zxing-cpp 100 %). The version split says the frame: v1 has no alignment pattern and v2-6 one, and from v21 up there are many and the decoder anchors on one. A mesh over several alignment patterns; corners from the finders' outer edges and the timing lines where there is no pattern to anchor on.
+3. **Rotation at 2-3 px/module** (gap 65, reverse 54) and the small cells (bilinear 2-2.5, downscale 1.5-2.5). Diagnosed after 1, which probably moves them.
 4. **Micro QR bilinear 2-2.5** (`NotDetected`): the single finder under blur. **rMQR keystone on wide symbols**: the perspective search's step over 99 and 139 modules.
 
 ## Phases
@@ -138,12 +138,13 @@ Each phase follows the test-first workflow, updates the decoder specs in the sam
 | 7 | P2 | Micro QR and rMQR absolutes | Approach 4 | Micro QR bilinear 2-2.5 at or above 99 %; rMQR keystone 6-20 % at widths 99 and 139 measured against the true-transform column, and either repaired or recorded as the envelope with its number |
 | 8 | P2 | Fold | Envelope tables, decisions, refuted candidates and lessons into the three decoder specs; the sweep and the corpus into the fixtures spec; this plan deleted | Nothing here is only here |
 
-Phases 1 and 2 were first because they could redirect everything after them, and phase 2 did: the real-image gap is ten times the synthetic one in proportion, and the largest single cause in it, the global threshold under a lighting gradient, is a class no synthetic kind draws. It goes first as phase 3. The synthetic phases keep their order behind it, because the rest of the real-image gap (`qrcode-3`, `qrcode-4`) is the classes they already target, and from here on every phase reports the corpus beside the sweep.
+Phases 1 and 2 were first because they could redirect everything after them, and phase 2 did: the real-image gap is nine times the synthetic one in proportion, and the largest single cause in it, the global threshold under a lighting gradient, is a class no synthetic kind draws. It goes first as phase 3. The synthetic phases keep their order behind it, because the rest of the real-image gap (`qrcode-3`, `qrcode-4`) is the classes they already target, and from here on every phase reports the corpus beside the sweep.
 
 ## Verification notes
 
+- A row's key is how its image was made, and beside it the row carries a digest of the pixels. `compare` keeps a pair whose digests differ out of gained and lost: if an encoder's mask choice or a renderer changes between two trees, the pair is two images, and the read that moved is not the decoder's.
 - The sweep pairs by construction: a case fixes the payload, the level and every render parameter, and each encoder's symbol goes through the same parameters. Seeds are arithmetic on the case and kind indices, never `GetHashCode`, which is randomized per process.
-- libzint's creator (the pinned ZXingCpp package) dies with an access violation on some payloads, some of the time (Standard QR case 301, about one run in three, alone in its process). The first reading, that readers on other threads caused it, was wrong. The sweep runs the creator in a worker process, retries the case it died on, and drops a case only after eight deaths in a row, so two runs stay identical. A process killed that way can linger and hold its files: build to another output directory rather than wait for it.
+- libzint's creator (the pinned ZXingCpp package) dies with an access violation on some payloads, some of the time (Standard QR case 301, about one run in three, alone in its process). The first reading, that readers on other threads caused it, was wrong. The sweep runs the creator in a worker process, retries the case it died on, and gives a case up only after eight deaths in a row. A drop is rare, not impossible, so it is never silent: the case gets a row saying so and the run exits with a failure, because its images are no longer the set other runs have. A process killed that way can linger and hold its files: build to another output directory rather than wait for it.
 - qrtool 0.13.2 emits a wrong R17x43 symbol at level M: about 88 modules differ from this library's and libzint's matrices, which agree byte for byte, and zxing-cpp does not read it either; level H is only the documented tail defect. R17x43 from qrtool is excluded from every table; the fixtures spec carries the note.
 - A synthetic kind cannot stand in for a photograph's lighting, so the threshold phase's regression renders need a generator of their own: a symbol under a luminance ramp and under a soft shadow edge, with the ramp's depth as the parameter, checked against the corpus sets before it is trusted as their stand-in.
 - A regression test added by a phase is a render of the failing class with its geometry asserted (drawn corners), plus the negative that the repair must not admit, each failing with the repair removed. The sweep is the measurement, not the test.
@@ -155,17 +156,30 @@ Phases 1 and 2 were first because they could redirect everything after them, and
 
 **Done.** `tools/QRImageDecodeSweep`, in the solution beside the interop fixtures: `sweep` (seven encoders for Standard QR, three for Micro QR and rMQR, 23 kinds drawn by the test suite's own renderers linked from `tests/FeatherQR.Tests/Shared`, three readers), `corpus`, `compare` (two result files image for image: gained, lost, every lost image by name) and `import-corpus`. Output is a per-image CSV and the gap table as Markdown. Every package it needs was already pinned centrally. The fixtures spec has the section ("Image decode sweep") and the two oracle defects as lessons.
 
-**Exit met.** Against the throwaway probe's result files, which are this plan's baseline: 134,877 of 134,877 images identical in status, in all three readers' verdicts, and in density and size (63,600 Standard QR, 27,600 Micro QR, 43,677 rMQR). Three full runs wrote byte-identical files. The baseline was taken at a874f5e and the tool ran at 02168b0, so the decode-speed change between them (#415) moved no read.
+**Exit met.** Against the throwaway probe's result files, which were this plan's first baseline: 134,877 of 134,877 images identical in status, in all three readers' verdicts, and in density and size (63,600 Standard QR, 27,600 Micro QR, 43,677 rMQR). Three full runs wrote byte-identical files. The baseline was taken at a874f5e and the tool ran at 02168b0, so the decode-speed change between them (#415) moved no read.
 
 **Lessons.** The libzint crash was misdiagnosed at first. It first appeared with readers running on other threads, a serial scan of the same cases passed, and "not thread-safe" fitted; a lock did not help, which should have ended that reading and instead got explained away as the readers' threads. Moved into a serial pass of its own, it crashed there, on the same case, one run in three. A fault that is probabilistic per input looks like a race under every test that varies the threading and nothing else; the test that separates them holds the threading still and repeats the input. And escapes do not survive this machine's shell tooling (a `\u0001` separator arrived in the source as a raw control character, and a quoted apostrophe ended a script): generated edits go through files, and a sort key is built from `ThenBy`, not from a joined string.
 
 **Benchmark delta.** None; nothing under `src/` changed. The full sweep takes about two minutes on this machine and the corpus a few seconds.
 
+### Phase 1, review round: the version each case asks for is the version it gets (2026-09-21)
+
+**Done.** Four review comments on the tool's PR, three taken and one answered in the docs.
+
+- **Taken: Standard QR cases did not land on their version.** The payload was 75-100 % of the asked version's capacity, and from version 6 up the version below holds more than 75 % of it, so 230 of 400 cases encoded smaller: version 40 had two cases and 39 three, where the plan said ten each. The per-band figures were never wrong (they read each symbol's own version), but the coverage was thin exactly where F13-F18 had found a class. The payload is now longer than the version below holds and no longer than the asked one does; every version has its ten, and three cases see an encoder choose a neighbouring version through its own segmentation. The Standard QR baseline was taken again: gap 1,870 → 2,002, the same five kinds, the encoder spread at most 10 of 400. Micro QR and rMQR pin the version in every encoder and did not move by a row.
+- **Taken: a comparison paired by render parameters alone.** If an encoder's mask choice or a renderer changed between two trees, `compare` would have paired two different images and charged the difference to the decoder. Each row now carries a digest of its pixels, and a pair whose digests differ is counted in a column of its own and kept out of gained and lost.
+- **Taken in part: a case dropped after eight creator deaths changes the row set.** Eight attempts make that rare and cannot make it impossible. The retries stay, because an unknown payload may need them, but a drop is no longer silent: the case gets a row saying so, the table lists it, and the run exits with a failure.
+- **Answered: the supersampled renderer's four-module quiet zone round Micro QR and rMQR.** True, and left: those kinds measure what the rotation tests draw, the renderer is the tests', and a wider quiet zone is within both specifications. The spec and the kind's comment now say so.
+
+**Lessons.** "Ten per version" was a claim about the generator that nothing checked, and a claim about a sample is cheap to check: count it. The sweep now counts the cases whose symbol is not the version asked for and prints the count, and it prints zero. A key that names how an image was made is not the image; the two agree until something upstream changes, which is the moment a comparison is needed most.
+
+**Benchmark delta.** None; nothing under `src/` changed. Two full runs after the change are byte-identical.
+
 ### Phase 2: real images, and they reorder the plan (2026-09-21)
 
 **Done.** zxing-cpp's black-box sets for the three symbologies (`qrcode-1` to `-6`, `microqrcode-1`, `rmqrcode-1`; 156 images, 1.1 MB, Apache-2.0) are committed under `tests/FeatherQR.Tests/Fixtures/RealImages/zxing-cpp-samples` with the LICENSE and a PROVENANCE.md naming commit 7e51e7b, the commit the Structured Append captures already came from. They are small enough to commit, so nothing is fetched at run time. No test reads them yet; the tool does, at the four right angles, as that repository's own runner does. The numbers are the "Real images" table under Baseline.
 
-**Exit met, and its condition fired.** The corpus gap is stated per set: 153 of 548 Standard QR reads, 3 of 64 Micro QR, 0 of 12 rMQR. It is ten times the synthetic gap in proportion and its largest cause is of another kind, so the phases are reordered: the threshold under uneven lighting is the new phase 3, ahead of every synthetic cell. The evidence is a diagnostic, not a candidate: a local-mean binarization in front of the decoder reads 42 of the 43 gap reads of the two sets that fail as `NotDetected` under a lighting gradient, moves the two blurred, keystoned sets by a net of one read, and loses 14 reads elsewhere.
+**Exit met, and its condition fired.** The corpus gap is stated per set: 153 of 548 Standard QR reads, 3 of 64 Micro QR, 0 of 12 rMQR. It is nine times the synthetic gap in proportion and its largest cause is of another kind, so the phases are reordered: the threshold under uneven lighting is the new phase 3, ahead of every synthetic cell. The evidence is a diagnostic, not a candidate: a local-mean binarization in front of the decoder reads 42 of the 43 gap reads of the two sets that fail as `NotDetected` under a lighting gradient, moves the two blurred, keystoned sets by a net of one read, and loses 14 reads elsewhere.
 
 **Lessons.** "Misread" needed a second look before it meant anything: all 44 were one class, Byte-mode Shift_JIS with no ECI header, which this library decodes as the specified default on purpose and zxing-cpp reads by guessing. Counting them as gap would have put a character-set policy at the top of an image-accuracy plan, and counting them as reads would have hidden them, so they have a column of their own, together with the bit streams this library refuses. The synthetic sweep was built from the failure classes this project already knew, which is why it had no kind for the one that matters most on photographs; a corpus someone else collected is what finds the class nobody here thought to draw. And ZXing.Net, last in every synthetic kind, is ahead of this library on photographs: its hybrid binarizer is the difference, and that is one more pointer at phase 3.
 

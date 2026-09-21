@@ -23,9 +23,14 @@ internal static class Sweep
         var stopwatch = Stopwatch.StartNew();
 
         // The own-writer kind is the last one
-        Libzint.Fill(symbology, caseCount, kinds.Length - 1);
+        foreach (var caseId in Libzint.Fill(symbology, caseCount, kinds.Length - 1))
+        {
+            var definition = Cases.Create(symbology, caseId);
+            rows.Add(Failure(definition, encoders.First(static e => e.Name == Libzint.Name), "(encode)", definition.VersionName, $"EncodeFailed: {Libzint.Name}{Libzint.DiedStatus}"));
+        }
 
         var done = 0;
+        var offVersion = 0;
         Parallel.For(0, caseCount, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 2) }, caseId =>
         {
             var definition = Cases.Create(symbology, caseId);
@@ -43,6 +48,8 @@ internal static class Sweep
                 }
                 if (symbol is null)
                     continue;
+                if (ReferenceEquals(encoder, encoders[0]) && symbol.VersionName != definition.VersionName)
+                    Interlocked.Increment(ref offVersion);
 
                 for (var k = 0; k < kinds.Length; k++)
                 {
@@ -68,6 +75,9 @@ internal static class Sweep
                 Console.WriteLine($"[{stopwatch.Elapsed:mm\\:ss}] {symbology}: {n}/{caseCount} cases");
         });
 
+        // A case names its version; this library's encoder is first in the list and has to land on it, or the sample is not the one the table claims
+        Console.WriteLine($"{symbology}: {offVersion} of {caseCount} cases are not the version they ask for");
+
         return [.. rows.OrderBy(static r => r.Key[3], StringComparer.Ordinal).ThenBy(static r => r.Key[2], StringComparer.Ordinal).ThenBy(static r => int.Parse(r.Key[1], CultureInfo.InvariantCulture))];
     }
 
@@ -86,5 +96,5 @@ internal static class Sweep
     ];
 
     private static ResultRow Failure(CaseDefinition d, Encoder encoder, string kind, string version, string status) =>
-        new(Key(d, encoder, kind, version, 0, 0, 0), status.ReplaceLineEndings(" "), false, false, false, false);
+        new(Key(d, encoder, kind, version, 0, 0, 0), "", status.ReplaceLineEndings(" "), false, false, false, false);
 }

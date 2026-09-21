@@ -15,19 +15,19 @@ internal static class Encoders
                 list.Add(new Encoder("QRCoder", QrCoder, NativeRenderers.QrCoder));
                 list.Add(new Encoder("QrCodeGenerator", Nayuki, null));
                 list.Add(new Encoder("CodeGlyphX", CodeGlyph, null));
-                list.Add(new Encoder("libzint", Libzint.Encode, Libzint.NativeRender));
+                list.Add(new Encoder(Libzint.Name, Libzint.Encode, Libzint.NativeRender));
                 if (Qrtool.Available)
                     list.Add(new Encoder("qrtool", Qrtool.Encode, NativeRenderers.QrtoolPng));
                 break;
             case Symbologies.MicroQr:
                 list.Add(new Encoder("FeatherQR", FeatherQrMicro, NativeRenderers.FeatherQrMicro));
-                list.Add(new Encoder("libzint", Libzint.Encode, Libzint.NativeRender));
+                list.Add(new Encoder(Libzint.Name, Libzint.Encode, Libzint.NativeRender));
                 if (Qrtool.Available)
                     list.Add(new Encoder("qrtool", Qrtool.Encode, NativeRenderers.QrtoolPng));
                 break;
             default:
                 list.Add(new Encoder("FeatherQR", FeatherQrRmqr, NativeRenderers.FeatherQrRmqr));
-                list.Add(new Encoder("libzint", Libzint.Encode, Libzint.NativeRender));
+                list.Add(new Encoder(Libzint.Name, Libzint.Encode, Libzint.NativeRender));
                 if (Qrtool.Available)
                     list.Add(new Encoder("qrtool", Qrtool.Encode, NativeRenderers.QrtoolPng));
                 break;

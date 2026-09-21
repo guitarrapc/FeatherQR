@@ -71,6 +71,8 @@ internal static class Kinds
             var (Luminance, Width, Height) = NearestNeighbourRenderer.Turn(lum, w, h, random.Next(4), mirror: true);
             return new Rendered(Luminance, Width, Height, ppm);
         }));
+        // The supersampled renderer draws four quiet-zone modules round every symbology, Micro QR and rMQR included, where the kinds above draw their two.
+        // It is left as the tests have it: these kinds measure what the rotation tests draw, and a wider quiet zone is within either specification.
         foreach (var (Label, Lo, Hi) in new (string Label, float Lo, float Hi)[] { ("2.00-3.00", 2f, 3f), ("3.00-6.00", 3f, 6f) })
         {
             list.Add(new Kind($"07 supersampled, any rotation {Label}", (s, d, e, random) =>

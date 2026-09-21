@@ -18,8 +18,8 @@ internal sealed record Encoder(string Name, Func<CaseDefinition, Symbol?> Encode
 /// <summary>A way of turning a matrix into an image.</summary>
 internal sealed record Kind(string Name, Func<Symbol, CaseDefinition, Encoder, Random, Rendered?> Render);
 
-/// <summary>What the three readers made of one image. <see cref="Key"/> names the image and is stable between runs and trees; <see cref="Note"/> says how a misread differs and is not part of the result file.</summary>
-internal sealed record ResultRow(string[] Key, string Status, bool FeatherQr, bool Misread, bool ZXingCpp, bool ZXingNet, string? Note = null);
+/// <summary>What the three readers made of one image. <see cref="Key"/> names the image by how it was made and is stable between runs and trees; <see cref="Image"/> is a digest of its pixels, so that a comparison can tell a changed decoder from a changed image; <see cref="Note"/> says how a misread differs and is not part of the result file.</summary>
+internal sealed record ResultRow(string[] Key, string Image, string Status, bool FeatherQr, bool Misread, bool ZXingCpp, bool ZXingNet, string? Note = null);
 
 internal static class Symbologies
 {

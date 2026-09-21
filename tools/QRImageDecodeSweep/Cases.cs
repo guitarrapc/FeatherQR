@@ -54,21 +54,26 @@ internal static class Cases
         var ecc = (QREccLevel)random.Next(4);
         var mode = new[] { "numeric", "alphanumeric", "byte" }[random.Next(3)];
         var full = RandomText(random, mode, 7100);
-        var capacity = LongestFit(full, text =>
+        int Capacity(int atMost) => LongestFit(full, text =>
         {
             try
             {
-                var qr = QRCodeGenerator.Create(text, ecc, new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = QRVersionRange.AtMost(version) });
-                return (qr.Size - 17) / 4 <= version;
+                var qr = QRCodeGenerator.Create(text, ecc, new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = QRVersionRange.AtMost(atMost) });
+                return (qr.Size - 17) / 4 <= atMost;
             }
             catch
             {
                 return false;
             }
         });
-        if (capacity == 0)
-            capacity = 1;
-        var payload = full[..Math.Max(1, (int)(capacity * (0.75 + random.NextDouble() * 0.25)))];
+
+        // Longer than the version below holds and no longer than this one does, so the smallest version that fits is the one asked for.
+        // A fraction of this version's capacity alone would not do: from version 6 up the version below holds over 75 % of it.
+        // Another encoder may still land on a neighbour (its own segmentation); the result file carries each symbol's version.
+        var capacity = Math.Max(1, Capacity(version));
+        var below = version == 1 ? 0 : Capacity(version - 1);
+        var length = Math.Min(capacity, below + 1 + (int)(random.NextDouble() * (capacity - below)));
+        var payload = full[..length];
         if (payload[^1] == ' ')
             payload = payload[..^1] + "A";
         return new CaseDefinition(Symbologies.StandardQr, caseId, payload, mode, ecc.ToString(), version, "v" + version, 0, 0);

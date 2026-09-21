@@ -26,18 +26,24 @@ switch (command)
             Qrtool.Locate(repoRoot);
 
             var markdown = new StringBuilder();
+            var incomplete = false;
             foreach (var symbology in Symbologies.All)
             {
                 if (which != "all" && which != symbology)
                     continue;
                 var cases = args.Length > 2 ? int.Parse(args[2]) : Symbologies.DefaultCases(symbology);
                 var rows = Sweep.Run(symbology, cases);
+                incomplete |= rows.Any(static r => r.Status.EndsWith(Libzint.DiedStatus, StringComparison.Ordinal));
                 var csv = Path.Combine(outDir, $"sweep-{symbology}.csv");
                 Csv.Write(csv, Sweep.KeyColumns, rows);
                 Console.WriteLine($"wrote {csv}");
                 markdown.Append(Report.Table($"{symbology}, {cases} cases", rows, rowColumn: 3, splitColumn: 2, withZXingNet: symbology == Symbologies.StandardQr));
             }
-            return Finish(Path.Combine(outDir, $"sweep-{which}.md"), markdown.ToString());
+            Finish(Path.Combine(outDir, $"sweep-{which}.md"), markdown.ToString());
+            if (!incomplete)
+                return 0;
+            Console.Error.WriteLine("A case was given up, so this run's images are not the set other runs have. Run it again before comparing.");
+            return 2;
         }
     case "corpus":
         {

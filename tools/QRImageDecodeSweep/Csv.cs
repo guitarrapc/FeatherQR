@@ -2,10 +2,10 @@ using System.Text;
 
 namespace QRImageDecodeSweep;
 
-/// <summary>The per-image result file: the key columns, then status and one 0/1 column per reader.</summary>
+/// <summary>The per-image result file: the key columns, a digest of the image's pixels, then status and one 0/1 column per reader.</summary>
 internal static class Csv
 {
-    private static readonly string[] resultColumns = ["status", "featherqr", "misread", "zxingcpp", "zxingnet"];
+    private static readonly string[] resultColumns = ["image", "status", "featherqr", "misread", "zxingcpp", "zxingnet"];
 
     public static void Write(string path, string[] keyColumns, IEnumerable<ResultRow> rows)
     {
@@ -14,7 +14,7 @@ internal static class Csv
         writer.WriteLine(string.Join(',', keyColumns.Concat(resultColumns)));
         foreach (var row in rows)
         {
-            var fields = row.Key.Select(Quote).Append(Quote(row.Status)).Append(Bit(row.FeatherQr)).Append(Bit(row.Misread)).Append(Bit(row.ZXingCpp)).Append(Bit(row.ZXingNet));
+            var fields = row.Key.Select(Quote).Append(row.Image).Append(Quote(row.Status)).Append(Bit(row.FeatherQr)).Append(Bit(row.Misread)).Append(Bit(row.ZXingCpp)).Append(Bit(row.ZXingNet));
             writer.WriteLine(string.Join(',', fields));
         }
     }
@@ -33,7 +33,7 @@ internal static class Csv
             if (line.Length == 0)
                 continue;
             var f = Split(line);
-            rows.Add(new ResultRow(f[..keyCount], f[keyCount], f[keyCount + 1] == "1", f[keyCount + 2] == "1", f[keyCount + 3] == "1", f[keyCount + 4] == "1"));
+            rows.Add(new ResultRow(f[..keyCount], f[keyCount], f[keyCount + 1], f[keyCount + 2] == "1", f[keyCount + 3] == "1", f[keyCount + 4] == "1", f[keyCount + 5] == "1"));
         }
         return (header[..keyCount], rows);
     }
