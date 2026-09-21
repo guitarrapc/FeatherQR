@@ -167,9 +167,12 @@ public class SampleGridPiecewiseParityTest
     }
 
     /// <summary>
-    /// The scalar cast saturates and maps NaN to 0; a raw vector conversion returns INT_MIN for all of
-    /// them. The tiers have to land on the reference's pixel anyway, and which operand of the float
-    /// minimum holds the limit is what decides it for NaN.
+    /// What the reference's cast makes of these depends on the runtime: from .NET 9 it saturates and
+    /// maps NaN to 0, so +∞ is the far edge of the image; on net8.0 it is the raw x64 conversion,
+    /// INT_MIN for every one of them, which the clamp takes to 0. A raw vector conversion gives the
+    /// net8.0 answer on both, so the vector tier has a form per runtime, and on the saturating side
+    /// which operand of the float minimum holds the limit decides where NaN lands.
+    /// Both target frameworks have to run this: the first port passed on net10.0 and failed on net8.0.
     /// </summary>
     [Test]
     [Arguments(float.NaN)]
