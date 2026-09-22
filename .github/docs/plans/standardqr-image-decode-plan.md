@@ -687,3 +687,39 @@ Lessons:
 - The conversion is one form here because the scalar cast is. The AVX2 tier carries two forms because x64's raw conversion changed to a saturating one in .NET 9; ARM64's has always been fcvtzs. A tier's shape follows the reference's cast on that machine, not the other machine's history; the parity test on this machine is what says so.
 - A survivor can say the guard it defeats belongs to another ISA. The minimum's operand order was written into the AVX2 tier for `Avx.Min`, whose result with NaN depends on it; `Vector128.Min` has no such asymmetry and the fault could not move a pixel. The comment now says which.
 - A survivor can also be dead code. The leftover four-lane loop was there for dimensions no caller passes; the sweep, not the reading, found it.
+
+### Phase 5, one edge loop on both machines (2026-09-23)
+
+Done: `ExtractRowEdges` writes a word's rising and falling edges by one loop, one of each an iteration, on x64 as well as ARM64; the `AdvSimd.Arm64.IsSupported` branch and x64's two loops are gone (7 lines in, 26 out). The question was whether the ARM64 form holds on x64, where the reason it won there, a two-cycle bit-clear chain, does not exist: the JIT emits `blsr`, one instruction.
+
+The kernel search ran as a micro-benchmark outside this repository, on the ARM64 round's operation, sink, scenes and gate inputs: the shipped x64 `ScanRowEdges` copied verbatim as the baseline, a byte-identical canary of it and one of the variant, the gate the hit sequence against the mask walk plus both extractions compared edge for edge on every row (a dropped leftover falling edge: 456 hits against 1,092, red). Ryzen 9 7950X3D, .NET 10, three runs, same-run ratios to the baseline:
+
+| Variant | v40 3 / 3.4 / 8 px | 4 px rot / soft | v10 3 px | Noise 740 | Verdict |
+|---|---:|---:|---:|---:|---|
+| Baseline canary | 0.99-1.04 / 0.94-1.02 / 0.98-1.02 | 1.02-1.03 / 0.96-1.03 | 0.98-1.06 | 0.99-1.05 (1.48 in the first run, which voids that column there) | |
+| One loop, and its canary | 0.93-1.00 / 0.91-0.95 / 0.82-0.94 | 0.85-0.97 / 0.89-1.06 | 0.94-1.02 | 0.92-1.04 | Confirmed, small: never behind beyond the canaries, 3 to 10 % on version 40 symbols |
+| One loop with native-width counts | 0.92 / 0.88 / 0.81 | 0.97 / 0.90 | 0.99 | 0.93 | Refuted: the sign extension went, and the JIT spilled both array bases to the stack instead, a load an edge; inside the one loop's canary spread |
+| Probe: extraction alone, each form | 0.61-0.63 against 0.61-0.63 | 0.62-0.66 against 0.61-0.66 | 0.58 against 0.59 | 0.29 against 0.28 | Level |
+
+The extraction alone is level, and the whole row pass is not: the extraction is about 62 % of the pass, so a pass 8 % faster would need the extraction 13 % faster, which it is not on its own. What the one loop changes is branches, one loop branch for two edges where the two loops paid one for each, and the classification and flagged-window loops of the same row share the predictor with it. That reading is consistent with the rotated input moving most and is not confirmed by counters.
+
+Tests first: with the one loop still behind the ARM64 branch, dropping its leftover falling edge left `FinderRowEdgesTest` green on x64, since x64 never ran that code. After the change it and two more planted faults in the loop (the leftover rising edge dropped, the falling set cleared twice) are red on x64. Full suite green on net8.0 and net10.0 (25,181 run, 378 skipped as before, none failed).
+
+Benchmark delta, x64. `QRCodeImageDecodeEndToEnd` on the committed tree (8907ea8) and the change, each exported outside the working tree, three launches of fifteen iterations, three alternating runs a side, the median; us:
+
+| Shape | Span, before | Span, after | Bitmap, before | Bitmap, after |
+|---|---:|---:|---:|---:|
+| v40-3px | 95.9 | 94.0 | 125.4 | 125.5 |
+| v40-3.4px | 109.8 | 106.9 | 146.8 | 149.5 |
+| v40-4px-rot17 | 299.0 | 290.9 | 382.4 | 377.3 |
+| v40-4px-soft | 263.0 | 263.0 | 312.0 | 316.8 |
+| v6-4px | 10.06 | 10.27 | 14.12 | 14.56 |
+| none-noise | 1,432 | 1,404 | 1,477 | 1,462 |
+| none-gradient | 336 | 322 | 396 | 371 |
+
+Level: every row within −3 to +3 % but the gradient, which has almost no edges for the change to reach and moved −4 to −6 %, which is the floor here. That is the expected size: a few percent of a row pass that is about a fifth of a version 40 decode. Allocated unchanged, the span rows at zero. The one Micro QR and rMQR run a side read 1.03 to 1.08 slower after, the PNG generation rows, which the change cannot reach, by the same 1.07 to 1.08: a slower pass, not a result. The change stays for what it removes: one code path where there were two, and the ARM64 form now run by x64 CI.
+
+Lessons:
+- A reason that does not transfer can still leave a result that does. The chain the ARM64 loop broke is not on x64, and the loop still won there for another reason, its branch count; the variant was worth measuring because the prediction was only "level".
+- A stage probe can be blind to what the stage does to its neighbours. The extraction alone read level three times while the pass read 5 to 15 % faster; a branch change has to be judged inside the loop that shares the predictor, the same lesson the rotated decode taught about the row walk.
+- The benchmark host found a second copy of the benchmark project in a worktree under `.claude/` and refused to build, and the first E2E pass wrote nothing but NA rows without failing the script. Both trees are now exported outside the repository, and the script stops on a build refusal.

@@ -94,7 +94,7 @@ internal static partial class FinderPatternFinder
         //    rising        ^           ^                       ^         ^                  starts 2, 8, 20, 25
         //    falling             ^                       ^           ^       ^              ends   5, 17, 23, 27
         //
-        // 3. Each bit set is taken apart on its own, into its own array, lowest bit first: the position of the lowest set bit is one
+        // 3. Each bit set goes into its own array, lowest bit first: the position of the lowest set bit is one
         //    instruction and bits &= bits - 1 clears it. Taking every edge from one set (word ^ previous) and sending them alternately
         //    to the two arrays measured no faster than a single array: every edge then pays for working out where it goes, which cost
         //    what the split saved the classification. The classification wants them apart because a window is three consecutive
@@ -128,36 +128,19 @@ internal static partial class FinderPatternFinder
             var rising = word & ~previous;   // dark after light: a run starts here
             var falling = ~word & previous;  // light after dark: a run ended just before here
 
-            // Lowest set bit first, so positions come out in row order
-            if (AdvSimd.Arm64.IsSupported)
-            {
-                // Within a word the two alternate, so one loop takes one of each and the odd one out follows: each edge is a
-                // two-cycle chain (clear the bit, find the next), and two chains in one loop overlap where two loops in a row
-                // did not. Measured 0.78 to 0.92 of the two loops on rendered symbols on Apple M2; level on noise.
-                while (rising != 0 && falling != 0)
-                {
-                    Unsafe.Add(ref start, startCount++) = (short)(x + BitOperations.TrailingZeroCount(rising));
-                    Unsafe.Add(ref end, endCount++) = (short)(x + BitOperations.TrailingZeroCount(falling));
-                    rising &= rising - 1;
-                    falling &= falling - 1;
-                }
-                if (rising != 0)
-                    Unsafe.Add(ref start, startCount++) = (short)(x + BitOperations.TrailingZeroCount(rising));
-                if (falling != 0)
-                    Unsafe.Add(ref end, endCount++) = (short)(x + BitOperations.TrailingZeroCount(falling));
-                continue;
-            }
-
-            while (rising != 0)
+            // Lowest set bit first, so positions come out in row order. Within a word the two alternate, so one loop takes one of
+            // each and the odd one out follows: on ARM64 the two bit-clear chains overlap, and on x64 the loop branches half as often
+            while (rising != 0 && falling != 0)
             {
                 Unsafe.Add(ref start, startCount++) = (short)(x + BitOperations.TrailingZeroCount(rising));
-                rising &= rising - 1;
-            }
-            while (falling != 0)
-            {
                 Unsafe.Add(ref end, endCount++) = (short)(x + BitOperations.TrailingZeroCount(falling));
+                rising &= rising - 1;
                 falling &= falling - 1;
             }
+            if (rising != 0)
+                Unsafe.Add(ref start, startCount++) = (short)(x + BitOperations.TrailingZeroCount(rising));
+            if (falling != 0)
+                Unsafe.Add(ref end, endCount++) = (short)(x + BitOperations.TrailingZeroCount(falling));
         }
         // A dark run reaching the end of a row whose length is a multiple of 64 ends at the length
         if (carry != 0)
