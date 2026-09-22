@@ -51,29 +51,33 @@ internal readonly struct GreyLevels
         if (darkWeight == 0 || lightWeight == 0)
             return default;
 
-        long count = 0, sum = 0;
-        for (var i = 0; i < threshold && count * 2 < darkWeight; i++)
+        long darkCount = 0, darkSum = 0;
+        for (var i = 0; i < threshold && darkCount * 2 < darkWeight; i++)
         {
-            count += histogram[i];
-            sum += (long)i * histogram[i];
+            darkCount += histogram[i];
+            darkSum += (long)i * histogram[i];
         }
-        var dark = (float)sum / count;
+        var dark = (float)darkSum / darkCount;
 
-        count = 0;
-        sum = 0;
-        for (var i = 255; i >= threshold && count * 2 < lightWeight; i--)
+        long lightCount = 0, lightSum = 0;
+        for (var i = 255; i >= threshold && lightCount * 2 < lightWeight; i--)
         {
-            count += histogram[i];
-            sum += (long)i * histogram[i];
+            lightCount += histogram[i];
+            lightSum += (long)i * histogram[i];
         }
-        var light = (float)sum / count;
+        var light = (float)lightSum / lightCount;
 
         if (light - dark < MinimumRange)
             return default;
 
-        // No pixel strictly between the levels: every share is 0 or 1
+        // No pixel strictly between the levels: every share is 0 or 1. The bounds come from the integer sums, not the
+        // float means: past 2^24 in a weighted sum the float mean of a class at 255 rounds above 255, and a scan bounded
+        // by it would count bin 255 itself. The smallest bin above the dark mean is floor(mean) + 1, the largest below
+        // the light mean is ceil(mean) - 1, both exact in integers
+        var firstAbove = (int)(darkSum / darkCount) + 1;
+        var lastBelow = (int)((lightSum - 1) / lightCount);
         var any = false;
-        for (var i = (int)dark + 1; i < light; i++)
+        for (var i = firstAbove; i <= lastBelow; i++)
         {
             if (histogram[i] != 0)
             {
