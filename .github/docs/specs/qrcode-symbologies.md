@@ -49,7 +49,7 @@ Dependency rule: shared code never references a symbology namespace; symbology n
 
 Two detection primitives were lifted from `Internals.StandardQR` to the shared `Internals.ImageDecoders` namespace when Micro QR image detection (Phase 4b) became their second consumer, exactly the trigger this document prescribed:
 
-- `Binarizer.ComputeOtsuThreshold`, generic binarization (moved out of `QRImageDecoder`)
+- `Binarizer`, generic binarization (moved out of `QRImageDecoder`): the histogram is counted once an image (a 256-bit tier and an ARM64 tier count a block's two extreme values in registers, the ARM64 one spreading dense blocks over four sub-histograms; a scalar walk elsewhere), the threshold search and the grey levels read the histogram alone, and the inverted retry every image decoder makes mirrors the first polarity's bins instead of counting the negative and searches the threshold again on them, because two values with nothing between them tie at every split and `256 - threshold` is a different threshold on exactly a rendered symbol; all three tiers are held to one bin count, and the decisions and measurements are in [standardqr-decoder.md](standardqr-decoder.md)
 - `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR and rMQR use the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`; runs that miss the ratio by less than 1.5 px on every one of the five are measured again from grey levels (`GreyLevels`, taken from the threshold's own histogram) before they are refused, which is what reads anti-aliased edges at about 2 px/module
 - `ModuleBoundaryReader`, the grid of a crisp axis-aligned symbol below 1.75 px/module as a table of module boundaries read off the timing patterns and the finder's own lines, instead of a fitted transform; each symbology says where its timing lines run and how they end (a far finder for Standard QR, the quiet zone for Micro QR and rMQR, with rMQR's three-module alignment and corner runs allowed on the line)
 - `FinderAxisEstimator`, the finder-local module scale for all three symbologies (dark-light-dark runs that pair edges of the same polarity, so ink spread and erosion do not scale it) and single-finder axis recovery for Micro QR and rMQR (an axis fitted to a 90-direction sweep, then the sweep's separated minima); lifted from the Micro QR image decoder when rMQR image detection (Phase 7) became its second consumer, and the Standard QR finder-to-finder measurement folded into it in 2026-09
@@ -280,7 +280,7 @@ that one-time build to the call that happened to trigger it.
 Shared primitives that already have both an x64 and an ARM64/Vector128 tier, and must be
 treated as controls rather than reimplemented when a new symbology or kernel arrives:
 `TextAnalyzer`, `EccBinaryEncoder`, `EccBinaryDecoder` (syndrome pass), `ModuleBitPacker`,
-`LuminanceConverter`, `LuminanceInverter`, and finder/alignment row-mask construction.
+`LuminanceConverter`, `LuminanceInverter`, finder/alignment row-mask construction, the histogram fill (`Binarizer`), the finder search's edge-list row kernel (`FinderPatternFinder.RowEdges`) and the Standard QR piecewise mesh sampler (`QRImageDecoder.SampleGridPiecewise`).
 Architecture-neutral work already benefits every target: cached per-version layouts, pair
 stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
 finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
@@ -301,10 +301,16 @@ increment chain costs this core twice what it costs x64. The fill now has an ARM
 core's L1 holds and x64's did not; see the Performance lessons in
 [standardqr-decoder.md](standardqr-decoder.md)), and its "near the per-pixel floor" reason no
 longer stands. The queue is closed again behind it.
-The x64 side of that has since shipped as a 256-bit histogram tier (same Performance lessons). ARM64 and
-WASM did not get a vector tier with it: the 128-bit form measured on x64 says nothing about targets
-where the mask extraction is a different sequence of instructions, so they run the scalar walk, which
-changed only in how it indexes the bins, and the entry still stands for them.
+The finder search and the mesh sampler followed on 2026-09-22 by the same route: after the
+fill's tier the profile named the finder's mask walk (10 to 50 % of a version 40 decode, 46 % of
+a no-symbol image, bound by its branches as on x64) and then the sampler's column-table tier
+(45 of a 138 µs decode), and both have ARM64 tiers now (the row kernel's word from the NEON fold,
+eight windows a step; the sampler on four lanes, two steps a body). What the x64 round found
+there transferred as structure and not as instructions, and each tier was searched again on the
+M2 against its own reference (see the Performance lessons in
+[standardqr-decoder.md](standardqr-decoder.md)). WASM runs the scalar fill, the mask walk and
+the column table: the 128-bit forms measured on x64 say nothing about it, and it is unmeasured.
+The queue is closed again behind them, on the same rule.
 
 ## Scope decisions
 
