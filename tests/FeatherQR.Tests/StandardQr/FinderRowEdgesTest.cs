@@ -13,7 +13,7 @@ public class FinderRowEdgesTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors (net8.0+ on AVX2).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
             return;
         }
 
@@ -72,7 +72,7 @@ public class FinderRowEdgesTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors (net8.0+ on AVX2).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
             return;
         }
 
@@ -102,7 +102,7 @@ public class FinderRowEdgesTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors (net8.0+ on AVX2).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
             return;
         }
 
@@ -132,7 +132,7 @@ public class FinderRowEdgesTest
         await Assert.That(checker.Windows - checker.Strict).IsGreaterThan(100_000);
     }
 
-    /// <summary>Lays run vectors out as dark runs of one row, classifies them sixteen windows at a time, and holds every window of the row, the ones between the vectors included, to the scalar checks.</summary>
+    /// <summary>Lays run vectors out as dark runs of one row, classifies them a step of windows at a time (<see cref="FinderPatternFinder.ClassifyWindowLanes"/>), and holds every window of the row, the ones between the vectors included, to the scalar checks.</summary>
     private sealed class WindowChecker
     {
         private readonly short[] _starts = new short[64];
@@ -150,7 +150,7 @@ public class FinderRowEdgesTest
         public void Add(ReadOnlySpan<int> vector)
         {
             // three dark runs and the two gaps between them; the gap before the next vector is one pixel
-            if (_darkRuns + 3 > 18 || _position + vector[0] + vector[1] + vector[2] + vector[3] + vector[4] + 1 >= FinderPatternFinder.EdgeListWidthLimit)
+            if (_darkRuns + 3 > FinderPatternFinder.ClassifyWindowLanes + 2 || _position + vector[0] + vector[1] + vector[2] + vector[3] + vector[4] + 1 >= FinderPatternFinder.EdgeListWidthLimit)
                 Flush();
             for (var i = 0; i < 5; i += 2)
             {

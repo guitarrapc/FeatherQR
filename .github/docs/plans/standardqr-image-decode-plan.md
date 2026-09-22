@@ -143,7 +143,7 @@ Each phase follows the test-first workflow, updates the decoder spec in the same
 | 2 | **P0** | Otsu histogram | The variant ladder of Approach 2, the mirrored histogram for the second polarity as a variant of its own; the winner per tier with runtime dispatch; parity tests first | Done, see the two Progress log entries. Histogram, threshold and `GreyLevels` identical to the shipped walk over random images, two-valued images at every module size from 1 to 16 px, images with no extremes, all-one-value images and lengths that are not a multiple of the vector width; planted faults each red; no input class slower, noise and the gradient included; the second polarity's threshold and `GreyLevels` identical to a recomputation over the inverted pixels; kernel ratio and end-to-end delta per class, `QRCodeImageDecodeEndToEnd` against its phase 1 baselines |
 | 3 | P1 | Piecewise sampling | A vector form of `SampleGridPiecewise` after the global sampler's, the scalar loop kept as the reference; parity tests first | Done, see Progress log. The sampled grid identical to the scalar loop's, module for module, over every version that uses the mesh, upright, rotated and under keystone, with mesh nodes found and with nodes left at their predictions, and at image edges where a sample clamps; planted faults each red; kernel ratio and end-to-end delta per class |
 | 4 | **P0** | Finder search | Read and timed, see Approach 4: the search is 56 to 66 % of a rendered version 40 decode and 92 % of a no-symbol noise image. The ladder of Approach 4 in its order: per-axis cross-check walkers, exact run caps, the edge list with vector window classification; the shipped walk and cross-checks kept as the reference; parity tests first | Done, see the three Progress log entries; one gap is recorded there (three faults that only over-report are held by no test in this repository). The candidate list identical to the reference's, every centre, module size and count bit for bit, and so the same three patterns, over the image fixtures, the clean-image sweep, the perspective and rotation tests, noise, gradients, rows narrower than a vector step and runs that reach either end of a row; for the run caps, the verdict of every cross-check identical over random and adversarial cross sections; planted faults each red; no input class slower end to end, the not-found inputs and the rotated class timed inside a decode included; Micro QR and rMQR image decodes as arms; kernel ratio and end-to-end delta per class against `QRCodeImageDecodeEndToEnd` |
-| 5 | P1 | ARM64 measurement | The phase 1 profile and the shipped candidates on the ARM64 machine, same harness; then the Otsu fill's ARM64 tier, which the profile ranks first | Done, see the two Progress log entries: nothing loses, nothing gated or reverted; the Otsu fill has an ARM64 tier. A number per arm and class; anything that loses there is gated or reverted |
+| 5 | P1 | ARM64 measurement | The phase 1 profile and the shipped candidates on the ARM64 machine, same harness; then the Otsu fill's ARM64 tier, which the profile ranks first | Done, see the three Progress log entries: nothing loses, nothing gated or reverted; the Otsu fill and the finder search's row kernel have ARM64 tiers. A number per arm and class; anything that loses there is gated or reverted |
 | 6 | P2 | Fold | Decisions and measurements into `specs/standardqr-decoder.md`, the shared binarizer's into `specs/qrcode-symbologies.md`; this plan deleted | The spec carries what was decided and why |
 
 Phase 1 can end the plan early in one way: if the attempts count explains most of "rest", the work is a decision about the retry ladder, which changes what decodes first and belongs with the accuracy work, not here.
@@ -564,3 +564,66 @@ Lessons:
 - The same address written two ways is two costs. One base plus 256·k and four references reach the same bins; the first puts a sign extension on the way to every load, and noise read 1.15 against 1.00.
 - Where three placements differ by what a placement cannot cause, the difference is layout. The lanes' storage moved the two-valued inputs, which never touch the lanes, by as much as it moved noise. The choice was made on the rule it had to satisfy and confirmed by the decode A/B, not by the isolated ranking.
 - The net8.0 build could only be run rolled forward here. The tier's gates are runtime checks and its code is the same on both frameworks, so this checks the compilation paths and not a .NET 8 JIT; CI runs the real one.
+
+### Phase 5, the finder search's ARM64 row kernel (2026-09-22)
+
+Done: the edge-list row kernel of phase 4 (`FinderPatternFinder.RowEdges.cs`) runs on ARM64. `IsEdgeListKernelSupported` is true under `AdvSimd.Arm64` as well; `DarkWord` builds a row's 64-pixel word per machine (x64's two 32-byte compares through the min identity, or the NEON fold the mask walk already used); on ARM64 the rising and the falling edges of a word are written by one loop, one of each an iteration; `ClassifyWindows` judges `ClassifyWindowLanes` windows a call, sixteen with 256-bit vectors and eight through `ClassifyWindows8` on 128-bit ones, whose lanes become bits by `LaneBits` (narrow, one weight a lane, add across); and `ScanRowEdges` on ARM64 turns a step's three verdicts into bits only after one add across their OR says a lane is flagged. The x64 path keeps its instructions; the mask walk stays the kernel for rows outside 32 to 4,095 pixels and for 128-bit targets without AdvSimd.
+
+After the Otsu tier the search was 10 to 50 % of a version 40 decode on the M2 and 46 % of a no-symbol noise image. The kernel search ran as a micro-benchmark outside this repository: the shipped ARM64 mask walk copied verbatim as the baseline, `TryAddCandidate` a sink of the same signature that is not inlined, one operation the stride pass over an image, the gate the hit sequence (row, window end, five runs) over the seven inputs, symbols and finder fields from 1.3 to 7 px a module crisp and blurred, noise at 25 widths around the block sizes at four thresholds with the grey levels on and off, and rows all dark, all light, starting or ending dark, alternating and at the finder ratio. Two of three planted faults were red (1,092 hits on the 3 px input against 990 with a lane cut from the live mask); the third, a near miss handled with the grey levels off, survives as phase 4's gap does, because the follow-up refuses what the flag over-reports. Same-run ratios to the mask walk, canary within 6 %:
+
+| Variant, each one change on its parent | v40 3 px / 3.4 px / 8 px | 4 px rot / soft | v10 3 px | Noise 740 | Verdict |
+|---|---:|---:|---:|---:|---|
+| The 256-bit kernel on 128-bit vectors, eight windows a step, bits by `ExtractMostSignificantBits` | 0.15 / 0.17 / 0.21 | 0.20 / 0.15 | 0.25 | 0.38 | Confirmed: the mask walk's cost is its branches here too |
+| Verdict bits by narrow, weight and add across, and only once the OR of the three is non-zero | 0.14 / 0.16 / 0.20 | 0.19 / 0.14 | 0.25 | 0.38 | Confirmed, 3 to 8 %: `ExtractMostSignificantBits` on eight shorts is a sequence, three a step, and 364 of 7,455 windows are flagged |
+| Sixteen windows a step as two halves | 0.16 / 0.19 / 0.27 | 0.19 / 0.18 | 0.24 | 0.36 | Refuted: the second half is wasted on every row's last step, and an 8 px row has about 40 windows |
+| Rising and falling edges written by one loop | 0.14 / 0.16 / 0.19 | 0.16 / 0.13 | 0.26 | 0.37 | Confirmed, 8 to 22 % on symbols: each edge is a two-cycle chain (clear the bit, find the next), and two chains overlap where two loops in a row did not. Shipped |
+| The same loop as do-while | 0.14 / 0.15 / 0.21 | 0.16 / 0.14 | 0.25 | 0.37 | Refuted: within the canary spread either way; the JIT decides the loop's rotation |
+
+Probes that cut the kernel short split the shipped form on the 3 px input into the fold 0.02, the bit loops 0.06, the classification 0.03 and the flagged windows 0.03; on noise the flagged windows are 0.29 of 0.37: 7,209 of 45,163 windows are flagged there, 5,228 of them near misses that pay the grey coverage measurement, which the mask walk pays too. That is the shipped follow-up, not the row kernel, and it is the next candidate on an image with no symbol.
+
+Tests first: `FinderRowEdgesTest`'s window checker is sized by `ClassifyWindowLanes` and the two classes' skips no longer name AVX2; the test project failed to compile on the constant, then passed with the kernel, both classes running on ARM64 with nothing skipped. Full suite green on net10.0 (12,404 run, none failed) and on the net8.0 build rolled forward to the .NET 10 runtime (12,402). Spec and spec map updated.
+
+Planted faults in the ARM64 paths, a counted green baseline first (3 and 3 tests): 18, 15 red. The lane weights repeating 64, the bits unweighted, either leftover edge dropped, the falling set cleared twice, the fold's fourth load from 47, its last pairwise add dropped, the tail's pixel loop dropped, the centre's half total unrounded, the centre's difference from the single total, the near limit at 10, `enough` strict, the crisp centre from 2, sixteen lanes claimed on ARM64, the live mask one too wide. Three survived: the tail's shift by `i` instead of `i − x` (C# masks a shift count to six bits and `x` is a multiple of 64: equivalent), the flagged test without the live mask (dead lanes go on to the per-verdict bits, which are masked: slower, not wrong), and the near bits ungated by the grey levels, phase 4's recorded over-report gap.
+
+Found on the way and filed as its own task: `GreyLevels.FromHistogram` enables the grey levels on a pure two-valued image when 255 times the count of 255s passes 2²⁴, because the light mean is computed in float and rounds above 255, so the "any pixel strictly between the levels" loop reaches bin 255 itself. A 555 x 555 render of a version 40 symbol at 3 px a module gets the near-miss second look and the same symbol at 3.4 px does not. It changes which windows reach the cross-checks, so it is outside this plan's rule and not fixed here; the benchmark scenes reproduce it as the library does.
+
+Benchmark delta, the ARM64 machine. The stage harness built against the committed tree (the Otsu tier, 245ba84) and the working tree, three alternating passes, the median; us:
+
+| | Image decode before | after | Finder before | after |
+|---|---:|---:|---:|---:|
+| Version 40, 3 px hard | 270 | 138 | 182 | 48 |
+| 3.4 px fractional | 300 | 164 | 203 | 63 |
+| 4 px hard | 343 | 177 | 246 | 80 |
+| 4.4 px fractional | 385 | 213 | 280 | 106 |
+| 8 px hard | 441 | 302 | 275 | 132 |
+| 8.4 px fractional | 481 | 330 | 303 | 149 |
+| 3 / 4 / 8 px soft | 356 / 520 / 1,090 | 211 / 326 / 938 | 183 / 277 / 311 | 38 / 75 / 153 |
+| 3 / 4 / 8 px rot | 621 / 757 / 1,545 | 471 / 550 / 1,380 | 223 / 326 / 318 | 62 / 106 / 141 |
+| Version 20, 3 / 4 / 8 px hard | 69 / 85 / 175 | 42 / 51 / 110 | | |
+| Version 10, 3 / 4 / 8 px hard | 21 / 27 / 58 | 15 / 19 / 44 | 12.7 / 17.5 / 40.4 | 6.5 / 9.3 / 26.0 |
+| Version 6, 4 px hard / soft / rot | 15.6 / 26.6 / 22.4 | 11.6 / 22.8 / 17.5 | | |
+| No symbol, noise 740 / 1480 | 3,377 / 7,203 | 1,778 / 3,997 | 1,574 / 3,205 a polarity | 781 / 1,594 |
+| No symbol, gradient 740 / 1480 | 321 / 914 | 315 / 904 | 34 / 114 | 31 / 107 |
+
+The search 0.21 to 0.49 at version 40, 0.50 on noise, the gradient (no windows) level; the decode 0.51 to 0.89 on symbols, 0.53 and 0.55 on noise. `QRCodeImageDecodeEndToEnd`, alternating, two runs a side, BenchmarkDotNet means in us:
+
+| Shape | Span, before | Span, after | Bitmap, before | Bitmap, after |
+|---|---:|---:|---:|---:|
+| v40-3px | 269 / 271 | 137 / 139 | 314 / 317 | 187 / 190 |
+| v40-3.4px | 307 / 311 | 161 / 161 | 370 / 370 | 221 / 225 |
+| v40-4px-rot17 | 756 / 771 | 549 / 553 | 884 / 891 | 674 / 675 |
+| v40-4px-soft | 530 / 524 | 334 / 328 | 605 / 608 | 407 / 414 |
+| v6-4px | 15.4 / 15.4 | 11.6 / 11.6 | 22.0 / 22.2 | 18.2 / 18.4 |
+| none-noise | 3,308 / 3,317 | 1,723 / 1,726 | 3,391 / 3,427 | 1,802 / 1,802 |
+| none-gradient | 317 / 318 | 321 / 310 | 399 / 400 | 393 / 395 |
+
+The shared scan: Micro QR M4 image decode 6.3 to 5.9 us; rMQR R7x43 7.0 to 5.8 and R17x139 34.5 to 25.1 (span), 10.0 to 8.7 and 48.0 to 39.2 (bitmap); rMQR no-symbol noise 7,742 to 6,346, gradient 124 to 108. The PNG generation rows read level within 1 %. Allocated unchanged on every row, the span rows at zero: the edge buffer is the one rental a search the x64 kernel already made.
+
+The ARM64 machine against the code before this plan (fc1cc0c), from the phase 5 harness runs: a version 40 image decode at 3 px a module 782 to 138 us, at 3.4 px 910 to 164, 4 px rotated 1,185 to 550, 4 px soft 618 to 326; no-symbol noise 740 x 740 3,827 to 1,778, a gradient 2,274 to 315.
+
+Lessons:
+- The x64 kernel's structure transferred and its instruction choices did not. All edges at once and windows judged without a branch won here by the same margin; the movemask, the sixteen-window step and the bit extraction each had to be replaced, and the one of those tried as a straight transfer (sixteen windows as two halves) lost.
+- A probe before a hypothesis, this time. Cutting the kernel short after each stage said the fold was a quarter of the extraction and the bit loops the rest before a variant was written for either; phase 4 had spent two rounds learning that the other way.
+- What is left on noise is not the kernel's. Three quarters of the edge list's time on a no-symbol image is the coverage measurement on 5,228 near misses a polarity, the same in every kernel. A count of what the flags fire on, taken once, is what says where the next plan goes.
+- A faithful copy reproduces the bugs too. The gate's two-valued 3 px scene came out with the grey levels on, and the copy was right: the library does that at 181,962 light pixels. The scene size was what exposed it.
+- Layout again, on the smallest work. The 8 px input, about 40 windows a row, moved a variant by 20 % between runs and its canary by 6 %; every verdict here is a same-run ratio, and the do-while form was refuted for being inside that spread rather than for losing.

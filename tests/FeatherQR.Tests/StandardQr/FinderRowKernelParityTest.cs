@@ -15,7 +15,7 @@ public class FinderRowKernelParityTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors (net8.0+ on AVX2).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
             return;
         }
 
