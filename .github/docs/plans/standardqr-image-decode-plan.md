@@ -143,7 +143,7 @@ Each phase follows the test-first workflow, updates the decoder spec in the same
 | 2 | **P0** | Otsu histogram | The variant ladder of Approach 2, the mirrored histogram for the second polarity as a variant of its own; the winner per tier with runtime dispatch; parity tests first | Done, see the two Progress log entries. Histogram, threshold and `GreyLevels` identical to the shipped walk over random images, two-valued images at every module size from 1 to 16 px, images with no extremes, all-one-value images and lengths that are not a multiple of the vector width; planted faults each red; no input class slower, noise and the gradient included; the second polarity's threshold and `GreyLevels` identical to a recomputation over the inverted pixels; kernel ratio and end-to-end delta per class, `QRCodeImageDecodeEndToEnd` against its phase 1 baselines |
 | 3 | P1 | Piecewise sampling | A vector form of `SampleGridPiecewise` after the global sampler's, the scalar loop kept as the reference; parity tests first | Done, see Progress log. The sampled grid identical to the scalar loop's, module for module, over every version that uses the mesh, upright, rotated and under keystone, with mesh nodes found and with nodes left at their predictions, and at image edges where a sample clamps; planted faults each red; kernel ratio and end-to-end delta per class |
 | 4 | **P0** | Finder search | Read and timed, see Approach 4: the search is 56 to 66 % of a rendered version 40 decode and 92 % of a no-symbol noise image. The ladder of Approach 4 in its order: per-axis cross-check walkers, exact run caps, the edge list with vector window classification; the shipped walk and cross-checks kept as the reference; parity tests first | Done, see the three Progress log entries; one gap is recorded there (three faults that only over-report are held by no test in this repository). The candidate list identical to the reference's, every centre, module size and count bit for bit, and so the same three patterns, over the image fixtures, the clean-image sweep, the perspective and rotation tests, noise, gradients, rows narrower than a vector step and runs that reach either end of a row; for the run caps, the verdict of every cross-check identical over random and adversarial cross sections; planted faults each red; no input class slower end to end, the not-found inputs and the rotated class timed inside a decode included; Micro QR and rMQR image decodes as arms; kernel ratio and end-to-end delta per class against `QRCodeImageDecodeEndToEnd` |
-| 5 | P1 | ARM64 measurement | The phase 1 profile and the shipped candidates on the ARM64 machine, same harness | A number per arm and class; anything that loses there is gated or reverted |
+| 5 | P1 | ARM64 measurement | The phase 1 profile and the shipped candidates on the ARM64 machine, same harness; then the Otsu fill's ARM64 tier, which the profile ranks first | Done, see the two Progress log entries: nothing loses, nothing gated or reverted; the Otsu fill has an ARM64 tier. A number per arm and class; anything that loses there is gated or reverted |
 | 6 | P2 | Fold | Decisions and measurements into `specs/standardqr-decoder.md`, the shared binarizer's into `specs/qrcode-symbologies.md`; this plan deleted | The spec carries what was decided and why |
 
 Phase 1 can end the plan early in one way: if the attempts count explains most of "rest", the work is a decision about the retry ladder, which changes what decodes first and belongs with the accuracy work, not here.
@@ -451,3 +451,116 @@ Lessons:
 - Parity of results cannot hold a stage whose mistakes the next stage forgives. Twelve of twenty-two faults survived a bit-for-bit candidate comparison. The repair was not more scenes but two seams at the stage's own boundaries, tested against what each stage stands for. Three faults still survive, all over-reports, and the log says so.
 - A benchmark run that reads 1.5x on code the change does not touch is the machine. The first Micro QR run read its PNG generation rows, identical in both trees, 1.47x to 1.58x slower on the changed side in both passes, and its decode row with them. Run again with the order reversed everything was level or better. The rows a change cannot reach are the canary of an end-to-end class, and they were only looked at because the decode row looked wrong.
 - A code generation switch is verified in the disassembly. `DOTNET_EnableAVX512F=0` does nothing on .NET 10 (`DOTNET_EnableAVX512=0` does); the first check without AVX-512 reproduced the round before it and would have passed for the answer. The exported disassembly held 1,435 mask-register instructions, then none.
+
+### Phase 5, ARM64 measurement (2026-09-22)
+
+Scope of this entry: the measurement. The Otsu fill's ARM64 tier, which it points to, has its own entry.
+
+Done: the phase 1 stage harness rebuilt (the first did not outlive the session that wrote it) and run on the ARM64 machine, Apple M2, 8 cores, .NET 10.0.301. There are no 256-bit vectors here, so every tier this plan shipped behind `Vector256.IsHardwareAccelerated` or `Avx2.IsSupported` is absent: the Otsu fill runs its scalar tier, the mesh sampler its column-table tier, the finder rows the mask walk. Seven trees: the code before the plan (fc1cc0c) and the commit of each step of phases 2 to 4. One harness compiled against each tree's library sources, the seven binaries checked to differ; 52 luminance images made once by the library's renderer at HEAD (versions 6, 10, 20 and 40 x 3, 4 and 8 px a module x hard, fractional, soft and rot; noise and a gradient at 740 and 1480, no symbol), the same classes as phase 1; the decode, each stage alone, and the stages stamped inside one decode body. Nine rounds an input with the arm order rotated each round, three passes a tree with the tree order rotated each pass; a figure is the median over passes of each pass's median. The decode arm runs first and last as the canary, and the two read within 1 % on every input. `QRCodeImageDecodeEndToEnd`, `MicroQRImageEndToEnd` and `RmQRImageEndToEnd` from the committed tree and from fc1cc0c with the image decode class copied in, alternating, two runs a side. No library source changed.
+
+Two corrections to the harness before anything was read. Warmed 60 ms an arm, the first inputs were measured at Tier0 (a version 40 decode read 900 us, 715 once warmed 300 ms or more); the first input now warms 400 ms an arm. And version 20 rotated at 3 and 4 px decodes on its second attempt (the mesh samples and fails, the global transform reads it), as phase 1 recorded, so those two have a decode figure and no stage split.
+
+Where a version 40 decode goes on ARM64, HEAD, us, the stages timed inside one decode body:
+
+| | Total | Otsu | Finder | Mesh build | Sampling | Matrix | Otsu share |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 3 px hard | 722 | 455 | 197 | 12 | 45 | 17 | 63 % |
+| 3.4 px fractional | 850 | 560 | 224 | 16 | 45 | 17 | 66 % |
+| 4 px hard | 683 | 332 | 273 | 10 | 45 | 20 | 49 % |
+| 4.4 px fractional | 1,180 | 806 | 299 | 13 | 45 | 19 | 68 % |
+| 8 px hard | 822 | 468 | 285 | 11 | 45 | 18 | 57 % |
+| 8.4 px fractional | 2,515 | 2,117 | 330 | 16 | 45 | 21 | 84 % |
+| 3 / 4 / 8 px soft | 372 / 550 / 1,264 | 111 / 205 / 896 | 186 / 281 / 320 | 9 to 13 | 45 | 17 | 30 / 37 / 70 % |
+| 3 / 4 / 8 px rot | 728 / 1,137 / 3,103 | 317 / 706 / 2,718 | 235 / 338 / 336 | 11 to 20 | 45 to 47 | 119 / 28 / 20 | 43 / 62 / 87 % |
+| No symbol, noise / gradient 740 x 740 | 3,362 / 1,126 | 171 / 1,097 a polarity's fill | 1,551 / 34 a polarity | | | | |
+
+The dimension estimate reads 0.2 to 0.8 us everywhere. The `SKBitmap` conversion adds 46 to 83 us at 3 and 4 px, 325 to 506 at 8 px. Version 20 has the same shape (total 107 to 1,020 us, Otsu 36 to 823, the finder 41 to 160, sampling 14); version 6 is 20 to 204 us with Otsu 42 to 75 % of it.
+
+What each step of the plan does here, each tree against the one before it, version 40 unless named:
+
+| Step | What runs on ARM64 | Ratio to the step before |
+|---|---|---|
+| Phase 2, the fill | The scalar tier only | Otsu 0.99 to 1.01 on every input: the unchecked references changed nothing here |
+| Phase 2, the second polarity | Every target | No-symbol gradient 0.50 and 0.53, noise 0.92 and 0.95; the decodes level |
+| Phase 3 | The column-table tier | Sampling 85 to 88 us down to 45 (0.51 to 0.55, version 20 0.55); the decode 0.91 to 0.99 |
+| Phase 4, rung 1 | Every target | The search 0.89 to 1.00, noise 0.96 |
+| Phase 4, rung 2 | Every target | The search 0.94 to 0.99, noise 0.95 |
+| Phase 4, rung 3 | The mask walk; no edge buffer is rented | The search 0.99 to 1.01, noise 0.99: level with rung 2, as it should be |
+
+HEAD against the code before the plan: the decode 0.89 to 0.98 at version 40, 0.91 to 0.97 at version 20, 0.96 to 1.02 at versions 6 and 10, no-symbol noise 0.85 and 0.88, the gradient 0.50 and 0.53. No step loses on any class. Two readings over 1.00 were checked against their own passes: version 6 at 4 px rotated, 55.8 to 56.7 us, which every tree reads between 55.8 and 56.8; and the search on version 20 at 3 px soft, 1.03, which reads 42.2 to 47.0 across trees in no order. Nothing is gated or reverted.
+
+`QRCodeImageDecodeEndToEnd`, BenchmarkDotNet means in us, two runs a side:
+
+| Shape | Span, before | Span, after | Bitmap, before | Bitmap, after |
+|---|---:|---:|---:|---:|
+| v40-3px | 780 / 786 | 722 / 727 | 827 / 835 | 768 / 774 |
+| v40-3.4px | 930 / 944 | 868 / 888 | 981 / 1,001 | 929 / 932 |
+| v40-4px-rot17 | 1,180 / 1,185 | 1,135 / 1,147 | 1,307 / 1,312 | 1,267 / 1,298 |
+| v40-4px-soft | 619 / 626 | 553 / 554 | 703 / 709 | 631 / 659 |
+| v6-4px | 34.3 / 34.6 | 34.1 / 34.3 | 40.9 / 41.1 | 40.6 / 42.0 |
+| none-noise | 3,774 / 3,804 | 3,294 / 3,338 | 3,838 / 3,886 | 3,382 / 3,469 |
+| none-gradient | 2,267 / 2,278 | 1,132 / 1,136 | 2,347 / 2,350 | 1,212 / 1,219 |
+
+Micro QR M4 image decode 11.8 to 11.4 us; rMQR R7x43 13.1 to 12.9, R17x139 71 to 68 (one run after read 87 with an error of 627 and is not counted), no-symbol noise 8,488 to 8,035 and gradient 235 to 146 to 152. The PNG generation rows, which no step reaches, read level within 2 %. Allocated unchanged on every row, the span rows at zero.
+
+Lessons:
+- On ARM64 the plan so far is the part of it that is not a kernel. The three kernels that carried the x64 figures (the fill's 256-bit tier, the AVX2 mesh sampler, the edge list) do not run here, and a version 40 decode that x64 took to about a fifth of its old time is 0.89 to 0.98 of it here. What did move it is what every target runs: the mirrored histogram, the column table and the two cross-check rungs.
+- The fill's scalar tier costs this core twice what it costs x64 wherever increments to one bin chain: 1.47 ns a pixel on the 3 px hard render against 0.71 on x64 before phase 2, 0.21 against 0.09 at 8 px, 2.0 against 1.56 on the gradient. On noise, where they do not chain, it is 0.31 against 0.29. The load-add-store chain is dearer here and the rest is not. That makes the threshold the largest stage on every input, 30 to 87 % of a version 40 decode, and ARM64's own tier of the fill the next step: Approach 2's item 4, which phase 2 left for this machine.
+- A warmup that is enough on one machine is not evidence on another. The harness's 60 ms had been enough on x64 and left this one at Tier0, and a decode at Tier0 reads as a plausible slow machine. A stage figure that moves when the warmup doubles is not a figure.
+
+### Phase 5, the Otsu fill's ARM64 tier (2026-09-22)
+
+Done: `Binarizer.FillHistogramAdvSimd` (net8.0+, taken when `AdvSimd.Arm64.IsSupported` and 256-bit vectors are not), dispatched from `FillHistogram` after the 256-bit tier. It keeps that tier's 32-pixel blocks on two 128-bit loads, its dense cut-over at 12 and its untested stretch of 31 blocks, and differs in four places, each measured on the M2 against the scalar tier copied verbatim (its figures matched the stage harness's Otsu arm to within 2 %) before it was kept:
+
+| Change, each on the one before | Two-valued | 8 px aligned | Rotated | Gradient | Photo-like | Noise | Micro QR sized |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| The 256-bit tier on two 128-bit loads, masks by `ExtractMostSignificantBits` | 0.08 | 0.54 | 0.52 | 0.98 | 1.03 | 1.05 | 0.29 |
+| Masks by a narrowing shift, one bit a byte | 0.06 | 0.39 | 0.46 | 0.98 | 1.02 | 1.05 | 0.21 |
+| The zeros in byte counters, not popcounts | 0.04 | 0.27 | 0.45 | 0.97 | 1.03 | 1.05 | 0.15 |
+| Dense blocks and the stretch over four lanes, one reference each, zeroed once, merged four bins a step | 0.04 | 0.27 | 0.45 | 0.22 | 0.83 | 0.99 | 0.18 |
+| A block's extremes by one add across; the other-pixel mask only when a sparse block has any | 0.03 | 0.19 | 0.46 | 0.23 | 0.83 | 0.98 | 0.14 |
+
+Scalar four lanes on their own read 0.31 to 0.34 two-valued, 0.22 gradient, 0.82 photo-like, 0.96 noise, 0.42 rotated, 1.00 aligned: the lanes are the dense classes' gain, the vector blocks the extremes'. Refused: two lanes (0.45 gradient) and eight (noise 1.14); a dense cut-over of 8 (rotated 0.50) or 16 (level); the sparse walk over two lanes (level); the index written as a native unsigned byte, which the JIT compiled to the same instructions.
+
+The lanes are 4 KB, past the few hundred bytes the library allows on the stack, and are rented from `ArrayPool` once a call. Three placements were measured, a stack buffer, a rental and a 1.5 KB form (lane 0 the caller's histogram, lanes 1 to 3 `ushort`, drained every 32,000 groups); they differed by 2 to 10 %, and by the same amounts on two-valued inputs, which never touch the lanes, and a rental moved 32 or 256 ints in read identically to both offsets. That is code layout under dynamic PGO, as phase 2 found, not the storage. The rental was chosen and the decode A/B below cleared it on every class.
+
+Tests first: `OtsuHistogramParityTest` gained the tier entered directly, inputs long enough that the zero counters drain many times and end at every phase of the drain, and a constant image counted after a noise image, which a lane left uncleared would show in every bin. It failed to compile, passed with the tier delegating to the scalar one, and stayed green with the tier. Full suite green on net10.0 (12,400 run, none failed) and on the net8.0 build rolled forward to the .NET 10 runtime (12,398), since this machine has no .NET 8 runtime: the net8.0 compilation paths ran, its JIT did not. Spec, spec map and the symbologies record's ARM64 note updated.
+
+Planted faults, a counted green baseline first: 18, 17 red. The zero counters drained at 130 blocks, the extremes counted from 31 or not negated, the mask at 0x01, the low walk's index divided by 8, the high walk from 15, the lanes not cleared, the merge without lane 3, the fold adding 7, the last drain dropped, the 255s taken as every extreme, the tail one short, the stretch's step not undone, the stretch unclamped, the zeros counted twice, a dense block's last group dropped, the counters not reset after a drain. The survivor is equivalent: a narrowing shift of 3 instead of 4 leaves each byte's bit at 4i + 1, and the index is the same quarter of it.
+
+Benchmark delta, the ARM64 machine. The stage harness built against the committed tree and the working tree, three alternating passes, the median; image decode, us:
+
+| | before | after | Otsu before | after |
+|---|---:|---:|---:|---:|
+| Version 40, 3 px hard | 716 | 272 | 455 | 14 |
+| 3.4 px fractional | 853 | 297 | 559 | 18 |
+| 4 px hard | 675 | 340 | 332 | 24 |
+| 4.4 px fractional | 1,179 | 383 | 807 | 29 |
+| 8 px hard | 816 | 440 | 465 | 93 |
+| 8.4 px fractional | 2,517 | 485 | 2,110 | 103 |
+| 3 / 4 / 8 px soft | 366 / 551 / 1,259 | 353 / 521 / 1,088 | 110 / 204 / 888 | 97 / 172 / 705 |
+| 3 / 4 / 8 px rot | 727 / 1,140 / 3,122 | 619 / 752 / 1,539 | 313 / 704 / 2,680 | 202 / 335 / 1,137 |
+| Versions 6 to 20, all classes | 20 to 1,015 | 12 to 539 | | |
+| No symbol, noise 740 / 1480 | 3,347 / 7,209 | 3,356 / 7,182 | 171 / 679 | 170 / 679 |
+| No symbol, gradient 740 / 1480 | 1,133 / 2,174 | 324 / 903 | 1,097 / 1,894 | 243 / 630 |
+
+`QRCodeImageDecodeEndToEnd`, the committed tree exported beside the working one, alternating, two runs a side, BenchmarkDotNet means in us:
+
+| Shape | Span, before | Span, after | Bitmap, before | Bitmap, after |
+|---|---:|---:|---:|---:|
+| v40-3px | 720 / 720 | 268 / 267 | 764 / 767 | 312 / 313 |
+| v40-3.4px | 857 / 861 | 307 / 305 | 924 / 925 | 373 / 369 |
+| v40-4px-rot17 | 1,137 / 1,141 | 753 / 755 | 1,266 / 1,276 | 877 / 882 |
+| v40-4px-soft | 553 / 555 | 521 / 528 | 634 / 633 | 604 / 603 |
+| v6-4px | 34.1 / 34.0 | 15.4 / 15.4 | 40.7 / 40.6 | 22.0 / 21.9 |
+| none-noise | 3,310 / 3,298 | 3,338 / 3,299 | 3,392 / 3,388 | 3,396 / 3,397 |
+| none-gradient | 1,121 / 1,134 | 317 / 317 | 1,204 / 1,212 | 400 / 399 |
+
+Micro QR M4 image decode 11.4 to 6.4 us; rMQR R7x43 12.9 to 7.0, R17x139 67.6 to 34.7, no-symbol noise 8,012 to 7,677, gradient 145 to 124. The PNG generation rows, which do not reach the threshold, read level within 2 %. Allocated unchanged on every row, the span rows at zero.
+
+Lessons:
+- A refutation belongs to the machine it was made on. Phase 2 refused the lanes four times on x64, each time for L1 footprint, and on a core with four times the L1 they are the whole gain on gradients and photo-like images. The record said why they lost, and the reason was what did not transfer.
+- Count the round trips between the vector and the general registers. The second-best form moved each other-pixel mask out to a general register and straight back for a popcount, which on this core is itself a vector instruction, twice a block. Counting the extremes where they already were, and building the mask only where it would be walked, was worth a third on the aligned render.
+- The same address written two ways is two costs. One base plus 256·k and four references reach the same bins; the first puts a sign extension on the way to every load, and noise read 1.15 against 1.00.
+- Where three placements differ by what a placement cannot cause, the difference is layout. The lanes' storage moved the two-valued inputs, which never touch the lanes, by as much as it moved noise. The choice was made on the rule it had to satisfy and confirmed by the decode A/B, not by the isolated ranking.
+- The net8.0 build could only be run rolled forward here. The tier's gates are runtime checks and its code is the same on both frameworks, so this checks the compilation paths and not a .NET 8 JIT; CI runs the real one.

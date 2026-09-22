@@ -294,10 +294,13 @@ mechanism. That happened once (2026-09-21): a stage profile of the Standard QR m
 on Apple M2 named the syndrome pass's carried dependency chain, and the shared AdvSimd kernel
 was re-associated to eight bytes a step (see the Performance lessons in
 [standardqr-decoder.md](standardqr-decoder.md)); the queue is closed again behind it.
-The Otsu entry above is the next one a profile questions: on x64 the histogram fill read as
-the largest stage of a large symbol's image decode, because its uniform-group fold stops
-paying at 3 pixels a module (same Performance lessons). That is an x64 figure on synthetic
-renders; nothing was re-measured on ARM64, and the entry stands until it is.
+The Otsu entry above was reopened the same way (2026-09-22): an image-decode stage profile on
+Apple M2 put the histogram fill at 30-87 % of a version 40 decode, because the same-bin
+increment chain costs this core twice what it costs x64. The fill now has an ARM64 tier
+(block extremes counted without a movemask, dense blocks over four sub-histograms, which this
+core's L1 holds and x64's did not; see the Performance lessons in
+[standardqr-decoder.md](standardqr-decoder.md)), and its "near the per-pixel floor" reason no
+longer stands. The queue is closed again behind it.
 The x64 side of that has since shipped as a 256-bit histogram tier (same Performance lessons). ARM64 and
 WASM did not get a vector tier with it: the 128-bit form measured on x64 says nothing about targets
 where the mask extraction is a different sequence of instructions, so they run the scalar walk, which
