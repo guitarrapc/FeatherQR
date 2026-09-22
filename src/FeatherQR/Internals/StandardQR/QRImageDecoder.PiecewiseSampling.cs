@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -31,6 +32,11 @@ internal static partial class QRImageDecoder
         if (Avx2.IsSupported)
         {
             SampleGridPiecewiseAvx2(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
+            return;
+        }
+        if (AdvSimd.Arm64.IsSupported)
+        {
+            SampleGridPiecewiseAdvSimd(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
             return;
         }
 #endif
@@ -128,7 +134,7 @@ internal static partial class QRImageDecoder
         Span<int> stepLast = stackalloc int[MaxPiecewiseDimension / 8];
         Span<int> laneMasks = stackalloc int[MaxPiecewiseDimension];
         BuildColumnTable(gridCoords, cells, dimension, cellOf, fractionOf);
-        if (!TryBuildStepTable(cellOf, dimension, stepFirst, stepLast, laneMasks))
+        if (!TryBuildStepTable(cellOf, dimension, 8, stepFirst, stepLast, laneMasks))
         {
             // cells narrower than a step: not an Annex E lattice, and the two-cell select does not cover it
             SampleGridPiecewiseColumnTable(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
@@ -233,17 +239,148 @@ internal static partial class QRImageDecoder
         }
     }
 
-    // For each 8-column step: the cell of its first lane, the cell of its last, and a lane mask (all
-    // ones where the lane is in the last lane's cell). False when a step touches a third cell.
-    private static bool TryBuildStepTable(ReadOnlySpan<int> cellOf, int dimension, Span<int> stepFirst, Span<int> stepLast, Span<int> laneMasks)
+    /// <summary>
+    /// ARM64 tier: the AVX2 tier's step on four lanes, two steps a loop body, their eight pixels packed into one word for one compare and one store.
+    /// </summary>
+    /// <remarks>
+    /// The same float operations in the reference's order, so the same pixel; what differs from the AVX2 tier is what this machine has. Byte-lane <c>LessThan</c> is the unsigned compare (cmhi), so no min identity is needed.
+    /// The scalar cast is fcvtzs on ARM64 on every runtime, saturating with NaN to 0, and so is the vector conversion, so this tier has one conversion form where the AVX2 tier has two; the clamp keeps the AVX2 tier's .NET 9 shape (the limit first in a float minimum, then an integer maximum with 0), which lands NaN and both infinities where the reference does.
+    /// The pixel index is one integer multiply-add, exact. Measured on Apple M2 against the column-table tier: 0.46 to 0.50 at versions 14 to 40, upright and rotated; a per-cell broadcast kept as vectors and loading the pixels straight into lanes each measured level and were left out. Four lanes are half of the AVX2 tier's gain on that machine, and there is no wider form on this ISA.
+    /// </remarks>
+    internal static void SampleGridPiecewiseAdvSimd(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
-        for (int u = 0, j = 0; u + 8 <= dimension; u += 8, j++)
+        if (!AdvSimd.Arm64.IsSupported || width > MaxExactFloatSide || height > MaxExactFloatSide
+            || !CheckPiecewiseArguments(luminance, width, height, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules))
+        {
+            SampleGridPiecewiseColumnTable(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
+            return;
+        }
+
+        var cells = meshSize - 1;
+        Span<float> rowXs = stackalloc float[MaxMeshNodes];
+        Span<float> rowYs = stackalloc float[MaxMeshNodes];
+        Span<float> cellStartX = stackalloc float[MaxMeshNodes];
+        Span<float> cellSpanX = stackalloc float[MaxMeshNodes];
+        Span<float> cellStartY = stackalloc float[MaxMeshNodes];
+        Span<float> cellSpanY = stackalloc float[MaxMeshNodes];
+        Span<int> cellOf = stackalloc int[MaxPiecewiseDimension];
+        Span<float> fractionOf = stackalloc float[MaxPiecewiseDimension];
+        Span<int> stepFirst = stackalloc int[MaxPiecewiseDimension / 4];
+        Span<int> stepLast = stackalloc int[MaxPiecewiseDimension / 4];
+        Span<int> laneMasks = stackalloc int[MaxPiecewiseDimension];
+        BuildColumnTable(gridCoords, cells, dimension, cellOf, fractionOf);
+        if (!TryBuildStepTable(cellOf, dimension, 4, stepFirst, stepLast, laneMasks))
+        {
+            // cells narrower than a step: not an Annex E lattice, and the two-cell select does not cover it
+            SampleGridPiecewiseColumnTable(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
+            return;
+        }
+
+        var zero = Vector128<int>.Zero;
+        var maxPx = Vector128.Create((float)(width - 1));
+        var maxPy = Vector128.Create((float)(height - 1));
+        var widthVector = Vector128.Create(width);
+        var limitVector = Vector128.Create(threshold);
+        var one = Vector128.Create((byte)1);
+        // Every table through one reference from here: the lengths were checked above, a cell index is below
+        // meshSize − 1 ≤ 6, a step index below dimension / 4, and a bounds check a step measured 3 to 6 % of the kernel
+        ref var fraction0 = ref MemoryMarshal.GetReference(fractionOf);
+        ref var mask0 = ref MemoryMarshal.GetReference(laneMasks);
+        ref var first0 = ref MemoryMarshal.GetReference(stepFirst);
+        ref var last0 = ref MemoryMarshal.GetReference(stepLast);
+        ref var startX0 = ref MemoryMarshal.GetReference(cellStartX);
+        ref var spanX0 = ref MemoryMarshal.GetReference(cellSpanX);
+        ref var startY0 = ref MemoryMarshal.GetReference(cellStartY);
+        ref var spanY0 = ref MemoryMarshal.GetReference(cellSpanY);
+        ref var lum = ref MemoryMarshal.GetReference(luminance);
+        ref var dst = ref MemoryMarshal.GetReference(modules);
+
+        var cellJ = 0;
+        for (var v = 0; v < dimension; v++)
+        {
+            InterpolateMeshRow(v, ref cellJ, cells, meshSize, gridCoords, nodeXs, nodeYs, rowXs, rowYs);
+            for (var c = 0; c < cells; c++)
+            {
+                cellStartX[c] = rowXs[c];
+                cellSpanX[c] = rowXs[c + 1] - rowXs[c];
+                cellStartY[c] = rowYs[c];
+                cellSpanY[c] = rowYs[c + 1] - rowYs[c];
+            }
+            var rowBase = v * dimension;
+            var u = 0;
+            var j = 0;
+            for (; u + 8 <= dimension; u += 8, j += 2)
+            {
+                var low = StepIndexAdvSimd(ref startX0, ref spanX0, ref startY0, ref spanY0, Unsafe.Add(ref first0, j), Unsafe.Add(ref last0, j), ref mask0, ref fraction0, u, maxPx, maxPy, zero, widthVector);
+                var high = StepIndexAdvSimd(ref startX0, ref spanX0, ref startY0, ref spanY0, Unsafe.Add(ref first0, j + 1), Unsafe.Add(ref last0, j + 1), ref mask0, ref fraction0, u + 4, maxPx, maxPy, zero, widthVector);
+                var pixels = (ulong)Unsafe.Add(ref lum, (nuint)low.GetElement(0))
+                    | (ulong)Unsafe.Add(ref lum, (nuint)low.GetElement(1)) << 8
+                    | (ulong)Unsafe.Add(ref lum, (nuint)low.GetElement(2)) << 16
+                    | (ulong)Unsafe.Add(ref lum, (nuint)low.GetElement(3)) << 24
+                    | (ulong)Unsafe.Add(ref lum, (nuint)high.GetElement(0)) << 32
+                    | (ulong)Unsafe.Add(ref lum, (nuint)high.GetElement(1)) << 40
+                    | (ulong)Unsafe.Add(ref lum, (nuint)high.GetElement(2)) << 48
+                    | (ulong)Unsafe.Add(ref lum, (nuint)high.GetElement(3)) << 56;
+                var dark = Vector128.LessThan(Vector128.CreateScalar(pixels).AsByte(), limitVector) & one;
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, rowBase + u), dark.AsUInt64().ToScalar());
+            }
+            // row tail: 1 module for every Annex E version (17 + 4·version), up to 7 for any other dimension; the reference's scalar body on the same per-cell floats
+            for (; u < dimension; u++)
+            {
+                var c = cellOf[u];
+                var s = fractionOf[u];
+                var px = (int)(cellStartX[c] + cellSpanX[c] * s);
+                var py = (int)(cellStartY[c] + cellSpanY[c] * s);
+                if (px < 0)
+                    px = 0;
+                else if (px >= width)
+                    px = width - 1;
+                if (py < 0)
+                    py = 0;
+                else if (py >= height)
+                    py = height - 1;
+                modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
+            }
+        }
+    }
+
+    /// <summary>The pixel index of the four modules at column <paramref name="u"/>: the AVX2 step's arithmetic on four lanes.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<uint> StepIndexAdvSimd(ref float startX0, ref float spanX0, ref float startY0, ref float spanY0, int a, int b, ref int mask0, ref float fraction0, int u, Vector128<float> maxPx, Vector128<float> maxPy, Vector128<int> zero, Vector128<int> widthVector)
+    {
+        var startX = Vector128.Create(Unsafe.Add(ref startX0, a));
+        var spanX = Vector128.Create(Unsafe.Add(ref spanX0, a));
+        var startY = Vector128.Create(Unsafe.Add(ref startY0, a));
+        var spanY = Vector128.Create(Unsafe.Add(ref spanY0, a));
+        if (a != b)
+        {
+            var inLast = Vector128.LoadUnsafe(ref mask0, (nuint)u).AsSingle();
+            startX = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref startX0, b)), startX);
+            spanX = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref spanX0, b)), spanX);
+            startY = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref startY0, b)), startY);
+            spanY = Vector128.ConditionalSelect(inLast, Vector128.Create(Unsafe.Add(ref spanY0, b)), spanY);
+        }
+        var s = Vector128.LoadUnsafe(ref fraction0, (nuint)u);
+        // multiply and add kept separate: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel
+        var x = startX + spanX * s;
+        var y = startY + spanY * s;
+        // a NaN lane comes out of the minimum as NaN whichever operand it is, converts to 0 and stays 0; the limit is first as in the AVX2 tier
+        var px = Vector128.Max(Vector128.ConvertToInt32(Vector128.Min(maxPx, x)), zero);
+        var py = Vector128.Max(Vector128.ConvertToInt32(Vector128.Min(maxPy, y)), zero);
+        return AdvSimd.MultiplyAdd(px, py, widthVector).AsUInt32();
+    }
+
+    // For each step of `lanes` columns: the cell of its first lane, the cell of its last, and a lane mask (all
+    // ones where the lane is in the last lane's cell). False when a step touches a third cell.
+    private static bool TryBuildStepTable(ReadOnlySpan<int> cellOf, int dimension, int lanes, Span<int> stepFirst, Span<int> stepLast, Span<int> laneMasks)
+    {
+        for (int u = 0, j = 0; u + lanes <= dimension; u += lanes, j++)
         {
             var first = cellOf[u];
-            var last = cellOf[u + 7];
+            var last = cellOf[u + lanes - 1];
             stepFirst[j] = first;
             stepLast[j] = last;
-            for (var k = 0; k < 8; k++)
+            for (var k = 0; k < lanes; k++)
             {
                 var cell = cellOf[u + k];
                 if (cell != first && cell != last)

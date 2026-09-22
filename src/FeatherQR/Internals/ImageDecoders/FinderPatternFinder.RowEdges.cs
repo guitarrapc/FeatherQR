@@ -35,7 +35,7 @@ internal static partial class FinderPatternFinder
         => false;
 #endif
 
-    /// <summary>Windows <see cref="ClassifyWindows"/> judges in one call: sixteen with 256-bit vectors, eight on ARM64.</summary>
+    /// <summary>Windows <c>ClassifyWindows</c> judges in one call: sixteen with 256-bit vectors, eight on ARM64.</summary>
     internal static int ClassifyWindowLanes
 #if NET8_0_OR_GREATER
         => Vector256.IsHardwareAccelerated ? 16 : 8;

@@ -143,7 +143,7 @@ Each phase follows the test-first workflow, updates the decoder spec in the same
 | 2 | **P0** | Otsu histogram | The variant ladder of Approach 2, the mirrored histogram for the second polarity as a variant of its own; the winner per tier with runtime dispatch; parity tests first | Done, see the two Progress log entries. Histogram, threshold and `GreyLevels` identical to the shipped walk over random images, two-valued images at every module size from 1 to 16 px, images with no extremes, all-one-value images and lengths that are not a multiple of the vector width; planted faults each red; no input class slower, noise and the gradient included; the second polarity's threshold and `GreyLevels` identical to a recomputation over the inverted pixels; kernel ratio and end-to-end delta per class, `QRCodeImageDecodeEndToEnd` against its phase 1 baselines |
 | 3 | P1 | Piecewise sampling | A vector form of `SampleGridPiecewise` after the global sampler's, the scalar loop kept as the reference; parity tests first | Done, see Progress log. The sampled grid identical to the scalar loop's, module for module, over every version that uses the mesh, upright, rotated and under keystone, with mesh nodes found and with nodes left at their predictions, and at image edges where a sample clamps; planted faults each red; kernel ratio and end-to-end delta per class |
 | 4 | **P0** | Finder search | Read and timed, see Approach 4: the search is 56 to 66 % of a rendered version 40 decode and 92 % of a no-symbol noise image. The ladder of Approach 4 in its order: per-axis cross-check walkers, exact run caps, the edge list with vector window classification; the shipped walk and cross-checks kept as the reference; parity tests first | Done, see the three Progress log entries; one gap is recorded there (three faults that only over-report are held by no test in this repository). The candidate list identical to the reference's, every centre, module size and count bit for bit, and so the same three patterns, over the image fixtures, the clean-image sweep, the perspective and rotation tests, noise, gradients, rows narrower than a vector step and runs that reach either end of a row; for the run caps, the verdict of every cross-check identical over random and adversarial cross sections; planted faults each red; no input class slower end to end, the not-found inputs and the rotated class timed inside a decode included; Micro QR and rMQR image decodes as arms; kernel ratio and end-to-end delta per class against `QRCodeImageDecodeEndToEnd` |
-| 5 | P1 | ARM64 measurement | The phase 1 profile and the shipped candidates on the ARM64 machine, same harness; then the Otsu fill's ARM64 tier, which the profile ranks first | Done, see the three Progress log entries: nothing loses, nothing gated or reverted; the Otsu fill and the finder search's row kernel have ARM64 tiers. A number per arm and class; anything that loses there is gated or reverted |
+| 5 | P1 | ARM64 measurement | The phase 1 profile and the shipped candidates on the ARM64 machine, same harness; then the Otsu fill's ARM64 tier, which the profile ranks first | Done, see the four Progress log entries: nothing loses, nothing gated or reverted; the Otsu fill, the finder search's row kernel and the mesh sampler have ARM64 tiers. A number per arm and class; anything that loses there is gated or reverted |
 | 6 | P2 | Fold | Decisions and measurements into `specs/standardqr-decoder.md`, the shared binarizer's into `specs/qrcode-symbologies.md`; this plan deleted | The spec carries what was decided and why |
 
 Phase 1 can end the plan early in one way: if the attempts count explains most of "rest", the work is a decision about the retry ladder, which changes what decodes first and belongs with the accuracy work, not here.
@@ -627,3 +627,63 @@ Lessons:
 - What is left on noise is not the kernel's. Three quarters of the edge list's time on a no-symbol image is the coverage measurement on 5,228 near misses a polarity, the same in every kernel. A count of what the flags fire on, taken once, is what says where the next plan goes.
 - A faithful copy reproduces the bugs too. The gate's two-valued 3 px scene came out with the grey levels on, and the copy was right: the library does that at 181,962 light pixels. The scene size was what exposed it.
 - Layout again, on the smallest work. The 8 px input, about 40 windows a row, moved a variant by 20 % between runs and its canary by 6 %; every verdict here is a same-run ratio, and the do-while form was refuted for being inside that spread rather than for losing.
+
+### Phase 5, the mesh sampler's ARM64 tier (2026-09-22)
+
+Done: `QRImageDecoder.SampleGridPiecewiseAdvSimd` (net8.0+, taken under `AdvSimd.Arm64` after the AVX2 tier), the AVX2 tier's step on four lanes, two steps a loop body: a cell's start and span once a row, broadcast; a step straddling two cells selects per lane from the version's table (`TryBuildStepTable` now takes the lane count); the lerp as separate multiply and add; the clamp as a float minimum then a saturating conversion (fcvtzs, which is also what the scalar cast is on ARM64 on every runtime, so one form serves both frameworks where the AVX2 tier needs two) then an integer maximum with 0; the pixel index by one integer multiply-add; eight scalar loads packed into one word, one unsigned byte compare, one 8-byte store; every table through a hoisted reference, indexed unchecked. After the threshold and the search had their tiers the sampler was 45 of a 138 us version 40 decode on the M2, the largest stage.
+
+The kernel search ran as a micro-benchmark outside this repository against the shipped column-table tier copied verbatim, gated on the x64 round's 442 scenes plus two images that are not square, onto a dirty buffer, every module against the reference; a planted fault (the two-cell select removed) was red. Same-run ratios to the column-table tier, canary within 1 %:
+
+| Variant, each one change on its parent | v14 3 px | v20 4 px | v40 3 px / rot / 8 px rot | Verdict |
+|---|---:|---:|---:|---|
+| The AVX2 tier on four lanes | 0.56 | 0.54 | 0.55 / 0.56 / 0.57 | Confirmed, and half of what eight lanes gave x64 (0.24 of the same tier there) |
+| Two four-lane steps a body, eight loads packed, one compare and store | 0.54 | 0.51 | 0.51 / 0.53 / 0.54 | Confirmed, 5 to 8 % |
+| Tables through hoisted references, unchecked | 0.51 | 0.48 | 0.48 / 0.50 / 0.53 | Confirmed, 3 to 6 %: the step paid three or four bounds checks and frame reloads past the 256-byte immediate range |
+| The index vector stored and reloaded as words instead of lane extracts | 0.61 | 0.59 | 0.58 / 0.59 / 0.60 | Refuted: a 16-byte store followed by word loads stalls on partial forwarding |
+| The loop's runtime flag removed | 0.50 | 0.47 | 0.47 / 0.48 / 0.50 | 2 to 3 % |
+| Cell parameters kept as broadcast vectors a row | 0.51 | 0.47 | 0.46 / 0.48 / 0.50 | Refuted, level: four `ldr q` cost what four `ldr s` + `dup` did |
+| The index by one integer multiply-add | 0.50 | 0.47 | 0.46 / 0.47 / 0.50 | Confirmed, 1 to 2 %, exact on integers. Shipped |
+| The eight pixels loaded straight into vector lanes (`ld1 {v.b}[i]`) | 0.50 | 0.47 | 0.46 / 0.47 / 0.48 | Refuted, level: `add` + `ld1` for `ldrb` + `orr`, one for one, and it needs a pointer |
+
+The kernel is instruction-bound at eight to nine instructions a module and about four a cycle: two cell broadcasts, thirteen vector operations and the extraction (a lane move, a load and an or a module) for four modules. Nothing in the audit reopened it: the column and step tables are once a call, there is no cliff between sizes, and there is no recurrence. Four lanes are half of the AVX2 tier's gain on this machine and this ISA has no wider form.
+
+Tests first: `SampleGridPiecewiseParityTest` lists the tier where it lists the AVX2 one, so on ARM64 every one of its scenes (63 tests: upright and bent at versions 14 to 40, clamps at each image edge, poison nodes, cells narrower than a step, buffers it cannot index) runs against it. It failed to compile, then passed. Full suite green on net10.0 (12,408 run, none failed) and on the net8.0 build rolled forward (12,406). Spec and spec map updated.
+
+Planted faults, a counted green baseline first: 15, 13 red. The minimum's operands swapped, the maximum with 0 dropped, the multiply-add's operands swapped, the select dropped or fed the wrong table, the step table built for eight lanes, the high step taken from the low step's table entry, a pixel shifted into the next lane, the x limit from the height, the compare not strict, a cell span as the far node, the tail dropped, the fractions read a column on, the lerp fused. Two survived: the minimum's operand order, which mattered for `Avx.Min` and not for `Vector128.Min`, which returns NaN from either side on this runtime, and the four-lane leftover loop after the eight-module loop, which no Annex E dimension (17 + 4·version, 1 mod 4) ever enters; that loop was deleted and the scalar tail covers any other dimension.
+
+Benchmark delta, the ARM64 machine. The stage harness against the committed tree (8907ea8) and the working tree, three alternating passes, the median; us:
+
+| | Image decode before | after | Sampling before | after |
+|---|---:|---:|---:|---:|
+| Version 40, 3 px hard | 141 | 115 | 45.2 | 20.7 |
+| 3.4 px fractional | 163 | 136 | 45.1 | 20.6 |
+| 4 px hard | 182 | 155 | 45.0 | 20.7 |
+| 4.4 px fractional | 210 | 186 | 45.1 | 20.6 |
+| 8 px hard | 293 | 266 | 45.0 | 21.2 |
+| 8.4 px fractional | 329 | 304 | 45.2 | 21.0 |
+| 3 / 4 / 8 px soft | 211 / 325 / 934 | 186 / 304 / 913 | 45 | 20.5 / 20.7 / 21.0 |
+| 3 / 4 / 8 px rot | 462 / 544 / 1,366 | 440 / 521 / 1,344 | 45 / 45 / 47 | 21.4 / 21.8 / 23.9 |
+| Version 20, 3 / 4 / 8 px hard | 42 / 51 / 112 | 34 / 44 / 105 | 14.0 | 6.5 |
+| No symbol, noise 740 | 1,791 | 1,756 | | |
+
+Sampling 0.46 to 0.51 everywhere; the decode 0.81 to 0.99 on the mesh versions, level on version 6 and 10 (the global transform) and on the no-symbol inputs. `QRCodeImageDecodeEndToEnd`, alternating, two runs a side, BenchmarkDotNet means in us:
+
+| Shape | Span, before | Span, after | Bitmap, before | Bitmap, after |
+|---|---:|---:|---:|---:|
+| v40-3px | 139 / 138 | 114 / 115 | 187 / 187 | 162 / 161 |
+| v40-3.4px | 162 / 160 | 138 / 135 | 221 / 222 | 196 / 195 |
+| v40-4px-rot17 | 546 / 544 | 527 / 523 | 674 / 674 | 653 / 653 |
+| v40-4px-soft | 328 / 324 | 302 / 304 | 407 / 405 | 385 / 384 |
+| v6-4px | 11.6 / 11.6 | 11.6 / 11.6 | 18.2 / 18.1 | 18.2 / 18.1 |
+| none-noise | 1,723 / 1,726 | 1,718 / 1,721 | 1,802 / 1,810 | 1,815 / 1,806 |
+| none-gradient | 309 / 310 | 321 / 324 | 392 / 394 | 395 / 394 |
+
+Micro QR M4 5.9 / 5.9 to 5.8 / 5.9 us, rMQR R7x43 5.7 / 5.8 to 5.8 / 5.7 and R17x139 25.6 / 25.4 to 25.0 / 25.6: level, as they must be, since neither reaches this sampler. The PNG rows read level within 1 %. Allocated unchanged on every row, the span rows at zero. The gradient's 309 to 321 is the run's spread on a row this change cannot reach (its threshold and search are untouched and it never samples); the same row read 317 / 318 and 321 / 310 across the two previous A/Bs.
+
+The ARM64 machine against the code before this plan (fc1cc0c): a version 40 image decode at 3 px a module 782 to 115 us, at 3.4 px 910 to 136, 4 px rotated 1,185 to 521, 4 px soft 618 to 304; no-symbol noise 740 x 740 3,827 to 1,756, a gradient 2,274 to 321.
+
+Lessons:
+- Half the lanes is half the gain, once the loop is at the machine's issue width. The four-lane tier settled at 0.46 of the column table where the eight-lane tier is 0.24 of it on x64, and the variants that tried to buy the difference back by trading one instruction for another (cell vectors for broadcasts, lane loads for byte loads) each traded one for one and measured level. The count is what binds, and the count a lane costs is set.
+- The conversion is one form here because the scalar cast is. The AVX2 tier carries two forms because x64's raw conversion changed to a saturating one in .NET 9; ARM64's has always been fcvtzs. A tier's shape follows the reference's cast on that machine, not the other machine's history; the parity test on this machine is what says so.
+- A survivor can say the guard it defeats belongs to another ISA. The minimum's operand order was written into the AVX2 tier for `Avx.Min`, whose result with NaN depends on it; `Vector128.Min` has no such asymmetry and the fault could not move a pixel. The comment now says which.
+- A survivor can also be dead code. The leftover four-lane loop was there for dimensions no caller passes; the sweep, not the reading, found it.
