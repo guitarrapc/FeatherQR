@@ -165,6 +165,26 @@ internal static class Binarizer
     /// </summary>
     internal static void FillHistogramVector256(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
+        // Why: histogram[v]++ waits on the previous store to the same bin (store-to-load forwarding), and a rendered symbol
+        // is 0 and 255 in long runs, so the scalar walk spends most of its time in that chain. Here the two extremes never go
+        // through memory: each block is compared against 0 and against 255, the two masks are counted with a popcount, and
+        // the two totals go into their bins once, at the end.
+        //
+        // Each 32-pixel block takes one of three paths:
+        //   pure or sparse   12 or fewer other pixels: the extremes counted from the masks, the others walked one by one
+        //                    through the third mask (the lowest set bit is the next, clear it, increment its bin)
+        //   dense            13 or more: the scalar tier's groups of eight, so a photo-like image costs what it costs there,
+        //                    the compares would only be added to it
+        //   a stretch        two dense blocks in a row with no 0 and no 255 at all start 31 blocks taken without the test.
+        //                    A photo-like image is such blocks end to end, and the test in front of each one is what made it
+        //                    slower than the scalar tier; a rendered or resampled symbol almost never has one
+        //
+        //   block      0   0   0   0  255 255   0   0   0  200 255  ...    32 pixels
+        //   isMin      1   1   1   1   0   0    1   1   1   0   0          popcount into minCount
+        //   isMax      0   0   0   0   1   1    0   0   0   0   1          popcount into maxCount
+        //   others     0   0   0   0   0   0    0   0   0   1   0          one bin increment a set bit
+        //
+        // The cut-over and the stretch length are the two constants above, with what was measured for them.
         ref var h = ref ClearedBins(histogram);
         ref var p = ref MemoryMarshal.GetReference(luminance);
         var offset = 0;
@@ -336,12 +356,20 @@ internal static class Binarizer
         ArrayPool<int>.Shared.Return(rented);
     }
 
-    /// <summary>
-    /// Sixteen compare lanes (0 or 0xFF) to a 64-bit mask with one bit a byte, byte i at bit 4 i: masked to 0x11, each 16-bit pair shifted right by 4 and narrowed keeps the low byte's bit 4 at bit 0 and the high byte's bit 0 at bit 4.
-    /// </summary>
+    /// <summary>Sixteen compare lanes (0 or 0xFF) to a 64-bit mask with lane j at bit 4j.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong OneBitPerByte(Vector128<byte> lanes)
-        => AdvSimd.ShiftRightLogicalNarrowingLower((lanes & Vector128.Create((byte)0x11)).AsUInt16(), 4).AsUInt64().ToScalar();
+    {
+        // No movemask on ARM64. A narrowing shift does it for two lanes at once: read the lanes as eight 16-bit pairs, keep
+        // bits 0 and 4 of each byte (the AND with 0x11), shift each pair right by 4 and keep its low byte. The low lane's bit 4
+        // lands at bit 0, the high lane's bit 0, which sat at bit 8 of the pair, lands at bit 4, and the high lane's bit 4 is
+        // shifted out by the narrowing. The eight bytes are the mask; the caller finds a lane with tzcnt and divides by 4.
+        //
+        //   pair (high, low)   FF FF     FF 00     00 FF     00 00
+        //   & 0x11             11 11     11 00     00 11     00 00
+        //   >> 4, low byte     0x11      0x10      0x01      0x00     both, high only, low only, neither
+        return AdvSimd.ShiftRightLogicalNarrowingLower((lanes & Vector128.Create((byte)0x11)).AsUInt16(), 4).AsUInt64().ToScalar();
+    }
 
     /// <summary>
     /// <see cref="CountGroup"/> over four sub-histograms: pixel i into lane i % 4, a uniform group into lane 0.

@@ -249,6 +249,24 @@ internal static partial class QRImageDecoder
     /// </remarks>
     internal static void SampleGridPiecewiseAdvSimd(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
+        // The AVX2 tier's shape on this machine's 128-bit vectors: the same float operations in the reference's order, so
+        // every module comes from the same pixel, module for module.
+        //
+        // Per row: the mesh row's node positions (InterpolateMeshRow), then each cell's start and span in x and in y, so a
+        // module's position is start + span * fraction, the fraction tabled once a call (BuildColumnTable). Per step of four
+        // columns (StepIndexAdvSimd): the cell's start and span broadcast, or selected a lane where the step straddles two
+        // cells, the lerp, the clamp, and the pixel index px + py * width. Two steps a loop body: their eight indices become
+        // eight scalar byte loads packed into one word, one byte compare against the threshold gives the eight modules, and
+        // one store writes them.
+        //
+        //   columns   u   u+1  u+2  u+3 | u+4 ... u+7       two four-lane steps
+        //   indices   i0  i1   i2   i3  | i4  ... i7        eight scattered loads, packed low byte first
+        //   modules   d0  d1   d2   d3    d4  ... d7        LessThan(word, threshold) & 1, one ulong store
+        //
+        // What this machine changes: byte-lane LessThan is the unsigned compare, so no min identity; the scalar cast and the
+        // vector conversion are both fcvtzs (saturating, NaN to 0), so one conversion form serves every runtime where the
+        // AVX2 tier needs two. A step that touches three cells, or a mesh past the stack tables, goes to the column-table
+        // tier, as there.
         if (!AdvSimd.Arm64.IsSupported || width > MaxExactFloatSide || height > MaxExactFloatSide
             || !CheckPiecewiseArguments(luminance, width, height, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules))
         {
@@ -348,6 +366,11 @@ internal static partial class QRImageDecoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<uint> StepIndexAdvSimd(ref float startX0, ref float spanX0, ref float startY0, ref float spanY0, int a, int b, ref int mask0, ref float fraction0, int u, Vector128<float> maxPx, Vector128<float> maxPy, Vector128<int> zero, Vector128<int> widthVector)
     {
+        // One step of four modules. The cell of the step's first lane gives start and span; where the step's last lane is in
+        // the next cell, the lanes in it take that cell's values through the lane mask (a step never touches a third cell:
+        // the step table refused such a lattice). Then the lerp as a separate multiply and add (fused, a coordinate can land
+        // an ulp off the reference's and truncate into the next pixel), the limit first in the minimum so a NaN lane converts
+        // to 0, the conversion, the clamp at 0, and px + py * width in one multiply-add.
         var startX = Vector128.Create(Unsafe.Add(ref startX0, a));
         var spanX = Vector128.Create(Unsafe.Add(ref spanX0, a));
         var startY = Vector128.Create(Unsafe.Add(ref startY0, a));

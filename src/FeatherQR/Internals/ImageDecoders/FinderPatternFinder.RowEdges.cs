@@ -81,8 +81,9 @@ internal static partial class FinderPatternFinder
     {
         // How the edges come out of the pixels.
         //
-        // 1. A row is taken 64 pixels at a time. Two 32-pixel compares give one word with bit i set where pixel x + i is dark.
-        //    The word is used at once and never stored, so there is no mask buffer to clear, write and read back.
+        // 1. A row is taken 64 pixels at a time. DarkWord makes the word for the machine (two 32-byte compares on x64, the
+        //    NEON fold on ARM64), bit i set where pixel x + i is dark. The word is used at once and never stored, so there is
+        //    no mask buffer to clear, write and read back.
         //
         // 2. Edges come from the word and the same word one pixel later:
         //      previous = (word << 1) | carry      bit i = pixel x + i - 1 is dark; the carry is the last pixel of the word before,
@@ -94,11 +95,14 @@ internal static partial class FinderPatternFinder
         //    rising        ^           ^                       ^         ^                  starts 2, 8, 20, 25
         //    falling             ^                       ^           ^       ^              ends   5, 17, 23, 27
         //
-        // 3. Each bit set goes into its own array, lowest bit first: the position of the lowest set bit is one
-        //    instruction and bits &= bits - 1 clears it. Taking every edge from one set (word ^ previous) and sending them alternately
-        //    to the two arrays measured no faster than a single array: every edge then pays for working out where it goes, which cost
-        //    what the split saved the classification. The classification wants them apart because a window is three consecutive
-        //    starts and ends, so six loads give sixteen windows.
+        // 3. Each bit set goes into its own array, lowest bit first: the position of the lowest set bit is one instruction and
+        //    bits &= bits - 1 clears it. Taking every edge from one set (word ^ previous) and sending them alternately to the two
+        //    arrays measured no faster than a single array: every edge then pays for working out where it goes, which cost what
+        //    the split saved the classification. The classification wants them apart because a window is three consecutive
+        //    starts and ends, so six loads give a step of windows.
+        //    Within a word the two sets alternate, start, end, start, end, so one loop takes one of each an iteration and the
+        //    odd one out follows. Each edge is a two-cycle chain (clear the bit, find the next); in one loop the two chains
+        //    overlap, and the loop branches half as often as two loops in a row would.
         //
         // 4. A run that reaches the end of the row still needs its end. In a last word that is not full the bits past the row are 0,
         //    so the end falls out as the falling edge at the row's length. When the length is a multiple of 64 no word holds that bit,
@@ -153,13 +157,34 @@ internal static partial class FinderPatternFinder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong DarkWord(ref byte pixels, int x, int width, byte threshold)
     {
-        // At a threshold of 0 nothing is dark; the x64 identity below would call every pixel dark, because t - 1 wraps to 255
+        // How 64 pixels become one word, bit i set where pixel x + i is dark, that is v < threshold as unsigned bytes.
+        //
+        // x64: there is no unsigned byte compare below AVX-512, and min(v, t - 1) == v says the same thing: v is below t exactly
+        //      when clamping it to t - 1 changes nothing. Two 32-byte compares give the two halves of the word as their sign
+        //      bits, one movemask each, and the high half is shifted up by 32.
+        //
+        // ARM64: byte-lane LessThan is the unsigned compare (cmhi), but there is no movemask, so the word is folded out of the
+        //      compare masks. Each of the four 16-lane masks is ANDed with the weights 1, 2, 4, ..., 128, 1, 2, ..., 128, so a dark
+        //      lane holds the bit its pixel has inside its byte of the word. Three pairwise adds then merge neighbouring lanes,
+        //      64 to 32 to 16 to 8 bytes; a lane pair never shares a bit, so no add carries:
+        //
+        //        pixels    0 1 2 3 4 5 6 7 | 8 .. 15 | 16 .. 31 | 32 .. 63       four compares, a weight kept where dark
+        //        add 1     (0+1) (2+3) (4+5) (6+7) (8+9) ...                       32 bytes, two pixels' bits each
+        //        add 2     (0..3) (4..7) (8..11) ...                               16 bytes, four pixels' bits each
+        //        add 3     (0..7) (8..15) ... (56..63)                              8 bytes: the word, low byte first
+        //
+        //      The third add pairs the vector with itself, so its low 64 bits are the word and the high 64 a copy.
+        //
+        // The last word of a row is partial: what is left is taken a vector at a time where a vector fits, then pixel by pixel,
+        // and the bits past the row stay 0, which is what lets a run that reaches the end of the row end there.
+        //
+        // At a threshold of 0 nothing is dark. The x64 identity would say the opposite, t - 1 wraps to 255, so it is answered first.
         if (threshold == 0)
             return 0;
 
         if (Vector256.IsHardwareAccelerated)
         {
-            // Dark is v < threshold, unsigned, and x64 has no unsigned byte compare below AVX-512: min(v, t - 1) == v says the same
+            // x64: the min identity, two halves
             var thresholdMinus1 = Vector256.Create((byte)(threshold - 1));
             if (x + 64 <= width)
             {
@@ -188,8 +213,7 @@ internal static partial class FinderPatternFinder
         }
         else
         {
-            // NEON: byte-lane LessThan is the unsigned compare (cmhi), and there is no movemask. A full word is the mask walk's fold:
-            // four compares select per-byte bit weights and three pairwise adds reduce them to one word (the simdjson shape).
+            // ARM64: the fold
             var thr = Vector128.Create(threshold);
             if (x + 64 <= width)
             {
@@ -330,6 +354,16 @@ internal static partial class FinderPatternFinder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ClassifyWindows8(ref short starts, ref short ends, nuint k, out Vector128<short> strict, out Vector128<short> near, out Vector128<short> crisp)
     {
+        // The arithmetic is ClassifyWindows16's on eight lanes; how the checks became integers is at the top of that method.
+        // Two things are different here, both for ARM64:
+        //
+        // 1. The verdicts leave as lanes (0 or all bits), not as bits. Turning a vector of shorts into a bitmask is one
+        //    instruction on x64 and a short sequence on ARM64 (LaneBits), and a step would pay it three times while on a
+        //    symbol most steps flag nothing. The caller ORs the three verdicts, makes bits of that once, and only when some
+        //    lane is flagged makes bits of each verdict.
+        //
+        // 2. Eight windows a step, not sixteen as two halves: the second half is wasted on every row's last step, and a row
+        //    of a small symbol has only a few dozen windows. Measured slower.
         var s0 = Vector128.LoadUnsafe(ref starts, k);
         var s1 = Vector128.LoadUnsafe(ref starts, k + 1);
         var s2 = Vector128.LoadUnsafe(ref starts, k + 2);
@@ -380,12 +414,22 @@ internal static partial class FinderPatternFinder
 
     private static readonly Vector64<byte> LaneWeights8 = Vector64.Create((byte)1, 2, 4, 8, 16, 32, 64, 128);
 
-    /// <summary>Eight verdict lanes (0 or all bits) to eight bits: narrowed to bytes, one weight kept a lane, added across. Three instructions where <c>ExtractMostSignificantBits</c> is a sequence on ARM64.</summary>
+    /// <summary>Eight verdict lanes (0 or all bits) to eight bits, bit j for lane j.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint LaneBits(Vector128<short> lanes)
-        => AdvSimd.Arm64.IsSupported
-            ? AdvSimd.Arm64.AddAcross(AdvSimd.ExtractNarrowingLower(lanes).AsByte() & LaneWeights8).ToScalar()
-            : lanes.ExtractMostSignificantBits();
+    {
+        // ExtractMostSignificantBits is one instruction on x64 and a sequence on ARM64, where three instructions do the same
+        // for lanes that are 0 or all bits: narrow each short to its low byte (0x00 or 0xFF), keep one bit a lane with the
+        // weights 1, 2, 4, ..., 128, and add the eight bytes across. No two lanes keep the same bit, so the sum is the mask
+        // and never carries.
+        //
+        //   lanes      -1    0    0   -1   -1    0    0    0
+        //   narrowed   FF   00   00   FF   FF   00   00   00
+        //   weighted    1    0    0    8   16    0    0    0      sum 25 = 0b00011001: lanes 0, 3 and 4
+        if (AdvSimd.Arm64.IsSupported)
+            return AdvSimd.Arm64.AddAcross(AdvSimd.ExtractNarrowingLower(lanes).AsByte() & LaneWeights8).ToScalar();
+        return lanes.ExtractMostSignificantBits();
+    }
 
     private static void ScanRowEdges(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int y, Span<short> edges, Span<FinderPattern> candidates, ref int candidateCount)
     {
@@ -393,6 +437,18 @@ internal static partial class FinderPatternFinder
         if (edges.Length < 2 * half || (uint)y >= (uint)height || (long)width * height > luminance.Length)
             throw new ArgumentException($"Edge buffer of {edges.Length} for a row of {width}, or row {y} outside the {width} x {height} image");
 
+        // One row: its dark runs as two arrays, then the windows a step at a time.
+        //
+        //   starts   s0   s1   s2   s3 ...      window k is dark runs k, k + 1 and k + 2 and the two gaps between:
+        //   ends     e0   e1   e2   e3 ...      e[k] - s[k], s[k+1] - e[k], e[k+1] - s[k+1], s[k+2] - e[k+1], e[k+2] - s[k+2]
+        //
+        // A step judges ClassifyWindowLanes windows at once, sixteen with 256-bit vectors and eight on ARM64, and gets one bit
+        // a window for each of the three checks. The lanes past the last window of a row read whatever the buffer holds and
+        // are masked off (live), and the near-miss bits are masked off while the grey levels are off, because the mask walk
+        // skips that check then. Only flagged windows run scalar code, in row order, through the follow-ups the mask walk runs.
+        //
+        // On ARM64 the verdicts arrive as lanes and each becomes bits by a short sequence, so the OR of the three is turned
+        // into bits first, and a step with nothing flagged, which on a symbol is nearly every step, pays only that one.
         var endCount = ExtractRowEdges(luminance.Slice(y * width, width), threshold, edges.Slice(0, half), edges.Slice(half, half));
         ref var starts = ref MemoryMarshal.GetReference(edges);
         ref var ends = ref Unsafe.Add(ref starts, half);
