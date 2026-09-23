@@ -5,10 +5,11 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The regional binarization, scalar and vector, against a reference written here from the scheme itself: 8 × 8 blocks, a black point each from its mean or, when flat, from half its minimum or its top and left neighbours, and every pixel read against the mean of the 5 × 5 black points around its block.
 /// Widths and heights off a multiple of 8 put the last block column and row over the one before, which the vector form leaves to its scalar tail.
+/// The negative is read from the same pixels, each complemented as it is loaded, and has to equal the reference run on a negated copy.
 /// </summary>
 public class LocalBinarizerParityTest
 {
-    public static IEnumerable<(int, int, string, byte)> Cases()
+    public static IEnumerable<(int, int, string, byte, bool)> Cases()
     {
         (int, int)[] sizes = [(40, 40), (41, 43), (47, 40), (48, 56), (63, 65), (64, 64), (100, 37), (129, 131), (256, 200)];
         string[] contents = ["noise", "blurred noise", "ramp", "symbol under a shadow", "two levels", "flat grey", "flat black", "flat white", "flat block edges"];
@@ -17,24 +18,28 @@ public class LocalBinarizerParityTest
             foreach (var content in contents)
             {
                 foreach (var globalThreshold in new byte[] { 0, 1, 128, 255 })
-                    yield return (width, height, content, globalThreshold);
+                {
+                    yield return (width, height, content, globalThreshold, false);
+                    yield return (width, height, content, globalThreshold, true);
+                }
             }
         }
     }
 
     [Test]
     [MethodDataSource(nameof(Cases))]
-    public async Task TryBinarize_VectorAndScalar_MatchReference(int width, int height, string content, byte globalThreshold)
+    public async Task TryBinarize_VectorAndScalar_MatchReference(int width, int height, string content, byte globalThreshold, bool negative)
     {
         var luminance = Render(content, width, height);
-        var (expected, expectedDark, expectedDiffers) = Reference(luminance, width, height, globalThreshold);
+        var seen = negative ? luminance.Select(static v => (byte)(255 - v)).ToArray() : luminance;
+        var (expected, expectedDark, expectedDiffers) = Reference(seen, width, height, globalThreshold);
 
         var scratch = new int[LocalBinarizer.ScratchLength(width, height)];
         var vector = new byte[width * height];
         var scalar = new byte[width * height];
-        var vectorDiffers = LocalBinarizer.TryBinarize(luminance, width, height, globalThreshold, vector, scratch, out var vectorDark);
+        var vectorDiffers = LocalBinarizer.TryBinarize(luminance, width, height, negative, globalThreshold, vector, scratch, out var vectorDark);
         Array.Clear(scratch);
-        var scalarDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, globalThreshold, scalar, scratch, out var scalarDark);
+        var scalarDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, negative, globalThreshold, scalar, scratch, out var scalarDark);
 
         await Assert.That(scalar).IsEquivalentTo(expected);
         await Assert.That(scalarDark).IsEqualTo(expectedDark);
@@ -55,7 +60,7 @@ public class LocalBinarizerParityTest
         Array.Fill(binarized, (byte)77);
 
         await Assert.That(LocalBinarizer.ScratchLength(width, height)).IsEqualTo(0);
-        await Assert.That(LocalBinarizer.TryBinarize(luminance, width, height, 128, binarized, [], out var dark)).IsFalse();
+        await Assert.That(LocalBinarizer.TryBinarize(luminance, width, height, negative: false, 128, binarized, [], out var dark)).IsFalse();
         await Assert.That(dark).IsEqualTo(0);
         await Assert.That(binarized.All(static b => b == 77)).IsTrue();
     }

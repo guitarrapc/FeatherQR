@@ -36,7 +36,7 @@ internal static class MicroQRImageDecoder
 
     /// <summary>
     /// Decodes a Micro QR code from grayscale pixels.
-    /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails. A symbol lit unevenly, which no one threshold splits, is retried once more on a regional binarization when both polarities fail.
+    /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails. A symbol lit unevenly, which no one threshold splits, is retried on a regional binarization of each polarity when both fail.
     /// </summary>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
@@ -72,35 +72,14 @@ internal static class MicroQRImageDecoder
                 return invertedStatus;
             }
 
-            // Uneven lighting: no one threshold splits the symbol, so binarize again against
-            // each region's own level. Skipped when it would put every pixel where the global
-            // threshold did, since the decoder has read that image already.
-            Binarizer.InvertHistogram(histogram);
-            var globalThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out _);
-            var scratchLength = LocalBinarizer.ScratchLength(width, height);
-            if (scratchLength > 0)
+            // Uneven lighting: no one threshold splits the symbol, so each polarity is
+            // binarized again against each region's own level
+            var regional = new RegionalAttempt();
+            var regionalStatus = RegionalRetry.Decode<RegionalAttempt, MicroQRCodeDecodeInfo>(ref regional, luminance, inverted, histogram, width, height, destination, out charsWritten, out var regionalInfo);
+            if (IsTerminal(regionalStatus))
             {
-                var rentedBlocks = ArrayPool<int>.Shared.Rent(scratchLength);
-                try
-                {
-                    var binarized = inverted; // the negative is no longer needed
-                    if (LocalBinarizer.TryBinarize(luminance, width, height, globalThreshold, binarized, rentedBlocks, out var darkCount))
-                    {
-                        histogram.Clear();
-                        histogram[LocalBinarizer.Dark] = darkCount;
-                        histogram[LocalBinarizer.Light] = pixelCount - darkCount;
-                        var localStatus = DecodeLuminanceCore(binarized, histogram, width, height, destination, out charsWritten, out var localInfo, sweepRetry: false);
-                        if (IsTerminal(localStatus))
-                        {
-                            info = localInfo;
-                            return localStatus;
-                        }
-                    }
-                }
-                finally
-                {
-                    ArrayPool<int>.Shared.Return(rentedBlocks);
-                }
+                info = regionalInfo;
+                return regionalStatus;
             }
 
             // Every attempt failed: report the first one's diagnostics
@@ -110,6 +89,13 @@ internal static class MicroQRImageDecoder
         {
             ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
+    }
+
+    /// <summary>The regional retry's decode: this decoder's attempt on a binarized image.</summary>
+    private readonly struct RegionalAttempt : ILuminanceAttempt<MicroQRCodeDecodeInfo>
+    {
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, sweepRetry: false);
     }
 
     /// <summary>

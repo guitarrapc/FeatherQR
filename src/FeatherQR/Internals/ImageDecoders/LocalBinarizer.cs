@@ -7,7 +7,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
 /// Regional binarization for images the global threshold cannot split: a symbol lit unevenly has light modules on its dim side darker than dark modules on its bright side, and one threshold then reads a whole side of it as one class.
-/// Shared by all three image decoders, which try it only after both polarities have failed on the global threshold, so an evenly lit image never pays for it.
+/// Shared by all three image decoders, which try it only after both polarities have failed on the global threshold, so an image the global threshold reads never pays for it.
 /// </summary>
 /// <remarks>
 /// Each 8 × 8 block gets a black point from its own range, and each pixel is read against the mean of the black points of the 5 × 5 blocks around its block (the hybrid scheme of ZXing, which zxing-cpp also uses).
@@ -45,21 +45,23 @@ internal static class LocalBinarizer
     /// <param name="luminance">Grayscale pixels, row-major.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
-    /// <param name="globalThreshold">The global threshold the decoder already failed on (dark: luminance &lt; threshold).</param>
+    /// <param name="negative">Binarize the negative: each pixel is read as 255 minus its value, and the negative is never written out.</param>
+    /// <param name="globalThreshold">The global threshold the decoder already failed on in that polarity (dark: luminance &lt; threshold).</param>
     /// <param name="binarized">Receives one byte a pixel; may not alias <paramref name="luminance"/>.</param>
     /// <param name="scratch"><see cref="ScratchLength"/> ints.</param>
     /// <param name="darkCount">Pixels written <see cref="Dark"/>.</param>
     /// <returns>
     /// <see langword="false"/> when the image is too small to have a neighbourhood, or when every pixel lands in the class the global threshold put it in: the decoder has read that image already.
     /// </returns>
-    internal static bool TryBinarize(ReadOnlySpan<byte> luminance, int width, int height, byte globalThreshold, Span<byte> binarized, Span<int> scratch, out int darkCount)
-        => TryBinarizeCore(luminance, width, height, globalThreshold, binarized, scratch, vector: true, out darkCount);
+    internal static bool TryBinarize(ReadOnlySpan<byte> luminance, int width, int height, bool negative, byte globalThreshold, Span<byte> binarized, Span<int> scratch, out int darkCount)
+        => TryBinarizeCore(luminance, width, height, negative ? (byte)0xFF : (byte)0, globalThreshold, binarized, scratch, vector: true, out darkCount);
 
     /// <summary>The scalar form of <see cref="TryBinarize"/>, whatever the hardware; the reference its vector form is held to.</summary>
-    internal static bool TryBinarizeScalar(ReadOnlySpan<byte> luminance, int width, int height, byte globalThreshold, Span<byte> binarized, Span<int> scratch, out int darkCount)
-        => TryBinarizeCore(luminance, width, height, globalThreshold, binarized, scratch, vector: false, out darkCount);
+    internal static bool TryBinarizeScalar(ReadOnlySpan<byte> luminance, int width, int height, bool negative, byte globalThreshold, Span<byte> binarized, Span<int> scratch, out int darkCount)
+        => TryBinarizeCore(luminance, width, height, negative ? (byte)0xFF : (byte)0, globalThreshold, binarized, scratch, vector: false, out darkCount);
 
-    private static bool TryBinarizeCore(ReadOnlySpan<byte> luminance, int width, int height, byte globalThreshold, Span<byte> binarized, Span<int> scratch, bool vector, out int darkCount)
+    // flip is XORed into every pixel as it is loaded: 0, or 0xFF for the negative (255 - v is v ^ 0xFF)
+    private static bool TryBinarizeCore(ReadOnlySpan<byte> luminance, int width, int height, byte flip, byte globalThreshold, Span<byte> binarized, Span<int> scratch, bool vector, out int darkCount)
     {
         darkCount = 0;
         var length = ScratchLength(width, height);
@@ -84,7 +86,7 @@ internal static class LocalBinarizer
             var blockX = 0;
 #if NET8_0_OR_GREATER
             if (vector)
-                blockX = BlockStatsVector128(luminance, width, top, alignedColumns, packed);
+                blockX = BlockStatsVector128(luminance, width, flip, top, alignedColumns, packed);
 #endif
             for (; blockX < columns; blockX++)
             {
@@ -95,7 +97,7 @@ internal static class LocalBinarizer
                     var row = luminance.Slice((top + y) * width + left, BlockSize);
                     for (var x = 0; x < BlockSize; x++)
                     {
-                        int pixel = row[x];
+                        var pixel = row[x] ^ flip;
                         sum += pixel;
                         min = Math.Min(min, pixel);
                         max = Math.Max(max, pixel);
@@ -126,7 +128,7 @@ internal static class LocalBinarizer
             var blockStart = 0;
 #if NET8_0_OR_GREATER
             if (vector)
-                blockStart = WriteBlocksVector128(luminance, binarized, width, top, alignedColumns, thresholds);
+                blockStart = WriteBlocksVector128(luminance, binarized, width, flip, top, alignedColumns, thresholds);
 #endif
             for (var blockX = blockStart; blockX < columns; blockX++)
             {
@@ -138,7 +140,7 @@ internal static class LocalBinarizer
                     var source = luminance.Slice(offset, BlockSize);
                     var target = binarized.Slice(offset, BlockSize);
                     for (var x = 0; x < BlockSize; x++)
-                        target[x] = source[x] <= threshold ? Dark : Light;
+                        target[x] = (source[x] ^ flip) <= threshold ? Dark : Light;
                 }
             }
         }
@@ -149,13 +151,13 @@ internal static class LocalBinarizer
         var differs = false;
 #if NET8_0_OR_GREATER
         if (vector)
-            start = CountVector128(luminance, binarized, globalThreshold, ref dark, ref differs);
+            start = CountVector128(luminance, binarized, flip, globalThreshold, ref dark, ref differs);
 #endif
         for (var i = start; i < pixelCount; i++)
         {
             var isDark = binarized[i] == Dark;
             dark += isDark ? 1 : 0;
-            differs |= isDark != luminance[i] < globalThreshold;
+            differs |= isDark != (luminance[i] ^ flip) < globalThreshold;
         }
         darkCount = dark;
         return differs;
@@ -190,23 +192,24 @@ internal static class LocalBinarizer
 
 #if NET8_0_OR_GREATER
     /// <summary>Two blocks a step, 16 pixels wide: lane-wise min, max and widened sums over the eight rows, then each half folded to one value. Returns the first block left to the scalar loop.</summary>
-    private static int BlockStatsVector128(ReadOnlySpan<byte> luminance, int width, int top, int alignedColumns, Span<int> packed)
+    private static int BlockStatsVector128(ReadOnlySpan<byte> luminance, int width, byte flip, int top, int alignedColumns, Span<int> packed)
     {
         if (!Vector128.IsHardwareAccelerated)
             return 0;
         ref var origin = ref MemoryMarshal.GetReference(luminance);
+        var flipLanes = Vector128.Create(flip);
         var blockX = 0;
         for (; blockX + 2 <= alignedColumns; blockX += 2)
         {
             var offset = (nuint)(top * width + blockX * BlockSize);
-            var first = Vector128.LoadUnsafe(ref origin, offset);
+            var first = Vector128.LoadUnsafe(ref origin, offset) ^ flipLanes;
             var min = first;
             var max = first;
             var sumLow = Vector128.WidenLower(first);
             var sumHigh = Vector128.WidenUpper(first);
             for (var y = 1; y < BlockSize; y++)
             {
-                var row = Vector128.LoadUnsafe(ref origin, offset + (nuint)(y * width));
+                var row = Vector128.LoadUnsafe(ref origin, offset + (nuint)(y * width)) ^ flipLanes;
                 min = Vector128.Min(min, row);
                 max = Vector128.Max(max, row);
                 sumLow += Vector128.WidenLower(row);
@@ -227,12 +230,13 @@ internal static class LocalBinarizer
     }
 
     /// <summary>Two blocks a step: each half compared with its own block's threshold. Returns the first block left to the scalar loop.</summary>
-    private static int WriteBlocksVector128(ReadOnlySpan<byte> luminance, Span<byte> binarized, int width, int top, int alignedColumns, ReadOnlySpan<int> thresholds)
+    private static int WriteBlocksVector128(ReadOnlySpan<byte> luminance, Span<byte> binarized, int width, byte flip, int top, int alignedColumns, ReadOnlySpan<int> thresholds)
     {
         if (!Vector128.IsHardwareAccelerated)
             return 0;
         ref var source = ref MemoryMarshal.GetReference(luminance);
         ref var target = ref MemoryMarshal.GetReference(binarized);
+        var flipLanes = Vector128.Create(flip);
         var blockX = 0;
         for (; blockX + 2 <= alignedColumns; blockX += 2)
         {
@@ -241,7 +245,7 @@ internal static class LocalBinarizer
             var offset = (nuint)(top * width + blockX * BlockSize);
             for (var y = 0; y < BlockSize; y++, offset += (nuint)width)
             {
-                var pixels = Vector128.LoadUnsafe(ref source, offset);
+                var pixels = Vector128.LoadUnsafe(ref source, offset) ^ flipLanes;
                 Vector128.OnesComplement(Vector128.Equals(Vector128.Min(pixels, threshold), pixels)).StoreUnsafe(ref target, offset);
             }
         }
@@ -249,7 +253,7 @@ internal static class LocalBinarizer
     }
 
     /// <summary>Dark pixels, and whether any lands in the other class than the global threshold puts it, 16 pixels a step. Returns the first pixel left to the scalar loop.</summary>
-    private static int CountVector128(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> binarized, byte globalThreshold, ref int dark, ref bool differs)
+    private static int CountVector128(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> binarized, byte flip, byte globalThreshold, ref int dark, ref bool differs)
     {
         if (!Vector128.IsHardwareAccelerated)
             return 0;
@@ -258,6 +262,7 @@ internal static class LocalBinarizer
         // luminance < g is min(luminance, g - 1) == luminance, with nothing dark at g = 0
         var globalMinus1 = Vector128.Create((byte)(globalThreshold == 0 ? 0 : globalThreshold - 1));
         var globalNone = globalThreshold == 0 ? Vector128<byte>.AllBitsSet : Vector128<byte>.Zero;
+        var flipLanes = Vector128.Create(flip);
         var mismatch = Vector128<byte>.Zero;
         var i = 0;
         var last = binarized.Length - Vector128<byte>.Count;
@@ -268,7 +273,7 @@ internal static class LocalBinarizer
             var stop = Math.Min(last, i + 254 * Vector128<byte>.Count);
             for (; i <= stop; i += Vector128<byte>.Count)
             {
-                var pixels = Vector128.LoadUnsafe(ref source, (nuint)i);
+                var pixels = Vector128.LoadUnsafe(ref source, (nuint)i) ^ flipLanes;
                 var isDark = Vector128.Equals(Vector128.LoadUnsafe(ref target, (nuint)i), Vector128<byte>.Zero);
                 var globalDark = Vector128.AndNot(Vector128.Equals(Vector128.Min(pixels, globalMinus1), pixels), globalNone);
                 mismatch |= isDark ^ globalDark;

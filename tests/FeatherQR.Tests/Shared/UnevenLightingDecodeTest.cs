@@ -55,6 +55,7 @@ public class UnevenLightingDecodeTest
 
         await Assert.That(success).IsTrue().Because($"{light} towards {degrees} at depth {depth}: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
     }
 
     [Test]
@@ -71,6 +72,7 @@ public class UnevenLightingDecodeTest
 
         await Assert.That(success).IsTrue().Because($"{light} towards {degrees} at depth {depth}: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
     }
 
     [Test]
@@ -87,9 +89,70 @@ public class UnevenLightingDecodeTest
 
         await Assert.That(success).IsTrue().Because($"{light} towards {degrees} at depth {depth}: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
     }
 
-    /// <summary>A symbol the regional pass finds and whose data is past correction still fails, and with the status of the first attempt, not a text.</summary>
+    /// <summary>
+    /// The negative of each lit render decodes too: light modules on dark paper, with the shading running the other way, since negating the image negates its light.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Lighting))]
+    public async Task StandardQR_UnevenLightReflectanceReversed_Decodes(UnevenLight light, float degrees, float depth)
+    {
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
+        Func<int, int, bool> isDark = (row, column) => qr[row, column];
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Size, qr.Size, PixelsPerModule, light, degrees, depth);
+        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Size, luminance, width);
+        Negate(luminance);
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{light} towards {degrees} at depth {depth}: {info.Status}");
+        await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Lighting))]
+    public async Task MicroQR_UnevenLightReflectanceReversed_Decodes(UnevenLight light, float degrees, float depth)
+    {
+        var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+        Func<int, int, bool> isDark = (row, column) => qr[row, column];
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Size, qr.Size, PixelsPerModule, light, degrees, depth);
+        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Size, luminance, width);
+        Negate(luminance);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{light} towards {degrees} at depth {depth}: {info.Status}");
+        await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Lighting))]
+    public async Task RmQR_UnevenLightReflectanceReversed_Decodes(UnevenLight light, float degrees, float depth)
+    {
+        var qr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
+        Func<int, int, bool> isDark = (row, column) => qr[row, column];
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Width, qr.Height, PixelsPerModule, light, degrees, depth);
+        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Width, luminance, width);
+        Negate(luminance);
+
+        var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{light} towards {degrees} at depth {depth}: {info.Status}");
+        await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
+    }
+
+    private static void Negate(byte[] luminance)
+    {
+        for (var i = 0; i < luminance.Length; i++)
+            luminance[i] = (byte)(255 - luminance[i]);
+    }
+
+    /// <summary>A symbol under the same light whose data is past correction does not decode, and gives no text.</summary>
     [Test]
     [Arguments(UnevenLight.Ramp, 0f, 0.8f)]
     [Arguments(UnevenLight.Shadow, 90f, 0.55f)]
@@ -104,6 +167,7 @@ public class UnevenLightingDecodeTest
 
         await Assert.That(success).IsFalse().Because($"decoded \"{text}\"");
         await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEmpty();
     }
 
     /// <summary>An image with no symbol and a lighting ramp in it reads as nothing: the regional pass turns the ramp into paper and the noise into specks, neither a finder.</summary>
@@ -141,8 +205,34 @@ public class UnevenLightingDecodeTest
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
     }
 
+    [Test]
+    public async Task MicroQR_UnevenLight_ShortDestination_ReportsDestinationTooSmall()
+    {
+        var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, PixelsPerModule, UnevenLight.Shadow, 0f, 0.55f);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[2], out var written, out var info);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(written).IsEqualTo(0);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+    }
+
+    [Test]
+    public async Task RmQR_UnevenLight_ShortDestination_ReportsDestinationTooSmall()
+    {
+        var qr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Width, qr.Height, PixelsPerModule, UnevenLight.Shadow, 0f, 0.55f);
+
+        var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[2], out var written, out var info);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(written).IsEqualTo(0);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+    }
+
     /// <summary>
-    /// A two-level image already is a binarization, so the regional one puts every pixel where the global threshold did and the pass is skipped: two-level noise and a crisp symbol that failed on its data cost nothing more.
+    /// On images of only 0 and 255 the regional binarization puts every pixel where the global threshold did (every regional threshold lies in [0, 251]), which is why the decoders skip such images without binarizing them.
     /// </summary>
     [Test]
     [Arguments("noise 1 px", 1)]
@@ -178,7 +268,7 @@ public class UnevenLightingDecodeTest
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out _);
         var binarized = new byte[luminance.Length];
 
-        var differs = LocalBinarizer.TryBinarize(luminance, width, height, threshold, binarized, new int[LocalBinarizer.ScratchLength(width, height)], out _);
+        var differs = LocalBinarizer.TryBinarize(luminance, width, height, negative: false, threshold, binarized, new int[LocalBinarizer.ScratchLength(width, height)], out _);
 
         await Assert.That(differs).IsFalse().Because(name);
     }
@@ -192,7 +282,7 @@ public class UnevenLightingDecodeTest
         var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, PixelsPerModule, light, degrees, depth);
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out _);
 
-        var differs = LocalBinarizer.TryBinarize(luminance, width, height, threshold, new byte[luminance.Length], new int[LocalBinarizer.ScratchLength(width, height)], out _);
+        var differs = LocalBinarizer.TryBinarize(luminance, width, height, negative: false, threshold, new byte[luminance.Length], new int[LocalBinarizer.ScratchLength(width, height)], out _);
 
         await Assert.That(differs).IsTrue();
     }
