@@ -281,10 +281,12 @@ internal static class Binarizer
 
     /// <summary>
     /// The walk itself, in its own method so the rental's try region does not reach the block loop: a loop inside one holds its vectors in registers less readily, and this tier was measured without it.
+    /// Kept out of line: under dynamic PGO the Tier1 caller inlined it back into the try region, and measured alone the dense inputs lost 10 to 33 % to the scalar tier.
     /// </summary>
     /// <param name="luminance">Grayscale pixels.</param>
     /// <param name="histogram">Receives the 256 bins, overwritten.</param>
     /// <param name="lanes">The four sub-histograms, cleared here: a rental can hold the counts of the call before.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void CountIntoLanes(ReadOnlySpan<byte> luminance, Span<int> histogram, Span<int> lanes)
     {
         lanes.Clear();
