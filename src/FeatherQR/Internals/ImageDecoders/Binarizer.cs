@@ -271,95 +271,105 @@ internal static class Binarizer
         var rented = ArrayPool<int>.Shared.Rent(4 * HistogramBins);
         try
         {
-            var lanes = rented.AsSpan(0, 4 * HistogramBins);
-            lanes.Clear();
-            ref var l0 = ref MemoryMarshal.GetReference(lanes);
-            ref var l1 = ref Unsafe.Add(ref l0, HistogramBins);
-            ref var l2 = ref Unsafe.Add(ref l0, 2 * HistogramBins);
-            ref var l3 = ref Unsafe.Add(ref l0, 3 * HistogramBins);
-            ref var p = ref MemoryMarshal.GetReference(luminance);
-            var offset = 0;
-            var minCount = 0;
-            var extremes = 0; // zeros and 255s of the sparse blocks together
-            var uncounted = 0; // blocks in a row with no 0 and no 255
-            var allOnes = Vector128<byte>.AllBitsSet;
-            var zeroCounters = Vector128<byte>.Zero;
-            var pending = 0;
-            for (; offset + 32 <= luminance.Length; offset += 32)
-            {
-                var lo = Vector128.LoadUnsafe(ref p, (nuint)offset);
-                var hi = Vector128.LoadUnsafe(ref p, (nuint)offset + 16);
-                var zerosLo = Vector128.Equals(lo, Vector128<byte>.Zero);
-                var zerosHi = Vector128.Equals(hi, Vector128<byte>.Zero);
-                var extremesLo = zerosLo | Vector128.Equals(lo, allOnes);
-                var extremesHi = zerosHi | Vector128.Equals(hi, allOnes);
-                // A lane of the sum is 0, -1 or -2, so the byte sum is minus the block's extremes, of which there are at most 32
-                var others = 32 - (byte)-AdvSimd.Arm64.AddAcross(extremesLo + extremesHi).ToScalar();
-                if (others > DenseBlock)
-                {
-                    ref var b = ref Unsafe.Add(ref p, offset);
-                    CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref b));
-                    CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, 8)));
-                    CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, 16)));
-                    CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, 24)));
-
-                    uncounted = others == 32 ? uncounted + 1 : 0;
-                    if (uncounted >= 2)
-                    {
-                        var end = Math.Min(offset + (1 + UntestedBlocks) * 32, luminance.Length);
-                        for (offset += 32; offset + 8 <= end; offset += 8)
-                        {
-                            CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, offset)));
-                        }
-                        offset -= 32; // the loop's own step lands on the next untested block
-                    }
-                    continue;
-                }
-
-                uncounted = 0;
-                extremes += 32 - others;
-                // A zero's lane is 0xFF, so subtracting it counts one
-                zeroCounters = zeroCounters - zerosLo - zerosHi;
-                if (++pending == ZeroCounterBlocks)
-                {
-                    minCount += AdvSimd.Arm64.AddAcrossWidening(zeroCounters).ToScalar();
-                    zeroCounters = Vector128<byte>.Zero;
-                    pending = 0;
-                }
-                if (others == 0)
-                    continue;
-
-                var othersLo = OneBitPerByte(~extremesLo);
-                var othersHi = OneBitPerByte(~extremesHi);
-                while (othersLo != 0)
-                {
-                    Unsafe.Add(ref l0, Unsafe.Add(ref p, offset + (BitOperations.TrailingZeroCount(othersLo) >> 2)))++;
-                    othersLo &= othersLo - 1;
-                }
-                while (othersHi != 0)
-                {
-                    Unsafe.Add(ref l0, Unsafe.Add(ref p, offset + 16 + (BitOperations.TrailingZeroCount(othersHi) >> 2)))++;
-                    othersHi &= othersHi - 1;
-                }
-            }
-            minCount += AdvSimd.Arm64.AddAcrossWidening(zeroCounters).ToScalar();
-            for (; offset < luminance.Length; offset++)
-            {
-                Unsafe.Add(ref l0, Unsafe.Add(ref p, offset))++;
-            }
-
-            ref var h = ref MemoryMarshal.GetReference(histogram);
-            for (nuint i = 0; i < HistogramBins; i += 4)
-            {
-                (Vector128.LoadUnsafe(ref l0, i) + Vector128.LoadUnsafe(ref l1, i) + Vector128.LoadUnsafe(ref l2, i) + Vector128.LoadUnsafe(ref l3, i)).StoreUnsafe(ref h, i);
-            }
-            Unsafe.Add(ref h, 0) += minCount;
-            Unsafe.Add(ref h, 255) += extremes - minCount;
+            CountIntoLanes(luminance, histogram, rented.AsSpan(0, 4 * HistogramBins));
         }
         finally
         {
             ArrayPool<int>.Shared.Return(rented);
         }
+    }
+
+    /// <summary>
+    /// The walk itself, in its own method so the rental's try region does not reach the block loop: a loop inside one holds its vectors in registers less readily, and this tier was measured without it.
+    /// </summary>
+    /// <param name="luminance">Grayscale pixels.</param>
+    /// <param name="histogram">Receives the 256 bins, overwritten.</param>
+    /// <param name="lanes">The four sub-histograms, cleared here: a rental can hold the counts of the call before.</param>
+    private static void CountIntoLanes(ReadOnlySpan<byte> luminance, Span<int> histogram, Span<int> lanes)
+    {
+        lanes.Clear();
+        ref var l0 = ref MemoryMarshal.GetReference(lanes);
+        ref var l1 = ref Unsafe.Add(ref l0, HistogramBins);
+        ref var l2 = ref Unsafe.Add(ref l0, 2 * HistogramBins);
+        ref var l3 = ref Unsafe.Add(ref l0, 3 * HistogramBins);
+        ref var p = ref MemoryMarshal.GetReference(luminance);
+        var offset = 0;
+        var minCount = 0;
+        var extremes = 0; // zeros and 255s of the sparse blocks together
+        var uncounted = 0; // blocks in a row with no 0 and no 255
+        var allOnes = Vector128<byte>.AllBitsSet;
+        var zeroCounters = Vector128<byte>.Zero;
+        var pending = 0;
+        for (; offset + 32 <= luminance.Length; offset += 32)
+        {
+            var lo = Vector128.LoadUnsafe(ref p, (nuint)offset);
+            var hi = Vector128.LoadUnsafe(ref p, (nuint)offset + 16);
+            var zerosLo = Vector128.Equals(lo, Vector128<byte>.Zero);
+            var zerosHi = Vector128.Equals(hi, Vector128<byte>.Zero);
+            var extremesLo = zerosLo | Vector128.Equals(lo, allOnes);
+            var extremesHi = zerosHi | Vector128.Equals(hi, allOnes);
+            // A lane of the sum is 0, -1 or -2, so the byte sum is minus the block's extremes, of which there are at most 32
+            var others = 32 - (byte)-AdvSimd.Arm64.AddAcross(extremesLo + extremesHi).ToScalar();
+            if (others > DenseBlock)
+            {
+                ref var b = ref Unsafe.Add(ref p, offset);
+                CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref b));
+                CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, 8)));
+                CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, 16)));
+                CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b, 24)));
+
+                uncounted = others == 32 ? uncounted + 1 : 0;
+                if (uncounted >= 2)
+                {
+                    var end = Math.Min(offset + (1 + UntestedBlocks) * 32, luminance.Length);
+                    for (offset += 32; offset + 8 <= end; offset += 8)
+                    {
+                        CountGroupLaned(ref l0, ref l1, ref l2, ref l3, Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, offset)));
+                    }
+                    offset -= 32; // the loop's own step lands on the next untested block
+                }
+                continue;
+            }
+
+            uncounted = 0;
+            extremes += 32 - others;
+            // A zero's lane is 0xFF, so subtracting it counts one
+            zeroCounters = zeroCounters - zerosLo - zerosHi;
+            if (++pending == ZeroCounterBlocks)
+            {
+                minCount += AdvSimd.Arm64.AddAcrossWidening(zeroCounters).ToScalar();
+                zeroCounters = Vector128<byte>.Zero;
+                pending = 0;
+            }
+            if (others == 0)
+                continue;
+
+            var othersLo = OneBitPerByte(~extremesLo);
+            var othersHi = OneBitPerByte(~extremesHi);
+            while (othersLo != 0)
+            {
+                Unsafe.Add(ref l0, Unsafe.Add(ref p, offset + (BitOperations.TrailingZeroCount(othersLo) >> 2)))++;
+                othersLo &= othersLo - 1;
+            }
+            while (othersHi != 0)
+            {
+                Unsafe.Add(ref l0, Unsafe.Add(ref p, offset + 16 + (BitOperations.TrailingZeroCount(othersHi) >> 2)))++;
+                othersHi &= othersHi - 1;
+            }
+        }
+        minCount += AdvSimd.Arm64.AddAcrossWidening(zeroCounters).ToScalar();
+        for (; offset < luminance.Length; offset++)
+        {
+            Unsafe.Add(ref l0, Unsafe.Add(ref p, offset))++;
+        }
+
+        ref var h = ref MemoryMarshal.GetReference(histogram);
+        for (nuint i = 0; i < HistogramBins; i += 4)
+        {
+            (Vector128.LoadUnsafe(ref l0, i) + Vector128.LoadUnsafe(ref l1, i) + Vector128.LoadUnsafe(ref l2, i) + Vector128.LoadUnsafe(ref l3, i)).StoreUnsafe(ref h, i);
+        }
+        Unsafe.Add(ref h, 0) += minCount;
+        Unsafe.Add(ref h, 255) += extremes - minCount;
     }
 
     /// <summary>Sixteen compare lanes (0 or 0xFF) to a 64-bit mask with lane j at bit 4j.</summary>
