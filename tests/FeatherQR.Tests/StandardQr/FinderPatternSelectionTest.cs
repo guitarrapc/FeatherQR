@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.SkiaSharp;
 
@@ -406,5 +407,29 @@ public class FinderPatternSelectionTest
             }
         }
         return (luminance, side);
+    }
+
+    /// <summary>
+    /// The complementary pass scans only the rows the stride pass skipped, so the two together are one sweep and a candidate's
+    /// Count stays the number of rows it was seen on. That Count is what the confirmation gate, the score of a triple and
+    /// ConfirmedHeight all read, and a pass that scanned a stride row twice would inflate every one of them while still decoding.
+    /// A keystoned render whose stride pass cannot settle the triple is what reaches the second pass, and its Counts are held here.
+    /// </summary>
+    [Test]
+    [Arguments("FQR15153", 23, 3.849512f, 217.87996f, 0.18072245f, 7, 7, 6)]
+    [Arguments("FQR35690", 12, 4.889204f, 114.38633f, 0.07109908f, 9, 8, 9)]
+    [Arguments("FQR93829", 25, 3.3416924f, 248.33737f, 0.1592999f, 6, 8, 7)]
+    public async Task TryFind_ComplementaryPassScansTheSkippedRowsOnly_CountsAreRowsSeen(string content, int version, float pixelsPerModule, float degrees, float keystone, int first, int second, int third)
+    {
+        var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var (luminance, side) = SupersampledRenderer.Render(qr, pixelsPerModule, degrees, keystone);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+
+        var patterns = new FinderPattern[3];
+        await Assert.That(FinderPatternFinder.TryFind(luminance, side, side, threshold, patterns, grey)).IsTrue();
+
+        // In the order the patterns lie in the image, not the order the scan happened to select them in
+        var counts = patterns.OrderBy(p => p.Y).ThenBy(p => p.X).Select(p => p.Count).ToArray();
+        await Assert.That(counts).IsEquivalentTo(new[] { first, second, third }, CollectionOrdering.Matching).Because($"{content}, version {version}");
     }
 }

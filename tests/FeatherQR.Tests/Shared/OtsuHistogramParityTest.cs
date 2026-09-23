@@ -1,4 +1,5 @@
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Tests;
@@ -11,6 +12,9 @@ namespace FeatherQR.Tests;
 /// <para>
 /// The vector tier counts the pixels equal to 0 and to 255 in registers and sends only the others to the bins, a block at a time, and hands a block that is mostly other values to the scalar groups.
 /// So the inputs are chosen by what a block holds, not by what the image shows: pure blocks, blocks with a few intruders, blocks on both sides of the dense cut-over, blocks of neither value, and module boundaries at every phase of a 32- and 8-pixel block.
+/// </para>
+/// <para>
+/// The ARM64 tier does the same with 128-bit vectors, counts the zeros in byte counters it drains every so many blocks, and counts the dense blocks into four sub-histograms it rents and merges; so the inputs also run long enough to drain many times, and one test hands it lanes left dirty by a previous call.
 /// </para>
 /// <para>
 /// Each tier is entered directly. The dispatcher reaches one tier per machine, so a test through it alone would never run the scalar tier on a machine with vectors.
@@ -34,6 +38,37 @@ public class OtsuHistogramParityTest
         if (!Vector256.IsHardwareAccelerated)
             Skip.Test("Vector256 not accelerated on this machine");
         await AssertMatchesPerPixelCount(Binarizer.FillHistogramVector256);
+    }
+
+    [Test]
+    public async Task AdvSimdTier_MatchesPerPixelCount()
+    {
+        if (!AdvSimd.Arm64.IsSupported)
+            Skip.Test("AdvSimd not supported on this machine");
+        await AssertMatchesPerPixelCount(Binarizer.FillHistogramAdvSimd);
+    }
+
+    /// <summary>
+    /// The sub-histograms are rented, and a rental can come back holding the counts of the call before; a constant image after a noise image is where a lane left uncleared shows up in every bin.
+    /// </summary>
+    [Test]
+    public async Task AdvSimdTier_AfterAnotherImage_CountsOnlyThisOne()
+    {
+        if (!AdvSimd.Arm64.IsSupported)
+            Skip.Test("AdvSimd not supported on this machine");
+
+        var noise = new byte[512 * 512];
+        new Random(3).NextBytes(noise);
+        var histogram = new int[256];
+        Binarizer.FillHistogramAdvSimd(noise, histogram);
+
+        var flat = new byte[300 * 300];
+        flat.AsSpan().Fill(77);
+        Binarizer.FillHistogramAdvSimd(flat, histogram);
+
+        var expected = new int[256];
+        expected[77] = flat.Length;
+        await Assert.That(histogram).IsEquivalentTo(expected);
     }
 
     /// <summary>The tiers store through unchecked references, so a histogram that cannot hold 256 bins is refused rather than overrun.</summary>
@@ -119,6 +154,17 @@ public class OtsuHistogramParityTest
         var noise = new byte[256 * 256];
         rng.NextBytes(noise);
         yield return ("noise", noise);
+
+        // zeros and 255s in sparse blocks for long enough that the ARM64 tier's byte counters drain many times, ending at every phase of the drain
+        for (var blocks = 110; blocks <= 400; blocks += 29)
+        {
+            var counted = new byte[blocks * 32 + 13];
+            for (var i = 0; i < counted.Length; i++)
+                counted[i] = (i * 5 + blocks) % 7 < 3 ? (byte)0 : (i % 11 == 0 ? (byte)77 : (byte)255);
+            yield return ($"counted {blocks} blocks", counted);
+        }
+        var zeros = new byte[32 * 1000 + 7];
+        yield return ("all zero, long", zeros);
 
         foreach (var value in new byte[] { 0, 1, 127, 128, 254, 255 })
         {

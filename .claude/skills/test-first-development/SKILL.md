@@ -70,8 +70,9 @@ Filter to the relevant benchmark class when bisecting:
 
 ```shell
 dotnet run -c Release -- --filter "*SimpleEncode*"
-dotnet run -c Release -- --filter "*QrCodeDecodeEndToEnd*"
-dotnet run -c Release -- --filter "*QrCodeImageEndToEnd*"
+dotnet run -c Release -- --filter "*QRCodeDecodeEndToEnd*"
+dotnet run -c Release -- --filter "*QRCodeImageEndToEnd*"
+dotnet run -c Release -- --filter "*QRCodeImageDecodeEndToEnd*"
 ```
 
 Compare results against a baseline from the `main` branch (or the previous commit on your branch). If no prior baseline exists, run the benchmark on `main` first to establish one.
@@ -83,10 +84,10 @@ Relevant benchmarks by change area:
 
 | Changed area | Benchmark to check |
 |---|---|
-| `QRCodeGenerator`, binary encoders | `SimpleEncode`, `QrCodeEndToEnd` |
-| `QRCodeDecoder`, image decoders | `QrCodeDecodeEndToEnd` |
-| `QRCodeImageBuilder`, rendering | `QrCodeImageEndToEnd` |
-| `QRCodeData` serialization | `SimpleSerialize` |
+| `QRCodeGenerator`, binary encoders | `SimpleEncode`, `QRCodeEncodeEndToEnd` |
+| `QRCodeDecoder`, matrix decode | `QRCodeDecodeEndToEnd` |
+| `QRImageDecoder`, image decoders, finder scan, threshold | `QRCodeImageDecodeEndToEnd` |
+| `QRCodeImageBuilder`, rendering | `QRCodeImageEndToEnd` |
 
 ### 6. Update Specs
 
