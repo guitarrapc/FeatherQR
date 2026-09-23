@@ -89,7 +89,7 @@ internal static class MicroQRImageDecoder
                         histogram.Clear();
                         histogram[LocalBinarizer.Dark] = darkCount;
                         histogram[LocalBinarizer.Light] = pixelCount - darkCount;
-                        var localStatus = DecodeLuminanceCore(binarized, histogram, width, height, destination, out charsWritten, out var localInfo);
+                        var localStatus = DecodeLuminanceCore(binarized, histogram, width, height, destination, out charsWritten, out var localInfo, sweepRetry: false);
                         if (IsTerminal(localStatus))
                         {
                             info = localInfo;
@@ -119,7 +119,7 @@ internal static class MicroQRImageDecoder
     /// Mirrors the rMQR image decoder: the widening trigger has to be a question about the symbol, and only the caller can ask it.
     /// See <see cref="FinderPatternFinder.FindCandidates"/>.
     /// </remarks>
-    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool sweepRetry = true)
     {
         // Hoisted: the two scans binarize the same buffer
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
@@ -132,6 +132,11 @@ internal static class MicroQRImageDecoder
         // decoders check bitstream sufficiency before destination sufficiency precisely
         // so a malformed count cannot masquerade as a short buffer here.)
         if (IsTerminal(status))
+            return status;
+
+        // Only the global attempts retry with the full sweep: in the regional one it read
+        // nothing more and was most of what that attempt added to a failing image
+        if (!sweepRetry)
             return status;
 
         var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true);

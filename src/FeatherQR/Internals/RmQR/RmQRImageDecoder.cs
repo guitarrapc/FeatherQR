@@ -120,7 +120,7 @@ internal static class RmQRImageDecoder
                         histogram.Clear();
                         histogram[LocalBinarizer.Dark] = darkCount;
                         histogram[LocalBinarizer.Light] = pixelCount - darkCount;
-                        var localStatus = DecodeLuminanceCore(binarized, histogram, width, height, destination, out charsWritten, out var localInfo);
+                        var localStatus = DecodeLuminanceCore(binarized, histogram, width, height, destination, out charsWritten, out var localInfo, sweepRetry: false);
                         if (IsTerminal(localStatus))
                         {
                             info = localInfo;
@@ -153,7 +153,7 @@ internal static class RmQRImageDecoder
     /// The scan itself cannot ask it: every signal inside a flat candidate list is a statement about the image, so a second QR code or a noise artefact would answer it in the real symbol's place and suppress the sweep the symbol needed.
     /// Paid only on images that fail, and it makes the detection envelope a superset of a full sweep's: the symbol is read if either pass reads it.
     /// </remarks>
-    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool sweepRetry = true)
     {
         // Hoisted: the two scans binarize the same buffer
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
@@ -166,6 +166,11 @@ internal static class RmQRImageDecoder
         // decoders check bitstream sufficiency before destination sufficiency precisely
         // so a malformed count cannot masquerade as a short buffer here.)
         if (IsTerminal(status))
+            return status;
+
+        // Only the global attempts retry with the full sweep: in the regional one it read
+        // nothing more and was most of what that attempt added to a failing image
+        if (!sweepRetry)
             return status;
 
         var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
