@@ -9,12 +9,12 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Decodes a QR code from a grayscale image: clean, well-lit, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal and mild perspective distortion (Tier 2).
+/// Decodes a QR code from a grayscale image: clean, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal, a lighting gradient across the symbol and mild perspective distortion (Tier 2).
 /// </summary>
 /// <remarks>
 /// Pipeline:
 /// <code>
-/// 1. Global binarization threshold (Otsu's method over the luminance histogram)
+/// 1. Global binarization threshold (Otsu's method over the luminance histogram); a regional binarization when neither polarity reads
 /// 2. Finder pattern detection (1:1:3:1:1 scan + cross checks)
 /// 3. Orientation from the three finder centers (rotation-invariant)
 /// 4. Dimension estimate from center distances and module size
@@ -22,13 +22,13 @@ namespace FeatherQR.Internals.StandardQR;
 /// 6. Perspective grid sampling into a module matrix (4-point projective transform)
 /// 7. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
 /// </code>
-/// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, uneven lighting (global threshold only), blur, and multiple QR codes per image.
+/// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, hard-edged shadows, blur, and multiple QR codes per image.
 /// </remarks>
 internal static partial class QRImageDecoder
 {
     /// <summary>
     /// Decodes a QR code from grayscale pixels.
-    /// Reflectance-reversed codes (light modules on a dark background, common in dark-mode UIs) are handled by one inverted retry when the normal attempt fails.
+    /// Reflectance-reversed codes (light modules on a dark background, common in dark-mode UIs) are handled by one inverted retry when the normal attempt fails. A symbol lit unevenly, which no one threshold splits, is retried once more on a regional binarization when both polarities fail.
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -70,7 +70,38 @@ internal static partial class QRImageDecoder
                 return invertedStatus;
             }
 
-            // Both polarities failed: report the original attempt's diagnostics
+            // Uneven lighting: no one threshold splits the symbol, so binarize again against
+            // each region's own level. Skipped when it would put every pixel where the global
+            // threshold did, since the decoder has read that image already.
+            Binarizer.InvertHistogram(histogram);
+            var globalThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out _);
+            var scratchLength = LocalBinarizer.ScratchLength(width, height);
+            if (scratchLength > 0)
+            {
+                var rentedBlocks = ArrayPool<int>.Shared.Rent(scratchLength);
+                try
+                {
+                    var binarized = inverted; // the negative is no longer needed
+                    if (LocalBinarizer.TryBinarize(luminance, width, height, globalThreshold, binarized, rentedBlocks, out var darkCount))
+                    {
+                        histogram.Clear();
+                        histogram[LocalBinarizer.Dark] = darkCount;
+                        histogram[LocalBinarizer.Light] = pixelCount - darkCount;
+                        var localStatus = DecodeLuminanceCore(binarized, histogram, width, height, destination, out charsWritten, out var localInfo);
+                        if (IsTerminal(localStatus))
+                        {
+                            info = localInfo;
+                            return localStatus;
+                        }
+                    }
+                }
+                finally
+                {
+                    ArrayPool<int>.Shared.Return(rentedBlocks);
+                }
+            }
+
+            // Every attempt failed: report the first one's diagnostics
             return status;
         }
         finally

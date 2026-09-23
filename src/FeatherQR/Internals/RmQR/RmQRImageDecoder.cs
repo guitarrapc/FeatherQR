@@ -9,7 +9,7 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// Decodes an rMQR Code from a grayscale image: clean, well-lit, screen-rendered or scanned inputs.
+/// Decodes an rMQR Code from a grayscale image: clean, screen-rendered or scanned inputs, including a lighting gradient across the symbol.
 /// </summary>
 /// <remarks>
 /// Pipeline:
@@ -28,7 +28,8 @@ namespace FeatherQR.Internals.RmQR;
 ///    mild perspective; the sub-finder-side format copy gates each projective
 ///    candidate cheaply before a full sample
 /// 6. Matrix decoding arbitrates (format cross-check, RS); reflectance reversal is
-///    handled by one inverted retry when the normal attempt fails
+///    handled by one inverted retry when the normal attempt fails, and a symbol lit unevenly by one more
+///    on a regional binarization when both polarities fail
 /// </code>
 /// </remarks>
 internal static class RmQRImageDecoder
@@ -65,7 +66,7 @@ internal static class RmQRImageDecoder
 
     /// <summary>
     /// Decodes an rMQR Code from grayscale pixels.
-    /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails.
+    /// Reflectance-reversed symbols (light modules on a dark background) are handled by one inverted retry when the normal attempt fails. A symbol lit unevenly, which no one threshold splits, is retried once more on a regional binarization when both polarities fail.
     /// </summary>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
@@ -102,7 +103,38 @@ internal static class RmQRImageDecoder
                 return invertedStatus;
             }
 
-            // Both polarities failed: report the original attempt's diagnostics
+            // Uneven lighting: no one threshold splits the symbol, so binarize again against
+            // each region's own level. Skipped when it would put every pixel where the global
+            // threshold did, since the decoder has read that image already.
+            Binarizer.InvertHistogram(histogram);
+            var globalThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out _);
+            var scratchLength = LocalBinarizer.ScratchLength(width, height);
+            if (scratchLength > 0)
+            {
+                var rentedBlocks = ArrayPool<int>.Shared.Rent(scratchLength);
+                try
+                {
+                    var binarized = inverted; // the negative is no longer needed
+                    if (LocalBinarizer.TryBinarize(luminance, width, height, globalThreshold, binarized, rentedBlocks, out var darkCount))
+                    {
+                        histogram.Clear();
+                        histogram[LocalBinarizer.Dark] = darkCount;
+                        histogram[LocalBinarizer.Light] = pixelCount - darkCount;
+                        var localStatus = DecodeLuminanceCore(binarized, histogram, width, height, destination, out charsWritten, out var localInfo);
+                        if (IsTerminal(localStatus))
+                        {
+                            info = localInfo;
+                            return localStatus;
+                        }
+                    }
+                }
+                finally
+                {
+                    ArrayPool<int>.Shared.Return(rentedBlocks);
+                }
+            }
+
+            // Every attempt failed: report the first one's diagnostics
             return status;
         }
         finally

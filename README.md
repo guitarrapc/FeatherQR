@@ -445,7 +445,7 @@ finally
 
 Use the decoder that matches the expected symbol type. Each decoder in `FeatherQR` accepts generated data, a byte-per-module matrix, or a grayscale luminance span. `FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
 
-Image decoding is intended for screenshots, generated images, and clean scans. For camera images with strong perspective, uneven lighting, or blur, use a dedicated scanner such as ZXing.Net.
+Image decoding is intended for screenshots, generated images, and clean scans, including a shading gradient or a soft shadow across the symbol. For camera images with strong perspective, hard-edged shadows, or blur, use a dedicated scanner such as ZXing.Net.
 
 ```csharp
 using SkiaSharp;
@@ -625,7 +625,7 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional
 
 ### Any plan to support QR code scanning?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, uneven lighting, blur) is a computer-vision problem outside this library's scope, use a dedicated reader such as ZXing.Net for camera captures.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, hard-edged shadows, blur) is a computer-vision problem outside this library's scope, use a dedicated reader such as ZXing.Net for camera captures.
 
 ### What QR code style provides the best scan reliability?
 
