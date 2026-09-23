@@ -52,6 +52,7 @@ public class FinderRunBoundsTest
         var acceptable = 0L;
         string? first = null;
         Span<int> runs = stackalloc int[5];
+        Span<int> expectedTotals = stackalloc int[5];
         for (var trial = 0; trial < 4_000_000; trial++)
         {
             var module = random.Next(1, 400);
@@ -62,17 +63,70 @@ public class FinderRunBoundsTest
                 runs[i] = Math.Max(0, nominal + random.Next(-reach, reach + 1));
             }
             var total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
-            // the expected total anywhere the total check can still pass, and a little beyond on both sides
-            var expected = Math.Max(1, (int)(total * (0.68 + 0.80 * random.NextDouble())));
-            if (!CouldBeAccepted(expected, runs))
-                continue;
-            acceptable++;
-            if (Violation(FinderPatternFinder.AxisRunBounds.From(expected), expected, runs) is { } violation)
-                first ??= $"expected={expected}, runs=[{runs[0]},{runs[1]},{runs[2]},{runs[3]},{runs[4]}]: {violation}";
+            // The expected total anywhere the total check can still pass, and both corners of that window, where a bound is
+            // one step away from a total it must not refuse: the largest expected total accepting this one and the smallest
+            expectedTotals[0] = Math.Max(1, (int)(total * (0.68 + 0.80 * random.NextDouble())));
+            expectedTotals[1] = 5 * total / 3;
+            expectedTotals[2] = 5 * total / 3 - 1;
+            expectedTotals[3] = 5 * total / 7 + 1;
+            expectedTotals[4] = 5 * total / 7 + 2;
+            foreach (var expected in expectedTotals)
+            {
+                if (expected < 1 || !CouldBeAccepted(expected, runs))
+                    continue;
+                acceptable++;
+                if (Violation(FinderPatternFinder.AxisRunBounds.From(expected), expected, runs) is { } violation)
+                    first ??= $"expected={expected}, runs=[{runs[0]},{runs[1]},{runs[2]},{runs[3]},{runs[4]}]: {violation}";
+            }
         }
 
         await Assert.That(first).IsNull();
         await Assert.That(acceptable).IsGreaterThan(100_000);
+    }
+
+    [Test]
+    public async Task EveryAcceptableCentre_IsInsideTheBounds_AcrossTheWholeTotalWindow()
+    {
+        // The vectors above are drawn around a true 1:1:3:1:1, which leaves the corners of the total window unvisited: a centre run at
+        // its floor beside near-module side runs is acceptable there, and a bound one step too tight would refuse it and lose the candidate.
+        // Every (expected, total, centre) of the window is walked here instead, with the side runs spread evenly and pushed to one side,
+        // and every witness the verdict accepts has to lie inside the bounds.
+        var acceptable = 0L;
+        string? first = null;
+        Span<int> runs = stackalloc int[5];
+        for (var expected = 1; expected <= 200; expected++)
+        {
+            var bounds = FinderPatternFinder.AxisRunBounds.From(expected);
+            for (var total = 3 * expected / 5; total <= 7 * expected / 5 + 1; total++)
+            {
+                for (var centre = 1; centre + 4 <= total; centre++)
+                {
+                    var sides = total - centre;
+                    for (var skew = 0; skew < 2; skew++)
+                    {
+                        // evenly, then as short as the first three runs can be with the last one taking the rest
+                        var least = skew == 0 ? sides / 4 : Math.Max(1, sides / 4 - 2);
+                        runs[0] = runs[1] = runs[3] = least;
+                        runs[4] = sides - 3 * least;
+                        if (skew == 0)
+                        {
+                            for (var i = 0; i < sides % 4; i++)
+                                runs[i >= 2 ? i + 1 : i]++;
+                            runs[4] = sides - runs[0] - runs[1] - runs[3];
+                        }
+                        runs[2] = centre;
+                        if (runs[4] < 1 || !CouldBeAccepted(expected, runs))
+                            continue;
+                        acceptable++;
+                        if (Violation(bounds, expected, runs) is { } violation)
+                            first ??= $"expected={expected}, total={total}, runs=[{runs[0]},{runs[1]},{runs[2]},{runs[3]},{runs[4]}]: {violation}";
+                    }
+                }
+            }
+        }
+
+        await Assert.That(first).IsNull();
+        await Assert.That(acceptable).IsGreaterThan(10_000);
     }
 
     [Test]

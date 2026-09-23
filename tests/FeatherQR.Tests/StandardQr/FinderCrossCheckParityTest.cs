@@ -46,35 +46,52 @@ public class FinderCrossCheckParityTest
     [Test]
     public async Task CrossCheck_BoundedWalkMatchesReference_GreyEdges()
     {
-        // Blurred along the line, with the grey levels of the image: near misses are measured again from coverage, the one accept path the bounds were not derived from directly
+        // With the grey levels of the image, near misses are measured again from coverage, the one accept path the bounds were not derived from directly.
+        // The box-filtered columns are what reach it: their whole-pixel runs miss the ratio by a rounding their edges keep. The blur along the line
+        // spreads each edge evenly over the pixels beside it, so coverage measures the whole-pixel runs again; those columns hold the grey refusals.
         var compared = 0L;
-        var accepted = 0L;
         var handedBack = 0L;
-        var acceptedCrisp = 0L;
+        var acceptedGrey = new long[2]; // columns, rows
+        var acceptedCrisp = new long[2];
         foreach (var (lines, length) in sizes)
         {
             foreach (var module in new[] { 2, 3, 4 })
             {
-                var crisp = BuildRunColumns(lines, length, module, seed: 5 + module);
-                var columns = BlurAlongColumns(crisp, lines, length);
-                var rows = Transpose(columns, lines, length);
-                var threshold = Binarizer.ComputeOtsuThreshold(columns, out var grey);
-                await Assert.That(grey.IsEnabled).IsTrue();
-
-                foreach (var expected in ExpectedTotals(module))
+                // Only a window whose total is 20 px or less can be a near miss the strict ratio refuses, so the second look is reached
+                // at the smallest pitches alone: the box-filtered scenes are built at several of them, the blurred ones hold the refusals.
+                var blurred = BlurAlongColumns(BuildRunColumns(lines, length, module, seed: 5 + module), lines, length);
+                var boxFiltered = BuildBoxFilteredColumns(lines, length, 1.4f + module * 0.2f, seed: 11 + module);
+                var boxFilteredWider = BuildBoxFilteredColumns(lines, length, 1.8f + module * 0.2f, seed: 29 + module);
+                foreach (var columns in new[] { blurred, boxFiltered, boxFilteredWider })
                 {
-                    var mismatch = CompareEveryCentre(columns, lines, length, threshold, grey, vertical: true, expected, ref compared, ref accepted, ref handedBack)
-                        ?? CompareEveryCentre(rows, length, lines, threshold, grey, vertical: false, expected, ref compared, ref accepted, ref handedBack);
-                    await Assert.That(mismatch).IsNull().Because($"{lines} lines of {length}, module={module}, expected={expected}, grey");
+                    var rows = Transpose(columns, lines, length);
+                    var threshold = Binarizer.ComputeOtsuThreshold(columns, out var grey);
+                    await Assert.That(grey.IsEnabled).IsTrue();
 
-                    var unused = 0L;
-                    _ = CompareEveryCentre(columns, lines, length, threshold, default, vertical: true, expected, ref unused, ref acceptedCrisp, ref unused);
+                    foreach (var expected in ExpectedTotals(module))
+                    {
+                        var mismatch = CompareEveryCentre(columns, lines, length, threshold, grey, vertical: true, expected, ref compared, ref acceptedGrey[0], ref handedBack)
+                            ?? CompareEveryCentre(rows, length, lines, threshold, grey, vertical: false, expected, ref compared, ref acceptedGrey[1], ref handedBack);
+                        await Assert.That(mismatch).IsNull().Because($"{lines} lines of {length}, module={module}, expected={expected}, grey");
+
+                        // The same centres with the grey levels off, which is also where these scenes are held to the reference without them
+                        var unused = 0L;
+                        var crispMismatch = CompareEveryCentre(columns, lines, length, threshold, default, vertical: true, expected, ref unused, ref acceptedCrisp[0], ref unused)
+                            ?? CompareEveryCentre(rows, length, lines, threshold, default, vertical: false, expected, ref unused, ref acceptedCrisp[1], ref unused);
+                        await Assert.That(crispMismatch).IsNull().Because($"{lines} lines of {length}, module={module}, expected={expected}, grey off");
+                    }
                 }
             }
         }
 
-        // The second look has to have turned refusals into acceptances, or it was never reached
-        await Assert.That(accepted).IsGreaterThan(acceptedCrisp / 2 + 100);
+        // The second look has to have turned refusals into acceptances on both axes, or it was never reached: the same centres
+        // with and without the grey levels, which can only add acceptances. The rows read the transposed image, so the two
+        // counts are the same number reached through the other walk, and each is held on its own.
+        await Assert.That(acceptedGrey[0] - acceptedCrisp[0]).IsGreaterThan(500);
+        await Assert.That(acceptedGrey[1] - acceptedCrisp[1]).IsGreaterThan(500);
+        // Both verdicts have to occur in number here too, and the mode that hands its runs back has to be reached
+        await Assert.That(compared - acceptedGrey[0] - acceptedGrey[1]).IsGreaterThan(100_000);
+        await Assert.That(handedBack).IsGreaterThan(500);
     }
 
     [Test]
@@ -221,6 +238,55 @@ public class FinderCrossCheckParityTest
             for (var x = 0; x < width; x++)
                 transposed[x * height + y] = image[y * width + x];
         return transposed;
+    }
+
+    /// <summary>
+    /// <paramref name="lines"/> columns of <paramref name="length"/> pixels drawn by a box filter at a fractional module size: every pixel's level is the part of it a light run covers.
+    /// The finder-like cross sections sit at any sub-pixel offset with each run moved by up to a third of a module, so their whole-pixel runs miss the ratio by a rounding where their edges, measured from coverage, keep it.
+    /// </summary>
+    private static byte[] BuildBoxFilteredColumns(int lines, int length, float module, int seed)
+    {
+        var random = new Random(seed);
+        var image = new byte[lines * length];
+        Span<float> edges = stackalloc float[length + 2];
+        for (var x = 0; x < lines; x++)
+        {
+            // Edges of alternating runs along the column, the first run dark
+            var count = 0;
+            var position = (float)random.NextDouble() * module;
+            edges[count++] = position;
+            while (position < length && count < edges.Length)
+            {
+                // An odd count is inside a dark run, where a cross section can begin
+                if (count % 2 == 1 && random.Next(3) == 0 && count + 6 <= edges.Length)
+                {
+                    // a finder-like cross section: dark, light, dark x3, light, dark, then the light run after it
+                    for (var part = 0; part < 5; part++)
+                    {
+                        var nominal = part == 2 ? 3 * module : module;
+                        position += nominal + ((float)random.NextDouble() * 2 - 1) * module / 3;
+                        edges[count++] = position;
+                    }
+                    position += module * random.Next(1, 4);
+                    edges[count++] = position;
+                }
+                else
+                {
+                    position += module * random.Next(1, 5);
+                    edges[count++] = position;
+                }
+            }
+
+            for (var y = 0; y < length; y++)
+            {
+                // Darkness of pixel [y, y + 1): its overlap with the dark runs [edges[2k], edges[2k + 1])
+                var darkness = 0f;
+                for (var k = 0; k + 1 < count; k += 2)
+                    darkness += Math.Max(0f, Math.Min(y + 1, edges[k + 1]) - Math.Max(y, edges[k]));
+                image[y * lines + x] = (byte)Math.Round(255 * (1 - Math.Min(1f, darkness)));
+            }
+        }
+        return image;
     }
 
     private static byte[] BlurAlongColumns(byte[] image, int width, int height)

@@ -13,7 +13,7 @@ public class FinderRowEdgesTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or ARM64 AdvSimd (net8.0+).");
             return;
         }
 
@@ -72,7 +72,7 @@ public class FinderRowEdgesTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or ARM64 AdvSimd (net8.0+).");
             return;
         }
 
@@ -102,7 +102,7 @@ public class FinderRowEdgesTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or ARM64 AdvSimd (net8.0+).");
             return;
         }
 

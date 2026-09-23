@@ -245,7 +245,7 @@ internal static partial class QRImageDecoder
     /// <remarks>
     /// The same float operations in the reference's order, so the same pixel; what differs from the AVX2 tier is what this machine has. Byte-lane <c>LessThan</c> is the unsigned compare (cmhi), so no min identity is needed.
     /// The scalar cast is fcvtzs on ARM64 on every runtime, saturating with NaN to 0, and so is the vector conversion, so this tier has one conversion form where the AVX2 tier has two; the clamp keeps the AVX2 tier's .NET 9 shape (the limit first in a float minimum, then an integer maximum with 0), which lands NaN and both infinities where the reference does.
-    /// The pixel index is one integer multiply-add, exact. Measured on Apple M2 against the column-table tier: 0.46 to 0.50 at versions 14 to 40, upright and rotated; a per-cell broadcast kept as vectors and loading the pixels straight into lanes each measured level and were left out. Four lanes are half of the AVX2 tier's gain on that machine, and there is no wider form on this ISA.
+    /// The pixel index is one integer multiply-add, exact. Measured on Apple M2 against the column-table tier: 0.46 to 0.51 at versions 14 to 40, upright and rotated; a per-cell broadcast kept as vectors and loading the pixels straight into lanes each measured level and were left out. Four lanes are half of the AVX2 tier's gain on that machine, and there is no wider form on this ISA.
     /// </remarks>
     internal static void SampleGridPiecewiseAdvSimd(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {
@@ -342,7 +342,7 @@ internal static partial class QRImageDecoder
                 var dark = Vector128.LessThan(Vector128.CreateScalar(pixels).AsByte(), limitVector) & one;
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, rowBase + u), dark.AsUInt64().ToScalar());
             }
-            // row tail: 1 module for every Annex E version (17 + 4·version), up to 7 for any other dimension; the reference's scalar body on the same per-cell floats
+            // row tail: 1 module for even versions and 5 for odd ones (17 + 4·version), up to 7 for any other dimension; the reference's scalar body on the same per-cell floats
             for (; u < dimension; u++)
             {
                 var c = cellOf[u];

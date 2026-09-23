@@ -10,7 +10,7 @@ using System.Runtime.Intrinsics.Arm;
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// The edge-list row kernel of the finder search (net8.0+, 256-bit vectors or AdvSimd).
+/// The edge-list row kernel of the finder search (net8.0+, 256-bit vectors or ARM64 AdvSimd).
 /// </summary>
 /// <remarks>
 /// The mask walk goes through a row run by run and judges a window at the end of every dark run with up to fifteen compares that may each leave early. On a large symbol that is ten thousand windows a search and on an image without a symbol forty-five thousand, nearly all of them refused, and the branches are what it costs.

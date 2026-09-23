@@ -30,10 +30,10 @@ internal enum FinderRowKernel
     /// <summary>The pixel-by-pixel row walk, and the reference walks in the cross-checks: the reference for the whole search.</summary>
     Scalar,
 
-    /// <summary>The run-by-run walk over a dark bitmask; the scalar walk on rows too narrow for it.</summary>
+    /// <summary>The run-by-run walk over a dark bitmask; the scalar walk on rows too narrow for it or where 128-bit vectors are not accelerated.</summary>
     MaskWalk,
 
-    /// <summary>All edges of the row at once and sixteen windows a step; the mask walk where <see cref="FinderPatternFinder.IsEdgeListKernelSupported"/> is false or the row is too wide or too narrow for it.</summary>
+    /// <summary>All edges of the row at once and sixteen windows a step (eight on ARM64); the mask walk, and below its width the scalar walk, where <see cref="FinderPatternFinder.IsEdgeListKernelSupported"/> is false or the row is too wide or too narrow for it.</summary>
     EdgeList,
 }
 
@@ -57,6 +57,7 @@ internal enum FinderRowKernel
 /// The scan strides over rows: the band of rows showing the 1:1:3:1:1 signature is 3 modules tall for an axis-aligned symbol (under rotation the ratios drift off-centre and it narrows — see CandidateRowStride), and although the module size is unknown before detection, the worst case (a version-40 symbol filling the frame) bounds it from below, so a stride of 3·height/(4·177) hits the band of every supported axis-aligned symbol.
 /// When TryFind's stride pass cannot select a consistent triple, or selects a poor one with once-seen candidates left out, the rows it skipped are scanned as a complementary pass, together exactly one full-image sweep, so its striding cannot lose a symbol a full scan would find — that fallback, not the stride arithmetic, is what makes TryFind safe under rotation too.
 /// On net8.0+ each row is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any 128-bit acceleration) and walked run-by-run via trailing-zero counts instead of pixel-by-pixel (measured ~11x combined on the found path on x64 and 3.3-4.1x on Apple M2).
+/// With 256-bit vectors or ARM64 AdvSimd, rows of 32 to 4,095 pixels go to the edge-list kernel instead (FinderPatternFinder.RowEdges.cs): every edge of the row at once, and the windows classified many a step without a branch.
 /// </para>
 /// </remarks>
 internal static partial class FinderPatternFinder

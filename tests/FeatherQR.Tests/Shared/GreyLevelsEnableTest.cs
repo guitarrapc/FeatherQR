@@ -49,6 +49,84 @@ public class GreyLevelsEnableTest
         await Assert.That(disabled).IsEmpty();
     }
 
+    /// <summary>
+    /// A pixel one bin inside either level enables them, and so does one in the bin next to a class mean that is not a whole number.
+    /// These are the two bounds of the "strictly between" scan, the first bin above the dark mean and the last below the light one.
+    /// </summary>
+    [Test]
+    public async Task PixelNextToALevel_EnablesTheLevels()
+    {
+        var disabled = new List<string>();
+        foreach (var between in new byte[] { 1, 2, 253, 254 })
+        {
+            var histogram = new int[256];
+            histogram[0] = 5_000;
+            histogram[255] = 5_000;
+            histogram[between] = 1;
+            Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
+            if (!grey.IsEnabled)
+                disabled.Add($"0/255 and one pixel at {between}");
+        }
+
+        // A light mean of 250.43 (400 at 250, 300 at 251): bin 250 lies below it
+        var light = new int[256];
+        light[0] = 1_000;
+        light[250] = 400;
+        light[251] = 300;
+        Binarizer.ComputeOtsuThresholdFromHistogram(light, out var lightGrey);
+        if (!lightGrey.IsEnabled)
+            disabled.Add("light mean 250.43");
+
+        // A dark mean of 4.57 (300 at 4, 400 at 5): bin 5 lies above it
+        var dark = new int[256];
+        dark[4] = 300;
+        dark[5] = 400;
+        dark[255] = 1_000;
+        Binarizer.ComputeOtsuThresholdFromHistogram(dark, out var darkGrey);
+        if (!darkGrey.IsEnabled)
+            disabled.Add("dark mean 4.57");
+
+        await Assert.That(disabled).IsEmpty();
+    }
+
+    /// <summary>
+    /// Each class mean is taken over the outer half of its class, and a class whose count reaches exactly half its weight ends there:
+    /// the bin that would tie is part of the inner half, where the edge pixels being measured sit, and pulls the level toward the other class.
+    /// A range of exactly <c>MinimumRange</c> is wide enough for a level between the two to mean coverage.
+    /// </summary>
+    [Test]
+    public async Task ClassMeansStopAtTheHalfWeight_AndTheRangeBoundIsInclusive()
+    {
+        // 100 at bin 0 is exactly half the dark class, so the dark level is 0 and not the mean with bin 10
+        var darkTie = new int[256];
+        darkTie[0] = 100;
+        darkTie[10] = 100;
+        darkTie[255] = 100;
+        Binarizer.ComputeOtsuThresholdFromHistogram(darkTie, out var darkGrey);
+        await Assert.That(darkGrey.Darkness(128)).IsEqualTo(127f / 255f).Within(1e-5f);
+
+        // and 100 at bin 255 is exactly half the light class
+        var lightTie = new int[256];
+        lightTie[0] = 100;
+        lightTie[245] = 100;
+        lightTie[255] = 100;
+        Binarizer.ComputeOtsuThresholdFromHistogram(lightTie, out var lightGrey);
+        await Assert.That(lightGrey.Darkness(250)).IsEqualTo(5f / 255f).Within(1e-5f);
+
+        // Levels 32 apart are far enough apart; one closer is not
+        var atTheBound = new int[256];
+        atTheBound[0] = 100;
+        atTheBound[10] = 1;
+        atTheBound[32] = 100;
+        await Assert.That(GreyLevels.FromHistogram(atTheBound, 20).IsEnabled).IsTrue();
+
+        var insideTheBound = new int[256];
+        insideTheBound[0] = 100;
+        insideTheBound[10] = 1;
+        insideTheBound[31] = 100;
+        await Assert.That(GreyLevels.FromHistogram(insideTheBound, 20).IsEnabled).IsFalse();
+    }
+
     /// <summary>The levels and the scale are the class means as before: a pixel at the light level reads 0, at the dark level 1, halfway between 0.5.</summary>
     [Test]
     public async Task Darkness_ReadsTheShareBetweenTheClassMeans()

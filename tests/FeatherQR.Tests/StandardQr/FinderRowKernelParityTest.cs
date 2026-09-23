@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the row kernels of the finder search.
-/// The scalar walk judges the 1:1:3:1:1 window at the end of every dark run from the third on; the mask walk does the same from a dark bitmask; the edge-list kernel takes all edges of the row at once and classifies sixteen windows a step, handing only the flagged ones, in order, to the same follow-ups.
+/// The scalar walk judges the 1:1:3:1:1 window at the end of every dark run from the third on; the mask walk does the same from a dark bitmask; the edge-list kernel takes all edges of the row at once and classifies sixteen windows a step (eight on ARM64), handing only the flagged ones, in order, to the same follow-ups.
 /// All three have to leave the same candidate list behind: every centre, module size and count bit for bit, in the same order, because a candidate is a running average over its hits and the order of the hits is part of it.
 /// The scalar kernel also runs the reference cross-check walks, so this holds the whole search to its reference, row kernel and walks together.
 /// </summary>
@@ -15,22 +15,27 @@ public class FinderRowKernelParityTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors or AdvSimd (net8.0+).");
+            Skip.Test("The edge-list kernel needs 256-bit vectors or ARM64 AdvSimd (net8.0+).");
             return;
         }
 
-        var (scenes, candidates) = await CompareOnEveryScene(FinderRowKernel.EdgeList);
+        var (scenes, candidates, widthLimitScenes, fewestAtWidthLimit) = await CompareOnEveryScene(FinderRowKernel.EdgeList);
         await Assert.That(scenes).IsGreaterThan(150);
         await Assert.That(candidates).IsGreaterThan(1_000);
+        // The three scenes at the width limit each hold three finders the cross-checks accept, or the kernel boundary was compared on nothing
+        await Assert.That(widthLimitScenes).IsEqualTo(3);
+        await Assert.That(fewestAtWidthLimit).IsGreaterThanOrEqualTo(3);
     }
 
     [Test]
     public async Task MaskWalkKernel_LeavesTheScalarKernelsCandidates()
     {
-        // The kernel every target without 256-bit vectors runs, and rows of 4,096 pixels and more everywhere. Once the edge-list kernel is what TryFind picks on x64, nothing else reaches it there.
-        var (scenes, candidates) = await CompareOnEveryScene(FinderRowKernel.MaskWalk);
+        // The kernel TryFind picks where 128-bit vectors are accelerated but neither 256-bit vectors nor ARM64 AdvSimd are, and where they are, for rows of 16 to 31 pixels and of 4,096 and more; narrower rows and targets without 128-bit acceleration take the scalar walk. There the rows between reach it only through this test.
+        var (scenes, candidates, widthLimitScenes, fewestAtWidthLimit) = await CompareOnEveryScene(FinderRowKernel.MaskWalk);
         await Assert.That(scenes).IsGreaterThan(150);
         await Assert.That(candidates).IsGreaterThan(1_000);
+        await Assert.That(widthLimitScenes).IsEqualTo(3);
+        await Assert.That(fewestAtWidthLimit).IsGreaterThanOrEqualTo(3);
     }
 
     [Test]
@@ -64,12 +69,14 @@ public class FinderRowKernelParityTest
         await Assert.That(found).IsGreaterThan(15);
     }
 
-    private static async Task<(int Scenes, long Candidates)> CompareOnEveryScene(FinderRowKernel kernel)
+    private static async Task<(int Scenes, long Candidates, int WidthLimitScenes, int FewestAtWidthLimit)> CompareOnEveryScene(FinderRowKernel kernel)
     {
         var reference = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var actual = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var scenes = 0;
         var total = 0L;
+        var widthLimitScenes = 0;
+        var fewestAtWidthLimit = int.MaxValue;
         foreach (var (name, scene, width, height, threshold, grey, stride) in Scenes())
         {
             Array.Clear(reference);
@@ -78,6 +85,11 @@ public class FinderRowKernelParityTest
             var count = FinderPatternFinder.FindCandidatesWith(scene, width, height, threshold, actual, grey, stride, kernel);
             scenes++;
             total += expected;
+            if (name.StartsWith("wide", StringComparison.Ordinal))
+            {
+                widthLimitScenes++;
+                fewestAtWidthLimit = Math.Min(fewestAtWidthLimit, expected);
+            }
 
             string? mismatch = count != expected ? $"{count} candidates, reference {expected}" : null;
             for (var i = 0; mismatch is null && i < expected; i++)
@@ -87,7 +99,7 @@ public class FinderRowKernelParityTest
             }
             await Assert.That(mismatch).IsNull().Because($"{name}, kernel={kernel}");
         }
-        return (scenes, total);
+        return (scenes, total, widthLimitScenes, fewestAtWidthLimit);
     }
 
     private static bool Same(in FinderPattern a, in FinderPattern b)
@@ -166,6 +178,29 @@ public class FinderRowKernelParityTest
                 }
                 foreach (var stride in new[] { 1, 3 })
                     yield return ($"finder field, module {module}, phase {phase}, stride {stride}", field, width, height, 128, default, stride);
+            }
+        }
+
+        // A finder flush against the right edge whose right ring is light on one row: that row's last window stops one dark run short,
+        // and the edge buffer still holds the row above, whose last run is the ring. A lane past the last window would read that run
+        // and see a whole finder the scalar walk never sees. The bars in front move the last window across every lane of a step.
+        foreach (var module in new[] { 2, 3, 4 })
+        {
+            for (var bars = 0; bars < 16; bars++)
+            {
+                var x0 = 30 + bars * 2 * module;
+                var width = x0 + 7 * module;
+                var height = 9 * module + 2;
+                var scene = new byte[width * height];
+                scene.AsSpan().Fill(255);
+                for (var y = 0; y < height; y++)
+                {
+                    for (var bar = 0; bar < bars; bar++)
+                        scene.AsSpan(y * width + 10 + bar * 2 * module, module).Fill(0);
+                }
+                WriteFinder(scene, width, x0, module, module);
+                scene.AsSpan((module + 3 * module) * width + x0 + 6 * module, module).Fill(255);
+                yield return ($"notched finder at the right edge, module {module}, {bars} bars", scene, width, height, 128, default, 1);
             }
         }
 

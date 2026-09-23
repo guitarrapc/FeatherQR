@@ -99,7 +99,7 @@ public class FinderRunWalkParityTest
     [Test]
     public async Task TryFind_MatchesReferenceWalkers_NonSquareImages()
     {
-        // End to end: TryFindScalar runs the reference walkers, TryFind the stepped ones. Real symbols on canvases that are not square, crisp and blurred, so the grey second look is reached through both.
+        // End to end: TryFindScalar runs the reference walkers and the scalar row walk, TryFind the bounded axis walk, the stepped diagonal one and the vector row kernels. Real symbols on canvases that are not square, crisp and blurred, so the grey second look is reached through both.
         var fast = new FinderPattern[3];
         var reference = new FinderPattern[3];
         foreach (var version in new[] { 1, 4, 7 })
