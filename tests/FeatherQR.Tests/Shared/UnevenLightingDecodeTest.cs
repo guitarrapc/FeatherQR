@@ -1,4 +1,6 @@
 using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.MicroQR;
+using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
 
@@ -144,6 +146,87 @@ public class UnevenLightingDecodeTest
         await Assert.That(success).IsTrue().Because($"{light} towards {degrees} at depth {depth}: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.Success);
+    }
+
+    /// <summary>
+    /// Renders whose finder band falls between the rows a strided scan visits, at 2 px/module: the regional attempt reads them only through the strideless sweep, which it has like the global attempts.
+    /// </summary>
+    public static IEnumerable<(bool, float, float, float, bool, UnevenLight, float, float)> BetweenScannedRows()
+    {
+        // (Micro QR, turn, offset x, offset y, anti-aliased, light, light direction, depth)
+        // Chosen to keep needing the sweep, and reading with it, under a nudge of up to 0.5° of turn, 0.1 px of either offset or 0.03 of depth: a case at a knife edge stops guarding the sweep on the next unrelated change
+        yield return (true, 31f, 0.25f, 2.5f, false, UnevenLight.Ramp, 0f, 0.8f);
+        yield return (true, 61f, 0.5f, 3f, false, UnevenLight.Ramp, 90f, 0.8f);
+        yield return (true, 57f, 0.25f, 2.5f, true, UnevenLight.Ramp, 90f, 0.8f);
+        yield return (false, 33f, 0f, 2.5f, false, UnevenLight.Ramp, 0f, 0.8f);
+        yield return (false, 59f, 0.25f, 2.5f, false, UnevenLight.Ramp, 90f, 0.8f);
+        yield return (false, 33f, 0f, 2.5f, true, UnevenLight.Ramp, 90f, 0.8f);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(BetweenScannedRows))]
+    public async Task UnevenLight_FinderBetweenScannedRows_Decodes(bool microQr, float turn, float offsetX, float offsetY, bool antiAliased, UnevenLight light, float lightDegrees, float depth)
+    {
+        var micro = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+        var rmqr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
+        var (luminance, width, height) = microQr
+            ? UnevenLightingRenderer.Render((row, column) => micro[row, column], micro.Size, micro.Size, 2f, turn, offsetX, offsetY, antiAliased, light, lightDegrees, depth)
+            : UnevenLightingRenderer.Render((row, column) => rmqr[row, column], rmqr.Width, rmqr.Height, 2f, turn, offsetX, offsetY, antiAliased, light, lightDegrees, depth);
+        await AssertGlobalAttemptsFail(microQr, luminance, width, height);
+        await AssertOnlyTheSweepFindsTheFinder(luminance, width, height);
+
+        string text;
+        DecodeStatus status;
+        if (microQr)
+        {
+            MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out text, out var info);
+            status = info.Status;
+        }
+        else
+        {
+            RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out text, out var info);
+            status = info.Status;
+        }
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo(Content);
+    }
+
+    /// <summary>
+    /// The case is only one of this group if neither global polarity reads it, sweep included; otherwise the regional attempt is never reached.
+    /// </summary>
+    private static async Task AssertGlobalAttemptsFail(bool microQr, byte[] luminance, int width, int height)
+    {
+        var histogram = new int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var negative = new byte[luminance.Length];
+        LuminanceInverter.Invert(luminance, negative);
+        var negativeHistogram = histogram.ToArray();
+        Binarizer.InvertHistogram(negativeHistogram);
+        var destination = new char[64];
+
+        foreach (var (image, bins) in new[] { (luminance, histogram), (negative, negativeHistogram) })
+        {
+            var status = microQr
+                ? MicroQRImageDecoder.DecodeLuminanceCore(image, bins, width, height, destination, out _, out _)
+                : RmQRImageDecoder.DecodeLuminanceCore(image, bins, width, height, destination, out _, out _);
+            await Assert.That(status).IsNotEqualTo(DecodeStatus.Success);
+        }
+    }
+
+    /// <summary>
+    /// The case is only one of this group if, on the regional binarization, the strided scan finds no finder and the sweep does; otherwise a decode proves nothing about the sweep.
+    /// </summary>
+    private static async Task AssertOnlyTheSweepFindsTheFinder(byte[] luminance, int width, int height)
+    {
+        var binarized = new byte[luminance.Length];
+        var moved = LocalBinarizer.TryBinarize(luminance, width, height, negative: false, Binarizer.ComputeOtsuThreshold(luminance, out _), binarized, new int[LocalBinarizer.ScratchLength(width, height)], out _);
+        var threshold = Binarizer.ComputeOtsuThreshold(binarized, out var grey);
+        var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+
+        await Assert.That(moved).IsTrue();
+        await Assert.That(FinderPatternFinder.FindCandidates(binarized, width, height, threshold, candidates, grey)).IsEqualTo(0);
+        await Assert.That(FinderPatternFinder.FindCandidatesFullSweep(binarized, width, height, threshold, candidates, grey)).IsGreaterThan(0);
     }
 
     private static void Negate(byte[] luminance)
