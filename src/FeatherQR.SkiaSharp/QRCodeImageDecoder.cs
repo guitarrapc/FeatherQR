@@ -17,7 +17,7 @@ public static class QRCodeImageDecoder
         /// Finds and decodes a QR code in a bitmap.
         /// </summary>
         /// <remarks>
-        /// Made for clean images, including a shading gradient or a soft shadow across the symbol: screenshots, rendered QR codes and scans, at any rotation, mirrored, inverted, or mildly skewed.
+        /// Made for clean images, including a shading gradient or a soft-edged shadow over part of the symbol: screenshots, rendered QR codes and scans, at any rotation, mirrored, inverted, or mildly skewed.
         /// Photos with strong perspective, hard-edged shadows or blur are out of scope; reach for a computer-vision grade reader such as ZXing.Net there.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
@@ -31,7 +31,7 @@ public static class QRCodeImageDecoder
         /// Finds and decodes a QR code in a bitmap, and reports what it found.
         /// </summary>
         /// <remarks>
-        /// Made for clean images, including a shading gradient or a soft shadow across the symbol: screenshots, rendered QR codes and scans, at any rotation, mirrored, inverted, or mildly skewed.
+        /// Made for clean images, including a shading gradient or a soft-edged shadow over part of the symbol: screenshots, rendered QR codes and scans, at any rotation, mirrored, inverted, or mildly skewed.
         /// Photos with strong perspective, hard-edged shadows or blur are out of scope; reach for a computer-vision grade reader such as ZXing.Net there.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>

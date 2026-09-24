@@ -70,6 +70,15 @@ internal static class RmQRImageDecoder
     /// </summary>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
+        var status = DecodeLuminanceAttempts(luminance, width, height, destination, out charsWritten, out info);
+        // No text unless it decoded: a failing decode can stop after a segment was written
+        if (status != DecodeStatus.Success)
+            charsWritten = 0;
+        return status;
+    }
+
+    private static DecodeStatus DecodeLuminanceAttempts(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
         {
             charsWritten = 0;
@@ -103,17 +112,25 @@ internal static class RmQRImageDecoder
                 return invertedStatus;
             }
 
-            // Uneven lighting: no one threshold splits the symbol, so each polarity is
-            // binarized again against each region's own level
+            // A verdict skips the regional pass, which looks for a symbol the global threshold did not see
+            if (RegionalRetry.IsContentVerdict(status))
+                return status;
+            if (RegionalRetry.IsContentVerdict(invertedStatus))
+            {
+                info = invertedInfo;
+                return invertedStatus;
+            }
+
+            // Uneven lighting: each polarity binarized again against each region's own level
             var regional = new RegionalAttempt();
             var regionalStatus = RegionalRetry.Decode<RegionalAttempt, RmQRCodeDecodeInfo>(ref regional, luminance, inverted, histogram, width, height, destination, out charsWritten, out var regionalInfo);
-            if (IsTerminal(regionalStatus))
+            if (IsTerminal(regionalStatus) || RegionalRetry.IsContentVerdict(regionalStatus))
             {
                 info = regionalInfo;
                 return regionalStatus;
             }
 
-            // Every attempt failed: report the first one's diagnostics
+            // Every attempt failed short of the content: report the first one's diagnostics
             return status;
         }
         finally
@@ -150,14 +167,15 @@ internal static class RmQRImageDecoder
         // the bitstream, so the buffer is the only thing missing and a wider finder scan
         // cannot change it. (That ordering is a precondition, not a given: the segment
         // decoders check bitstream sufficiency before destination sufficiency precisely
-        // so a malformed count cannot masquerade as a short buffer here.)
+        // so a malformed count cannot masquerade as a short buffer here.) A verdict on
+        // the content does not end it: the sweep can find another symbol that reads.
         if (IsTerminal(status))
             return status;
 
         var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
-        // Terminal, not just successful, for the same reason as above: when the sweep
-        // is the pass that reads the symbol, its DestinationTooSmall is the answer.
-        if (IsTerminal(sweptStatus))
+        // Settled, not just successful: when the sweep is the pass that reads the symbol,
+        // its DestinationTooSmall or its verdict on the content is the answer.
+        if (IsSettled(sweptStatus))
         {
             charsWritten = sweptChars;
             info = sweptInfo;
@@ -1323,9 +1341,12 @@ internal static class RmQRImageDecoder
         DecodeStatus.InvalidMatrix => 1,
         DecodeStatus.FormatInformationInvalid => 1,
         // The symbol was read (format + RS) and only the caller's buffer is short:
-        // this outranks every other failure so an earlier same-finder RS failure
+        // this outranks every failure short of the content so an earlier same-finder RS failure
         // (the usual prelude to the perspective search) can never mask it.
         DecodeStatus.DestinationTooSmall => 3,
+        // A verdict on the content comes after error correction too, so a wrong grid's
+        // correction failure tried before the right one cannot mask it
+        DecodeStatus.UnmappedCharacter or DecodeStatus.UnsupportedContent => 3,
         _ => 2, // got past format decoding
     };
 
@@ -1337,8 +1358,12 @@ internal static class RmQRImageDecoder
     /// <summary>
     /// Outcomes no further geometry around the SAME finder can change: success, and a caller destination too small for the payload (the symbol was already read through format decode and RS on every block, the same evidence a success rests on; the perspective search, the remaining frames of that finder and the inverted retry would only rediscover the same symbol at hundreds of times the cost).
     /// Other finder candidates of the same polarity are still tried, so a second symbol in the frame that does fit the destination is found regardless of candidate order; a fitting symbol of the OPPOSITE polarity next to a too-large one is the accepted trade-off of skipping the inverted retry.
-    /// The status also outranks every other failure in <see cref="Rank"/>, so it reaches the caller even when an earlier attempt around the same finder failed at RS.
+    /// The status also outranks every failure short of the content in <see cref="Rank"/>, so it reaches the caller even when an earlier attempt around the same finder failed at RS.
     /// </summary>
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
+
+    /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content.</summary>
+    private static bool IsSettled(DecodeStatus status)
+        => IsTerminal(status) || RegionalRetry.IsContentVerdict(status);
 }

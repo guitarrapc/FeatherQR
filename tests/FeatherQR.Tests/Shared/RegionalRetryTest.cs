@@ -43,10 +43,14 @@ public class RegionalRetryTest
     }
 
     private static DecodeStatus Run(byte[] luminance, int width, int height, Calls calls, params DecodeStatus[] results)
+        => Run(luminance, width, height, calls, out _, results);
+
+    /// <param name="info">The decode the result came from: 1 for the positive, 2 for the negative.</param>
+    private static DecodeStatus Run(byte[] luminance, int width, int height, Calls calls, out int info, params DecodeStatus[] results)
     {
         var (negative, histogram) = AfterInvertedRetry(luminance);
         var attempt = new RecordingAttempt { Calls = calls, Results = results };
-        return RegionalRetry.Decode<RecordingAttempt, int>(ref attempt, luminance, negative, histogram, width, height, new char[16], out _, out _);
+        return RegionalRetry.Decode<RecordingAttempt, int>(ref attempt, luminance, negative, histogram, width, height, new char[16], out _, out info);
     }
 
     private static byte[] Lit(bool negate)
@@ -126,6 +130,37 @@ public class RegionalRetryTest
         await Assert.That(status).IsEqualTo(negativeResult);
     }
 
+    /// <summary>A verdict on the symbol's content ends the retry like a read does: the negative of one symbol could only read another.</summary>
+    [Test]
+    [Arguments(DecodeStatus.UnmappedCharacter)]
+    [Arguments(DecodeStatus.UnsupportedContent)]
+    public async Task Decode_PositiveContentVerdict_StopsThere(DecodeStatus positiveResult)
+    {
+        var side = LitSide;
+        var calls = new Calls();
+
+        var status = Run(Lit(negate: true), side, side, calls, out var info, positiveResult, DecodeStatus.Success);
+
+        await Assert.That(calls.Inputs.Count).IsEqualTo(1);
+        await Assert.That(status).IsEqualTo(positiveResult);
+        await Assert.That(info).IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments(DecodeStatus.UnmappedCharacter)]
+    [Arguments(DecodeStatus.UnsupportedContent)]
+    public async Task Decode_NegativeContentVerdict_IsReturned(DecodeStatus negativeResult)
+    {
+        var side = LitSide;
+        var calls = new Calls();
+
+        var status = Run(Lit(negate: true), side, side, calls, out var info, DecodeStatus.DataUncorrectable, negativeResult);
+
+        await Assert.That(calls.Inputs.Count).IsEqualTo(2);
+        await Assert.That(status).IsEqualTo(negativeResult);
+        await Assert.That(info).IsEqualTo(2);
+    }
+
     [Test]
     public async Task Decode_PositiveTooShortForItsDestination_StopsThere()
     {
@@ -139,7 +174,7 @@ public class RegionalRetryTest
     }
 
     /// <summary>
-    /// Noise of two levels more than 24 apart is its own binarization in either polarity: every block holds both levels with a range past the flat bound, so its threshold falls between them, and neither polarity is decoded again.
+    /// Noise of two levels more than 24 apart binarizes to itself in either polarity, so neither polarity is decoded again.
     /// Uneven levels are what tell each polarity's threshold apart: given the other polarity's threshold the negative of 20/100 noise would all read light and differ.
     /// </summary>
     [Test]
@@ -162,7 +197,7 @@ public class RegionalRetryTest
     }
 
     /// <summary>
-    /// The gates are each polarity's own. Large flat cells of 0 and 100 agree with the positive's global threshold (a flat 100 reads as paper, as it should), and not with the negative's: there the cells of 155 are ink by the global threshold and paper by the flat rule.
+    /// Each polarity has its own gate: flat cells of 0 and 100 agree with the positive's global threshold and not with the negative's.
     /// </summary>
     [Test]
     public async Task Decode_OnlyTheNegativeDiffers_DecodesOnlyTheNegative()
@@ -182,7 +217,7 @@ public class RegionalRetryTest
     }
 
     /// <summary>
-    /// A level one away from an extreme is not an extreme: a flat cell of 1 in the top-left corner has no neighbours to read, takes half its minimum, and reads as paper where the global threshold made it ink, so the image is binarized and decoded.
+    /// A level one away from an extreme is not an extreme: a flat cell of 1 changes class, so the image is binarized and decoded.
     /// The same from the other end: a corner of 254 among 0 is that cell of 1 in the negative.
     /// </summary>
     [Test]
@@ -216,7 +251,7 @@ public class RegionalRetryTest
     }
 
     /// <summary>
-    /// Why an image of only 0 and 255 skips the binarization outright: every regional threshold then lies in [0, 251], so 0 reads dark and 255 light in both polarities, as the global threshold reads them.
+    /// An image of only 0 and 255 reads the same regionally as globally in both polarities, so it skips the binarization.
     /// Held here over sizes whose last block overlaps the one before and over flat and isolated patterns, both polarities, vector and scalar.
     /// </summary>
     [Test]

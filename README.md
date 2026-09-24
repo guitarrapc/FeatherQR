@@ -445,7 +445,7 @@ finally
 
 Use the decoder that matches the expected symbol type. Each decoder in `FeatherQR` accepts generated data, a byte-per-module matrix, or a grayscale luminance span. `FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
 
-Image decoding is intended for screenshots, generated images, and clean scans, including a shading gradient or a soft shadow across the symbol. For camera images with strong perspective, hard-edged shadows, or blur, use a dedicated scanner such as ZXing.Net.
+Image decoding is intended for screenshots, generated images, and clean scans, including a shading gradient or a soft-edged shadow over part of the symbol. For camera images with strong perspective, hard-edged shadows, or blur, use a dedicated scanner such as ZXing.Net.
 
 ```csharp
 using SkiaSharp;

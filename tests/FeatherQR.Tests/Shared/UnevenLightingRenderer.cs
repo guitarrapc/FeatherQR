@@ -11,7 +11,7 @@ public enum UnevenLight
 
 /// <summary>
 /// Renders a module grid printed on paper and lit unevenly: each pixel is the reflectance of what it covers (dark ink or light paper) times the light that falls there.
-/// A ramp dims the light steadily across the image; a shadow drops it across a soft edge through the middle. Either way one global threshold puts a whole side of the symbol in one class, which is what a photograph with a shading gradient does.
+/// A ramp dims the light steadily across the image; a shadow drops it across a soft edge through the middle.
 /// The whole-scale form draws the grid as given, so its quiet zone has to be part of it; the turned form adds a light margin of two modules.
 /// </summary>
 internal static class UnevenLightingRenderer
@@ -40,7 +40,7 @@ internal static class UnevenLightingRenderer
     }
 
     /// <summary>
-    /// The same light over a symbol turned by any angle and moved by an offset in pixels from a point 1.5 px above the image centre, crisp or anti-aliased (4 × 4 samples a pixel), in a light margin of two modules while the offset is within half a pixel across and -0.5 to 3.5 px down.
+    /// The same light over a symbol turned and offset, crisp or anti-aliased (4 × 4 samples a pixel), in a light margin of two modules.
     /// </summary>
     /// <param name="turnDegrees">The symbol's rotation.</param>
     /// <param name="offsetX">Pixels right, whole or fractional: a fractional offset moves where module edges fall inside pixels.</param>

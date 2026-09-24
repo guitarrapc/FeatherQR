@@ -18,13 +18,13 @@ namespace FeatherQR.Tests;
 /// <para>
 /// The symbol has to be built here because no generator in this library emits Kanji:
 /// hand-made data codewords go through the real ECC, placement, mask and format
-/// pipeline, so what the decoder sees is a genuine version 1-L symbol.
+/// pipeline, so what the decoder sees is a genuine level L symbol (version 1 here).
 /// </para>
 /// </remarks>
 public class KanjiUnmappedCharacterEndToEndTest
 {
     private const int Version = 1;
-    private const int Size = 21;
+    internal const int Size = 21;
 
     /// <summary>ISO/IEC 18004 8.4.5 compaction, computed independently of the production helper.</summary>
     private static int Kanji(int sjis)
@@ -33,35 +33,41 @@ public class KanjiUnmappedCharacterEndToEndTest
         return ((shifted >> 8) * 0xC0) + (shifted & 0xFF);
     }
 
-    /// <summary>Builds a real version 1-L symbol carrying one Kanji segment of one cell.</summary>
-    private static byte[] BuildSymbol(int sjis)
+    /// <summary>Builds a real level L symbol carrying one Kanji segment of one cell, version 1 unless another is given.</summary>
+    internal static byte[] BuildSymbol(int sjis, int version = Version)
     {
-        var eccInfo = QRCodeConstants.GetEccInfo(Version, QREccLevel.L);
+        var eccInfo = QRCodeConstants.GetEccInfo(version, QREccLevel.L);
+        var size = 17 + 4 * version;
 
         var data = new byte[eccInfo.TotalDataCodewords];
         var writer = new BitWriter(data);
         writer.Write(0b1000, 4);              // Kanji mode indicator
-        writer.Write(1, 8);                   // version 1 Kanji count indicator is 8 bits
+        writer.Write(1, version <= 9 ? 8 : version <= 26 ? 10 : 12); // Kanji count indicator width
         writer.Write(Kanji(sjis), 13);
         writer.Write(0b0000, 4);              // terminator
         writer.Flush();
         for (var i = writer.GetData().Length; i < data.Length; i++)
             data[i] = (i & 1) == 0 ? (byte)0xEC : (byte)0x11; // ISO/IEC 18004 pad codewords
 
-        var ecc = new byte[eccInfo.ECCPerBlock];
-        EccBinaryEncoder.CalculateECC(data, ecc, eccInfo.ECCPerBlock);
+        var blocks = eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2;
+        var ecc = new byte[blocks * eccInfo.ECCPerBlock];
+        for (int b = 0, d = 0; b < blocks; b++)
+        {
+            var length = b < eccInfo.BlocksInGroup1 ? eccInfo.CodewordsInGroup1 : eccInfo.CodewordsInGroup2;
+            EccBinaryEncoder.CalculateECC(data.AsSpan(d, length), ecc.AsSpan(b * eccInfo.ECCPerBlock, eccInfo.ECCPerBlock), eccInfo.ECCPerBlock);
+            d += length;
+        }
+        var codewords = new byte[BinaryInterleaver.CalculateInterleavedSize(eccInfo, QRCodeConstants.GetRemainderBits(version))];
+        BinaryInterleaver.InterleaveCodewords(data, ecc, codewords, eccInfo);
 
-        // Version 1 has a single block, so interleaving is concatenation.
-        var codewords = new byte[data.Length + ecc.Length];
-        data.CopyTo(codewords, 0);
-        ecc.CopyTo(codewords, data.Length);
-
-        var layout = ModulePlacer.GetLayout(Version);
-        var modules = new byte[Size * Size];
+        var layout = ModulePlacer.GetLayout(version);
+        var modules = new byte[size * size];
         layout.Template.AsSpan().CopyTo(modules);
         ModulePlacer.PlaceDataWords(modules, layout, codewords);
-        var mask = ModulePlacer.MaskCode(modules, Size, Version, layout.BlockedMask, QREccLevel.L);
-        ModulePlacer.PlaceFormat(modules, Size, QRCodeConstants.GetFormatBits(QREccLevel.L, mask));
+        var mask = ModulePlacer.MaskCode(modules, size, version, layout.BlockedMask, QREccLevel.L);
+        ModulePlacer.PlaceFormat(modules, size, QRCodeConstants.GetFormatBits(QREccLevel.L, mask));
+        if (version >= 7)
+            ModulePlacer.PlaceVersion(modules, size, QRCodeConstants.GetVersionBits(version));
 
         return modules;
     }
@@ -106,10 +112,10 @@ public class KanjiUnmappedCharacterEndToEndTest
 
     /// <summary>
     /// The image path reports it too. This is the path a caller scanning a photographed
-    /// or rendered Japanese symbol actually takes, and it retries (inverted, mirrored,
-    /// neighbouring dimensions) on any non-terminal status — so a status that is correct
-    /// at the matrix level can still be lost to a retry's verdict before the caller
-    /// sees it.
+    /// or rendered Japanese symbol actually takes, and it retries inverted on any failure and
+    /// mirrored or at neighbouring dimensions on a failure short of the content, so a status
+    /// that is correct at the matrix level could be lost to a retry's verdict before the
+    /// caller sees it.
     /// </summary>
     [Test]
     public async Task UnmappedCell_ReachesTheCallerThroughTheImagePath()
@@ -131,6 +137,31 @@ public class KanjiUnmappedCharacterEndToEndTest
         }
 
         var ok = QRCodeDecoder.TryDecodeImage(luminance, side, side, out _, out var info);
+
+        await Assert.That(ok).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
+    }
+
+    /// <summary>
+    /// A verdict read by a later attempt reaches the caller.
+    /// Reversed reflectance is read by the inverted retry, uneven light only by the regional pass after both polarities.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task UnmappedCell_ReadOnlyByALaterAttempt_ReachesTheCaller(bool unevenLight)
+    {
+        const int Quiet = 4;
+        var modules = BuildSymbol(0x8740);
+        Func<int, int, bool> isDark = (row, column) => row >= Quiet && column >= Quiet && row < Quiet + Size && column < Quiet + Size && modules[(row - Quiet) * Size + column - Quiet] != 0;
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, Size + 2 * Quiet, Size + 2 * Quiet, 4, UnevenLight.Shadow, 0f, unevenLight ? 0.55f : 0f);
+        if (!unevenLight)
+        {
+            for (var i = 0; i < luminance.Length; i++)
+                luminance[i] = (byte)(255 - luminance[i]);
+        }
+
+        var ok = QRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out var info);
 
         await Assert.That(ok).IsFalse();
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);

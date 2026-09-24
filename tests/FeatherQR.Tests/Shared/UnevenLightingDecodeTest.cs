@@ -1,12 +1,13 @@
 using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
+using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// A symbol lit unevenly has no single threshold between its modules: at the dim side a light module is darker than the global threshold, so the finders there read as solid and nothing is detected.
-/// The decoders binarize again against each region's own level when the global threshold reads nothing.
+/// A symbol lit unevenly has no single threshold between its modules; the decoders binarize again against each region's level when the global threshold reads nothing.
 /// </summary>
 public class UnevenLightingDecodeTest
 {
@@ -22,25 +23,48 @@ public class UnevenLightingDecodeTest
         }
     }
 
-    /// <summary>
-    /// The case is only one of this class if the global threshold reads part of the paper as ink; otherwise a decode proves nothing about the regional pass.
-    /// </summary>
-    private static async Task AssertGlobalThresholdSplitsThePaper(Func<int, int, bool> isDark, int columns, byte[] luminance, int width)
+    public enum Symbology { StandardQR, MicroQR, RmQR }
+
+    /// <summary>The lighting of <see cref="Lighting"/> a global threshold still reads, per symbology; every other case needs the regional pass.</summary>
+    private static readonly Dictionary<Symbology, (UnevenLight, float)[]> ReadByGlobalThreshold = new()
     {
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out _);
-        var paperAsInk = 0;
-        var paper = 0;
-        for (var i = 0; i < luminance.Length; i++)
+        [Symbology.StandardQR] = [(UnevenLight.Ramp, 45f)],
+        [Symbology.MicroQR] = [(UnevenLight.Ramp, 45f), (UnevenLight.Ramp, 135f), (UnevenLight.Ramp, 315f)],
+        [Symbology.RmQR] = [(UnevenLight.Ramp, 0f), (UnevenLight.Ramp, 45f), (UnevenLight.Ramp, 135f), (UnevenLight.Ramp, 315f)],
+    };
+
+    /// <summary>
+    /// Asserts which pass reads the case: a decode by the global threshold proves nothing about the regional pass.
+    /// </summary>
+    private static async Task AssertWhichPassReads(Symbology symbology, UnevenLight light, float degrees, byte[] luminance, int width, int height)
+    {
+        var global = ReadByGlobalThreshold[symbology].Contains((light, degrees));
+        await Assert.That(GlobalAttemptsRead(symbology, luminance, width, height)).IsEqualTo(global).Because(global ? "listed as read by the global threshold" : "needs the regional pass");
+    }
+
+    /// <summary>Whether either global polarity reads the image, sweep included: the attempts made before the regional pass.</summary>
+    private static bool GlobalAttemptsRead(Symbology symbology, byte[] luminance, int width, int height)
+    {
+        var histogram = new int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var negative = new byte[luminance.Length];
+        LuminanceInverter.Invert(luminance, negative);
+        var negativeHistogram = histogram.ToArray();
+        Binarizer.InvertHistogram(negativeHistogram);
+        var destination = new char[64];
+
+        foreach (var (image, bins) in new[] { (luminance, histogram), (negative, negativeHistogram) })
         {
-            var x = i % width;
-            var y = i / width;
-            if (isDark(y / PixelsPerModule, x / PixelsPerModule))
-                continue;
-            paper++;
-            if (luminance[i] < threshold)
-                paperAsInk++;
+            var status = symbology switch
+            {
+                Symbology.StandardQR => QRImageDecoder.DecodeLuminanceCore(image, bins, width, height, destination, out _, out _),
+                Symbology.MicroQR => MicroQRImageDecoder.DecodeLuminanceCore(image, bins, width, height, destination, out _, out _),
+                _ => RmQRImageDecoder.DecodeLuminanceCore(image, bins, width, height, destination, out _, out _),
+            };
+            if (status == DecodeStatus.Success)
+                return true;
         }
-        await Assert.That(paperAsInk * 10).IsGreaterThan(paper).Because($"threshold {threshold} reads {paperAsInk} of {paper} paper pixels as ink; the case needs a tenth");
+        return false;
     }
 
     [Test]
@@ -51,7 +75,7 @@ public class UnevenLightingDecodeTest
         Func<int, int, bool> isDark = (row, column) => qr[row, column];
         var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Size, qr.Size, PixelsPerModule, light, degrees, depth);
 
-        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Size, luminance, width);
+        await AssertWhichPassReads(Symbology.StandardQR, light, degrees, luminance, width, height);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -68,7 +92,7 @@ public class UnevenLightingDecodeTest
         Func<int, int, bool> isDark = (row, column) => qr[row, column];
         var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Size, qr.Size, PixelsPerModule, light, degrees, depth);
 
-        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Size, luminance, width);
+        await AssertWhichPassReads(Symbology.MicroQR, light, degrees, luminance, width, height);
 
         var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -85,7 +109,7 @@ public class UnevenLightingDecodeTest
         Func<int, int, bool> isDark = (row, column) => qr[row, column];
         var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Width, qr.Height, PixelsPerModule, light, degrees, depth);
 
-        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Width, luminance, width);
+        await AssertWhichPassReads(Symbology.RmQR, light, degrees, luminance, width, height);
 
         var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -104,8 +128,8 @@ public class UnevenLightingDecodeTest
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
         Func<int, int, bool> isDark = (row, column) => qr[row, column];
         var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Size, qr.Size, PixelsPerModule, light, degrees, depth);
-        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Size, luminance, width);
         Negate(luminance);
+        await AssertWhichPassReads(Symbology.StandardQR, light, degrees, luminance, width, height);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -121,8 +145,8 @@ public class UnevenLightingDecodeTest
         var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
         Func<int, int, bool> isDark = (row, column) => qr[row, column];
         var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Size, qr.Size, PixelsPerModule, light, degrees, depth);
-        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Size, luminance, width);
         Negate(luminance);
+        await AssertWhichPassReads(Symbology.MicroQR, light, degrees, luminance, width, height);
 
         var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -138,8 +162,8 @@ public class UnevenLightingDecodeTest
         var qr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
         Func<int, int, bool> isDark = (row, column) => qr[row, column];
         var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Width, qr.Height, PixelsPerModule, light, degrees, depth);
-        await AssertGlobalThresholdSplitsThePaper(isDark, qr.Width, luminance, width);
         Negate(luminance);
+        await AssertWhichPassReads(Symbology.RmQR, light, degrees, luminance, width, height);
 
         var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -149,12 +173,12 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>
-    /// Renders whose finder band falls between the rows a strided scan visits, at 2 px/module: the regional attempt reads them only through the strideless sweep, which it has like the global attempts.
+    /// Renders whose finder falls between the rows a strided scan visits: the regional attempt reads them only through its full sweep.
     /// </summary>
     public static IEnumerable<(bool, float, float, float, bool, UnevenLight, float, float)> BetweenScannedRows()
     {
         // (Micro QR, turn, offset x, offset y, anti-aliased, light, light direction, depth)
-        // Chosen to keep needing the sweep, and reading with it, under a nudge of up to 0.5° of turn, 0.1 px of either offset or 0.03 of depth: a case at a knife edge stops guarding the sweep on the next unrelated change
+        // Chosen to hold under small nudges of turn, offset and depth, so the case keeps needing the sweep
         yield return (true, 31f, 0.25f, 2.5f, false, UnevenLight.Ramp, 0f, 0.8f);
         yield return (true, 61f, 0.5f, 3f, false, UnevenLight.Ramp, 90f, 0.8f);
         yield return (true, 57f, 0.25f, 2.5f, true, UnevenLight.Ramp, 90f, 0.8f);
@@ -196,26 +220,10 @@ public class UnevenLightingDecodeTest
     /// The case is only one of this group if neither global polarity reads it, sweep included; otherwise the regional attempt is never reached.
     /// </summary>
     private static async Task AssertGlobalAttemptsFail(bool microQr, byte[] luminance, int width, int height)
-    {
-        var histogram = new int[Binarizer.HistogramBins];
-        Binarizer.FillHistogram(luminance, histogram);
-        var negative = new byte[luminance.Length];
-        LuminanceInverter.Invert(luminance, negative);
-        var negativeHistogram = histogram.ToArray();
-        Binarizer.InvertHistogram(negativeHistogram);
-        var destination = new char[64];
-
-        foreach (var (image, bins) in new[] { (luminance, histogram), (negative, negativeHistogram) })
-        {
-            var status = microQr
-                ? MicroQRImageDecoder.DecodeLuminanceCore(image, bins, width, height, destination, out _, out _)
-                : RmQRImageDecoder.DecodeLuminanceCore(image, bins, width, height, destination, out _, out _);
-            await Assert.That(status).IsNotEqualTo(DecodeStatus.Success);
-        }
-    }
+        => await Assert.That(GlobalAttemptsRead(microQr ? Symbology.MicroQR : Symbology.RmQR, luminance, width, height)).IsFalse();
 
     /// <summary>
-    /// The case is only one of this group if, on the regional binarization, the strided scan finds no finder and the sweep does; otherwise a decode proves nothing about the sweep.
+    /// The group's premise: on the regional binarization the strided scan finds no finder and the sweep does.
     /// </summary>
     private static async Task AssertOnlyTheSweepFindsTheFinder(byte[] luminance, int width, int height)
     {
@@ -233,6 +241,298 @@ public class UnevenLightingDecodeTest
     {
         for (var i = 0; i < luminance.Length; i++)
             luminance[i] = (byte)(255 - luminance[i]);
+    }
+
+    /// <summary>
+    /// Another symbology's image binarized regionally passes an M1 check on some grids; that is not a read.
+    /// </summary>
+    [Test]
+    [Arguments("2553", RmQREccLevel.M, 270f)]
+    [Arguments("NZN0", RmQREccLevel.H, 180f)]
+    [Arguments("1W0H", RmQREccLevel.M, 270f)]
+    [Arguments("sknh", RmQREccLevel.H, 90f)]
+    public async Task MicroQR_UnevenLightRmQRImage_NoFalseRead(string payload, RmQREccLevel level, float lightDegrees)
+    {
+        var rmqr = RmQRCodeGenerator.Create(payload, level);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => rmqr[row, column], rmqr.Width, rmqr.Height, 2.2f, 13f, 0f, 0f, true, UnevenLight.Shadow, lightDegrees, 0.35f);
+        Negate(luminance);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsFalse().Because($"read \"{text}\" as {info.Version}");
+    }
+
+    /// <summary>
+    /// Another symbology's texture can correct to a read at M3-M's limit; the regional pass refuses M3-M and M4-M reads at their limit.
+    /// </summary>
+    public static IEnumerable<(bool RmQR, string Payload, QREccLevel Level, float PixelsPerModule, float Turn, float OffsetX, float OffsetY, UnevenLight Light, float LightDegrees, float Depth)> ForeignImagesAtTheCorrectionLimit()
+    {
+        yield return (false, "tddutrZIg", QREccLevel.L, 3f, 171.35826f, 0.69572777f, 0.75405896f, UnevenLight.Ramp, 270f, 0.42188275f);
+        yield return (false, "aLQ0lryjgEo1p7rRwXssrRGpx8d", QREccLevel.M, 2.5f, 54.391262f, 0.27924117f, 0.36606738f, UnevenLight.Ramp, 90f, 0.4495769f);
+        yield return (false, "hD567gtHuB8XxZakOc4mHwAo", QREccLevel.L, 3f, 282.45126f, 0.56217444f, 0.03247166f, UnevenLight.Shadow, 270f, 0.406949f);
+        yield return (true, "8Q3eYUVAd4", default, 2.5f, 90f, 0.10880279f, 0.78370607f, UnevenLight.Shadow, 0f, 0.43216985f);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(ForeignImagesAtTheCorrectionLimit))]
+    public async Task MicroQR_UnevenLightForeignImage_NoReadAtTheCorrectionLimit(bool rmqr, string payload, QREccLevel level, float pixelsPerModule, float turn, float offsetX, float offsetY, UnevenLight light, float lightDegrees, float depth)
+    {
+        (byte[] Luminance, int Width, int Height) image;
+        if (rmqr)
+        {
+            var symbol = RmQRCodeGenerator.Create(payload, RmQREccLevel.H);
+            image = UnevenLightingRenderer.Render((row, column) => symbol[row, column], symbol.Width, symbol.Height, pixelsPerModule, turn, offsetX, offsetY, true, light, lightDegrees, depth);
+        }
+        else
+        {
+            var symbol = QRCodeGenerator.Create(payload, level);
+            image = UnevenLightingRenderer.Render((row, column) => symbol[row, column], symbol.Size, symbol.Size, pixelsPerModule, turn, offsetX, offsetY, true, light, lightDegrees, depth);
+        }
+
+        await Assert.That(RegionalReadsWithoutRefusal(image.Luminance, image.Width, image.Height).Any(read => read.Status == DecodeStatus.Success && read.ErrorsCorrected == MicroQRConstants.GetErrorCorrectionCapacity(read.Version, read.EccLevel))).IsTrue();
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(image.Luminance, image.Width, image.Height, out var text, out var info);
+
+        await Assert.That(success).IsFalse().Because($"read \"{text}\" as {info.Version}-{info.EccLevel} with {info.ErrorsCorrected} corrected");
+    }
+
+    /// <summary>
+    /// A verdict from another symbology's texture at M3-M's or M4-M's correction limit is refused like a read.
+    /// </summary>
+    public static IEnumerable<(bool RmQR, string Payload, float PixelsPerModule, float Turn, float OffsetX, float OffsetY, UnevenLight Light, float LightDegrees, float Depth)> ForeignVerdictsAtTheCorrectionLimit()
+    {
+        yield return (false, "qrf2BRFy", 2.2f, 180f, 0.87237096f, 0.5018127f, UnevenLight.Ramp, 0f, 0.30661732f);
+        yield return (true, "DC3XnKYuLsSY", 2.4056265f, 3.60112f, -0.45129496f, 0.29853797f, UnevenLight.Shadow, 315f, 0.37471867f);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(ForeignVerdictsAtTheCorrectionLimit))]
+    public async Task MicroQR_UnevenLightForeignImage_NoVerdictAtTheCorrectionLimit(bool rmqr, string payload, float pixelsPerModule, float turn, float offsetX, float offsetY, UnevenLight light, float lightDegrees, float depth)
+    {
+        (byte[] Luminance, int Width, int Height) image;
+        if (rmqr)
+        {
+            var symbol = RmQRCodeGenerator.Create(payload, RmQREccLevel.H);
+            image = UnevenLightingRenderer.Render((row, column) => symbol[row, column], symbol.Width, symbol.Height, pixelsPerModule, turn, offsetX, offsetY, true, light, lightDegrees, depth);
+        }
+        else
+        {
+            var symbol = QRCodeGenerator.Create(payload, QREccLevel.H);
+            image = UnevenLightingRenderer.Render((row, column) => symbol[row, column], symbol.Size, symbol.Size, pixelsPerModule, turn, offsetX, offsetY, true, light, lightDegrees, depth);
+        }
+        Negate(image.Luminance);
+        await Assert.That(RegionalReadsWithoutRefusal(image.Luminance, image.Width, image.Height).Any(read => read.Status == DecodeStatus.UnmappedCharacter && read.ErrorsCorrected == MicroQRConstants.GetErrorCorrectionCapacity(read.Version, read.EccLevel))).IsTrue();
+
+        MicroQRCodeDecoder.TryDecodeImage(image.Luminance, image.Width, image.Height, out _, out var info);
+
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.UnmappedCharacter).Because($"{info.Version}-{info.EccLevel} with {info.ErrorsCorrected} corrected");
+    }
+
+    /// <summary>What the Micro QR regional pass reads with its refusals off, one decode a polarity: a refusal test's premise.</summary>
+    private static List<MicroQRCodeDecodeInfo> RegionalReadsWithoutRefusal(byte[] luminance, int width, int height)
+    {
+        var histogram = new int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var positiveThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out _);
+        Binarizer.InvertHistogram(histogram);
+        var negativeThreshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out _);
+        var reads = new List<MicroQRCodeDecodeInfo>();
+        foreach (var (negative, threshold) in new[] { (false, positiveThreshold), (true, negativeThreshold) })
+        {
+            var binarized = new byte[luminance.Length];
+            if (!LocalBinarizer.TryBinarize(luminance, width, height, negative, threshold, binarized, new int[LocalBinarizer.ScratchLength(width, height)], out var darkCount))
+                continue;
+            var bins = new int[Binarizer.HistogramBins];
+            bins[LocalBinarizer.Dark] = darkCount;
+            bins[LocalBinarizer.Light] = binarized.Length - darkCount;
+            MicroQRImageDecoder.DecodeLuminanceCore(binarized, bins, width, height, new char[64], out _, out var info, refuseWeakReads: false);
+            reads.Add(info);
+        }
+        return reads;
+    }
+
+    /// <summary>
+    /// The refusals' edges: reads at the M2-L, M3-L and M4-L limits, one short of the M3 and M4 limits, and a one-character read that needed correction are kept; a short destination reports a short destination.
+    /// </summary>
+    [Test]
+    [Arguments("12345678", MicroQREccLevel.L, MicroQRVersion.M2, new[] { 12, 12 })]
+    [Arguments(Content, MicroQREccLevel.L, MicroQRVersion.M3, new[] { 14, 14 })]
+    [Arguments(Content, MicroQREccLevel.L, MicroQRVersion.M4, new[] { 16, 16, 16, 14 })]
+    [Arguments(Content, MicroQREccLevel.L, MicroQRVersion.M4, new[] { 16, 16, 16, 14, 16, 12 })]
+    [Arguments("3", MicroQREccLevel.L, MicroQRVersion.M3, new[] { 14, 14 })]
+    [Arguments("12345", MicroQREccLevel.L, MicroQRVersion.M3, new[] { 14, 14, 14, 12 })]
+    public async Task MicroQR_DamagedUnevenLight_ReadByTheRegionalPass(string payload, MicroQREccLevel level, MicroQRVersion version, int[] flippedModules)
+    {
+        var qr = MicroQRCodeGenerator.Create(payload, level, new MicroQRCodeGeneratorOptions { Version = version });
+        // Flipped data modules, (row, column) pairs in symbol coordinates: each one error to correct
+        var flipped = new HashSet<(int, int)>();
+        for (var i = 0; i < flippedModules.Length; i += 2)
+            flipped.Add((flippedModules[i], flippedModules[i + 1]));
+        Func<int, int, bool> isDark = (row, column) => flipped.Contains((row - 2, column - 2)) ? !qr[row, column] : qr[row, column];
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, qr.Size, qr.Size, PixelsPerModule, UnevenLight.Shadow, 0f, 0.55f);
+        var limit = MicroQRConstants.GetErrorCorrectionCapacity(version, level);
+        await Assert.That(flipped.Count).IsLessThanOrEqualTo(limit);
+        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+        MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[payload.Length - 1], out _, out var shortInfo);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo(payload);
+        await Assert.That(info.ErrorsCorrected).IsEqualTo(flipped.Count);
+        await Assert.That(shortInfo.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+    }
+
+    /// <summary>An empty read that needed correction is refused, but the candidate's search goes on: a later grid on the same symbol reads it without correction.</summary>
+    [Test]
+    public async Task MicroQR_EmptySymbolTurnedUnevenLight_ReadByALaterGrid()
+    {
+        var qr = MicroQRCodeGenerator.Create("", MicroQREccLevel.M);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 2.5f, 220.17834f, -0.16711113f, 2.105269f, false, UnevenLight.Shadow, 90f, 0.39125693f);
+        await Assert.That(qr.Version).IsEqualTo(MicroQRVersion.M3);
+        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo("");
+        await Assert.That(info.Version).IsEqualTo(MicroQRVersion.M3);
+    }
+
+    /// <summary>Another symbology's texture correcting to an empty read is not a read.</summary>
+    [Test]
+    [Arguments(0.375f)]
+    [Arguments(0.385f)]
+    public async Task MicroQR_UnevenLightRmQRImage_NoEmptyRead(float depth)
+    {
+        var rmqr = RmQRCodeGenerator.Create("GJFLIBPZDCB0B", RmQREccLevel.M);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => rmqr[row, column], rmqr.Width, rmqr.Height, 2.5f, 338f, 0.5041975f, 0.74804866f, true, UnevenLight.Shadow, 270f, depth);
+        Negate(luminance);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsFalse().Because($"read \"{text}\" as {info.Version}");
+    }
+
+    /// <summary>A real symbol holding no text is read by the regional pass.</summary>
+    [Test]
+    [Arguments(0f)]
+    [Arguments(90f)]
+    public async Task MicroQR_EmptySymbolUnevenLight_ReadByTheRegionalPass(float degrees)
+    {
+        var qr = MicroQRCodeGenerator.Create("", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3 });
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, PixelsPerModule, UnevenLight.Shadow, degrees, 0.55f);
+        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo("");
+        await Assert.That(info.Version).IsEqualTo(MicroQRVersion.M3);
+    }
+
+    /// <summary>The regional pass reads an M2 symbol the global threshold cannot: only M1, which detects errors without correcting them, is refused.</summary>
+    [Test]
+    public async Task MicroQR_M2UnevenLight_ReadByTheRegionalPass()
+    {
+        var qr = MicroQRCodeGenerator.Create("12345678", MicroQREccLevel.L);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, PixelsPerModule, UnevenLight.Shadow, 0f, 0.55f);
+        await Assert.That(qr.Version).IsEqualTo(MicroQRVersion.M2);
+        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out _);
+
+        await Assert.That(success).IsTrue();
+        await Assert.That(text).IsEqualTo("12345678");
+    }
+
+    /// <summary>
+    /// An M1 symbol only the regional pass could read is not read, in either polarity or destination length, and reports no characters.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task MicroQR_M1UnevenLight_NotReadByTheRegionalPass(bool reflectanceReversed)
+    {
+        var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, PixelsPerModule, UnevenLight.Shadow, 0f, 0.55f);
+        if (reflectanceReversed)
+            Negate(luminance);
+        await Assert.That(qr.Version).IsEqualTo(MicroQRVersion.M1);
+        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[32], out var charsWritten, out var info);
+        MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out var shortCharsWritten, out var shortInfo);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
+        await Assert.That(charsWritten).IsEqualTo(0);
+        await Assert.That(shortInfo.Status).IsEqualTo(DecodeStatus.NotDetected);
+        await Assert.That(shortCharsWritten).IsEqualTo(0);
+    }
+
+    /// <summary>The refusal holds on the grids read from module boundaries too, which is how a crisp symbol under 1.5 px/module is read.</summary>
+    [Test]
+    [Arguments(1f, 180f, 0.3f)]
+    [Arguments(1.25f, 270f, 0.4f)]
+    public async Task MicroQR_M1UnevenLightLowDensity_NotReadByTheRegionalPass(float pixelsPerModule, float degrees, float depth)
+    {
+        var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
+        // In the corner of a wider light grid, so the image is at least 33 px a side
+        const int GridSize = 28;
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => row < qr.Size && column < qr.Size && qr[row, column], GridSize, GridSize, pixelsPerModule, 0f, 0f, 0f, false, UnevenLight.Shadow, degrees, depth);
+        await Assert.That(qr.Version).IsEqualTo(MicroQRVersion.M1);
+        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+
+        MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out var info);
+
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
+    }
+
+    /// <summary>A verdict the global threshold reaches at level M's correction limit does not skip the regional pass, which reads the symbol.</summary>
+    [Test]
+    [Arguments(MicroQRVersion.M4, 4.739f, 244.99f, -0.196f, 1.381f)]
+    [Arguments(MicroQRVersion.M3, 5.076f, 241.05f, 0.262f, 3.218f)]
+    public async Task MicroQR_GlobalVerdictAtTheCorrectionLimit_RegionalPassReads(MicroQRVersion version, float pixelsPerModule, float turn, float offsetX, float offsetY)
+    {
+        var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = version });
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Size - 4, qr.Size - 4, pixelsPerModule, turn, offsetX, offsetY, true, UnevenLight.Shadow, 270f, 0.4f);
+        var histogram = new int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        var globalStatus = MicroQRImageDecoder.DecodeLuminanceCore(luminance, histogram, width, height, new char[64], out _, out var globalInfo);
+        await Assert.That(globalStatus).IsEqualTo(DecodeStatus.UnmappedCharacter);
+        await Assert.That(globalInfo.ErrorsCorrected).IsEqualTo(MicroQRConstants.GetErrorCorrectionCapacity(globalInfo.Version, globalInfo.EccLevel));
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo("12345");
+    }
+
+    /// <summary>An M1 symbol the regional pass refuses does not end the pass: a larger symbol beside it, which only that pass reads, is still read.</summary>
+    [Test]
+    public async Task MicroQR_M1BesideM3UnevenLight_RegionalPassReadsTheM3()
+    {
+        var m1 = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
+        var m3 = MicroQRCodeGenerator.Create("FQR 2.0", MicroQREccLevel.L);
+        // Drawn larger, the M1's finder collects more row hits, so the scan tries it first
+        const int M1Scale = 6;
+        const int M3Scale = 4;
+        var m1Width = m1.Size * M1Scale;
+        var m3Width = m3.Size * M3Scale;
+        Func<int, int, bool> isDark = (row, column) => column < m1Width
+            ? row < m1Width && m1[row / M1Scale, column / M1Scale]
+            : row < m3Width && m3[row / M3Scale, (column - m1Width) / M3Scale];
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, m1Width + m3Width, Math.Max(m1Width, m3Width), 1, UnevenLight.Shadow, 270f, 0.55f);
+        await Assert.That(m1.Version).IsEqualTo(MicroQRVersion.M1);
+        await Assert.That(m3.Version).IsEqualTo(MicroQRVersion.M3);
+        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue();
+        await Assert.That(info.Version).IsEqualTo(MicroQRVersion.M3);
+        await Assert.That(text).IsEqualTo("FQR 2.0");
     }
 
     /// <summary>A symbol under the same light whose data is past correction does not decode, and gives no text.</summary>
@@ -253,7 +553,7 @@ public class UnevenLightingDecodeTest
         await Assert.That(text).IsEmpty();
     }
 
-    /// <summary>An image with no symbol and a lighting ramp in it reads as nothing: the regional pass turns the ramp into paper and the noise into specks, neither a finder.</summary>
+    /// <summary>An image with no symbol under a lighting ramp reads as nothing.</summary>
     [Test]
     public async Task AllSymbologies_UnevenLightNoSymbol_NotDetected()
     {
@@ -274,7 +574,7 @@ public class UnevenLightingDecodeTest
         await Assert.That(rmqr.Status).IsEqualTo(DecodeStatus.NotDetected);
     }
 
-    /// <summary>A symbol read by the regional pass into a destination too short reports that, as the first two attempts do, rather than falling through to their failure.</summary>
+    /// <summary>A symbol read by the regional pass into a short destination reports a short destination.</summary>
     [Test]
     public async Task StandardQR_UnevenLight_ShortDestination_ReportsDestinationTooSmall()
     {
@@ -315,7 +615,7 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>
-    /// On images of only 0 and 255 the regional binarization puts every pixel where the global threshold did (every regional threshold lies in [0, 251]), which is why the decoders skip such images without binarizing them.
+    /// On images of only 0 and 255 the regional binarization changes no pixel's class.
     /// </summary>
     [Test]
     [Arguments("noise 1 px", 1)]
@@ -368,5 +668,230 @@ public class UnevenLightingDecodeTest
         var differs = LocalBinarizer.TryBinarize(luminance, width, height, negative: false, threshold, new byte[luminance.Length], new int[LocalBinarizer.ScratchLength(width, height)], out _);
 
         await Assert.That(differs).IsTrue();
+    }
+
+    /// <summary>
+    /// A 40 % shadow on a crisp render of the grid and its quiet zone, 2 to 16 px/module, whichever pass reads it.
+    /// Standard QR is version 1 at level H, among the first to fail.
+    /// </summary>
+    public static IEnumerable<(Symbology, int, float)> ShadowUpToFortyPercent()
+    {
+        foreach (var symbology in new[] { Symbology.StandardQR, Symbology.MicroQR, Symbology.RmQR })
+        {
+            foreach (var pixelsPerModule in new[] { 2, 3, 4, 6, 8, 12, 16 })
+            {
+                foreach (var degrees in new[] { 0f, 45f, 90f, 135f, 180f, 225f, 270f, 315f })
+                    yield return (symbology, pixelsPerModule, degrees);
+            }
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(ShadowUpToFortyPercent))]
+    public async Task UnevenLight_ShadowUpToFortyPercent_Decodes(Symbology symbology, int pixelsPerModule, float degrees)
+    {
+        var (luminance, width, height) = RenderShadow(symbology, pixelsPerModule, degrees, 0.4f, standardQRVersion: 1, standardQREccLevel: QREccLevel.H);
+
+        var (status, text) = Decode(symbology, luminance, width, height);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo(Content);
+    }
+
+    /// <summary>
+    /// The same shadow on anti-aliased edges at 3.5 px/module, turned or not.
+    /// </summary>
+    public static IEnumerable<(Symbology, float, float)> AntiAliasedShadowUpToFortyPercent()
+    {
+        foreach (var symbology in new[] { Symbology.StandardQR, Symbology.MicroQR, Symbology.RmQR })
+        {
+            foreach (var turn in new[] { 0f, 13f, 45f })
+            {
+                foreach (var degrees in new[] { 0f, 45f, 90f, 135f, 180f, 225f, 270f, 315f })
+                    yield return (symbology, turn, degrees);
+            }
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(AntiAliasedShadowUpToFortyPercent))]
+    public async Task UnevenLight_AntiAliasedShadowUpToFortyPercent_Decodes(Symbology symbology, float turn, float degrees)
+    {
+        const float Scale = 3.5f;
+        const float OffsetX = 0.3f;
+        const float OffsetY = 0.7f;
+        // The renderer adds a two-module margin, so each symbol is drawn without its own quiet zone
+        string expected;
+        (byte[] Luminance, int Width, int Height) image;
+        switch (symbology)
+        {
+            case Symbology.StandardQR:
+            {
+                var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 5, QuietZoneSize = 0 });
+                expected = Content;
+                image = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
+                break;
+            }
+            case Symbology.MicroQR:
+            {
+                var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+                expected = Content;
+                image = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Size - 4, qr.Size - 4, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
+                break;
+            }
+            default:
+            {
+                var qr = RmQRCodeGenerator.Create("12345", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
+                expected = "12345";
+                image = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Width - 4, qr.Height - 4, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
+                break;
+            }
+        }
+
+        var (status, text) = Decode(symbology, image.Luminance, image.Width, image.Height);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo(expected);
+    }
+
+    /// <summary>
+    /// Past half the light on modules aligned with the 8 × 8 blocks, the regional pass reads where the shadow falls away from the lit blocks above and to the left.
+    /// </summary>
+    [Test]
+    [Arguments(Symbology.StandardQR, 8, 180f)]
+    [Arguments(Symbology.StandardQR, 8, 270f)]
+    [Arguments(Symbology.MicroQR, 8, 180f)]
+    [Arguments(Symbology.RmQR, 8, 180f)]
+    public async Task UnevenLight_ShadowPastHalfOnBlockAlignedModules_RegionalPassDecodes(Symbology symbology, int pixelsPerModule, float degrees)
+    {
+        var (luminance, width, height) = RenderShadow(symbology, pixelsPerModule, degrees, 0.55f, standardQRVersion: 3, standardQREccLevel: QREccLevel.M);
+        await Assert.That(GlobalAttemptsRead(symbology, luminance, width, height)).IsFalse();
+
+        var (status, text) = Decode(symbology, luminance, width, height);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo(Content);
+    }
+
+    private static (byte[] Luminance, int Width, int Height) RenderShadow(Symbology symbology, int pixelsPerModule, float degrees, float depth, int standardQRVersion, QREccLevel standardQREccLevel)
+    {
+        switch (symbology)
+        {
+            case Symbology.StandardQR:
+            {
+                var qr = QRCodeGenerator.Create(Content, standardQREccLevel, new QRCodeGeneratorOptions { Version = standardQRVersion });
+                return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
+            }
+            case Symbology.MicroQR:
+            {
+                var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+                return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
+            }
+            default:
+            {
+                var qr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
+                return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Width, qr.Height, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
+            }
+        }
+    }
+
+    private static (DecodeStatus Status, string Text) Decode(Symbology symbology, byte[] luminance, int width, int height)
+    {
+        switch (symbology)
+        {
+            case Symbology.StandardQR:
+            {
+                QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                return (info.Status, text);
+            }
+            case Symbology.MicroQR:
+            {
+                MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                return (info.Status, text);
+            }
+            default:
+            {
+                RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                return (info.Status, text);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A failed decode writes no characters, even when the last attempt fails part-way through the bitstream.
+    /// </summary>
+    [Test]
+    [Arguments(UnevenLight.Shadow, 0f, 0.55f)]
+    [Arguments(UnevenLight.Ramp, 90f, 0.8f)]
+    public async Task StandardQR_UnevenLightBitstreamFailsPartWay_WritesNoCharacters(UnevenLight light, float degrees, float depth)
+    {
+        var modules = BuildBitstreamFailingAfterText();
+        const int quietZone = 4;
+        const int columns = 21 + 2 * quietZone;
+        // Mirrored: rows and columns swapped
+        Func<int, int, bool> isDark = (row, column) =>
+        {
+            var r = column - quietZone;
+            var c = row - quietZone;
+            return r >= 0 && c >= 0 && r < 21 && c < 21 && modules[r * 21 + c] != 0;
+        };
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, columns, columns, PixelsPerModule, light, degrees, depth);
+        Negate(luminance);
+        var destination = new char[64];
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, destination, out var written, out var info);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.Success);
+        await Assert.That(written).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// A destination too short for the second segment still reports no characters: the first segment was written before the second found no room.
+    /// </summary>
+    [Test]
+    [Arguments(0f)]
+    [Arguments(0.55f)]
+    public async Task StandardQR_DestinationShortOfTheSecondSegment_WritesNoCharacters(float depth)
+    {
+        var qr = QRCodeGenerator.Create(new string('1', 40) + "abc", QREccLevel.L, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, PixelsPerModule, UnevenLight.Shadow, 0f, depth);
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, new char[40], out var written, out var info);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+        await Assert.That(written).IsEqualTo(0);
+    }
+
+    /// <summary>A real version 1-L symbol carrying Byte "HELLO" and then an undefined mode indicator: its decode writes five characters before it fails.</summary>
+    private static byte[] BuildBitstreamFailingAfterText()
+    {
+        const int version = 1;
+        const int size = 21;
+        var eccInfo = QRCodeConstants.GetEccInfo(version, QREccLevel.L);
+        var data = new byte[eccInfo.TotalDataCodewords];
+        var writer = new BitWriter(data);
+        writer.Write(0b0100, 4);
+        writer.Write(5, 8);
+        foreach (var ch in "HELLO")
+            writer.Write(ch, 8);
+        writer.Write(0b0110, 4);
+        writer.Write(0, 4);
+        writer.Flush();
+        for (var i = writer.GetData().Length; i < data.Length; i++)
+            data[i] = (i & 1) == 0 ? (byte)0xEC : (byte)0x11;
+        var ecc = new byte[eccInfo.ECCPerBlock];
+        EccBinaryEncoder.CalculateECC(data, ecc, eccInfo.ECCPerBlock);
+        var codewords = new byte[data.Length + ecc.Length];
+        data.CopyTo(codewords, 0);
+        ecc.CopyTo(codewords, data.Length);
+        var layout = ModulePlacer.GetLayout(version);
+        var modules = new byte[size * size];
+        layout.Template.AsSpan().CopyTo(modules);
+        ModulePlacer.PlaceDataWords(modules, layout, codewords);
+        var mask = ModulePlacer.MaskCode(modules, size, version, layout.BlockedMask, QREccLevel.L);
+        ModulePlacer.PlaceFormat(modules, size, QRCodeConstants.GetFormatBits(QREccLevel.L, mask));
+        return modules;
     }
 }

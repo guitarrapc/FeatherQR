@@ -6,13 +6,10 @@ using System.Runtime.Intrinsics;
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// Regional binarization for images the global threshold cannot split: a symbol lit unevenly has light modules on its dim side darker than dark modules on its bright side, and one threshold then reads a whole side of it as one class.
-/// Shared by all three image decoders, which try it only after both polarities have failed on the global threshold, so an image the global threshold reads never pays for it.
+/// Regional binarization for a symbol lit unevenly: each pixel is read against its neighbourhood's level instead of one global threshold.
 /// </summary>
 /// <remarks>
-/// Each 8 × 8 block gets a black point from its own range, and each pixel is read against the mean of the black points of the 5 × 5 blocks around its block (the hybrid scheme of ZXing, which zxing-cpp also uses).
-/// A block flatter than <see cref="MinDynamicRange"/> holds no edge to measure, so it takes half its minimum (paper stays light), or the black point of its top and left neighbours when that is above its minimum (the inside of a large dark module stays dark).
-/// The last block row and column overlap the one before rather than run off the image, and are written after it.
+/// ZXing's hybrid scheme: an 8 × 8 block's black point is its mean, or for a flat block (range at most <see cref="MinDynamicRange"/>) half its minimum, raised to the 1:2:1 mean of its top, left and top-left neighbours when its minimum is below that mean (off the first block row and column); each pixel is read against the mean black point of the 5 × 5 blocks around its block.
 /// </remarks>
 internal static class LocalBinarizer
 {
@@ -51,7 +48,7 @@ internal static class LocalBinarizer
     /// <param name="scratch"><see cref="ScratchLength"/> ints.</param>
     /// <param name="darkCount">Pixels written <see cref="Dark"/>.</param>
     /// <returns>
-    /// <see langword="false"/> when the image is too small to have a neighbourhood, or when every pixel lands in the class the global threshold put it in: the decoder has read that image already.
+    /// <see langword="false"/> when the image is under five blocks a side, or no pixel leaves the class the global threshold put it in.
     /// </returns>
     internal static bool TryBinarize(ReadOnlySpan<byte> luminance, int width, int height, bool negative, byte globalThreshold, Span<byte> binarized, Span<int> scratch, out int darkCount)
         => TryBinarizeCore(luminance, width, height, negative ? (byte)0xFF : (byte)0, globalThreshold, binarized, scratch, vector: true, out darkCount);
@@ -166,7 +163,7 @@ internal static class LocalBinarizer
     /// <summary>A block's statistics until <see cref="ApplyFlatRule"/> reads them: range, minimum and mean in one int.</summary>
     private static int Pack(int min, int max, int sum) => (max - min) << 16 | min << 8 | sum / (BlockSize * BlockSize);
 
-    /// <summary>Turns a block row's packed statistics into black points; a flat block reads its top and left neighbours, which are final by then.</summary>
+    /// <summary>Turns a block row's packed statistics into black points; a flat block reads its top, left and top-left neighbours, which are final by then.</summary>
     private static void ApplyFlatRule(Span<int> blackPoints, int columns, int blockY)
     {
         for (var blockX = 0; blockX < columns; blockX++)

@@ -3,7 +3,7 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The regional binarization, scalar and vector, against a reference written here from the scheme itself: 8 × 8 blocks, a black point each from its mean or, when flat, from half its minimum or its top and left neighbours, and every pixel read against the mean of the 5 × 5 black points around its block.
+/// The regional binarization, scalar and vector, against a reference written here from ZXing's hybrid scheme.
 /// Widths and heights off a multiple of 8 put the last block column and row over the one before, which the vector form leaves to its scalar tail.
 /// The negative is read from the same pixels, each complemented as it is loaded, and has to equal the reference run on a negated copy.
 /// </summary>
@@ -12,7 +12,7 @@ public class LocalBinarizerParityTest
     public static IEnumerable<(int, int, string, byte, bool)> Cases()
     {
         (int, int)[] sizes = [(40, 40), (41, 43), (47, 40), (48, 56), (63, 65), (64, 64), (100, 37), (129, 131), (256, 200)];
-        string[] contents = ["noise", "blurred noise", "ramp", "symbol under a shadow", "two levels", "flat grey", "flat black", "flat white", "flat block edges"];
+        string[] contents = ["noise", "blurred noise", "ramp", "symbol under a shadow", "two levels", "flat grey", "flat black", "flat white", "flat block edges", "levels 24 apart", "levels 25 apart", "flat at its neighbours' level"];
         foreach (var (width, height) in sizes)
         {
             foreach (var content in contents)
@@ -83,6 +83,11 @@ public class LocalBinarizerParityTest
                     "flat grey" => 150,
                     "flat black" => 0,
                     "flat white" => 255,
+                    // Both sides of the flat bound: a block holding both levels has a range of exactly 24, or 25
+                    "levels 24 apart" => random.Next(2) == 0 ? (byte)100 : (byte)124,
+                    "levels 25 apart" => random.Next(2) == 0 ? (byte)100 : (byte)125,
+                    // A flat block whose minimum equals its neighbours' black point: checkered 0/200 blocks average 100 around a flat 100
+                    "flat at its neighbours' level" => (x / 8) % 3 == 2 && (y / 8) % 3 == 2 ? (byte)100 : ((x + y) & 1) == 0 ? (byte)0 : (byte)200,
                     // Blocks flat inside, each its own level, so the flat rule reads its neighbours
                     _ => (byte)(((x / 8 + y / 8) % 3) * 90 + 10),
                 };

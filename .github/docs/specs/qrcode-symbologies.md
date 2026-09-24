@@ -261,6 +261,26 @@ Two failure causes are kept apart on the error path: a structurally impossible b
 `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing
 arithmetic sits on the error path only, so the happy path stays a single indexed load.
 
+On the image path `UnmappedCharacter` and `UnsupportedContent` are verdicts on the symbol's content,
+reached only after its error correction, and one is reported when no attempt reads a symbol. The
+first attempt and the inverted retry run as they always have, so a readable symbol elsewhere in the
+image (a light-on-dark one beside it, say) is still read. A verdict from either skips the regional
+pass, which looks for a symbol the global threshold cannot see, so a second, unevenly lit symbol
+beside a symbol that gave a verdict is not looked for. Micro QR makes one exception: a verdict at
+M3-M's or M4-M's correction limit, where texture also lands, still tries the regional pass, and is
+reported only if that pass reads nothing. In the regional
+pass a verdict on the positive ends it before the negative. Inside an attempt a verdict counts like a read
+wherever Standard QR chooses between grids for one symbol (the timing frame or the finder grid, other
+dimensions, the mesh or the global grid, the finder-only grid, the mirrored grid), whichever grid
+reached it; Micro QR and rMQR rank a verdict above a correction failure on another grid for the same
+symbol and report a verdict their full finder sweep reaches. Their scans still try every remaining
+candidate after a verdict, and a verdict from the strided scan still runs the full sweep, which can
+find another symbol that reads. When every attempt fails short of the content, the first attempt's
+diagnostics are reported.
+`DataUncorrectable` and `InvalidBitstream` stay out of that rule: noise reaches the first, and
+through a miscorrection the second. A failed image decode reports no characters written, whatever an
+attempt left in the destination.
+
 Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode
 segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1.
 Structured Append is read and written since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md) and [standardqr-encoder.md](standardqr-encoder.md)).
@@ -281,7 +301,7 @@ that one-time build to the call that happened to trigger it.
 Shared primitives that already have both an x64 and an ARM64/Vector128 tier, and must be
 treated as controls rather than reimplemented when a new symbology or kernel arrives:
 `TextAnalyzer`, `EccBinaryEncoder`, `EccBinaryDecoder` (syndrome pass), `ModuleBitPacker`,
-`LuminanceConverter`, `LuminanceInverter`, finder/alignment row-mask construction, the histogram fill (`Binarizer`), the finder search's edge-list row kernel (`FinderPatternFinder.RowEdges`) and the Standard QR piecewise mesh sampler (`QRImageDecoder.SampleGridPiecewise`).
+`LuminanceConverter`, `LuminanceInverter`, `LocalBinarizer` (portable `Vector128` for its three passes), finder/alignment row-mask construction, the histogram fill (`Binarizer`), the finder search's edge-list row kernel (`FinderPatternFinder.RowEdges`) and the Standard QR piecewise mesh sampler (`QRImageDecoder.SampleGridPiecewise`).
 Architecture-neutral work already benefits every target: cached per-version layouts, pair
 stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
 finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
