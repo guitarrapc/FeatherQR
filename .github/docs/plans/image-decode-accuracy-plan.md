@@ -454,6 +454,17 @@ Tests: `MicroQRGridEvidenceTest` (27 a framework): the table against the exact s
 - 200,000 evenly lit renders at 1-2.5 px/module, anti-aliased or a bilinear upscale: M1 43,442 → 43,189 (−256, +3), M2-M4 126,432 → 126,417; misreads 38 → 17.
 - The sweep tool: Micro QR +24 (bilinear at 2-2.5 px/module) and −10 (five M1 images at 1.2-2.0 px/module, each from two encoders); the corpus identical image for image.
 
+**Against the other readers.** The two references in `.references/` that decode Micro QR, zxing-cpp (0.5.2, `TryHarder`) and CodeGlyphX (2.1.0, RGBA input), on the same images:
+
+| Set | This library | zxing-cpp | CodeGlyphX |
+|---|---|---|---|
+| 1,000,000 foreign images, false reads | 1 | 274 | 2,306 |
+| 200,000 mixed real renders, read / misread | 194,520 / 3 | 166,280 / 18 | 148,116 / 853 |
+| 200,000 evenly lit at 1-2.5 px/module, read / misread | 169,606 / 17 | 54,397 / 64 | 62,817 / 1,214 |
+| M1 under a 40 % shadow (crisp axes, crisp turned, anti-aliased) | 9,987, 9,996, 9,998 of 10,000 | 9,821, 9,936, 9,890 | 3,237, 100, 0 |
+
+The designs explain the rows. zxing-cpp samples one grid a finder (the best of four orientations by format distance), checks two timing modules and rejects only a quiet zone more than two-thirds dark, and corrects at Reed-Solomon's full strength, past the misdecode-protection cap: few grids keep its false reads low and cost it reads. CodeGlyphX checks finder, separator and timing modules against fixed budgets whatever the correction count, which a Standard QR corner passes. Renders zxing-cpp reads and this library does not: 1,102 mixed and 1,922 at low density, of which this phase lost 2 and 28; the rest were unread before it and belong to phases 4 and 7.
+
 **Refuted, with the numbers.**
 
 - **The quiet zone's second ring** (1.5 modules out, clear of the grey an anti-aliased edge leaves): low-density M1 losses 256 → 63 and M2-M4 15 → 0, but near-miss misreads 17 → 21, the two real M1 misreads back and an M4-M foreign verdict back. A grid a little too small puts the first ring on the symbol's own edge; the second ring cannot see that. Both rings together: losses 34, misreads 28.
