@@ -42,7 +42,7 @@ internal enum FinderRowKernel
 /// </summary>
 /// <remarks>
 /// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then cross-checks each hit vertically, horizontally and diagonally before accepting it as a candidate (the standard ZXing-style detection approach).
-/// Designed for Tier-1 inputs, clean, well-lit, screen-rendered or scanned images with mild rotation, not for low-contrast photos.
+/// Designed for Tier-1 inputs, clean, screen-rendered or scanned images with mild rotation, not for low-contrast photos.
 /// <para>
 /// The ratio is checked on whole-pixel runs first. An anti-aliased edge leaves a grey pixel that a threshold rounds to a whole one, which at about 2 px/module is half a module, so runs that miss by less than 1.5 px, the same budget on every run, are measured again from <see cref="GreyLevels"/> and held to the strict tolerance, in the row scan and in all three cross-checks.
 /// The tolerance is what keeps data runs out of the candidate list, so it is the measurement that is repaired and never the check; with no grey in the image the second look could only repeat the whole-pixel runs and is switched off.

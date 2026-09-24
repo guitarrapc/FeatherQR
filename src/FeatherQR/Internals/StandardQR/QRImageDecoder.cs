@@ -9,12 +9,12 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Decodes a QR code from a grayscale image: clean, well-lit, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal and mild perspective distortion (Tier 2).
+/// Decodes a QR code from a grayscale image: clean, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal, a lighting gradient across the symbol and mild perspective distortion (Tier 2).
 /// </summary>
 /// <remarks>
 /// Pipeline:
 /// <code>
-/// 1. Global binarization threshold (Otsu's method over the luminance histogram)
+/// 1. Global binarization threshold (Otsu's method over the luminance histogram); a regional binarization when neither polarity reads
 /// 2. Finder pattern detection (1:1:3:1:1 scan + cross checks)
 /// 3. Orientation from the three finder centers (rotation-invariant)
 /// 4. Dimension estimate from center distances and module size
@@ -22,13 +22,13 @@ namespace FeatherQR.Internals.StandardQR;
 /// 6. Perspective grid sampling into a module matrix (4-point projective transform)
 /// 7. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
 /// </code>
-/// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, uneven lighting (global threshold only), blur, and multiple QR codes per image.
+/// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, hard-edged shadows, blur, and multiple QR codes per image.
 /// </remarks>
 internal static partial class QRImageDecoder
 {
     /// <summary>
     /// Decodes a QR code from grayscale pixels.
-    /// Reflectance-reversed codes (light modules on a dark background, common in dark-mode UIs) are handled by one inverted retry when the normal attempt fails.
+    /// Reflectance-reversed codes (light modules on a dark background, common in dark-mode UIs) are handled by one inverted retry when the normal attempt fails. A symbol lit unevenly, which no one threshold splits, is retried on a regional binarization of each polarity when both fail.
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -37,6 +37,15 @@ internal static partial class QRImageDecoder
     /// <param name="charsWritten">Number of characters written.</param>
     /// <param name="info">Diagnostic information.</param>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
+        var status = DecodeLuminanceAttempts(luminance, width, height, destination, out charsWritten, out info);
+        // No text unless it decoded: a failing decode can stop after a segment was written
+        if (status != DecodeStatus.Success)
+            charsWritten = 0;
+        return status;
+    }
+
+    private static DecodeStatus DecodeLuminanceAttempts(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
         {
@@ -70,7 +79,25 @@ internal static partial class QRImageDecoder
                 return invertedStatus;
             }
 
-            // Both polarities failed: report the original attempt's diagnostics
+            // A verdict skips the regional pass, which looks for a symbol the global threshold did not see
+            if (RegionalRetry.IsContentVerdict(status))
+                return status;
+            if (RegionalRetry.IsContentVerdict(invertedStatus))
+            {
+                info = invertedInfo;
+                return invertedStatus;
+            }
+
+            // Uneven lighting: each polarity binarized again against each region's own level
+            var regional = new RegionalAttempt();
+            var regionalStatus = RegionalRetry.Decode<RegionalAttempt, QRCodeDecodeInfo>(ref regional, luminance, inverted, histogram, width, height, destination, out charsWritten, out var regionalInfo);
+            if (IsTerminal(regionalStatus) || RegionalRetry.IsContentVerdict(regionalStatus))
+            {
+                info = regionalInfo;
+                return regionalStatus;
+            }
+
+            // Every attempt failed short of the content: report the first one's diagnostics
             return status;
         }
         finally
@@ -79,7 +106,14 @@ internal static partial class QRImageDecoder
         }
     }
 
-    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    /// <summary>The regional retry's decode: this decoder's attempt on a binarized image.</summary>
+    private readonly struct RegionalAttempt : ILuminanceAttempt<QRCodeDecodeInfo>
+    {
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
+    }
+
+    internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
@@ -100,7 +134,7 @@ internal static partial class QRImageDecoder
         // both grids read, this one's corners are the symbol's own edges and the other's are
         // extrapolated to within a module; two lines that do not read cost a few hundred pixels.
         var frameStatus = DecodeThroughTimingFrame(luminance, width, height, threshold, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
-        if (IsTerminal(frameStatus))
+        if (IsSettled(frameStatus))
             return frameStatus;
 
         return DecodeFromFinders(luminance, width, height, threshold, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
@@ -130,7 +164,7 @@ internal static partial class QRImageDecoder
         }
 
         var status = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, destination, out charsWritten, out info, out var versionDimension);
-        if (IsTerminal(status))
+        if (IsSettled(status))
             return status;
 
         // The timing patterns count the modules the estimate only measures. Counted
@@ -140,7 +174,7 @@ internal static partial class QRImageDecoder
         if (timingDimension != 0 && timingDimension != dimension)
         {
             var timingStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, timingDimension, moduleSize, destination, out var timingCharsWritten, out var timingInfo, out _);
-            if (IsTerminal(timingStatus))
+            if (IsSettled(timingStatus))
             {
                 charsWritten = timingCharsWritten;
                 info = timingInfo;
@@ -153,7 +187,7 @@ internal static partial class QRImageDecoder
         if (versionDimension != 0 && versionDimension != dimension && versionDimension != timingDimension)
         {
             var versionStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, versionDimension, moduleSize, destination, out var versionCharsWritten, out var versionInfo, out _);
-            if (IsTerminal(versionStatus))
+            if (IsSettled(versionStatus))
             {
                 charsWritten = versionCharsWritten;
                 info = versionInfo;
@@ -168,7 +202,7 @@ internal static partial class QRImageDecoder
         if (secondaryDimension != 0 && secondaryDimension != versionDimension && secondaryDimension != timingDimension)
         {
             var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _, finderFallback: false);
-            if (IsTerminal(secondaryStatus))
+            if (IsSettled(secondaryStatus))
             {
                 charsWritten = secondaryCharsWritten;
                 info = secondaryInfo;
@@ -271,7 +305,7 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// Samples the module grid at the given dimension and decodes it, retrying once transposed for mirrored images (e.g. front-camera captures): finder geometry is identical but data is transposed.
-    /// The mirror retry triggers on any non-terminal decode failure; a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
+    /// The mirror retry triggers on any unsettled decode failure; a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
     /// DestinationTooSmall is terminal because the non-mirrored symbol has already been read successfully through RS correction.
     /// On failure, versionDimension is the dimension the sampled version information names when it differs from the one sampled, else 0.
     /// <paramref name="finderFallback"/> allows the resample through the finders alone when the alignment-anchored grid fails; off for a dimension that is only a guess.
@@ -299,7 +333,7 @@ internal static partial class QRImageDecoder
             {
                 SampleGridPiecewise(luminance, width, height, threshold, meshGridCoords.Slice(0, meshSize), meshNodeXs, meshNodeYs, meshSize, dimension, modules);
                 var meshStatus = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var meshTransposed);
-                if (IsTerminal(meshStatus))
+                if (IsSettled(meshStatus))
                 {
                     // The corners follow the mesh, because the mesh is what decoded: the
                     // global fit's fourth anchor is unvalidated on this path, and on large
@@ -328,7 +362,7 @@ internal static partial class QRImageDecoder
             }
             if (namedDimension != dimension)
                 versionDimension = namedDimension;
-            if (IsTerminal(status) || !alignmentAnchored || !finderFallback)
+            if (IsSettled(status) || !alignmentAnchored || !finderFallback)
                 return status;
 
             // Alignment fallback: the alignment centre is pixel-resolved, which at about
@@ -350,7 +384,7 @@ internal static partial class QRImageDecoder
                     return status;
 
                 var parallelogramStatus = DecodeWithMirrorRetry(parallelogramModules, dimension, destination, out var parallelogramCharsWritten, out var parallelogramInfo, out var parallelogramTransposed);
-                if (!IsTerminal(parallelogramStatus))
+                if (!IsSettled(parallelogramStatus))
                     return status;
 
                 charsWritten = parallelogramCharsWritten;
@@ -371,20 +405,21 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Decodes the sampled matrix, retrying once transposed (mirrored capture).
-    /// On non-terminal failure reports the non-mirrored attempt's diagnostics.
+    /// Decodes the sampled matrix, retrying once transposed (mirrored capture) unless the first grid settled it.
+    /// On failure reports the non-mirrored attempt's diagnostics, or the mirrored attempt's verdict on the content when that is what it reached.
     /// <paramref name="transposed"/> says which attempt produced the result, because the transpose swaps the grid's axes relative to the symbol's and the reported corners have to follow.
     /// </summary>
     private static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out bool transposed)
     {
         transposed = false;
         var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
-        if (IsTerminal(status))
+        if (IsSettled(status))
             return status;
 
         TransposeInPlace(modules, dimension);
         var mirroredStatus = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out var mirroredInfo);
-        if (IsTerminal(mirroredStatus))
+        // The mirrored grid's verdict on the content says more than the unmirrored grid's failure to read it
+        if (IsSettled(mirroredStatus))
         {
             info = mirroredInfo;
             transposed = true;
@@ -396,6 +431,10 @@ internal static partial class QRImageDecoder
 
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
+
+    /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content.</summary>
+    private static bool IsSettled(DecodeStatus status)
+        => IsTerminal(status) || RegionalRetry.IsContentVerdict(status);
 
     /// <summary>BCH(18,6) version information codewords of versions 7-40, indexed by version − 7.</summary>
     private static readonly uint[] VersionCodewords = CreateVersionCodewords();
