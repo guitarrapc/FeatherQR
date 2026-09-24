@@ -1,5 +1,6 @@
 using System.Buffers;
 #if NET8_0_OR_GREATER
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -51,6 +52,12 @@ internal static class RmQRImageDecoder
 
     /// <summary>Template matches (of 25) required to accept a sub-finder location.</summary>
     private const int SubFinderMinScore = 24;
+
+    /// <summary>Rings of the sub-finder search scored without the lattice screen: a sub-finder near its prediction is found before the screen would pay for itself.</summary>
+    private const int SubFinderUnscreenedRings = 3;
+
+    /// <summary>Rows of positions the lattice screen can hold: the lattice is <c>2 · radius + 9</c> points a side, one 64-bit mask a row.</summary>
+    internal const int MaxSubFinderScreenRows = 64;
 
     /// <summary>Row-axis shear searched on the perspective path, ± degrees.</summary>
     private const int MaxShearDegrees = 20;
@@ -161,7 +168,8 @@ internal static class RmQRImageDecoder
         // Hoisted: the two scans binarize the same buffer
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
-        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false);
+        Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount);
         // Terminal, not just successful: DestinationTooSmall is only reached after the
         // symbol has been located, sampled, RS-corrected and its segment found to fit
         // the bitstream, so the buffer is the only thing missing and a wider finder scan
@@ -172,7 +180,10 @@ internal static class RmQRImageDecoder
         if (IsTerminal(status))
             return status;
 
-        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
+        // A candidate the strided scan tried decodes the same way in the sweep, so it is not
+        // tried again; unless that scan settled, when every candidate stays
+        var skip = IsSettled(status) ? default : tried.Slice(0, triedCount);
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _);
         // Settled, not just successful: when the sweep is the pass that reads the symbol,
         // its DestinationTooSmall or its verdict on the content is the answer.
         if (IsSettled(sweptStatus))
@@ -187,9 +198,16 @@ internal static class RmQRImageDecoder
         return status;
     }
 
-    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep)
+    /// <summary>
+    /// One finder scan and the candidates it ranks first; those equal to one in <paramref name="skip"/> are not decoded, and each one decoded is written to <paramref name="tried"/>.
+    /// </summary>
+    /// <remarks>
+    /// A candidate's decode depends on its position and module size, the image and the threshold, and on the scan's best failure only once that is terminal; so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
+    /// </remarks>
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount)
     {
         charsWritten = 0;
+        triedCount = 0;
 
         Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var candidateCount = fullSweep
@@ -224,10 +242,15 @@ internal static class RmQRImageDecoder
         {
             var modules = rentedModules.AsSpan(0, MaxModules);
             Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
-            var tried = Math.Min(candidateCount, MaxCandidatesToTry);
-            for (var c = 0; c < tried; c++)
+            var ranked = Math.Min(candidateCount, MaxCandidatesToTry);
+            for (var c = 0; c < ranked; c++)
             {
                 ref readonly var candidate = ref candidates[c];
+                // Not replaced by the next in rank: the candidates tried stay the first eight
+                if (FinderPatternFinder.ContainsCandidate(skip, candidate))
+                    continue;
+                if (!tried.IsEmpty)
+                    tried[triedCount++] = candidate;
                 var attemptsRemaining = MaxDecodeAttemptsPerCandidate;
 
                 // Fast path: right-angle frames from the axis-aligned module sizes.
@@ -845,24 +868,36 @@ internal static class RmQRImageDecoder
         // A keystone leans the column axis (see TryPerspectiveVariants); the template
         // is matched with a few leans so its corner samples stay on their modules.
         ReadOnlySpan<float> shearDegrees = stackalloc float[] { 0f, 12f, -12f };
+        Span<ulong> survivors = stackalloc ulong[MaxSubFinderScreenRows];
         foreach (var degrees in shearDegrees)
         {
             var radians = degrees * (Math.PI / 180d);
             var leanCos = (float)Math.Cos(radians);
             Rotate(vX / leanCos, vY / leanCos, leanCos, (float)Math.Sin(radians), out var svX, out var svY);
+            var screenTried = false;
+            var screened = false;
             // Outward by rings (Chebyshev distance): the prediction is usually within a
             // few modules, and the first perfect match on the innermost ring is the
             // answer (the tie-break prefers the nearest anyway), so the search stops there.
             for (var ring = 0; ring <= radius && bestScore < 25; ring++)
             {
+                if (ring >= SubFinderUnscreenedRings && !screenTried)
+                {
+                    screenTried = true;
+                    screened = TryScreenSubFinderPositions(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, radius, survivors);
+                }
+
                 for (var ov = -ring; ov <= ring; ov++)
                 {
                     var offV = ov * 0.5f;
-                    var onVerticalEdge = ov == -ring || ov == ring;
-                    for (var ou = -ring; ou <= ring; ou++)
+                    // Between the top and bottom rows only the two ends: smaller rings scanned the interior
+                    var step = ov == -ring || ov == ring ? 1 : 2 * ring;
+                    for (var ou = -ring; ou <= ring; ou += step)
                     {
-                        if (!onVerticalEdge && ou != -ring && ou != ring)
-                            continue; // interior of the ring was scanned by smaller rings
+                        // Two certain mismatches: the position scores under the floor, and a
+                        // score under the floor never becomes the answer
+                        if (screened && (survivors[ov + radius] >> (ou + radius) & 1) == 0)
+                            continue;
 
                         var offU = ou * 0.5f;
                         var cx = predictedX + offU * uX + offV * svX;
@@ -934,6 +969,186 @@ internal static class RmQRImageDecoder
         }
         return true;
     }
+
+    /// <summary>
+    /// Screens the sub-finder search's positions on the half-module lattice they sample: position (ou, ov) samples lattice points (ou + 2i, ov + 2j), so one read of each point serves every position, and a position with two certain mismatches of its 25 cannot reach <see cref="SubFinderMinScore"/>.
+    /// Bit <c>ou + radius</c> of <c>survivors[ov + radius]</c> stays set unless the position is dropped.
+    /// </summary>
+    /// <remarks>
+    /// The search computes each sample in another float expression, so the two can fall in different pixels next to a pixel edge or the image border.
+    /// A point counts only when a margin around it, several times the rounding of both expressions at its magnitude, stays in one pixel or wholly outside the image; otherwise it matches either way.
+    /// False, with nothing screened, when the lattice is wider than a mask or a coordinate is not finite.
+    /// </remarks>
+    internal static bool TryScreenSubFinderPositions(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float predictedX, float predictedY, float uX, float uY, float svX, float svY, int radius, Span<ulong> survivors)
+    {
+        Span<ulong> mismatchIfDark = stackalloc ulong[MaxSubFinderScreenRows];
+        Span<ulong> mismatchIfLight = stackalloc ulong[MaxSubFinderScreenRows];
+        if (!TryClassifySubFinderLattice(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, radius, mismatchIfDark, mismatchIfLight))
+            return false;
+
+        // Per position row, all positions at once: a bit reaches "two" at its second mismatch
+        var positions = 2 * radius + 1;
+        var positionMask = (1UL << positions) - 1;
+        for (var p = 0; p < positions; p++)
+        {
+            var one = 0UL;
+            var two = 0UL;
+            for (var j = 0; j < 5; j++)
+            {
+                // Lattice row of template row j - 2 for position row p - radius
+                var ifDark = mismatchIfDark[p + 2 * j];
+                var ifLight = mismatchIfLight[p + 2 * j];
+                for (var i = 0; i < 5; i++)
+                {
+                    // Dark ring, light ring, dark centre
+                    var expectedDark = i == 0 || i == 4 || j == 0 || j == 4 || (i == 2 && j == 2);
+                    var mismatch = (expectedDark ? ifDark : ifLight) >> (2 * i);
+                    two |= one & mismatch;
+                    one |= mismatch;
+                }
+            }
+            survivors[p] = ~two & positionMask;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The lattice <see cref="TryScreenSubFinderPositions"/> screens on, <c>2 · radius + 9</c> points a side from (-(radius + 4), -(radius + 4)) half modules off the prediction.
+    /// Bit <c>a</c> of row <c>b</c> is set in <paramref name="mismatchIfDark"/> for a certain light pixel, in <paramref name="mismatchIfLight"/> for a certain dark one, in both when the point is certainly outside the image, and in neither next to an edge.
+    /// </summary>
+    internal static bool TryClassifySubFinderLattice(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float predictedX, float predictedY, float uX, float uY, float svX, float svY, int radius, Span<ulong> mismatchIfDark, Span<ulong> mismatchIfLight)
+    {
+        var side = 2 * radius + 9;
+        if (radius < 0 || side > MaxSubFinderScreenRows)
+            return false;
+
+        // Every coordinate either expression forms is at most this large; each rounds a
+        // handful of times, 2^-24 of it at most, and the margin is 2^-18 of it
+        var reach = radius * 0.5f + 2f;
+        var marginX = (Math.Abs(predictedX) + reach * (Math.Abs(uX) + Math.Abs(svX))) * (1f / 262144f);
+        var marginY = (Math.Abs(predictedY) + reach * (Math.Abs(uY) + Math.Abs(svY))) * (1f / 262144f);
+        if (!(marginX < float.PositiveInfinity) || !(marginY < float.PositiveInfinity))
+            return false; // NaN fails both comparisons
+
+#if NET8_0_OR_GREATER
+        if (Vector128.IsHardwareAccelerated)
+        {
+            ClassifySubFinderLatticeVector128(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, mismatchIfDark, mismatchIfLight);
+            return true;
+        }
+#endif
+        ClassifySubFinderLatticeScalar(luminance, width, height, threshold, predictedX, predictedY, uX, uY, svX, svY, side, marginX, marginY, mismatchIfDark, mismatchIfLight);
+        return true;
+    }
+
+    internal static void ClassifySubFinderLatticeScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float predictedX, float predictedY, float uX, float uY, float svX, float svY, int side, float marginX, float marginY, Span<ulong> mismatchIfDark, Span<ulong> mismatchIfLight)
+    {
+        var first = -(side - 1) / 2;
+        for (var row = 0; row < side; row++)
+        {
+            var halfV = (first + row) * 0.5f;
+            var rowX = predictedX + halfV * svX;
+            var rowY = predictedY + halfV * svY;
+            var ifDark = 0UL;
+            var ifLight = 0UL;
+            for (var column = 0; column < side; column++)
+            {
+                var halfU = (first + column) * 0.5f;
+                var x = rowX + halfU * uX;
+                var y = rowY + halfU * uY;
+                var bit = 1UL << column;
+
+                // The search truncates, so a coordinate in (-1, size) lands inside
+                if (x + marginX <= -1f || x - marginX >= width || y + marginY <= -1f || y - marginY >= height)
+                {
+                    ifDark |= bit;
+                    ifLight |= bit;
+                    continue;
+                }
+                if (x - marginX <= -1f || x + marginX >= width || y - marginY <= -1f || y + marginY >= height)
+                    continue;
+                var px = (int)(x - marginX);
+                var py = (int)(y - marginY);
+                if (px != (int)(x + marginX) || py != (int)(y + marginY))
+                    continue;
+
+                if (luminance[py * width + px] < threshold)
+                    ifLight |= bit;
+                else
+                    ifDark |= bit;
+            }
+            mismatchIfDark[row] = ifDark;
+            mismatchIfLight[row] = ifLight;
+        }
+    }
+
+#if NET8_0_OR_GREATER
+    /// <summary>The scalar classification four points at a time: the same expressions and comparisons per lane, the pixel read only where the lane is certain.</summary>
+    internal static void ClassifySubFinderLatticeVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float predictedX, float predictedY, float uX, float uY, float svX, float svY, int side, float marginX, float marginY, Span<ulong> mismatchIfDark, Span<ulong> mismatchIfLight)
+    {
+        var first = -(side - 1) / 2;
+        var laneHalves = Vector128.Create(0f, 0.5f, 1f, 1.5f);
+        var columnU = Vector128.Create(uX);
+        var columnV = Vector128.Create(uY);
+        var marginXs = Vector128.Create(marginX);
+        var marginYs = Vector128.Create(marginY);
+        var minusOne = Vector128.Create(-1f);
+        var widths = Vector128.Create((float)width);
+        var heights = Vector128.Create((float)height);
+        var stride = Vector128.Create(width);
+        var sideMask = side == 64 ? ulong.MaxValue : (1UL << side) - 1;
+        Span<int> indices = stackalloc int[4];
+        for (var row = 0; row < side; row++)
+        {
+            var halfV = (first + row) * 0.5f;
+            var rowX = Vector128.Create(predictedX + halfV * svX);
+            var rowY = Vector128.Create(predictedY + halfV * svY);
+            var ifDark = 0UL;
+            var ifLight = 0UL;
+            // Lanes past the side are classified and masked off below; a certain lane is inside the image whatever its column
+            for (var column = 0; column < side; column += 4)
+            {
+                // (first + column) / 2 plus a lane's half is exact, as the scalar half is
+                var halfU = Vector128.Create((first + column) * 0.5f) + laneHalves;
+                var x = rowX + halfU * columnU;
+                var y = rowY + halfU * columnV;
+                var xLow = x - marginXs;
+                var xHigh = x + marginXs;
+                var yLow = y - marginYs;
+                var yHigh = y + marginYs;
+
+                var outside = Vector128.LessThanOrEqual(xHigh, minusOne) | Vector128.GreaterThanOrEqual(xLow, widths)
+                    | Vector128.LessThanOrEqual(yHigh, minusOne) | Vector128.GreaterThanOrEqual(yLow, heights);
+                var nearBorder = Vector128.LessThanOrEqual(xLow, minusOne) | Vector128.GreaterThanOrEqual(xHigh, widths)
+                    | Vector128.LessThanOrEqual(yLow, minusOne) | Vector128.GreaterThanOrEqual(yHigh, heights);
+                // Truncating, as the scalar cast does; a lane out of range is near the border and not read
+                var pxLow = Vector128.ConvertToInt32(xLow);
+                var pyLow = Vector128.ConvertToInt32(yLow);
+                var onePixel = Vector128.Equals(pxLow, Vector128.ConvertToInt32(xHigh)) & Vector128.Equals(pyLow, Vector128.ConvertToInt32(yHigh));
+                var certain = Vector128.AndNot(onePixel, nearBorder.AsInt32());
+
+                var outsideBits = (ulong)outside.ExtractMostSignificantBits() << column;
+                ifDark |= outsideBits;
+                ifLight |= outsideBits;
+                var certainBits = certain.ExtractMostSignificantBits();
+                if (certainBits == 0)
+                    continue;
+                (pyLow * stride + pxLow).CopyTo(indices);
+                while (certainBits != 0)
+                {
+                    var lane = BitOperations.TrailingZeroCount(certainBits);
+                    certainBits &= certainBits - 1;
+                    // Branch-free: on texture the pixel's class is a coin toss
+                    var dark = (ulong)(luminance[indices[lane]] - threshold) >> 63;
+                    ifLight |= dark << (column + lane);
+                    ifDark |= (dark ^ 1) << (column + lane);
+                }
+            }
+            mismatchIfDark[row] = ifDark & sideMask;
+            mismatchIfLight[row] = ifLight & sideMask;
+        }
+    }
+#endif
 
     /// <summary>
     /// Moves the point to the midpoint of the dark run it sits in, along a unit direction; left unchanged when the run is not a plausible single module.

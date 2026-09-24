@@ -301,7 +301,7 @@ that one-time build to the call that happened to trigger it.
 Shared primitives that already have both an x64 and an ARM64/Vector128 tier, and must be
 treated as controls rather than reimplemented when a new symbology or kernel arrives:
 `TextAnalyzer`, `EccBinaryEncoder`, `EccBinaryDecoder` (syndrome pass), `ModuleBitPacker`,
-`LuminanceConverter`, `LuminanceInverter`, `LocalBinarizer` (portable `Vector128` for its three passes), finder/alignment row-mask construction, the histogram fill (`Binarizer`), the finder search's edge-list row kernel (`FinderPatternFinder.RowEdges`) and the Standard QR piecewise mesh sampler (`QRImageDecoder.SampleGridPiecewise`).
+`LuminanceConverter`, `LuminanceInverter`, `LocalBinarizer` (portable `Vector128` for its three passes), finder/alignment row-mask construction, the histogram fill (`Binarizer`), the finder search's edge-list row kernel (`FinderPatternFinder.RowEdges`), the Standard QR piecewise mesh sampler (`QRImageDecoder.SampleGridPiecewise`), and, portable `Vector128` only, the Micro QR affine grid sampler (`MicroQRImageDecoder.SampleGridVector128`) and the rMQR sub-finder lattice classification (`RmQRImageDecoder.ClassifySubFinderLatticeVector128`).
 Architecture-neutral work already benefits every target: cached per-version layouts, pair
 stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
 finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.

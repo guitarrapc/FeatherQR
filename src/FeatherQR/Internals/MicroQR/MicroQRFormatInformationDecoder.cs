@@ -40,6 +40,58 @@ internal static class MicroQRFormatInformationDecoder
     /// <returns>False when the copy is beyond correction distance of every valid pattern.</returns>
     public static bool TryDecode(ushort raw, out MicroQRVersion version, out MicroQREccLevel eccLevel, out int maskPattern)
     {
+        // Every copy the matrix decoder reads is 15 bits; a wider word takes the search
+        if (raw < nearest.Length)
+        {
+            var index = nearest[raw];
+            if (index == NoCandidate)
+            {
+                version = default;
+                eccLevel = default;
+                maskPattern = -1;
+                return false;
+            }
+
+            MicroQRConstants.GetVersionAndEccFromSymbolNumber(index >> 2, out version, out eccLevel);
+            maskPattern = index & 3;
+            return true;
+        }
+
+        return TryDecodeBySearch(raw, out version, out eccLevel, out maskPattern);
+    }
+
+    private const byte NoCandidate = 0xFF;
+
+    /// <summary>
+    /// The candidate within <see cref="MaxCorrectableBits"/> of each 15-bit word, or <see cref="NoCandidate"/>.
+    /// The words within three bits of the 32 candidates are 576 each and never shared, since the candidates lie at least seven apart, so marking them gives what the search finds.
+    /// </summary>
+    private static readonly byte[] nearest = BuildNearest();
+
+    private static byte[] BuildNearest()
+    {
+        var table = new byte[1 << 15];
+        table.AsSpan().Fill(NoCandidate);
+        for (var i = 0; i < candidates.Length; i++)
+        {
+            var word = candidates[i];
+            table[word] = (byte)i;
+            for (var a = 0; a < 15; a++)
+            {
+                table[word ^ (1 << a)] = (byte)i;
+                for (var b = a + 1; b < 15; b++)
+                {
+                    table[word ^ (1 << a) ^ (1 << b)] = (byte)i;
+                    for (var c = b + 1; c < 15; c++)
+                        table[word ^ (1 << a) ^ (1 << b) ^ (1 << c)] = (byte)i;
+                }
+            }
+        }
+        return table;
+    }
+
+    private static bool TryDecodeBySearch(ushort raw, out MicroQRVersion version, out MicroQREccLevel eccLevel, out int maskPattern)
+    {
         var best = 0;
         var bestDistance = int.MaxValue;
         for (var i = 0; i < candidates.Length; i++)
