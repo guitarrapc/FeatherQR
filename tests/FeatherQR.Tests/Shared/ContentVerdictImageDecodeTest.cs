@@ -194,6 +194,48 @@ public class ContentVerdictImageDecodeTest
     }
 
     /// <summary>
+    /// When the strided scan settles on a verdict, the sweep decodes that symbol again: beside a second unmapped symbol only the sweep finds, the verdict reported is the first symbol's, which the sweep ranks first.
+    /// A sweep that skipped the candidates the strided scan tried would report the second one's.
+    /// </summary>
+    [Test]
+    [Arguments(Symbology.MicroQR)]
+    [Arguments(Symbology.RmQR)]
+    public async Task TwoUnmappedSymbols_TheSweepReportsTheOneTheStridedScanFound(Symbology symbology)
+    {
+        var (first, columns, rows) = symbology == Symbology.MicroQR ? BuildMicroQR(Unmapped, MicroQREccLevel.L) : BuildRmQR(Unmapped, RmQREccLevel.M);
+        var (second, _, _) = symbology == Symbology.MicroQR ? BuildMicroQR(Unmapped, MicroQREccLevel.M) : BuildRmQR(Unmapped, RmQREccLevel.H);
+        const int quietZone = 4;
+        var left = NearestNeighbourRenderer.Render((row, column) => IsDark(first, columns, rows, row, column, quietZone), columns + 2 * quietZone, rows + 2 * quietZone, 4f, 0f, 0f);
+        var right = NearestNeighbourRenderer.Render((row, column) => IsDark(second, columns, rows, row, column, quietZone), columns + 2 * quietZone, rows + 2 * quietZone, 1.30f, 0.75f, 0.75f);
+        var width = left.Width + right.Width;
+        var height = Math.Max(left.Height, right.Height);
+        var luminance = new byte[width * height];
+        Array.Fill(luminance, (byte)255);
+        for (var y = 0; y < left.Height; y++)
+            Array.Copy(left.Luminance, y * left.Width, luminance, y * width, left.Width);
+        for (var y = 0; y < right.Height; y++)
+            Array.Copy(right.Luminance, y * right.Width, luminance, y * width + left.Width, right.Width);
+
+        // Each alone gives its own verdict, so the level says which symbol was reported
+        await Assert.That(DecodeLevel(symbology, left.Luminance, left.Width, left.Height)).IsEqualTo((DecodeStatus.UnmappedCharacter, 0));
+        await Assert.That(DecodeLevel(symbology, right.Luminance, right.Width, right.Height)).IsEqualTo((DecodeStatus.UnmappedCharacter, 1));
+
+        await Assert.That(DecodeLevel(symbology, luminance, width, height)).IsEqualTo((DecodeStatus.UnmappedCharacter, 0));
+
+        // Level 0 is the first symbol's: Micro QR L against M, rMQR M against H
+        static (DecodeStatus Status, int Level) DecodeLevel(Symbology symbology, byte[] luminance, int width, int height)
+        {
+            if (symbology == Symbology.MicroQR)
+            {
+                MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out var micro);
+                return (micro.Status, micro.EccLevel == MicroQREccLevel.L ? 0 : 1);
+            }
+            RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out var rmqr);
+            return (rmqr.Status, rmqr.EccLevel == RmQREccLevel.M ? 0 : 1);
+        }
+    }
+
+    /// <summary>
     /// A verdict from the global threshold skips the regional pass, so a shadowed readable symbol beside it is not looked for.
     /// </summary>
     [Test]
@@ -359,11 +401,10 @@ public class ContentVerdictImageDecodeTest
         return (modules, size, size);
     }
 
-    /// <summary>An R11x43-M symbol holding one Kanji cell.</summary>
-    private static (byte[] Modules, int Columns, int Rows) BuildRmQR(int sjis)
+    /// <summary>An R11x43 symbol holding one Kanji cell, level M unless given.</summary>
+    private static (byte[] Modules, int Columns, int Rows) BuildRmQR(int sjis, RmQREccLevel eccLevel = RmQREccLevel.M)
     {
         const RmQRVersion version = RmQRVersion.R11x43;
-        const RmQREccLevel eccLevel = RmQREccLevel.M;
         var dataCount = RmQRConstants.GetDataCodewordCount(version, eccLevel);
         var data = new byte[dataCount];
         var writer = new BitWriter(data);

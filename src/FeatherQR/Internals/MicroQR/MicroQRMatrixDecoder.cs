@@ -36,18 +36,34 @@ internal static class MicroQRMatrixDecoder
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
     public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
+        if (modules.Length < size * size)
+        {
+            charsWritten = 0;
+            info = new MicroQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            return DecodeStatus.InvalidMatrix;
+        }
+
+        return DecodeMatrix(modules, new MatrixModules(size), size, destination, out charsWritten, out info);
+    }
+
+    /// <summary>
+    /// Decodes the grid <paramref name="modules"/> reads out of <paramref name="pixels"/>, asking only for the modules the decode reaches: the format information first, the data and ECC modules once it names this size.
+    /// </summary>
+    public static DecodeStatus DecodeMatrix<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+        where TModules : struct, IMicroQRModules
+    {
         charsWritten = 0;
 
         // 1. Version from size
         var version = MicroQRConstants.VersionFromSize(size);
-        if (version == 0 || modules.Length < size * size)
+        if (version == 0)
         {
             info = new MicroQRCodeDecodeInfo(DecodeStatus.InvalidMatrix, 0, default, -1, 0);
             return DecodeStatus.InvalidMatrix;
         }
 
         // 2. Format information (symbol number → version/ECC, mask pattern)
-        var rawFormat = ReadFormatBits(modules, size);
+        var rawFormat = ReadFormatBits(pixels, modules);
         if (!MicroQRFormatInformationDecoder.TryDecode(rawFormat, out var formatVersion, out var eccLevel, out var maskPattern)
             || formatVersion != version)
         {
@@ -67,7 +83,7 @@ internal static class MicroQRMatrixDecoder
         block.Clear();
 
         // 3. Extract codewords (inverse zigzag + unmask)
-        ExtractCodewords(modules, size, maskPattern, dataBitCount, dataCodewords, block);
+        ExtractCodewords(pixels, modules, size, maskPattern, dataBitCount, dataCodewords, block);
 
         // 4. Reed-Solomon correction, capped at the symbol's correction capacity
         if (!EccBinaryDecoder.TryCorrect(block, eccCodewords, out var errorsCorrected)
@@ -100,19 +116,19 @@ internal static class MicroQRMatrixDecoder
     /// Reads the 15 format information bits.
     /// Positions mirror <see cref="MicroQRModulePlacer.PlaceFormat"/> exactly: bits 14…7 along row 8 columns 1-8, bits 6…0 down column 8 rows 7-1.
     /// </summary>
-    private static ushort ReadFormatBits(ReadOnlySpan<byte> modules, int size)
+    private static ushort ReadFormatBits<TModules>(ReadOnlySpan<byte> pixels, in TModules modules)
+        where TModules : struct, IMicroQRModules
     {
         var raw = 0;
         var bit = 14;
-        var row8Offset = 8 * size;
         for (var col = 1; col <= 8; col++, bit--)
         {
-            if (modules[row8Offset + col] != 0)
+            if (modules.IsDark(pixels, 8, col))
                 raw |= 1 << bit;
         }
         for (var row = 7; row >= 1; row--, bit--)
         {
-            if (modules[row * size + 8] != 0)
+            if (modules.IsDark(pixels, row, 8))
                 raw |= 1 << bit;
         }
 
@@ -123,50 +139,65 @@ internal static class MicroQRMatrixDecoder
     /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="MicroQRModulePlacer.PlaceDataCodewords"/>), unmasking each module on the fly.
     /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword naturally ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>); ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
     /// </summary>
-    private static void ExtractCodewords(ReadOnlySpan<byte> modules, int size, int maskPattern, int dataBitCount, int dataCodewords, Span<byte> block)
+    private static void ExtractCodewords<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, int maskPattern, int dataBitCount, int dataCodewords, Span<byte> block)
+        where TModules : struct, IMicroQRModules
     {
+        var placement = Placements[(size - 11) >> 1];
         // The stream length always equals the free-module count (ISO tables), but
         // guard the write anyway so a table inconsistency cannot corrupt memory.
-        var totalBits = dataBitCount + (block.Length - dataCodewords) * 8;
-        var bitIndex = 0;
-        var upward = true;
+        var totalBits = Math.Min(dataBitCount + (block.Length - dataCodewords) * 8, placement.Length);
+        for (var bitIndex = 0; bitIndex < totalBits; bitIndex++)
+        {
+            var module = placement[bitIndex];
+            var dark = modules.IsDark(pixels, module.Row, module.Col) ^ ((module.MaskBits >> maskPattern & 1) != 0);
+            if (!dark)
+                continue;
 
+            if (bitIndex < dataBitCount)
+            {
+                block[bitIndex >> 3] |= (byte)(0x80 >> (bitIndex & 7));
+            }
+            else
+            {
+                var eccBit = bitIndex - dataBitCount;
+                block[dataCodewords + (eccBit >> 3)] |= (byte)(0x80 >> (eccBit & 7));
+            }
+        }
+    }
+
+    /// <summary>A data module in placement order, with bit <c>m</c> of <see cref="MaskBits"/> set where mask pattern <c>m</c> inverts it.</summary>
+    private readonly record struct PlacedModule(byte Row, byte Col, byte MaskBits);
+
+    /// <summary>The data modules of each size (11, 13, 15, 17) in placement order: the codeword stream reads them in this order, whatever grid they are read from.</summary>
+    private static readonly PlacedModule[][] Placements = [BuildPlacement(11), BuildPlacement(13), BuildPlacement(15), BuildPlacement(17)];
+
+    private static PlacedModule[] BuildPlacement(int size)
+    {
+        var placement = new List<PlacedModule>(size * size);
+        var upward = true;
         // Column pairs (size-1, size-2) … (2, 1); column 0 is all function modules.
         for (var right = size - 1; right >= 2; right -= 2)
         {
             for (var step = 0; step < size; step++)
             {
                 var row = upward ? size - 1 - step : step;
-                var rowOffset = row * size;
-
                 for (var side = 0; side < 2; side++)
                 {
                     var col = right - side;
                     if (MicroQRModulePlacer.IsFunctionModule(row, col))
                         continue;
-                    if (bitIndex >= totalBits)
-                        return;
 
-                    var dark = modules[rowOffset + col] != 0;
-                    if (MicroQRModulePlacer.GetMaskBit(maskPattern, row, col))
-                        dark = !dark;
-
-                    if (dark)
+                    var maskBits = 0;
+                    for (var mask = 0; mask < 4; mask++)
                     {
-                        if (bitIndex < dataBitCount)
-                        {
-                            block[bitIndex >> 3] |= (byte)(0x80 >> (bitIndex & 7));
-                        }
-                        else
-                        {
-                            var eccBit = bitIndex - dataBitCount;
-                            block[dataCodewords + (eccBit >> 3)] |= (byte)(0x80 >> (eccBit & 7));
-                        }
+                        if (MicroQRModulePlacer.GetMaskBit(mask, row, col))
+                            maskBits |= 1 << mask;
                     }
-                    bitIndex++;
+                    placement.Add(new PlacedModule((byte)row, (byte)col, (byte)maskBits));
                 }
             }
             upward = !upward;
         }
+        return placement.ToArray();
     }
 }

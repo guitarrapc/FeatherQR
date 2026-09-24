@@ -155,6 +155,19 @@ internal static partial class FinderPatternFinder
     /// <summary>Capacity to provide for <see cref="FindCandidates"/>'s candidate buffer.</summary>
     internal const int MaxFinderCandidates = MaxCandidates;
 
+    /// <summary>
+    /// Whether a candidate at the same position with the same module size is in the list: a decoder reads those three and nothing else of a candidate (the count only ranks it).
+    /// </summary>
+    internal static bool ContainsCandidate(ReadOnlySpan<FinderPattern> candidates, in FinderPattern candidate)
+    {
+        foreach (var other in candidates)
+        {
+            if (other.X == candidate.X && other.Y == candidate.Y && other.ModuleSize == candidate.ModuleSize)
+                return true;
+        }
+        return false;
+    }
+
     private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<FinderPattern> patterns)
     {
         // One rental a search, not a row: the edge-list kernel's buffer
