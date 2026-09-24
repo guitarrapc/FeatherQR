@@ -243,6 +243,62 @@ public class UnevenLightingDecodeTest
             luminance[i] = (byte)(255 - luminance[i]);
     }
 
+    /// <summary>What the Micro QR decoder reads with the evidence rule off: a test's premise that the rule is what refuses the read.</summary>
+    private static (bool Success, string Text, MicroQRCodeDecodeInfo Info) ReadWithoutTheRule(byte[] luminance, int width, int height)
+    {
+        MicroQRGridEvidence.SuspendedOnThisThread = true;
+        try
+        {
+            var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+            return (success, text, info);
+        }
+        finally
+        {
+            MicroQRGridEvidence.SuspendedOnThisThread = false;
+        }
+    }
+
+    /// <summary>
+    /// An evenly lit Standard QR image read as M1 at its own finder: the separator and finder match, and only the timing patterns and the quiet zone tell the corner of another symbol from an M1.
+    /// </summary>
+    [Test]
+    [Arguments("PQJB0blseF3NxjuVLwKq7dFLjJAsOujjtqo9w9YI3j", QREccLevel.Q, 3.9258766f, 270f, 2.6744332f, 2.0729795f, 270f)]
+    [Arguments("WwsLYCfK87uLJMiurOaPnLPcyoMFCF4cH2", QREccLevel.M, 3.342065f, 0f, 2.522543f, 1.4961945f, 225f)]
+    public async Task MicroQR_EvenlyLitStandardQRImage_NotReadAsM1(string payload, QREccLevel level, float pixelsPerModule, float turn, float offsetX, float offsetY, float lightDegrees)
+    {
+        var symbol = QRCodeGenerator.Create(payload, level);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => symbol[row, column], symbol.Size, symbol.Size, pixelsPerModule, turn, offsetX, offsetY, false, UnevenLight.Ramp, lightDegrees, 0f);
+        var (premiseRead, _, premiseInfo) = ReadWithoutTheRule(luminance, width, height);
+        await Assert.That(premiseRead).IsTrue();
+        await Assert.That(premiseInfo.Version).IsEqualTo(MicroQRVersion.M1);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsFalse().Because($"read \"{text}\" as {info.Version}");
+    }
+
+    /// <summary>
+    /// A real M1 symbol under a ramp: a grid near the real one passes M1's check with other text, while its structure does not earn the read, and the search goes on to the real grid.
+    /// </summary>
+    [Test]
+    [Arguments(1.704664f, 161.30449f, 0.9384652f, 0.7178035f, 0.46648604f, true)]
+    [Arguments(1.7392006f, 21.610983f, 0.93279475f, 0.47893137f, 0.55047244f, false)]
+    public async Task MicroQR_M1UnderRamp_NotMisread(float pixelsPerModule, float turn, float offsetX, float offsetY, float depth, bool reflectanceReversed)
+    {
+        var qr = MicroQRCodeGenerator.Create("1", MicroQREccLevel.ErrorDetectionOnly);
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, turn, offsetX, offsetY, true, UnevenLight.Ramp, 225f, depth);
+        if (reflectanceReversed)
+            Negate(luminance);
+        var (premiseRead, premiseText, _) = ReadWithoutTheRule(luminance, width, height);
+        await Assert.That(premiseRead).IsTrue();
+        await Assert.That(premiseText).IsNotEqualTo("1");
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo("1");
+    }
+
     /// <summary>
     /// Another symbology's image binarized regionally passes an M1 check on some grids; that is not a read.
     /// </summary>
@@ -256,6 +312,7 @@ public class UnevenLightingDecodeTest
         var rmqr = RmQRCodeGenerator.Create(payload, level);
         var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => rmqr[row, column], rmqr.Width, rmqr.Height, 2.2f, 13f, 0f, 0f, true, UnevenLight.Shadow, lightDegrees, 0.35f);
         Negate(luminance);
+        await Assert.That(ReadWithoutTheRule(luminance, width, height).Success).IsTrue();
 
         var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -345,16 +402,26 @@ public class UnevenLightingDecodeTest
             var bins = new int[Binarizer.HistogramBins];
             bins[LocalBinarizer.Dark] = darkCount;
             bins[LocalBinarizer.Light] = binarized.Length - darkCount;
-            MicroQRImageDecoder.DecodeLuminanceCore(binarized, bins, width, height, new char[64], out _, out var info, refuseWeakReads: false);
-            reads.Add(info);
+            MicroQRGridEvidence.SuspendedOnThisThread = true;
+            try
+            {
+                MicroQRImageDecoder.DecodeLuminanceCore(binarized, bins, width, height, new char[64], out _, out var info);
+                reads.Add(info);
+            }
+            finally
+            {
+                MicroQRGridEvidence.SuspendedOnThisThread = false;
+            }
         }
         return reads;
     }
 
     /// <summary>
-    /// The refusals' edges: reads at the M2-L, M3-L and M4-L limits, one short of the M3 and M4 limits, and a one-character read that needed correction are kept; a short destination reports a short destination.
+    /// A real symbol shows its structure, so it may use every correction its level allows: reads at every level's limit, one short of it, and a one-character read that needed correction are kept; a short destination reports a short destination.
     /// </summary>
     [Test]
+    [Arguments("12345", MicroQREccLevel.M, MicroQRVersion.M3, new[] { 14, 14, 14, 12, 14, 10, 14, 8 })]
+    [Arguments("12345", MicroQREccLevel.M, MicroQRVersion.M4, new[] { 16, 16, 16, 14, 16, 12, 16, 10, 16, 8 })]
     [Arguments("12345678", MicroQREccLevel.L, MicroQRVersion.M2, new[] { 12, 12 })]
     [Arguments(Content, MicroQREccLevel.L, MicroQRVersion.M3, new[] { 14, 14 })]
     [Arguments(Content, MicroQREccLevel.L, MicroQRVersion.M4, new[] { 16, 16, 16, 14 })]
@@ -383,7 +450,7 @@ public class UnevenLightingDecodeTest
         await Assert.That(shortInfo.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
     }
 
-    /// <summary>An empty read that needed correction is refused, but the candidate's search goes on: a later grid on the same symbol reads it without correction.</summary>
+    /// <summary>A turned empty symbol under a shadow is read by the regional pass.</summary>
     [Test]
     public async Task MicroQR_EmptySymbolTurnedUnevenLight_ReadByALaterGrid()
     {
@@ -408,6 +475,7 @@ public class UnevenLightingDecodeTest
         var rmqr = RmQRCodeGenerator.Create("GJFLIBPZDCB0B", RmQREccLevel.M);
         var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => rmqr[row, column], rmqr.Width, rmqr.Height, 2.5f, 338f, 0.5041975f, 0.74804866f, true, UnevenLight.Shadow, 270f, depth);
         Negate(luminance);
+        await Assert.That(ReadWithoutTheRule(luminance, width, height).Success).IsTrue();
 
         var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
@@ -431,7 +499,7 @@ public class UnevenLightingDecodeTest
         await Assert.That(info.Version).IsEqualTo(MicroQRVersion.M3);
     }
 
-    /// <summary>The regional pass reads an M2 symbol the global threshold cannot: only M1, which detects errors without correcting them, is refused.</summary>
+    /// <summary>The regional pass reads an M2 symbol the global threshold cannot.</summary>
     [Test]
     public async Task MicroQR_M2UnevenLight_ReadByTheRegionalPass()
     {
@@ -447,12 +515,12 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>
-    /// An M1 symbol only the regional pass could read is not read, in either polarity or destination length, and reports no characters.
+    /// An M1 symbol only the regional pass reads is read in either polarity, and into a short destination reports a short destination.
     /// </summary>
     [Test]
     [Arguments(false)]
     [Arguments(true)]
-    public async Task MicroQR_M1UnevenLight_NotReadByTheRegionalPass(bool reflectanceReversed)
+    public async Task MicroQR_M1UnevenLight_ReadByTheRegionalPass(bool reflectanceReversed)
     {
         var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
         var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, PixelsPerModule, UnevenLight.Shadow, 0f, 0.55f);
@@ -461,21 +529,20 @@ public class UnevenLightingDecodeTest
         await Assert.That(qr.Version).IsEqualTo(MicroQRVersion.M1);
         await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
 
-        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[32], out var charsWritten, out var info);
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
         MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out var shortCharsWritten, out var shortInfo);
 
-        await Assert.That(success).IsFalse();
-        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
-        await Assert.That(charsWritten).IsEqualTo(0);
-        await Assert.That(shortInfo.Status).IsEqualTo(DecodeStatus.NotDetected);
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo("12345");
+        await Assert.That(shortInfo.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
         await Assert.That(shortCharsWritten).IsEqualTo(0);
     }
 
-    /// <summary>The refusal holds on the grids read from module boundaries too, which is how a crisp symbol under 1.5 px/module is read.</summary>
+    /// <summary>The same through the grids read from module boundaries, which is how a crisp symbol under 1.5 px/module is read: their quiet zone is counted too.</summary>
     [Test]
     [Arguments(1f, 180f, 0.3f)]
     [Arguments(1.25f, 270f, 0.4f)]
-    public async Task MicroQR_M1UnevenLightLowDensity_NotReadByTheRegionalPass(float pixelsPerModule, float degrees, float depth)
+    public async Task MicroQR_M1UnevenLightLowDensity_ReadByTheRegionalPass(float pixelsPerModule, float degrees, float depth)
     {
         var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
         // In the corner of a wider light grid, so the image is at least 33 px a side
@@ -484,55 +551,44 @@ public class UnevenLightingDecodeTest
         await Assert.That(qr.Version).IsEqualTo(MicroQRVersion.M1);
         await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
 
-        MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out _, out var info);
-
-        await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
-    }
-
-    /// <summary>A verdict the global threshold reaches at level M's correction limit does not skip the regional pass, which reads the symbol.</summary>
-    [Test]
-    [Arguments(MicroQRVersion.M4, 4.739f, 244.99f, -0.196f, 1.381f)]
-    [Arguments(MicroQRVersion.M3, 5.076f, 241.05f, 0.262f, 3.218f)]
-    public async Task MicroQR_GlobalVerdictAtTheCorrectionLimit_RegionalPassReads(MicroQRVersion version, float pixelsPerModule, float turn, float offsetX, float offsetY)
-    {
-        var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = version });
-        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Size - 4, qr.Size - 4, pixelsPerModule, turn, offsetX, offsetY, true, UnevenLight.Shadow, 270f, 0.4f);
-        var histogram = new int[Binarizer.HistogramBins];
-        Binarizer.FillHistogram(luminance, histogram);
-        var globalStatus = MicroQRImageDecoder.DecodeLuminanceCore(luminance, histogram, width, height, new char[64], out _, out var globalInfo);
-        await Assert.That(globalStatus).IsEqualTo(DecodeStatus.UnmappedCharacter);
-        await Assert.That(globalInfo.ErrorsCorrected).IsEqualTo(MicroQRConstants.GetErrorCorrectionCapacity(globalInfo.Version, globalInfo.EccLevel));
-
         var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
         await Assert.That(success).IsTrue().Because(info.Status.ToString());
         await Assert.That(text).IsEqualTo("12345");
     }
 
-    /// <summary>An M1 symbol the regional pass refuses does not end the pass: a larger symbol beside it, which only that pass reads, is still read.</summary>
+    /// <summary>
+    /// A grid the global threshold samples off the real one reaches an unmapped Kanji cell at M3-M's or M4-M's limit without the structure to earn it, so no verdict is reported and the symbol is read.
+    /// </summary>
     [Test]
-    public async Task MicroQR_M1BesideM3UnevenLight_RegionalPassReadsTheM3()
+    [Arguments(MicroQRVersion.M4, 4.739f, 244.99f, -0.196f, 1.381f)]
+    [Arguments(MicroQRVersion.M3, 5.076f, 241.05f, 0.262f, 3.218f)]
+    public async Task MicroQR_VerdictAtTheCorrectionLimitWithoutStructure_SymbolRead(MicroQRVersion version, float pixelsPerModule, float turn, float offsetX, float offsetY)
     {
-        var m1 = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
-        var m3 = MicroQRCodeGenerator.Create("FQR 2.0", MicroQREccLevel.L);
-        // Drawn larger, the M1's finder collects more row hits, so the scan tries it first
-        const int M1Scale = 6;
-        const int M3Scale = 4;
-        var m1Width = m1.Size * M1Scale;
-        var m3Width = m3.Size * M3Scale;
-        Func<int, int, bool> isDark = (row, column) => column < m1Width
-            ? row < m1Width && m1[row / M1Scale, column / M1Scale]
-            : row < m3Width && m3[row / M3Scale, (column - m1Width) / M3Scale];
-        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, m1Width + m3Width, Math.Max(m1Width, m3Width), 1, UnevenLight.Shadow, 270f, 0.55f);
-        await Assert.That(m1.Version).IsEqualTo(MicroQRVersion.M1);
-        await Assert.That(m3.Version).IsEqualTo(MicroQRVersion.M3);
-        await Assert.That(GlobalAttemptsRead(Symbology.MicroQR, luminance, width, height)).IsFalse();
+        var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = version });
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Size - 4, qr.Size - 4, pixelsPerModule, turn, offsetX, offsetY, true, UnevenLight.Shadow, 270f, 0.4f);
+        var histogram = new int[Binarizer.HistogramBins];
+        Binarizer.FillHistogram(luminance, histogram);
+        DecodeStatus suspendedStatus;
+        MicroQRCodeDecodeInfo suspendedInfo;
+        MicroQRGridEvidence.SuspendedOnThisThread = true;
+        try
+        {
+            suspendedStatus = MicroQRImageDecoder.DecodeLuminanceCore(luminance, histogram, width, height, new char[64], out _, out suspendedInfo);
+        }
+        finally
+        {
+            MicroQRGridEvidence.SuspendedOnThisThread = false;
+        }
+        await Assert.That(suspendedStatus).IsEqualTo(DecodeStatus.UnmappedCharacter);
+        await Assert.That(suspendedInfo.ErrorsCorrected).IsEqualTo(MicroQRConstants.GetErrorCorrectionCapacity(suspendedInfo.Version, suspendedInfo.EccLevel));
 
+        var globalStatus = MicroQRImageDecoder.DecodeLuminanceCore(luminance, histogram, width, height, new char[64], out _, out _);
         var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
-        await Assert.That(success).IsTrue();
-        await Assert.That(info.Version).IsEqualTo(MicroQRVersion.M3);
-        await Assert.That(text).IsEqualTo("FQR 2.0");
+        await Assert.That(globalStatus).IsNotEqualTo(DecodeStatus.UnmappedCharacter);
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo("12345");
     }
 
     /// <summary>A symbol under the same light whose data is past correction does not decode, and gives no text.</summary>

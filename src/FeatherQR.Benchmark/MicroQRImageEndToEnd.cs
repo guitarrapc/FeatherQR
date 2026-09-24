@@ -14,6 +14,8 @@ public class MicroQRImageEndToEnd
     private int _m1ShadowSide;
     private byte[] _m1TurnedShadowLuminance = default!;
     private int _m1TurnedShadowSide;
+    private byte[] _standardQRLuminance = default!;
+    private int _standardQRSide;
     private char[] _decodeBuffer = default!;
 
     [GlobalSetup]
@@ -35,7 +37,7 @@ public class MicroQRImageEndToEnd
         }
         _decodeBuffer = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
 
-        // An M1 symbol under a 55 % shadow: only the regional pass sees it, and it refuses M1
+        // An M1 symbol under a 55 % shadow: only the regional pass reads it
         var m1 = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly);
         const int PixelsPerModule = 4;
         _m1ShadowSide = m1.Size * PixelsPerModule;
@@ -51,8 +53,18 @@ public class MicroQRImageEndToEnd
             }
         }
 
-        // Turned 20° and anti-aliased: refused inside the rotation, scale and perspective searches
+        // Turned 20° and anti-aliased: past the lighting bounds, so the searches find no grid its structure earns
         _m1TurnedShadowLuminance = RenderTurnedUnderShadow(m1, PixelsPerModule, 20f, out _m1TurnedShadowSide);
+
+        // A version 10 Standard QR symbol at 4 px/module: no Micro QR in it, and its finders and texture are what the searches try
+        var standard = QRCodeGenerator.Create("MICRO QR DECODER, STANDARD QR IMAGE: A FAILURE PATH BENCHMARK 0123456789", QREccLevel.M, new QRCodeGeneratorOptions { Version = 10 });
+        _standardQRSide = standard.Size * PixelsPerModule;
+        _standardQRLuminance = new byte[_standardQRSide * _standardQRSide];
+        for (var y = 0; y < _standardQRSide; y++)
+        {
+            for (var x = 0; x < _standardQRSide; x++)
+                _standardQRLuminance[y * _standardQRSide + x] = standard[y / PixelsPerModule, x / PixelsPerModule] ? (byte)30 : (byte)220;
+        }
     }
 
     /// <summary>Turned about the image centre, 4 × 4 samples a pixel, under the same shadow.</summary>
@@ -104,8 +116,11 @@ public class MicroQRImageEndToEnd
     public bool M4_ImageDecode_Span() => MicroQRCodeDecoder.TryDecodeImage(_m4Luminance, _m4ImageSide, _m4ImageSide, _decodeBuffer, out _, out _);
 
     [Benchmark]
-    public bool M1_UnderShadow_ImageDecode_Fails() => MicroQRCodeDecoder.TryDecodeImage(_m1ShadowLuminance, _m1ShadowSide, _m1ShadowSide, _decodeBuffer, out _, out _);
+    public bool M1_UnderShadow_ImageDecode() => MicroQRCodeDecoder.TryDecodeImage(_m1ShadowLuminance, _m1ShadowSide, _m1ShadowSide, _decodeBuffer, out _, out _);
 
     [Benchmark]
     public bool M1_TurnedUnderShadow_ImageDecode_Fails() => MicroQRCodeDecoder.TryDecodeImage(_m1TurnedShadowLuminance, _m1TurnedShadowSide, _m1TurnedShadowSide, _decodeBuffer, out _, out _);
+
+    [Benchmark]
+    public bool StandardQRImage_ImageDecode_Fails() => MicroQRCodeDecoder.TryDecodeImage(_standardQRLuminance, _standardQRSide, _standardQRSide, _decodeBuffer, out _, out _);
 }
