@@ -157,6 +157,13 @@ internal static class MicroQRMatrixDecoder
         return mismatches;
     }
 
+    /// <summary>Whether the grid's format word is one of the 32 exactly and names the version its size is.</summary>
+    public static bool HasExactFormat<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size)
+        where TModules : struct, IMicroQRModules
+        => MicroQRFormatInformationDecoder.TryDecode(ReadFormatBits(pixels, modules), out var formatVersion, out _, out _, out var distance)
+            && distance == 0
+            && formatVersion == MicroQRConstants.VersionFromSize(size);
+
     /// <summary>
     /// Reads the 15 format information bits.
     /// Positions mirror <see cref="MicroQRModulePlacer.PlaceFormat"/> exactly: bits 14…7 along row 8 columns 1-8, bits 6…0 down column 8 rows 7-1.
