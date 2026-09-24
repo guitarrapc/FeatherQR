@@ -20,7 +20,8 @@ namespace FeatherQR.Internals.MicroQR;
 ///    a bounded projective search using the shared Standard QR sampler
 /// 5. Every version size (M4..M1) × orientation × transpose (mirror) is tried
 /// 6. Matrix decoding arbitrates: format info is cross-checked against the matrix
-///    size and RS + the ISO Table 9 capacity cap reject wrong-grid samples
+///    size, and a grid may use only the corrections its timing patterns, format
+///    word and quiet zone earn (MicroQRGridEvidence), at most the ISO Table 9 cap
 /// </code>
 /// A Micro QR symbol has a single finder pattern, so orientation cannot be derived from finder geometry the way three finders allow for Standard QR.
 /// The detector therefore recovers the finder's local axes from angular dark-light-dark runs and searches the two projective coefficients that remain unknown.
@@ -84,10 +85,10 @@ internal static class MicroQRImageDecoder
                 return invertedStatus;
             }
 
-            // A verdict skips the regional pass, but not one at level M's correction limit, where texture also lands
-            if (RegionalRetry.IsContentVerdict(status) && !AtLevelMLimit(info))
+            // A verdict skips the regional pass: the symbol was seen
+            if (RegionalRetry.IsContentVerdict(status))
                 return status;
-            if (RegionalRetry.IsContentVerdict(invertedStatus) && !AtLevelMLimit(invertedInfo))
+            if (RegionalRetry.IsContentVerdict(invertedStatus))
             {
                 info = invertedInfo;
                 return invertedStatus;
@@ -102,12 +103,7 @@ internal static class MicroQRImageDecoder
                 return regionalStatus;
             }
 
-            if (!RegionalRetry.IsContentVerdict(status) && RegionalRetry.IsContentVerdict(invertedStatus))
-            {
-                info = invertedInfo;
-                return invertedStatus;
-            }
-            // Report the first attempt: its verdict, or its diagnostics when every attempt failed short of the content
+            // Report the first attempt's diagnostics: every attempt failed short of the content
             return status;
         }
         finally
@@ -120,7 +116,7 @@ internal static class MicroQRImageDecoder
     private readonly struct RegionalAttempt : ILuminanceAttempt<MicroQRCodeDecodeInfo>
     {
         public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
-            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, refuseWeakReads: true);
+            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
     }
 
     /// <summary>
@@ -129,15 +125,14 @@ internal static class MicroQRImageDecoder
     /// <remarks>
     /// Mirrors the rMQR image decoder: the widening trigger has to be a question about the symbol, and only the caller can ask it.
     /// See <see cref="FinderPatternFinder.FindCandidates"/>.
-    /// With <c>refuseWeakReads</c> (the regional pass), <see cref="DecodeGrid"/> refuses weak reads.
     /// </remarks>
-    internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool refuseWeakReads = false)
+    internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
         // Hoisted: the two scans binarize the same buffer
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
         Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
-        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false, refuseWeakReads, skip: default, tried, out var triedCount);
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount);
         // Terminal, not just successful: DestinationTooSmall is only reached after the
         // symbol has been located, sampled, RS-corrected and its segment found to fit
         // the bitstream, so the buffer is the only thing missing and a wider finder scan
@@ -151,7 +146,7 @@ internal static class MicroQRImageDecoder
         // A candidate the strided scan tried decodes the same way in the sweep, so it is not
         // tried again; unless that scan settled, when every candidate stays
         var skip = IsSettled(status) ? default : tried.Slice(0, triedCount);
-        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true, refuseWeakReads, skip, tried: default, out _);
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _);
         // Settled, not just successful: when the sweep is the pass that reads the symbol,
         // its DestinationTooSmall or its verdict on the content is the answer.
         if (IsSettled(sweptStatus))
@@ -168,9 +163,9 @@ internal static class MicroQRImageDecoder
     /// One finder scan and the candidates it ranks first; those equal to one in <paramref name="skip"/> are not decoded, and each one decoded is written to <paramref name="tried"/>.
     /// </summary>
     /// <remarks>
-    /// A candidate's decode depends on its position and module size, the image, the threshold and the refusal rule, and not on the other candidates; so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
+    /// A candidate's decode depends on its position and module size, the image and the threshold, and not on the other candidates; so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
     /// </remarks>
-    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool fullSweep, bool refuseWeakReads, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount)
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount)
     {
         charsWritten = 0;
         triedCount = 0;
@@ -222,12 +217,10 @@ internal static class MicroQRImageDecoder
             if (horizontalModuleSize < 1f || verticalModuleSize < 1f)
                 continue; // below one pixel per module nothing can be sampled reliably
             var samplingSlack = Math.Max(horizontalModuleSize, verticalModuleSize);
-            // Set when the regional pass refuses an M1 read: the finder's other grids sample the same texture
-            var refused = false;
 
             // Right-angle orientations as grid axis pairs (u = grid column axis,
             // v = grid row axis, in pixels per module).
-            for (var orientation = 0; orientation < 4 && !refused; orientation++)
+            for (var orientation = 0; orientation < 4; orientation++)
             {
                 var (uX, uY, vX, vY) = orientation switch
                 {
@@ -243,26 +236,25 @@ internal static class MicroQRImageDecoder
 
                 // Larger sizes first: a real M4 sampled as M2 reads a garbled
                 // sub-grid, while trying real sizes first exits at the first success.
-                for (var size = 17; size >= 11 && !refused; size -= 2)
+                for (var size = 17; size >= 11; size -= 2)
                 {
                     if (!SymbolFitsImage(originX, originY, uX, uY, vX, vY, size, width, height, samplingSlack))
                         continue;
 
                     SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
+                    var quietZone = new AffineQuietZone(originX, originY, uX, uY, vX, vY);
 
-                    var status = DecodeGrid(modules, new MatrixModules(size), size, destination, out charsWritten, out var attemptInfo, refuseWeakReads, ref refused);
+                    var status = DecodeGrid(modules, new MatrixModules(size), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var attemptInfo);
                     if (status == DecodeStatus.Success)
                     {
                         info = attemptInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: false));
                         return status;
                     }
                     TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
-                    if (refused)
-                        break;
 
                     // Mirrored capture (e.g. front camera): finder geometry is
                     // identical but the data grid is transposed.
-                    var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, destination, out charsWritten, out var mirroredInfo, refuseWeakReads, ref refused);
+                    var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredInfo);
                     if (mirroredStatus == DecodeStatus.Success)
                     {
                         info = mirroredInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: true));
@@ -275,12 +267,12 @@ internal static class MicroQRImageDecoder
                 // symbol, and a render that snaps modules to whole pixels can give the
                 // finder a size a few percent off. The timing patterns reach the far edge,
                 // so they measure the symbol itself. Failure-path cost only.
-                if (!refused
-                    && TryTimingFrame(luminance, width, height, threshold, candidate, uX, uY, vX, vY, out var timingOriginX, out var timingOriginY, out var tuX, out var tuY, out var tvX, out var tvY, out var timingSize)
+                if (TryTimingFrame(luminance, width, height, threshold, candidate, uX, uY, vX, vY, out var timingOriginX, out var timingOriginY, out var tuX, out var tuY, out var tvX, out var tvY, out var timingSize)
                     && SymbolFitsImage(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, width, height, samplingSlack))
                 {
                     SampleGrid(luminance, width, height, threshold, timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, modules);
-                    var timingStatus = DecodeGrid(modules, new MatrixModules(timingSize), timingSize, destination, out charsWritten, out var timingInfo, refuseWeakReads, ref refused);
+                    var quietZone = new AffineQuietZone(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY);
+                    var timingStatus = DecodeGrid(modules, new MatrixModules(timingSize), timingSize, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var timingInfo);
                     if (timingStatus == DecodeStatus.Success)
                     {
                         info = timingInfo.WithCorners(SymbolGeometry.FromAffine(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, transposed: false));
@@ -288,30 +280,27 @@ internal static class MicroQRImageDecoder
                     }
                     TrackBestFailure(timingStatus, timingInfo, ref bestStatus, ref bestInfo);
 
-                    if (!refused)
+                    var mirroredTimingStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(timingSize)), timingSize, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredTimingInfo);
+                    if (mirroredTimingStatus == DecodeStatus.Success)
                     {
-                        var mirroredTimingStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(timingSize)), timingSize, destination, out charsWritten, out var mirroredTimingInfo, refuseWeakReads, ref refused);
-                        if (mirroredTimingStatus == DecodeStatus.Success)
-                        {
-                            info = mirroredTimingInfo.WithCorners(SymbolGeometry.FromAffine(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, transposed: true));
-                            return mirroredTimingStatus;
-                        }
-                        TrackBestFailure(mirroredTimingStatus, mirroredTimingInfo, ref bestStatus, ref bestInfo);
+                        info = mirroredTimingInfo.WithCorners(SymbolGeometry.FromAffine(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, transposed: true));
+                        return mirroredTimingStatus;
                     }
+                    TrackBestFailure(mirroredTimingStatus, mirroredTimingInfo, ref bestStatus, ref bestInfo);
                 }
 
                 // Module boundaries: under about 1.5 px/module a crisp module is 1 or 2 px wide
                 // and a sample has an eighth of a pixel to spare, which neither fitted frame keeps.
-                if (!refused
-                    && samplingSlack < ModuleBoundaryReader.MaxModuleSize
+                if (samplingSlack < ModuleBoundaryReader.MaxModuleSize
                     && TryReadModuleBoundaries(luminance, width, height, threshold, candidate, Math.Sign(uX), Math.Sign(uY), Math.Sign(vX), Math.Sign(vY), samplingSlack, boundaryColumns, boundaryRows, out var frame, out var boundarySize))
                 {
                     ModuleBoundaryReader.Sample(luminance, width, height, threshold, frame, boundaryColumns, boundarySize, boundaryRows, boundarySize, modules);
+                    var quietZone = new CountedQuietZone(ModuleBoundaryReader.CountQuietZoneDark(luminance, width, height, threshold, frame, boundaryColumns, boundarySize, boundaryRows, boundarySize));
                     frame.ToImage(boundaryColumns[0], boundaryRows[0], out var boundaryOriginX, out var boundaryOriginY);
                     var pitchU = (boundaryColumns[boundarySize] - boundaryColumns[0]) / (float)boundarySize;
                     var pitchV = (boundaryRows[boundarySize] - boundaryRows[0]) / (float)boundarySize;
 
-                    var boundaryStatus = DecodeGrid(modules, new MatrixModules(boundarySize), boundarySize, destination, out charsWritten, out var boundaryInfo, refuseWeakReads, ref refused);
+                    var boundaryStatus = DecodeGrid(modules, new MatrixModules(boundarySize), boundarySize, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var boundaryInfo);
                     if (boundaryStatus == DecodeStatus.Success)
                     {
                         info = boundaryInfo.WithCorners(SymbolGeometry.FromAffine(boundaryOriginX, boundaryOriginY, pitchU * frame.UX, pitchU * frame.UY, pitchV * frame.VX, pitchV * frame.VY, boundarySize, transposed: false));
@@ -319,21 +308,15 @@ internal static class MicroQRImageDecoder
                     }
                     TrackBestFailure(boundaryStatus, boundaryInfo, ref bestStatus, ref bestInfo);
 
-                    if (!refused)
+                    var mirroredBoundaryStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(boundarySize)), boundarySize, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredBoundaryInfo);
+                    if (mirroredBoundaryStatus == DecodeStatus.Success)
                     {
-                        var mirroredBoundaryStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(boundarySize)), boundarySize, destination, out charsWritten, out var mirroredBoundaryInfo, refuseWeakReads, ref refused);
-                        if (mirroredBoundaryStatus == DecodeStatus.Success)
-                        {
-                            info = mirroredBoundaryInfo.WithCorners(SymbolGeometry.FromAffine(boundaryOriginX, boundaryOriginY, pitchU * frame.UX, pitchU * frame.UY, pitchV * frame.VX, pitchV * frame.VY, boundarySize, transposed: true));
-                            return mirroredBoundaryStatus;
-                        }
-                        TrackBestFailure(mirroredBoundaryStatus, mirroredBoundaryInfo, ref bestStatus, ref bestInfo);
+                        info = mirroredBoundaryInfo.WithCorners(SymbolGeometry.FromAffine(boundaryOriginX, boundaryOriginY, pitchU * frame.UX, pitchU * frame.UY, pitchV * frame.VX, pitchV * frame.VY, boundarySize, transposed: true));
+                        return mirroredBoundaryStatus;
                     }
+                    TrackBestFailure(mirroredBoundaryStatus, mirroredBoundaryInfo, ref bestStatus, ref bestInfo);
                 }
             }
-
-            if (refused)
-                continue;
 
             // The fast path above covers the overwhelmingly common axis-aligned
             // case. On failure, recover the finder square's local axes by sweeping
@@ -351,9 +334,7 @@ internal static class MicroQRImageDecoder
                 out charsWritten,
                 out var rotatedInfo,
                 ref bestStatus,
-                ref bestInfo,
-                refuseWeakReads,
-                ref refused);
+                ref bestInfo);
             if (rotatedStatus == DecodeStatus.Success)
             {
                 info = rotatedInfo;
@@ -382,9 +363,7 @@ internal static class MicroQRImageDecoder
         out int charsWritten,
         out MicroQRCodeDecodeInfo info,
         ref DecodeStatus bestStatus,
-        ref MicroQRCodeDecodeInfo bestInfo,
-        bool refuseWeakReads,
-        ref bool refused)
+        ref MicroQRCodeDecodeInfo bestInfo)
     {
         Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
         var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, candidate, orientations);
@@ -409,7 +388,7 @@ internal static class MicroQRImageDecoder
 
                 for (var size = 17; size >= 11; size -= 2)
                 {
-                    if (attemptsRemaining == 0 || refused)
+                    if (attemptsRemaining == 0)
                     {
                         charsWritten = 0;
                         info = bestInfo;
@@ -420,8 +399,9 @@ internal static class MicroQRImageDecoder
                         continue;
 
                     SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
+                    var quietZone = new AffineQuietZone(originX, originY, uX, uY, vX, vY);
                     attemptsRemaining--;
-                    var status = DecodeGrid(modules, new MatrixModules(size), size, destination, out charsWritten, out var attemptInfo, refuseWeakReads, ref refused);
+                    var status = DecodeGrid(modules, new MatrixModules(size), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var attemptInfo);
                     if (status == DecodeStatus.Success)
                     {
                         info = attemptInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: false));
@@ -429,11 +409,11 @@ internal static class MicroQRImageDecoder
                     }
                     TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
-                    if (attemptsRemaining == 0 || refused)
+                    if (attemptsRemaining == 0)
                         continue;
 
                     attemptsRemaining--;
-                    var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, destination, out charsWritten, out var mirroredInfo, refuseWeakReads, ref refused);
+                    var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredInfo);
                     if (mirroredStatus == DecodeStatus.Success)
                     {
                         info = mirroredInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, uX, uY, vX, vY, size, transposed: true));
@@ -452,7 +432,7 @@ internal static class MicroQRImageDecoder
                         luminance, width, height, threshold, candidate,
                         uX, uY, vX, vY, size, modules, destination,
                         out charsWritten, out var scaledInfo,
-                        ref bestStatus, ref bestInfo, ref attemptsRemaining, refuseWeakReads, ref refused);
+                        ref bestStatus, ref bestInfo, ref attemptsRemaining);
                     if (scaledStatus == DecodeStatus.Success)
                     {
                         info = scaledInfo;
@@ -477,9 +457,7 @@ internal static class MicroQRImageDecoder
                         out var projectiveInfo,
                         ref bestStatus,
                         ref bestInfo,
-                        ref attemptsRemaining,
-                        refuseWeakReads,
-                        ref refused);
+                        ref attemptsRemaining);
                     if (projectiveStatus == DecodeStatus.Success)
                     {
                         info = projectiveInfo;
@@ -514,9 +492,7 @@ internal static class MicroQRImageDecoder
         out MicroQRCodeDecodeInfo info,
         ref DecodeStatus bestStatus,
         ref MicroQRCodeDecodeInfo bestInfo,
-        ref int attemptsRemaining,
-        bool refuseWeakReads,
-        ref bool refused)
+        ref int attemptsRemaining)
     {
         ReadOnlySpan<float> centerOffsets = stackalloc float[] { 0f, -0.5f, 0.5f };
         ReadOnlySpan<float> factors = stackalloc float[] { 0.94f, 0.97f, 1f, 1.03f, 1.06f };
@@ -530,7 +506,7 @@ internal static class MicroQRImageDecoder
                 {
                     foreach (var uFactor in factors)
                     {
-                        if (attemptsRemaining == 0 || refused)
+                        if (attemptsRemaining == 0)
                         {
                             charsWritten = 0;
                             info = bestInfo;
@@ -553,8 +529,9 @@ internal static class MicroQRImageDecoder
                             continue;
 
                         SampleGrid(luminance, width, height, threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
+                        var quietZone = new AffineQuietZone(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY);
                         attemptsRemaining--;
-                        var status = DecodeGrid(modules, new MatrixModules(size), size, destination, out charsWritten, out var attemptInfo, refuseWeakReads, ref refused);
+                        var status = DecodeGrid(modules, new MatrixModules(size), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var attemptInfo);
                         if (status == DecodeStatus.Success)
                         {
                             info = attemptInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, transposed: false));
@@ -562,11 +539,11 @@ internal static class MicroQRImageDecoder
                         }
                         TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
-                        if (attemptsRemaining == 0 || refused)
+                        if (attemptsRemaining == 0)
                             continue;
 
                         attemptsRemaining--;
-                        var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, destination, out charsWritten, out var mirroredInfo, refuseWeakReads, ref refused);
+                        var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredInfo);
                         if (mirroredStatus == DecodeStatus.Success)
                         {
                             info = mirroredInfo.WithCorners(SymbolGeometry.FromAffine(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, transposed: true));
@@ -605,9 +582,7 @@ internal static class MicroQRImageDecoder
         out MicroQRCodeDecodeInfo info,
         ref DecodeStatus bestStatus,
         ref MicroQRCodeDecodeInfo bestInfo,
-        ref int attemptsRemaining,
-        bool refuseWeakReads,
-        ref bool refused)
+        ref int attemptsRemaining)
     {
         ReadOnlySpan<float> strengths = stackalloc float[] { -0.12f, -0.08f, -0.04f, -0.02f, 0f, 0.02f, 0.04f, 0.08f, 0.12f };
         for (var pyIndex = 0; pyIndex < strengths.Length; pyIndex++)
@@ -615,7 +590,7 @@ internal static class MicroQRImageDecoder
             var perspectiveY = strengths[pyIndex] / size;
             for (var pxIndex = 0; pxIndex < strengths.Length; pxIndex++)
             {
-                if (attemptsRemaining == 0 || refused)
+                if (attemptsRemaining == 0)
                 {
                     charsWritten = 0;
                     info = bestInfo;
@@ -641,8 +616,9 @@ internal static class MicroQRImageDecoder
                     continue;
 
                 QRImageDecoder.SampleGrid(luminance, width, height, threshold, transform, size, modules);
+                var quietZone = new ProjectiveQuietZone(transform);
                 attemptsRemaining--;
-                var status = DecodeGrid(modules, new MatrixModules(size), size, destination, out charsWritten, out var attemptInfo, refuseWeakReads, ref refused);
+                var status = DecodeGrid(modules, new MatrixModules(size), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var attemptInfo);
                 if (status == DecodeStatus.Success)
                 {
                     info = attemptInfo.WithCorners(SymbolGeometry.FromTransform(transform, size, size, transposed: false));
@@ -650,11 +626,11 @@ internal static class MicroQRImageDecoder
                 }
                 TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
-                if (attemptsRemaining == 0 || refused)
+                if (attemptsRemaining == 0)
                     continue;
 
                 attemptsRemaining--;
-                var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, destination, out charsWritten, out var mirroredInfo, refuseWeakReads, ref refused);
+                var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredInfo);
                 if (mirroredStatus == DecodeStatus.Success)
                 {
                     info = mirroredInfo.WithCorners(SymbolGeometry.FromTransform(transform, size, size, transposed: true));
@@ -669,38 +645,11 @@ internal static class MicroQRImageDecoder
         return bestStatus;
     }
 
-    /// <summary>
-    /// One grid's matrix decode. With <paramref name="refuseWeakReads"/>, an M1 result, an empty read that needed correction, or an M3-M or M4-M result at its correction limit is refused; an M1 one also sets <paramref name="refused"/>.
-    /// </summary>
-    private static DecodeStatus DecodeGrid<TModules>(ReadOnlySpan<byte> modules, in TModules grid, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool refuseWeakReads, ref bool refused)
+    /// <summary>One grid's matrix decode: the corrections its read may use are what its structure earns (<see cref="MicroQRMatrixDecoder.DecodeSampledGrid"/>).</summary>
+    private static DecodeStatus DecodeGrid<TModules, TQuietZone>(ReadOnlySpan<byte> modules, in TModules grid, int size, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
         where TModules : struct, IMicroQRModules
-    {
-        var status = MicroQRMatrixDecoder.DecodeMatrix(modules, grid, size, destination, out charsWritten, out info);
-        // Verdicts too: a grid on texture can reach an unmapped Kanji cell
-        if (!refuseWeakReads || !IsSettled(status))
-            return status;
-
-        // Texture passes too often as M1, which only detects errors
-        if (info.Version == MicroQRVersion.M1)
-        {
-            refused = true;
-            return Refuse(out charsWritten, out info);
-        }
-        // Texture also corrects into an empty read or into level M at its limit; a real symbol
-        // read that way may read cleanly on the next grid, so the search goes on
-        if (info.ErrorsCorrected > 0
-            && ((status == DecodeStatus.Success && charsWritten == 0)
-                || AtLevelMLimit(info)))
-            return Refuse(out charsWritten, out info);
-        return status;
-
-        static DecodeStatus Refuse(out int charsWritten, out MicroQRCodeDecodeInfo info)
-        {
-            charsWritten = 0;
-            info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
-            return DecodeStatus.NotDetected;
-        }
-    }
+        where TQuietZone : struct, IMicroQRQuietZone
+        => MicroQRMatrixDecoder.DecodeSampledGrid(modules, grid, size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out info);
 
     /// <summary>
     /// Ranks decode failures by how far the attempt progressed; keeps the deepest.
@@ -739,10 +688,6 @@ internal static class MicroQRImageDecoder
 
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
-
-    /// <summary>An M3-M or M4-M result that needed every correction its level allows.</summary>
-    private static bool AtLevelMLimit(in MicroQRCodeDecodeInfo info)
-        => info.Version >= MicroQRVersion.M3 && info.EccLevel == MicroQREccLevel.M && info.ErrorsCorrected == MicroQRConstants.GetErrorCorrectionCapacity(info.Version, info.EccLevel);
 
     /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content.</summary>
     private static bool IsSettled(DecodeStatus status)

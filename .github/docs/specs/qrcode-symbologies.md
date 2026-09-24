@@ -266,9 +266,7 @@ reached only after its error correction, and one is reported when no attempt rea
 first attempt and the inverted retry run as they always have, so a readable symbol elsewhere in the
 image (a light-on-dark one beside it, say) is still read. A verdict from either skips the regional
 pass, which looks for a symbol the global threshold cannot see, so a second, unevenly lit symbol
-beside a symbol that gave a verdict is not looked for. Micro QR makes one exception: a verdict at
-M3-M's or M4-M's correction limit, where texture also lands, still tries the regional pass, and is
-reported only if that pass reads nothing. In the regional
+beside a symbol that gave a verdict is not looked for. In the regional
 pass a verdict on the positive ends it before the negative. Inside an attempt a verdict counts like a read
 wherever Standard QR chooses between grids for one symbol (the timing frame or the finder grid, other
 dimensions, the mesh or the global grid, the finder-only grid, the mirrored grid), whichever grid

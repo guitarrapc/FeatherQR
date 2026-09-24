@@ -106,7 +106,7 @@ public class MicroQRGridReadParityTest
 #endif
     }
 
-    /// <summary>The format table against the nearest-candidate search it replaced, for every 16-bit word.</summary>
+    /// <summary>The format table against the nearest-candidate search it replaced, for every 16-bit word, the distance included.</summary>
     [Test]
     public async Task FormatTable_MatchesTheSearch_EveryWord()
     {
@@ -137,10 +137,10 @@ public class MicroQRGridReadParityTest
             var wantOk = bestDistance <= 3;
             MicroQRConstants.GetVersionAndEccFromSymbolNumber(best >> 2, out var wantVersion, out var wantLevel);
 
-            var gotOk = MicroQRFormatInformationDecoder.TryDecode((ushort)raw, out var gotVersion, out var gotLevel, out var gotMask);
+            var gotOk = MicroQRFormatInformationDecoder.TryDecode((ushort)raw, out var gotVersion, out var gotLevel, out var gotMask, out var gotDistance);
             var same = gotOk == wantOk && (!wantOk
-                ? gotVersion == default && gotLevel == default && gotMask == -1
-                : gotVersion == wantVersion && gotLevel == wantLevel && gotMask == (best & 3));
+                ? gotVersion == default && gotLevel == default && gotMask == -1 && gotDistance == -1
+                : gotVersion == wantVersion && gotLevel == wantLevel && gotMask == (best & 3) && gotDistance == bestDistance);
             if (!same && mismatches++ == 0)
                 first = $"word {raw:X4}";
             if (wantOk)

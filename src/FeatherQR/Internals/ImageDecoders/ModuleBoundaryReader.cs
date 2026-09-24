@@ -317,6 +317,29 @@ internal static class ModuleBoundaryReader
         }
     }
 
+    /// <summary>
+    /// Dark modules on the line past the last column and the last row (one module as wide as the last), read like <see cref="Sample"/>; outside the image counts as light.
+    /// </summary>
+    public static int CountQuietZoneDark(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in AxisAlignedFrame frame, ReadOnlySpan<int> columns, int columnCount, ReadOnlySpan<int> rows, int rowCount)
+    {
+        var s = columns[columnCount] + (columns[columnCount] - columns[columnCount - 1] - 1) / 2;
+        var t = rows[rowCount] + (rows[rowCount] - rows[rowCount - 1] - 1) / 2;
+        var dark = IsDarkAt(luminance, width, height, threshold, frame.CenterX + s * frame.UX + t * frame.VX, frame.CenterY + s * frame.UY + t * frame.VY) ? 1 : 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            var rowT = (rows[row] + rows[row + 1] - 1) / 2;
+            if (IsDarkAt(luminance, width, height, threshold, frame.CenterX + s * frame.UX + rowT * frame.VX, frame.CenterY + s * frame.UY + rowT * frame.VY))
+                dark++;
+        }
+        for (var column = 0; column < columnCount; column++)
+        {
+            var columnS = (columns[column] + columns[column + 1] - 1) / 2;
+            if (IsDarkAt(luminance, width, height, threshold, frame.CenterX + columnS * frame.UX + t * frame.VX, frame.CenterY + columnS * frame.UY + t * frame.VY))
+                dark++;
+        }
+        return dark;
+    }
+
     public static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int x, int y)
         => x >= 0 && y >= 0 && x < width && y < height && luminance[y * width + x] < threshold;
 }

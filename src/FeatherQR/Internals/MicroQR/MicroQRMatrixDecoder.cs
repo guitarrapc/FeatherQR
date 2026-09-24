@@ -15,7 +15,8 @@ namespace FeatherQR.Internals.MicroQR;
 ///    (single Reed-Solomon block, so there is no deinterleaving stage)
 /// 4. Reed-Solomon error correction, capped at the ISO Table 9 capacity t
 ///    (the ECC codewords include misdecode-protection codewords p; M1 is
-///    error detection only, t = 0)
+///    error detection only, t = 0) and, on a grid sampled from an image, at
+///    what its structure earns (MicroQRGridEvidence)
 /// 5. Bitstream decoding (mode segments → text), bounded by the bit capacity
 ///    (M1/M3 end on a 4-bit half codeword)
 /// </code>
@@ -51,6 +52,22 @@ internal static class MicroQRMatrixDecoder
     /// </summary>
     public static DecodeStatus DecodeMatrix<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
         where TModules : struct, IMicroQRModules
+        => Decode(pixels, modules, size, sampled: false, default, 0, 0, 0, new CountedQuietZone(0), destination, out charsWritten, out info);
+
+    /// <summary>
+    /// Decodes a grid sampled from an image, where the grid may lie on anything: the corrections a read may use are what its timing patterns, format word and quiet zone earn (<see cref="MicroQRGridEvidence"/>), and a read beyond what they earn fails as a correction failure does.
+    /// </summary>
+    /// <remarks>
+    /// The structure is counted only for a grid Reed-Solomon reads, which texture rarely reaches, and the quiet zone, read from <paramref name="luminance"/>, only when the timing patterns and format word fall short.
+    /// </remarks>
+    public static DecodeStatus DecodeSampledGrid<TModules, TQuietZone>(ReadOnlySpan<byte> pixels, in TModules modules, int size, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+        where TModules : struct, IMicroQRModules
+        where TQuietZone : struct, IMicroQRQuietZone
+        => Decode(pixels, modules, size, sampled: true, luminance, width, height, threshold, quietZone, destination, out charsWritten, out info);
+
+    private static DecodeStatus Decode<TModules, TQuietZone>(ReadOnlySpan<byte> pixels, in TModules modules, int size, bool sampled, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+        where TModules : struct, IMicroQRModules
+        where TQuietZone : struct, IMicroQRQuietZone
     {
         charsWritten = 0;
 
@@ -64,7 +81,7 @@ internal static class MicroQRMatrixDecoder
 
         // 2. Format information (symbol number → version/ECC, mask pattern)
         var rawFormat = ReadFormatBits(pixels, modules);
-        if (!MicroQRFormatInformationDecoder.TryDecode(rawFormat, out var formatVersion, out var eccLevel, out var maskPattern)
+        if (!MicroQRFormatInformationDecoder.TryDecode(rawFormat, out var formatVersion, out var eccLevel, out var maskPattern, out var formatDistance)
             || formatVersion != version)
         {
             // A decodable format word naming a different version than the physical
@@ -85,9 +102,11 @@ internal static class MicroQRMatrixDecoder
         // 3. Extract codewords (inverse zigzag + unmask)
         ExtractCodewords(pixels, modules, size, maskPattern, dataBitCount, dataCodewords, block);
 
-        // 4. Reed-Solomon correction, capped at the symbol's correction capacity
+        // 4. Reed-Solomon correction, capped at the ISO Table 9 capacity and, on a sampled grid, at what its
+        //    structure earns: counted only for a read, which texture rarely reaches, the quiet zone last
         if (!EccBinaryDecoder.TryCorrect(block, eccCodewords, out var errorsCorrected)
-            || errorsCorrected > MicroQRConstants.GetErrorCorrectionCapacity(version, eccLevel))
+            || errorsCorrected > MicroQRConstants.GetErrorCorrectionCapacity(version, eccLevel)
+            || (sampled && !MicroQRGridEvidence.SuspendedOnThisThread && !Earns(pixels, modules, size, version, eccLevel, formatDistance, errorsCorrected, luminance, width, height, threshold, quietZone)))
         {
             info = new MicroQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
             return DecodeStatus.DataUncorrectable;
@@ -110,6 +129,32 @@ internal static class MicroQRMatrixDecoder
     {
         var eccLevel = version == MicroQRVersion.M1 ? MicroQREccLevel.ErrorDetectionOnly : MicroQREccLevel.L;
         return MicroQRConstants.GetDataCodewordCount(version, eccLevel) * 3;
+    }
+
+    /// <summary>Whether the grid's timing patterns and format word, and its quiet zone when they fall short, earn <paramref name="errorsCorrected"/> corrections.</summary>
+    private static bool Earns<TModules, TQuietZone>(ReadOnlySpan<byte> pixels, in TModules modules, int size, MicroQRVersion version, MicroQREccLevel eccLevel, int formatDistance, int errorsCorrected, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in TQuietZone quietZone)
+        where TModules : struct, IMicroQRModules
+        where TQuietZone : struct, IMicroQRQuietZone
+    {
+        var timingMismatches = CountTimingMismatches(pixels, modules, size);
+        return errorsCorrected <= MicroQRGridEvidence.MaxCorrections(version, eccLevel, formatDistance, timingMismatches, MicroQRGridEvidence.QuietZoneUnread)
+            || errorsCorrected <= MicroQRGridEvidence.MaxCorrections(version, eccLevel, formatDistance, timingMismatches, quietZone.CountDark(luminance, width, height, threshold, size));
+    }
+
+    /// <summary>Timing modules (row 0 and column 0 from index 8, dark on even indices) that read the other way; the same count for a grid and its transpose.</summary>
+    private static int CountTimingMismatches<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size)
+        where TModules : struct, IMicroQRModules
+    {
+        var mismatches = 0;
+        for (var i = 8; i < size; i++)
+        {
+            var dark = (i & 1) == 0;
+            if (modules.IsDark(pixels, 0, i) != dark)
+                mismatches++;
+            if (modules.IsDark(pixels, i, 0) != dark)
+                mismatches++;
+        }
+        return mismatches;
     }
 
     /// <summary>
