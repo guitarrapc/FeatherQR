@@ -415,7 +415,7 @@ internal static class MicroQRImageDecoder
         int height,
         byte threshold,
         in GreyLevels grey,
-        in FinderPattern candidate,
+        in FinderPattern finder,
         Span<byte> modules,
         Span<char> destination,
         out int charsWritten,
@@ -424,12 +424,15 @@ internal static class MicroQRImageDecoder
         ref MicroQRCodeDecodeInfo bestInfo)
     {
         Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
-        var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, candidate, orientations);
+        var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, finder, orientations);
         var attemptsRemaining = MaxArbitraryOrientationDecodeAttempts;
 
         for (var frameIndex = 0; frameIndex < orientationCount; frameIndex++)
         {
             ref readonly var frame = ref orientations[frameIndex];
+            // The centre square's window has to lie along the symbol's axes, which only this frame knows
+            var candidate = finder;
+            ConcentricCentroid.TryRefine(luminance, width, height, grey, frame.UX, frame.UY, frame.VX, frame.VY, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
             for (var orientation = 0; orientation < 4; orientation++)
             {
                 var (uX, uY, vX, vY) = orientation switch

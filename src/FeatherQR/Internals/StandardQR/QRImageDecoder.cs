@@ -665,16 +665,12 @@ internal static partial class QRImageDecoder
     /// The module size must NOT come from the horizontal-scan run widths: those are measured along image rows and grow by up to √2 under rotation (at 45° a row cuts the rotated rings diagonally).
     /// Instead it is measured along the actual finder-to-finder lines, which is rotation-invariant.
     /// </remarks>
-    /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
-    /// <param name="width">Image width in pixels.</param>
-    /// <param name="height">Image height in pixels.</param>
-    /// <param name="threshold">Binarization threshold: a pixel is dark when luminance &lt; threshold.</param>
     /// <param name="topLeft">The finder pattern at the top-left corner of the symbol.</param>
     /// <param name="topRight">The finder pattern at the top-right corner of the symbol.</param>
     /// <param name="bottomLeft">The finder pattern at the bottom-left corner of the symbol.</param>
     /// <param name="dimension">Nearest valid dimension to the estimate.</param>
     /// <param name="secondaryDimension">Second-nearest valid dimension when the estimate is also within one version step of it (retry candidate for estimates near a snap boundary), else 0.</param>
-    /// <param name="moduleSize">Measured module size in pixels (for the alignment pattern search).</param>
+    /// <param name="moduleSize">Module size in pixels, measured along the finder-to-finder lines (<see cref="MeasureModuleSizes"/>).</param>
     private static bool TryEstimateDimension(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float moduleSize, out int dimension, out int secondaryDimension)
     {
         dimension = 0;

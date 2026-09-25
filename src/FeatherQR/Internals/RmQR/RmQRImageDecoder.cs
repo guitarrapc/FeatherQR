@@ -295,16 +295,16 @@ internal static class RmQRImageDecoder
                     continue;
                 if (!tried.IsEmpty)
                     tried[triedCount++] = candidates[c];
-                var candidate = candidates[c];
+                var finder = candidates[c];
                 var attemptsRemaining = MaxDecodeAttemptsPerCandidate;
 
                 // Fast path: right-angle frames from the axis-aligned module sizes.
-                FinderAxisEstimator.RefineModuleSize(luminance, width, height, threshold, candidate, out var horizontalModuleSize, out var verticalModuleSize);
+                FinderAxisEstimator.RefineModuleSize(luminance, width, height, threshold, finder, out var horizontalModuleSize, out var verticalModuleSize);
                 if (horizontalModuleSize >= 1f && verticalModuleSize >= 1f)
                 {
-                    ConcentricCentroid.TryRefine(luminance, width, height, grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
+                    ConcentricCentroid.TryRefine(luminance, width, height, grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref finder.X, ref finder.Y, out _);
                     var status = TryFrames(
-                        luminance, width, height, threshold, grey, candidate,
+                        luminance, width, height, threshold, grey, finder,
                         horizontalModuleSize, 0f, 0f, verticalModuleSize,
                         modules, destination, out charsWritten, out info,
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -318,10 +318,13 @@ internal static class RmQRImageDecoder
                 }
 
                 // Arbitrary rotation: recover the finder's local axes from the angular sweep.
-                var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, candidate, orientations);
+                var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, finder, orientations);
                 for (var o = 0; o < orientationCount && attemptsRemaining > 0; o++)
                 {
                     ref readonly var frame = ref orientations[o];
+                    // The centre square's window has to lie along the symbol's axes, which only this frame knows
+                    var candidate = finder;
+                    ConcentricCentroid.TryRefine(luminance, width, height, grey, frame.UX, frame.UY, frame.VX, frame.VY, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
                     var status = TryFrames(
                         luminance, width, height, threshold, grey, candidate,
                         frame.UX, frame.UY, frame.VX, frame.VY,

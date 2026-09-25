@@ -213,6 +213,40 @@ public class SubPixelFrameDecodeTest
         await Assert.That(text).IsEqualTo(content);
     }
 
+    /// <summary>Turned off the image axes, the centre square's window has to follow the symbol's axes; one along the image axes takes in a corner of the light ring and pulls the centre off.</summary>
+    [Test]
+    [Arguments(MicroQRVersion.M4, 1.5102993f, 315.6054f, 0.86167276f, 0.4975676f)]
+    [Arguments(MicroQRVersion.M3, 1.6059713f, 46.342644f, 0.98668975f, 0.4381953f)]
+    [Arguments(MicroQRVersion.M3, 1.8273811f, 52.850662f, 0.28859267f, 0.8406578f)]
+    public async Task MicroQR_TurnedGreyEdges_Decodes(MicroQRVersion version, float pixelsPerModule, float degrees, float offsetX, float offsetY)
+    {
+        var content = MicroContent(version);
+        var qr = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version });
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, degrees, offsetX, offsetY, true, UnevenLight.Shadow, 0f, 0f);
+        await AssertGreyEdges(luminance);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModule} px/module turned {degrees}: {info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
+    [Test]
+    [Arguments(RmQRVersion.R17x99, 1.5186417f, 122.485016f, 0.33186528f, 0.8910761f)]
+    [Arguments(RmQRVersion.R13x77, 1.8165147f, 315.76337f, 0.17417641f, 0.056273535f)]
+    public async Task RmQR_TurnedGreyEdges_Decodes(RmQRVersion version, float pixelsPerModule, float degrees, float offsetX, float offsetY)
+    {
+        const string content = "RMQR 01";
+        var qr = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        var (luminance, width, height) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Width, qr.Height, pixelsPerModule, degrees, offsetX, offsetY, true, UnevenLight.Shadow, 0f, 0f);
+        await AssertGreyEdges(luminance);
+
+        var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModule} px/module turned {degrees}: {info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
     private static async Task AssertFinderOnlyAtTheMidpoint(byte[] luminance, int width, int height)
     {
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);

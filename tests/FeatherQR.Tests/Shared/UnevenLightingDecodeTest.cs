@@ -281,7 +281,7 @@ public class UnevenLightingDecodeTest
     /// A real M1 symbol under a ramp: a grid near the real one passes M1's check with other text, while its structure does not earn the read, and the search goes on to the real grid.
     /// </summary>
     [Test]
-    [Arguments(1.8141892f, 26.383986f, 0.25066826f, 0.98595005f, 0.5586403f, false)]
+    [Arguments(1.8233829f, 94.35809f, 0.18023811f, 0.41934952f, 0.46335387f, false)]
     [Arguments(1.7421498f, 250.21765f, 0.034180205f, 0.023200577f, 0.52600694f, true)]
     public async Task MicroQR_M1UnderRamp_NotMisread(float pixelsPerModule, float turn, float offsetX, float offsetY, float depth, bool reflectanceReversed)
     {
@@ -562,7 +562,7 @@ public class UnevenLightingDecodeTest
     /// </summary>
     [Test]
     [Arguments(MicroQRVersion.M4, 4.363f, 245.54f, 2.320f, 3.068f)]
-    [Arguments(MicroQRVersion.M4, 3.775f, 239.05f, 0.587f, 0.448f)]
+    [Arguments(MicroQRVersion.M4, 4.242f, 243.36f, 2.739f, 1.752f)]
     public async Task MicroQR_VerdictAtTheCorrectionLimitWithoutStructure_SymbolRead(MicroQRVersion version, float pixelsPerModule, float turn, float offsetX, float offsetY)
     {
         var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = version });
