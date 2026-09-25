@@ -15,9 +15,9 @@ namespace FeatherQR.Internals.StandardQR;
 /// Pipeline:
 /// <code>
 /// 1. Global binarization threshold (Otsu's method over the luminance histogram); a regional binarization when neither polarity reads
-/// 2. Finder pattern detection (1:1:3:1:1 scan + cross checks)
+/// 2. Finder pattern detection (1:1:3:1:1 scan + cross checks, a column allowed to be as much longer or shorter than its row as a finder in perspective is); when the selected triple fails, up to two other triples, best confirmed first, each once its timing patterns read
 /// 3. Orientation from the three finder centers (rotation-invariant)
-/// 4. Dimension estimate from center distances and module size
+/// 4. Dimension estimate from center distances and the module sizes at both ends of each finder line
 /// 5. Bottom-right alignment pattern search where the finders' frame puts it: their centres and how the module size changes along the two finder lines (version 2+; the parallelogram, then that frame, when nothing anchors the corner)
 /// 6. Perspective grid sampling into a module matrix (4-point projective transform)
 /// 7. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
@@ -119,13 +119,70 @@ internal static partial class QRImageDecoder
 
         var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
 
+        Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         Span<FinderPattern> patterns = stackalloc FinderPattern[3];
-        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey))
+        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey, candidates, out var candidateCount))
         {
             info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
             return DecodeStatus.NotDetected;
         }
 
+        var status = DecodeTriple(luminance, width, height, threshold, grey, patterns, destination, out charsWritten, out info);
+        if (IsSettled(status) || candidateCount <= 3)
+            return status;
+        return DecodeAlternativeTriples(luminance, width, height, threshold, grey, candidates.Slice(0, candidateCount), patterns, destination, status, ref charsWritten, ref info);
+    }
+
+    /// <summary>
+    /// How many other triples a failed decode verifies, best confirmed first.
+    /// </summary>
+    /// <remarks>
+    /// When the stride pass selected the triple and returned, the list it hands back counts each finder on a third of its rows, once or twice, and the order is coarse: three renders in 1,600 past 20 % keystone needed the second triple, and eight or 64 read none more.
+    /// Sweeping the rest of the rows first made the first triple enough, and cost a failing image a sweep each attempt: 740 × 740 noise doubled, 3.1 to 6.2 ms.
+    /// </remarks>
+    private const int MaxAlternativeTriples = 2;
+
+    /// <summary>
+    /// After the selected triple failed, the candidate list's other triples, best confirmed first (<see cref="FinderPatternFinder.AlternativeTriples"/>): each decoded only once its timing patterns read through its own frame (<see cref="TimingPatternsRead"/>); otherwise <paramref name="status"/> and the selected triple's diagnostics stand.
+    /// </summary>
+    private static DecodeStatus DecodeAlternativeTriples(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
+    {
+        var alternatives = new FinderPatternFinder.AlternativeTriples(candidates, selected);
+        Span<FinderPattern> triple = stackalloc FinderPattern[3];
+        for (var verified = 0; verified < MaxAlternativeTriples && alternatives.TryNext(triple); verified++)
+        {
+            OrderFinderPatterns(triple, out var topLeft, out var topRight, out var bottomLeft);
+            if (!TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+                continue;
+
+            var alternativeStatus = DecodeTriple(luminance, width, height, threshold, grey, triple, destination, out var alternativeCharsWritten, out var alternativeInfo);
+            if (IsSettled(alternativeStatus))
+            {
+                charsWritten = alternativeCharsWritten;
+                info = alternativeInfo;
+                return alternativeStatus;
+            }
+        }
+        return status;
+    }
+
+    /// <summary>
+    /// Whether a triple's two timing patterns read through the frame of its own centres and sizes: the check a triple from <see cref="FinderPatternFinder.AlternativeTriples"/> passes before it costs a decode.
+    /// </summary>
+    /// <remarks>
+    /// A timing pattern runs between two real finders and nowhere else, and the frame follows perspective, so this holds past 40 % keystone where the triple's shape says little: through their own frames the drawn triples of those renders read no timing module wrong, and triples holding a false candidate read 20 to 49 % wrong, near the half that texture reads.
+    /// The centres are not refined for it; a grid through them misses the timing modules by under a module.
+    /// </remarks>
+    internal static bool TimingPatternsRead(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
+    {
+        var moduleSizes = MeasureModuleSizes(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft);
+        return moduleSizes.Mean >= 1f
+            && MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, FinderFrame.Create(topLeft, topRight, bottomLeft, moduleSizes)) != 0;
+    }
+
+    /// <summary>One finder triple, in any order, through the timing frame and then the grids its centres and sizes give.</summary>
+    private static DecodeStatus DecodeTriple(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> patterns, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
         OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
 
         // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth
@@ -186,7 +243,7 @@ internal static partial class QRImageDecoder
         var matchedDimension = -1;
         var moduleSize = moduleSizes.Mean;
         var frame = FinderFrame.Create(topLeft, topRight, bottomLeft, moduleSizes);
-        if (!TryEstimateDimension(topLeft, topRight, bottomLeft, moduleSize, out var dimension, out var secondaryDimension))
+        if (!TryEstimateDimension(topLeft, topRight, bottomLeft, moduleSizes, frame, out var dimension, out var secondaryDimension))
         {
             // Snapped finders at versions 39-40 measure a few percent small, which puts the
             // estimate past the largest version; the count does not depend on it.
@@ -196,7 +253,7 @@ internal static partial class QRImageDecoder
                 timingCounted = true;
                 // A turned symbol under 3 px/module breaks the counted runs; its timing modules still alternate on the right grid
                 if (timingDimension == 0)
-                    timingDimension = matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSize, frame);
+                    timingDimension = matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
             }
             if (timingDimension == 0)
             {
@@ -242,7 +299,7 @@ internal static partial class QRImageDecoder
         // counted runs; the timing modules still alternate on the grid of the right dimension
         if (matchedDimension < 0 && moduleSize >= 1f)
         {
-            matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSize, frame);
+            matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
             if (matchedDimension != 0 && matchedDimension != dimension && matchedDimension != timingDimension && matchedDimension != versionDimension)
             {
                 var matchedStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, matchedDimension, moduleSize, destination, out var matchedCharsWritten, out var matchedInfo, out _);
@@ -694,19 +751,17 @@ internal static partial class QRImageDecoder
     /// <param name="bottomLeft">The finder pattern at the bottom-left corner of the symbol.</param>
     /// <param name="dimension">Nearest valid dimension to the estimate.</param>
     /// <param name="secondaryDimension">Second-nearest valid dimension when the estimate is also within one version step of it (retry candidate for estimates near a snap boundary), else 0.</param>
-    /// <param name="moduleSize">Module size in pixels, measured along the finder-to-finder lines (<see cref="MeasureModuleSizes"/>).</param>
-    private static bool TryEstimateDimension(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float moduleSize, out int dimension, out int secondaryDimension)
+    /// <param name="moduleSizes">Module sizes in pixels, measured along the finder-to-finder lines (<see cref="MeasureModuleSizes"/>).</param>
+    /// <param name="frame">The finders' frame built from those sizes: which lines it foreshortens.</param>
+    private static bool TryEstimateDimension(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, in FinderFrame frame, out int dimension, out int secondaryDimension)
     {
         dimension = 0;
         secondaryDimension = 0;
 
-        if (moduleSize < 1f)
+        if (moduleSizes.Mean < 1f)
             return false; // below one pixel per module nothing can be sampled reliably
 
-        // Finder centers sit 7 modules apart from the matrix edges
-        var widthModules = Distance(topLeft, topRight) / moduleSize + 7f;
-        var heightModules = Distance(topLeft, bottomLeft) / moduleSize + 7f;
-        var estimate = (widthModules + heightModules) / 2f;
+        var estimate = EstimateModules(topLeft, topRight, bottomLeft, moduleSizes, frame);
 
         // Snap to the nearest valid dimension, clamped to the version range so an
         // estimate just past version 40 (or below 1) still snaps; reject wild ones
@@ -730,6 +785,27 @@ internal static partial class QRImageDecoder
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The symbol's width in modules as the finders measure it, unsnapped: the mean over the two finder lines of each line's module count plus the 7 modules outside the centres.
+    /// </summary>
+    /// <remarks>
+    /// Where the frame is the parallelogram, the symbol has one module size and both lines divide by the mean of all four.
+    /// Otherwise each line divides by the geometric mean of its own two ends, which is the count the frame itself implies:
+    /// with the far end at weight w the near end measures w·L/(n − 7) and the far end L/(w·(n − 7)), so their product is (L/(n − 7))². Their plain mean is larger by (w + 1/w)/2 and puts the count short, 6 % at a size ratio of 2 and 13 % at 3, which at version 40 is five versions.
+    /// A line the frame takes as flat beside one it foreshortens divides by its own sizes too, not by the mean of four: that mean holds the other line's far end, 40 % large on a symbol at 20 % keystone, and put a version 40 two versions short.
+    /// </remarks>
+    internal static float EstimateModules(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, in FinderFrame frame)
+    {
+        var flat = frame.IsAffine;
+        var widthModules = Distance(topLeft, topRight) / LineModuleSize(flat, moduleSizes.TopLeftAlongU, moduleSizes.TopRight, moduleSizes.Mean) + 7f;
+        var heightModules = Distance(topLeft, bottomLeft) / LineModuleSize(flat, moduleSizes.TopLeftAlongV, moduleSizes.BottomLeft, moduleSizes.Mean) + 7f;
+        return (widthModules + heightModules) / 2f;
+
+        // A size is NaN where its run left the image, and a line missing one falls back on the mean of the rest
+        static float LineModuleSize(bool flat, float near, float far, float mean)
+            => flat || !(near > 0f && far > 0f) ? mean : (float)Math.Sqrt(near * far);
     }
 
     /// <summary>
@@ -813,9 +889,13 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// The dimension within four versions of the finders' estimate whose grid puts both timing patterns on alternating modules, sampled through the finders' frame; 0 when none leaves under an eighth of them wrong.
     /// </summary>
-    internal static int MatchTimingDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float moduleSize, in FinderFrame frame)
+    /// <remarks>
+    /// The estimate it searches around is <see cref="EstimateModules"/>, the frame's own count along each line: under strong keystone a count from the mean size is short by more than the four versions searched.
+    /// A dimension is given up as soon as its wrong modules are as many as the best so far allows, which a false triple's timing lines, about half wrong, reach within a few dozen modules; the result is the full count's.
+    /// </remarks>
+    internal static int MatchTimingDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, in FinderFrame frame)
     {
-        var estimate = ((Distance(topLeft, topRight) + Distance(topLeft, bottomLeft)) / 2f) / moduleSize + 7f;
+        var estimate = EstimateModules(topLeft, topRight, bottomLeft, moduleSizes, frame);
         var best = 0;
         var bestWrong = 1f / 8f;
         for (var version = 1; version <= 40; version++)
@@ -824,6 +904,7 @@ internal static partial class QRImageDecoder
             if (Math.Abs(dimension - estimate) > 16f)
                 continue;
             var transform = frame.Transform(dimension);
+            var samples = 2f * (dimension - 16);
             var wrong = 0;
             for (var i = 8; i < dimension - 8; i++)
             {
@@ -832,8 +913,11 @@ internal static partial class QRImageDecoder
                     wrong++;
                 if (IsDarkAt(luminance, width, height, threshold, grey, transform, 6.5f, i + 0.5f) != dark)
                     wrong++;
+                // Wrong modules only accumulate, so a share that is already too many cannot become the best
+                if (wrong / samples >= bestWrong)
+                    break;
             }
-            var share = wrong / (2f * (dimension - 16));
+            var share = wrong / samples;
             if (share < bestWrong)
             {
                 bestWrong = share;
