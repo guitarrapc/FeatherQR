@@ -11,6 +11,7 @@ using SkiaSharp;
 ///   v40-3.4px     : version 40 at a fractional module size, 629 x 629, still crisp
 ///   v40-4px-rot17 : version 40, 4 px a module, rotated 17 degrees with a linear filter, 925 x 925
 ///   v40-4px-soft  : version 40, 4 px a module, blurred, contrast reduced, a brightness ramp and noise: no pure black or white left
+///   v25-4px-keystone15 : version 25, 4 px a module, one edge 15 % shorter and turned 23 degrees with a linear filter: the alignment pattern where the finders' frame predicts it
 ///   v6-4px        : a version 6 URL, the small-symbol reference
 ///   none-noise    : 740 x 740 noise, no symbol: the failure path, both polarities
 ///   none-gradient : 740 x 740 smooth ramp, no symbol: the histogram's worst case, both polarities
@@ -21,7 +22,7 @@ public class QRCodeImageDecodeEndToEnd
 {
     private static readonly string[] shapeKeys =
     [
-        "v40-3px", "v40-3.4px", "v40-4px-rot17", "v40-4px-soft", "v6-4px", "none-noise", "none-gradient",
+        "v40-3px", "v40-3.4px", "v40-4px-rot17", "v40-4px-soft", "v25-4px-keystone15", "v6-4px", "none-noise", "none-gradient",
     ];
 
     private SKBitmap _bitmap = default!;
@@ -39,6 +40,7 @@ public class QRCodeImageDecodeEndToEnd
     {
         var large = QRCodeGenerator.Create(DeterministicText(2900).AsSpan(), QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(40) });
         var small = QRCodeGenerator.Create("https://github.com/guitarrapc/FeatherQR".AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(6) });
+        var medium = QRCodeGenerator.Create(DeterministicText(400).AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(25) });
 
         _bitmap = Shape switch
         {
@@ -46,6 +48,7 @@ public class QRCodeImageDecodeEndToEnd
             "v40-3.4px" => Render(large, (int)MathF.Round(large.Size * 3.4f)),
             "v40-4px-rot17" => Rotate(Render(large, large.Size * 4), 17f),
             "v40-4px-soft" => Soften(Render(large, large.Size * 4)),
+            "v25-4px-keystone15" => Keystone(Render(medium, medium.Size * 4), 0.15f, 23f),
             "v6-4px" => Render(small, small.Size * 4),
             "none-noise" => NoSymbol(740, noise: true),
             "none-gradient" => NoSymbol(740, noise: false),
@@ -95,6 +98,51 @@ public class QRCodeImageDecodeEndToEnd
             canvas.DrawImage(image, -source.Width / 2f, -source.Height / 2f, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
             canvas.Flush();
             return rotated;
+        }
+    }
+
+    /// <summary>The top edge shortened by <paramref name="keystone"/> of the width, then turned about the centre of a canvas half as wide again.</summary>
+    private static SKBitmap Keystone(SKBitmap source, float keystone, float degrees)
+    {
+        using (source)
+        {
+            var width = source.Width;
+            var side = (int)(width * 1.5f);
+            var margin = (side - width) / 2f;
+            var shrink = keystone * width / 2f;
+
+            // The unit square's homography onto the quadrilateral (top-left, top-right, bottom-right, bottom-left)
+            float x0 = margin + shrink, y0 = margin, x1 = margin + width - shrink, y1 = margin, x2 = margin + width, y2 = margin + width, x3 = margin, y3 = margin + width;
+            var dx1 = x1 - x2;
+            var dx2 = x3 - x2;
+            var dx3 = x0 - x1 + x2 - x3;
+            var dy1 = y1 - y2;
+            var dy2 = y3 - y2;
+            var dy3 = y0 - y1 + y2 - y3;
+            var denominator = dx1 * dy2 - dx2 * dy1;
+            var a13 = (dx3 * dy2 - dx2 * dy3) / denominator;
+            var a23 = (dx1 * dy3 - dx3 * dy1) / denominator;
+            var warp = new SKMatrix
+            {
+                ScaleX = (x1 - x0 + a13 * x1) / width,
+                SkewX = (x3 - x0 + a23 * x3) / width,
+                TransX = x0,
+                SkewY = (y1 - y0 + a13 * y1) / width,
+                ScaleY = (y3 - y0 + a23 * y3) / width,
+                TransY = y0,
+                Persp0 = a13 / width,
+                Persp1 = a23 / width,
+                Persp2 = 1f,
+            };
+
+            var result = new SKBitmap(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using var canvas = new SKCanvas(result);
+            using var image = SKImage.FromBitmap(source);
+            canvas.Clear(SKColors.White);
+            canvas.SetMatrix(SKMatrix.CreateRotationDegrees(degrees, side / 2f, side / 2f).PreConcat(warp));
+            canvas.DrawImage(image, 0, 0, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+            canvas.Flush();
+            return result;
         }
     }
 

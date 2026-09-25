@@ -296,6 +296,60 @@ internal static class FinderAxisEstimator
     }
 
     /// <summary>
+    /// <see cref="MeasureAxis"/> from sub-pixel edges: where the luminance interpolated along the line crosses <paramref name="level"/>, halfway between the dark and light levels.
+    /// NaN when either walk leaves the image or passes <paramref name="maxRunLength"/> before the dark ring ends.
+    /// </summary>
+    /// <remarks>
+    /// A grey edge pixel's level is the share of it the module covers, so the crossing places the edge within a small fraction of a pixel where a threshold walk places it within half a step.
+    /// </remarks>
+    public static float MeasureAxisAtLevel(ReadOnlySpan<byte> luminance, int width, int height, float level, float centerX, float centerY, float dirX, float dirY, float maxRunLength)
+    {
+        if (!TryDarkLightDarkEdges(luminance, width, height, level, centerX, centerY, dirX, dirY, maxRunLength, out var forwardInner, out var forwardOuter)
+            || !TryDarkLightDarkEdges(luminance, width, height, level, centerX, centerY, -dirX, -dirY, maxRunLength, out var backwardInner, out var backwardOuter))
+            return float.NaN;
+
+        return (forwardInner + backwardOuter + backwardInner + forwardOuter) / 12f;
+    }
+
+    private static bool TryDarkLightDarkEdges(ReadOnlySpan<byte> luminance, int width, int height, float level, float startX, float startY, float dirX, float dirY, float maxRunLength, out float inner, out float outer)
+    {
+        const float Step = 0.5f;
+        inner = 0f;
+        outer = 0f;
+        var previous = LuminanceSampler.Bilinear(luminance, width, height, startX, startY);
+        if (previous >= level)
+            return false;
+
+        var phase = 0;
+        for (var t = Step; t <= maxRunLength; t += Step)
+        {
+            var x = startX + dirX * t;
+            var y = startY + dirY * t;
+            if (x < 0f || x >= width || y < 0f || y >= height)
+                return false;
+
+            var value = LuminanceSampler.Bilinear(luminance, width, height, x, y);
+            // Out of the light ring the edge is light to dark (the dark ring's inner edge); the other two are dark to light
+            var crossed = phase == 1 ? value < level : value >= level;
+            if (crossed)
+            {
+                var edge = t - Step + Step * (level - previous) / (value - previous);
+                if (phase == 1)
+                    inner = edge;
+                else if (phase == 2)
+                {
+                    outer = edge;
+                    return true;
+                }
+                phase++;
+            }
+            previous = value;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Walks from the finder center along a direction through the dark-light-dark sequence (center square → light ring → dark ring → out), returning the distances to the dark ring's inner edge (≈ 2.5 modules) and outer edge (≈ 3.5 modules).
     /// False when the image edge or the caller's maximum run length interrupts the sequence.
     /// </summary>

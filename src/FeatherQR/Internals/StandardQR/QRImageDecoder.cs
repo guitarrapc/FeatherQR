@@ -18,7 +18,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// 2. Finder pattern detection (1:1:3:1:1 scan + cross checks)
 /// 3. Orientation from the three finder centers (rotation-invariant)
 /// 4. Dimension estimate from center distances and module size
-/// 5. Bottom-right alignment pattern search (version 2+; parallelogram estimate as fallback)
+/// 5. Bottom-right alignment pattern search where the finders' frame puts it: their centres and how the module size changes along the two finder lines (version 2+; the parallelogram, then that frame, when nothing anchors the corner)
 /// 6. Perspective grid sampling into a module matrix (4-point projective transform)
 /// 7. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
 /// </code>
@@ -137,11 +137,12 @@ internal static partial class QRImageDecoder
         if (IsSettled(frameStatus))
             return frameStatus;
 
-        var moduleSizes = MeasureModuleSizes(luminance, width, height, threshold, topLeft, topRight, bottomLeft);
-        // Measured again from centres that moved: the runs are read outward from them
-        if (RefineFinderCentres(luminance, width, height, grey, moduleSizes, ref topLeft, ref topRight, ref bottomLeft))
-            moduleSizes = MeasureModuleSizes(luminance, width, height, threshold, topLeft, topRight, bottomLeft);
-        return DecodeFromFinders(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes.Mean, destination, out charsWritten, out info);
+        var moduleSizes = MeasureModuleSizes(luminance, width, height, threshold, default, topLeft, topRight, bottomLeft);
+        RefineFinderCentres(luminance, width, height, grey, moduleSizes, ref topLeft, ref topRight, ref bottomLeft);
+        // Measured again where there are grey levels: outward from the centres that moved, and to sub-pixel edges
+        if (grey.IsEnabled)
+            moduleSizes = MeasureModuleSizes(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft);
+        return DecodeFromFinders(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, destination, out charsWritten, out info);
     }
 
     /// <summary>Each finder's centre moved to the centroid of its centre square's darkness; true when any moved.</summary>
@@ -167,19 +168,24 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Module sizes measured along the finder-to-finder lines: each finder's own, since one size does not fit a keystoned symbol, and their mean for the dimension estimate.
+    /// Module sizes measured along the finder-to-finder lines: each finder's own along each line it is on, since one size does not fit a keystoned symbol, and their mean.
     /// A finder's run widths along the image rows would not do: a turn lengthens them by up to √2.
+    /// <see cref="SubPixelAlongU"/> and <see cref="SubPixelAlongV"/> are true when both sizes on that line came from sub-pixel edges, fine enough to measure how the size changes along it; false, both came from whole-pixel runs.
     /// </summary>
-    internal readonly record struct FinderModuleSizes(float TopLeft, float TopRight, float BottomLeft, float Mean);
+    internal readonly record struct FinderModuleSizes(float TopLeftAlongU, float TopLeftAlongV, float TopRight, float BottomLeft, float Mean, bool SubPixelAlongU, bool SubPixelAlongV)
+    {
+        public float TopLeft => float.IsNaN(TopLeftAlongU) ? TopLeftAlongV : float.IsNaN(TopLeftAlongV) ? TopLeftAlongU : (TopLeftAlongU + TopLeftAlongV) / 2f;
+    }
 
     /// <summary>The dimension candidates in turn: the estimate, the timing count, the version information, the runner-up.</summary>
-    private static DecodeStatus DecodeFromFinders(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float measuredModuleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeFromFinders(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
         var timingCounted = false;
         var timingDimension = 0;
         var matchedDimension = -1;
-        var moduleSize = measuredModuleSize;
+        var moduleSize = moduleSizes.Mean;
+        var frame = FinderFrame.Create(topLeft, topRight, bottomLeft, moduleSizes);
         if (!TryEstimateDimension(topLeft, topRight, bottomLeft, moduleSize, out var dimension, out var secondaryDimension))
         {
             // Snapped finders at versions 39-40 measure a few percent small, which puts the
@@ -190,7 +196,7 @@ internal static partial class QRImageDecoder
                 timingCounted = true;
                 // A turned symbol under 3 px/module breaks the counted runs; its timing modules still alternate on the right grid
                 if (timingDimension == 0)
-                    timingDimension = matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSize);
+                    timingDimension = matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSize, frame);
             }
             if (timingDimension == 0)
             {
@@ -200,7 +206,7 @@ internal static partial class QRImageDecoder
             dimension = timingDimension;
         }
 
-        var status = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, destination, out charsWritten, out info, out var versionDimension);
+        var status = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, dimension, moduleSize, destination, out charsWritten, out info, out var versionDimension);
         if (IsSettled(status))
             return status;
 
@@ -210,7 +216,7 @@ internal static partial class QRImageDecoder
             timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
         if (timingDimension != 0 && timingDimension != dimension)
         {
-            var timingStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, timingDimension, moduleSize, destination, out var timingCharsWritten, out var timingInfo, out _);
+            var timingStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, timingDimension, moduleSize, destination, out var timingCharsWritten, out var timingInfo, out _);
             if (IsSettled(timingStatus))
             {
                 charsWritten = timingCharsWritten;
@@ -223,7 +229,7 @@ internal static partial class QRImageDecoder
         // wrong dimension still samples it, so it overrules the estimate.
         if (versionDimension != 0 && versionDimension != dimension && versionDimension != timingDimension && versionDimension != matchedDimension)
         {
-            var versionStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, versionDimension, moduleSize, destination, out var versionCharsWritten, out var versionInfo, out _);
+            var versionStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, versionDimension, moduleSize, destination, out var versionCharsWritten, out var versionInfo, out _);
             if (IsSettled(versionStatus))
             {
                 charsWritten = versionCharsWritten;
@@ -236,10 +242,10 @@ internal static partial class QRImageDecoder
         // counted runs; the timing modules still alternate on the grid of the right dimension
         if (matchedDimension < 0 && moduleSize >= 1f)
         {
-            matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSize);
+            matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSize, frame);
             if (matchedDimension != 0 && matchedDimension != dimension && matchedDimension != timingDimension && matchedDimension != versionDimension)
             {
-                var matchedStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, matchedDimension, moduleSize, destination, out var matchedCharsWritten, out var matchedInfo, out _);
+                var matchedStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, matchedDimension, moduleSize, destination, out var matchedCharsWritten, out var matchedInfo, out _);
                 if (IsSettled(matchedStatus))
                 {
                     charsWritten = matchedCharsWritten;
@@ -255,7 +261,7 @@ internal static partial class QRImageDecoder
         // gets no finder fallback: on a wrong size it only doubles the failure's cost.
         if (secondaryDimension != 0 && secondaryDimension != versionDimension && secondaryDimension != timingDimension && secondaryDimension != matchedDimension)
         {
-            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _, finderFallback: false);
+            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _, finderFallback: false);
             if (IsSettled(secondaryStatus))
             {
                 charsWritten = secondaryCharsWritten;
@@ -362,12 +368,12 @@ internal static partial class QRImageDecoder
     /// The mirror retry triggers on any unsettled decode failure; a permuted format pattern may fall within BCH distance of a wrong candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
     /// DestinationTooSmall is terminal because the non-mirrored symbol has already been read successfully through RS correction.
     /// On failure, versionDimension is the dimension the sampled version information names when it differs from the one sampled, else 0.
-    /// <paramref name="finderFallback"/> allows the resample through the finders alone when the alignment-anchored grid fails; off for a dimension that is only a guess.
+    /// <paramref name="finderFallback"/> allows the resample through the finders alone, their parallelogram when the alignment-anchored grid fails and their frame when nothing anchored the fourth corner; off for a dimension that is only a guess.
     /// </summary>
-    private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
+    private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderFrame frame, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
     {
         versionDimension = 0;
-        var transform = BuildGridTransform(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, out var alignmentAnchored);
+        var transform = BuildGridTransform(luminance, width, height, threshold, grey, frame, dimension, moduleSize, out var alignmentAnchored);
 
         // Version 7+ symbols carry a lattice of alignment patterns; when most of
         // them are detected, a piecewise mesh replaces the single global homography
@@ -429,41 +435,59 @@ internal static partial class QRImageDecoder
                     return coverageStatus;
                 }
             }
-            if (!alignmentAnchored || !finderFallback)
+            if (!finderFallback || (!alignmentAnchored && frame.IsAffine))
                 return status;
+
+            // The mirror retry above left the first sampling transposed
+            TransposeInPlace(modules, dimension);
 
             // Alignment fallback: the alignment centre is pixel-resolved, which at about
             // 2 px/module is a third of a module, and the transform extrapolates that
             // error across the bottom-right block as perspective. The finders alone are
             // exact for a flat symbol. Failure-path cost only.
-            var parallelogram = BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension);
-            var rentedParallelogram = ArrayPool<byte>.Shared.Rent(dimension * dimension);
-            try
-            {
-                var parallelogramModules = rentedParallelogram.AsSpan(0, dimension * dimension);
-                SampleGrid(luminance, width, height, threshold, parallelogram, dimension, parallelogramModules);
+            if (alignmentAnchored)
+                return DecodeOtherGrid(luminance, width, height, threshold, grey, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, modules, coverage: false, destination, status, ref charsWritten, ref info);
 
-                // The same modules decode the same way: an alignment centre found where the
-                // finders put it samples identically, as on any symbol whose data is damaged.
-                // The mirror retry above left the first sampling transposed.
-                TransposeInPlace(modules, dimension);
-                if (parallelogramModules.SequenceEqual(modules))
-                    return status;
+            // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the
+            // finders' foreshortening places it under perspective. Not first, because on a flat symbol
+            // under 2 px/module that foreshortening is measurement noise of a percent or two
+            if (!frame.IsAffine)
+                return DecodeOtherGrid(luminance, width, height, threshold, grey, frame.Transform(dimension), dimension, modules, coverage: grey.IsEnabled, destination, status, ref charsWritten, ref info);
+            return status;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
 
-                var parallelogramStatus = DecodeWithMirrorRetry(parallelogramModules, dimension, destination, out var parallelogramCharsWritten, out var parallelogramInfo, out var parallelogramTransposed);
-                if (!IsSettled(parallelogramStatus))
-                    return status;
+    /// <summary>
+    /// Another grid for the same symbol: decoded unless it samples what <paramref name="firstSampling"/> holds, read again by coverage when asked, and reported only when it settles; otherwise <paramref name="status"/> stands.
+    /// </summary>
+    private static DecodeStatus DecodeOtherGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in PerspectiveTransform transform, int dimension, ReadOnlySpan<byte> firstSampling, bool coverage, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
+    {
+        var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
+        try
+        {
+            var modules = rented.AsSpan(0, dimension * dimension);
+            SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
 
-                charsWritten = parallelogramCharsWritten;
-                info = parallelogramStatus == DecodeStatus.Success
-                    ? parallelogramInfo.WithCorners(SymbolGeometry.FromTransform(parallelogram, dimension, dimension, parallelogramTransposed))
-                    : parallelogramInfo;
-                return parallelogramStatus;
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rentedParallelogram, clearArray: false);
-            }
+            // The same modules decode the same way: an alignment centre found where the finders put it,
+            // or a frame that foreshortens by under a pixel, samples identically, as on any damaged symbol
+            if (modules.SequenceEqual(firstSampling))
+                return status;
+
+            var otherStatus = DecodeWithMirrorRetry(modules, dimension, destination, out var otherCharsWritten, out var otherInfo, out var transposed);
+            if (!IsSettled(otherStatus) && coverage)
+                otherStatus = DecodeByCoverage(luminance, width, height, grey, transform, dimension, modules, destination, out otherCharsWritten, out otherInfo);
+            else if (otherStatus == DecodeStatus.Success)
+                otherInfo = otherInfo.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
+            if (!IsSettled(otherStatus))
+                return status;
+
+            charsWritten = otherCharsWritten;
+            info = otherInfo;
+            return otherStatus;
         }
         finally
         {
@@ -711,25 +735,22 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// Measures the module size along the finder-to-finder axes, through each pattern's center toward (and away from) its neighbor, independent of rotation.
     /// </summary>
-    internal static FinderModuleSizes MeasureModuleSizes(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
+    internal static FinderModuleSizes MeasureModuleSizes(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
     {
+        var alongU = MeasureLine(luminance, width, height, threshold, grey, topLeft, topRight);
+        var alongV = MeasureLine(luminance, width, height, threshold, grey, topLeft, bottomLeft);
+
         var sum = 0f;
         var count = 0;
-
-        var topLeftAlongU = MeasureBothWays(luminance, width, height, threshold, topLeft, topRight);
-        var topRightSize = MeasureBothWays(luminance, width, height, threshold, topRight, topLeft);
-        var topLeftAlongV = MeasureBothWays(luminance, width, height, threshold, topLeft, bottomLeft);
-        var bottomLeftSize = MeasureBothWays(luminance, width, height, threshold, bottomLeft, topLeft);
-        Accumulate(topLeftAlongU, ref sum, ref count);
-        Accumulate(topRightSize, ref sum, ref count);
-        Accumulate(topLeftAlongV, ref sum, ref count);
-        Accumulate(bottomLeftSize, ref sum, ref count);
-        var topLeftSize = float.IsNaN(topLeftAlongU) ? topLeftAlongV : float.IsNaN(topLeftAlongV) ? topLeftAlongU : (topLeftAlongU + topLeftAlongV) / 2f;
+        Accumulate(alongU.Near, ref sum, ref count);
+        Accumulate(alongU.Far, ref sum, ref count);
+        Accumulate(alongV.Near, ref sum, ref count);
+        Accumulate(alongV.Far, ref sum, ref count);
 
         // All measurements clipped (pattern at the image border): fall back to the
         // horizontal-scan estimate, valid for near-axis-aligned inputs.
         var mean = count > 0 ? sum / count : (topLeft.ModuleSize + topRight.ModuleSize + bottomLeft.ModuleSize) / 3f;
-        return new FinderModuleSizes(topLeftSize, topRightSize, bottomLeftSize, mean);
+        return new FinderModuleSizes(alongU.Near, alongV.Near, alongU.Far, alongV.Far, mean, alongU.SubPixel, alongV.SubPixel);
 
         static void Accumulate(float value, ref float sum, ref int count)
         {
@@ -742,18 +763,35 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Module size through <paramref name="from"/>'s center along the line toward <paramref name="towards"/>, measured by the finder axis estimator the single-finder symbologies share.
-    /// Returns the module size, or NaN when the run leaves the image.
+    /// The module sizes at both ends of the line from <paramref name="near"/> to <paramref name="far"/>, through each end's center along the line, measured by the finder axis estimator the single-finder symbologies share.
+    /// Both come from sub-pixel edges when the image has grey levels and both walks finish, else both from whole-pixel runs: a line's change of size is compared at one resolution.
+    /// A size is NaN when its run leaves the image.
     /// </summary>
-    private static float MeasureBothWays(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern from, in FinderPattern towards)
+    private static (float Near, float Far, bool SubPixel) MeasureLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern near, in FinderPattern far)
     {
-        var dx = towards.X - from.X;
-        var dy = towards.Y - from.Y;
+        var dx = far.X - near.X;
+        var dy = far.Y - near.Y;
         var length = (float)Math.Sqrt(dx * dx + dy * dy);
         if (length < 1f)
-            return float.NaN;
+            return (float.NaN, float.NaN, false);
+        var dirX = dx / length;
+        var dirY = dy / length;
 
-        return FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, from.X, from.Y, dx / length, dy / length);
+        if (grey.IsEnabled)
+        {
+            // The dark ring ends 3.5 modules out, and the row scan's module size is never shorter than the module: a turn lengthens it
+            var nearSize = FinderAxisEstimator.MeasureAxisAtLevel(luminance, width, height, grey.Midpoint, near.X, near.Y, dirX, dirY, 6f * near.ModuleSize);
+            if (!float.IsNaN(nearSize))
+            {
+                var farSize = FinderAxisEstimator.MeasureAxisAtLevel(luminance, width, height, grey.Midpoint, far.X, far.Y, -dirX, -dirY, 6f * far.ModuleSize);
+                if (!float.IsNaN(farSize))
+                    return (nearSize, farSize, true);
+            }
+        }
+        return (
+            FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, near.X, near.Y, dirX, dirY),
+            FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, far.X, far.Y, -dirX, -dirY),
+            false);
     }
 
     /// <summary>
@@ -773,9 +811,9 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// The dimension within four versions of the finders' estimate whose grid puts both timing patterns on alternating modules, sampled through the three finder centres; 0 when none leaves under an eighth of them wrong.
+    /// The dimension within four versions of the finders' estimate whose grid puts both timing patterns on alternating modules, sampled through the finders' frame; 0 when none leaves under an eighth of them wrong.
     /// </summary>
-    private static int MatchTimingDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float moduleSize)
+    internal static int MatchTimingDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, float moduleSize, in FinderFrame frame)
     {
         var estimate = ((Distance(topLeft, topRight) + Distance(topLeft, bottomLeft)) / 2f) / moduleSize + 7f;
         var best = 0;
@@ -785,7 +823,7 @@ internal static partial class QRImageDecoder
             var dimension = 17 + 4 * version;
             if (Math.Abs(dimension - estimate) > 16f)
                 continue;
-            var transform = BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension);
+            var transform = frame.Transform(dimension);
             var wrong = 0;
             for (var i = 8; i < dimension - 8; i++)
             {
@@ -1224,29 +1262,44 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Builds the grid-to-pixel projective transform from the three finder centers plus a fourth correspondence point: the bottom-right alignment pattern when one exists and is found, otherwise the parallelogram corner estimate (which degrades the transform to affine, exact for flat, on-axis captures).
+    /// Builds the grid-to-pixel projective transform from the three finder centers plus a fourth correspondence point: the bottom-right alignment pattern when one exists and is found where the finders' frame predicts it, otherwise the parallelogram corner estimate (which degrades the transform to affine, exact for flat, on-axis captures).
     /// Grid coordinates put module (u, v)'s center at (u+0.5, v+0.5), so finder centers sit at 3.5 and the alignment center at dimension−6.5.
     /// </summary>
-    internal static PerspectiveTransform BuildGridTransform(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, out bool alignmentAnchored)
+    internal static PerspectiveTransform BuildGridTransform(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderFrame frame, int dimension, float moduleSize, out bool alignmentAnchored)
     {
         alignmentAnchored = false;
-        // Parallelogram estimate of the bottom-right corner (grid dimension−3.5)
-        var cornerX = topRight.X + bottomLeft.X - topLeft.X;
-        var cornerY = topRight.Y + bottomLeft.Y - topLeft.Y;
+        var topLeft = frame.TopLeft;
+        var topRight = frame.TopRight;
+        var bottomLeft = frame.BottomLeft;
 
         // Version 2+ has an alignment pattern centered 6.5 modules in from the
-        // bottom-right corner; its predicted position pulls the corner estimate
-        // toward the top-left by 3 modules on both axes.
+        // bottom-right corner
         if (dimension >= 25)
         {
-            var correction = 1f - 3f / (dimension - 7);
-            var expectedX = topLeft.X + correction * (cornerX - topLeft.X);
-            var expectedY = topLeft.Y + correction * (cornerY - topLeft.Y);
+            float expectedX, expectedY;
+            (float X, float Y) axisX, axisY;
+            if (frame.IsAffine)
+            {
+                // Parallelogram estimate of the bottom-right corner (grid dimension−3.5), pulled
+                // toward the top-left by 3 modules on both axes
+                var cornerX = topRight.X + bottomLeft.X - topLeft.X;
+                var cornerY = topRight.Y + bottomLeft.Y - topLeft.Y;
+                var correction = 1f - 3f / (dimension - 7);
+                expectedX = topLeft.X + correction * (cornerX - topLeft.X);
+                expectedY = topLeft.Y + correction * (cornerY - topLeft.Y);
 
-            // Per-module grid axis vectors, for orientation-aware ring validation
-            var span = dimension - 7;
-            var axisX = ((topRight.X - topLeft.X) / span, (topRight.Y - topLeft.Y) / span);
-            var axisY = ((bottomLeft.X - topLeft.X) / span, (bottomLeft.Y - topLeft.Y) / span);
+                // Per-module grid axis vectors, for orientation-aware ring validation
+                var span = dimension - 7;
+                axisX = ((topRight.X - topLeft.X) / span, (topRight.Y - topLeft.Y) / span);
+                axisY = ((bottomLeft.X - topLeft.X) / span, (bottomLeft.Y - topLeft.Y) / span);
+            }
+            else
+            {
+                // Where the foreshortening puts it, and the grid axes there, which a keystone
+                // turns and scales away from the ones at the finders
+                frame.Map(dimension - 6.5f, dimension - 6.5f, dimension, out expectedX, out expectedY);
+                frame.Axes(dimension - 6.5f, dimension - 6.5f, dimension, out axisX, out axisY);
+            }
 
             // Expanding search window; mild perspective shifts the true position
             // further from the parallelogram prediction as the tilt grows.
