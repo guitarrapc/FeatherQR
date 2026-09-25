@@ -1,3 +1,4 @@
 * test=auto
 *.sh eol=lf
 PublicAPI.approved.txt eol=lf
+tests/FeatherQR.Tests/Fixtures/RealImages/zxing-cpp-samples/**/*.txt -text
