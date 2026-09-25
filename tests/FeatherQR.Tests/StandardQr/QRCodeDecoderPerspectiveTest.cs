@@ -3,11 +3,9 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Tier-2 image decoding: mild perspective (keystone) distortion, alone and
-/// combined with rotation and mirroring. The asserted tilt levels sit inside the
-/// measured envelope with margin (probe results: versions 2-5 decode to ~15%
-/// keystone, 10-15 to ~6-10%, version 1, no alignment pattern, parallelogram
-/// fallback, to ~2%).
+/// Tier-2 image decoding: perspective (keystone) distortion, alone and combined
+/// with rotation and mirroring. The asserted tilt levels sit inside the measured
+/// envelope with margin (standardqr-decoder.md, Input envelope).
 /// </summary>
 public class QRCodeDecoderPerspectiveTest
 {
@@ -28,6 +26,10 @@ public class QRCodeDecoderPerspectiveTest
     [Arguments(20, 0.04f)] // regression guard: snapped one version low / bent global anchor before the mesh
     [Arguments(25, 0.04f)]
     [Arguments(25, 0.08f)]
+    // The bottom-right alignment pattern where the finders' frame predicts it
+    [Arguments(10, 0.1f)]
+    [Arguments(25, 0.1f)]
+    [Arguments(40, 0.08f)]
     public async Task Decode_Keystone(int version, float tilt)
     {
         var content = $"perspective v{version} tilt {tilt}";
@@ -39,12 +41,15 @@ public class QRCodeDecoderPerspectiveTest
     }
 
     [Test]
-    public async Task Decode_Keystone_Version1_ParallelogramFallback()
+    [Arguments(0.02f)]
+    [Arguments(0.05f)]
+    [Arguments(0.08f)]
+    public async Task Decode_Keystone_Version1(float tilt)
     {
-        // Version 1 has no alignment pattern; the fourth point is estimated, so
-        // only very mild perspective is absorbed, that boundary is by design.
-        var content = "v1 fallback";
-        using var bitmap = RenderKeystone(content, version: 1, tilt: 0.02f, rotateDegrees: 0);
+        // Version 1 has no alignment pattern: the parallelogram of the finders reads
+        // mild perspective, and the finders' frame the rest
+        var content = "v1 keystone";
+        using var bitmap = RenderKeystone(content, version: 1, tilt: tilt, rotateDegrees: 0);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
         await Assert.That(decoded).IsEquivalentTo(content);

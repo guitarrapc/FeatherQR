@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Unlike the outer dark ring, those three runs are fully owned by the pattern: adjacent dark data modules can merge with the border ring and stretch its runs, but never touch the inner ones.
 /// Candidates are cross-checked vertically with the same signature.
 /// The search stays inside a small window around the prediction, 1-module runs are everywhere in QR data, so an unconstrained search would drown in false positives.
-/// Version 1 symbols have no alignment pattern and callers fall back to the parallelogram corner estimate.
+/// Version 1 symbols have no alignment pattern and callers sample the parallelogram of the finder centres, then the finders' frame.
 /// </remarks>
 internal static class AlignmentPatternFinder
 {

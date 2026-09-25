@@ -16,27 +16,9 @@ internal static class SupersampledRenderer
     {
         var spanX = columns + 8f; // 4-module quiet zone each side
         var spanY = rows + 8f;
-        var symbolWidth = spanX * pixelsPerModule;
-        var symbolHeight = spanY * pixelsPerModule;
-        var side = (int)(Math.Max(symbolWidth, symbolHeight) * 1.45f) + 8;
+        var corners = SpanCorners(columns, rows, pixelsPerModule, degrees, keystone, out var side);
         var luminance = new byte[side * side];
         Array.Fill(luminance, (byte)255);
-
-        // Destination corners (TL, TR, BR, BL); the top edge shrinks by the keystone
-        var halfWidth = symbolWidth / 2f;
-        var halfHeight = symbolHeight / 2f;
-        var top = halfWidth * (1f - keystone);
-        float[] corners = [-top, -halfHeight, top, -halfHeight, halfWidth, halfHeight, -halfWidth, halfHeight];
-        var radians = degrees * MathF.PI / 180f;
-        var cos = MathF.Cos(radians);
-        var sin = MathF.Sin(radians);
-        for (var i = 0; i < 8; i += 2)
-        {
-            var x = corners[i];
-            var y = corners[i + 1];
-            corners[i] = side / 2f + x * cos - y * sin;
-            corners[i + 1] = side / 2f + x * sin + y * cos;
-        }
 
         var toModules = Homography(corners, [0, 0, spanX, 0, spanX, spanY, 0, spanY]);
         for (var y = 0; y < side; y++)
@@ -67,6 +49,33 @@ internal static class SupersampledRenderer
         }
 
         return (luminance, side, side);
+    }
+
+    /// <summary>
+    /// Where <see cref="Render(Func{int, int, bool}, int, int, float, float, float)"/> puts the corners of the symbol and its 4-module quiet zone (top-left, top-right, bottom-right, bottom-left, x then y), and the side of its square canvas: module column <c>c</c> of the grid lies at <c>c + 4</c> of that span.
+    /// </summary>
+    public static float[] SpanCorners(int columns, int rows, float pixelsPerModule, float degrees, float keystone, out int side)
+    {
+        var symbolWidth = (columns + 8f) * pixelsPerModule;
+        var symbolHeight = (rows + 8f) * pixelsPerModule;
+        side = (int)(Math.Max(symbolWidth, symbolHeight) * 1.45f) + 8;
+
+        // Destination corners (TL, TR, BR, BL); the top edge shrinks by the keystone
+        var halfWidth = symbolWidth / 2f;
+        var halfHeight = symbolHeight / 2f;
+        var top = halfWidth * (1f - keystone);
+        float[] corners = [-top, -halfHeight, top, -halfHeight, halfWidth, halfHeight, -halfWidth, halfHeight];
+        var radians = degrees * MathF.PI / 180f;
+        var cos = MathF.Cos(radians);
+        var sin = MathF.Sin(radians);
+        for (var i = 0; i < 8; i += 2)
+        {
+            var x = corners[i];
+            var y = corners[i + 1];
+            corners[i] = side / 2f + x * cos - y * sin;
+            corners[i + 1] = side / 2f + x * sin + y * cos;
+        }
+        return corners;
     }
 
     /// <summary>Solves the 4-point homography mapping <paramref name="source"/> to <paramref name="destination"/> (8 coefficients, h33 = 1).</summary>
