@@ -27,6 +27,15 @@ internal readonly struct GreyLevels
     /// <summary>False for <c>default</c> and for an image the levels say nothing about, where every caller must read whole pixels.</summary>
     public bool IsEnabled => _scale > 0f;
 
+    /// <summary>The light level to the nearest whole luminance.</summary>
+    public int LightLevel => (int)Math.Round(_light);
+
+    /// <summary>The dark level to the nearest whole luminance.</summary>
+    public int DarkLevel => (int)Math.Round(_light - 1f / _scale);
+
+    /// <summary>The luminance of a pixel half dark: halfway between the two levels.</summary>
+    public float Midpoint => _light - 0.5f / _scale;
+
     /// <summary>The share of the pixel that is dark, 0 to 1.</summary>
     public float Darkness(byte luminance)
     {

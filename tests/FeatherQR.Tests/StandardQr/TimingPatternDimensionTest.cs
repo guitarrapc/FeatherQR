@@ -87,32 +87,59 @@ public class TimingPatternDimensionTest
     }
 
     /// <summary>
-    /// The same render with a timing module painted over: nothing counts, and an estimate that
-    /// was refused stays refused.
+    /// The same render with four timing modules painted over: nothing counts, and the grid through the finders still puts all but four of the timing modules on alternating modules at version 40, which reads.
     /// </summary>
     [Test]
-    public async Task Decode_EstimatePastVersion40_NoCount_IsNotDetected()
+    public async Task Decode_EstimatePastVersion40_FewTimingModulesPainted_ReadByTheTimingMatch()
     {
         const int sizePx = 540;
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
-        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
-        var luminance = Luminance(bitmap);
-        // Light timing modules 9 and 11 on both lines, painted dark at the average pitch
-        // (qr.Size includes the quiet zone)
-        var pitch = sizePx / (float)qr.Size;
-        foreach (var (row, column) in new[] { (6, 9), (6, 11), (9, 6), (11, 6) })
-        {
-            for (var y = (int)((row + QuietZone) * pitch); y < (int)((row + QuietZone + 1) * pitch); y++)
-            {
-                for (var x = (int)((column + QuietZone) * pitch); x < (int)((column + QuietZone + 1) * pitch); x++)
-                    luminance[y * sizePx + x] = 0;
-            }
-        }
+        var luminance = PaintLightTimingModules(qr, sizePx, [9, 11]);
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Version).IsEqualTo(40);
+    }
+
+    /// <summary>
+    /// The same render with every other light timing module painted over, a quarter of the timing modules: no dimension leaves under an eighth of them wrong, and an estimate that was refused stays refused.
+    /// </summary>
+    [Test]
+    public async Task Decode_EstimatePastVersion40_TimingLinesBroken_IsNotDetected()
+    {
+        const int sizePx = 540;
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
+        var modules = new List<int>();
+        for (var module = 9; module < 177 - 8; module += 4)
+            modules.Add(module);
+        var luminance = PaintLightTimingModules(qr, sizePx, [.. modules]);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out _, out var info);
 
         await Assert.That(success).IsFalse();
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
+    }
+
+    /// <summary>The symbol drawn by the image builder with the given light timing modules painted dark on both lines, at the average pitch (qr.Size includes the quiet zone).</summary>
+    private static byte[] PaintLightTimingModules(QRCodeData qr, int sizePx, int[] modules)
+    {
+        using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        var luminance = Luminance(bitmap);
+        var pitch = sizePx / (float)qr.Size;
+        foreach (var module in modules)
+        {
+            foreach (var (row, column) in new[] { (6, module), (module, 6) })
+            {
+                for (var y = (int)((row + QuietZone) * pitch); y < (int)((row + QuietZone + 1) * pitch); y++)
+                {
+                    for (var x = (int)((column + QuietZone) * pitch); x < (int)((column + QuietZone + 1) * pitch); x++)
+                        luminance[y * sizePx + x] = 0;
+                }
+            }
+        }
+        return luminance;
     }
 
     /// <summary>

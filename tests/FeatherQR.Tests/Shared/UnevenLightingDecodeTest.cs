@@ -281,8 +281,8 @@ public class UnevenLightingDecodeTest
     /// A real M1 symbol under a ramp: a grid near the real one passes M1's check with other text, while its structure does not earn the read, and the search goes on to the real grid.
     /// </summary>
     [Test]
-    [Arguments(1.704664f, 161.30449f, 0.9384652f, 0.7178035f, 0.46648604f, true)]
-    [Arguments(1.7392006f, 21.610983f, 0.93279475f, 0.47893137f, 0.55047244f, false)]
+    [Arguments(1.8233829f, 94.35809f, 0.18023811f, 0.41934952f, 0.46335387f, false)]
+    [Arguments(1.7421498f, 250.21765f, 0.034180205f, 0.023200577f, 0.52600694f, true)]
     public async Task MicroQR_M1UnderRamp_NotMisread(float pixelsPerModule, float turn, float offsetX, float offsetY, float depth, bool reflectanceReversed)
     {
         var qr = MicroQRCodeGenerator.Create("1", MicroQREccLevel.ErrorDetectionOnly);
@@ -561,8 +561,8 @@ public class UnevenLightingDecodeTest
     /// A grid the global threshold samples off the real one reaches an unmapped Kanji cell at M3-M's or M4-M's limit without the structure to earn it, so no verdict is reported and the symbol is read.
     /// </summary>
     [Test]
-    [Arguments(MicroQRVersion.M4, 4.739f, 244.99f, -0.196f, 1.381f)]
-    [Arguments(MicroQRVersion.M3, 5.076f, 241.05f, 0.262f, 3.218f)]
+    [Arguments(MicroQRVersion.M4, 4.363f, 245.54f, 2.320f, 3.068f)]
+    [Arguments(MicroQRVersion.M4, 4.242f, 243.36f, 2.739f, 1.752f)]
     public async Task MicroQR_VerdictAtTheCorrectionLimitWithoutStructure_SymbolRead(MicroQRVersion version, float pixelsPerModule, float turn, float offsetX, float offsetY)
     {
         var qr = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = version });

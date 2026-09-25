@@ -97,7 +97,7 @@ internal static class RmQRImageDecoder
         // One count serves both polarities: the negative's histogram is this one mirrored
         Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
         Binarizer.FillHistogram(luminance, histogram);
-        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
+        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out var noFinder, out var positiveThreshold, out var positiveGrey);
         if (IsTerminal(status))
             return status;
 
@@ -110,7 +110,7 @@ internal static class RmQRImageDecoder
             LuminanceInverter.Invert(luminance, inverted);
             Binarizer.InvertHistogram(histogram);
 
-            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo);
+            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo, out var invertedNoFinder, out var negativeThreshold, out var negativeGrey);
             if (IsTerminal(invertedStatus))
             {
                 // Success, or the symbol was read but the caller's destination is too
@@ -135,6 +135,28 @@ internal static class RmQRImageDecoder
             {
                 info = regionalInfo;
                 return regionalStatus;
+            }
+
+            // Last, and only for a polarity whose global threshold found no finder at all: a symbol the regional pass reads never pays for it
+            if (noFinder)
+            {
+                var midpointStatus = DecodeAtMidpoint(luminance, positiveThreshold, positiveGrey, width, height, destination, out charsWritten, out var midpointInfo);
+                if (IsSettled(midpointStatus))
+                {
+                    info = midpointInfo;
+                    return midpointStatus;
+                }
+            }
+            if (invertedNoFinder)
+            {
+                // The regional pass wrote its binarization into this buffer
+                LuminanceInverter.Invert(luminance, inverted);
+                var midpointStatus = DecodeAtMidpoint(inverted, negativeThreshold, negativeGrey, width, height, destination, out charsWritten, out var midpointInfo);
+                if (IsSettled(midpointStatus))
+                {
+                    info = midpointInfo;
+                    return midpointStatus;
+                }
             }
 
             // Every attempt failed short of the content: report the first one's diagnostics
@@ -164,12 +186,17 @@ internal static class RmQRImageDecoder
     /// Paid only on images that fail, and it makes the detection envelope a superset of a full sweep's: the symbol is read if either pass reads it.
     /// </remarks>
     internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+        => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out _, out _, out _);
+
+    /// <summary>The strided scan and the sweep at the global threshold; <paramref name="noFinder"/> when neither found a finder candidate, with the threshold and levels they used.</summary>
+    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
     {
         // Hoisted: the two scans binarize the same buffer
-        var threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out var grey);
+        threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out grey);
 
         Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
-        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount);
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
+        noFinder = false;
         // Terminal, not just successful: DestinationTooSmall is only reached after the
         // symbol has been located, sampled, RS-corrected and its segment found to fit
         // the bitstream, so the buffer is the only thing missing and a wider finder scan
@@ -183,7 +210,8 @@ internal static class RmQRImageDecoder
         // A candidate the strided scan tried decodes the same way in the sweep, so it is not
         // tried again; unless that scan settled, when every candidate stays
         var skip = IsSettled(status) ? default : tried.Slice(0, triedCount);
-        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _);
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _, out var sweptFound);
+        noFinder = stridedFound == 0 && sweptFound == 0;
         // Settled, not just successful: when the sweep is the pass that reads the symbol,
         // its DestinationTooSmall or its verdict on the content is the answer.
         if (IsSettled(sweptStatus))
@@ -199,12 +227,28 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
+    /// The sweep at the midpoint of the two levels, for a polarity where the global threshold found no finder at all.
+    /// Edge greys pull the global threshold toward light, and a blurred finder's light ring can keep too few pixels above it; halfway between the levels the ring reads its width.
+    /// </summary>
+    private static DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, byte threshold, in GreyLevels grey, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    {
+        charsWritten = 0;
+        info = NotDetected();
+        if (!grey.IsEnabled)
+            return DecodeStatus.NotDetected;
+        var midpoint = (byte)Math.Round(grey.Midpoint);
+        if (midpoint == threshold)
+            return DecodeStatus.NotDetected;
+        return DecodeLuminanceScan(luminance, width, height, midpoint, grey, destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
+    }
+
+    /// <summary>
     /// One finder scan and the candidates it ranks first; those equal to one in <paramref name="skip"/> are not decoded, and each one decoded is written to <paramref name="tried"/>.
     /// </summary>
     /// <remarks>
     /// A candidate's decode depends on its position and module size, the image and the threshold, and on the scan's best failure only once that is terminal; so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
     /// </remarks>
-    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount)
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount, out int found)
     {
         charsWritten = 0;
         triedCount = 0;
@@ -213,6 +257,7 @@ internal static class RmQRImageDecoder
         var candidateCount = fullSweep
             ? FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey)
             : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates, grey);
+        found = candidateCount;
         if (candidateCount == 0)
         {
             info = NotDetected();
@@ -245,20 +290,21 @@ internal static class RmQRImageDecoder
             var ranked = Math.Min(candidateCount, MaxCandidatesToTry);
             for (var c = 0; c < ranked; c++)
             {
-                ref readonly var candidate = ref candidates[c];
                 // Not replaced by the next in rank: the candidates tried stay the first eight
-                if (FinderPatternFinder.ContainsCandidate(skip, candidate))
+                if (FinderPatternFinder.ContainsCandidate(skip, candidates[c]))
                     continue;
                 if (!tried.IsEmpty)
-                    tried[triedCount++] = candidate;
+                    tried[triedCount++] = candidates[c];
+                var finder = candidates[c];
                 var attemptsRemaining = MaxDecodeAttemptsPerCandidate;
 
                 // Fast path: right-angle frames from the axis-aligned module sizes.
-                FinderAxisEstimator.RefineModuleSize(luminance, width, height, threshold, candidate, out var horizontalModuleSize, out var verticalModuleSize);
+                FinderAxisEstimator.RefineModuleSize(luminance, width, height, threshold, finder, out var horizontalModuleSize, out var verticalModuleSize);
                 if (horizontalModuleSize >= 1f && verticalModuleSize >= 1f)
                 {
+                    ConcentricCentroid.TryRefine(luminance, width, height, grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref finder.X, ref finder.Y, out _);
                     var status = TryFrames(
-                        luminance, width, height, threshold, candidate,
+                        luminance, width, height, threshold, grey, finder,
                         horizontalModuleSize, 0f, 0f, verticalModuleSize,
                         modules, destination, out charsWritten, out info,
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -272,12 +318,15 @@ internal static class RmQRImageDecoder
                 }
 
                 // Arbitrary rotation: recover the finder's local axes from the angular sweep.
-                var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, candidate, orientations);
+                var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, finder, orientations);
                 for (var o = 0; o < orientationCount && attemptsRemaining > 0; o++)
                 {
                     ref readonly var frame = ref orientations[o];
+                    // The centre square's window has to lie along the symbol's axes, which only this frame knows
+                    var candidate = finder;
+                    ConcentricCentroid.TryRefine(luminance, width, height, grey, frame.UX, frame.UY, frame.VX, frame.VY, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
                     var status = TryFrames(
-                        luminance, width, height, threshold, candidate,
+                        luminance, width, height, threshold, grey, candidate,
                         frame.UX, frame.UY, frame.VX, frame.VY,
                         modules, destination, out charsWritten, out info,
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -306,6 +355,7 @@ internal static class RmQRImageDecoder
         int width,
         int height,
         byte threshold,
+        in GreyLevels grey,
         in FinderPattern candidate,
         float uX,
         float uY,
@@ -336,7 +386,7 @@ internal static class RmQRImageDecoder
 
                 var (colX, colY, rowX, rowY) = mirror == 0 ? (aX, aY, bX, bY) : (bX, bY, aX, aY);
                 var status = TryFrame(
-                    luminance, width, height, threshold, candidate,
+                    luminance, width, height, threshold, grey, candidate,
                     colX, colY, rowX, rowY,
                     modules, destination, out charsWritten, out info,
                     ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -358,6 +408,7 @@ internal static class RmQRImageDecoder
         int width,
         int height,
         byte threshold,
+        in GreyLevels grey,
         in FinderPattern candidate,
         float uX,
         float uY,
@@ -412,7 +463,7 @@ internal static class RmQRImageDecoder
 
             formatRead = true;
             var status = TryScaledFrame(
-                luminance, width, height, threshold, candidate,
+                luminance, width, height, threshold, grey, candidate,
                 scale * uX, scale * uY, scale * vX, scale * vY, version, affine,
                 modules, destination, out charsWritten, out info,
                 ref bestStatus, ref bestInfo, ref attemptsRemaining, out var anchoredStatus);
@@ -537,6 +588,7 @@ internal static class RmQRImageDecoder
         int width,
         int height,
         byte threshold,
+        in GreyLevels grey,
         in FinderPattern candidate,
         float uX,
         float uY,
@@ -563,6 +615,7 @@ internal static class RmQRImageDecoder
         var subFinderFound = TryLocateSubFinder(luminance, width, height, threshold, candidate, uX, uY, vX, vY, symbolWidth, symbolHeight, out var subX, out var subY);
         if (subFinderFound)
         {
+            ConcentricCentroid.TryRefine(luminance, width, height, grey, uX, uY, vX, vY, 1f, 1f, 0.5f, ref subX, ref subY, out _);
             // Predicted (affine) and observed offsets from the finder center to the sub-finder center.
             var dX = symbolWidth - 2.5f - FinderCenter;
             var dY = symbolHeight - 2.5f - FinderCenter;
@@ -582,7 +635,7 @@ internal static class RmQRImageDecoder
                 Rotate(uX, uY, cos, sin, out var ruX, out var ruY);
                 Rotate(vX, vY, cos, sin, out var rvX, out var rvY);
                 var isotropic = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * ruX, scale * ruY, scale * rvX, scale * rvY, 0f, 0f);
-                var status = Attempt(luminance, width, height, threshold, isotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                var status = Attempt(luminance, width, height, threshold, grey, isotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
                 if (IsTerminal(status))
                     return status;
                 frameStatus = Deeper(frameStatus, status);
@@ -597,7 +650,7 @@ internal static class RmQRImageDecoder
                     if (a > 0.7f && a < 1.4f && b > 0.7f && b < 1.4f)
                     {
                         var anisotropic = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, a * uX, a * uY, b * vX, b * vY, 0f, 0f);
-                        status = Attempt(luminance, width, height, threshold, anisotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                        status = Attempt(luminance, width, height, threshold, grey, anisotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
                         if (IsTerminal(status))
                             return status;
                         frameStatus = Deeper(frameStatus, status);
@@ -612,7 +665,7 @@ internal static class RmQRImageDecoder
                 if (IsPlausibleRefinement(frameStatus))
                 {
                     status = TryPerspectiveVariants(
-                        luminance, width, height, threshold, candidate,
+                        luminance, width, height, threshold, grey, candidate,
                         uX, uY, vX, vY, version, symbolWidth, symbolHeight, samplingSlack,
                         observedX, observedY, dX, dY,
                         modules, destination, out charsWritten, out info,
@@ -631,7 +684,7 @@ internal static class RmQRImageDecoder
         // different grid, and on a hidden sub-finder it is the frame that reads.
         if (!IsPlausibleRefinement(frameStatus))
         {
-            var status = Attempt(luminance, width, height, threshold, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            var status = Attempt(luminance, width, height, threshold, grey, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
             if (IsTerminal(status))
                 return status;
         }
@@ -650,6 +703,7 @@ internal static class RmQRImageDecoder
         int width,
         int height,
         byte threshold,
+        in GreyLevels grey,
         in FinderPattern candidate,
         float uX,
         float uY,
@@ -760,7 +814,7 @@ internal static class RmQRImageDecoder
                     if (!TimingRowsAgree(luminance, width, height, threshold, transform, version, symbolWidth, symbolHeight))
                         continue;
 
-                    var status = Attempt(luminance, width, height, threshold, transform, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                    var status = Attempt(luminance, width, height, threshold, grey, transform, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
                     if (IsTerminal(status))
                         return status;
                 }
@@ -778,6 +832,7 @@ internal static class RmQRImageDecoder
         int width,
         int height,
         byte threshold,
+        in GreyLevels grey,
         in PerspectiveTransform transform,
         int symbolWidth,
         int symbolHeight,
@@ -810,7 +865,36 @@ internal static class RmQRImageDecoder
         }
 
         TrackBestFailure(status, info, ref bestStatus, ref bestInfo);
-        return status;
+        if (!grey.IsEnabled || !IsPlausibleRefinement(status) || attemptsRemaining <= 0)
+            return status;
+
+        // Grey edges: the same grid read by coverage, decoded only where it differs from the one that failed
+        attemptsRemaining--;
+        var midpoint = grey.Midpoint;
+        var changed = false;
+        for (var row = 0; row < symbolHeight; row++)
+        {
+            for (var column = 0; column < symbolWidth; column++)
+            {
+                transform.Transform(column + 0.5f, row + 0.5f, out var x, out var y);
+                var dark = LuminanceSampler.Bilinear(luminance, width, height, x, y) < midpoint ? (byte)1 : (byte)0;
+                changed |= grid[row * symbolWidth + column] != dark;
+                grid[row * symbolWidth + column] = dark;
+            }
+        }
+        if (!changed)
+            return status;
+        var coverageStatus = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out var coverageInfo);
+        if (coverageStatus == DecodeStatus.Success)
+        {
+            info = coverageInfo.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
+            return coverageStatus;
+        }
+        TrackBestFailure(coverageStatus, coverageInfo, ref bestStatus, ref bestInfo);
+        if (Rank(coverageStatus) <= Rank(status))
+            return status;
+        info = coverageInfo;
+        return coverageStatus;
     }
 
     /// <summary>
