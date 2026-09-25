@@ -170,9 +170,9 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// Module sizes measured along the finder-to-finder lines: each finder's own along each line it is on, since one size does not fit a keystoned symbol, and their mean.
     /// A finder's run widths along the image rows would not do: a turn lengthens them by up to √2.
-    /// <see cref="SubPixel"/> is true when all four came from sub-pixel edges, fine enough to measure how the size changes along a line.
+    /// <see cref="SubPixelAlongU"/> and <see cref="SubPixelAlongV"/> are true when both sizes on that line came from sub-pixel edges, fine enough to measure how the size changes along it; false, both came from whole-pixel runs.
     /// </summary>
-    internal readonly record struct FinderModuleSizes(float TopLeftAlongU, float TopLeftAlongV, float TopRight, float BottomLeft, float Mean, bool SubPixel)
+    internal readonly record struct FinderModuleSizes(float TopLeftAlongU, float TopLeftAlongV, float TopRight, float BottomLeft, float Mean, bool SubPixelAlongU, bool SubPixelAlongV)
     {
         public float TopLeft => float.IsNaN(TopLeftAlongU) ? TopLeftAlongV : float.IsNaN(TopLeftAlongV) ? TopLeftAlongU : (TopLeftAlongU + TopLeftAlongV) / 2f;
     }
@@ -737,23 +737,20 @@ internal static partial class QRImageDecoder
     /// </summary>
     internal static FinderModuleSizes MeasureModuleSizes(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
     {
+        var alongU = MeasureLine(luminance, width, height, threshold, grey, topLeft, topRight);
+        var alongV = MeasureLine(luminance, width, height, threshold, grey, topLeft, bottomLeft);
+
         var sum = 0f;
         var count = 0;
-
-        var subPixel = grey.IsEnabled;
-        var topLeftAlongU = MeasureBothWays(luminance, width, height, threshold, grey, topLeft, topRight, ref subPixel);
-        var topRightSize = MeasureBothWays(luminance, width, height, threshold, grey, topRight, topLeft, ref subPixel);
-        var topLeftAlongV = MeasureBothWays(luminance, width, height, threshold, grey, topLeft, bottomLeft, ref subPixel);
-        var bottomLeftSize = MeasureBothWays(luminance, width, height, threshold, grey, bottomLeft, topLeft, ref subPixel);
-        Accumulate(topLeftAlongU, ref sum, ref count);
-        Accumulate(topRightSize, ref sum, ref count);
-        Accumulate(topLeftAlongV, ref sum, ref count);
-        Accumulate(bottomLeftSize, ref sum, ref count);
+        Accumulate(alongU.Near, ref sum, ref count);
+        Accumulate(alongU.Far, ref sum, ref count);
+        Accumulate(alongV.Near, ref sum, ref count);
+        Accumulate(alongV.Far, ref sum, ref count);
 
         // All measurements clipped (pattern at the image border): fall back to the
         // horizontal-scan estimate, valid for near-axis-aligned inputs.
         var mean = count > 0 ? sum / count : (topLeft.ModuleSize + topRight.ModuleSize + bottomLeft.ModuleSize) / 3f;
-        return new FinderModuleSizes(topLeftAlongU, topLeftAlongV, topRightSize, bottomLeftSize, mean, subPixel);
+        return new FinderModuleSizes(alongU.Near, alongV.Near, alongU.Far, alongV.Far, mean, alongU.SubPixel, alongV.SubPixel);
 
         static void Accumulate(float value, ref float sum, ref int count)
         {
@@ -766,29 +763,35 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Module size through <paramref name="from"/>'s center along the line toward <paramref name="towards"/>, measured by the finder axis estimator the single-finder symbologies share: from sub-pixel edges while <paramref name="subPixel"/> holds, else from whole-pixel runs, which clears it.
-    /// Returns the module size, or NaN when the run leaves the image.
+    /// The module sizes at both ends of the line from <paramref name="near"/> to <paramref name="far"/>, through each end's center along the line, measured by the finder axis estimator the single-finder symbologies share.
+    /// Both come from sub-pixel edges when the image has grey levels and both walks finish, else both from whole-pixel runs: a line's change of size is compared at one resolution.
+    /// A size is NaN when its run leaves the image.
     /// </summary>
-    private static float MeasureBothWays(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern from, in FinderPattern towards, ref bool subPixel)
+    private static (float Near, float Far, bool SubPixel) MeasureLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern near, in FinderPattern far)
     {
-        var dx = towards.X - from.X;
-        var dy = towards.Y - from.Y;
+        var dx = far.X - near.X;
+        var dy = far.Y - near.Y;
         var length = (float)Math.Sqrt(dx * dx + dy * dy);
         if (length < 1f)
-        {
-            subPixel = false;
-            return float.NaN;
-        }
+            return (float.NaN, float.NaN, false);
+        var dirX = dx / length;
+        var dirY = dy / length;
 
-        if (subPixel)
+        if (grey.IsEnabled)
         {
             // The dark ring ends 3.5 modules out, and the row scan's module size is never shorter than the module: a turn lengthens it
-            var size = FinderAxisEstimator.MeasureAxisAtLevel(luminance, width, height, grey.Midpoint, from.X, from.Y, dx / length, dy / length, 6f * from.ModuleSize);
-            if (!float.IsNaN(size))
-                return size;
-            subPixel = false;
+            var nearSize = FinderAxisEstimator.MeasureAxisAtLevel(luminance, width, height, grey.Midpoint, near.X, near.Y, dirX, dirY, 6f * near.ModuleSize);
+            if (!float.IsNaN(nearSize))
+            {
+                var farSize = FinderAxisEstimator.MeasureAxisAtLevel(luminance, width, height, grey.Midpoint, far.X, far.Y, -dirX, -dirY, 6f * far.ModuleSize);
+                if (!float.IsNaN(farSize))
+                    return (nearSize, farSize, true);
+            }
         }
-        return FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, from.X, from.Y, dx / length, dy / length);
+        return (
+            FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, near.X, near.Y, dirX, dirY),
+            FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, far.X, far.Y, -dirX, -dirY),
+            false);
     }
 
     /// <summary>

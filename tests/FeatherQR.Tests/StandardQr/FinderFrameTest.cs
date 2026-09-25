@@ -32,7 +32,7 @@ public class FinderFrameTest
             SizeAlong(plane, dimension - 3.5f, 3.5f, 1f, 0f),
             SizeAlong(plane, 3.5f, dimension - 3.5f, 0f, 1f),
             PixelsPerModule,
-            SubPixel: true);
+            SubPixelAlongU: true, SubPixelAlongV: true);
 
         var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes);
         var transform = frame.Transform(dimension);
@@ -65,7 +65,7 @@ public class FinderFrameTest
     {
         var plane = Plane(57, 0f, 23f);
         var (topLeft, topRight, bottomLeft) = Centres(plane, 57);
-        var sizes = new QRImageDecoder.FinderModuleSizes(4f, 4f, 4f, 4f, 4f, SubPixel: true);
+        var sizes = new QRImageDecoder.FinderModuleSizes(4f, 4f, 4f, 4f, 4f, SubPixelAlongU: true, SubPixelAlongV: true);
 
         var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes);
         var transform = frame.Transform(57);
@@ -88,7 +88,7 @@ public class FinderFrameTest
         var plane = Plane(21, 0f, 0f);
         var (topLeft, topRight, bottomLeft) = Centres(plane, 21);
         var far = 4f / (weight * weight);
-        var sizes = new QRImageDecoder.FinderModuleSizes(4f, 4f, far, far, 4f, SubPixel: true);
+        var sizes = new QRImageDecoder.FinderModuleSizes(4f, 4f, far, far, 4f, SubPixelAlongU: true, SubPixelAlongV: true);
 
         var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes);
 
@@ -103,7 +103,7 @@ public class FinderFrameTest
     {
         var plane = Plane(57, 0f, 0f);
         var (topLeft, topRight, bottomLeft) = Centres(plane, 57);
-        var sizes = new QRImageDecoder.FinderModuleSizes(4f, 4f, far, 4f, 4f, SubPixel: false);
+        var sizes = new QRImageDecoder.FinderModuleSizes(4f, 4f, far, 4f, 4f, SubPixelAlongU: false, SubPixelAlongV: false);
 
         var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes);
 
@@ -173,10 +173,43 @@ public class FinderFrameTest
 
         var sizes = QRImageDecoder.MeasureModuleSizes(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft);
 
-        await Assert.That(sizes.SubPixel).IsTrue();
+        await Assert.That(sizes.SubPixelAlongU).IsTrue();
+        await Assert.That(sizes.SubPixelAlongV).IsTrue();
         await Assert.That(Math.Abs(sizes.TopLeftAlongU / SizeAlong(truth, 3.5f, 3.5f, 1f, 0f) - 1f)).IsLessThan(0.02f);
         await Assert.That(Math.Abs(sizes.TopLeftAlongV / SizeAlong(truth, 3.5f, 3.5f, 0f, 1f) - 1f)).IsLessThan(0.02f);
         await Assert.That(Math.Abs(sizes.TopRight / SizeAlong(truth, dimension - 3.5f, 3.5f, 1f, 0f) - 1f)).IsLessThan(0.02f);
+        await Assert.That(Math.Abs(sizes.BottomLeft / SizeAlong(truth, 3.5f, dimension - 3.5f, 0f, 1f) - 1f)).IsLessThan(0.02f);
+    }
+
+    /// <summary>
+    /// A line whose far end cannot be measured to sub-pixel edges takes both of its sizes from whole-pixel runs, so its change of size is never compared across two resolutions; the other line keeps its sub-pixel sizes.
+    /// The far finder's row-scan size is given as half the module, which stops its sub-pixel walk before the dark ring ends and leaves the runs, which have no such limit, to measure it.
+    /// </summary>
+    [Test]
+    [Arguments(37f, 4f)]
+    [Arguments(200f, 4f)]
+    public async Task ModuleSizes_WhenOneEndIsNotSubPixel_TakeThatWholeLineFromRuns(float degrees, float pixelsPerModule)
+    {
+        var qr = QRCodeGenerator.Create("FQR KEYSTONE 0123", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(5), QuietZoneSize = 0 });
+        var dimension = qr.Size;
+        var (luminance, width, height) = SupersampledRenderer.Render((row, column) => qr[row, column], dimension, dimension, pixelsPerModule, degrees, 0.15f);
+        var truth = SupersampledGeometry.GridToPixel(dimension, dimension, pixelsPerModule, degrees, 0.15f);
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        var (topLeft, topRight, bottomLeft) = Centres(truth, dimension);
+        topLeft.ModuleSize = SizeAlong(truth, 3.5f, 3.5f, 1f, 0f);
+        topRight.ModuleSize = SizeAlong(truth, dimension - 3.5f, 3.5f, 1f, 0f) / 2f;
+        bottomLeft.ModuleSize = SizeAlong(truth, 3.5f, dimension - 3.5f, 1f, 0f);
+
+        var sizes = QRImageDecoder.MeasureModuleSizes(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft);
+
+        var length = Distance(topLeft.X, topLeft.Y, topRight.X, topRight.Y);
+        var dirX = (topRight.X - topLeft.X) / length;
+        var dirY = (topRight.Y - topLeft.Y) / length;
+        await Assert.That(sizes.SubPixelAlongU).IsFalse();
+        await Assert.That(sizes.TopLeftAlongU).IsEqualTo(FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, topLeft.X, topLeft.Y, dirX, dirY));
+        await Assert.That(sizes.TopRight).IsEqualTo(FinderAxisEstimator.MeasureAxis(luminance, width, height, threshold, topRight.X, topRight.Y, -dirX, -dirY));
+        await Assert.That(sizes.SubPixelAlongV).IsTrue();
+        await Assert.That(Math.Abs(sizes.TopLeftAlongV / SizeAlong(truth, 3.5f, 3.5f, 0f, 1f) - 1f)).IsLessThan(0.02f);
         await Assert.That(Math.Abs(sizes.BottomLeft / SizeAlong(truth, 3.5f, dimension - 3.5f, 0f, 1f) - 1f)).IsLessThan(0.02f);
     }
 
@@ -193,8 +226,8 @@ public class FinderFrameTest
         var topRightSize = SizeAlong(truth, dimension - 3.5f, 3.5f, 1f, 0f);
         var bottomLeftSize = SizeAlong(truth, 3.5f, dimension - 3.5f, 0f, 1f);
         var mean = (topLeftSizeU + topLeftSizeV + topRightSize + bottomLeftSize) / 4f;
-        var sizes = new QRImageDecoder.FinderModuleSizes(topLeftSizeU, topLeftSizeV, topRightSize, bottomLeftSize, mean, SubPixel: true);
-        var equal = new QRImageDecoder.FinderModuleSizes(mean, mean, mean, mean, mean, SubPixel: true);
+        var sizes = new QRImageDecoder.FinderModuleSizes(topLeftSizeU, topLeftSizeV, topRightSize, bottomLeftSize, mean, SubPixelAlongU: true, SubPixelAlongV: true);
+        var equal = new QRImageDecoder.FinderModuleSizes(mean, mean, mean, mean, mean, SubPixelAlongU: true, SubPixelAlongV: true);
         return (luminance, width, height, dimension, QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes), QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, equal), mean);
     }
 

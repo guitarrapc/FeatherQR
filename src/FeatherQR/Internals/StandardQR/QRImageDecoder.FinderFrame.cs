@@ -35,8 +35,8 @@ internal static partial class QRImageDecoder
 
         public static FinderFrame Create(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes sizes)
         {
-            var uWeight = Weight(sizes.TopLeftAlongU, sizes.TopRight, sizes.SubPixel);
-            var vWeight = Weight(sizes.TopLeftAlongV, sizes.BottomLeft, sizes.SubPixel);
+            var uWeight = Weight(sizes.TopLeftAlongU, sizes.TopRight, sizes.SubPixelAlongU);
+            var vWeight = Weight(sizes.TopLeftAlongV, sizes.BottomLeft, sizes.SubPixelAlongV);
             // A plane in front of the camera keeps the denominator positive over the whole symbol, whose
             // corners lie at a and b from −0.25 to 1.25 at version 1 and closer in above it; sizes that put
             // the horizon across the symbol were measured wrong
