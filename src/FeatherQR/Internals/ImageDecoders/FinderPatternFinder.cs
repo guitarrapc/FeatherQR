@@ -41,7 +41,7 @@ internal enum FinderRowKernel
 /// Locates the three 7×7 finder patterns in a binarized luminance image.
 /// </summary>
 /// <remarks>
-/// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then cross-checks each hit vertically, horizontally and diagonally before accepting it as a candidate (the standard ZXing-style detection approach).
+/// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then cross-checks each hit vertically, horizontally and diagonally before accepting it as a candidate.
 /// Each line is held to its own 1:1:3:1:1; the column may be as much longer or shorter than the row as a finder in perspective is drawn (<see cref="IsTotalInWindow"/>), and one outside the row's own 40 % is taken only when the rising diagonal reads 1:1:3:1:1 as well.
 /// Designed for Tier-1 inputs, clean, screen-rendered or scanned images with mild rotation, not for low-contrast photos.
 /// <para>

@@ -108,13 +108,13 @@ internal static class RmQRConstants
     //
     // Provenance: derived from the block-structure tables above ((total − data) /
     // blocks / 2), which are oracle-verified (specs/rmqr-encoder.md, "Verification
-    // record"), and consistent with zxing-cpp — the only maintained OSS rMQR decode
-    // lineage — which corrects rMQR at full Reed-Solomon strength. The ISO/IEC 23941
-    // Table 8 capacity column itself has NOT been read: the standard is paywalled and
-    // the public preview stops short of Table 8. Held as data rather than as the
-    // ⌊ecc/2⌋ expression so that a future reading of Table 8 showing a reserved p on
-    // some row is a table edit alone; RmQRMatrixDecoder already applies the value per
-    // block. RmQRConstantsUnitTest pins every row against ECCPerBlock / 2.
+    // record"); the evidence for full strength is the Correction cap decision in
+    // specs/rmqr-decoder.md. The ISO/IEC 23941 Table 8 capacity column itself has NOT
+    // been read: the standard is paywalled and the public preview stops short of
+    // Table 8. Held as data rather than as the ⌊ecc/2⌋ expression so that a future
+    // reading of Table 8 showing a reserved p on some row is a table edit alone;
+    // RmQRMatrixDecoder already applies the value per block. RmQRConstantsUnitTest
+    // pins every row against ECCPerBlock / 2.
     private static ReadOnlySpan<byte> errorCorrectionCapacities =>
     [
         3, 5, 4, 7, 6, 11, 8, 15, 12, 11,
@@ -309,7 +309,7 @@ internal static class RmQRConstants
     }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
     /// <summary>
-    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation and read for real by the qrtool Kanji fixtures, which cover widths 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139); 2, 3 and 6 rest on the derivation.
+    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation and read for real by the rMQR Kanji fixtures, which cover widths 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139); 2, 3 and 6 rest on the derivation.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(RmQRVersion version) => kanjiCountBits[Index(version)];

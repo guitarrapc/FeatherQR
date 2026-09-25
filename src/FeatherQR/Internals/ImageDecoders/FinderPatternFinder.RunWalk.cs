@@ -116,7 +116,7 @@ internal static partial class FinderPatternFinder
     /// Each line has passed its own 1:1:3:1:1 by then, so this is only how the two lines may differ in scale, and that depends on which line it is.
     /// The row again (<paramref name="acrossAxes"/> false) is the row scan's own line through a refined centre: the same cross section, within 40 %.
     /// The column is the other axis, and a symbol in perspective draws a finder longer along one axis than the other: at keystone k the finder at the wide edge is 1/(1 − k) times taller than wide in the symbol's own axes, and turning it only brings the two totals closer, so a column is at most that factor from the row, 2 at 50 %.
-    /// The window is 5/12 to 12/5, that factor and a fifth on top for whole-pixel runs; zxing-cpp allows 5 between any two of its four lines and walks up to 4 times the row, with no early stop.
+    /// The window is 5/12 to 12/5, that factor and a fifth on top for whole-pixel runs.
     /// </remarks>
     internal static bool IsTotalInWindow(int total, int expectedTotal, bool acrossAxes)
         => acrossAxes

@@ -9,13 +9,13 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// Regional binarization for a symbol lit unevenly: each pixel is read against its neighbourhood's level instead of one global threshold.
 /// </summary>
 /// <remarks>
-/// ZXing's hybrid scheme: an 8 × 8 block's black point is its mean, or for a flat block (range at most <see cref="MinDynamicRange"/>) half its minimum, raised to the 1:2:1 mean of its top, left and top-left neighbours when its minimum is below that mean (off the first block row and column); each pixel is read against the mean black point of the 5 × 5 blocks around its block.
+/// An 8 × 8 block's black point is its mean, or for a flat block (range at most <see cref="MinDynamicRange"/>) half its minimum, raised to the 1:2:1 mean of its top, left and top-left neighbours when its minimum is below that mean (off the first block row and column); each pixel is read against the mean black point of the 5 × 5 blocks around its block.
 /// </remarks>
 internal static class LocalBinarizer
 {
     internal const int BlockSize = 8;
 
-    /// <summary>A block's range at or below this is read as flat; ZXing's value.</summary>
+    /// <summary>A block's range at or below this is read as flat.</summary>
     internal const int MinDynamicRange = 24;
 
     /// <summary>Blocks each side of a block that its threshold averages over.</summary>
