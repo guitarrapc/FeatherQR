@@ -733,6 +733,7 @@ internal static partial class FinderPatternFinder
     /// </summary>
     /// <remarks>
     /// At 1 to 1.5 px/module a crisp render draws each module 1 or 2 px wide, so a run is up to a whole module off and the half-module tolerance means nothing. The edges themselves are exact, and the pattern they frame either is a finder, module for module, or is not: a stronger test than three ratios, and independent of how wide each module came out.
+    /// The column is held to the same window as in the ratio path, so a finder drawn taller than wide is read here too, but the rising diagonal is not asked: the 49 modules include every light-ring module that diagonal crosses, so they already refuse what it would refuse. Asking it anyway refused no broken ring more, and lost real stretched finders at 1.25 × 1.6-1.75 px, where a whole-pixel walk at 45° crosses module corners.
     /// </remarks>
     private static bool TryCrossCheckWholePattern(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<int> rowRuns, int endX, int y, bool referenceWalk, out float centerX, out float centerY, out int refinedTotal)
     {

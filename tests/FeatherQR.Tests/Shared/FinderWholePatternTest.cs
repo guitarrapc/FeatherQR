@@ -85,6 +85,54 @@ public class FinderWholePatternTest
         await Assert.That(count).IsEqualTo(expected);
     }
 
+    /// <summary>
+    /// A crisp finder 1 px a module across and 1.6 or 2 px down: its column is past the row's own 40 %, and the column's window reads it here as in the ratio path, at every sub-pixel offset.
+    /// With its light ring filled in the two quadrants the rising diagonal crosses, the 49 modules refuse it at every offset, which is why this path does not ask the diagonal as well.
+    /// </summary>
+    [Test]
+    [Arguments(1.6f, false, 16)]
+    [Arguments(1.6f, true, 0)]
+    [Arguments(2f, false, 16)]
+    [Arguments(2f, true, 0)]
+    public async Task FindCandidates_StretchedSmallFinder_WholePatternRefusesABrokenRing(float pixelsPerModuleDown, bool risingDiagonalBroken, int expectedOffsets)
+    {
+        const float pixelsPerModuleAcross = 1f;
+        var width = (int)(15 * pixelsPerModuleAcross) + 2;
+        var height = (int)(15 * pixelsPerModuleDown) + 2;
+        var offsetsWithACandidate = 0;
+        for (var offsetX = 0; offsetX < 4; offsetX++)
+        {
+            for (var offsetY = 0; offsetY < 4; offsetY++)
+            {
+                var luminance = new byte[width * height];
+                for (var y = 0; y < height; y++)
+                {
+                    for (var x = 0; x < width; x++)
+                    {
+                        var row = (int)Math.Floor((y + offsetY * 0.25f) / pixelsPerModuleDown) - 4;
+                        var column = (int)Math.Floor((x + offsetX * 0.25f) / pixelsPerModuleAcross) - 4;
+                        luminance[y * width + x] = StretchedFinder(row, column, risingDiagonalBroken) ? (byte)0 : (byte)255;
+                    }
+                }
+                if (Find(luminance, width, height).Count > 0)
+                    offsetsWithACandidate++;
+            }
+        }
+
+        await Assert.That(offsetsWithACandidate).IsEqualTo(expectedOffsets);
+
+        // A 7 × 7 finder, its light ring filled in the two quadrants the rising diagonal crosses when broken
+        static bool StretchedFinder(int row, int column, bool broken)
+        {
+            if (row < 0 || column < 0 || row >= 7 || column >= 7)
+                return false;
+            var ring = Math.Min(Math.Min(row, column), Math.Min(6 - row, 6 - column));
+            if (ring != 1)
+                return true;
+            return broken && ((row < 3 && column > 3) || (row > 3 && column < 3));
+        }
+    }
+
     private static (int Count, FinderPattern[] Candidates) Find(byte[] luminance, int width, int height)
     {
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
