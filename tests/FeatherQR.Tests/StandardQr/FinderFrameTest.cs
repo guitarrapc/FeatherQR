@@ -120,11 +120,11 @@ public class FinderFrameTest
     [Arguments(40, 0.45f, 200f, 4f)]
     public async Task TimingMatch_ThroughTheFrame_NamesTheDimensionTheParallelogramMisses(int version, float keystone, float degrees, float pixelsPerModule)
     {
-        var (luminance, width, height, dimension, frame, parallelogram, moduleSize) = RenderWithTrueFrames(version, keystone, degrees, pixelsPerModule);
+        var (luminance, width, height, dimension, frame, parallelogram, _, sizes, equalSizes) = RenderWithTrueFrames(version, keystone, degrees, pixelsPerModule);
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
-        var throughParallelogram = QRImageDecoder.MatchTimingDimension(luminance, width, height, threshold, grey, frame.TopLeft, frame.TopRight, frame.BottomLeft, moduleSize, parallelogram);
-        var throughFrame = QRImageDecoder.MatchTimingDimension(luminance, width, height, threshold, grey, frame.TopLeft, frame.TopRight, frame.BottomLeft, moduleSize, frame);
+        var throughParallelogram = QRImageDecoder.MatchTimingDimension(luminance, width, height, threshold, grey, frame.TopLeft, frame.TopRight, frame.BottomLeft, equalSizes, parallelogram);
+        var throughFrame = QRImageDecoder.MatchTimingDimension(luminance, width, height, threshold, grey, frame.TopLeft, frame.TopRight, frame.BottomLeft, sizes, frame);
 
         await Assert.That(throughParallelogram).IsNotEqualTo(dimension).Because("the parallelogram has to miss for the frame to be what finds it");
         await Assert.That(throughFrame).IsEqualTo(dimension);
@@ -139,7 +139,7 @@ public class FinderFrameTest
     [Arguments(25, 0.18f, 213f, 4.3f)]
     public async Task AlignmentSearch_WhereTheFrameExpectsIt_AnchorsOnTheBottomRightPattern(int version, float keystone, float degrees, float pixelsPerModule)
     {
-        var (luminance, width, height, dimension, frame, parallelogram, moduleSize) = RenderWithTrueFrames(version, keystone, degrees, pixelsPerModule);
+        var (luminance, width, height, dimension, frame, parallelogram, moduleSize, _, _) = RenderWithTrueFrames(version, keystone, degrees, pixelsPerModule);
         var truth = SupersampledGeometry.GridToPixel(dimension, dimension, pixelsPerModule, degrees, keystone);
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
@@ -213,8 +213,157 @@ public class FinderFrameTest
         await Assert.That(Math.Abs(sizes.BottomLeft / SizeAlong(truth, 3.5f, dimension - 3.5f, 0f, 1f) - 1f)).IsLessThan(0.02f);
     }
 
-    /// <summary>A render of a version's symbol, the frame of its true finder centres and true sizes beside the parallelogram of the same centres, and the sizes' mean, the module size the decoder searches with.</summary>
-    private static (byte[] Luminance, int Width, int Height, int Dimension, QRImageDecoder.FinderFrame Frame, QRImageDecoder.FinderFrame Parallelogram, float ModuleSize) RenderWithTrueFrames(int version, float keystone, float degrees, float pixelsPerModule)
+    /// <summary>
+    /// The count along each finder line from its own two ends is the plane's: the far end at weight w measures 1/w² of the near one, and the distance over their geometric mean is the modules between the centres.
+    /// The mean of all four sizes, the estimate before, is short by more than a version here.
+    /// </summary>
+    [Test]
+    [Arguments(97, 0.45f, 0f)]
+    [Arguments(117, 0.4f, 35f)]
+    [Arguments(177, 0.5f, 200f)]
+    [Arguments(177, 0.35f, 290f)]
+    public async Task Estimate_OfAPlaneInPerspective_CountsEachLineByItsOwnEnds(int dimension, float keystone, float degrees)
+    {
+        var plane = Plane(dimension, keystone, degrees);
+        var (topLeft, topRight, bottomLeft) = Centres(plane, dimension);
+        var sizes = TrueSizes(plane, dimension);
+        var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes);
+
+        var estimate = QRImageDecoder.EstimateModules(topLeft, topRight, bottomLeft, sizes, frame);
+
+        var byMean = (Distance(topLeft.X, topLeft.Y, topRight.X, topRight.Y) + Distance(topLeft.X, topLeft.Y, bottomLeft.X, bottomLeft.Y)) / 2f / sizes.Mean + 7f;
+        await Assert.That(dimension - byMean).IsGreaterThan(4f).Because("the mean of the four sizes has to miss for the lines' own sizes to be what counts right");
+        await Assert.That(Math.Abs(estimate - dimension)).IsLessThan(0.5f);
+    }
+
+    /// <summary>
+    /// A line whose whole-pixel runs are one size beside a line the frame foreshortens counts by its own sizes. The mean of all four held the other line's far end, 40 % large here, and put a version 40 two versions short.
+    /// </summary>
+    [Test]
+    public async Task Estimate_FlatLineBesideAForeshortenedOne_CountsByItsOwnSizes()
+    {
+        var topLeft = new FinderPattern { X = 100f, Y = 100f, ModuleSize = 3.5f, Count = 2 };
+        var topRight = new FinderPattern { X = 100f + 560f, Y = 100f, ModuleSize = 3.5f, Count = 2 };
+        var bottomLeft = new FinderPattern { X = 100f, Y = 100f + 600f, ModuleSize = 5f, Count = 2 };
+        var sizes = new QRImageDecoder.FinderModuleSizes(3.5f, 3.5f, 3.5f, 5f, 3.875f, SubPixelAlongU: false, SubPixelAlongV: false);
+        var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes);
+
+        var estimate = QRImageDecoder.EstimateModules(topLeft, topRight, bottomLeft, sizes, frame);
+
+        await Assert.That(frame.IsAffine).IsFalse().Because("the left line's runs differ past their resolution");
+        var expected = ((560f / 3.5f + 7f) + (600f / MathF.Sqrt(3.5f * 5f) + 7f)) / 2f;
+        await Assert.That(Math.Abs(estimate - expected)).IsLessThan(1e-3f);
+    }
+
+    /// <summary>Where the frame is the parallelogram, the estimate divides both lines by the mean of all four sizes, as it did before any line counted by its own.</summary>
+    [Test]
+    public async Task Estimate_OfTheParallelogram_IsTheMeanOfFourBitForBit()
+    {
+        var plane = Plane(97, 0f, 23f);
+        var (topLeft, topRight, bottomLeft) = Centres(plane, 97);
+        // Whole-pixel runs within their resolution of one another: the frame takes both lines as flat
+        var sizes = new QRImageDecoder.FinderModuleSizes(4f, 4f + 1f / 12f, 4f - 2f / 12f, 4f + 2f / 12f, 4f + 1f / 48f, SubPixelAlongU: false, SubPixelAlongV: false);
+        var frame = QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes);
+
+        var estimate = QRImageDecoder.EstimateModules(topLeft, topRight, bottomLeft, sizes, frame);
+
+        await Assert.That(frame.IsAffine).IsTrue();
+        var widthModules = Distance(topLeft.X, topLeft.Y, topRight.X, topRight.Y) / sizes.Mean + 7f;
+        var heightModules = Distance(topLeft.X, topLeft.Y, bottomLeft.X, bottomLeft.Y) / sizes.Mean + 7f;
+        await Assert.That(estimate).IsEqualTo((widthModules + heightModules) / 2f);
+    }
+
+    /// <summary>
+    /// The timing match gives a dimension up once its wrong modules are as many as the best so far allows, which has to name what counting every module names: through true frames, through the parallelogram of the same centres, and through triples with a corner moved off its finder, where nothing reads.
+    /// </summary>
+    [Test]
+    public async Task TimingMatch_GivingUpADimensionEarly_NamesWhatTheFullCountNames()
+    {
+        var named = 0;
+        var refused = 0;
+        foreach (var version in new[] { 2, 7, 20, 32, 40 })
+        {
+            foreach (var (keystone, degrees) in new[] { (0f, 0f), (0.3f, 77f), (0.45f, 200f) })
+            {
+                var (luminance, width, height, _, frame, parallelogram, _, sizes, equalSizes) = RenderWithTrueFrames(version, keystone, degrees, 4f);
+                var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+                foreach (var shift in new[] { 0f, 3f, 11f })
+                {
+                    var topRight = frame.TopRight;
+                    topRight.X += shift * topRight.ModuleSize;
+                    foreach (var (triple, tripleSizes) in new[] { (frame, sizes), (parallelogram, equalSizes) })
+                    {
+                        var moved = QRImageDecoder.FinderFrame.Create(triple.TopLeft, topRight, triple.BottomLeft, tripleSizes);
+                        var actual = QRImageDecoder.MatchTimingDimension(luminance, width, height, threshold, grey, triple.TopLeft, topRight, triple.BottomLeft, tripleSizes, moved);
+                        var reference = MatchTimingDimensionCountingEveryModule(luminance, width, height, threshold, grey, triple.TopLeft, topRight, triple.BottomLeft, tripleSizes, moved);
+                        await Assert.That(actual).IsEqualTo(reference).Because($"version {version}, keystone {keystone}, turned {degrees}°, top-right moved {shift} modules");
+                        if (reference == 0)
+                            refused++;
+                        else
+                            named++;
+                    }
+                }
+            }
+        }
+
+        // Both outcomes have to occur, or the comparison held nothing
+        await Assert.That(named).IsGreaterThan(10);
+        await Assert.That(refused).IsGreaterThan(10);
+    }
+
+    /// <summary>The timing match as it was before it gave a dimension up early: every timing module of every dimension within four versions counted.</summary>
+    private static int MatchTimingDimensionCountingEveryModule(byte[] luminance, int width, int height, byte threshold, GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, QRImageDecoder.FinderModuleSizes sizes, QRImageDecoder.FinderFrame frame)
+    {
+        var estimate = QRImageDecoder.EstimateModules(topLeft, topRight, bottomLeft, sizes, frame);
+        var best = 0;
+        var bestWrong = 1f / 8f;
+        for (var version = 1; version <= 40; version++)
+        {
+            var dimension = 17 + 4 * version;
+            if (Math.Abs(dimension - estimate) > 16f)
+                continue;
+            var transform = frame.Transform(dimension);
+            var wrong = 0;
+            for (var i = 8; i < dimension - 8; i++)
+            {
+                var dark = (i & 1) == 0;
+                if (IsDarkAt(transform, i + 0.5f, 6.5f) != dark)
+                    wrong++;
+                if (IsDarkAt(transform, 6.5f, i + 0.5f) != dark)
+                    wrong++;
+            }
+            var share = wrong / (2f * (dimension - 16));
+            if (share < bestWrong)
+            {
+                bestWrong = share;
+                best = dimension;
+            }
+        }
+        return best;
+
+        bool IsDarkAt(in PerspectiveTransform transform, float u, float v)
+        {
+            transform.Transform(u, v, out var x, out var y);
+            if (grey.IsEnabled)
+                return LuminanceSampler.Bilinear(luminance, width, height, x, y) < grey.Midpoint;
+            var px = x < 0f ? 0 : x >= width ? width - 1 : (int)x;
+            var py = y < 0f ? 0 : y >= height ? height - 1 : (int)y;
+            return luminance[py * width + px] < threshold;
+        }
+    }
+
+    /// <summary>The plane's own sizes along each finder line at its finder centres, as sub-pixel measurements.</summary>
+    private static QRImageDecoder.FinderModuleSizes TrueSizes(in PerspectiveTransform plane, int dimension)
+    {
+        var topLeftU = SizeAlong(plane, 3.5f, 3.5f, 1f, 0f);
+        var topLeftV = SizeAlong(plane, 3.5f, 3.5f, 0f, 1f);
+        var topRight = SizeAlong(plane, dimension - 3.5f, 3.5f, 1f, 0f);
+        var bottomLeft = SizeAlong(plane, 3.5f, dimension - 3.5f, 0f, 1f);
+        return new QRImageDecoder.FinderModuleSizes(topLeftU, topLeftV, topRight, bottomLeft, (topLeftU + topLeftV + topRight + bottomLeft) / 4f, SubPixelAlongU: true, SubPixelAlongV: true);
+    }
+
+    /// <summary>A render of a version's symbol, the frame of its true finder centres and true sizes beside the parallelogram of the same centres, the sizes' mean, the module size the decoder searches with, and the two sets of sizes.</summary>
+    private static (byte[] Luminance, int Width, int Height, int Dimension, QRImageDecoder.FinderFrame Frame, QRImageDecoder.FinderFrame Parallelogram, float ModuleSize, QRImageDecoder.FinderModuleSizes Sizes, QRImageDecoder.FinderModuleSizes EqualSizes) RenderWithTrueFrames(int version, float keystone, float degrees, float pixelsPerModule)
     {
         var qr = QRCodeGenerator.Create("FQR KEYSTONE 0123", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
         var dimension = qr.Size;
@@ -228,7 +377,7 @@ public class FinderFrameTest
         var mean = (topLeftSizeU + topLeftSizeV + topRightSize + bottomLeftSize) / 4f;
         var sizes = new QRImageDecoder.FinderModuleSizes(topLeftSizeU, topLeftSizeV, topRightSize, bottomLeftSize, mean, SubPixelAlongU: true, SubPixelAlongV: true);
         var equal = new QRImageDecoder.FinderModuleSizes(mean, mean, mean, mean, mean, SubPixelAlongU: true, SubPixelAlongV: true);
-        return (luminance, width, height, dimension, QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes), QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, equal), mean);
+        return (luminance, width, height, dimension, QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, sizes), QRImageDecoder.FinderFrame.Create(topLeft, topRight, bottomLeft, equal), mean, sizes, equal);
     }
 
     /// <summary>How far the transform puts grid point (<paramref name="at"/>, <paramref name="at"/>) from where the render drew it, in modules there.</summary>

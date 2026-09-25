@@ -81,7 +81,7 @@ public class KeystoneFrameDecodeTest
     }
 
     /// <summary>Decodes the render and holds each reported corner within half a module of where the render drew it.</summary>
-    private static async Task AssertDecodes(int version, float pixelsPerModule, float degrees, float keystone, bool binarized)
+    internal static async Task AssertDecodes(int version, float pixelsPerModule, float degrees, float keystone, bool binarized)
     {
         var qr = StandardQR(version);
         var size = qr.Size;

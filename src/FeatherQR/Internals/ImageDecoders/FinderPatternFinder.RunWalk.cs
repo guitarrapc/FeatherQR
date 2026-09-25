@@ -14,7 +14,7 @@ internal static partial class FinderPatternFinder
     internal const int NoRunCap = int.MaxValue;
 
     /// <summary>
-    /// Measures the five runs through (<paramref name="centerX"/>, <paramref name="centerY"/>) along (<paramref name="stepX"/>, <paramref name="stepY"/>), which is (0, 1), (1, 0) or (1, 1).
+    /// Measures the five runs through (<paramref name="centerX"/>, <paramref name="centerY"/>) along (<paramref name="stepX"/>, <paramref name="stepY"/>), which is (0, 1), (1, 0), (1, 1) or (1, −1).
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -29,21 +29,21 @@ internal static partial class FinderPatternFinder
     /// <param name="end">Steps from the centre to the first pixel after the last run.</param>
     /// <returns>False when the centre run reaches the image border on either side, which no cross-check accepts.</returns>
     /// <remarks>
-    /// One walk for the three lines: they differ only in the distance between two pixels of the line and in how many pixels lie before and after the centre, so both are worked out once and the loops test a count, not coordinates.
+    /// One walk for the four lines: they differ only in the distance between two pixels of the line and in how many pixels lie before and after the centre, so both are worked out once and the loops test a count, not coordinates.
     /// The pixels read and their order are the reference's. The offset moves as an integer and is turned into a reference only after the count has said the pixel exists, so no reference is ever formed outside the image.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool MeasureRuns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, int stepX, int stepY, int cap, Span<int> runs, out int end)
     {
-        Debug.Assert((stepX | stepY) == 1 && (stepX & ~1) == 0 && (stepY & ~1) == 0, "The line is a row, a column or the falling diagonal.");
+        Debug.Assert((stepX == 0 && stepY == 1) || (stepX == 1 && (stepY == 0 || stepY == 1 || stepY == -1)), "The line is a row, a column or a diagonal.");
 
         // The only checks of the walk: everything after this indexes unchecked
         if ((uint)centerX >= (uint)width || (uint)centerY >= (uint)height || (long)width * height > luminance.Length)
             ThrowCentreOutsideImage(centerX, centerY, width, height, luminance.Length);
 
         end = 0;
-        var before = stepX == 0 ? centerY : stepY == 0 ? centerX : Math.Min(centerX, centerY);
-        var after = stepX == 0 ? height - 1 - centerY : stepY == 0 ? width - 1 - centerX : Math.Min(width - 1 - centerX, height - 1 - centerY);
+        var before = stepX == 0 ? centerY : stepY == 0 ? centerX : stepY > 0 ? Math.Min(centerX, centerY) : Math.Min(centerX, height - 1 - centerY);
+        var after = stepX == 0 ? height - 1 - centerY : stepY == 0 ? width - 1 - centerX : stepY > 0 ? Math.Min(width - 1 - centerX, height - 1 - centerY) : Math.Min(width - 1 - centerX, centerY);
         var step = (nint)stepY * width + stepX;
         var centre = (nint)centerY * width + centerX;
         ref var origin = ref MemoryMarshal.GetReference(luminance);
@@ -110,10 +110,24 @@ internal static partial class FinderPatternFinder
     }
 
     /// <summary>
+    /// Whether an axis cross-check's run total is close enough to the total of the row it checks.
+    /// </summary>
+    /// <remarks>
+    /// Each line has passed its own 1:1:3:1:1 by then, so this is only how the two lines may differ in scale, and that depends on which line it is.
+    /// The row again (<paramref name="acrossAxes"/> false) is the row scan's own line through a refined centre: the same cross section, within 40 %.
+    /// The column is the other axis, and a symbol in perspective draws a finder longer along one axis than the other: at keystone k the finder at the wide edge is 1/(1 − k) times taller than wide in the symbol's own axes, and turning it only brings the two totals closer, so a column is at most that factor from the row, 2 at 50 %.
+    /// The window is 5/12 to 12/5, that factor and a fifth on top for whole-pixel runs; zxing-cpp allows 5 between any two of its four lines and walks up to 4 times the row, with no early stop.
+    /// </remarks>
+    internal static bool IsTotalInWindow(int total, int expectedTotal, bool acrossAxes)
+        => acrossAxes
+            ? 12 * total > 5 * expectedTotal && 5 * total < 12 * expectedTotal
+            : 5 * Math.Abs(total - expectedTotal) < 2 * expectedTotal;
+
+    /// <summary>
     /// What the runs of a cross section an axis cross-check could still accept are bounded by, given the total it expects.
     /// </summary>
     /// <remarks>
-    /// Every bound is a consequence of the cross-check's own accept conditions and of nothing else: the total within 40 % of the expected one, and either the strict ratio (each side run within half a module of one module, the centre within a module and a half of three) or the near-miss one (each run within ten sevenths of a pixel), which is also the only door to the grey second look, or, in the mode that hands its runs back, the small crisp runs, which turn out to lie inside the same bounds.
+    /// Every bound is a consequence of the cross-check's own accept conditions and of nothing else: the total inside the window of <see cref="IsTotalInWindow"/>, and either the strict ratio (each side run within half a module of one module, the centre within a module and a half of three) or the near-miss one (each run within ten sevenths of a pixel), which is also the only door to the grey second look, or, in the mode that hands its runs back, the small crisp runs, which turn out to lie inside the same bounds.
     /// The strict ratio puts every side run below the centre run, and the near-miss one ties it to a third of the centre, so the bound on a side run is known as soon as the centre has been measured.
     /// A walk that stops at these bounds can therefore only stop where the verdict would have been a refusal. <c>FinderRunBoundsTest</c> holds each bound against the ratio checks themselves.
     /// </remarks>
@@ -137,11 +151,11 @@ internal static partial class FinderPatternFinder
             CentreHigh = centreHigh;
         }
 
-        public static AxisRunBounds From(int expectedTotal)
+        public static AxisRunBounds From(int expectedTotal, bool acrossAxes)
         {
-            // 5·|total − expected| < 2·expected
-            var totalLow = Math.Max(3 * expectedTotal / 5 + 1, MinTotal);
-            var totalHigh = (7 * expectedTotal - 1) / 5;
+            // The smallest and the largest total inside the window: 5·|total − expected| < 2·expected along the row, 5·expected < 12·total and 5·total < 12·expected across the axes
+            var totalLow = Math.Max((acrossAxes ? 5 * expectedTotal / 12 : 3 * expectedTotal / 5) + 1, MinTotal);
+            var totalHigh = acrossAxes ? (12 * expectedTotal - 1) / 5 : (7 * expectedTotal - 1) / 5;
             if (totalHigh < totalLow)
                 return new AxisRunBounds(totalHigh, 1, 0);
 
@@ -212,7 +226,8 @@ internal static partial class FinderPatternFinder
         if (leftForward == 0)
             return false;
 
-        var bounds = AxisRunBounds.From(expectedTotal);
+        // A column is checked against the row, the other axis; a row against the row
+        var bounds = AxisRunBounds.From(expectedTotal, acrossAxes: stepX == 0);
         if (r2 < bounds.CentreLow || r2 > bounds.CentreHigh)
             return false;
 
@@ -375,6 +390,59 @@ internal static partial class FinderPatternFinder
             i++;
         }
         while (centerX + i < width && centerY + i < height && IsDark(luminance, width, centerX + i, centerY + i, threshold))
+        {
+            runs[4]++;
+            i++;
+        }
+
+        runs.CopyTo(runsOut);
+        end = i;
+        return true;
+    }
+
+    /// <summary>
+    /// The bottom-left to top-right walk, written as <see cref="MeasureDiagonalRunsReference"/> is with the rows running the other way, as the reference <see cref="MeasureRuns"/> is held to along (1, −1). Its side runs have no cap.
+    /// </summary>
+    internal static bool MeasureRisingDiagonalRunsReference(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, Span<int> runsOut, out int end)
+    {
+        end = 0;
+        Span<int> runs = stackalloc int[5];
+
+        var i = 0;
+        while (centerX - i >= 0 && centerY + i < height && IsDark(luminance, width, centerX - i, centerY + i, threshold))
+        {
+            runs[2]++;
+            i++;
+        }
+        if (centerX - i < 0 || centerY + i >= height)
+            return false;
+
+        while (centerX - i >= 0 && centerY + i < height && !IsDark(luminance, width, centerX - i, centerY + i, threshold))
+        {
+            runs[1]++;
+            i++;
+        }
+        while (centerX - i >= 0 && centerY + i < height && IsDark(luminance, width, centerX - i, centerY + i, threshold))
+        {
+            runs[0]++;
+            i++;
+        }
+
+        i = 1;
+        while (centerX + i < width && centerY - i >= 0 && IsDark(luminance, width, centerX + i, centerY - i, threshold))
+        {
+            runs[2]++;
+            i++;
+        }
+        if (centerX + i >= width || centerY - i < 0)
+            return false;
+
+        while (centerX + i < width && centerY - i >= 0 && !IsDark(luminance, width, centerX + i, centerY - i, threshold))
+        {
+            runs[3]++;
+            i++;
+        }
+        while (centerX + i < width && centerY - i >= 0 && IsDark(luminance, width, centerX + i, centerY - i, threshold))
         {
             runs[4]++;
             i++;

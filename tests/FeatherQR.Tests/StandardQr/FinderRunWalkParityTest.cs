@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the run measurement of the finder cross-checks.
-/// <see cref="FinderPatternFinder.MeasureRuns"/> walks a stepped reference with the runs in locals; <see cref="FinderPatternFinder.MeasureAxisRunsReference"/> and <see cref="FinderPatternFinder.MeasureDiagonalRunsReference"/> are the loops it replaced, kept verbatim.
+/// <see cref="FinderPatternFinder.MeasureRuns"/> walks a stepped reference with the runs in locals; <see cref="FinderPatternFinder.MeasureAxisRunsReference"/> and <see cref="FinderPatternFinder.MeasureDiagonalRunsReference"/> are the loops it replaced, kept verbatim, and <see cref="FinderPatternFinder.MeasureRisingDiagonalRunsReference"/> is the falling one written for the other diagonal.
 /// The verdict on the runs is shared code, and on most centres it is a refusal whatever the runs were, so the walkers are compared on the runs themselves: the five lengths and where the walk ended.
 /// </summary>
 public class FinderRunWalkParityTest
@@ -85,10 +85,12 @@ public class FinderRunWalkParityTest
 
                 // From the centre pixel every axis reads 1:1:3:1:1 in whole modules
                 var runs = new int[5];
-                foreach (var (stepX, stepY) in new[] { (0, 1), (1, 0), (1, 1) })
+                foreach (var (stepX, stepY) in new[] { (0, 1), (1, 0), (1, 1), (1, -1) })
                 {
+                    // On the rising diagonal the centre square is crossed symmetrically from one row up when the module is an even number of pixels
                     var centre = 4 * ppm + ppm / 2;
-                    var ok = FinderPatternFinder.MeasureRuns(scene, width, height, 128, centre, centre, stepX, stepY, FinderPatternFinder.NoRunCap, runs, out _);
+                    var centreY = stepY == -1 ? centre - (1 - ppm % 2) : centre;
+                    var ok = FinderPatternFinder.MeasureRuns(scene, width, height, 128, centre, centreY, stepX, stepY, FinderPatternFinder.NoRunCap, runs, out _);
                     await Assert.That(ok).IsTrue();
                     await Assert.That(runs).IsEquivalentTo(new[] { ppm, ppm, 3 * ppm, ppm, ppm }).Because($"ppm={ppm}, step=({stepX},{stepY})");
                 }
@@ -145,17 +147,19 @@ public class FinderRunWalkParityTest
         {
             for (var x = 0; x < width; x++)
             {
-                foreach (var (stepX, stepY) in new[] { (0, 1), (1, 0), (1, 1) })
+                foreach (var (stepX, stepY) in new[] { (0, 1), (1, 0), (1, 1), (1, -1) })
                 {
-                    // The diagonal check has no cap; the axis checks cap each side run at the expected total, which is 7 or more in a decode and anything here
-                    var caps = stepX == stepY ? new[] { FinderPatternFinder.NoRunCap } : new[] { 0, 1, 2, 5, 21, 1000 };
+                    // The diagonal checks have no cap; the axis checks cap each side run at the expected total, which is 7 or more in a decode and anything here
+                    var caps = stepX != 0 && stepY != 0 ? new[] { FinderPatternFinder.NoRunCap } : new[] { 0, 1, 2, 5, 21, 1000 };
                     foreach (var cap in caps)
                     {
                         fast.Fill(Dirty);
                         reference.Fill(Dirty);
                         var fastOk = FinderPatternFinder.MeasureRuns(scene, width, height, threshold, x, y, stepX, stepY, cap, fast, out var fastEnd);
-                        var referenceOk = stepX == stepY
-                            ? FinderPatternFinder.MeasureDiagonalRunsReference(scene, width, height, threshold, x, y, reference, out var referenceEnd)
+                        var referenceOk = stepY == -1
+                            ? FinderPatternFinder.MeasureRisingDiagonalRunsReference(scene, width, height, threshold, x, y, reference, out var referenceEnd)
+                            : stepX == stepY
+                            ? FinderPatternFinder.MeasureDiagonalRunsReference(scene, width, height, threshold, x, y, reference, out referenceEnd)
                             : FinderPatternFinder.MeasureAxisRunsReference(scene, width, height, threshold, x, y, vertical: stepX == 0, cap, reference, out referenceEnd);
 
                         compared++;

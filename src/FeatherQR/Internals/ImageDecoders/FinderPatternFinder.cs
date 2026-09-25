@@ -42,6 +42,7 @@ internal enum FinderRowKernel
 /// </summary>
 /// <remarks>
 /// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then cross-checks each hit vertically, horizontally and diagonally before accepting it as a candidate (the standard ZXing-style detection approach).
+/// Each line is held to its own 1:1:3:1:1; the column may be as much longer or shorter than the row as a finder in perspective is drawn (<see cref="IsTotalInWindow"/>), and one outside the row's own 40 % is taken only when the rising diagonal reads 1:1:3:1:1 as well.
 /// Designed for Tier-1 inputs, clean, screen-rendered or scanned images with mild rotation, not for low-contrast photos.
 /// <para>
 /// The ratio is checked on whole-pixel runs first. An anti-aliased edge leaves a grey pixel that a threshold rounds to a whole one, which at about 2 px/module is half a module, so runs that miss by less than 1.5 px, the same budget on every run, are measured again from <see cref="GreyLevels"/> and held to the strict tolerance, in the row scan and in all three cross-checks.
@@ -78,15 +79,39 @@ internal static partial class FinderPatternFinder
     /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
     /// <returns>True when at least three mutually consistent finder patterns were found.</returns>
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
-        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, patterns);
+    {
+        Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
+        return TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, candidates, out _, patterns);
+    }
 
-    /// <summary>Reference entry for parity tests: the scalar row walk and the reference cross-check walks; behavior-identical to <see cref="TryFind"/>.</summary>
+    /// <summary>
+    /// Searches the image for finder patterns and returns the best three, handing back the candidate list they were chosen from, for the triples to try after them (<see cref="AlternativeTriples"/>).
+    /// </summary>
+    /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="threshold">Binarization threshold: a pixel is dark when luminance &lt; threshold.</param>
+    /// <param name="patterns">Receives the three finder patterns (top-left first is NOT guaranteed).</param>
+    /// <param name="grey">Grey levels for re-measuring a near miss; <c>default</c> measures whole pixels only.</param>
+    /// <param name="candidates">Receives the candidates, in the order the scan found them; <see cref="MaxFinderCandidates"/> entries suffice.</param>
+    /// <param name="candidateCount">The number of candidates written, whether or not a triple was selected.</param>
+    /// <returns>True when at least three mutually consistent finder patterns were found.</returns>
+    public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey, Span<FinderPattern> candidates, out int candidateCount)
+        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, candidates, out candidateCount, patterns);
+
+    /// <summary>Reference entry for parity tests: the scalar row walk and the reference cross-check walks; behavior-identical to <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/>.</summary>
     internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
-        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Scalar, patterns);
+    {
+        Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
+        return TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Scalar, candidates, out _, patterns);
+    }
 
-    /// <summary>Kernel-selecting entry for parity tests; behavior-identical to <see cref="TryFind"/> under every kernel.</summary>
+    /// <summary>Kernel-selecting entry for parity tests; behavior-identical to <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/> under every kernel.</summary>
     internal static bool TryFindWith(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey, FinderRowKernel kernel)
-        => TryFindCore(luminance, width, height, threshold, grey, kernel, patterns);
+    {
+        Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
+        return TryFindCore(luminance, width, height, threshold, grey, kernel, candidates, out _, patterns);
+    }
 
     /// <summary>
     /// Row stride for <see cref="FindCandidates"/>.
@@ -101,7 +126,7 @@ internal static partial class FinderPatternFinder
     /// Used by the Micro QR and rMQR image decoders, where a symbol carries a single finder pattern.
     /// </summary>
     /// <remarks>
-    /// Strided like <see cref="TryFind"/>, but with no fallback of its own: this scan has only a flat candidate list, and every signal available inside it is a statement about the image rather than about the symbol being looked for.
+    /// Strided like <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/>, but with no fallback of its own: this scan has only a flat candidate list, and every signal available inside it is a statement about the image rather than about the symbol being looked for.
     /// A confirmation test (any candidate seen on two or more rows) reads like a per-symbol signal but is not one — a second QR code, a printed logo, or salt-and-pepper noise confirms by itself and would suppress the pass the real symbol needed.
     /// The only question that distinguishes them is "did anything actually decode", which only the caller can answer, so the widening lives there: the image decoders run this scan first and re-run <see cref="FindCandidatesFullSweep"/> when nothing decoded.
     /// Skipping three rows in four is most of the rMQR image path: end to end the span decode of the widest symbol is 2.7x a strideless build's (see the plan's benchmark tables).
@@ -168,13 +193,13 @@ internal static partial class FinderPatternFinder
         return false;
     }
 
-    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<FinderPattern> patterns)
+    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<FinderPattern> candidates, out int candidateCount, Span<FinderPattern> patterns)
     {
         // One rental a search, not a row: the edge-list kernel's buffer
         var rentedEdges = RentEdgeBuffer(kernel, width);
         try
         {
-            return TryFindRows(luminance, width, height, threshold, grey, kernel, rentedEdges, patterns);
+            return TryFindRows(luminance, width, height, threshold, grey, kernel, rentedEdges, candidates.Slice(0, MaxCandidates), out candidateCount, patterns);
         }
         finally
         {
@@ -182,25 +207,24 @@ internal static partial class FinderPatternFinder
         }
     }
 
-    private static bool TryFindRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> patterns)
+    private static bool TryFindRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> candidates, out int candidateCount, Span<FinderPattern> patterns)
     {
         // Row stride bound: a v40 symbol filling the frame has module size height/177.
         // Its 3-module center band is 3·height/177 px tall and a stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol occupies half the frame), enough for the Count-based confirmation in TrySelectBestThree.
         // Smaller strides than 3 don't pay for themselves.
         var stride = Math.Max(3, 3 * height / (4 * MaxSymbolModules));
 
-        Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
-        var candidateCount = 0;
+        candidateCount = 0;
 
         for (var y = 0; y < height; y += stride)
         {
             ScanRow(luminance, width, height, threshold, grey, y, kernel, edges, candidates, ref candidateCount);
         }
 
+        // Every selection runs on a copy: TrySelectBestThree compacts and sorts in place, and the list has to stay intact for the rescan and for the caller's triples after this one
+        Span<FinderPattern> scratch = stackalloc FinderPattern[MaxCandidates];
         if (stride > 1)
         {
-            // Select on a copy: TrySelectBestThree compacts and sorts in place, and a failed selection must leave the list intact for the rescan.
-            Span<FinderPattern> scratch = stackalloc FinderPattern[MaxCandidates];
             candidates.Slice(0, candidateCount).CopyTo(scratch);
             // A stride can hit a real finder's band once while a false candidate is confirmed; a poor triple with candidates left out is not an answer yet.
             var strideSelected = TrySelectBestThree(scratch.Slice(0, candidateCount), patterns, out var unconfirmedLeftOut);
@@ -223,7 +247,8 @@ internal static partial class FinderPatternFinder
                 // A keystoned real triple scores poorly too, and the rows that confirm its finders confirm false candidates inside the symbol with them, over less of their height. The sweep's triple has to be confirmed over as much.
                 var strideHeight = ConfirmedHeight(candidates.Slice(0, candidateCount), patterns);
                 Span<FinderPattern> swept = stackalloc FinderPattern[3];
-                if (TrySelectBestThree(candidates.Slice(0, candidateCount), swept)
+                candidates.Slice(0, candidateCount).CopyTo(scratch);
+                if (TrySelectBestThree(scratch.Slice(0, candidateCount), swept)
                     && ConfirmedHeight(swept, swept) >= strideHeight)
                 {
                     swept.CopyTo(patterns);
@@ -232,7 +257,8 @@ internal static partial class FinderPatternFinder
             }
         }
 
-        return TrySelectBestThree(candidates.Slice(0, candidateCount), patterns);
+        candidates.Slice(0, candidateCount).CopyTo(scratch);
+        return TrySelectBestThree(scratch.Slice(0, candidateCount), patterns);
     }
 
     /// <summary>
@@ -647,12 +673,12 @@ internal static partial class FinderPatternFinder
         }
     }
 
-    /// <summary>The ratio along the column, the row again and the diagonal.</summary>
+    /// <summary>The ratio along the column, the row again and the falling diagonal, and the rising diagonal too when the column is past the row's own 40 %.</summary>
     private static bool TryCrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, float rowCenterX, int y, int total, bool referenceWalk, out float centerX, out float centerY, out int refinedTotal)
     {
         centerX = rowCenterX;
         refinedTotal = 0;
-        centerY = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, y, vertical: true, total, referenceWalk, out _, default);
+        centerY = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, y, vertical: true, total, referenceWalk, out var columnTotal, default);
         if (float.IsNaN(centerY))
             return false;
 
@@ -660,7 +686,12 @@ internal static partial class FinderPatternFinder
         if (float.IsNaN(centerX))
             return false;
 
-        return CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, referenceWalk);
+        if (!CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, referenceWalk))
+            return false;
+
+        // A column the row's own 40 % refuses is taken only as the finder a perspective stretches: an affine image of the rings, which every line through the centre crosses 1:1:3:1:1, the other diagonal too
+        return IsTotalInWindow(columnTotal, total, acrossAxes: false)
+            || CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, referenceWalk, rising: true);
     }
 
     /// <summary>
@@ -777,8 +808,8 @@ internal static partial class FinderPatternFinder
         var i = (vertical ? centerY : centerX) + end;
         total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
 
-        // Reject when the cross section is wildly different from the row hit
-        if (5 * Math.Abs(total - expectedTotal) >= 2 * expectedTotal)
+        // Reject when the cross section is wildly different from the row hit; a column may differ as far as perspective draws a finder
+        if (!IsTotalInWindow(total, expectedTotal, acrossAxes: vertical))
             return float.NaN;
 
         if (!nearMissRuns.IsEmpty)
@@ -796,23 +827,26 @@ internal static partial class FinderPatternFinder
     }
 
     /// <summary>
-    /// Validates the 1:1:3:1:1 ratio along the top-left → bottom-right diagonal, killing false positives that pass both axis checks (e.g. dense data areas).
+    /// Validates the 1:1:3:1:1 ratio along the top-left → bottom-right diagonal, or with <paramref name="rising"/> the bottom-left → top-right one, killing false positives that pass both axis checks (e.g. dense data areas).
     /// </summary>
     /// <remarks>
     /// This one takes the second look too, because it is also what reads a real finder's diagonal once the edges are grey, but it is the weakest place to take it: it is reached only after both axes have accepted, so re-measuring can only turn a refusal into an acceptance, and a 45° walk crosses module corners, where a pixel's darkness is not the position of a single edge.
     /// Below 2.25 px/module that is enough to admit a cross whose axes read 1:1:3:1:1 and whose diagonal does not. Measuring whole pixels here instead removes that class only below 2.05, where this is the route it comes in by, and costs real finders their decode at 2 px/module, so the repair is the corner model rather than the second look.
     /// </remarks>
-    private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool referenceWalk)
+    private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool referenceWalk, bool rising = false)
     {
         Span<int> runs = stackalloc int[5];
         int i;
+        var stepY = rising ? -1 : 1;
         var measured = referenceWalk
-            ? MeasureDiagonalRunsReference(luminance, width, height, threshold, centerX, centerY, runs, out i)
-            : MeasureRuns(luminance, width, height, threshold, centerX, centerY, 1, 1, NoRunCap, runs, out i);
+            ? rising
+                ? MeasureRisingDiagonalRunsReference(luminance, width, height, threshold, centerX, centerY, runs, out i)
+                : MeasureDiagonalRunsReference(luminance, width, height, threshold, centerX, centerY, runs, out i)
+            : MeasureRuns(luminance, width, height, threshold, centerX, centerY, 1, stepY, NoRunCap, runs, out i);
         if (!measured)
             return false;
 
-        return IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, centerX + i, centerY + i, 1, 1);
+        return IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, centerX + i, centerY + stepY * i, 1, stepY);
     }
 
     private static bool IsDark(ReadOnlySpan<byte> luminance, int width, int x, int y, byte threshold)
@@ -877,10 +911,13 @@ internal static partial class FinderPatternFinder
 
     /// <summary>The selection score of one triple: distance from a right isosceles triangle plus relative module-size spread.</summary>
     private static float TripleScore(ReadOnlySpan<FinderPattern> triple)
+        => TripleScore(triple[0], triple[1], triple[2]);
+
+    private static float TripleScore(in FinderPattern a, in FinderPattern b, in FinderPattern c)
     {
-        var smallest = Math.Min(triple[0].ModuleSize, Math.Min(triple[1].ModuleSize, triple[2].ModuleSize));
-        var largest = Math.Max(triple[0].ModuleSize, Math.Max(triple[1].ModuleSize, triple[2].ModuleSize));
-        var skew = RightIsoscelesSkew(DistanceSquared(triple[0], triple[1]), DistanceSquared(triple[0], triple[2]), DistanceSquared(triple[1], triple[2]));
+        var smallest = Math.Min(a.ModuleSize, Math.Min(b.ModuleSize, c.ModuleSize));
+        var largest = Math.Max(a.ModuleSize, Math.Max(b.ModuleSize, c.ModuleSize));
+        var skew = RightIsoscelesSkew(DistanceSquared(a, b), DistanceSquared(a, c), DistanceSquared(b, c));
         return float.IsNaN(skew) || !(smallest > 0f) ? float.MaxValue : skew + (largest - smallest) / smallest;
     }
 

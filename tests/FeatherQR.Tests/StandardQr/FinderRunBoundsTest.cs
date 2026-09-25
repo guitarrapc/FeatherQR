@@ -5,22 +5,26 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The bounds the axis cross-checks stop their walk at (<see cref="FinderPatternFinder.AxisRunBounds"/>) are exact only if no cross section the verdict could accept lies outside them.
 /// That is a property of the verdict alone, so it is held here against the verdict's own checks, not against images: every run vector that passes the total check and either ratio check has to be inside every bound.
+/// Each test runs for both total windows: the row again within 40 % of the row, and the column within 5/12 to 12/5 of it.
 /// The grey second look is left out on purpose: it is asked only of runs that already pass the near-miss check, so it can refuse more and never accept more.
 /// </summary>
 public class FinderRunBoundsTest
 {
     [Test]
-    public async Task EveryAcceptableCrossSection_IsInsideTheBounds_SmallTotalsExhaustive()
+    [Arguments(false, 40)]
+    // The column's window reaches 12/5 of the expected total, so the enumeration grows as its fifth power; 24 keeps it to the row's size
+    [Arguments(true, 24)]
+    public async Task EveryAcceptableCrossSection_IsInsideTheBounds_SmallTotalsExhaustive(bool acrossAxes, int largestExpected)
     {
-        // Every vector of five runs, zero included, whose sum can still pass the total check, for every expected total up to 40
+        // Every vector of five runs, zero included, whose sum can still pass the total check, for every expected total up to the largest
         var acceptable = 0L;
         var outside = 0L;
         string? first = null;
         Span<int> runs = stackalloc int[5];
-        for (var expected = 1; expected <= 40; expected++)
+        for (var expected = 1; expected <= largestExpected; expected++)
         {
-            var bounds = FinderPatternFinder.AxisRunBounds.From(expected);
-            var limit = 7 * expected / 5 + 1;
+            var bounds = FinderPatternFinder.AxisRunBounds.From(expected, acrossAxes);
+            var limit = LargestTotal(expected, acrossAxes) + 1;
             for (var r0 = 0; r0 <= limit; r0++)
                 for (var r1 = 0; r0 + r1 <= limit; r1++)
                     for (var r2 = 0; r0 + r1 + r2 <= limit; r2++)
@@ -28,10 +32,10 @@ public class FinderRunBoundsTest
                             for (var r4 = 0; r0 + r1 + r2 + r3 + r4 <= limit; r4++)
                             {
                                 runs[0] = r0; runs[1] = r1; runs[2] = r2; runs[3] = r3; runs[4] = r4;
-                                if (!CouldBeAccepted(expected, runs))
+                                if (!CouldBeAccepted(expected, runs, acrossAxes))
                                     continue;
                                 acceptable++;
-                                if (Violation(bounds, expected, runs) is { } violation)
+                                if (Violation(bounds, runs) is { } violation)
                                 {
                                     outside++;
                                     first ??= $"expected={expected}, runs=[{r0},{r1},{r2},{r3},{r4}]: {violation}";
@@ -45,7 +49,9 @@ public class FinderRunBoundsTest
     }
 
     [Test]
-    public async Task EveryAcceptableCrossSection_IsInsideTheBounds_LargeTotalsAtTheEdges()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EveryAcceptableCrossSection_IsInsideTheBounds_LargeTotalsAtTheEdges(bool acrossAxes)
     {
         // Large totals cannot be enumerated, so the vectors are built where a bound could be wrong: around 1:1:3:1:1 at a module size, every run pushed to and past its tolerance
         var random = new Random(20260922);
@@ -65,17 +71,28 @@ public class FinderRunBoundsTest
             var total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
             // The expected total anywhere the total check can still pass, and both corners of that window, where a bound is
             // one step away from a total it must not refuse: the largest expected total accepting this one and the smallest
-            expectedTotals[0] = Math.Max(1, (int)(total * (0.68 + 0.80 * random.NextDouble())));
-            expectedTotals[1] = 5 * total / 3;
-            expectedTotals[2] = 5 * total / 3 - 1;
-            expectedTotals[3] = 5 * total / 7 + 1;
-            expectedTotals[4] = 5 * total / 7 + 2;
+            if (acrossAxes)
+            {
+                expectedTotals[0] = Math.Max(1, (int)(total * (0.40 + 2.0 * random.NextDouble())));
+                expectedTotals[1] = (12 * total - 1) / 5;
+                expectedTotals[2] = (12 * total - 1) / 5 - 1;
+                expectedTotals[3] = 5 * total / 12 + 1;
+                expectedTotals[4] = 5 * total / 12 + 2;
+            }
+            else
+            {
+                expectedTotals[0] = Math.Max(1, (int)(total * (0.68 + 0.80 * random.NextDouble())));
+                expectedTotals[1] = 5 * total / 3;
+                expectedTotals[2] = 5 * total / 3 - 1;
+                expectedTotals[3] = 5 * total / 7 + 1;
+                expectedTotals[4] = 5 * total / 7 + 2;
+            }
             foreach (var expected in expectedTotals)
             {
-                if (expected < 1 || !CouldBeAccepted(expected, runs))
+                if (expected < 1 || !CouldBeAccepted(expected, runs, acrossAxes))
                     continue;
                 acceptable++;
-                if (Violation(FinderPatternFinder.AxisRunBounds.From(expected), expected, runs) is { } violation)
+                if (Violation(FinderPatternFinder.AxisRunBounds.From(expected, acrossAxes), runs) is { } violation)
                     first ??= $"expected={expected}, runs=[{runs[0]},{runs[1]},{runs[2]},{runs[3]},{runs[4]}]: {violation}";
             }
         }
@@ -85,7 +102,9 @@ public class FinderRunBoundsTest
     }
 
     [Test]
-    public async Task EveryAcceptableCentre_IsInsideTheBounds_AcrossTheWholeTotalWindow()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EveryAcceptableCentre_IsInsideTheBounds_AcrossTheWholeTotalWindow(bool acrossAxes)
     {
         // The vectors above are drawn around a true 1:1:3:1:1, which leaves the corners of the total window unvisited: a centre run at
         // its floor beside near-module side runs is acceptable there, and a bound one step too tight would refuse it and lose the candidate.
@@ -96,8 +115,8 @@ public class FinderRunBoundsTest
         Span<int> runs = stackalloc int[5];
         for (var expected = 1; expected <= 200; expected++)
         {
-            var bounds = FinderPatternFinder.AxisRunBounds.From(expected);
-            for (var total = 3 * expected / 5; total <= 7 * expected / 5 + 1; total++)
+            var bounds = FinderPatternFinder.AxisRunBounds.From(expected, acrossAxes);
+            for (var total = SmallestTotal(expected, acrossAxes) - 1; total <= LargestTotal(expected, acrossAxes) + 1; total++)
             {
                 for (var centre = 1; centre + 4 <= total; centre++)
                 {
@@ -115,10 +134,10 @@ public class FinderRunBoundsTest
                             runs[4] = sides - runs[0] - runs[1] - runs[3];
                         }
                         runs[2] = centre;
-                        if (runs[4] < 1 || !CouldBeAccepted(expected, runs))
+                        if (runs[4] < 1 || !CouldBeAccepted(expected, runs, acrossAxes))
                             continue;
                         acceptable++;
-                        if (Violation(bounds, expected, runs) is { } violation)
+                        if (Violation(bounds, runs) is { } violation)
                             first ??= $"expected={expected}, total={total}, runs=[{runs[0]},{runs[1]},{runs[2]},{runs[3]},{runs[4]}]: {violation}";
                     }
                 }
@@ -130,27 +149,48 @@ public class FinderRunBoundsTest
     }
 
     [Test]
-    public async Task Bounds_AreNotVacuous()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Bounds_AreNotVacuous(bool acrossAxes)
     {
         // A bound that never refuses holds trivially. For a 3 px a module window (21 px), a centre of one module leaves no room for a side run of one module, and a side run of three modules is past every centre.
-        var bounds = FinderPatternFinder.AxisRunBounds.From(21);
+        var bounds = FinderPatternFinder.AxisRunBounds.From(21, acrossAxes);
         await Assert.That(bounds.CentreLow).IsGreaterThan(1);
-        await Assert.That(bounds.CentreHigh).IsLessThan(21);
+        await Assert.That(bounds.CentreHigh).IsLessThan(acrossAxes ? 36 : 21);
         await Assert.That(bounds.SideCap(3)).IsLessThan(3);
         await Assert.That(bounds.SideCap(9)).IsLessThan(9);
-        await Assert.That(bounds.TotalCap(9)).IsLessThanOrEqualTo(29);
+        await Assert.That(bounds.TotalCap(9)).IsLessThanOrEqualTo(acrossAxes ? 41 : 29);
 
         // Below the smallest total any ratio check accepts there is nothing to walk for
-        await Assert.That(FinderPatternFinder.AxisRunBounds.From(4).CentreHigh).IsLessThan(FinderPatternFinder.AxisRunBounds.From(4).CentreLow);
+        await Assert.That(FinderPatternFinder.AxisRunBounds.From(2, acrossAxes).CentreHigh).IsLessThan(FinderPatternFinder.AxisRunBounds.From(2, acrossAxes).CentreLow);
     }
 
     [Test]
-    public async Task SideCap_NeverExceedsTheExpectedTotal()
+    public async Task ColumnWindow_IsWiderThanTheRowsOnBothSides()
+    {
+        // The column is held to 5/12 to 12/5 of the row: a finder drawn up to twice as tall as wide, and a fifth on top for whole pixels
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(49, 33, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(49, 33, acrossAxes: false)).IsFalse();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(79, 33, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(80, 33, acrossAxes: true)).IsFalse();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(14, 33, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(13, 33, acrossAxes: true)).IsFalse();
+        // 60 = 12 × 5 and 25 = 5 × 5: both edges are open
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(60, 25, acrossAxes: true)).IsFalse();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(59, 25, acrossAxes: true)).IsTrue();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(25, 60, acrossAxes: true)).IsFalse();
+        await Assert.That(FinderPatternFinder.IsTotalInWindow(26, 60, acrossAxes: true)).IsTrue();
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SideCap_NeverExceedsTheExpectedTotal(bool acrossAxes)
     {
         // The reference walk caps a side run at the expected total. A bound above that would let the two walks stop a run at different lengths without either refusing.
         for (var expected = 1; expected <= 5000; expected++)
         {
-            var bounds = FinderPatternFinder.AxisRunBounds.From(expected);
+            var bounds = FinderPatternFinder.AxisRunBounds.From(expected, acrossAxes);
             for (var centre = bounds.CentreLow; centre <= bounds.CentreHigh; centre++)
             {
                 if (bounds.SideCap(centre) > expected)
@@ -161,18 +201,26 @@ public class FinderRunBoundsTest
         }
     }
 
-    /// <summary>The verdict of an axis cross-check without its grey second look: the total within 40 % of the expected one, and the strict ratio or the near-miss one with four non-empty side runs.</summary>
-    internal static bool CouldBeAccepted(int expected, ReadOnlySpan<int> runs)
+    /// <summary>The verdict of an axis cross-check without its grey second look: the total inside its window, and the strict ratio or the near-miss one with four non-empty side runs.</summary>
+    internal static bool CouldBeAccepted(int expected, ReadOnlySpan<int> runs, bool acrossAxes)
     {
         var total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
-        if (5 * Math.Abs(total - expected) >= 2 * expected)
+        // Written out rather than calling IsTotalInWindow, so that the window the bounds are derived for is stated here too
+        var inWindow = acrossAxes
+            ? 12 * total > 5 * expected && 5 * total < 12 * expected
+            : 5 * Math.Abs(total - expected) < 2 * expected;
+        if (!inWindow)
             return false;
         return FinderPatternFinder.IsSmallCrispFinderRuns(runs[0], runs[1], runs[2], runs[3], runs[4])
             || FinderPatternFinder.IsFinderRatio(runs)
             || (runs[0] != 0 && runs[1] != 0 && runs[3] != 0 && runs[4] != 0 && FinderPatternFinder.IsNearFinderRatio(runs[0], runs[1], runs[2], runs[3], runs[4]));
     }
 
-    private static string? Violation(FinderPatternFinder.AxisRunBounds bounds, int expected, ReadOnlySpan<int> runs)
+    private static int SmallestTotal(int expected, bool acrossAxes) => acrossAxes ? 5 * expected / 12 + 1 : 3 * expected / 5 + 1;
+
+    private static int LargestTotal(int expected, bool acrossAxes) => acrossAxes ? (12 * expected - 1) / 5 : (7 * expected - 1) / 5;
+
+    private static string? Violation(FinderPatternFinder.AxisRunBounds bounds, ReadOnlySpan<int> runs)
     {
         var centre = runs[2];
         if (centre < bounds.CentreLow || centre > bounds.CentreHigh)
