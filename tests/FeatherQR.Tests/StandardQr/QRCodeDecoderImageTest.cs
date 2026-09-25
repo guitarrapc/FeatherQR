@@ -3,7 +3,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Image-level decode tests (Tier 1): rendered bitmaps, scaling, rotation,
+/// Image-level decode tests on clean images: rendered bitmaps, scaling, rotation,
 /// mirroring and negative cases.
 /// </summary>
 public class QRCodeDecoderImageTest

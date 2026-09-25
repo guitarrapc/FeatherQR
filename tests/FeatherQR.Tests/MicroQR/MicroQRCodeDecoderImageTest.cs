@@ -8,8 +8,8 @@ namespace FeatherQR.Tests;
 /// Image-path decoding tests for <see cref="MicroQRCodeDecoder"/>: clean rendered
 /// images (all versions × ECC), the supported geometric transforms (90° rotations,
 /// mirroring, reflectance reversal, scaling, translation, quiet zone variants) and
-/// a representative degradation subset per the test strategy §7. Perspective is
-/// documented out of scope for the single-finder Micro QR tier-1 detector.
+/// a representative degradation subset. Perspective is in
+/// <see cref="MicroQRCodeDecoderPerspectiveTest"/>.
 /// </summary>
 public class MicroQRCodeDecoderImageTest
 {
@@ -344,7 +344,7 @@ public class MicroQRCodeDecoderImageTest
 
     #endregion
 
-    #region Degradation subset (deterministic, per test strategy §7)
+    #region Degradation subset (deterministic)
 
     [Test]
     public async Task Decode_JpegCompressionArtifacts()

@@ -3,7 +3,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Tier-2 rMQR image decoding: mild perspective (keystone along either symbol
+/// rMQR image decoding in mild perspective (keystone along either symbol
 /// axis), including composition with rotation and mirroring. rMQR symbols are
 /// wide, so the far end of the symbol is where the sub-finder anchored
 /// refinement earns its keep; the envelope asserted here is the measured one.

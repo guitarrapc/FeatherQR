@@ -645,7 +645,7 @@ internal static class MicroQRImageDecoder
 
     /// <summary>
     /// A single finder determines a homography's image point and local Jacobian, leaving only the two projective denominator coefficients unknown.
-    /// Search a bounded Tier-2 range for those two values; matrix format and RS validation select the correct transform without image-specific heuristics.
+    /// Search a small grid of mild-perspective values for those two; matrix format and RS validation select the correct transform without image-specific heuristics.
     /// </summary>
     private static DecodeStatus TryDecodePerspectiveVariants(
         ReadOnlySpan<byte> luminance,

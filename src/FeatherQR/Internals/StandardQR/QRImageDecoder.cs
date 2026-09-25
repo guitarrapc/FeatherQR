@@ -9,7 +9,7 @@ using FeatherQR.Internals.ImageDecoders;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Decodes a QR code from a grayscale image: clean, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal, a lighting gradient across the symbol and mild perspective distortion (Tier 2).
+/// Decodes a QR code from a grayscale image: clean, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal, a lighting gradient across the symbol and mild perspective distortion.
 /// </summary>
 /// <remarks>
 /// Pipeline:

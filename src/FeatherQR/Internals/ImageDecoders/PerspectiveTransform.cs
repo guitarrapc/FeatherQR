@@ -5,7 +5,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// </summary>
 /// <remarks>
 /// Standard homogeneous 3×3 formulation: a unit-square-to-quadrilateral transform is built directly from the target quad, its inverse comes from the adjugate matrix (a projective transform needs no normalization, so the adjugate substitutes for the true inverse), and quad-to-quad is the composition of the two.
-/// Mild keystone distortion, the Tier-2 target, is exactly representable; the affine case falls out naturally when the fourth point matches the parallelogram estimate.
+/// Mild keystone distortion is exactly representable; the affine case falls out naturally when the fourth point matches the parallelogram estimate.
 /// </remarks>
 internal readonly struct PerspectiveTransform
 {

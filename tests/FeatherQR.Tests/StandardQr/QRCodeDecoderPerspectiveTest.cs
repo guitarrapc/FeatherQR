@@ -3,7 +3,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Tier-2 image decoding: perspective (keystone) distortion, alone and combined
+/// Image decoding under perspective (keystone) distortion, alone and combined
 /// with rotation and mirroring. The asserted tilt levels sit inside the measured
 /// envelope with margin (standardqr-decoder.md, Input envelope).
 /// </summary>

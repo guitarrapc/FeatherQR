@@ -3,7 +3,7 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Tier-2 Micro QR image decoding: mild perspective (keystone), including
+/// Micro QR image decoding in mild perspective (keystone), including
 /// composition with arbitrary rotation and mirroring. Micro QR has no alignment
 /// patterns, so its measured perspective envelope is intentionally conservative.
 /// </summary>

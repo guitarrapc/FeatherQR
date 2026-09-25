@@ -24,7 +24,7 @@ internal static class Binarizer
 
     /// <summary>
     /// Otsu's method: picks the threshold that maximizes between-class variance of the luminance histogram, and the grey levels of the two classes it separates, from the same histogram.
-    /// Suits Tier-1 inputs with clear bimodal contrast.
+    /// Suits clean inputs with clear bimodal contrast.
     /// </summary>
     /// <param name="luminance">Grayscale pixels.</param>
     /// <param name="grey">The levels a pixel between the two classes is read against; disabled when the image holds no such pixel.</param>
