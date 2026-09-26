@@ -81,11 +81,15 @@ public class KeystoneFrameDecodeTest
     }
 
     /// <summary>Decodes the render and holds each reported corner within half a module of where the render drew it.</summary>
-    internal static async Task AssertDecodes(int version, float pixelsPerModule, float degrees, float keystone, bool binarized)
+    internal static Task AssertDecodes(int version, float pixelsPerModule, float degrees, float keystone, bool binarized)
+        => AssertDecodes(version, pixelsPerModule, degrees, keystone, binarized, tiltDegrees: 0f);
+
+    /// <summary><see cref="AssertDecodes(int, float, float, float, bool)"/> for a plane tilted about both axes (<see cref="SupersampledRenderer.SpanCorners(int, int, float, float, float, float, out int)"/>).</summary>
+    internal static async Task AssertDecodes(int version, float pixelsPerModule, float degrees, float keystone, bool binarized, float tiltDegrees)
     {
         var qr = StandardQR(version);
         var size = qr.Size;
-        var (luminance, width, height) = SupersampledRenderer.Render((row, column) => qr[row, column], size, size, pixelsPerModule, degrees, keystone);
+        var (luminance, width, height) = SupersampledRenderer.Render((row, column) => qr[row, column], size, size, pixelsPerModule, degrees, keystone, tiltDegrees);
         if (binarized)
         {
             for (var i = 0; i < luminance.Length; i++)
@@ -94,11 +98,11 @@ public class KeystoneFrameDecodeTest
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
 
-        await Assert.That(success).IsTrue().Because($"version {version} at {pixelsPerModule} px/module turned {degrees}° under {keystone:P1} keystone: {info.Status}");
+        await Assert.That(success).IsTrue().Because($"version {version} at {pixelsPerModule} px/module turned {degrees}° under {keystone:P1} keystone tilted {tiltDegrees}°: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
 
         // The symbol's module area sits inside the generator's quiet zone
-        var truth = SupersampledGeometry.GridToPixel(size, size, pixelsPerModule, degrees, keystone);
+        var truth = SupersampledGeometry.GridToPixel(size, size, pixelsPerModule, degrees, keystone, tiltDegrees);
         var far = size - 4f;
         await AssertNear(truth, info.Corners.TopLeft, 4f, 4f);
         await AssertNear(truth, info.Corners.TopRight, far, 4f);

@@ -36,32 +36,32 @@ public class StructuredAppendNeonParityTest
         var actual = new int[8 * StructuredAppendPlanner.MaxSymbols];
         var counts = new int[8];
         foreach (var version in new[] { 1, 9, 10, 26, 27, 40 })
-        foreach (var used in new[] { 1, 2, 3, 4, 5, 7, 8 })
-        {
-            var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
-            var budgets = Enumerable.Range(0, used).Select(i => capacity - 3 * i).ToArray();
-            // Unsorted budgets also exercise partially active lanes independently of the search's order.
-            var walked = StructuredAppendPlanner.WalkLanes(text, analysis.EciMode, version, budgets,
-                StructuredAppendPlanner.MaxSymbols, 0, 0, counts, actual, out _);
-            if (!walked)
+            foreach (var used in new[] { 1, 2, 3, 4, 5, 7, 8 })
             {
-                var impossible = false;
-                foreach (var budget in budgets)
-                    impossible |= StructuredAppendPlanner.CountChunks(text, analysis.EciMode, false, QRSegmentation.Optimal,
-                        version, budget, StructuredAppendPlanner.MaxSymbols, expected) == int.MaxValue;
-                await Assert.That(impossible).IsTrue();
-                continue;
+                var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
+                var budgets = Enumerable.Range(0, used).Select(i => capacity - 3 * i).ToArray();
+                // Unsorted budgets also exercise partially active lanes independently of the search's order.
+                var walked = StructuredAppendPlanner.WalkLanes(text, analysis.EciMode, version, budgets,
+                    StructuredAppendPlanner.MaxSymbols, 0, 0, counts, actual, out _);
+                if (!walked)
+                {
+                    var impossible = false;
+                    foreach (var budget in budgets)
+                        impossible |= StructuredAppendPlanner.CountChunks(text, analysis.EciMode, false, QRSegmentation.Optimal,
+                            version, budget, StructuredAppendPlanner.MaxSymbols, expected) == int.MaxValue;
+                    await Assert.That(impossible).IsTrue();
+                    continue;
+                }
+                for (var lane = 0; lane < used; lane++)
+                {
+                    var count = StructuredAppendPlanner.CountChunks(text, analysis.EciMode, false, QRSegmentation.Optimal,
+                        version, budgets[lane], StructuredAppendPlanner.MaxSymbols, expected);
+                    var because = $"v{version}, {analysis.EciMode}, n={text.Length}, used={used}, lane={lane}";
+                    await Assert.That(counts[lane]).IsEqualTo(count).Because(because);
+                    for (var k = 0; k < Math.Min(count, StructuredAppendPlanner.MaxSymbols); k++)
+                        await Assert.That(actual[lane * StructuredAppendPlanner.MaxSymbols + k]).IsEqualTo(expected[k]).Because(because);
+                }
             }
-            for (var lane = 0; lane < used; lane++)
-            {
-                var count = StructuredAppendPlanner.CountChunks(text, analysis.EciMode, false, QRSegmentation.Optimal,
-                    version, budgets[lane], StructuredAppendPlanner.MaxSymbols, expected);
-                var because = $"v{version}, {analysis.EciMode}, n={text.Length}, used={used}, lane={lane}";
-                await Assert.That(counts[lane]).IsEqualTo(count).Because(because);
-                for (var k = 0; k < Math.Min(count, StructuredAppendPlanner.MaxSymbols); k++)
-                    await Assert.That(actual[lane * StructuredAppendPlanner.MaxSymbols + k]).IsEqualTo(expected[k]).Because(because);
-            }
-        }
     }
 
     [Test]

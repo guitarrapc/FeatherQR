@@ -115,8 +115,9 @@ internal static partial class FinderPatternFinder
     /// <remarks>
     /// Each line has passed its own 1:1:3:1:1 by then, so this is only how the two lines may differ in scale, and that depends on which line it is.
     /// The row again (<paramref name="acrossAxes"/> false) is the row scan's own line through a refined centre: the same cross section, within 40 %.
-    /// The column is the other axis, and a symbol in perspective draws a finder longer along one axis than the other: at keystone k the finder at the wide edge is 1/(1 − k) times taller than wide in the symbol's own axes, and turning it only brings the two totals closer, so a column is at most that factor from the row, 2 at 50 %.
-    /// The window is 5/12 to 12/5, that factor and a fifth on top for whole-pixel runs.
+    /// The column is the other axis, and a symbol in perspective draws a finder longer along one axis than the other: at keystone k the finder at the wide edge is stretched 1/(1 − k), 2 at 50 %.
+    /// Stretched along its own axes, a finder's column is at most that factor from its row whatever the turn; stretched off them, as a tilt about both axes draws every finder and a one-axis keystone the corner ones, it can be further, up to 2.31 at a stretch of 2.
+    /// The window is 5/12 to 12/5: whole-pixel runs on the worst finder a 50 % keystone draws, at 3 px/module, measure 2.33.
     /// </remarks>
     internal static bool IsTotalInWindow(int total, int expectedTotal, bool acrossAxes)
         => acrossAxes

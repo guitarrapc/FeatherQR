@@ -782,26 +782,26 @@ public class UnevenLightingDecodeTest
         switch (symbology)
         {
             case Symbology.StandardQR:
-            {
-                var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 5, QuietZoneSize = 0 });
-                expected = Content;
-                image = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
-                break;
-            }
+                {
+                    var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 5, QuietZoneSize = 0 });
+                    expected = Content;
+                    image = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
+                    break;
+                }
             case Symbology.MicroQR:
-            {
-                var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
-                expected = Content;
-                image = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Size - 4, qr.Size - 4, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
-                break;
-            }
+                {
+                    var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+                    expected = Content;
+                    image = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Size - 4, qr.Size - 4, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
+                    break;
+                }
             default:
-            {
-                var qr = RmQRCodeGenerator.Create("12345", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
-                expected = "12345";
-                image = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Width - 4, qr.Height - 4, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
-                break;
-            }
+                {
+                    var qr = RmQRCodeGenerator.Create("12345", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
+                    expected = "12345";
+                    image = UnevenLightingRenderer.Render((row, column) => qr[row + 2, column + 2], qr.Width - 4, qr.Height - 4, Scale, turn, OffsetX, OffsetY, true, UnevenLight.Shadow, degrees, 0.4f);
+                    break;
+                }
         }
 
         var (status, text) = Decode(symbology, image.Luminance, image.Width, image.Height);
@@ -834,20 +834,20 @@ public class UnevenLightingDecodeTest
         switch (symbology)
         {
             case Symbology.StandardQR:
-            {
-                var qr = QRCodeGenerator.Create(Content, standardQREccLevel, new QRCodeGeneratorOptions { Version = standardQRVersion });
-                return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
-            }
+                {
+                    var qr = QRCodeGenerator.Create(Content, standardQREccLevel, new QRCodeGeneratorOptions { Version = standardQRVersion });
+                    return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
+                }
             case Symbology.MicroQR:
-            {
-                var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
-                return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
-            }
+                {
+                    var qr = MicroQRCodeGenerator.Create(Content, MicroQREccLevel.L);
+                    return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
+                }
             default:
-            {
-                var qr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
-                return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Width, qr.Height, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
-            }
+                {
+                    var qr = RmQRCodeGenerator.Create(Content, RmQREccLevel.M);
+                    return UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Width, qr.Height, pixelsPerModule, UnevenLight.Shadow, degrees, depth);
+                }
         }
     }
 
@@ -856,20 +856,20 @@ public class UnevenLightingDecodeTest
         switch (symbology)
         {
             case Symbology.StandardQR:
-            {
-                QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
-                return (info.Status, text);
-            }
+                {
+                    QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                    return (info.Status, text);
+                }
             case Symbology.MicroQR:
-            {
-                MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
-                return (info.Status, text);
-            }
+                {
+                    MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                    return (info.Status, text);
+                }
             default:
-            {
-                RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
-                return (info.Status, text);
-            }
+                {
+                    RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                    return (info.Status, text);
+                }
         }
     }
 

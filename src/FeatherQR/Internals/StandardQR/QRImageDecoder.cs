@@ -143,7 +143,7 @@ internal static partial class QRImageDecoder
     private const int MaxAlternativeTriples = 2;
 
     /// <summary>
-    /// After the selected triple failed, the candidate list's other triples, best confirmed first (<see cref="FinderPatternFinder.AlternativeTriples"/>): each decoded only once its timing patterns read through its own frame (<see cref="TimingPatternsRead"/>); otherwise <paramref name="status"/> and the selected triple's diagnostics stand.
+    /// After the selected triple failed, the candidate list's other triples, best confirmed first (<see cref="FinderPatternFinder.AlternativeTriples"/>): each decoded only from a corner whose timing patterns read through its own frame (<see cref="TryCornerByTimingPatterns"/>); otherwise <paramref name="status"/> and the selected triple's diagnostics stand.
     /// </summary>
     private static DecodeStatus DecodeAlternativeTriples(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
     {
@@ -151,11 +151,10 @@ internal static partial class QRImageDecoder
         Span<FinderPattern> triple = stackalloc FinderPattern[3];
         for (var verified = 0; verified < MaxAlternativeTriples && alternatives.TryNext(triple); verified++)
         {
-            OrderFinderPatterns(triple, out var topLeft, out var topRight, out var bottomLeft);
-            if (!TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+            if (!TryCornerByTimingPatterns(luminance, width, height, threshold, grey, triple, out var topLeft, out var topRight, out var bottomLeft))
                 continue;
 
-            var alternativeStatus = DecodeTriple(luminance, width, height, threshold, grey, triple, destination, out var alternativeCharsWritten, out var alternativeInfo);
+            var alternativeStatus = DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var alternativeCharsWritten, out var alternativeInfo);
             if (IsSettled(alternativeStatus))
             {
                 charsWritten = alternativeCharsWritten;
@@ -167,7 +166,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Whether a triple's two timing patterns read through the frame of its own centres and sizes: the check a triple from <see cref="FinderPatternFinder.AlternativeTriples"/> passes before it costs a decode.
+    /// Whether a triple's two timing patterns read through the frame of its own centres and sizes: the check a triple from <see cref="FinderPatternFinder.AlternativeTriples"/>, or another corner of a triple that failed, passes before it costs a decode.
     /// </summary>
     /// <remarks>
     /// A timing pattern runs between two real finders and nowhere else, and the frame follows perspective, so this holds past 40 % keystone where the triple's shape says little: through their own frames the drawn triples of those renders read no timing module wrong, and triples holding a false candidate read 20 to 49 % wrong, near the half that texture reads.
@@ -180,11 +179,59 @@ internal static partial class QRImageDecoder
             && MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, FinderFrame.Create(topLeft, topRight, bottomLeft, moduleSizes)) != 0;
     }
 
-    /// <summary>One finder triple, in any order, through the timing frame and then the grids its centres and sizes give.</summary>
+    /// <summary>
+    /// The corner of a triple its timing patterns name: the vertex the triangle's shape names first (<see cref="OrderFinderPatterns"/>), then the other two, each taken once the two timing patterns from it read through its own frame (<see cref="TimingPatternsRead"/>); false when none do.
+    /// </summary>
+    /// <remarks>
+    /// A plane tilted toward the top-left finder draws that finder nearest and the corner without one farthest, and past about 43 % keystone a leg of the image triangle is longer than its hypotenuse, so the vertex opposite the longest side is another finder.
+    /// Three centres cannot tell, since a projective map puts a triangle's right angle at any of its vertices.
+    /// What only the true corner has is the two timing patterns running from it; from either other vertex one of the two lines crosses the data.
+    /// </remarks>
+    internal static bool TryCornerByTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> triple, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
+    {
+        var shapeCorner = ShapeCorner(triple);
+        for (var i = 0; i < 3; i++)
+        {
+            OrderAroundCorner(triple, (shapeCorner + i) % 3, out topLeft, out topRight, out bottomLeft);
+            if (TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+                return true;
+        }
+        topLeft = topRight = bottomLeft = default;
+        return false;
+    }
+
+    /// <summary>
+    /// One finder triple, in any order: from the corner the triangle's shape names, and when that does not settle, from each other corner whose timing patterns read (<see cref="TryCornerByTimingPatterns"/>).
+    /// A symbol decodes from its shape's corner at no extra cost; the other corners are paid for only by a triple that failed.
+    /// </summary>
     private static DecodeStatus DecodeTriple(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> patterns, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
-        OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
+        var shapeCorner = ShapeCorner(patterns);
+        OrderAroundCorner(patterns, shapeCorner, out var topLeft, out var topRight, out var bottomLeft);
+        var status = DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
+        if (IsSettled(status))
+            return status;
 
+        for (var i = 1; i < 3; i++)
+        {
+            OrderAroundCorner(patterns, (shapeCorner + i) % 3, out topLeft, out topRight, out bottomLeft);
+            if (!TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+                continue;
+
+            var cornerStatus = DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var cornerCharsWritten, out var cornerInfo);
+            if (IsSettled(cornerStatus))
+            {
+                charsWritten = cornerCharsWritten;
+                info = cornerInfo;
+                return cornerStatus;
+            }
+        }
+        return status;
+    }
+
+    /// <summary>A triple with its corners assigned, through the timing frame and then the grids its centres and sizes give.</summary>
+    private static DecodeStatus DecodeCorners(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
         // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth
         // of a pixel to spare, which no grid extrapolated from the finder centres keeps. The
         // timing patterns mark every module boundary between the finders. First, because where
@@ -631,7 +678,7 @@ internal static partial class QRImageDecoder
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 
-    /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content.</summary>
+    /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content, which like a read comes only once every Reed-Solomon block has corrected.</summary>
     private static bool IsSettled(DecodeStatus status)
         => IsTerminal(status) || RegionalRetry.IsContentVerdict(status);
 
@@ -697,32 +744,28 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// Assigns the three finder centers to their corners: the two farthest apart span the diagonal (top-right / bottom-left), the remaining one is top-left; the cross product resolves which diagonal end is which.
+    /// Tilted strongly toward the top-left finder, a symbol's diagonal is not the longest side, and this names another corner (<see cref="TryCornerByTimingPatterns"/>).
     /// </summary>
     internal static void OrderFinderPatterns(ReadOnlySpan<FinderPattern> patterns, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
+        => OrderAroundCorner(patterns, ShapeCorner(patterns), out topLeft, out topRight, out bottomLeft);
+
+    /// <summary>The index of the vertex opposite the longest side of the three centres' triangle.</summary>
+    private static int ShapeCorner(ReadOnlySpan<FinderPattern> patterns)
     {
         var d01 = DistanceSquared(patterns[0], patterns[1]);
         var d02 = DistanceSquared(patterns[0], patterns[2]);
         var d12 = DistanceSquared(patterns[1], patterns[2]);
-
-        FinderPattern a, b;
         if (d01 >= d02 && d01 >= d12)
-        {
-            topLeft = patterns[2];
-            a = patterns[0];
-            b = patterns[1];
-        }
-        else if (d02 >= d01 && d02 >= d12)
-        {
-            topLeft = patterns[1];
-            a = patterns[0];
-            b = patterns[2];
-        }
-        else
-        {
-            topLeft = patterns[0];
-            a = patterns[1];
-            b = patterns[2];
-        }
+            return 2;
+        return d02 >= d01 && d02 >= d12 ? 1 : 0;
+    }
+
+    /// <summary>The corners with <paramref name="corner"/> as the top-left; the cross product resolves which of the other two is top-right.</summary>
+    private static void OrderAroundCorner(ReadOnlySpan<FinderPattern> patterns, int corner, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
+    {
+        topLeft = patterns[corner];
+        var a = patterns[corner == 0 ? 1 : 0];
+        var b = patterns[corner == 2 ? 1 : 2];
 
         // Image coordinates have y pointing down, so for the standard QR layout the
         // cross product (a-topLeft) × (b-topLeft) is positive when a is top-right.
