@@ -13,24 +13,22 @@ namespace FeatherQR.Internals.RmQR;
 /// Decodes an rMQR Code from a grayscale image: clean, screen-rendered or scanned inputs, including a lighting gradient across the symbol.
 /// </summary>
 /// <remarks>
-/// Pipeline:
+/// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
+/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, each within a budget of decodes; a successful decode ends the scan, a read that did not fit ends the candidate and, once it is the scan's result, cuts each later candidate short, since a frame reports the scan's best result; otherwise the scan reports the result that went furthest.
+/// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
-/// 1. Global binarization threshold (Otsu, shared)
-/// 2. Finder pattern candidates (shared 1:1:3:1:1 scan; every candidate is tried)
-/// 3. Local grid frames around the finder: four right angles × transpose (mirror),
-///    then the angular finder-axis sweep (shared with Micro QR) for arbitrary rotation
-/// 4. Per frame: the finder-side format copy is sampled first (18 modules next to the
-///    finder), which yields the version and therefore the symbol width and height
-///    before any full grid is sampled
-/// 5. The sub-finder (5×5, bottom-right) is located near its predicted position and
-///    anchors the far end of the symbol: it fixes global scale and rotation exactly
-///    (the finder-local estimates are only pixel-accurate over 7 modules, far too
-///    coarse over 139), and a bounded projective search around that anchor recovers
-///    mild perspective; the sub-finder-side format copy gates each projective
-///    candidate cheaply before a full sample
-/// 6. Matrix decoding arbitrates (format cross-check, RS); reflectance reversal is
-///    handled by one inverted retry when the normal attempt fails, and a symbol lit unevenly by a
-///    regional binarization of each polarity when both fail
+/// 1. Frames: four right angles, each also with its axes swapped (mirror); first from the axis-aligned module sizes
+///    (one pixel or more), then from each axis pair of an angular sweep
+/// 2. Per frame:
+///    a. Low density (module under 1.75 px, along the image axes): module boundaries, whose count names the version
+///    b. Finder-side format copy at the measured scale, then, under 6 px per module, at scales a few percent off
+///       (an exact codeword there); a copy that reads names the version, so the width and height
+///    c. Sub-finder near the corner that version predicts: the isotropic grid, the anisotropic grid, then, once
+///       either gets past its format information, the perspective search, each candidate gated by the
+///       sub-finder-side format copy and the edge timing rows
+///    d. The unrefined frame when no refined grid got past its format information; the scales stop once a grid
+///       anchored on the sub-finder did
+/// 3. Each grid: the matrix level, then, on an image with grey levels, a coverage re-read of a grid past its format information
 /// </code>
 /// </remarks>
 internal static class RmQRImageDecoder
@@ -178,7 +176,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Strided finder scan first, then a full sweep when nothing decoded.
+    /// Strided finder scan first, then a full sweep when nothing was read.
     /// </summary>
     /// <remarks>
     /// The widening trigger has to be a question about the symbol, and "did anything decode" is the only one available.
@@ -826,7 +824,10 @@ internal static class RmQRImageDecoder
         return bestStatus;
     }
 
-    /// <summary>Samples the full grid through the transform and runs the matrix decoder.</summary>
+    /// <summary>
+    /// Samples the full grid through the transform and runs the matrix decoder, unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information is read again by coverage while the budget lasts.
+    /// Each decode spends one of the budget, the re-read whether or not it changes a module.
+    /// </summary>
     private static DecodeStatus Attempt(
         ReadOnlySpan<byte> luminance,
         int width,
