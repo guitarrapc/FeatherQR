@@ -43,11 +43,11 @@ A clean symbol through the main path.
 
 Each figure shows the input, with what the decoder finds drawn over it, beside the path through the [image-level stages](standardqr-spec-map.md#image-level). Every binarization pass runs this path: the global threshold, then the inverted image, then the regional pass (see [image decode passes](qrcode-symbologies.md#image-decode-passes)). The matrix decode at the bottom reads every grid, and reads it again transposed unless the first read settles it.
 
-Every box that is not faded runs. Green marks the stages this input depends on.
+Green and grey boxes run for this input; green marks the stages it depends on.
 
-- **Key** (green): without this stage, the input would not read, or would read only after a grid fails.
+- **Key** (green): without this stage, the input would not read, or would read only after more grids fail than with it. A grid is one sampling of the symbol: reading it again transposed or by coverage is the same grid.
 - **Runs** (grey): the stage runs as it does for any input.
-- **Only if needed** (dashed): the stage runs only when the grid before it fails.
+- **Only if needed** (dashed): the stage runs only when the grids before it fail.
 - **Skipped** (faded): the stage does not run for this input.
 
 Numbers on the boxes match the numbered notes under each figure.

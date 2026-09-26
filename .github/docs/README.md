@@ -21,7 +21,8 @@ Design records and spec-to-code maps for shipped behavior, organized symbology-f
 | [standardqr-encoder.md](specs/standardqr-encoder.md) | Design record | Standard QR encoder scope and decisions (single segment per input, no Kanji encoding, ECI policy) |
 | [standardqr-decoder.md](specs/standardqr-decoder.md) | Design record | Standard QR decoder scope, input tiers, lessons learned |
 | [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md) | Design record | Committed fixture corpus, manifest schema, external-oracle capability matrix |
-| [microqr-spec-map.md](specs/microqr-spec-map.md) | Spec-to-code map | Micro QR encoding pipeline vs ISO/IEC 18004 |
+| [microqr-spec-map.md](specs/microqr-spec-map.md) | Spec-to-code map | Micro QR encoding and decoding pipelines vs ISO/IEC 18004 |
+| [microqr-decoder.md](specs/microqr-decoder.md) | Design record | Micro QR decoder scope (matrix and image level), the single-finder image path, decode figures, decisions, lessons learned |
 | [rmqr-spec-map.md](specs/rmqr-spec-map.md) | Spec-to-code map | rMQR pipeline vs ISO/IEC 23941 (encoder, rendering, matrix decoder and image detection implemented) |
 | [rmqr-encoder.md](specs/rmqr-encoder.md) | Design record | rMQR encoder API, oracle-verified symbol parameter tables, decisions, verification record (spec-first) |
 | [rmqr-decoder.md](specs/rmqr-decoder.md) | Design record | rMQR decoder scope (matrix and image level), image detection design (format-first, sub-finder anchored, gated perspective search), decisions incl. the still-open Table 8 misdecode-protection reading, lessons |

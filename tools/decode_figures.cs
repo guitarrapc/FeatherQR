@@ -7,22 +7,26 @@ using System.Globalization;
 using System.Text;
 using FeatherQR;
 
-// Draws the Standard QR decode figures of the design record: a strip of the main path's stages on a
-// clean symbol, and one figure per input class the image decoder reads.
+// Draws the decode figures of the design records, one folder per symbology: a strip of the main path's
+// stages on a clean symbol, and one figure per input class the image decoder reads.
 //
-//   dotnet run tools/decode_figures.cs -- .github/docs/images/standardqr
+//   dotnet run tools/decode_figures.cs -- .github/docs/images
 //   dotnet run tools/decode_figures.cs -- <directory> --preview      also a page of every figure, light and dark
 //
 // Each input class is also rendered to pixels and decoded through the public API, and the run fails
-// unless it decodes. The figures carry pictures and labels only; their text is in
-// .github/docs/specs/standardqr-decoder.md, whose numbered notes match the numbers on the boxes.
-// A box is green when, without its stage, the input would not read, or would read only after a grid
-// fails. The boxes follow the image-level outline in .github/docs/specs/standardqr-spec-map.md.
+// unless it decodes. The figures carry pictures and labels only; their text is in the symbology's
+// design record (.github/docs/specs/*-decoder.md), whose numbered notes match the numbers on the boxes.
+// A box is green when, without its stage, the input would not read, or would read only after more grids
+// fail than with it; a grid is one sampling, and its transposed and coverage reads are the same grid.
+// The boxes follow the image-level outline in the symbology's spec-to-code map.
 
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-var outDir = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal)) ?? ".";
+var root = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal)) ?? ".";
 var preview = args.Contains("--preview");
-Directory.CreateDirectory(outDir);
+var qrDir = Path.Combine(root, "standardqr");
+var microDir = Path.Combine(root, "microqr");
+Directory.CreateDirectory(qrDir);
+Directory.CreateDirectory(microDir);
 
 const string Payload = "FeatherQR decoder";
 var v2 = Matrix(QRCodeGenerator.Create(Payload, QREccLevel.M, new QRCodeGeneratorOptions(version: QRVersionRange.Exactly(2), quietZoneSize: 0)));
@@ -68,6 +72,34 @@ Check("uneven lighting", v2, Payload, (x, y, s) => Square(25, x, y, s), 33 * 4, 
 Check("low density", v2, Payload, (x, y, s) => Square(25, x, y, s), 43, 1);
 Check("light on dark", v2, Payload, (x, y, s) => Square(25, x, y, s), 33 * 4, 1, invert: true);
 Check("large version", v14, MeshPayload, (x, y, s) => Keystone(73, x, y, s, 0.12), 81 * 4, 4);
+
+// Micro QR: an M3 for the clean figure, so the larger size is tried first, and an M4 for the others
+const string MicroPayload = "FEATHERQR";
+var m3 = MicroMatrix(MicroQRCodeGenerator.Create(MicroPayload, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions(version: MicroQRVersion.M3, quietZoneSize: 0)));
+const string MicroPayload4 = "FEATHERQR MICRO";
+var m4 = MicroMatrix(MicroQRCodeGenerator.Create(MicroPayload4, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions(version: MicroQRVersion.M4, quietZoneSize: 0)));
+
+void CheckMicro(string name, bool[,] m, string payload, Func<double, double, double, H> shape, int size, int supersample, bool blur = false)
+{
+    var dim = m.GetLength(0);
+    var luminance = Render(m, dim, shape(0, 0, size), size, size, supersample, null, false, blur);
+    var ok = MicroQRCodeDecoder.TryDecodeImage(luminance, size, size, out var text, out var info);
+    var pass = ok && text == payload;
+    Console.WriteLine($"{(pass ? "ok  " : "FAIL")} micro {name}: {size}x{size} px, {info.Status}, {info.Version}, corrected {info.ErrorsCorrected}");
+    if (!pass)
+        failures.Add("micro " + name);
+}
+
+// The inputs as rendered, shared with their figures
+const double MicroTurn = 30, MicroShrink = 0.08;
+const int MicroRotatedPx = 116, MicroKeystonePx = 78, MicroSnapPx = 41, MicroLowPx = 22, MicroGreyPx = 38;
+const bool MicroGreyBlur = false;
+CheckMicro("clean", m3, MicroPayload, (x, y, s) => Square(15, x, y, s, 2), 19 * 4, 1);
+CheckMicro("rotated and mirrored", Transposed(m4), MicroPayload4, (x, y, s) => Rotated(17, x, y, s, MicroTurn, 2), MicroRotatedPx, 4);
+CheckMicro("keystone", m4, MicroPayload4, (x, y, s) => Keystone(17, x, y, s, MicroShrink, 2), MicroKeystonePx, 4);
+CheckMicro("snapped scale", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroSnapPx, 1);
+CheckMicro("low density", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroLowPx, 1);
+CheckMicro("grey edges", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroGreyPx, 4, blur: MicroGreyBlur);
 
 // ---------- Drawing ----------
 
@@ -297,13 +329,111 @@ string Card(int width, int height, string defs = "")
         }
     }
     sb.Append("</svg>");
-    File.WriteAllText(Path.Combine(outDir, "decode-overview.svg"), sb.ToString());
+    File.WriteAllText(Path.Combine(qrDir, "decode-overview.svg"), sb.ToString());
+}
+
+// ---------- The Micro QR stage strip ----------
+{
+    const int W = 1080, H0 = 250;
+    var sb = new StringBuilder();
+    sb.Append(Card(W, H0,
+        "<filter id=\"lens\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"0.8\"/></filter><linearGradient id=\"light\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ffffff\" stop-opacity=\".35\"/><stop offset=\"1\" stop-color=\"#000000\" stop-opacity=\".22\"/></linearGradient>"));
+    const double P = 150, S = 36, Gap = 28, X0 = 24, Y0 = 20;
+    string[] labels = ["Luminance", "Global threshold", "Finder candidates", "Module sizes and centre", "Sizes M4 to M1", "Matrix decode"];
+    // The single finder's centre, in the modules of an M3
+    (double U, double V) centre = (3.5, 3.5);
+    for (var i = 0; i < 6; i++)
+    {
+        var x = X0 + i * (P + Gap);
+        sb.Append($"<rect class=\"box\" x=\"{F(x)}\" y=\"{F(Y0)}\" width=\"{P}\" height=\"{P + S}\" rx=\"8\"/>");
+        sb.Append(Line((x, Y0 + P), (x + P, Y0 + P), "sep"));
+        // Room for an M4 outline around the M3: the quiet zone is two modules
+        var map = Square(15, x + 10, Y0 + 10, P - 20, 2);
+        var sy = Y0 + P;
+        switch (i)
+        {
+            case 0:
+                sb.Append($"<g filter=\"url(#lens)\">{Symbol(map, m3, "#4a4a48", "#e7e3db")}</g>");
+                sb.Append($"<path fill=\"url(#light)\" d=\"{Poly(map, -2, -2, 17, 17)}\"/>");
+                sb.Append(Histogram(x + 20, sy + 7, P - 40, 22));
+                break;
+            case 1:
+                sb.Append(Symbol(map, m3));
+                sb.Append(Histogram(x + 20, sy + 7, P - 40, 22));
+                var tx = x + 20 + 0.52 * (P - 40);
+                sb.Append(Line((tx, sy + 4), (tx, sy + 31), "thr"));
+                break;
+            case 2:
+                sb.Append($"<g opacity=\"0.3\">{Symbol(map, m3)}</g>");
+                sb.Append(Line(map.Map(-1.5, centre.V), map.Map(8.5, centre.V), "detl"));
+                sb.Append(Dot(map.Map(centre.U, centre.V)));
+                var unit = 15.0; var bx = x + (P - 7 * unit) / 2; var by = sy + 7;
+                int[] runs = [1, 1, 3, 1, 1];
+                var rx = bx;
+                for (var k = 0; k < runs.Length; k++)
+                {
+                    var wdt = runs[k] * unit;
+                    sb.Append(k % 2 == 0
+                        ? $"<rect class=\"ink\" x=\"{F(rx)}\" y=\"{F(by)}\" width=\"{F(wdt)}\" height=\"9\"/>"
+                        : $"<rect fill=\"#ffffff\" stroke=\"#8c959f\" x=\"{F(rx)}\" y=\"{F(by)}\" width=\"{F(wdt)}\" height=\"9\"/>");
+                    sb.Append(Text(rx + wdt / 2, by + 22, runs[k].ToString(CultureInfo.InvariantCulture), "xs", "middle"));
+                    rx += wdt;
+                }
+                break;
+            case 3:
+                // Each size pairs the dark ring's inner edge on one side with its outer edge on the other: six modules
+                sb.Append($"<g opacity=\"0.3\">{Symbol(map, m3)}</g>");
+                sb.Append(Line(map.Map(1, centre.V - 0.25), map.Map(7, centre.V - 0.25), "tick"));
+                sb.Append(Line(map.Map(centre.U + 0.25, 1), map.Map(centre.U + 0.25, 7), "tick"));
+                sb.Append(Dot(map.Map(centre.U, centre.V)));
+                sb.Append(Line((x + 26, sy + 18), (x + 46, sy + 18), "tick"));
+                sb.Append(Text(x + 52, sy + 22, "six modules", "xs"));
+                break;
+            case 4:
+                sb.Append($"<g opacity=\"0.3\">{Symbol(map, m3)}</g>");
+                foreach (var size in new[] { 17, 13, 11 })
+                    sb.Append($"<path class=\"est\" d=\"{Poly(map, 0, 0, size, size)}\"/>");
+                sb.Append($"<path class=\"detl\" d=\"{Poly(map, 0, 0, 15, 15)}\"/>");
+                sb.Append(Dot(map.Map(centre.U, centre.V)));
+                sb.Append(Line((x + 12, sy + 18), (x + 30, sy + 18), "est"));
+                sb.Append(Text(x + 35, sy + 22, "other sizes", "xs"));
+                sb.Append(Line((x + 96, sy + 18), (x + 110, sy + 18), "detl"));
+                sb.Append(Text(x + 114, sy + 22, "reads", "xs"));
+                break;
+            case 5:
+                sb.Append($"<path class=\"paper\" stroke=\"#d0d7de\" d=\"{Poly(map, -2, -2, 17, 17)}\"/>");
+                var cells = new StringBuilder();
+                var fmt = new StringBuilder();
+                for (var r = 0; r < 15; r++)
+                    for (var c = 0; c < 15; c++)
+                    {
+                        // Format information: row 8 columns 1-8, column 8 rows 1-7
+                        var isFormat = (r == 8 && c >= 1 && c <= 8) || (c == 8 && r >= 1 && r <= 7);
+                        if (isFormat)
+                            fmt.Append(Poly(map, c + 0.12, r + 0.12, c + 0.88, r + 0.88));
+                        else if (m3[r, c])
+                            cells.Append(Poly(map, c + 0.12, r + 0.12, c + 0.88, r + 0.88));
+                    }
+                sb.Append($"<path class=\"ink\" d=\"{cells}\"/><path class=\"fmt\" d=\"{fmt}\"/>");
+                sb.Append($"<rect class=\"fmt\" x=\"{F(x + 26)}\" y=\"{F(sy + 12)}\" width=\"10\" height=\"10\"/>");
+                sb.Append(Text(x + 42, sy + 21, "format information", "xs"));
+                break;
+        }
+        sb.Append(Text(x + P / 2, Y0 + P + S + 22, labels[i], "h", "middle"));
+        if (i < 5)
+        {
+            var ax = x + P + 6; var ay = Y0 + P / 2;
+            sb.Append($"<path class=\"arrow\" d=\"M{F(ax)} {F(ay)}h{Gap - 12}m-5 -5l5 5l-5 5\"/>");
+        }
+    }
+    sb.Append("</svg>");
+    File.WriteAllText(Path.Combine(microDir, "decode-overview.svg"), sb.ToString());
 }
 
 // ---------- The input figures ----------
 
 // The image-level outline's stages, in its order; the matrix decode every grid goes through is the bar under them
-string[] boxes =
+string[] qrBoxes =
 [
     "Binarization pass",
     "Finder triple",
@@ -318,11 +448,12 @@ string[] boxes =
     "Parallelogram or frame grid",
     "Alternative triples",
 ];
-const int Bar = 12;
+// The matrix decode under the stages, in marks; its state is the last in a states string
+const int Bar = -1;
 
 // The picture on the left, the path through the outline's stages on the right. marks lists the boxes
 // that carry the design record's numbered notes, in the notes' order; Bar is the matrix decode.
-void InputFigure(string file, Func<StringBuilder, double, double, double, string[]> picture, int[] marks, string states, string defs = "")
+void InputFigure(string path, string[] boxes, Func<StringBuilder, double, double, double, string[]> picture, int[] marks, string states, int dashedFrom, string defs = "")
 {
     const double PX = 24, PY = 20, PS = 260;
     const double BW = 132, BH = 62, BG = 20, RG = 30;
@@ -394,7 +525,7 @@ void InputFigure(string file, Func<StringBuilder, double, double, double, string
     for (var b = 0; b < boxes.Length - 1; b++)
     {
         var (x, y) = At(b);
-        var cls = b >= 8 ? "flowd" : "flow";
+        var cls = b >= dashedFrom ? "flowd" : "flow";
         if (b % 4 == 3)
         {
             var (nx, ny) = At(b + 1);
@@ -405,9 +536,10 @@ void InputFigure(string file, Func<StringBuilder, double, double, double, string
             body.Append($"<path class=\"{cls}\" marker-end=\"url(#ah)\" d=\"M{F(x + BW + 2)} {F(y + BH / 2)}H{F(x + BW + BG - 4)}\"/>");
         }
     }
-    var barY = PY + 3 * BH + 2 * RG + 14;
+    var rows = (boxes.Length + 3) / 4;
+    var barY = PY + rows * BH + (rows - 1) * RG + 14;
     {
-        var (box, t) = Classes(states[Bar]);
+        var (box, t) = Classes(states[boxes.Length]);
         body.Append($"<rect class=\"{box}\" x=\"{F(FX)}\" y=\"{F(barY)}\" width=\"{F(FW)}\" height=\"30\" rx=\"8\"/>");
         body.Append(Text(FX + 10, barY + 20, "Matrix decode", t));
         if (numbers.TryGetValue(Bar, out var ns))
@@ -430,11 +562,11 @@ void InputFigure(string file, Func<StringBuilder, double, double, double, string
     sb.Append(Card(w, h, defs));
     sb.Append(body);
     sb.Append("</svg>");
-    File.WriteAllText(Path.Combine(outDir, file), sb.ToString());
+    File.WriteAllText(path, sb.ToString());
 }
 
 // Clean
-InputFigure("decode-input-clean.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-clean.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
@@ -449,10 +581,10 @@ InputFigure("decode-input-clean.svg",
         return ["det|found centre", "detl|finder line", "estl|longest side", "pred|alignment search"];
     },
     [],
-    "UUUSUUUSUSCSU");
+    "UUUSUUUSUSCSU", 8);
 
 // Rotated or mirrored
-InputFigure("decode-input-rotated.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-rotated.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         var map = Rotated(25, x + 20, y + 20, s - 40, 30);
@@ -470,10 +602,10 @@ InputFigure("decode-input-rotated.svg",
         return ["det|found centre", "detl|finder line", "row|image row", "estl|longest side"];
     },
     [4, Bar],
-    "UUUSKUUSUCCSK");
+    "UUUSKUUSUCCSK", 8);
 
 // Keystone: tilted back about the horizontal axis, so the left finder line runs into the distance
-InputFigure("decode-input-keystone.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-keystone.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         var map = Keystone(25, x + 20, y + 20, s - 40, 0.25);
@@ -495,10 +627,10 @@ InputFigure("decode-input-keystone.svg",
         return ["det|found centre", "tick|one module, near and far", "pred|alignment search", "est|parallelogram estimate", "detd|four-point anchors"];
     },
     [4, 5, 6, 8, 10],
-    "UUUSKKKSKCCSU");
+    "UUUSKKKSKCCSU", 8);
 
 // Grey edges and wrong modules
-InputFigure("decode-input-degraded.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-degraded.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
@@ -510,11 +642,11 @@ InputFigure("decode-input-degraded.svg",
         return ["det|refined centre", "err|wrong module"];
     },
     [9, Bar],
-    "UUUSUUUSUCCSK",
+    "UUUSUUUSUCCSK", 8,
     "<filter id=\"soft\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"1.2\"/></filter>");
 
 // Uneven lighting
-InputFigure("decode-input-lighting.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-lighting.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
@@ -536,10 +668,10 @@ InputFigure("decode-input-lighting.svg",
         return ["shade|soft shadow", "blk|regional threshold block"];
     },
     [0, 0],
-    "KUUSUUUSUSCSU");
+    "KUUSUUUSUSCSU", 8);
 
 // Low density
-InputFigure("decode-input-low-density.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-low-density.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         // The render itself, pixel by pixel
@@ -572,10 +704,10 @@ InputFigure("decode-input-low-density.svg",
         return ["tick|module boundary", "blk|pixel"];
     },
     [1, 3, 3],
-    "UKUKSSSSSSSSU");
+    "UKUKSSSSSSSSU", 8);
 
 // Light on dark
-InputFigure("decode-input-light-on-dark.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-light-on-dark.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
@@ -585,10 +717,10 @@ InputFigure("decode-input-light-on-dark.svg",
         return ["det|found centre"];
     },
     [0, 0],
-    "KUUSUUUSUSCSU");
+    "KUUSUUUSUSCSU", 8);
 
 // Large version: the mesh
-InputFigure("decode-input-large-version.svg",
+InputFigure(Path.Combine(qrDir, "decode-input-large-version.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
         var map = Keystone(73, x + 20, y + 20, s - 40, 0.12);
@@ -611,12 +743,187 @@ InputFigure("decode-input-large-version.svg",
         return ["det|searched node", "predr|extrapolated node", "lat|mesh"];
     },
     [4, 8, Bar],
-    "UUUSKUUUCCCSK");
+    "UUUSKUUUCCCSK", 8);
+
+// ---------- The Micro QR input figures ----------
+
+// The Micro QR image-level outline's stages, in its order
+string[] microBoxes =
+[
+    "Binarization pass",
+    "Finder candidates",
+    "Module sizes and centre",
+    "Sizes M4 to M1",
+    "Coverage re-read",
+    "Timing frame",
+    "Low density",
+    "Arbitrary orientation",
+    "Scale search",
+    "Perspective search",
+];
+// Past the first size's grid, every stage runs only when the grids before it failed
+const int MicroDashedFrom = 3;
+
+// A render drawn pixel by pixel, filling the picture, each pixel at its own grey; returns the size of one pixel
+double Raster(StringBuilder sb, bool[,] m, int px, int supersample, bool blur, double x, double y, double s)
+{
+    var dim = m.GetLength(0);
+    var raster = Render(m, dim, Square(dim, 0, 0, px, 2), px, px, supersample, null, false, blur);
+    var cell = (s - 40) / px;
+    var levels = new SortedDictionary<byte, StringBuilder>();
+    for (var r = 0; r < px; r++)
+        for (var c = 0; c < px; c++)
+        {
+            var v = raster[r * px + c];
+            if (v >= 220)
+                continue;
+            if (!levels.TryGetValue(v, out var path))
+                levels[v] = path = new StringBuilder();
+            path.Append($"M{F(x + 20 + c * cell)} {F(y + 20 + r * cell)}h{F(cell)}v{F(cell)}h{F(-cell)}Z");
+        }
+    sb.Append($"<rect fill=\"#ffffff\" stroke=\"#d0d7de\" x=\"{F(x + 20)}\" y=\"{F(y + 20)}\" width=\"{F(px * cell)}\" height=\"{F(px * cell)}\"/>");
+    // Ink 30 and paper 220 drawn as the figures' ink and white
+    foreach (var (v, path) in levels)
+    {
+        var g = (int)Math.Round(0x1f + (255 - 0x1f) * (v - 30) / 190.0);
+        sb.Append($"<path fill=\"#{g:x2}{g:x2}{g:x2}\" d=\"{path}\"/>");
+    }
+    var pixelGrid = new StringBuilder();
+    for (var k = 0; k <= px; k++)
+    {
+        pixelGrid.Append($"M{F(x + 20 + k * cell)} {F(y + 20)}v{F(px * cell)}");
+        pixelGrid.Append($"M{F(x + 20)} {F(y + 20 + k * cell)}h{F(px * cell)}");
+    }
+    sb.Append($"<path stroke=\"#8c959f\" stroke-opacity=\".45\" stroke-width=\".5\" fill=\"none\" d=\"{pixelGrid}\"/>");
+    return cell;
+}
+
+// The first pixel of module k along an axis of a crisp render: the first whose centre lies past the module's edge
+static int FirstPixel(double edge) => (int)Math.Ceiling(edge - 0.5);
+
+// Clean: an M3, so the M4 grid comes first
+InputFigure(Path.Combine(microDir, "decode-input-clean.svg"), microBoxes,
+    (sb, x, y, s) =>
+    {
+        var map = Square(15, x + 20, y + 20, s - 40, 2);
+        sb.Append(Symbol(map, m3));
+        sb.Append($"<path class=\"est\" d=\"{Poly(map, 0, 0, 17, 17)}\"/>");
+        sb.Append($"<path class=\"detl\" d=\"{Poly(map, 0, 0, 15, 15)}\"/>");
+        sb.Append(Dot(map.Map(3.5, 3.5), 5));
+        return ["det|found centre", "estl|M4 grid", "detl|M3 grid"];
+    },
+    [],
+    "UUUUSCSCCCU", MicroDashedFrom);
+
+// Rotated or mirrored: the finder's axes from the angular sweep
+InputFigure(Path.Combine(microDir, "decode-input-rotated.svg"), microBoxes,
+    (sb, x, y, s) =>
+    {
+        var map = Rotated(17, x + 20, y + 20, s - 40, MicroTurn, 2);
+        sb.Append(Symbol(map, Transposed(m4)));
+        var c = map.Map(3.5, 3.5);
+        var reach = Math.Sqrt(Math.Pow(map.Map(1, 0).X - map.Map(0, 0).X, 2) + Math.Pow(map.Map(1, 0).Y - map.Map(0, 0).Y, 2)) * 5;
+        var rays = new StringBuilder();
+        for (var deg = 0; deg < 180; deg += 15)
+        {
+            var rad = deg * Math.PI / 180;
+            rays.Append(Line((c.X - reach * Math.Cos(rad), c.Y - reach * Math.Sin(rad)), (c.X + reach * Math.Cos(rad), c.Y + reach * Math.Sin(rad)), "row"));
+        }
+        sb.Append($"<g opacity=\".35\">{rays}</g>");
+        sb.Append(Line(map.Map(-1, 3.5), map.Map(8, 3.5), "detl"));
+        sb.Append(Line(map.Map(3.5, -1), map.Map(3.5, 8), "detl"));
+        sb.Append(Dot(c, 5));
+        return ["det|found centre", "row|sweep direction", "detl|finder axes"];
+    },
+    [7, Bar],
+    "UUUUCCSKCCK", MicroDashedFrom);
+
+// Keystone: the grid a finder's axes and sizes give, against the symbol's edge
+InputFigure(Path.Combine(microDir, "decode-input-keystone.svg"), microBoxes,
+    (sb, x, y, s) =>
+    {
+        var map = Keystone(17, x + 20, y + 20, s - 40, MicroShrink, 2);
+        sb.Append(Symbol(map, m4));
+        var o = map.Map(3.5, 3.5); var pu = map.Map(4.5, 3.5); var pv = map.Map(3.5, 4.5);
+        double ux = pu.X - o.X, uy = pu.Y - o.Y, vx = pv.X - o.X, vy = pv.Y - o.Y;
+        (double X, double Y) Affine(double u, double v) => (o.X + (u - 3.5) * ux + (v - 3.5) * vx, o.Y + (u - 3.5) * uy + (v - 3.5) * vy);
+        var a = Affine(0, 0); var b = Affine(17, 0); var cc = Affine(17, 17); var d = Affine(0, 17);
+        sb.Append($"<path class=\"est\" d=\"M{F(a.X)} {F(a.Y)}L{F(b.X)} {F(b.Y)}L{F(cc.X)} {F(cc.Y)}L{F(d.X)} {F(d.Y)}Z\"/>");
+        sb.Append($"<path class=\"detl\" d=\"{Poly(map, 0, 0, 17, 17)}\"/>");
+        sb.Append(Dot(o, 5));
+        return ["det|found centre", "estl|grid from the finder's axes", "detl|symbol edge"];
+    },
+    [4, 7, 8, 9, Bar],
+    "UUUUKCSKKCK", MicroDashedFrom);
+
+// Snapped scale: whole pixels a module at the finder, the symbol's own pitch along the timing patterns
+InputFigure(Path.Combine(microDir, "decode-input-snapped.svg"), microBoxes,
+    (sb, x, y, s) =>
+    {
+        var cell = Raster(sb, m4, MicroSnapPx, 1, false, x, y, s);
+        var map = Square(17, 0, 0, MicroSnapPx, 2);
+        (double X, double Y) P(double px, double py) => (x + 20 + px * cell, y + 20 + py * cell);
+        // Timing boundaries along row 0 and column 0, where the render put them
+        for (var k = 7; k <= 17; k++)
+        {
+            var e = FirstPixel(map.Map(k, 0).X);
+            sb.Append(Line(P(e, FirstPixel(map.Map(0, 0).Y) - 0.6), P(e, FirstPixel(map.Map(0, 1).Y) + 0.6), "tick"));
+            sb.Append(Line(P(FirstPixel(map.Map(0, 0).X) - 0.6, e), P(FirstPixel(map.Map(1, 0).X) + 0.6, e), "tick"));
+        }
+        // The finder in whole pixels: its first pixel and its width over seven modules
+        var start = FirstPixel(map.Map(0, 0).X);
+        var pitch = (FirstPixel(map.Map(7, 0).X) - start) / 7.0;
+        var far = start + 17 * pitch;
+        sb.Append($"<path class=\"est\" d=\"M{F(P(start, start).X)} {F(P(start, start).Y)}H{F(P(far, far).X)}V{F(P(far, far).Y)}H{F(P(start, start).X)}Z\"/>");
+        var edge0 = map.Map(0, 0); var edge1 = map.Map(17, 17);
+        sb.Append($"<path class=\"detl\" d=\"M{F(P(edge0.X, edge0.Y).X)} {F(P(edge0.X, edge0.Y).Y)}H{F(P(edge1.X, edge1.Y).X)}V{F(P(edge1.X, edge1.Y).Y)}H{F(P(edge0.X, edge0.Y).X)}Z\"/>");
+        return ["tick|timing boundary", "estl|grid from the finder's size", "detl|symbol edge"];
+    },
+    [5],
+    "UUUUSKSCCCU", MicroDashedFrom);
+
+// Low density: module boundaries read off the timing patterns, at whole pixels
+InputFigure(Path.Combine(microDir, "decode-input-low-density.svg"), microBoxes,
+    (sb, x, y, s) =>
+    {
+        var cell = Raster(sb, m4, MicroLowPx, 1, false, x, y, s);
+        var map = Square(17, 0, 0, MicroLowPx, 2);
+        (double X, double Y) P(double px, double py) => (x + 20 + px * cell, y + 20 + py * cell);
+        var row0 = FirstPixel(map.Map(0, 0).Y); var row1 = FirstPixel(map.Map(0, 1).Y);
+        for (var k = 7; k <= 17; k++)
+        {
+            var e = FirstPixel(map.Map(k, 0).X);
+            sb.Append(Line(P(e, row0 - 0.6), P(e, row1 + 0.6), "tick"));
+            sb.Append(Line(P(row0 - 0.6, e), P(row1 + 0.6, e), "tick"));
+            // A module two pixels wide
+            if (k < 17 && FirstPixel(map.Map(k + 1, 0).X) - e == 2)
+            {
+                sb.Append($"<rect class=\"pred\" x=\"{F(P(e, row0).X)}\" y=\"{F(P(e, row0).Y)}\" width=\"{F(2 * cell)}\" height=\"{F((row1 - row0) * cell)}\"/>");
+                sb.Append($"<rect class=\"pred\" x=\"{F(P(row0, e).X)}\" y=\"{F(P(row0, e).Y)}\" width=\"{F((row1 - row0) * cell)}\" height=\"{F(2 * cell)}\"/>");
+            }
+        }
+        return ["tick|module boundary", "pred|two-pixel module", "blk|pixel"];
+    },
+    [6],
+    "UUUUSCKCCCU", MicroDashedFrom);
+
+// Grey edges: each pixel at its own grey
+InputFigure(Path.Combine(microDir, "decode-input-grey-edges.svg"), microBoxes,
+    (sb, x, y, s) =>
+    {
+        Raster(sb, m4, MicroGreyPx, 4, MicroGreyBlur, x, y, s);
+        return ["blk|pixel, at its grey"];
+    },
+    [4, Bar],
+    "UUUUKCSCCCK", MicroDashedFrom);
 
 // Preview: every figure on a light and on a dark page
 if (preview)
 {
-    string[] files = ["decode-overview.svg", "decode-input-clean.svg", "decode-input-rotated.svg", "decode-input-keystone.svg", "decode-input-degraded.svg", "decode-input-lighting.svg", "decode-input-low-density.svg", "decode-input-light-on-dark.svg", "decode-input-large-version.svg"];
+    var files = new[] { qrDir, microDir }
+        .SelectMany(d => Directory.GetFiles(d, "*.svg").OrderBy(p => Path.GetFileName(p) == "decode-overview.svg" ? 0 : 1).ThenBy(p => p, StringComparer.Ordinal))
+        .Select(p => Path.GetRelativePath(root, p).Replace(Path.DirectorySeparatorChar, '/'))
+        .ToArray();
     var html = new StringBuilder("<!doctype html><html><head><meta charset=\"utf-8\"><title>Decode figures</title><style>body{margin:0;font-family:system-ui,sans-serif}section{padding:24px}section.dark{background:#0d1117;color:#e6edf3}img{display:block;max-width:100%;height:auto;margin:0 0 20px}</style></head><body>");
     foreach (var theme in new[] { "light", "dark" })
     {
@@ -626,7 +933,7 @@ if (preview)
         html.Append("</section>");
     }
     html.Append("</body></html>");
-    File.WriteAllText(Path.Combine(outDir, "preview.html"), html.ToString());
+    File.WriteAllText(Path.Combine(root, "preview.html"), html.ToString());
 }
 
 if (failures.Count > 0)
@@ -634,10 +941,19 @@ if (failures.Count > 0)
     Console.Error.WriteLine($"did not decode: {string.Join(", ", failures)}");
     return 1;
 }
-Console.WriteLine($"written to {outDir}");
+Console.WriteLine($"written to {root}");
 return 0;
 
 // ---------- Geometry and rendering ----------
+
+static bool[,] MicroMatrix(MicroQRCodeData qr)
+{
+    var m = new bool[qr.Size, qr.Size];
+    for (var r = 0; r < qr.Size; r++)
+        for (var c = 0; c < qr.Size; c++)
+            m[r, c] = qr[r, c];
+    return m;
+}
 
 static bool[,] Matrix(QRCodeData qr)
 {
