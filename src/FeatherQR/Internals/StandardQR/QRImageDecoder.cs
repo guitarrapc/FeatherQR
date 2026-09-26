@@ -127,10 +127,29 @@ internal static partial class QRImageDecoder
             return DecodeStatus.NotDetected;
         }
 
-        var status = DecodeTriple(luminance, width, height, threshold, grey, patterns, destination, out charsWritten, out info);
+        var corners = new ImageCorners();
+        var status = DecodeTriple(ref corners, luminance, width, height, threshold, grey, patterns, destination, out charsWritten, out info);
         if (IsSettled(status) || candidateCount <= 3)
             return status;
-        return DecodeAlternativeTriples(luminance, width, height, threshold, grey, candidates.Slice(0, candidateCount), patterns, destination, status, ref charsWritten, ref info);
+        return DecodeAlternativeTriples(ref corners, luminance, width, height, threshold, grey, candidates.Slice(0, candidateCount), patterns, destination, status, ref charsWritten, ref info);
+    }
+
+    /// <summary>The two steps a finder triple is tried with from one of its corners: whether that corner's timing patterns read, and the decode from it.</summary>
+    internal interface ICornerAttempt
+    {
+        bool ReadsTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft);
+
+        DecodeStatus Decode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info);
+    }
+
+    /// <summary>The corner steps on the image: <see cref="TimingPatternsRead"/> and <see cref="DecodeCorners"/>.</summary>
+    private readonly struct ImageCorners : ICornerAttempt
+    {
+        public bool ReadsTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
+            => TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft);
+
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+            => DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
     }
 
     /// <summary>
@@ -145,16 +164,17 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// After the selected triple failed, the candidate list's other triples, best confirmed first (<see cref="FinderPatternFinder.AlternativeTriples"/>): each decoded only from a corner whose timing patterns read through its own frame (<see cref="TryCornerByTimingPatterns"/>); otherwise <paramref name="status"/> and the selected triple's diagnostics stand.
     /// </summary>
-    private static DecodeStatus DecodeAlternativeTriples(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
+    internal static DecodeStatus DecodeAlternativeTriples<TAttempt>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
+        where TAttempt : struct, ICornerAttempt
     {
         var alternatives = new FinderPatternFinder.AlternativeTriples(candidates, selected);
         Span<FinderPattern> triple = stackalloc FinderPattern[3];
         for (var verified = 0; verified < MaxAlternativeTriples && alternatives.TryNext(triple); verified++)
         {
-            if (!TryCornerByTimingPatterns(luminance, width, height, threshold, grey, triple, out var topLeft, out var topRight, out var bottomLeft))
+            if (!TryCornerByTimingPatterns(ref attempt, luminance, width, height, threshold, grey, triple, out var topLeft, out var topRight, out var bottomLeft))
                 continue;
 
-            var alternativeStatus = DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var alternativeCharsWritten, out var alternativeInfo);
+            var alternativeStatus = attempt.Decode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var alternativeCharsWritten, out var alternativeInfo);
             if (IsSettled(alternativeStatus))
             {
                 charsWritten = alternativeCharsWritten;
@@ -189,11 +209,18 @@ internal static partial class QRImageDecoder
     /// </remarks>
     internal static bool TryCornerByTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> triple, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
     {
+        var corners = new ImageCorners();
+        return TryCornerByTimingPatterns(ref corners, luminance, width, height, threshold, grey, triple, out topLeft, out topRight, out bottomLeft);
+    }
+
+    private static bool TryCornerByTimingPatterns<TAttempt>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> triple, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
+        where TAttempt : struct, ICornerAttempt
+    {
         var shapeCorner = ShapeCorner(triple);
         for (var i = 0; i < 3; i++)
         {
             OrderAroundCorner(triple, (shapeCorner + i) % 3, out topLeft, out topRight, out bottomLeft);
-            if (TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+            if (attempt.ReadsTimingPatterns(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
                 return true;
         }
         topLeft = topRight = bottomLeft = default;
@@ -204,21 +231,22 @@ internal static partial class QRImageDecoder
     /// One finder triple, in any order: from the corner the triangle's shape names, and when that does not settle, from each other corner whose timing patterns read (<see cref="TryCornerByTimingPatterns"/>).
     /// A symbol decodes from its shape's corner at no extra cost; the other corners are paid for only by a triple that failed.
     /// </summary>
-    private static DecodeStatus DecodeTriple(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> patterns, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    internal static DecodeStatus DecodeTriple<TAttempt>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> patterns, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+        where TAttempt : struct, ICornerAttempt
     {
         var shapeCorner = ShapeCorner(patterns);
         OrderAroundCorner(patterns, shapeCorner, out var topLeft, out var topRight, out var bottomLeft);
-        var status = DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
+        var status = attempt.Decode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
         if (IsSettled(status))
             return status;
 
         for (var i = 1; i < 3; i++)
         {
             OrderAroundCorner(patterns, (shapeCorner + i) % 3, out topLeft, out topRight, out bottomLeft);
-            if (!TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+            if (!attempt.ReadsTimingPatterns(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
                 continue;
 
-            var cornerStatus = DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var cornerCharsWritten, out var cornerInfo);
+            var cornerStatus = attempt.Decode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var cornerCharsWritten, out var cornerInfo);
             if (IsSettled(cornerStatus))
             {
                 charsWritten = cornerCharsWritten;
