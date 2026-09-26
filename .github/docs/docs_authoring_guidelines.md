@@ -9,6 +9,7 @@ Rules for documents under `.github/docs/`. These exist so that documents split a
 | `README.md` | The documentation index, the single enumeration of all documents |
 | `DESIGN.md` | Design principles (English + Japanese) |
 | `specs/` | Design records and spec-to-code maps for shipped behavior |
+| `images/` | Figures the specs show, one folder per symbology. Generated, not drawn by hand: the decode figures by `tools/decode_figures.cs`, which also decodes each input it draws. Regenerate them with the tool rather than editing the SVG |
 | `plans/` | Forward-looking strategy and implementation plans; durable decisions graduate into `specs/` after implementation, and the plan file is then **deleted**, so a completed plan never survives as a second, drifting copy of the record |
 | `plans/references/` | Research gathered for an open plan (registry checks, measurements, inventories) so later sessions can continue without re-surveying; linked from the plan and deleted with it |
 

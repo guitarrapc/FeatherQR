@@ -14,9 +14,10 @@ using FeatherQR;
 //   dotnet run tools/decode_figures.cs -- <directory> --preview      also a page of every figure, light and dark
 //
 // Each input class is also rendered to pixels and decoded through the public API, and the run fails
-// unless it decodes. A box is green when, without its stage, the input would not read, or would read
-// only after a grid fails. The boxes follow the image-level outline in
-// .github/docs/specs/standardqr-spec-map.md, and change with it.
+// unless it decodes. The figures carry pictures and labels only; their text is in
+// .github/docs/specs/standardqr-decoder.md, whose numbered notes match the numbers on the boxes.
+// A box is green when, without its stage, the input would not read, or would read only after a grid
+// fails. The boxes follow the image-level outline in .github/docs/specs/standardqr-spec-map.md.
 
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 var outDir = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal)) ?? ".";
@@ -75,10 +76,7 @@ string Style() => $$"""
 <style>
 .card{fill:#ffffff;stroke:#d0d7de}
 .box{fill:#f6f8fa;stroke:#d8dee4}
-.t{font:600 16px {{Font}};fill:#1f2328}
-.st{font:13px {{Font}};fill:#59636e}
 .h{font:600 12px {{Font}};fill:#1f2328}
-.sm{font:12px {{Font}};fill:#1f2328}
 .xs{font:11px {{Font}};fill:#59636e}
 .lab{font:600 11px {{Font}};fill:#0969da;paint-order:stroke;stroke:#ffffff;stroke-width:3px;stroke-linejoin:round}
 .estt{font:600 11px {{Font}};fill:#57606a;paint-order:stroke;stroke:#ffffff;stroke-width:3px;stroke-linejoin:round}
@@ -104,10 +102,10 @@ string Style() => $$"""
 .blk{stroke:#8250df;stroke-opacity:.35;stroke-width:.8;fill:none}
 .arrow{stroke:#8c959f;stroke-width:1.6;fill:none}
 .num{font:600 10px {{Font}};fill:#ffffff}
-.bk{fill:#dafbe1;stroke:#4ac26b;stroke-width:1.2}.bkt{font:600 12px {{Font}};fill:#1f2328}.bks{font:11px {{Font}};fill:#116329}
-.bu{fill:#f6f8fa;stroke:#d0d7de}.but{font:600 12px {{Font}};fill:#1f2328}.bus{font:11px {{Font}};fill:#59636e}
-.bc{fill:#ffffff;stroke:#bf8700;stroke-dasharray:4 3}.bct{font:600 12px {{Font}};fill:#7d4e00}.bcs{font:11px {{Font}};fill:#9a6700}
-.bs{fill:#ffffff;stroke:#d8dee4;stroke-dasharray:2 3}.bst{font:600 12px {{Font}};fill:#8c959f}.bss{font:11px {{Font}};fill:#afb8c1}
+.bk{fill:#dafbe1;stroke:#4ac26b;stroke-width:1.2}.bkt{font:600 12px {{Font}};fill:#1f2328}
+.bu{fill:#f6f8fa;stroke:#d0d7de}.but{font:600 12px {{Font}};fill:#1f2328}
+.bc{fill:#ffffff;stroke:#bf8700;stroke-dasharray:4 3}.bct{font:600 12px {{Font}};fill:#7d4e00}
+.bs{fill:#ffffff;stroke:#d8dee4;stroke-dasharray:2 3}.bst{font:600 12px {{Font}};fill:#8c959f}
 .flow{stroke:#8c959f;stroke-width:1.4;fill:none}
 .flowd{stroke:#bf8700;stroke-width:1.4;fill:none;stroke-dasharray:4 3}
 </style>
@@ -190,26 +188,18 @@ string Histogram(double x, double y, double w, double h)
     return $"<path class=\"hist\" d=\"{sb}\"/>";
 }
 
-string Card(int width, int height, string title, string subtitle, string defs = "")
+string Card(int width, int height, string defs = "")
     => $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">{Style()}<defs>{defs}<marker id=\"ah\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path d=\"M0 0L10 5L0 10z\" fill=\"#8c959f\"/></marker></defs>"
-        + $"<rect class=\"card\" x=\"0.5\" y=\"0.5\" width=\"{width - 1}\" height=\"{height - 1}\" rx=\"12\"/>" + Text(24, 34, title, "t") + Text(24, 54, subtitle, "st");
+        + $"<rect class=\"card\" x=\"0.5\" y=\"0.5\" width=\"{width - 1}\" height=\"{height - 1}\" rx=\"12\"/>";
 
 // ---------- The stage strip ----------
 {
-    const int W = 1080, H0 = 356;
+    const int W = 1080, H0 = 250;
     var sb = new StringBuilder();
-    sb.Append(Card(W, H0, "Standard QR image decode, stage by stage", "A clean symbol, read in the first pass: the input, then stages of the image-level outline in the spec-to-code map.",
+    sb.Append(Card(W, H0,
         "<filter id=\"lens\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"0.8\"/></filter><linearGradient id=\"light\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ffffff\" stop-opacity=\".35\"/><stop offset=\"1\" stop-color=\"#000000\" stop-opacity=\".22\"/></linearGradient>"));
-    const double P = 150, S = 36, Gap = 28, X0 = 24, Y0 = 74;
-    string[][] labels =
-    [
-        ["Luminance", "a grey image comes in"],
-        ["Global threshold", "one Otsu split of the", "histogram"],
-        ["Finder triple", "1:1:3:1:1 along a line", "through each centre"],
-        ["Corner from the triangle", "top-left is opposite the", "longest side"],
-        ["Alignment search", "where the frame predicts;", "then the four-point transform"],
-        ["Matrix decode", "format, unmask, deinterleave,", "Reed-Solomon, text"],
-    ];
+    const double P = 150, S = 36, Gap = 28, X0 = 24, Y0 = 20;
+    string[] labels = ["Luminance", "Global threshold", "Finder triple", "Corner from the triangle", "Alignment search", "Matrix decode"];
     for (var i = 0; i < 6; i++)
     {
         var x = X0 + i * (P + Gap);
@@ -299,9 +289,7 @@ string Card(int width, int height, string title, string subtitle, string defs = 
                 sb.Append(Text(x + 42, sy + 21, "format information", "xs"));
                 break;
         }
-        var ly = Y0 + P + S + 22;
-        for (var l = 0; l < labels[i].Length; l++)
-            sb.Append(Text(x + P / 2, ly + l * 16, labels[i][l], l == 0 ? "h" : "xs", "middle"));
+        sb.Append(Text(x + P / 2, Y0 + P + S + 22, labels[i], "h", "middle"));
         if (i < 5)
         {
             var ax = x + P + 6; var ay = Y0 + P / 2;
@@ -332,15 +320,18 @@ string[] boxes =
 ];
 const int Bar = 12;
 
-void InputFigure(string file, string title, string subtitle, Func<StringBuilder, double, double, double, string[]> picture, (int Box, string Short, string Text)[] notes, string states, string[] tags, string defs = "")
+// The picture on the left, the path through the outline's stages on the right. marks lists the boxes
+// that carry the design record's numbered notes, in the notes' order; Bar is the matrix decode.
+void InputFigure(string file, Func<StringBuilder, double, double, double, string[]> picture, int[] marks, string states, string defs = "")
 {
-    const int W = 1080;
+    const double PX = 24, PY = 20, PS = 260;
+    const double BW = 132, BH = 62, BG = 20, RG = 30;
+    const double FX = PX + PS + 32, FW = 4 * BW + 3 * BG;
     var body = new StringBuilder();
 
-    const double PX = 24, PY = 74, PS = 330;
     body.Append($"<rect class=\"box\" x=\"{PX}\" y=\"{PY}\" width=\"{PS}\" height=\"{PS}\" rx=\"8\"/>");
     var legend = picture(body, PX, PY, PS);
-    var lx = PX; var lyy = PY + PS + 24;
+    var lx = PX; var ly = PY + PS + 24;
     foreach (var item in legend)
     {
         var parts = item.Split('|');
@@ -348,153 +339,102 @@ void InputFigure(string file, string title, string subtitle, Func<StringBuilder,
         if (lx + width > PX + PS + 10)
         {
             lx = PX;
-            lyy += 20;
+            ly += 20;
         }
         body.Append(parts[0] switch
         {
-            "det" => Dot((lx + 6, lyy - 4), 4),
-            "detl" => Line((lx, lyy - 4), (lx + 14, lyy - 4), "detl"),
-            "detd" => Line((lx, lyy - 4), (lx + 14, lyy - 4), "detd"),
-            "pred" => $"<rect class=\"pred\" x=\"{F(lx + 1)}\" y=\"{F(lyy - 10)}\" width=\"12\" height=\"12\"/>",
-            "predr" => $"<circle class=\"predr\" cx=\"{F(lx + 6)}\" cy=\"{F(lyy - 4)}\" r=\"4\"/>",
-            "est" => Cross((lx + 6, lyy - 4), 4, "estx"),
-            "estl" => Line((lx, lyy - 4), (lx + 14, lyy - 4), "est"),
-            "row" => Line((lx, lyy - 4), (lx + 14, lyy - 4), "row"),
-            "tick" => Line((lx + 2, lyy - 4), (lx + 12, lyy - 4), "tick"),
-            "err" => $"<rect class=\"err\" x=\"{F(lx + 1)}\" y=\"{F(lyy - 10)}\" width=\"12\" height=\"12\"/>",
-            "lat" => Line((lx, lyy - 4), (lx + 14, lyy - 4), "lat"),
-            "blk" => $"<rect class=\"blk\" x=\"{F(lx + 1)}\" y=\"{F(lyy - 10)}\" width=\"12\" height=\"12\"/>",
-            "shade" => $"<rect fill=\"#1f2328\" fill-opacity=\".35\" x=\"{F(lx + 1)}\" y=\"{F(lyy - 10)}\" width=\"12\" height=\"12\"/>",
+            "det" => Dot((lx + 6, ly - 4), 4),
+            "detl" => Line((lx, ly - 4), (lx + 14, ly - 4), "detl"),
+            "detd" => Line((lx, ly - 4), (lx + 14, ly - 4), "detd"),
+            "pred" => $"<rect class=\"pred\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
+            "predr" => $"<circle class=\"predr\" cx=\"{F(lx + 6)}\" cy=\"{F(ly - 4)}\" r=\"4\"/>",
+            "est" => Cross((lx + 6, ly - 4), 4, "estx"),
+            "estl" => Line((lx, ly - 4), (lx + 14, ly - 4), "est"),
+            "row" => Line((lx, ly - 4), (lx + 14, ly - 4), "row"),
+            "tick" => Line((lx + 2, ly - 4), (lx + 12, ly - 4), "tick"),
+            "err" => $"<rect class=\"err\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
+            "lat" => Line((lx, ly - 4), (lx + 14, ly - 4), "lat"),
+            "blk" => $"<rect class=\"blk\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
+            "shade" => $"<rect fill=\"#1f2328\" fill-opacity=\".35\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
             _ => "",
         });
-        body.Append(Text(lx + 20, lyy, parts[1], "xs"));
+        body.Append(Text(lx + 20, ly, parts[1], "xs"));
         lx += width;
     }
 
-    // Numbers follow the notes, which are written in flow order
-    var shorts = new Dictionary<int, List<(int N, string Short)>>();
-    var numbers = new int[notes.Length];
-    var next = 0;
-    for (var i = 0; i < notes.Length; i++)
+    var numbers = new Dictionary<int, List<int>>();
+    for (var i = 0; i < marks.Length; i++)
     {
-        if (notes[i].Box < 0)
-            continue;
-        numbers[i] = ++next;
-        if (!shorts.TryGetValue(notes[i].Box, out var list))
-            shorts[notes[i].Box] = list = [];
-        list.Add((next, notes[i].Short));
+        if (!numbers.TryGetValue(marks[i], out var list))
+            numbers[marks[i]] = list = [];
+        list.Add(i + 1);
     }
 
-    const double MX = 384, MY = 88;
-    body.Append(Text(MX, MY, "What the decoder does", "h"));
-    var y = MY + 28.0;
-    for (var i = 0; i < notes.Length; i++)
+    // Three rows of four stages, then the matrix decode every grid goes through
+    (double X, double Y) At(int b) => (FX + (b % 4) * (BW + BG), PY + (b / 4) * (BH + RG));
+    (string Box, string Text) Classes(char state) => state switch
     {
-        body.Append(numbers[i] > 0 ? Marker(MX + 8, y - 4, numbers[i]) : $"<circle cx=\"{F(MX + 8)}\" cy=\"{F(y - 4)}\" r=\"2.2\" fill=\"#59636e\"/>");
-        foreach (var line in Wrap(notes[i].Text, 96))
-        {
-            body.Append(Text(MX + 24, y, line, "sm"));
-            y += 17;
-        }
-        y += 9;
-    }
-
-    // The path: two rows of the outline's stages, and the matrix decode under them
-    var fy = Math.Max(lyy + 44, y + 20);
-    body.Append(Text(24, fy, "Path through the pipeline", "h"));
-    body.Append(Text(24, fy + 18, "Every pass runs this path: the global threshold, the inverted image, then the regional binarization (see the shared passes).", "xs"));
-    const double BW = 152, BH = 80, BG = 24;
-    var r1 = fy + 34; var r2 = r1 + BH + 34;
-    (double X, double Y) At(int b) => (24 + (b % 6) * (BW + BG), b < 6 ? r1 : r2);
-    (string Box, string T, string S) Classes(char state) => state switch
-    {
-        'K' => ("bk", "bkt", "bks"),
-        'U' => ("bu", "but", "bus"),
-        'C' => ("bc", "bct", "bcs"),
-        _ => ("bs", "bst", "bss"),
+        'K' => ("bk", "bkt"),
+        'U' => ("bu", "but"),
+        'C' => ("bc", "bct"),
+        _ => ("bs", "bst"),
     };
     for (var b = 0; b < boxes.Length; b++)
     {
-        var (x, by) = At(b);
-        var (box, t, s) = Classes(states[b]);
-        body.Append($"<rect class=\"{box}\" x=\"{F(x)}\" y=\"{F(by)}\" width=\"{BW}\" height=\"{BH}\" rx=\"8\"/>");
-        var titleLines = Wrap(boxes[b], 21);
-        for (var l = 0; l < titleLines.Count; l++)
-            body.Append(Text(x + 10, by + 19 + l * 15, titleLines[l], t));
-        var ty = by + 19 + titleLines.Count * 15 + 6;
-        if (shorts.TryGetValue(b, out var items))
-        {
-            for (var k = 0; k < items.Count; k++)
-            {
-                body.Append(Marker(x + 18, ty - 4 + k * 17, items[k].N));
-                body.Append(Text(x + 30, ty + k * 17, items[k].Short, s));
-            }
-        }
-        else if (tags[b].Length > 0)
-        {
-            body.Append(Text(x + 10, ty, tags[b], s));
-        }
+        var (x, y) = At(b);
+        var (box, t) = Classes(states[b]);
+        body.Append($"<rect class=\"{box}\" x=\"{F(x)}\" y=\"{F(y)}\" width=\"{BW}\" height=\"{BH}\" rx=\"8\"/>");
+        var lines = Wrap(boxes[b], 18);
+        for (var l = 0; l < lines.Count; l++)
+            body.Append(Text(x + 10, y + 20 + l * 15, lines[l], t));
+        if (numbers.TryGetValue(b, out var ns))
+            for (var k = 0; k < ns.Count; k++)
+                body.Append(Marker(x + BW - 12 - (ns.Count - 1 - k) * 19, y, ns[k]));
     }
     for (var b = 0; b < boxes.Length - 1; b++)
     {
-        if (b == 5)
-            continue;
-        var (x, by) = At(b);
+        var (x, y) = At(b);
         var cls = b >= 8 ? "flowd" : "flow";
-        body.Append($"<path class=\"{cls}\" marker-end=\"url(#ah)\" d=\"M{F(x + BW + 2)} {F(by + BH / 2)}H{F(x + BW + BG - 4)}\"/>");
-    }
-    {
-        var (x5, y5) = At(5); var (x6, y6) = At(6);
-        var mid = y5 + BH + 17;
-        body.Append($"<path class=\"flow\" marker-end=\"url(#ah)\" d=\"M{F(x5 + BW / 2)} {F(y5 + BH + 2)}V{F(mid)}H{F(x6 + BW / 2)}V{F(y6 - 4)}\"/>");
-    }
-    var barY = r2 + BH + 14;
-    {
-        var (box, t, s) = Classes(states[Bar]);
-        body.Append($"<rect class=\"{box}\" x=\"24\" y=\"{F(barY)}\" width=\"1032\" height=\"32\" rx=\"8\"/>");
-        body.Append(Text(34, barY + 21, "Matrix decode", t));
-        var bx = 140.0;
-        if (shorts.TryGetValue(Bar, out var items))
+        if (b % 4 == 3)
         {
-            foreach (var (n, text) in items)
-            {
-                body.Append(Marker(bx + 8, barY + 16, n));
-                body.Append(Text(bx + 20, barY + 20, text, s));
-                bx += 20 + text.Length * 6.2 + 20;
-            }
+            var (nx, ny) = At(b + 1);
+            body.Append($"<path class=\"{cls}\" marker-end=\"url(#ah)\" d=\"M{F(x + BW / 2)} {F(y + BH + 2)}V{F(y + BH + RG / 2)}H{F(nx + BW / 2)}V{F(ny - 4)}\"/>");
         }
-        body.Append(Text(1046, barY + 20, "every grid, then transposed unless that settles it", "xs", "end"));
+        else
+        {
+            body.Append($"<path class=\"{cls}\" marker-end=\"url(#ah)\" d=\"M{F(x + BW + 2)} {F(y + BH / 2)}H{F(x + BW + BG - 4)}\"/>");
+        }
     }
-    var ky = barY + 32 + 26;
-    (string Box, string Label)[] key = [("bk", "decides: without it, this input would not read, or only after a grid fails"), ("bu", "runs"), ("bc", "only if needed"), ("bs", "not reached for this input")];
-    var kx = 24.0;
+    var barY = PY + 3 * BH + 2 * RG + 14;
+    {
+        var (box, t) = Classes(states[Bar]);
+        body.Append($"<rect class=\"{box}\" x=\"{F(FX)}\" y=\"{F(barY)}\" width=\"{F(FW)}\" height=\"30\" rx=\"8\"/>");
+        body.Append(Text(FX + 10, barY + 20, "Matrix decode", t));
+        if (numbers.TryGetValue(Bar, out var ns))
+            for (var k = 0; k < ns.Count; k++)
+                body.Append(Marker(FX + 118 + k * 19, barY + 15, ns[k]));
+    }
+    var ky = barY + 30 + 26;
+    (string Box, string Label)[] key = [("bk", "key"), ("bu", "runs"), ("bc", "only if needed"), ("bs", "skipped")];
+    var kx = FX;
     foreach (var (box, label) in key)
     {
         body.Append($"<rect class=\"{box}\" x=\"{F(kx)}\" y=\"{F(ky - 11)}\" width=\"18\" height=\"14\" rx=\"4\"/>");
         body.Append(Text(kx + 26, ky, label, "xs"));
-        kx += 26 + label.Length * 6.0 + 26;
+        kx += 26 + label.Length * 6.0 + 22;
     }
 
-    var h = (int)Math.Ceiling(ky + 24);
+    var w = (int)Math.Ceiling(FX + FW + 24);
+    var h = (int)Math.Ceiling(Math.Max(ly, ky) + 20);
     var sb = new StringBuilder();
-    sb.Append(Card(W, h, title, subtitle, defs));
+    sb.Append(Card(w, h, defs));
     sb.Append(body);
     sb.Append("</svg>");
     File.WriteAllText(Path.Combine(outDir, file), sb.ToString());
 }
 
-string[] Tags(params (int Box, string Tag)[] tags)
-{
-    var all = Enumerable.Repeat("", 13).ToArray();
-    foreach (var (b, t) in tags)
-        all[b] = t;
-    return all;
-}
-
 // Clean
 InputFigure("decode-input-clean.svg",
-    "Clean: a screenshot, a render or a flat scan",
-    "Upright, crisp and flat. The first grid decodes; nothing past the main path runs.",
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
@@ -508,20 +448,11 @@ InputFigure("decode-input-clean.svg",
         sb.Append(Dot(map.Map(al.U, al.V), 3.5));
         return ["det|found centre", "detl|finder line", "estl|longest side", "pred|alignment search"];
     },
-    [
-        (-1, "", "Only two grey levels: one global threshold splits ink from paper, and the stages that need grey levels stay off."),
-        (-1, "", "The strided row scan crosses each finder's centre band; the column, the row again and the falling diagonal confirm each candidate."),
-        (-1, "", "The vertex opposite the longest side is the top-left finder; the cross product tells the other two apart."),
-        (-1, "", "Measured in whole pixels, the module sizes agree at both ends of each finder line, so the finders' frame is the parallelogram of the centres."),
-        (-1, "", "The alignment pattern is found where the frame predicts and anchors the fourth corner. The first grid decodes."),
-    ],
-    "UUUSUUUSUSCSU",
-    Tags((0, "global threshold"), (3, "not low density"), (4, "whole pixels"), (5, "parallelogram"), (7, "version 2"), (9, "no grey levels"), (10, "if the grid fails")));
+    [],
+    "UUUSUUUSUSCSU");
 
 // Rotated or mirrored
 InputFigure("decode-input-rotated.svg",
-    "Rotated or mirrored",
-    "Any angle, either way round. The module sizes and the corner come from the symbol's own lines, not from image rows.",
     (sb, x, y, s) =>
     {
         var map = Rotated(25, x + 20, y + 20, s - 40, 30);
@@ -538,20 +469,11 @@ InputFigure("decode-input-rotated.svg",
         sb.Append(LabelAway(map, tl, "TL", 16));
         return ["det|found centre", "detl|finder line", "row|image row", "estl|longest side"];
     },
-    [
-        (-1, "", "A finder reads 1:1:3:1:1 along any line through its centre, so the row scan meets it at any angle."),
-        (-1, "", "The longest side of the centres' triangle is still the diagonal, so the corner does not depend on the angle."),
-        (4, "finder lines", "Module sizes are measured along the finder lines. An image row cuts a turned ring on the slant and reads it up to √2 too long."),
-        (-1, "", "The transform carries the turn into the grid; sampling is the same as upright."),
-        (Bar, "transposed", "A mirrored capture has the same finders and a transposed grid: a grid that does not settle is decoded again transposed."),
-    ],
-    "UUUSKUUSUCCSK",
-    Tags((0, "global threshold"), (3, "not low density"), (7, "version 2"), (9, "if the grid fails"), (10, "if the grid fails")));
+    [4, Bar],
+    "UUUSKUUSUCCSK");
 
 // Keystone: tilted back about the horizontal axis, so the left finder line runs into the distance
 InputFigure("decode-input-keystone.svg",
-    "Keystone: the symbol in perspective",
-    "A flat symbol tilted away at the bottom. Near modules draw larger than far ones.",
     (sb, x, y, s) =>
     {
         var map = Keystone(25, x + 20, y + 20, s - 40, 0.25);
@@ -564,32 +486,19 @@ InputFigure("decode-input-keystone.svg",
         var est = ParallelogramAlignment(map, 25);
         sb.Append($"<path class=\"est\" d=\"M{F(b.X)} {F(b.Y)}L{F(b.X + c.X - a.X)} {F(b.Y + c.Y - a.Y)}L{F(c.X)} {F(c.Y)}\"/>");
         sb.Append(Cross(est, 5, "estx"));
-        sb.Append(Text(est.X + 9, est.Y + 16, "parallelogram", "estt"));
         sb.Append(Window(map, al, 3, "pred"));
         var pa = map.Map(al.U, al.V);
         sb.Append($"<path class=\"detd\" d=\"M{F(a.X)} {F(a.Y)}L{F(b.X)} {F(b.Y)}L{F(pa.X)} {F(pa.Y)}L{F(c.X)} {F(c.Y)}Z\"/>");
         foreach (var f in new[] { tl, tr, bl })
             sb.Append(Dot(map.Map(f.U, f.V), 5));
         sb.Append(Dot(pa, 3.5));
-        return ["det|found centre", "tick|one module, near and far", "pred|search where the frame predicts", "est|parallelogram estimate", "detd|four-point anchors"];
+        return ["det|found centre", "tick|one module, near and far", "pred|alignment search", "est|parallelogram estimate", "detd|four-point anchors"];
     },
-    [
-        (4, "near and far", "Along a finder line that runs into the distance, the module size differs at its two ends (here the left line)."),
-        (5, "one plane", "One plane fits the three centres and both lines' changes of size: the finders' frame."),
-        (6, "frame's prediction", "The frame predicts where the alignment pattern sits and how the grid turns there; the parallelogram of the centres drifts from it as the tilt grows."),
-        (8, "anchored", "The three centres and the alignment centre anchor a four-point transform, which samples the grid."),
-        (10, "other grids", "If the anchored grid fails, the parallelogram grid is tried; with no alignment pattern found, the parallelogram comes first and the frame after it."),
-        (-1, "", "Perspective draws a finder taller or shorter than it is wide, as here: the column cross-check accepts that stretch within a window of its row, and past it only when the rising diagonal reads 1:1:3:1:1 too, which a harder tilt needs."),
-        (-1, "", "Whenever the frame foreshortens, each finder line's module count divides by the geometric mean of its two end sizes, the count the frame implies. On a version this small the plain mean snaps to the same size; on a large one it would come up short."),
-        (-1, "", "The corner the shape names can then be wrong: each other corner is decoded once its timing patterns read. With more than three candidates, further triples follow, each decoded once, from the first of its corners, the shape's included, whose timing patterns read."),
-    ],
-    "UUUSKKKSKCCSU",
-    Tags((0, "global threshold"), (1, "within its row's window"), (2, "the shape's corner"), (3, "not low density"), (7, "version 2"), (9, "if the grid fails"), (11, "three candidates")));
+    [4, 5, 6, 8, 10],
+    "UUUSKKKSKCCSU");
 
 // Grey edges and wrong modules
 InputFigure("decode-input-degraded.svg",
-    "Grey edges and wrong modules",
-    "Anti-aliased or resampled edges, and a few modules read the wrong way.",
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
@@ -598,24 +507,14 @@ InputFigure("decode-input-degraded.svg",
             sb.Append($"<path class=\"err\" d=\"{Poly(map, c - 0.1, r - 0.1, c + 1.1, r + 1.1)}\"/>");
         foreach (var f in new[] { tl, tr, bl })
             sb.Append(Dot(map.Map(f.U, f.V), 4));
-        return ["det|centre, sub-pixel", "err|module read wrong"];
+        return ["det|refined centre", "err|wrong module"];
     },
-    [
-        (-1, "", "Grey pixels at the edges give the histogram values between its two levels, which switches the grey-level stages on."),
-        (-1, "", "Each finder centre moves to the centroid of its centre square's darkness, a fraction of a pixel, and the module sizes are measured again to sub-pixel edges; here the grid reads without them."),
-        (9, "if the grid fails", "If the grid still fails, it is read again by coverage: each module centre interpolated and split halfway between the two levels."),
-        (Bar, "Reed-Solomon", "Modules read the wrong way are Reed-Solomon's: each block corrects up to its capacity."),
-        (-1, "", "At a lower density, a finder whose runs just miss 1:1:3:1:1 is measured again from the grey levels before it is refused."),
-        (-1, "", "Heavy blur or heavy damage is out of scope."),
-    ],
+    [9, Bar],
     "UUUSUUUSUCCSK",
-    Tags((0, "global threshold"), (3, "not low density"), (4, "sub-pixel"), (7, "version 2"), (10, "if the grid fails")),
-    "<filter id=\"soft\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"1.5\"/></filter>");
+    "<filter id=\"soft\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"1.2\"/></filter>");
 
 // Uneven lighting
 InputFigure("decode-input-lighting.svg",
-    "Uneven lighting: a soft-edged shadow",
-    "A shadow over part of the symbol: the global threshold falls between lit and shadowed paper, so shadowed paper reads as ink.",
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
@@ -634,22 +533,13 @@ InputFigure("decode-input-lighting.svg",
             blocks.Append(Line(map.Map(-2, k), map.Map(27, k), "blk"));
         }
         sb.Append(blocks);
-        return ["shade|shadow, soft edge", "blk|blocks of the regional threshold"];
+        return ["shade|soft shadow", "blk|regional threshold block"];
     },
-    [
-        (0, "regional pass", "When no one threshold splits ink from paper, the global passes read nothing and the regional pass runs: each pixel is read against the mean black point of the blocks around its own."),
-        (0, "positive first", "It binarizes the positive image first and runs the same path on the result; here that reads, so the negative is never binarized."),
-        (-1, "", "The result has only two levels, so the grey-level stages stay off: the centres are not refined and no grid is read by coverage."),
-        (-1, "", "Skipped after a verdict on the content from a global pass, for an image too small to hold one neighbourhood of blocks, and for a polarity it would leave as the global threshold did."),
-        (-1, "", "A hard-edged shadow is out of scope."),
-    ],
-    "KUUSUUUSUSCSU",
-    Tags((3, "not low density"), (4, "two levels"), (7, "version 2"), (9, "no grey levels"), (10, "if the grid fails")));
+    [0, 0],
+    "KUUSUUUSUSCSU");
 
 // Low density
 InputFigure("decode-input-low-density.svg",
-    "Low density: near one pixel a module",
-    "A crisp render near one pixel per module: each module is one or two pixels wide.",
     (sb, x, y, s) =>
     {
         // The render itself, pixel by pixel
@@ -674,46 +564,31 @@ InputFigure("decode-input-low-density.svg",
         var map = Square(25, 0, 0, px);
         for (var k = 7; k <= 18; k++)
         {
-            var b = map.Map(k, 6.5); var bx = x + 20 + Math.Round(b.X) * cell; var byy = y + 20 + b.Y * cell;
+            var b = map.Map(k, 6.5); var bx = x + 20 + Math.Round(b.X) * cell;
             sb.Append(Line((bx, y + 20 + map.Map(0, 6).Y * cell - 2), (bx, y + 20 + map.Map(0, 7).Y * cell + 2), "tick"));
             var d = map.Map(6.5, k); var dy = y + 20 + Math.Round(d.Y) * cell;
             sb.Append(Line((x + 20 + map.Map(6, 0).X * cell - 2, dy), (x + 20 + map.Map(7, 0).X * cell + 2, dy), "tick"));
         }
-        return ["tick|module boundary on a timing pattern", "blk|one pixel"];
+        return ["tick|module boundary", "blk|pixel"];
     },
-    [
-        (1, "whole pattern", "A finder's runs come out in whole pixels, a module one or two of them, too coarse for a ratio check. A crisp finder is taken when the row above or below repeats its runs pixel for pixel and all 49 of its modules read, through the edges its row and column measured."),
-        (3, "boundaries", "For an upright or right-angle symbol, the module boundaries are read off the two timing patterns, finder to finder, and the finders' own lines, and the grid is sampled between them, at every module wherever its edges fell."),
-        (3, "counted dimension", "Both timing lines must read as timing patterns of the same dimension, which names the version."),
-        (-1, "", "It is tried first for every corner: when it reads, nothing after it runs."),
-    ],
-    "UKUKSSSSSSSSU",
-    Tags((0, "global threshold"), (4, "not reached"), (5, "not reached"), (6, "not reached"), (7, "not reached"), (8, "not reached"), (9, "not reached"), (10, "not reached"), (11, "not reached")));
+    [1, 3, 3],
+    "UKUKSSSSSSSSU");
 
 // Light on dark
 InputFigure("decode-input-light-on-dark.svg",
-    "Light on dark",
-    "Reflectance reversed: light modules on a dark background, as in a dark-mode screen.",
     (sb, x, y, s) =>
     {
         var map = Square(25, x + 20, y + 20, s - 40);
         sb.Append(Symbol(map, v2, "#ffffff", "#1f2328"));
         foreach (var f in new[] { tl, tr, bl })
             sb.Append(Dot(map.Map(f.U, f.V), 5));
-        return ["det|found centre, in the inverted image"];
+        return ["det|found centre"];
     },
-    [
-        (0, "inverted pass", "In the positive image the finders' rings do not read 1:1:3:1:1, so the global positive pass reads nothing."),
-        (0, "mirrored histogram", "The inverted pass decodes the image inverted, its histogram mirrored rather than counted again, and runs the same path."),
-        (-1, "", "From the finder triple on, it is the clean path."),
-    ],
-    "KUUSUUUSUSCSU",
-    Tags((3, "not low density"), (4, "whole pixels"), (5, "parallelogram"), (7, "version 2"), (9, "no grey levels"), (10, "if the grid fails")));
+    [0, 0],
+    "KUUSUUUSUSCSU");
 
 // Large version: the mesh
 InputFigure("decode-input-large-version.svg",
-    "Large version: the mesh",
-    "Version 14 and up, in perspective: a mesh of local anchors is tried before one transform across the whole symbol.",
     (sb, x, y, s) =>
     {
         var map = Keystone(73, x + 20, y + 20, s - 40, 0.12);
@@ -731,22 +606,12 @@ InputFigure("decode-input-large-version.svg",
             foreach (var c in coords)
             {
                 var p = map.Map(c + 0.5, r + 0.5);
-                sb.Append(r == 6 || c == 6 ? $"<circle class=\"predr\" cx=\"{F(p.X)}\" cy=\"{F(p.Y)}\" r=\"3.5\"/>" : Dot(p, 3.5));
+                sb.Append(r == 6 || c == 6 ? $"<circle class=\"predr\" cx=\"{F(p.X)}\" cy=\"{F(p.Y)}\" r=\"3\"/>" : Dot(p, 3));
             }
-        return ["det|interior node, searched", "predr|edge node, extrapolated", "lat|mesh"];
+        return ["det|searched node", "predr|extrapolated node", "lat|mesh"];
     },
-    [
-        (4, "along the lines", "Module sizes are measured along each finder line. In perspective a module is not square: here it is shorter than it is wide, and sizes from image rows would count the left line short."),
-        (-1, "", "From version 14 the alignment patterns form a lattice of 4 × 4 positions or more."),
-        (-1, "", "The interior nodes are searched around a prediction carried from the finders node by node; missing ones are searched again through a homography anchored on the three finder centres and the farthest node found."),
-        (-1, "", "The row and column at coordinate 6, which lie on the timing patterns, are not searched; once the mesh is kept, they are extrapolated from the interior nodes."),
-        (-1, "", "The mesh is kept when enough of the searched nodes are found, and each cell is sampled between its four nodes."),
-        (8, "if the mesh fails", "The mesh grid is decoded first; one that does not settle falls back to the four-point transform."),
-        (Bar, "Reed-Solomon", "Here the mesh grid reads with corrections, which Reed-Solomon absorbs; without them, the four-point transform would read the symbol instead."),
-        (-1, "", "That transform needs no corrections here: a flat symbol in perspective is a plane, which one transform can map."),
-    ],
-    "UUUSKUUUCCCSK",
-    Tags((0, "global threshold"), (3, "not low density"), (7, "kept, its grid decodes"), (9, "if the 4-point grid fails"), (10, "if the re-read fails too")));
+    [4, 8, Bar],
+    "UUUSKUUUCCCSK");
 
 // Preview: every figure on a light and on a dark page
 if (preview)
