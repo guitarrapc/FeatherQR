@@ -849,3 +849,11 @@ Every render these sets still fail, stage by stage (the drawn triple taken from 
 Corrected in the decoder spec and above; the code did not depend on them, and the one test that did is replaced as described.
 
 **Lesson.** A number a probe derives is a claim about the code only once the probe does what the code does. This one called the same function and added a constant the function had already added, and the round figure it gave (a version or two) read as a plausible cause, so it went into the plan unchecked. The check that found it was the one the plan asks for anyway: each stage measured from the input the decode actually had, down to the step that fails.
+
+### Phase 5d, PR review round (2026-09-26)
+
+**Asked.** `DecodeTriple` returns a content verdict (`UnsupportedContent`, `UnmappedCharacter`) from the shape's corner without trying the others; if that corner is wrong, could its grid show a verdict and hide the symbol under the true corner? The suggestion: honour a verdict from the shape's corner only when its timing patterns read.
+
+**Measured.** A verdict comes only from the bit stream, after every Reed-Solomon block has corrected, as a read does. The drawn triple of 116,948 renders (versions 1-40, every level, 2.5-6 px/module; flat, keystoned to 30 % along an axis, and tilted 44-50 % toward the top-left finder), decoded from each of its two wrong corners through the decoder's own path: 233,896 decodes, 191,938 `DataUncorrectable`, 41,360 `FormatInformationInvalid`, 598 `NotDetected`, and none past Reed-Solomon, so no read, no verdict, no malformed bit stream. Of them, 20,300 were the corner the shape named.
+
+**Declined.** A grid from a wrong corner reaches a verdict only through the event that would give it a read, and a read from the shape's corner is honoured too; guarding the verdict alone would guard the less harmful of the two outcomes of one event, and would add a path neither the renders above nor a test can reach. The shape's result was final for every status before this phase as well. `IsSettled`'s summary now says why a verdict settles.

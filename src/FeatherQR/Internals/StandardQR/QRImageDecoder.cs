@@ -678,7 +678,7 @@ internal static partial class QRImageDecoder
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 
-    /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content.</summary>
+    /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content, which like a read comes only once every Reed-Solomon block has corrected.</summary>
     private static bool IsSettled(DecodeStatus status)
         => IsTerminal(status) || RegionalRetry.IsContentVerdict(status);
 
