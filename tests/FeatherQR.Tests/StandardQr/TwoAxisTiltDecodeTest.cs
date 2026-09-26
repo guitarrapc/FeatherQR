@@ -145,25 +145,25 @@ public class TwoAxisTiltDecodeTest
     }
 
     /// <summary>
-    /// A finder stretched off its own axes by a tilt about both, drawn over 2.2 times as tall as wide by whole pixels, at 3.1 and 3.8 px/module: a candidate, its column taken inside 5/12 to 12/5 of its row once its rising diagonal reads.
-    /// A stretch along a finder's axes leaves the ratio at the stretch; turned off them it rises, and past a 50 % keystone's stretch of 2 the window's fifth for whole pixels is what keeps it.
+    /// A finder stretched off its own axes by a tilt about both, its column past twice its row by whole pixels, at 3 and 3.8 px/module: a candidate, its column taken inside 5/12 to 12/5 of its row once its rising diagonal reads.
+    /// Twice the row is the stretch a 50 % keystone gives a finder along its own axes; off them the column goes past it, and with the window narrowed to 2 this finder is refused.
     /// </summary>
     [Test]
-    [Arguments(3.1f, 25f, 101f)]
-    [Arguments(3.8f, 26f, 100f)]
-    public async Task StretchedOffItsAxes_ColumnPastElevenFifthsOfTheRow_IsACandidate(float pixelsPerModule, float degrees, float tiltDegrees)
+    [Arguments(3f, 22f, 102f)]
+    [Arguments(3.8f, 24f, 98f)]
+    public async Task StretchedOffItsAxes_ColumnPastTwiceTheRow_IsACandidate(float pixelsPerModule, float degrees, float tiltDegrees)
     {
-        var (luminance, width, height, truth, size) = Render(40, pixelsPerModule, degrees, 0.5f, tiltDegrees, damaged: false);
+        var (luminance, width, height, truth, size) = Render(32, pixelsPerModule, degrees, 0.5f, tiltDegrees, damaged: false);
         var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
 
-        // The premise: at the top-right finder the column is past 11/5 of the row, each reading 1:1:3:1:1 on its own
+        // The premise: at the top-right finder the column is past twice the row, each reading 1:1:3:1:1 on its own
         truth.Transform(size - 7.5f, 7.5f, out var x, out var y);
         var row = new int[5];
         var column = new int[5];
         await Assert.That(FinderPatternFinder.MeasureRuns(luminance, width, height, threshold, (int)x, (int)y, 1, 0, FinderPatternFinder.NoRunCap, row, out _)).IsTrue();
         await Assert.That(FinderPatternFinder.MeasureRuns(luminance, width, height, threshold, (int)x, (int)y, 0, 1, FinderPatternFinder.NoRunCap, column, out _)).IsTrue();
         await Assert.That(FinderPatternFinder.IsFinderRatio(row) && FinderPatternFinder.IsFinderRatio(column)).IsTrue();
-        await Assert.That(5 * Sum(column)).IsGreaterThan(11 * Sum(row));
+        await Assert.That(Sum(column)).IsGreaterThan(2 * Sum(row));
 
         var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         var count = FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates, grey);
