@@ -13,10 +13,16 @@ internal static class SupersampledRenderer
     }
 
     public static (byte[] Luminance, int Width, int Height) Render(Func<int, int, bool> isDark, int columns, int rows, float pixelsPerModule, float degrees, float keystone = 0f)
+        => Render(isDark, columns, rows, pixelsPerModule, degrees, keystone, tiltDegrees: 0f);
+
+    /// <summary>
+    /// The plane tilted about both of the symbol's axes: the keystone narrows the plane along a direction <paramref name="tiltDegrees"/> from the symbol's own vertical, so at 45° the near and far points are two of the symbol's corners and every finder is drawn stretched off its own axes.
+    /// </summary>
+    public static (byte[] Luminance, int Width, int Height) Render(Func<int, int, bool> isDark, int columns, int rows, float pixelsPerModule, float degrees, float keystone, float tiltDegrees)
     {
         var spanX = columns + 8f; // 4-module quiet zone each side
         var spanY = rows + 8f;
-        var corners = SpanCorners(columns, rows, pixelsPerModule, degrees, keystone, out var side);
+        var corners = SpanCorners(columns, rows, pixelsPerModule, degrees, keystone, tiltDegrees, out var side);
         var luminance = new byte[side * side];
         Array.Fill(luminance, (byte)255);
 
@@ -55,16 +61,50 @@ internal static class SupersampledRenderer
     /// Where <see cref="Render(Func{int, int, bool}, int, int, float, float, float)"/> puts the corners of the symbol and its 4-module quiet zone (top-left, top-right, bottom-right, bottom-left, x then y), and the side of its square canvas: module column <c>c</c> of the grid lies at <c>c + 4</c> of that span.
     /// </summary>
     public static float[] SpanCorners(int columns, int rows, float pixelsPerModule, float degrees, float keystone, out int side)
+        => SpanCorners(columns, rows, pixelsPerModule, degrees, keystone, tiltDegrees: 0f, out side);
+
+    /// <summary>
+    /// <see cref="SpanCorners(int, int, float, float, float, out int)"/> with the keystone along a direction <paramref name="tiltDegrees"/> from the symbol's own vertical.
+    /// The span is turned by the tilt, the box round it is narrowed at the top by the keystone as a plane in perspective, and the result is turned by <paramref name="degrees"/>; the box's height and bottom edge keep their length, so the depth ratio between the span's nearest and farthest points is 1/(1 − keystone) at every tilt.
+    /// </summary>
+    public static float[] SpanCorners(int columns, int rows, float pixelsPerModule, float degrees, float keystone, float tiltDegrees, out int side)
     {
         var symbolWidth = (columns + 8f) * pixelsPerModule;
         var symbolHeight = (rows + 8f) * pixelsPerModule;
-        side = (int)(Math.Max(symbolWidth, symbolHeight) * 1.45f) + 8;
-
-        // Destination corners (TL, TR, BR, BL); the top edge shrinks by the keystone
         var halfWidth = symbolWidth / 2f;
         var halfHeight = symbolHeight / 2f;
-        var top = halfWidth * (1f - keystone);
-        float[] corners = [-top, -halfHeight, top, -halfHeight, halfWidth, halfHeight, -halfWidth, halfHeight];
+        float[] corners;
+        if (tiltDegrees == 0f)
+        {
+            side = (int)(Math.Max(symbolWidth, symbolHeight) * 1.45f) + 8;
+
+            // Destination corners (TL, TR, BR, BL); the top edge shrinks by the keystone
+            var top = halfWidth * (1f - keystone);
+            corners = [-top, -halfHeight, top, -halfHeight, halfWidth, halfHeight, -halfWidth, halfHeight];
+        }
+        else
+        {
+            var tilt = tiltDegrees * Math.PI / 180.0;
+            double tiltCos = Math.Cos(tilt), tiltSin = Math.Sin(tilt);
+            var boxHalfWidth = halfWidth * Math.Abs(tiltCos) + halfHeight * Math.Abs(tiltSin);
+            var boxHalfHeight = halfWidth * Math.Abs(tiltSin) + halfHeight * Math.Abs(tiltCos);
+            side = (int)(2.0 * Math.Max(boxHalfWidth, boxHalfHeight) * 1.45) + 8;
+
+            // The box's top edge narrowed to 1 − keystone of its bottom by the plane map x' = a·x / (1 + b·y), y' = (y + b·B²) / (1 + b·y), which keeps y = ±B
+            var bB = -keystone / (2.0 - keystone);
+            var a = (2.0 - 2.0 * keystone) / (2.0 - keystone);
+            var b = bB / boxHalfHeight;
+            corners = new float[8];
+            double[] span = [-halfWidth, -halfHeight, halfWidth, -halfHeight, halfWidth, halfHeight, -halfWidth, halfHeight];
+            for (var i = 0; i < 8; i += 2)
+            {
+                var x = span[i] * tiltCos - span[i + 1] * tiltSin;
+                var y = span[i] * tiltSin + span[i + 1] * tiltCos;
+                var w = 1.0 + b * y;
+                corners[i] = (float)(a * x / w);
+                corners[i + 1] = (float)((y + bB * boxHalfHeight) / w);
+            }
+        }
         var radians = degrees * MathF.PI / 180f;
         var cos = MathF.Cos(radians);
         var sin = MathF.Sin(radians);
