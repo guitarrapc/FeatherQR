@@ -11,8 +11,8 @@ public class ModulePlacerExpandBitsParityTest
     public static IEnumerable<(int Length, int Seed)> Inputs()
     {
         foreach (var length in new[] { 0, 1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 25, 26, 27, 31, 32, 33, 43, 44, 45, 70, 134, 255, 256, 257, 345, 346, 347, 3705, 3706, 3707 })
-        foreach (var seed in new[] { -1, 0, 7, 42, 20260920 })
-            yield return (length, seed);
+            foreach (var seed in new[] { -1, 0, 7, 42, 20260920 })
+                yield return (length, seed);
     }
 
     [Test]
@@ -31,8 +31,8 @@ public class ModulePlacerExpandBitsParityTest
     public async Task Expand_EveryByteValue_MatchesReference()
     {
         foreach (var length in new[] { 1, 2, 7, 15, 16, 17, 33 })
-        for (var value = 0; value <= byte.MaxValue; value++)
-            await Check(Enumerable.Repeat((byte)value, length).ToArray());
+            for (var value = 0; value <= byte.MaxValue; value++)
+                await Check(Enumerable.Repeat((byte)value, length).ToArray());
     }
 
 #if NET8_0_OR_GREATER

@@ -75,16 +75,16 @@ public class ModeSegmenterCostRunParityTest
     private static void Check(ReadOnlySpan<char> text)
     {
         foreach (var (mode, numeric, alnum, bytes) in new[] { (4, 10, 9, 8), (4, 12, 11, 16), (4, 14, 13, 16), (0, 3, 0, 0), (1, 4, 3, 0), (2, 5, 4, 4), (3, 6, 5, 5) })
-        foreach (var (allowAlnum, allowByte) in new[] { (true, true), (false, true), (true, false), (false, false) })
-        foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
-        {
-            var expected = Reference(text, charset, mode, numeric, alnum, bytes, allowAlnum, allowByte, out var expectedState);
-            // The cost-only entry point selects General for UTF-8 or when Byte is
-            // disabled, and Latin otherwise; both are checked against the same reference.
-            var cost = ModeSegmenter.ComputeCosts(text, charset, mode, numeric, alnum, bytes, default, out var finalState, allowAlnum, allowByte);
-            if (cost != expected || finalState != expectedState)
-                throw new InvalidOperationException($"Expected ({expected}, {expectedState}), got ({cost}, {finalState}); headers {mode}/{numeric}/{alnum}/{bytes}, allowed {allowAlnum}/{allowByte}, charset {charset}, text {Convert.ToHexString(Encoding.Unicode.GetBytes(text.ToString()))}.");
-        }
+            foreach (var (allowAlnum, allowByte) in new[] { (true, true), (false, true), (true, false), (false, false) })
+                foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+                {
+                    var expected = Reference(text, charset, mode, numeric, alnum, bytes, allowAlnum, allowByte, out var expectedState);
+                    // The cost-only entry point selects General for UTF-8 or when Byte is
+                    // disabled, and Latin otherwise; both are checked against the same reference.
+                    var cost = ModeSegmenter.ComputeCosts(text, charset, mode, numeric, alnum, bytes, default, out var finalState, allowAlnum, allowByte);
+                    if (cost != expected || finalState != expectedState)
+                        throw new InvalidOperationException($"Expected ({expected}, {expectedState}), got ({cost}, {finalState}); headers {mode}/{numeric}/{alnum}/{bytes}, allowed {allowAlnum}/{allowByte}, charset {charset}, text {Convert.ToHexString(Encoding.Unicode.GetBytes(text.ToString()))}.");
+                }
     }
 
     // Independent reference: relax every transition from every reachable state.

@@ -1,4 +1,3 @@
-using System.Text;
 using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;

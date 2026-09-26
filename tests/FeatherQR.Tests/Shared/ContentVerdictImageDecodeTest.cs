@@ -316,20 +316,20 @@ public class ContentVerdictImageDecodeTest
         switch (symbology)
         {
             case Symbology.StandardQR:
-            {
-                QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
-                return (info.Status, text);
-            }
+                {
+                    QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                    return (info.Status, text);
+                }
             case Symbology.MicroQR:
-            {
-                MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
-                return (info.Status, text);
-            }
+                {
+                    MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                    return (info.Status, text);
+                }
             default:
-            {
-                RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
-                return (info.Status, text);
-            }
+                {
+                    RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+                    return (info.Status, text);
+                }
         }
     }
 
