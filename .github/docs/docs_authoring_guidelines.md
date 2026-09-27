@@ -56,6 +56,14 @@ Required sections, in order:
 
 Implementation links that point outside the symbology's own namespace are marked "shared across symbologies".
 
+A decode diagram follows these rules:
+
+- ASCII in a fenced block, so it reads raw in editors, terminals and search results. The image level is an indented outline, one indent per loop.
+- It carries the stages, their order, the loop each stage sits in, and the branches that skip stages. No tuned numbers (thresholds, budgets, tolerances, measured bounds); structural facts from the standard, such as version ranges, are fine.
+- Each box names a stage that has its own table row, in the same words.
+- The passes every symbology runs are drawn once, in `qrcode-symbologies.md`; each map names them and links there.
+- The decoder's `Pipeline:` remarks list the same stages under the same names, nesting one level only where a flat list would read in the wrong order.
+
 ### Design record (`{symbology}-{feature}.md`, e.g. `standardqr-decoder.md`)
 
 Required sections, in order:
@@ -65,6 +73,19 @@ Required sections, in order:
 3. Why, scope reasoning
 4. Decisions, choices made, with rationale
 5. Lessons Learned, grouped by area
+
+A decoder's design record shows its decode figures under What. They follow these rules:
+
+- Two kinds: a stage strip, one panel per stage of the main path on a clean symbol, and one figure per input class, showing the input with what the decoder finds drawn over it beside the path through the stages.
+- They live in `images/{symbology}/` and are drawn by `tools/decode_figures.cs`, which also decodes every input it draws. Rerun the tool; never edit an SVG by hand.
+- They show the path an input takes as the code defines it, not a trace captured from a run.
+- The map's decode diagram is the authority: a figure's boxes use its stage names, each box one stage or a group of them.
+- A figure carries pictures and labels only. Its description and notes are Markdown under it, numbered to match the boxes, and neither carries tuned numbers.
+- A box is key (green) when, with its stage switched off for that input, the input would not read, or would read only after more grids fail. A grid is one sampling, however often it is read. A switch-off probe decides this, not which grid happened to decode.
+- Each input is tuned until the stage its figure is about is the one that decides it, inside the measured envelope.
+- Figures follow Standard QR's order; a class of a symbology's own sits next to the nearest Standard QR class.
+- Each figure is an opaque white card, so it reads on light and dark pages.
+- Every note and box state is checked against the code by an independent reviewer before it ships.
 
 ## Cross-document consistency rules
 

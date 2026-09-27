@@ -94,8 +94,9 @@ Relevant benchmarks by change area:
 If the implementation changes observable behavior or adds new functionality, update the relevant specification:
 
 - Symbology architecture, shared components, document index → `.github/docs/specs/qrcode-symbologies.md`
-- Spec-to-code map (per symbology) → `.github/docs/specs/standardqr-spec-map.md` (later `microqr-*.md`, `rmqr-*.md`)
-- Decoder design and scope → `.github/docs/specs/standardqr-decoder.md`
+- Spec-to-code map (per symbology) → `.github/docs/specs/{standardqr,microqr,rmqr}-spec-map.md`
+- Decoder design and scope → `.github/docs/specs/{standardqr,microqr,rmqr}-decoder.md`
+- A decode stage or retry added, removed or reordered → the map's decode diagram, the decoder's `Pipeline:` remarks and the decode figures: rerun `dotnet run tools/decode_figures.cs -- .github/docs/images`, then recheck each figure's box states and notes in the design record
 - Public API or migration notes → `docs/migration.md`
 - Capacity tables → `docs/data-capacity.md`
 

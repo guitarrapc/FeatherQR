@@ -177,3 +177,4 @@ Reference tests: [RmQRCodeDataUnitTest](../../../tests/FeatherQR.Tests/RmQr/RmQR
 - The pre-implementation oracle verification (what was checked, how, and the corrections it forced) is recorded in [rMQR Encoder](rmqr-encoder.md); Phase 5.1 turns those checks into permanent tests.
 - External-encoder fixtures and the oracle matrix are tracked in the [fixture record](qrcode-test-fixtures.md).
 - Components marked "shared across symbologies" live outside `Internals/RmQR`; the split is defined in [QR Symbology Architecture](qrcode-symbologies.md).
+- Adding, removing or reordering a decode stage or retry updates, in the same change, this map's decode diagram, the decoder's `Pipeline:` remarks and the decode figures in the [design record](rmqr-decoder.md#image-decode-figures): rerun `tools/decode_figures.cs`, then recheck each figure's box states and notes against the code.
