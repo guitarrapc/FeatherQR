@@ -137,8 +137,9 @@ public class MicroQRCodeDecoderImageTest
 
     /// <summary>
     /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
-    /// not square, so it must keep the finder's horizontal and vertical module scales apart. Up to
-    /// about 1.38:1 every right-angle rotation decodes; this is 1.25:1, 8 x 10 px.
+    /// not square, so it must keep the finder's horizontal and vertical module scales apart. Every
+    /// right-angle rotation decodes to 2.35:1 either way, where the finder cross-check's 12:5 window
+    /// ends; this is 1.25:1, 8 x 10 px.
     /// </summary>
     [Test]
     [Arguments(0)]
@@ -159,19 +160,38 @@ public class MicroQRCodeDecoderImageTest
         await Assert.That(text).IsEqualTo(content);
     }
 
-    /// <summary>
-    /// From about 1.4:1 the decoder reads modules wider than tall, to about 1.65:1, but not modules
-    /// taller than wide. This pins the half it supports, at 1.5:1 (12 x 8 px), upright and upside down.
-    /// </summary>
+    /// <summary>Modules 1.5:1 wider than tall (12 x 8 px): a finder whose column is more than 40 % off its row.</summary>
     [Test]
     [Arguments(0)]
+    [Arguments(90)]
     [Arguments(180)]
+    [Arguments(270)]
     public async Task Decode_NonSquareModules_WiderThanTall(int degrees)
     {
         const string content = "MICRO QR M4 TEST";
         using var rendered = RenderStretched(content, scaleX: 1.5f, scaleY: 1f);
         var (across, down) = StretchedSymbol.FinderStoneRuns(rendered);
         await Assert.That((float)across / down).IsEqualTo(1.5f).Within(0.05f).Because($"finder stone {across}x{down}");
+        using var bitmap = Rotate(rendered, degrees);
+
+        var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"degrees={degrees}, status={info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
+    /// <summary>The same taller than wide (8 x 12 px).</summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(90)]
+    [Arguments(180)]
+    [Arguments(270)]
+    public async Task Decode_NonSquareModules_TallerThanWide(int degrees)
+    {
+        const string content = "MICRO QR M4 TEST";
+        using var rendered = RenderStretched(content, scaleX: 1f, scaleY: 1.5f);
+        var (across, down) = StretchedSymbol.FinderStoneRuns(rendered);
+        await Assert.That((float)down / across).IsEqualTo(1.5f).Within(0.05f).Because($"finder stone {across}x{down}");
         using var bitmap = Rotate(rendered, degrees);
 
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
