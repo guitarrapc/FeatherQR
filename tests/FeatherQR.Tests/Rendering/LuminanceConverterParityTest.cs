@@ -337,7 +337,7 @@ public class LuminanceConverterParityTest
     /// Comparing only the first width × height bytes cannot see this: an over-write
     /// lands past the compared region and every asserted byte is still correct.
     /// Verified by mutation — rounding <c>blockEnd</c> up in
-    /// <c>LuminanceConverter.Simd.cs</c> leaves the parity assertions green and is
+    /// <c>LuminanceConverter.X86.cs</c> leaves the parity assertions green and is
     /// caught only by the tail.
     /// </remarks>
     [Test]

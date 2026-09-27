@@ -4,7 +4,7 @@ using FeatherQR.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Verifies that the ARM64 NEON mask selection tiers (ModulePlacer.Masking.Simd.Arm.cs:
+/// Verifies that the ARM64 NEON mask selection tiers (ModulePlacer.Masking.Arm64.cs:
 /// single-word, two-word SoA, three-word SoA) select the same pattern and produce a
 /// byte-identical matrix as the scalar bit-packed kernels. MaskCode dispatches by
 /// hardware capability, so these tests pin BOTH sides explicitly: the scalar kernels

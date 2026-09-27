@@ -11,7 +11,7 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>; produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
 /// </summary>
 /// <remarks>
-/// Faithful port of the SSSE3 kernel (see EccBinaryEncoder.Simd.cs for the shared architecture notes).
+/// Faithful port of the SSSE3 kernel (see EccBinaryEncoder.X86.cs for the shared architecture notes).
 /// Instruction mapping:
 ///
 /// - PSHUFB → TBL (<see cref="AdvSimd.Arm64.VectorTableLookup(Vector128{byte}, Vector128{byte})"/>).

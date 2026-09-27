@@ -78,7 +78,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Pixel buffer to BT.601 luminance.
-    /// Three tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.Simd.cs), a NEON kernel at 16 pixels per iteration (LuminanceConverter.Simd.Arm.cs), and this per-pixel loop everywhere else.
+    /// Three tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.X86.cs), a NEON kernel at 16 pixels per iteration (LuminanceConverter.Arm64.cs), and this per-pixel loop everywhere else.
     /// All three produce identical bytes; see LuminanceConverterParityTest.
     /// </summary>
     /// <remarks>
@@ -118,7 +118,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// UDOT carries the whole luminance sum (<see cref="System.Runtime.Intrinsics.Arm.Dp"/>, an ARMv8.2 extension that Cortex-A53/A72-class cores lack) and the composite path separates planes with UZP1/UZP2, which live under <c>AdvSimd.Arm64</c> — so both gates are required rather than plain AdvSimd.
-    /// LD4 would also serve for the planes but has no ref-taking overload, so it was rejected (see LuminanceConverter.Simd.Arm.cs).
+    /// LD4 would also serve for the planes but has no ref-taking overload, so it was rejected (see LuminanceConverter.Arm64.cs).
     /// </summary>
     private static bool IsAdvSimdTierAvailable
         => System.Runtime.Intrinsics.Arm.Dp.IsSupported && System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported;

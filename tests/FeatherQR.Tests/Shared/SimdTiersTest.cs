@@ -24,21 +24,21 @@ public class SimdTiersTest
     {
         ["TextAnalyzer"] = ["TextAnalyzer.cs"],
         ["ModuleBitPacker"] = ["ModuleBitPacker.cs"],
-        ["ModeSegmenterLanes"] = ["ModeSegmenter.Lanes.cs", "ModeSegmenter.Lanes.Arm.cs"],
-        ["EccBinaryEncoder"] = ["BinaryEncoders/EccBinaryEncoder.cs", "BinaryEncoders/EccBinaryEncoder.Simd.cs"],
-        ["EccBinaryDecoder"] = ["BinaryDecoders/EccBinaryDecoder.cs", "BinaryDecoders/EccBinaryDecoder.Simd.Arm.cs"],
+        ["ModeSegmenterLanes"] = ["ModeSegmenter.Lanes.cs", "ModeSegmenter.Lanes.Arm64.cs"],
+        ["EccBinaryEncoder"] = ["BinaryEncoders/EccBinaryEncoder.cs", "BinaryEncoders/EccBinaryEncoder.X86.cs"],
+        ["EccBinaryDecoder"] = ["BinaryDecoders/EccBinaryDecoder.cs", "BinaryDecoders/EccBinaryDecoder.Arm64.cs"],
         ["LuminanceConverter"] = ["ImageDecoders/LuminanceConverter.cs"],
         ["LuminanceInverter"] = ["ImageDecoders/LuminanceInverter.cs"],
         ["Binarizer"] = ["ImageDecoders/Binarizer.cs"],
-        ["LocalBinarizer"] = ["ImageDecoders/LocalBinarizer.cs"],
+        ["LocalBinarizer"] = ["ImageDecoders/LocalBinarizer.Vector128.cs"],
         ["FinderRowMask"] = ["ImageDecoders/FinderPatternFinder.cs"],
         ["FinderRowEdges"] = ["ImageDecoders/FinderPatternFinder.RowEdges.cs"],
         ["ModulePlacerExpandBits"] = ["StandardQR/ModulePlacer.ExpandBits.cs"],
         ["ModulePlacerMaskCode"] = ["StandardQR/ModulePlacer.Masking.cs"],
         ["AlignmentRowMask"] = ["StandardQR/AlignmentPatternFinder.cs"],
         ["QRSampleGrid"] = ["StandardQR/QRImageDecoder.cs"],
-        ["QRSampleGridPiecewise"] = ["StandardQR/QRImageDecoder.PiecewiseSampling.cs"],
-        ["StructuredAppendLanes"] = ["StandardQR/StructuredAppendPlanner.Lanes.cs", "StandardQR/StructuredAppendPlanner.Neon.cs"],
+        ["QRSampleGridPiecewise"] = ["StandardQR/QRImageDecoder.PiecewiseSampling.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.X86.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.Arm64.cs"],
+        ["StructuredAppendLanes"] = ["StandardQR/StructuredAppendPlanner.Lanes.cs", "StandardQR/StructuredAppendPlanner.Lanes.Arm64.cs"],
         ["StructuredAppendParity"] = ["StandardQR/StructuredAppendPlanner.Parity.cs"],
         ["StructuredAppendScanner"] = ["StandardQR/StructuredAppendScanner.cs"],
         ["MicroQRByteSegment"] = ["MicroQR/MicroQRBinaryEncoder.cs"],
@@ -46,10 +46,10 @@ public class SimdTiersTest
         ["MicroQRSampleGrid"] = ["MicroQR/MicroQRImageDecoder.cs"],
         ["RmQRValueSegments"] = ["RmQR/RmQRBinaryEncoder.cs"],
         ["RmQRLatin1Segment"] = ["RmQR/RmQRBinaryEncoder.cs"],
-        ["RmQRModulePlacer"] = ["RmQR/RmQRModulePlacer.cs", "RmQR/RmQRModulePlacer.Simd.Arm.cs"],
-        ["RmQRExtractCodewords"] = ["RmQR/RmQRMatrixDecoder.cs", "RmQR/RmQRMatrixDecoder.Simd.cs", "RmQR/RmQRMatrixDecoder.Simd.Arm.cs"],
+        ["RmQRModulePlacer"] = ["RmQR/RmQRModulePlacer.cs", "RmQR/RmQRModulePlacer.Arm64.cs"],
+        ["RmQRExtractCodewords"] = ["RmQR/RmQRMatrixDecoder.cs", "RmQR/RmQRMatrixDecoder.X86.cs", "RmQR/RmQRMatrixDecoder.Arm64.cs"],
         ["RmQRSubFinderLattice"] = ["RmQR/RmQRImageDecoder.cs"],
-        ["RmQRSampleGrid"] = ["RmQR/RmQRImageDecoder.cs"],
+        ["RmQRSampleGrid"] = ["RmQR/RmQRImageDecoder.cs", "RmQR/RmQRImageDecoder.Vector128.cs"],
     };
 
     /// <summary>
@@ -71,7 +71,7 @@ public class SimdTiersTest
     };
 
     /// <summary>The files that read flags without being a kernel: the table itself, and the CPU facts <c>IsSupported</c> does not express.</summary>
-    private static readonly string[] NonKernelFiles = ["SimdTiers.cs", "HardwareCapabilities.cs"];
+    private static readonly string[] NonKernelFiles = ["SimdTiers.cs", "HardwareCapabilities.X86.cs"];
 
     [Test]
     public async Task EveryReportedKernel_HasItsFiles_AndNoOther()

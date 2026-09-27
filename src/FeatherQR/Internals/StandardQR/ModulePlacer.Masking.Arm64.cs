@@ -10,7 +10,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON).
 /// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
 ///
-/// Port of the AVX2 architecture in ModulePlacer.Masking.Simd.cs to 128-bit vectors: the scorer runs lane-per-row (Vector128&lt;ulong&gt; = 2 rows per iteration) and the same three width tiers apply (1 ulong per row for versions 1-11, 2-word SoA for 12-29, 3-word SoA for 30-40).
+/// Port of the AVX2 architecture in ModulePlacer.Masking.X86.cs to 128-bit vectors: the scorer runs lane-per-row (Vector128&lt;ulong&gt; = 2 rows per iteration) and the same three width tiers apply (1 ulong per row for versions 1-11, 2-word SoA for 12-29, 3-word SoA for 30-40).
 /// NEON-specific choices:
 /// - Popcount is native (cnt.16b); one uaddlp widens the per-byte counts to
 ///   ushort lanes, which accumulate directly in Vector128&lt;ushort&gt;
