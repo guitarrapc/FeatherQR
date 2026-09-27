@@ -1369,7 +1369,7 @@ static (H Map, int Width, int Height) RectRotated(bool[,] m, double pitch, doubl
 }
 
 // The same in perspective: one edge ('T', 'B', 'L' or 'R') of the symbol with its quiet zone shortened by
-// shrink of its length, half at each end
+// shrink of its length, half at each end; the rMQR tests give that half as their tilt
 static (H Map, int Width, int Height) RectKeystone(bool[,] m, double pitch, double shrink, char edge, int qz = 2)
 {
     var rows = m.GetLength(0); var cols = m.GetLength(1);
@@ -1432,7 +1432,8 @@ static H Rotated(int dim, double x, double y, double size, double degrees, int q
     return H.Affine(cx - dim / 2.0 * (ux + vx), cy - dim / 2.0 * (uy + vy), ux, uy, vx, vy);
 }
 
-// The same, tilted away at the bottom: the far edge shorter by shrink of the near one
+// The same, tilted away at the bottom: the far edge shorter by shrink of the near one. Standard QR's
+// envelope counts the whole shrink; the perspective tests of all three give the half at each end as their tilt
 static H Keystone(int dim, double x, double y, double size, double shrink, int qz = 4)
 {
     var inset = shrink * size / 2;
