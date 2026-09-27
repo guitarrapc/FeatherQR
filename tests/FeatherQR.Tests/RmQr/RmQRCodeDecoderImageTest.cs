@@ -582,6 +582,100 @@ public class RmQRCodeDecoderImageTest
         }
     }
 
+    /// <summary>
+    /// The symbol that fits is turned, so it reads only in a frame after the first one whose format copy reads,
+    /// or only in the angular sweep's frames. A read that did not fit on an earlier candidate must not end any of them.
+    /// </summary>
+    [Test]
+    [Arguments(90f)]
+    [Arguments(180f)]
+    [Arguments(270f)]
+    [Arguments(30f)]
+    public async Task DecodeImage_DestinationTooSmallForOneSymbol_StillReadsATurnedSymbolThatFits(float degrees)
+    {
+        const string bigContent = "RMQR IMAGE 123 LONGER PAYLOAD";
+        var big = Create(bigContent, RmQREccLevel.M, RmQRVersion.R13x99);
+        var small = Create("AB1", RmQREccLevel.M, RmQRVersion.R7x43);
+        var destination = new char[8];
+        var sized = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
+
+        // Premises: the big symbol alone does not fit, the turned one alone reads, and together the big one is tried first
+        var (bigOnly, width, height) = RenderUprightAndTurned(big, small, degrees, drawUpright: true, drawTurned: false);
+        await Assert.That(RmQRCodeDecoder.TryDecodeImage(bigOnly, width, height, destination, out _, out var bigInfo)).IsFalse();
+        await Assert.That(bigInfo.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+        var (smallOnly, _, _) = RenderUprightAndTurned(big, small, degrees, drawUpright: false, drawTurned: true);
+        await Assert.That(RmQRCodeDecoder.TryDecodeImage(smallOnly, width, height, destination, out var smallWritten, out var smallInfo)).IsTrue().Because($"alone: {smallInfo.Status}");
+        await Assert.That(new string(destination, 0, smallWritten)).IsEqualTo("AB1");
+        var (both, _, _) = RenderUprightAndTurned(big, small, degrees, drawUpright: true, drawTurned: true);
+        await Assert.That(RmQRCodeDecoder.TryDecodeImage(both, width, height, sized, out var sizedWritten, out _)).IsTrue();
+        await Assert.That(new string(sized, 0, sizedWritten)).IsEqualTo(bigContent);
+
+        var ok = RmQRCodeDecoder.TryDecodeImage(both, width, height, destination, out var written, out var info);
+
+        await Assert.That(ok).IsTrue().Because($"degrees={degrees}, status={info.Status}, version={info.Version}");
+        await Assert.That(new string(destination, 0, written)).IsEqualTo("AB1");
+        await Assert.That(info.Version).IsEqualTo(RmQRVersion.R7x43);
+    }
+
+    /// <summary>
+    /// Neither symbol fits: the read that did not fit is reported, the first candidate's on the tie, and no text.
+    /// </summary>
+    [Test]
+    [Arguments(90f)]
+    [Arguments(30f)]
+    public async Task DecodeImage_DestinationTooSmallForBothSymbols_ReportsTheFirstCandidates(float degrees)
+    {
+        var big = Create("RMQR IMAGE 123 LONGER PAYLOAD", RmQREccLevel.M, RmQRVersion.R13x99);
+        var turned = Create("RMQR IMAGE 123", RmQREccLevel.M, RmQRVersion.R11x59);
+        var destination = new char[8];
+        var (turnedOnly, width, height) = RenderUprightAndTurned(big, turned, degrees, drawUpright: false, drawTurned: true);
+        await Assert.That(RmQRCodeDecoder.TryDecodeImage(turnedOnly, width, height, destination, out _, out var turnedInfo)).IsFalse();
+        await Assert.That((turnedInfo.Status, turnedInfo.Version)).IsEqualTo((DecodeStatus.DestinationTooSmall, RmQRVersion.R11x59));
+        var (both, _, _) = RenderUprightAndTurned(big, turned, degrees, drawUpright: true, drawTurned: true);
+
+        var ok = RmQRCodeDecoder.TryDecodeImage(both, width, height, destination, out var written, out var info);
+
+        await Assert.That(ok).IsFalse();
+        await Assert.That(written).IsEqualTo(0);
+        await Assert.That((info.Status, info.Version)).IsEqualTo((DecodeStatus.DestinationTooSmall, RmQRVersion.R13x99));
+    }
+
+    /// <summary>
+    /// <paramref name="upright"/> at 6 px/module, whose finder is confirmed on more rows, above <paramref name="turned"/>
+    /// at 4 px/module, turned about its centre; the layout is the same whichever of them is drawn.
+    /// </summary>
+    private static (byte[] Luminance, int Width, int Height) RenderUprightAndTurned(RmQRCodeData upright, RmQRCodeData turned, float degrees, bool drawUpright, bool drawTurned)
+    {
+        const int margin = 24;
+        var uprightWidth = upright.Width * 6;
+        var uprightHeight = upright.Height * 6;
+        var turnedWidth = turned.Width * 4;
+        var turnedHeight = turned.Height * 4;
+        var turnedSide = (int)Math.Ceiling(Math.Sqrt(turnedWidth * turnedWidth + turnedHeight * turnedHeight));
+        var width = Math.Max(uprightWidth, turnedSide) + 2 * margin;
+        var height = uprightHeight + turnedSide + 3 * margin;
+        using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.White);
+            if (drawUpright)
+                SymbolRenderer.Render(canvas, SKRect.Create(margin, margin, uprightWidth, uprightHeight), upright, SKColors.Black, SKColors.White);
+            if (drawTurned)
+            {
+                canvas.Translate(margin + turnedSide / 2f, uprightHeight + 2 * margin + turnedSide / 2f);
+                canvas.RotateDegrees(degrees);
+                canvas.Translate(-turnedWidth / 2f, -turnedHeight / 2f);
+                SymbolRenderer.Render(canvas, SKRect.Create(0, 0, turnedWidth, turnedHeight), turned, SKColors.Black, SKColors.White);
+            }
+        }
+
+        var luminance = new byte[width * height];
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+                luminance[y * width + x] = bitmap.GetPixel(x, y).Red;
+        return (luminance, width, height);
+    }
+
     [Test]
     public async Task DecodeImage_LuminanceTooSmall_Throws()
     {

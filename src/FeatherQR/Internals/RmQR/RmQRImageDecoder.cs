@@ -14,7 +14,7 @@ namespace FeatherQR.Internals.RmQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
-/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, each within a budget of decodes; a successful decode ends the scan, a read that did not fit ends the candidate and, once it is the scan's result, cuts each later candidate short, since a frame reports the scan's best result; otherwise the scan reports the result that went furthest.
+/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, each within a budget of decodes; a successful decode ends the scan and a read that did not fit ends the candidate, whose frames see only its own results; otherwise the scan reports the result that went furthest.
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
 /// 1. Frames: four right angles, each also with its axes swapped (mirror); first from the axis-aligned module sizes
@@ -244,7 +244,7 @@ internal static class RmQRImageDecoder
     /// One finder scan and the candidates it ranks first; those equal to one in <paramref name="skip"/> are not decoded, and each one decoded is written to <paramref name="tried"/>.
     /// </summary>
     /// <remarks>
-    /// A candidate's decode depends on its position and module size, the image and the threshold, and on the scan's best failure only once that is terminal; so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
+    /// A candidate's decode depends only on its position and module size, the image and the threshold, so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
     /// </remarks>
     private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount, out int found)
     {
@@ -293,51 +293,76 @@ internal static class RmQRImageDecoder
                     continue;
                 if (!tried.IsEmpty)
                     tried[triedCount++] = candidates[c];
-                var finder = candidates[c];
-                var attemptsRemaining = MaxDecodeAttemptsPerCandidate;
 
-                // Fast path: right-angle frames from the axis-aligned module sizes.
-                FinderAxisEstimator.RefineModuleSize(luminance, width, height, threshold, finder, out var horizontalModuleSize, out var verticalModuleSize);
-                if (horizontalModuleSize >= 1f && verticalModuleSize >= 1f)
-                {
-                    ConcentricCentroid.TryRefine(luminance, width, height, grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref finder.X, ref finder.Y, out _);
-                    var status = TryFrames(
-                        luminance, width, height, threshold, grey, finder,
-                        horizontalModuleSize, 0f, 0f, verticalModuleSize,
-                        modules, destination, out charsWritten, out info,
-                        ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (status == DecodeStatus.Success)
-                        return status;
-                    // Terminal for THIS finder (its symbol was read; no other frame can
-                    // change that); another finder in the frame may still carry a symbol
-                    // that fits, so the candidate loop continues.
-                    if (IsTerminal(status))
-                        continue;
-                }
-
-                // Arbitrary rotation: recover the finder's local axes from the angular sweep.
-                var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, finder, orientations);
-                for (var o = 0; o < orientationCount && attemptsRemaining > 0; o++)
-                {
-                    ref readonly var frame = ref orientations[o];
-                    // The centre square's window has to lie along the symbol's axes, which only this frame knows
-                    var candidate = finder;
-                    ConcentricCentroid.TryRefine(luminance, width, height, grey, frame.UX, frame.UY, frame.VX, frame.VY, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
-                    var status = TryFrames(
-                        luminance, width, height, threshold, grey, candidate,
-                        frame.UX, frame.UY, frame.VX, frame.VY,
-                        modules, destination, out charsWritten, out info,
-                        ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (status == DecodeStatus.Success)
-                        return status;
-                    if (IsTerminal(status))
-                        break;
-                }
+                // The frames see only this candidate's results: a read that did not fit on another one ends none of them
+                var candidateStatus = DecodeStatus.NotDetected;
+                var candidateInfo = NotDetected();
+                var status = DecodeCandidate(luminance, width, height, threshold, grey, candidates[c], modules, orientations, destination, out charsWritten, out info, ref candidateStatus, ref candidateInfo);
+                if (status == DecodeStatus.Success)
+                    return status;
+                TrackBestFailure(candidateStatus, candidateInfo, ref bestStatus, ref bestInfo);
             }
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(rentedModules, clearArray: false);
+        }
+
+        charsWritten = 0;
+        info = bestInfo;
+        return bestStatus;
+    }
+
+    /// <summary>
+    /// One finder candidate within its budget of decodes: the axis-aligned frames, then those of each axis pair from the angular sweep.
+    /// Ends at a read, or at a read that did not fit, since its symbol was read and no other frame of this finder can change that.
+    /// </summary>
+    private static DecodeStatus DecodeCandidate(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in GreyLevels grey,
+        FinderPattern finder,
+        Span<byte> modules,
+        Span<OrientationCandidate> orientations,
+        Span<char> destination,
+        out int charsWritten,
+        out RmQRCodeDecodeInfo info,
+        ref DecodeStatus bestStatus,
+        ref RmQRCodeDecodeInfo bestInfo)
+    {
+        var attemptsRemaining = MaxDecodeAttemptsPerCandidate;
+
+        // Fast path: right-angle frames from the axis-aligned module sizes.
+        FinderAxisEstimator.RefineModuleSize(luminance, width, height, threshold, finder, out var horizontalModuleSize, out var verticalModuleSize);
+        if (horizontalModuleSize >= 1f && verticalModuleSize >= 1f)
+        {
+            ConcentricCentroid.TryRefine(luminance, width, height, grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref finder.X, ref finder.Y, out _);
+            var status = TryFrames(
+                luminance, width, height, threshold, grey, finder,
+                horizontalModuleSize, 0f, 0f, verticalModuleSize,
+                modules, destination, out charsWritten, out info,
+                ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            if (IsTerminal(status))
+                return status;
+        }
+
+        // Arbitrary rotation: recover the finder's local axes from the angular sweep.
+        var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, finder, orientations);
+        for (var o = 0; o < orientationCount && attemptsRemaining > 0; o++)
+        {
+            ref readonly var frame = ref orientations[o];
+            // The centre square's window has to lie along the symbol's axes, which only this frame knows
+            var candidate = finder;
+            ConcentricCentroid.TryRefine(luminance, width, height, grey, frame.UX, frame.UY, frame.VX, frame.VY, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
+            var status = TryFrames(
+                luminance, width, height, threshold, grey, candidate,
+                frame.UX, frame.UY, frame.VX, frame.VY,
+                modules, destination, out charsWritten, out info,
+                ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            if (IsTerminal(status))
+                return status;
         }
 
         charsWritten = 0;
@@ -1640,10 +1665,10 @@ internal static class RmQRImageDecoder
         DecodeStatus.NotDetected => 0,
         DecodeStatus.InvalidMatrix => 1,
         DecodeStatus.FormatInformationInvalid => 1,
-        // The symbol was read (format + RS) and only the caller's buffer is short:
-        // this outranks every failure short of the content so an earlier same-finder RS failure
-        // (the usual prelude to the perspective search) can never mask it.
-        DecodeStatus.DestinationTooSmall => 3,
+        // The symbol was read (format + RS) and only the caller's buffer is short: above every
+        // other failure, a verdict on another symbol included, since a larger destination reads
+        // this one and the verdict holds at any size
+        DecodeStatus.DestinationTooSmall => 4,
         // A verdict on the content comes after error correction too, so a wrong grid's
         // correction failure tried before the right one cannot mask it
         DecodeStatus.UnmappedCharacter or DecodeStatus.UnsupportedContent => 3,
@@ -1658,7 +1683,7 @@ internal static class RmQRImageDecoder
     /// <summary>
     /// Outcomes no further geometry around the SAME finder can change: success, and a caller destination too small for the payload (the symbol was already read through format decode and RS on every block, the same evidence a success rests on; the perspective search, the remaining frames of that finder and the inverted retry would only rediscover the same symbol at hundreds of times the cost).
     /// Other finder candidates of the same polarity are still tried, so a second symbol in the frame that does fit the destination is found regardless of candidate order; a fitting symbol of the OPPOSITE polarity next to a too-large one is the accepted trade-off of skipping the inverted retry.
-    /// The status also outranks every failure short of the content in <see cref="Rank"/>, so it reaches the caller even when an earlier attempt around the same finder failed at RS.
+    /// The status also outranks every other failure in <see cref="Rank"/>, a verdict on the content included, so it reaches the caller even when an earlier attempt failed at RS or another symbol's content gave a verdict.
     /// </summary>
     private static bool IsTerminal(DecodeStatus status)
         => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;

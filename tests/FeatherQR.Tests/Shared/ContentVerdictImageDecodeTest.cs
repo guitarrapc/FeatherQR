@@ -236,6 +236,58 @@ public class ContentVerdictImageDecodeTest
     }
 
     /// <summary>
+    /// A symbol too long for the destination is reported over another symbol's verdict, whichever of them is tried first:
+    /// a larger destination reads it, while the verdict holds at any size.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task RmQR_UnmappedSymbolAndOneTooLongForTheDestination_ReportsDestinationTooSmall(bool verdictFirst)
+    {
+        const string longContent = "RMQR IMAGE 123 LONGER PAYLOAD";
+        const int quietZone = 4;
+        var (unmapped, columns, rows) = BuildRmQR(Unmapped);
+        var (unmappedH, _, _) = BuildRmQR(Unmapped, RmQREccLevel.H);
+        var tooLong = RmQRCodeGenerator.Create(longContent, RmQREccLevel.H, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        // The top symbol at 6 px/module is confirmed on more rows than the bottom one at 4, so it is tried first
+        (byte[] Luminance, int Width, int Height) RenderUnmapped(byte[] modules, float pixelsPerModule)
+            => NearestNeighbourRenderer.Render((row, column) => IsDark(modules, columns, rows, row, column, quietZone), columns + 2 * quietZone, rows + 2 * quietZone, pixelsPerModule, 0f, 0f);
+        (byte[] Luminance, int Width, int Height) RenderTooLong(float pixelsPerModule)
+            => NearestNeighbourRenderer.Render((row, column) => row >= quietZone && column >= quietZone && row - quietZone < tooLong.Height && column - quietZone < tooLong.Width && tooLong[row - quietZone, column - quietZone], tooLong.Width + 2 * quietZone, tooLong.Height + 2 * quietZone, pixelsPerModule, 0f, 0f);
+
+        // Premise: of two verdicts the top one's is reported, so the top symbol is tried first
+        var (premise, premiseWidth, premiseHeight) = Stack(RenderUnmapped(unmapped, 6f), RenderUnmapped(unmappedH, 4f));
+        RmQRCodeDecoder.TryDecodeImage(premise, premiseWidth, premiseHeight, out _, out var premiseInfo);
+        await Assert.That((premiseInfo.Status, premiseInfo.EccLevel)).IsEqualTo((DecodeStatus.UnmappedCharacter, RmQREccLevel.M));
+
+        var (luminance, width, height) = verdictFirst ? Stack(RenderUnmapped(unmapped, 6f), RenderTooLong(4f)) : Stack(RenderTooLong(6f), RenderUnmapped(unmapped, 4f));
+        var sized = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
+        await Assert.That(RmQRCodeDecoder.TryDecodeImage(luminance, width, height, sized, out var sizedWritten, out _)).IsTrue();
+        await Assert.That(new string(sized, 0, sizedWritten)).IsEqualTo(longContent);
+
+        var ok = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[8], out var written, out var info);
+
+        await Assert.That(ok).IsFalse();
+        await Assert.That(written).IsEqualTo(0);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+        await Assert.That(info.EccLevel).IsEqualTo(RmQREccLevel.H);
+    }
+
+    /// <summary>Two tiles, one above the other, on paper.</summary>
+    private static (byte[] Luminance, int Width, int Height) Stack((byte[] Luminance, int Width, int Height) top, (byte[] Luminance, int Width, int Height) bottom)
+    {
+        var width = Math.Max(top.Width, bottom.Width);
+        var height = top.Height + bottom.Height;
+        var luminance = new byte[width * height];
+        Array.Fill(luminance, (byte)255);
+        for (var y = 0; y < top.Height; y++)
+            Array.Copy(top.Luminance, y * top.Width, luminance, y * width, top.Width);
+        for (var y = 0; y < bottom.Height; y++)
+            Array.Copy(bottom.Luminance, y * bottom.Width, luminance, (top.Height + y) * width, bottom.Width);
+        return (luminance, width, height);
+    }
+
+    /// <summary>
     /// A verdict from the global threshold skips the regional pass, so a shadowed readable symbol beside it is not looked for.
     /// </summary>
     [Test]
