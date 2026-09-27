@@ -33,7 +33,7 @@ Kept under the default publish: `TextAnalyzer` (SSE2), `ModuleBitPacker`, `Modul
 
 Some kernels record that a portable 128-bit tier was measured and left out (`Binarizer.cs`). Those measurements compared it with the 256-bit tier under the JIT, where the 256-bit tier always runs. The table makes such kernels visible per build class; revisiting them belongs to the later decisions above.
 
-ARM64 is in better shape by construction: AdvSimd is the ARM64 baseline, so NativeAOT keeps every AdvSimd tier, and every kernel above has one. Two things are unverified: whether `Dp` (ARMv8.2, required by `LuminanceConverter`'s tier) reads true under a default NativeAOT publish on linux-arm64, win-arm64 and osx-arm64, and whether any kernel has a `Vector256`-only tier with no AdvSimd sibling (`Vector256` is never accelerated on ARM64).
+ARM64 is in better shape by construction: AdvSimd is the ARM64 baseline, so NativeAOT keeps every AdvSimd tier, and every kernel above has one. Two things were unverified until the phase 1 report ran on osx-arm64: whether `Dp` (ARMv8.2, required by `LuminanceConverter`'s tier) reads true under a default NativeAOT publish, which it does there and is still open on linux-arm64 and win-arm64, and whether any kernel has a `Vector256`-only tier with no AdvSimd sibling (`Vector256` is never accelerated on ARM64), which none has.
 
 ## Scope
 
@@ -103,3 +103,24 @@ Lessons:
 - **The first form moved every dispatch onto the table, and the JIT refused it.** With each dispatch branching on `bool` properties declared in the table, ILC's code for fourteen dispatches matched the previous commit's once two predicates were written exactly as the dispatch had them (an SSSE3 check added in front of GFNI is one more run-time flag test under NativeAOT, and a combined predicate holding a run-time check stayed a call until marked for inlining). The JIT's inlining did not match, and no form of indirection a probe tried restored it (see What was already measured). The dispatch went back to its own reads, unchanged, and the table became something the source test checks rather than something the code reads.
 - **The report corrected the list made by reading the code**, in the two places it could: `EccBinaryEncoder` runs its 128-bit GFNI tier under a default publish, not SSSE3, and the Structured Append parity and boundary scanner have no x64 tier at all. Both were in the code; neither was visible without running it.
 - **A tier's name is the least it needs, and a kernel can ask more.** `EccBinaryDecoder` runs 256-bit GFNI on `Gfni.V256` alone, `EccBinaryEncoder` also asks for AVX2, and `Gfni.V256` stays true with `DOTNET_EnableAVX2=0`, so the two differ on a real configuration. The table keeps each kernel's own condition, and the test lets a condition read only the flags its tier allows.
+
+### 2026-09-28: phase 1 on ARM64
+
+Done:
+
+- Phase 1's exit re-run on osx-arm64 (Apple M2, SDK 10.0.301, ILCompiler 10.0.9) on .NET 8.0.31 and 10.0.9.
+- The suite (28,953 tests over both frameworks) passes under the default, `DOTNET_EnableHWIntrinsic=0` and `DOTNET_EnableArm64Dp=0`, skipping 387, 953 and 403, the same tests the previous commit skips; the 19 `SimdTiersTest` tests pass under all three on both frameworks. `DOTNET_EnableAVX=0` is an x64 knob and has no ARM64 counterpart (Lessons).
+- The default NativeAOT publish prints the report, and the JIT's agrees with it line for line on .NET 8 and 10 (.NET 8's from a scratch build of the report, since `FeatherQR.AotAnalysis` targets `net10.0` only):
+
+| Build | Scalar | AdvSimd, AdvSimd + `Dp` or 128-bit | 256-bit |
+|---|---|---|---|
+| NativeAOT and JIT, default | 1 | 27 | 0 |
+| JIT, `DOTNET_EnableArm64Dp=0` | 2 | 26 | 0 |
+| JIT, `DOTNET_EnableHWIntrinsic=0` | 28 | 0 | 0 |
+
+The default scalar kernel is `RmQRValueSegments`, whose only tier is SSE4.1; `DOTNET_EnableArm64Dp=0` adds `LuminanceConverter`. `Vector256` reads false, and every kernel that has a `Vector256` or AVX2 tier takes its AdvSimd or `Vector128` tier instead, in the order the table gives (the finder and alignment row masks try AdvSimd before `Vector128`, which finishes the tail). `Dp` reads true under the default publish, and still does with `IlcInstructionSet=armv8-a`, a baseline without the dot product, which suggests ILC checks it at run time rather than taking it from the target; linux-arm64 and win-arm64 stay for phase 2's reports.
+
+Lessons:
+
+- **On ARM64 the one knob short of turning everything off is `Dp`.** `DOTNET_EnableArm64AdvSimd=0` gives nothing in between: .NET 8 reads exactly as under `DOTNET_EnableHWIntrinsic=0`, and .NET 10 accepts and ignores it (AdvSimd and `Vector128` still read true), so a leg that sets it on .NET 10 runs the default while its name says otherwise. `DOTNET_EnableArm64Dp=0` does take effect, and it is the one that matters: it shows on an M2 what a Cortex-A72-class core, which lacks the dot product, runs. A NativeAOT binary ignores `DOTNET_EnableArm64Dp=0` and `DOTNET_EnableHWIntrinsic=0` alike, so that view is the JIT's only.
+- **The ARM64 report found a kernel with no ARM64 tier**, the converse of the two with no x64 tier: `RmQRValueSegments`, SSE4.1 only. It was in the table from the start and in no list.
