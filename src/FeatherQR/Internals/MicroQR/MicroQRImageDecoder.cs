@@ -36,6 +36,7 @@ internal static class MicroQRImageDecoder
 
     /// <summary>
     /// Maximum matrix decode attempts in the arbitrary-orientation failure path for one finder candidate.
+    /// A grid spends its two, as sampled and transposed, together, so the budget ends the path between grids.
     /// This bounds the multiplicative frame, orientation, size, scale and perspective searches while leaving enough for one complete orientation frame (all four axis assignments and four symbol sizes), and without making the result CPU-speed dependent.
     /// </summary>
     private const int MaxArbitraryOrientationDecodeAttempts = 10_000;
@@ -451,7 +452,7 @@ internal static class MicroQRImageDecoder
 
                 for (var size = 17; size >= 11; size -= 2)
                 {
-                    if (attemptsRemaining == 0)
+                    if (attemptsRemaining < 2)
                     {
                         charsWritten = 0;
                         info = bestInfo;
@@ -463,7 +464,7 @@ internal static class MicroQRImageDecoder
 
                     SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
                     var quietZone = new AffineQuietZone(originX, originY, uX, uY, vX, vY);
-                    attemptsRemaining--;
+                    attemptsRemaining -= 2;
                     var status = DecodeGrid(modules, new MatrixModules(size), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var attemptInfo);
                     if (status == DecodeStatus.Success)
                     {
@@ -472,10 +473,6 @@ internal static class MicroQRImageDecoder
                     }
                     TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
-                    if (attemptsRemaining == 0)
-                        continue;
-
-                    attemptsRemaining--;
                     var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredInfo);
                     if (mirroredStatus == DecodeStatus.Success)
                     {
@@ -581,7 +578,7 @@ internal static class MicroQRImageDecoder
                 {
                     foreach (var uFactor in factors)
                     {
-                        if (attemptsRemaining == 0)
+                        if (attemptsRemaining < 2)
                         {
                             charsWritten = 0;
                             info = bestInfo;
@@ -605,7 +602,7 @@ internal static class MicroQRImageDecoder
 
                         SampleGrid(luminance, width, height, threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
                         var quietZone = new AffineQuietZone(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY);
-                        attemptsRemaining--;
+                        attemptsRemaining -= 2;
                         var status = DecodeGrid(modules, new MatrixModules(size), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var attemptInfo);
                         if (status == DecodeStatus.Success)
                         {
@@ -614,10 +611,6 @@ internal static class MicroQRImageDecoder
                         }
                         TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
-                        if (attemptsRemaining == 0)
-                            continue;
-
-                        attemptsRemaining--;
                         var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredInfo);
                         if (mirroredStatus == DecodeStatus.Success)
                         {
@@ -676,7 +669,7 @@ internal static class MicroQRImageDecoder
             var perspectiveY = strengths[pyIndex] / size;
             for (var pxIndex = 0; pxIndex < strengths.Length; pxIndex++)
             {
-                if (attemptsRemaining == 0)
+                if (attemptsRemaining < 2)
                 {
                     charsWritten = 0;
                     info = bestInfo;
@@ -703,7 +696,7 @@ internal static class MicroQRImageDecoder
 
                 QRImageDecoder.SampleGrid(luminance, width, height, threshold, transform, size, modules);
                 var quietZone = new ProjectiveQuietZone(transform);
-                attemptsRemaining--;
+                attemptsRemaining -= 2;
                 var status = DecodeGrid(modules, new MatrixModules(size), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var attemptInfo);
                 if (status == DecodeStatus.Success)
                 {
@@ -712,10 +705,6 @@ internal static class MicroQRImageDecoder
                 }
                 TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
-                if (attemptsRemaining == 0)
-                    continue;
-
-                attemptsRemaining--;
                 var mirroredStatus = DecodeGrid(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, luminance, width, height, threshold, quietZone, destination, out charsWritten, out var mirroredInfo);
                 if (mirroredStatus == DecodeStatus.Success)
                 {
