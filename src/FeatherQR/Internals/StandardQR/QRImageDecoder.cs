@@ -21,10 +21,11 @@ namespace FeatherQR.Internals.StandardQR;
 ///    a. Low density, upright or at a right angle: a grid of module boundaries read off the timing patterns
 ///    b. Finder centres and module sizes
 ///    c. Finders' frame and dimension candidates
-///    d. Per dimension: alignment search, then grids in turn: mesh (version 14+, half its searched nodes found),
-///       four-point transform (alignment-anchored, else the parallelogram), coverage re-read (grey levels),
-///       then the parallelogram after an anchored grid, or the frame grid and its coverage re-read when nothing
-///       anchored and the frame foreshortens; neither at the runner-up
+///    d. Per dimension: alignment search, then grids in turn: mesh (version 14+, half its searched nodes found)
+///       when nothing anchored, four-point transform (alignment-anchored, else the parallelogram), coverage
+///       re-read (grey levels), mesh when the search anchored, then the parallelogram after an anchored grid,
+///       or the frame grid and its coverage re-read when nothing anchored and the frame foreshortens; neither
+///       at the runner-up
 /// 3. When that does not settle, a-d from each other corner whose timing patterns read
 /// 4. When the selected triple does not settle and more than three candidates were found, the next two triples: each a-d once, from the first of its corners whose timing patterns read, or skipped when none does
 /// </code>
@@ -503,30 +504,17 @@ internal static partial class QRImageDecoder
         versionDimension = 0;
         var transform = BuildGridTransform(luminance, width, height, threshold, grey, frame, dimension, moduleSize, out var alignmentAnchored);
 
-        // Version 14+ symbols carry an alignment lattice of 4×4 or more; when at least half of its searched nodes are detected, a piecewise mesh replaces the single global homography (local anchors absorb the measurement noise that otherwise scales with distance across large symbols).
-        Span<float> meshGridCoords = stackalloc float[MaxMeshNodes];
-        Span<float> meshNodeXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
-        Span<float> meshNodeYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
-        var usePiecewise = TryBuildSampleMesh(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, meshGridCoords, meshNodeXs, meshNodeYs, out var meshSize, out _, out _);
-
         var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
         try
         {
             var modules = rented.AsSpan(0, dimension * dimension);
 
-            if (usePiecewise)
+            // Nothing anchored the fourth corner, so the transform below is the finders' parallelogram; the rest of the alignment lattice anchors the mesh
+            if (!alignmentAnchored)
             {
-                SampleGridPiecewise(luminance, width, height, threshold, meshGridCoords.Slice(0, meshSize), meshNodeXs, meshNodeYs, meshSize, dimension, modules);
-                var meshStatus = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var meshTransposed);
+                var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, modules, destination, out charsWritten, out info);
                 if (IsSettled(meshStatus))
-                {
-                    // The corners follow the mesh, because the mesh is what decoded: the global fit's fourth anchor is unvalidated on this path, and on large symbols under keystone it can sit on a neighbouring alignment pattern 18-30 modules from the truth while the mesh reads the symbol cleanly.
-                    if (meshStatus == DecodeStatus.Success)
-                        info = info.WithCorners(SymbolGeometry.FromTransform(MeshAnchoredTransform(topLeft, topRight, bottomLeft, meshGridCoords, meshNodeXs, meshNodeYs, meshSize, dimension), dimension, dimension, meshTransposed));
                     return meshStatus;
-                }
-
-                // Mesh fallback: a partially-detected mesh (unfound nodes keep extrapolated predictions) can sample worse than the single global homography, retrying globally guarantees the mesh path never regresses below it. Failure-path cost only.
             }
 
             SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
@@ -554,6 +542,28 @@ internal static partial class QRImageDecoder
                     return coverageStatus;
                 }
             }
+
+            // A plane in perspective is one projective map, which the anchored transform fits and the mesh only interpolates, so here the mesh comes second: for a surface bent off the plane, or a fourth anchor found on another mark.
+            // In its own buffer: the finder grids below compare against the first sampling.
+            if (alignmentAnchored)
+            {
+                var meshRented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
+                try
+                {
+                    var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, meshRented.AsSpan(0, dimension * dimension), destination, out var meshCharsWritten, out var meshInfo);
+                    if (IsSettled(meshStatus))
+                    {
+                        charsWritten = meshCharsWritten;
+                        info = meshInfo;
+                        return meshStatus;
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(meshRented, clearArray: false);
+                }
+            }
+
             if (!finderFallback || (!alignmentAnchored && frame.IsAffine))
                 return status;
 
@@ -575,6 +585,27 @@ internal static partial class QRImageDecoder
         {
             ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
+    }
+
+    /// <summary>
+    /// The grid sampled through the mesh over the alignment lattice and decoded, or <see cref="DecodeStatus.NotDetected"/> without sampling when no mesh is kept (<see cref="TryBuildSampleMesh"/>).
+    /// </summary>
+    private static DecodeStatus DecodeThroughMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
+        charsWritten = 0;
+        info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
+        Span<float> gridCoords = stackalloc float[MaxMeshNodes];
+        Span<float> nodeXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
+        Span<float> nodeYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
+        if (!TryBuildSampleMesh(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out var meshSize, out _, out _))
+            return DecodeStatus.NotDetected;
+
+        SampleGridPiecewise(luminance, width, height, threshold, gridCoords.Slice(0, meshSize), nodeXs, nodeYs, meshSize, dimension, modules);
+        var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
+        // The corners follow the mesh, because the mesh is what decoded: the four-point transform had no fourth anchor, or did not read
+        if (status == DecodeStatus.Success)
+            info = info.WithCorners(SymbolGeometry.FromTransform(MeshAnchoredTransform(topLeft, topRight, bottomLeft, gridCoords, nodeXs, nodeYs, meshSize, dimension), dimension, dimension, transposed));
+        return status;
     }
 
     /// <summary>

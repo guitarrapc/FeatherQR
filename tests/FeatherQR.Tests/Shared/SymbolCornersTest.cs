@@ -81,17 +81,21 @@ public class SymbolCornersTest
 
     /// <summary>
     /// A mirrored capture decodes on the transposed retry, and the corner order has to
-    /// carry that on both mappings: the global fit (version 2) and the piecewise mesh
-    /// (version 20 under keystone), which reaches the mesh's own attach site with its own
-    /// transposed flag. Review finding: without the second row a mesh site that dropped
-    /// the flag passed the suite.
+    /// carry that on every mapping: the global fit (version 2), the anchored four-point
+    /// transform (version 20 under keystone), and the piecewise mesh, which reads version 20
+    /// once its bottom-right alignment pattern is lost and attaches the corners with its own
+    /// transposed flag. Review finding: without a mesh row a mesh site that dropped the flag
+    /// passed the suite.
     /// </summary>
     [Test]
-    [Arguments(2, 0f)]
-    [Arguments(20, 0.06f)]
-    public async Task QR_Mirrored_WindingReverses(int version, float tilt)
+    [Arguments(2, 0f, false)]
+    [Arguments(20, 0.06f, false)]
+    [Arguments(20, 0.06f, true)]
+    public async Task QR_Mirrored_WindingReverses(int version, float tilt, bool alignmentPatternLost)
     {
         using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version);
+        if (alignmentPatternLost)
+            EraseBottomRightAlignmentPattern(flat, version);
         var matrix = Keystone(flat, tilt).PreConcat(MirrorInPlace(flat));
         using var scene = Compose(flat, matrix);
 
@@ -101,10 +105,8 @@ public class SymbolCornersTest
 
     /// <summary>
     /// A version with an alignment pattern gets a true four-point fit, held to half a module at
-    /// each tilt below. The 20, 25 and 30 rows sample through the mesh, and are where the global
-    /// fit's anchor locks onto a neighbouring alignment pattern 18 to 30 modules away, so they pin
-    /// that the corners follow whatever mapping decoded. Version 1 has no alignment pattern and is
-    /// covered by the flat and rotated cases only.
+    /// each tilt below; from version 14 on it is still the anchored transform that reads, not the
+    /// mesh. Version 1 has no alignment pattern and is covered by the flat and rotated cases only.
     /// </summary>
     [Test]
     [Arguments(2, 0.08f)]
