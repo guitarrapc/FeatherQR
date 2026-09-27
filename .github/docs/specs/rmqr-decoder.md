@@ -20,9 +20,115 @@ Behavior: version from the physical dimensions → both format-information copie
 
 Input: an `SKBitmap`, or a grayscale luminance span with width and height (`TryDecodeImage`), with an allocation-free span-destination variant (size it with `GetMaxDecodedLength(RmQRVersion.R17x139)` when the version is unknown).
 
-Behavior: shared Otsu threshold and finder candidates → local grid frames around the finder (four right angles × transpose for mirroring, then the angular finder-axis sweep for arbitrary rotation) → the finder-side format copy is sampled in the frame, which yields the version and therefore the symbol width and height before any full grid is sampled → the sub-finder is located near the corner the version predicts and anchors the far end of the symbol (global scale and rotation in closed form) → affine attempts, then a bounded projective search (two projective coefficients × row-axis shear, the column scale and rotation re-solved from the sub-finder each time, the row pitch carried from the frame's own scale rather than solved, gated by the sub-finder-side format copy and the edge timing patterns) → this matrix decoder → one inverted retry → the shared regional binarization of each polarity, decoded the same way, when both polarities read nothing.
+Behavior: in each of the [shared image decode passes](qrcode-symbologies.md#image-decode-passes) (the global threshold, the inverted image, the regional binarization of each polarity, and a sweep at the grey levels' midpoint for a polarity whose global pass found no finder), the ranked finder candidates → local grid frames around the finder (four right angles × transpose for mirroring, then the angular finder-axis sweep for arbitrary rotation) → in each frame, at low density, a table of module boundaries read off the timing lines and decoded on its own first; then the finder-side format copy is sampled in the frame, which yields the version and therefore the symbol width and height before any grid is fitted → the sub-finder is located near the corner the version predicts and anchors the far end of the symbol (global scale and rotation in closed form) → affine attempts, then, once one gets past its format information, a bounded projective search (two projective coefficients × row-axis shear, the column scale and rotation re-solved from the sub-finder each time, the row pitch carried from the frame's own scale rather than solved, gated by the sub-finder-side format copy and the edge timing patterns) → this matrix decoder, with a coverage re-read on grey edges. The unrefined frame is decoded when no anchored grid gets past its format information, as when the sub-finder is not found. The stages and their order are drawn in the [spec-to-code map](rmqr-spec-map.md#image-detection-and-sampling).
 
 On success the result carries the symbol's four corners in image coordinates (`RmQRCodeDecodeInfo.Corners`; contract in [qrcode-symbologies.md](qrcode-symbologies.md#public-api-direction)), taken from the winning frame's transform. The frames carry a mirrored capture in their axes rather than by transposing the sampled grid, so that transform is always in symbol order and the corners need no swap. The two far corners (top-right and bottom-left) carry the residual of the bounded perspective search; which is worse depends on the version and tilt, so the first draft's "top-right is the worst" was as wrong as the second's "bottom-left". Measured at 8 px per module against the rendered scene (a payload sweep gives bit-identical numbers, so it is the transform, not the data; figures from the shipped code, an earlier set was taken with a half-pixel shift since removed): R11x59 at 2 % top-right 0.90 module and bottom-left 0.87, at 3 % bottom-left 1.24, at 4 % bottom-left 1.22, with the anchors within 0.5 (top-left) and 0.25 (bottom-right), and 4 to 6 `ErrorsCorrected` on a noise-free render, meaning the accepted grid already mis-samples a few modules; R7x43 at 4 % top-right 1.04 with even the anchors drifting (top-left 0.93, bottom-right 0.72); R17x139 under 0.65 throughout (0.64 at 2 %, under 0.5 from 3 %); left/right-shrunk keystones under 0.4 everywhere; R11x59 keeps decoding to 8 % with the bottom-left at 1.4. The reported left edge on R11x59 at 4 % leans 3.6° where the true lean is 12°: the shear search covers the true angle, but `TryPerspectiveVariants` returns the first transform that decodes, and a wrong shear compensated by the projective terms decodes fine under ECC M. The contract therefore states about a module for rMQR under perspective and a module and a half from 2 % up (at 2 % nine versions pass a module, worst R7x99 1.22 and R15x99 1.19; only at 1 % does everything stay under 0.95, so 2 % is the real threshold and it is not only the short symbols); a sub-degree refit of the winning frame after decode would tighten it and is a follow-up.
+
+### Image decode figures
+
+These figures show how the decoder reads each kind of input. [decode_figures.cs](../../../tools/decode_figures.cs) draws them from the library's own symbols and decodes each input through the public API, so no figure can show a read that does not happen. Rerun it when the pipeline changes.
+
+#### Stage by stage
+
+A clean R11x43 on the main path.
+
+![Stage by stage: luminance, global threshold, finder candidates, finder-side format copy, sub-finder, isotropic grid](../images/rmqr/decode-overview.svg)
+
+- **Luminance:** the grey input.
+- **Global threshold:** one Otsu split of the histogram into ink and paper.
+- **Finder candidates:** patterns that read 1:1:3:1:1 along a line through their centre and pass the cross-checks, most confirmed first.
+- **Finder-side format copy:** read beside the finder before any grid is fitted. It names the version, and so the width and height.
+- **Sub-finder:** searched for near the corner the version predicts.
+- **Isotropic grid:** one turn and one scale take the finder centre to the sub-finder centre, and the grid is sampled at every module.
+
+#### Reading the input figures
+
+Each figure shows the input, with what the decoder finds drawn over it, above the path through the [image-level stages](rmqr-spec-map.md#image-detection-and-sampling). Every pass runs this path: the global threshold, the inverted image, the regional pass, then the midpoint sweep (see [image decode passes](qrcode-symbologies.md#image-decode-passes)). A mirrored capture is read by a frame with its axes swapped; no grid is read transposed.
+
+Green and grey boxes run for this input; green marks the stages it depends on.
+
+- **Key** (green): without this stage, the input would not read, or would read only after more grids fail than with it. A grid is one sampling; its coverage read is the same grid.
+- **Runs** (grey): runs as for any input.
+- **Only if needed** (dashed): runs only when the grids before it fail.
+- **Skipped** (faded): does not run for this input.
+
+The numbers on the boxes match the numbered notes.
+
+#### Clean
+
+An upright, crisp R11x77.
+
+![Clean R11x77 and its path through the pipeline](../images/rmqr/decode-input-clean.svg)
+
+The format copy reads at the measured scale and names R11x77. The sub-finder is where that version puts it, and the isotropic grid anchored on it reads first. With only two grey levels, the grey-level stages stay off, and at this density the boundary table is not used.
+
+#### Rotated or mirrored
+
+An R11x77, turned and seen in a mirror.
+
+![Rotated and mirrored R11x77 and its path through the pipeline](../images/rmqr/decode-input-rotated.svg)
+
+1. **Arbitrary orientation:** the axis-aligned frames sample no grid. The angular sweep finds the finder's own axes, and one of its frames, with the axes swapped, reads the format copy; that is how the mirror is read.
+2. **Sub-finder:** found near the corner the version predicts, and refined to its centre.
+3. **Isotropic grid:** one turn and one scale from the finder to the sub-finder. It reads.
+
+#### Keystone distortion
+
+An R11x77 in perspective, its top edge shortened as far as the tests go.
+
+![Keystoned R11x77 and its path through the pipeline](../images/rmqr/decode-input-keystone.svg)
+
+1. **Sub-finder:** found more than a module from where the version predicts it, and refined to its centre. Every later grid is anchored on it.
+2. **Perspective search:** the isotropic grid (dashed) and the anisotropic grid fail. The search then tries two projective coefficients and the row axis's shear. Each candidate must first pass the sub-finder-side format copy and the timing rows along the top and bottom edges; only then is a grid sampled. Here the first grid sampled reads.
+3. **Matrix decode:** Reed-Solomon corrects the data modules the grid still gets wrong; without correction, more grids fail first.
+
+The perspective search starts only after the isotropic or the anisotropic grid gets past its format information.
+
+#### Non-square modules
+
+An upright R11x77 whose modules are wider than tall.
+
+![R11x77 with non-square modules and its path through the pipeline](../images/rmqr/decode-input-non-square.svg)
+
+1. **Axis-aligned frames:** the module size is measured along each axis on its own, from a dark-light-dark run through the finder centre spanning six modules. Without the two sizes, a sweep frame reads, after one more failed grid.
+
+The isotropic grid scales the frame uniformly, so it keeps both sizes and reads first; the anisotropic grid is not needed.
+
+#### Grey edges
+
+An anti-aliased R11x77 at about one and a half pixels per module, slightly turned.
+
+![Anti-aliased R11x77 and its path through the pipeline](../images/rmqr/decode-input-grey-edges.svg)
+
+1. **Sub-finder:** found several modules from where the version predicts it, and refined to its centre.
+2. **Isotropic grid:** its turn from the finder to the sub-finder follows the symbol's, which the axis-aligned frame does not.
+3. **Coverage re-read:** the grid fails but gets past its format information, so it is read again with each module's luminance interpolated at its centre and split halfway between the two levels. That read succeeds.
+
+#### Hidden sub-finder
+
+An upright R11x77 whose sub-finder is painted out, as damage or a label would.
+
+![R11x77 with its sub-finder painted out, and its path through the pipeline](../images/rmqr/decode-input-hidden-sub-finder.svg)
+
+1. **Unrefined frame:** no sub-finder is found, so no grid can be anchored on one. The frame at the scale that read the format copy is sampled on its own, and it reads.
+
+#### Snapped scale
+
+A crisp R11x77 at a non-integer scale, with modules snapped to whole pixels.
+
+![R11x77 at a snapped scale and its path through the pipeline](../images/rmqr/decode-input-snapped.svg)
+
+1. **Finder-side format copy:** the finder measures a scale a few percent over the symbol's pitch, and at that scale the copy gives no word. At a scale a few percent smaller it reads and names the version.
+2. **Sub-finder:** found about a module from where the version predicts it. The isotropic grid anchored on it corrects the scale and reads. Without it, the unrefined frame reads, with corrections, after one more failed grid.
+
+#### Low density
+
+A crisp R11x77 at a little over one pixel per module.
+
+![R11x77 at low density and its path through the pipeline](../images/rmqr/decode-input-low-density.svg)
+
+1. **Finder candidates:** the row-strided scan misses the finder, and the sweep of every row finds it.
+2. **Low density:** each module is one or two whole pixels, which a fitted grid rarely follows. The module boundaries are read along the top row and the left column, and each module is sampled between its own boundaries. The width and height they count name the version, and the grid reads before the format copy is tried. Two-pixel modules are marked.
 
 ### Supported
 
@@ -33,7 +139,7 @@ On success the result carries the symbol's four corners in image coordinates (`R
 | Data modes | Numeric, Alphanumeric, Byte (UTF-8 / ISO-8859-1 heuristics as the other symbologies), Kanji (JIS X 0208; decode only), ECI headers 1 / 3 / 26 / 27 |
 | Quiet zone | Matrix: any light border, uniform or not (dark bounding box = core). Image: 1, 2 and 4 modules verified; the finder scan needs some light margin around the finder |
 | Error correction | Reed-Solomon per block at full strength ⌊ecc/2⌋ codewords per block, corrections reported |
-| Format information | Matrix: either copy alone suffices (≤ 3 bit errors per copy corrected; only copies naming the version the dimensions give count, the closer of those wins, so a copy miscorrected toward another version's word cannot veto the valid one). Image: the finder-side copy must be readable (≤ 3 bit errors); it is what names the version before any grid is sampled, the sub-finder-side copy is a consistency gate on the perspective path |
+| Format information | Matrix: either copy alone suffices (≤ 3 bit errors per copy corrected; only copies naming the version the dimensions give count, the closer of those wins, so a copy miscorrected toward another version's word cannot veto the valid one). Image: the finder-side copy must be readable (≤ 3 bit errors) to name the version before any grid is fitted (at low density the counted width × height names it instead), and the sub-finder-side copy is a consistency gate on the perspective path; each sampled grid then goes through the matrix decoder, which arbitrates both copies as on the matrix path |
 | Output | `string` (allocates the result only) or `Span<char>` (allocation-free steady state, image path included) |
 | Image envelope | Clean renders of every version × ECC at 3-13 px/module and non-integer scales, a shading gradient or a soft-edged shadow over part of the symbol (images at least 33 px a side; measured in [standardqr-decoder.md](standardqr-decoder.md)), every version at 1.5-6 px/module in four rotations, and pixel-aligned renders from 1 px/module; non-square modules within the envelope shared with the other symbologies ([qrcode-symbologies.md](qrcode-symbologies.md)); translation; right-angle and arbitrary rotation (every integer degree verified for R7x43 / R13x77); mirroring; reflectance reversal; JPEG q60, low contrast, additive noise; extreme aspect ratios; keystone 2 % and 4 % along either axis up to R17x139, also combined with 30° rotation or mirroring; the 148-symbol external PNG corpus |
 
@@ -67,7 +173,7 @@ On success the result carries the symbol's four corners in image coordinates (`R
 | Finder candidate scan performance | Reference strideless sweep first (it was sized for Micro QR), then the benchmark-driven follow-up (2026-08-17), corrected in review (2026-08-18): `FindCandidates` is a plain row-strided scan (stride 4) with no fallback of its own, and the image decoders re-run the whole decode through `FindCandidatesFullSweep` when the strided pass read nothing. The first design put the fallback inside the scan and triggered it on "no candidate confirmed on two or more rows", which is a statement about the image rather than about the symbol — a second QR code or a noise artefact satisfies it on the real symbol's behalf — and a differential sweep measured the loss. Moving the trigger to the caller makes detection a strict superset of a full sweep's. Shared with the Micro QR image decoder | The strideless retry costs a second decode pipeline on every failing image, and it re-runs the per-candidate work even when the sweep found no candidate the strided pass had not; comparing the two candidate lists first would skip it |
 | Luminance conversion performance | Reference per-pixel loop first, then the benchmark-driven fast path (follow-up, 2026-08-17): an AVX2 kernel at 32 px per iteration, bit-exact via the `pmaddubsw` weight split `[R,G,G,B] × [77,51,99,29]` (both pairs sum to 128, the BT.601 weights sum to 256), with the row remainder taken by 8-px blocks plus one overlapping block, and alpha handled in-vector. Then the ARM64 tier (2026-08-19): a NEON kernel at 16 px per iteration built on UDOT, which sums `77R + 150G + 29B` for four whole pixels without deinterleaving and weights the 4th byte 0 so RGB888x padding is free. It vectorizes *every* alpha shape including arbitrary partial straight alpha — the case the AVX2 tier left scalar — by classifying each row once and latching the mode, so four row modes ship rather than two. Shared by all three symbologies | The AVX2 tier still drops to the scalar formula for the remainder of a partial-straight-alpha row, which the NEON tier vectorizes — worth closing with the exact identity `x / 255 == ((x + 1) * 257) >> 16` at roughly 3x the ops of the opaque path. Also a layout beyond BGRA / RGBA / RGB888x, or an ARM64 core without the dot-product extension becoming worth a non-UDOT kernel |
 | Grid sampling performance | Reference scalar sampler first, then three tiers (follow-up, 2026-08-20): `SampleGridSimd128` (projective), `SampleGridSimd128Affine`, and the scalar loop as both parity reference and sub-Vector128 fallback. The affine tier is not a bet on typical input — `TryDecodeFrame` builds every frame before the perspective search with `perspectiveX = perspectiveY = 0`, so the denominator is exactly `1f` and dropping both divisions changes no sampled byte. 2.4-3.8x on the kernel, -14 to -16 % on span image decode. Not shared with the Standard QR row kernel: that one multiplies by a single reciprocal where this one divides twice, so the two do not sample identical bytes | The gather is the floor (0.70 ns/module, and NEON has no gather instruction), so the next step is a different data layout rather than a better kernel. Separately, axis-aligned sampling is a measured 6-10 % still on the table — see the parent plan, it is cross-symbology work rather than an rMQR item |
-| Too-small destination is terminal per finder candidate | A caller buffer too small for the payload short-circuits the remaining attempts for the candidate that produced it, rather than the whole decode: sizing probes cost 250-500x a sized call otherwise (73 ms against 0.2 ms at R13x99), while scoping it to the candidate preserves multi-symbol semantics. The inverted retry gates on `IsTerminal`, not `== Success` — gating on Success cost a second full pipeline (measured 2.1x) on a probe-for-required-size call — and `DestinationTooSmall` outranks every other failure in `TrackBestFailure` in both symbologies. This rests on `SegmentDecoders` checking the declared character count against the remaining bits BEFORE it checks the caller's buffer, an ordering those decoders must keep | Accepted residual: 2 of 11,200 fuzzed noise frames report `DestinationTooSmall` with a one-character destination on an image holding no symbol. Revisit if a caller reports growing its buffer for an image with nothing in it |
+| Too-small destination is terminal per finder candidate | A caller buffer too small for the payload short-circuits the remaining attempts for the candidate that produced it, rather than the whole decode: sizing probes cost 250-500x a sized call otherwise (73 ms against 0.2 ms at R13x99), while scoping it to the candidate was meant to keep multi-symbol reads. It keeps them only until such a read becomes the scan's result: after that each later candidate is cut short (see Ranked finder candidates in the [spec-to-code map](rmqr-spec-map.md#image-detection-and-sampling)), a defect whose fix is open. The inverted retry gates on `IsTerminal`, not `== Success` (gating on Success cost a second full pipeline, measured 2.1x, on a probe-for-required-size call), and `DestinationTooSmall` outranks every other failure in `TrackBestFailure` in both symbologies. This rests on `SegmentDecoders` checking the declared character count against the remaining bits BEFORE it checks the caller's buffer, an ordering those decoders must keep | Accepted residual: 2 of 11,200 fuzzed noise frames report `DestinationTooSmall` with a one-character destination on an image holding no symbol. Revisit if a caller reports growing its buffer for an image with nothing in it. The fix for the cut-short candidates also updates this row, the map's rows and the decoder's class remarks and comments |
 | Codeword extraction performance | Reference per-module walk first (Phase 6), then the benchmark-driven fast path (follow-up, 2026-08-17): per-version tables built once by the encoder's own predicates (walk order with the mask fused, plus a PEXT/PDEP descriptor per column pair), consumed by three tiers — a bit-plane kernel (transpose the grid into per-column bit planes, then one PEXT + PDEP per column) on x64 with AVX2 and fast BMI2, an ARM64 pair-plane kernel (2026-08-20), and a portable table walk everywhere else. ARM64 has no PEXT/PDEP, so the deposit step is designed away rather than emulated: one 32-bit lane holds a whole column *pair*, which already is that pair's output field with the function modules still in it, and a per-version run table compresses them out. The reference stays the source of truth for the tables and the naive reference pins all three tiers | Extraction stops being a material share of matrix decode, or a symbol shape appears whose data mask is not a small number of runs per pair |
 
 ## Lessons learned
@@ -93,3 +199,4 @@ On success the result carries the symbol's four corners in image coordinates (`R
 - A fast path that only handles the regular case leaves its own guard as the bottleneck: splitting column pairs into "clean" (both columns data on every row) and "irregular" covered only 39-45 % of the bits on the 27-wide versions, so the transpose was paid in full while most bits still went through a per-bit loop, and those versions regressed against the plain table walk. Because PEXT and PDEP take arbitrary masks, an irregular pair is the same two instructions with different constants; deleting the split removed the regression and was the largest single win after the tables.
 - A test that derives its expectation from the API under test stops being a test of it. `Damage_WithinCorrectionCapacity` originally flipped `ECCPerBlock / 2` codewords per block — the Reed-Solomon strength — and so was the only thing pinning "rMQR reserves no `p`". Rewriting it to call `GetErrorCorrectionCapacity` made it self-consistent with any wrong capacity: injecting `capacity - 1` left all 133 robustness tests green while the decoder silently refused corrections the code could make, and only the constants pin caught it. Damage tests must be written against the property being claimed (what RS can do), not against the constant that claims it.
 - An unread specification table stays unread no matter how the code is restructured. Moving the capacity rule into a named function and a 64-row table made the decoder better factored but added no knowledge, and the doc changes that came with it turned an honest open question into an asserted fact whose stated source (Table 8) had never been read. What actually closed the gap was measuring the reference implementation (`probe-rmqr-capacity`, both directions, 64/64). Restructuring is not evidence; record the provenance you actually have and keep the revisit trigger pointed at the evidence you still lack.
+- The anisotropic grid almost never reads inside the measured envelope. Non-square modules are handled before it: the frame measures each axis on its own, and the isotropic grid scales that frame uniformly. In the tests' non-square cases (8 × 10 and 12 × 8 px modules) and on upright anti-aliased renders from 1.5 to 4.5 px/module it never decided. It decided only at a few crisp row pitches between 1.65 and 1.95 px, with columns of 2.5 to 4 px, and not because of the modules' shape: there the sub-finder lands slightly off on the snapped rows, the isotropic grid turns 0.2 to 0.5° and fails, and the anisotropic grid, which has no rotation, reads. It still matters as a gate, since the perspective search starts only after the isotropic or the anisotropic grid gets past its format information. Found by switching stages off while choosing the figure inputs (2026-09-27). Whether it earns its place is open.

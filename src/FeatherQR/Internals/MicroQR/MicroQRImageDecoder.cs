@@ -11,17 +11,19 @@ namespace FeatherQR.Internals.MicroQR;
 /// Decodes a Micro QR code from a grayscale image: clean, screen-rendered or scanned inputs, including a lighting gradient across the symbol.
 /// </summary>
 /// <remarks>
-/// Pipeline:
+/// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
+/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first; only a successful decode ends it early, and otherwise it reports the result that went furthest.
+/// Each grid is decoded through the matrix level as soon as it is sampled, keeping only the corrections its structure earns (<see cref="MicroQRGridEvidence"/>), then transposed unless it decoded successfully.
+/// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
-/// 1. Global binarization threshold (Otsu, shared with Standard QR)
-/// 2. Finder pattern candidates (shared 1:1:3:1:1 scan; ALL candidates, not best three)
-/// 3. Fast axis-aligned grid sampling anchored on the single finder
-/// 4. Failure-path angular finder-axis recovery, local center/scale refinement and
-///    a bounded projective search using the shared Standard QR sampler
-/// 5. Every version size (M4..M1) × orientation × transpose (mirror) is tried
-/// 6. Matrix decoding arbitrates: format info is cross-checked against the matrix
-///    size, and a grid may use only the corrections its timing patterns, format
-///    word and quiet zone earn (MicroQRGridEvidence), at most the ISO Table 9 cap
+/// 1. Module sizes and centre of the candidate (dropped under one pixel per module)
+/// 2. Axis-aligned path, per right-angle orientation:
+///    a. Each size, M4 down to M1: affine grid; coverage re-read (grey levels, exact format word)
+///    b. Timing frame: the grid fitted to the timing patterns
+///    c. Low density (larger module size under 1.75 px): module boundaries read off the timing patterns
+/// 3. Arbitrary orientation, per axis frame from an angular sweep and per right-angle orientation, within an attempt budget:
+///    each size, M4 down to M1: affine grid; coverage re-read; once a grid gets past its format information,
+///    the scale search, then the perspective search, each of their grids with its coverage re-read
 /// </code>
 /// A Micro QR symbol has a single finder pattern, so orientation cannot be derived from finder geometry the way three finders allow for Standard QR.
 /// The detector therefore recovers the finder's local axes from angular dark-light-dark runs and searches the two projective coefficients that remain unknown.
@@ -142,7 +144,7 @@ internal static class MicroQRImageDecoder
     }
 
     /// <summary>
-    /// Strided finder scan first, then a full sweep when nothing decoded.
+    /// Strided finder scan first, then a full sweep when nothing was read.
     /// </summary>
     /// <remarks>
     /// Mirrors the rMQR image decoder: the widening trigger has to be a question about the symbol, and only the caller can ask it.

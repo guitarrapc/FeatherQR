@@ -12,15 +12,21 @@ namespace FeatherQR.Internals.StandardQR;
 /// Decodes a QR code from a grayscale image: clean, screen-rendered or scanned inputs, including arbitrary rotation, mirroring, reflectance reversal, a lighting gradient across the symbol and mild perspective distortion.
 /// </summary>
 /// <remarks>
-/// Pipeline:
+/// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, then the regional binarization, which a verdict on the content from either earlier pass also skips.
+/// Each grid is decoded through the matrix level as soon as it is sampled, then transposed unless that settles it; the first grid that settles ends the pass.
+/// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
-/// 1. Global binarization threshold (Otsu's method over the luminance histogram); a regional binarization when neither polarity reads
-/// 2. Finder pattern detection (1:1:3:1:1 scan + cross checks, a column allowed to be as much longer or shorter than its row as a finder in perspective is); when the selected triple fails, up to two other triples, best confirmed first, each once its timing patterns read
-/// 3. Orientation from the three finder centers (rotation-invariant)
-/// 4. Dimension estimate from center distances and the module sizes at both ends of each finder line
-/// 5. Bottom-right alignment pattern search where the finders' frame puts it: their centres and how the module size changes along the two finder lines (version 2+; the parallelogram, then that frame, when nothing anchors the corner)
-/// 6. Perspective grid sampling into a module matrix (4-point projective transform)
-/// 7. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
+/// 1. Finder triple
+/// 2. Corner from the triangle, and from that corner:
+///    a. Low density, upright or at a right angle: a grid of module boundaries read off the timing patterns
+///    b. Finder centres and module sizes
+///    c. Finders' frame and dimension candidates
+///    d. Per dimension: alignment search, then grids in turn: mesh (version 14+, half its searched nodes found),
+///       four-point transform (alignment-anchored, else the parallelogram), coverage re-read (grey levels),
+///       then the parallelogram after an anchored grid, or the frame grid and its coverage re-read when nothing
+///       anchored and the frame foreshortens; neither at the runner-up
+/// 3. When that does not settle, a-d from each other corner whose timing patterns read
+/// 4. When the selected triple does not settle and more than three candidates were found, the next two triples: each a-d once, from the first of its corners whose timing patterns read, or skipped when none does
 /// </code>
 /// Out of scope (documented, by design): strong perspective where the four-point transform no longer models the surface, hard-edged shadows, blur, and multiple QR codes per image.
 /// </remarks>
@@ -304,7 +310,7 @@ internal static partial class QRImageDecoder
         public float TopLeft => float.IsNaN(TopLeftAlongU) ? TopLeftAlongV : float.IsNaN(TopLeftAlongV) ? TopLeftAlongU : (TopLeftAlongU + TopLeftAlongV) / 2f;
     }
 
-    /// <summary>The dimension candidates in turn: the estimate, the timing count, the version information, the runner-up.</summary>
+    /// <summary>The dimension candidates in turn: the estimate, the timing count, the version information, the timing match, the runner-up.</summary>
     private static DecodeStatus DecodeFromFinders(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
