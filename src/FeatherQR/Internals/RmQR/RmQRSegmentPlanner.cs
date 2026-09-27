@@ -36,11 +36,8 @@ internal static class RmQRSegmentPlanner
     /// </summary>
     private const int MemoCapacity = 8;
 
-    // Narrowest count indicator any version uses, per mode (ISO/IEC 23941 Table 3;
-    // pinned by RmQRSegmentPlannerUnitTest). A cost run at these widths is a lower
-    // bound for every version, because widening a count indicator can only raise the
-    // price of the run that carries it, and the minimum over plans of a pointwise
-    // larger cost is itself larger.
+    // Narrowest count indicator any version uses, per mode (ISO/IEC 23941 Table 3; pinned by RmQRSegmentPlannerUnitTest).
+    // A cost run at these widths is a lower bound for every version, because widening a count indicator can only raise the price of the run that carries it, and the minimum over plans of a pointwise larger cost is itself larger.
     private const int MinCountBitsNumeric = 4;
     private const int MinCountBitsAlnum = 3;
     private const int MinCountBitsByte = 3;
@@ -61,9 +58,8 @@ internal static class RmQRSegmentPlanner
         if (TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var version, out useSegments))
             return version;
 
-        // Neither one mode nor a mixed plan fits: the single-mode selector owns the
-        // message. Only the Numeric shortcut can reach here with a requested version,
-        // and it wants that wording, so forwarding it unchanged is correct.
+        // Neither one mode nor a mixed plan fits: the single-mode selector owns the message.
+        // Only the Numeric shortcut can reach here with a requested version, and it wants that wording, so forwarding it unchanged is correct.
         return Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
     }
 
@@ -77,13 +73,11 @@ internal static class RmQRSegmentPlanner
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
 
-        // Validate before any planning so argument errors keep their current type,
-        // message and precedence; the selector re-validates on the paths reaching it.
+        // Validate before any planning so argument errors keep their current type, message and precedence; the selector re-validates on the paths reaching it.
         RmQRVersionSelector.ValidateFitArguments(eccLevel, fitStrategy, height, requestedVersion, charset);
 
-        // All-Numeric content is already at the optimum: splitting a Numeric run never
-        // lowers its payload and every extra run adds a header. Numeric-only — an
-        // Alphanumeric or Byte payload can still hide a digit run worth splitting off.
+        // All-Numeric content is already at the optimum: splitting a Numeric run never lowers its payload and every extra run adds a header.
+        // Numeric-only — an Alphanumeric or Byte payload can still hide a digit run worth splitting off.
         if (mode == EncodingMode.Numeric)
             return RmQRVersionSelector.TrySelect(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height, out selected);
 
@@ -91,29 +85,21 @@ internal static class RmQRSegmentPlanner
 
         if (requestedVersion is { } requested)
         {
-            // Single mode already fits: mixing cannot shrink a fixed version, so the
-            // stream stays exactly as it is today.
+            // Single mode already fits: mixing cannot shrink a fixed version, so the stream stays exactly as it is today.
             selected = requested;
             if (Fits(requested, eccLevel, mode, dataLength, charset))
                 return true;
 
-            // One candidate, so pricing it here would decide what building the plan
-            // decides anyway; TryBuildPlan rejects a plan the version cannot hold and
-            // the caller falls back to the single-mode selector, which owns the error.
+            // One candidate, so pricing it here would decide what building the plan decides anyway; TryBuildPlan rejects a plan the version cannot hold and the caller falls back to the single-mode selector, which owns the error.
             useSegments = true;
             return true;
         }
 
-        // Ceiling: the version single-mode encoding lands on, when there is one. When
-        // there is none the scan runs to the end instead of stopping early, because
-        // content that overflows every version in one mode can still fit once the
-        // modes are mixed (100 letters followed by 100 digits is 200 Byte-mode
-        // characters, 50 over the largest capacity, but 1157 bits when split).
+        // Ceiling: the version single-mode encoding lands on, when there is one.
+        // When there is none the scan runs to the end instead of stopping early, because content that overflows every version in one mode can still fit once the modes are mixed (100 letters followed by 100 digits is 200 Byte-mode characters, 50 over the largest capacity, but 1157 bits when split).
         var hasSingle = RmQRVersionSelector.TrySelectAutoFit(mode, dataLength, charset, eccLevel, fitStrategy, height, out var single);
 
-        // Unplannable content skips the scan before any cost run, which is what keeps
-        // a pathological length from paying for one (the floor run below is not itself
-        // guarded, unlike the per-version runs in PlanFits).
+        // Unplannable content skips the scan before any cost run, which is what keeps a pathological length from paying for one (the floor run below is not itself guarded, unlike the per-version runs in PlanFits).
         if (text.Length is 0 or > MaxPlannableChars)
         {
             selected = single;
@@ -123,11 +109,9 @@ internal static class RmQRSegmentPlanner
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
 
-        // Three filters, cheapest first, so a candidate only reaches an expensive one
-        // when the cheap ones could not answer. Soundness in one line each: the trivial
-        // bound and the floor are lower bounds, so they may only reject; the ceiling is
-        // the price of a real plan, so it may only accept. Rationale and measurements:
-        // specs/rmqr-encoder.md, "Bounding the scan".
+        // Three filters, cheapest first, so a candidate only reaches an expensive one when the cheap ones could not answer.
+        // Soundness in one line each: the trivial bound and the floor are lower bounds, so they may only reject; the ceiling is the price of a real plan, so it may only accept.
+        // Rationale and measurements: specs/rmqr-encoder.md, "Bounding the scan".
         var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
 
         var floorPayload = -1;
@@ -158,8 +142,7 @@ internal static class RmQRSegmentPlanner
                 continue; // cannot hold even the cheapest count indicators
             if (capacityBits >= UpperBound(floorPayload, runsNumeric, runsAlnum, runsByte, candidate) + eciBits)
             {
-                // Holds the floor plan re-priced at this version, so it holds the
-                // optimum too; no cost run needed.
+                // Holds the floor plan re-priced at this version, so it holds the optimum too; no cost run needed.
                 useSegments = true;
                 selected = candidate;
                 return true;
@@ -213,10 +196,8 @@ internal static class RmQRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
-        // A plan that opens a Byte run at a mid-content U+FEFF would lose it to the
-        // decoder's BOM consumption (which fires even behind an explicit UTF-8 ECI).
-        // Under UTF-8 the program builds none, so this is the refusal of a model that
-        // disagreed; the single-mode fallback keeps the character.
+        // A plan that opens a Byte run at a mid-content U+FEFF would lose it to the decoder's BOM consumption (which fires even behind an explicit UTF-8 ECI).
+        // Under UTF-8 the program builds none, so this is the refusal of a model that disagreed; the single-mode fallback keeps the character.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
         {
             segmentCount = 0;
@@ -225,19 +206,15 @@ internal static class RmQRSegmentPlanner
 
         ModeSegmenter.FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
 
-        // Re-cost the reconstructed plan from the byte counts the encoder will
-        // actually emit. Disagreeing with the dynamic programming cost model is a bug
-        // in the model (the version scan would have compared the wrong number against
-        // a capacity), so it fails loudly in Debug and rejects the plan in Release
-        // rather than becoming a stream that overruns the data codewords.
+        // Re-cost the reconstructed plan from the byte counts the encoder will actually emit.
+        // Disagreeing with the dynamic programming cost model is a bug in the model (the version scan would have compared the wrong number against a capacity), so it fails loudly in Debug and rejects the plan in Release rather than becoming a stream that overruns the data codewords.
         var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
         Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
         if (measuredBits != plannedBits || measuredBits + (charset == EciMode.Default ? 0 : EciHeaderBits) > capacityBits)
         {
-            // Either the model disagreed, or this version simply cannot hold the plan
-            // (a legitimate answer for a caller that asked about a specific version).
+            // Either the model disagreed, or this version simply cannot hold the plan (a legitimate answer for a caller that asked about a specific version).
             segmentCount = 0;
             return false;
         }

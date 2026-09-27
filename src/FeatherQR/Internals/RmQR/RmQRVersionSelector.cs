@@ -150,8 +150,7 @@ internal static class RmQRVersionSelector
     /// </summary>
     public static RmQRVersion Select(EncodingMode mode, int dataLength, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
     {
-        // Deliberately keep the pre-ECI hot path separate. Forwarding this overload
-        // through the larger ECI selector measurably changes end-to-end JIT codegen.
+        // Deliberately keep the pre-ECI hot path separate. Forwarding this overload through the larger ECI selector measurably changes end-to-end JIT codegen.
         if (!RmQRConstants.IsValidEccLevel(eccLevel))
             throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid rMQR ECC level: {eccLevel}");
         if (fitStrategy is < RmQRFitStrategy.MinimizeArea or > RmQRFitStrategy.MinimizeHeight)
@@ -207,8 +206,7 @@ internal static class RmQRVersionSelector
                 nameof(requestedVersion));
         }
 
-        // Most capacious candidate for the message; failure path only, so the success
-        // path never pays for this scan.
+        // Most capacious candidate for the message; failure path only, so the success path never pays for this scan.
         var largest = (RmQRVersion)0;
         var largestMax = -1;
         for (var i = 1; i <= RmQRConstants.VersionCount; i++)
@@ -251,8 +249,7 @@ internal static class RmQRVersionSelector
         var orders = new byte[3][];
         for (var s = 0; s < 3; s++)
         {
-            // insertion sort under the strict IsBetter comparator: it is a total order
-            // (equal area and height means the same version), so the ranking is unique
+            // insertion sort under the strict IsBetter comparator: it is a total order (equal area and height means the same version), so the ranking is unique
             var sorted = new List<byte>(RmQRConstants.VersionCount);
             for (var v = 1; v <= RmQRConstants.VersionCount; v++)
             {

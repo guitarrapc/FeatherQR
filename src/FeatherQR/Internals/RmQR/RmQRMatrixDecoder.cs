@@ -30,9 +30,7 @@ internal static partial class RmQRMatrixDecoder
             return DecodeStatus.InvalidMatrix;
         }
 
-        // 2. Format information (both copies) → ECC; only copies that agree with the
-        //    dimension-derived version count, so a copy miscorrected toward another
-        //    version's word cannot veto the valid one.
+        // 2. Format information (both copies) → ECC; only copies that agree with the dimension-derived version count, so a copy miscorrected toward another version's word cannot veto the valid one.
         ReadFormatCopies(modules, width, height, out var finderSideRaw, out var subFinderSideRaw);
         if (!RmQRFormatInformationDecoder.TryDecode(finderSideRaw, subFinderSideRaw, version, out var eccLevel, out _))
         {
@@ -62,8 +60,7 @@ internal static partial class RmQRMatrixDecoder
             var dataLength = b < eccInfo.BlocksInGroup1 ? eccInfo.CodewordsInGroup1 : eccInfo.CodewordsInGroup2;
             var blockSpan = block.Slice(0, dataLength + eccInfo.ECCPerBlock);
 
-            // Data codewords: round-robin rows across blocks; the extra codeword of the
-            // long blocks follows all short-length rows.
+            // Data codewords: round-robin rows across blocks; the extra codeword of the long blocks follows all short-length rows.
             for (var k = 0; k < dataLength; k++)
             {
                 var index = k < eccInfo.CodewordsInGroup1
@@ -77,8 +74,7 @@ internal static partial class RmQRMatrixDecoder
                 blockSpan[dataLength + e] = stream[eccInfo.TotalDataCodewords + e * blocks + b];
             }
 
-            // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋
-            // (see the remarks on this class); it is the seam a reserved p would use.
+            // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋ (see the remarks on this class); it is the seam a reserved p would use.
             if (!EccBinaryDecoder.TryCorrect(blockSpan, eccInfo.ECCPerBlock, out var blockErrors)
                 || blockErrors > correctionCapacity)
             {
@@ -188,10 +184,8 @@ internal static partial class RmQRMatrixDecoder
 
         var layout = GetExtractLayout(version);
 #if NET8_0_OR_GREATER
-        // Both vector kernels emit whole words off a per-version table, so their output
-        // length is fixed by the version rather than by the span they are handed. The
-        // portable tier reads stream.Length and truncates. Only dispatch to a kernel
-        // when those two agree; every production caller sizes the span exactly.
+        // Both vector kernels emit whole words off a per-version table, so their output length is fixed by the version rather than by the span they are handed.
+        // The portable tier reads stream.Length and truncates. Only dispatch to a kernel when those two agree; every production caller sizes the span exactly.
         var exact = stream.Length == RmQRConstants.GetTotalCodewordCount(version);
         if (exact && kernel != ExtractKernel.Scalar)
         {
@@ -243,13 +237,9 @@ internal static partial class RmQRMatrixDecoder
     }
 
     // ---------------------------------------------------------------
-    // Per-version extraction tables (built once from the placer's own predicates, so
-    // they are correct by construction; published with a volatile write - a benign
-    // race builds identical tables twice). Memory per version: 2 bytes per stream bit
-    // plus 24 bytes per column pair, and on ARM64 the pair-plane run tables on top of
-    // that. Measured: R17x139 is 5,368 B on x64/portable (3,712 B of order plus 69
-    // column pairs) and 7,368 B on ARM64; decoding all 32 versions costs about 68 KB
-    // and about 100 KB respectively.
+    // Per-version extraction tables (built once from the placer's own predicates, so they are correct by construction; published with a volatile write - a benign
+    // race builds identical tables twice).
+    // Memory per version: 2 bytes per stream bit plus 24 bytes per column pair, and on ARM64 the pair-plane run tables on top of that. Measured: R17x139 is 5,368 B on x64/portable (3,712 B of order plus 69 column pairs) and 7,368 B on ARM64; decoding all 32 versions costs about 68 KB and about 100 KB respectively.
     // ---------------------------------------------------------------
 
     /// <summary>Low bits of an <see cref="ExtractLayout.Order"/> entry: the core module index.</summary>
@@ -353,8 +343,7 @@ internal static partial class RmQRMatrixDecoder
             upward = !upward;
         }
 
-        // A block covers four consecutive pairs and the walk runs down the pair index, so
-        // walking the blocks backwards visits the runs in exactly stream order.
+        // A block covers four consecutive pairs and the walk runs down the pair index, so walking the blocks backwards visits the runs in exactly stream order.
         var runs = new List<uint>();
         var blockRunEnd = new uint[slots / 4];
         var atBlock = slots / 4 - 1;

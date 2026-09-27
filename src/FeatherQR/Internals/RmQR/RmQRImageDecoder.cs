@@ -111,8 +111,7 @@ internal static class RmQRImageDecoder
             var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo, out var invertedNoFinder, out var negativeThreshold, out var negativeGrey);
             if (IsTerminal(invertedStatus))
             {
-                // Success, or the symbol was read but the caller's destination is too
-                // small: both polarities report the same way.
+                // Success, or the symbol was read but the caller's destination is too small: both polarities report the same way.
                 info = invertedInfo;
                 return invertedStatus;
             }
@@ -195,23 +194,16 @@ internal static class RmQRImageDecoder
         Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
         var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
         noFinder = false;
-        // Terminal, not just successful: DestinationTooSmall is only reached after the
-        // symbol has been located, sampled, RS-corrected and its segment found to fit
-        // the bitstream, so the buffer is the only thing missing and a wider finder scan
-        // cannot change it. (That ordering is a precondition, not a given: the segment
-        // decoders check bitstream sufficiency before destination sufficiency precisely
-        // so a malformed count cannot masquerade as a short buffer here.) A verdict on
-        // the content does not end it: the sweep can find another symbol that reads.
+        // Terminal, not just successful: DestinationTooSmall is only reached after the symbol has been located, sampled, RS-corrected and its segment found to fit the bitstream, so the buffer is the only thing missing and a wider finder scan cannot change it. (That ordering is a precondition, not a given: the segment decoders check bitstream sufficiency before destination sufficiency precisely so a malformed count cannot masquerade as a short buffer here.)
+        // A verdict on the content does not end it: the sweep can find another symbol that reads.
         if (IsTerminal(status))
             return status;
 
-        // A candidate the strided scan tried decodes the same way in the sweep, so it is not
-        // tried again; unless that scan settled, when every candidate stays
+        // A candidate the strided scan tried decodes the same way in the sweep, so it is not tried again; unless that scan settled, when every candidate stays
         var skip = IsSettled(status) ? default : tried.Slice(0, triedCount);
         var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _, out var sweptFound);
         noFinder = stridedFound == 0 && sweptFound == 0;
-        // Settled, not just successful: when the sweep is the pass that reads the symbol,
-        // its DestinationTooSmall or its verdict on the content is the answer.
+        // Settled, not just successful: when the sweep is the pass that reads the symbol, its DestinationTooSmall or its verdict on the content is the answer.
         if (IsSettled(sweptStatus))
         {
             charsWritten = sweptChars;
@@ -219,8 +211,7 @@ internal static class RmQRImageDecoder
             return sweptStatus;
         }
 
-        // Both failed: keep the strided pass's diagnostic, which is the one whose
-        // candidate ranking the caller would have seen before this retry existed.
+        // Both failed: keep the strided pass's diagnostic, which is the one whose candidate ranking the caller would have seen before this retry existed.
         return status;
     }
 
@@ -278,8 +269,7 @@ internal static class RmQRImageDecoder
         var bestStatus = DecodeStatus.NotDetected;
         var bestInfo = NotDetected();
 
-        // The module buffer is sized for the largest symbol; rented rather than
-        // stack-allocated (2.3 KB) since this sits under the public image entry point.
+        // The module buffer is sized for the largest symbol; rented rather than stack-allocated (2.3 KB) since this sits under the public image entry point.
         var rentedModules = ArrayPool<byte>.Shared.Rent(MaxModules);
         try
         {
@@ -447,24 +437,17 @@ internal static class RmQRImageDecoder
     {
         charsWritten = 0;
 
-        // The finder-side format copy sits within 12 modules of the finder, so the local
-        // frame reads it before any refinement, as long as the finder's scale is close.
-        // A render that snaps modules to whole pixels can give the finder a scale 3-6 %
-        // off, most of a pixel at column 11 below 2 px/module, so the scales nearest the
-        // measured one are tried in turn. A corrected scale must read an exact codeword:
-        // within 3 bits, a quarter of random reads match one of the 64 words, so nine
-        // tries on noise would nearly always "read" a version and pay for its searches.
-        // Only while the larger of the finder's two axes measures under 6 px per module,
-        // a bound taken from measurement: the search buys fewer reads as the density rises
-        // and costs every other symbology's image its failure time. A trade, not a free cut:
-        // renders above the bound that read only at a corrected scale are given up.
+        // The finder-side format copy sits within 12 modules of the finder, so the local frame reads it before any refinement, as long as the finder's scale is close.
+        // A render that snaps modules to whole pixels can give the finder a scale 3-6 % off, most of a pixel at column 11 below 2 px/module, so the scales nearest the measured one are tried in turn.
+        // A corrected scale must read an exact codeword:
+        // within 3 bits, a quarter of random reads match one of the 64 words, so nine tries on noise would nearly always "read" a version and pay for its searches.
+        // Only while the larger of the finder's two axes measures under 6 px per module, a bound taken from measurement,the search buys fewer reads as the density rises and costs every other symbology's image its failure time.
+        // A trade, not a free cut: renders above the bound that read only at a corrected scale are given up.
         var moduleLength = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
         var formatRead = false;
 
-        // Module boundaries: under about 1.5 px/module a crisp module is 1 or 2 px wide and a
-        // sample has an eighth of a pixel to spare, which no frame scaled from the finder keeps.
-        // First, while the attempt budget is whole: the searches below can spend all of it on
-        // such a symbol, and two timing lines that do not read cost a few dozen pixels.
+        // Module boundaries: under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth of a pixel to spare, which no frame scaled from the finder keeps.
+        // First, while the attempt budget is whole: the searches below can spend all of it on such a symbol, and two timing lines that do not read cost a few dozen pixels.
         if (moduleLength < ModuleBoundaryReader.MaxModuleSize)
         {
             var boundaryStatus = TryBoundaryFrame(luminance, width, height, threshold, candidate, uX, uY, vX, vY, moduleLength, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -491,10 +474,8 @@ internal static class RmQRImageDecoder
                 modules, destination, out charsWritten, out info,
                 ref bestStatus, ref bestInfo, ref attemptsRemaining, out var anchoredStatus);
 
-            // A copy can read exactly at a scale a few percent off, and a frame built on
-            // it fails where the next scale reads; so the search goes on while frames fail.
-            // Once frames anchored on the sub-finder read format information, a failure is
-            // the data's: on a damaged symbol every later scale only repeated them.
+            // A copy can read exactly at a scale a few percent off, and a frame built on it fails where the next scale reads; so the search goes on while frames fail.
+            // Once frames anchored on the sub-finder read format information, a failure is the data's: on a damaged symbol every later scale only repeated them.
             if (IsTerminal(status))
                 return status;
             if (IsPlausibleRefinement(anchoredStatus))
@@ -663,8 +644,7 @@ internal static class RmQRImageDecoder
                     return status;
                 frameStatus = Deeper(frameStatus, status);
 
-                // (b) Anisotropic rescale without rotation: exact for a symbol rendered
-                // with non-square modules (independent per-axis scale error).
+                // (b) Anisotropic rescale without rotation: exact for a symbol rendered with non-square modules (independent per-axis scale error).
                 var determinant = dX * dY * (uX * vY - uY * vX);
                 if (Math.Abs(determinant) > 1e-6f)
                 {
@@ -680,11 +660,7 @@ internal static class RmQRImageDecoder
                     }
                 }
 
-                // (c) Perspective: only after an affine attempt got past format decoding
-                // (the grid is roughly right, RS still fails). Search the two projective
-                // coefficients; for each, the sub-finder fixes the Jacobian column scale and the
-                // frame rotation exactly, and the sub-finder-side format copy must read
-                // back consistently before the full grid is sampled.
+                // (c) Perspective: only after an affine attempt got past format decoding (the grid is roughly right, RS still fails). Search the two projective coefficients; for each, the sub-finder fixes the Jacobian column scale and the frame rotation exactly, and the sub-finder-side format copy must read back consistently before the full grid is sampled.
                 if (IsPlausibleRefinement(frameStatus))
                 {
                     status = TryPerspectiveVariants(
@@ -701,10 +677,8 @@ internal static class RmQRImageDecoder
 
         anchoredStatus = frameStatus;
 
-        // Fallback: the unrefined local frame (small symbols, or a sub-finder hidden
-        // by damage). Skipped when a refined affine grid already read the format:
-        // the coarser frame cannot do better. Run at every scale, though: each is a
-        // different grid, and on a hidden sub-finder it is the frame that reads.
+        // Fallback: the unrefined local frame (small symbols, or a sub-finder hidden by damage).
+        // Skipped when a refined affine grid already read the format: the coarser frame cannot do better. Run at every scale, though: each is a different grid, and on a hidden sub-finder it is the frame that reads.
         if (!IsPlausibleRefinement(frameStatus))
         {
             var status = Attempt(luminance, width, height, threshold, grey, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -748,8 +722,7 @@ internal static class RmQRImageDecoder
         ref RmQRCodeDecodeInfo bestInfo,
         ref int attemptsRemaining)
     {
-        // Relative foreshortening at the far edge, per axis. Fine steps along the
-        // long axis: a 1% error over 139 modules is already 0.7 module at the far end.
+        // Relative foreshortening at the far edge, per axis. Fine steps along the long axis: a 1% error over 139 modules is already 0.7 module at the far end.
         ReadOnlySpan<float> xStrengths = stackalloc float[]
         {
             0f, -0.01f, 0.01f, -0.02f, 0.02f, -0.03f, 0.03f, -0.04f, 0.04f, -0.05f, 0.05f, -0.06f, 0.06f,
@@ -762,18 +735,16 @@ internal static class RmQRImageDecoder
         var farX = symbolWidth - 2.5f;
         var farY = symbolHeight - 2.5f;
 
-        // Row-axis shear: under a keystone the finder's column axis leans away from
-        // the perpendicular by atan(shrink / height), 9° for a 2% tilt on 17 rows.
-        // The column direction is pinned by the sub-finder (the finder→sub-finder
-        // line is almost a symbol row); the row axis is the free direction.
+        // Row-axis shear: under a keystone the finder's column axis leans away from the perpendicular by atan(shrink / height), 9° for a 2% tilt on 17 rows.
+        // The column direction is pinned by the sub-finder (the finder→sub-finder line is almost a symbol row); the row axis is the free direction.
         for (var shearStep = 0; shearStep <= 2 * MaxShearDegrees; shearStep++)
         {
             var shearDegrees = (shearStep + 1) / 2 * ((shearStep & 1) == 0 ? -1 : 1); // 0, +1, -1, +2, -2, …
             var shearRadians = shearDegrees * (Math.PI / 180d);
             var shearCos = (float)Math.Cos(shearRadians);
             var shearSin = (float)Math.Sin(shearRadians);
-            // The row spacing was measured perpendicular to the column axis, i.e. it is
-            // the leaning axis projected onto that normal: undo the projection.
+            // The row spacing was measured perpendicular to the column axis,
+            // i.e. it is the leaning axis projected onto that normal: undo the projection.
             Rotate(vX / shearCos, vY / shearCos, shearCos, shearSin, out var svX, out var svY);
             var uDotV = uX * svX + uY * svY;
 
@@ -793,15 +764,12 @@ internal static class RmQRImageDecoder
                     if (perspectiveX == 0f && perspectiveY == 0f && shearDegrees == 0)
                         continue; // the affine frame was already tried
 
-                    // Q − P = (d0 / D) · J · (dX, dY): solve the Jacobian scale along the
-                    // column axis (quadratic, the axes need not be perpendicular) and the
-                    // frame rotation from the observed offset.
+                    // Q − P = (d0 / D) · J · (dX, dY): solve the Jacobian scale along the column axis (quadratic, the axes need not be perpendicular) and the frame rotation from the observed offset.
                     var d0 = perspectiveX * FinderCenter + perspectiveY * FinderCenter + 1f;
                     var d = perspectiveX * farX + perspectiveY * farY + 1f;
                     if (d <= 0.5f || d0 <= 0.5f)
                         continue;
-                    // |a·dX·u + dY·sv|² = required²: every term uses the SHEARED row axis
-                    // sv (its length is |v| / cos φ), the same vector the Jacobian below applies.
+                    // |a·dX·u + dY·sv|² = required²: every term uses the SHEARED row axis sv (its length is |v| / cos φ), the same vector the Jacobian below applies.
                     var required = observedLength * d / d0;
                     var qa = dX * dX * uLength * uLength;
                     var qb = 2f * dX * dY * uDotV;
@@ -884,8 +852,7 @@ internal static class RmQRImageDecoder
         var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
         if (status == DecodeStatus.Success)
         {
-            // The frames already carry a mirrored capture in their axes, so the
-            // transform is in symbol order and never transposed.
+            // The frames already carry a mirrored capture in their axes, so the transform is in symbol order and never transposed.
             info = info.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
             return status;
         }
@@ -948,15 +915,11 @@ internal static class RmQRImageDecoder
 
         var radius = SubFinderSearchRadiusHalfModulesBase + symbolWidth / 10 * SubFinderSearchRadiusHalfModulesPerTenModules;
 
-        // Reject before searching when the whole template can only land outside the
-        // image. Every sample sits at predicted + (offU + i)·u + (offV + j)·sv with
-        // |offU| ≤ radius/2 and |i| ≤ 2, and the 12° lean bounds |svX| by
-        // |vX| + tan 12°·|vY|, so |vX| + |vY| over-estimates it. A frame whose prediction
-        // misses the image entirely would otherwise score 0 at all 7,803 ring positions
-        // before returning false. Most wrong frames do NOT predict off-image, so this is
-        // the cheaper and rarer of the two guards here — end to end it is worth about a
-        // sixth of the failure-path win and the row-wise early exit below is worth the
-        // rest; on a frame it does catch it replaces a ~400 µs search with a few ns.
+        // Reject before searching when the whole template can only land outside the image.
+        // Every sample sits at predicted + (offU + i)·u + (offV + j)·sv with |offU| ≤ radius/2 and |i| ≤ 2,
+        // and the 12° lean bounds |svX| by |vX| + tan 12°·|vY|, so |vX| + |vY| over-estimates it.
+        // A frame whose prediction misses the image entirely would otherwise score 0 at all 7,803 ring positions before returning false.
+        // Most wrong frames do NOT predict off-image, so this is the cheaper and rarer of the two guards here — end to end it is worth about a sixth of the failure-path win and the row-wise early exit below is worth the rest; on a frame it does catch it replaces a ~400 µs search with a few ns.
         var reach = radius * 0.5f + 2f;
         var extentX = reach * (Math.Abs(uX) + Math.Abs(vX) + Math.Abs(vY)) + 1f;
         var extentY = reach * (Math.Abs(uY) + Math.Abs(vX) + Math.Abs(vY)) + 1f;
@@ -975,8 +938,7 @@ internal static class RmQRImageDecoder
         var bestVX = vX;
         var bestVY = vY;
 
-        // A keystone leans the column axis (see TryPerspectiveVariants); the template
-        // is matched with a few leans so its corner samples stay on their modules.
+        // A keystone leans the column axis (see TryPerspectiveVariants); the template is matched with a few leans so its corner samples stay on their modules.
         ReadOnlySpan<float> shearDegrees = stackalloc float[] { 0f, 12f, -12f };
         Span<ulong> survivors = stackalloc ulong[MaxSubFinderScreenRows];
         foreach (var degrees in shearDegrees)
@@ -986,9 +948,7 @@ internal static class RmQRImageDecoder
             Rotate(vX / leanCos, vY / leanCos, leanCos, (float)Math.Sin(radians), out var svX, out var svY);
             var screenTried = false;
             var screened = false;
-            // Outward by rings (Chebyshev distance): the prediction is usually within a
-            // few modules, and the first perfect match on the innermost ring is the
-            // answer (the tie-break prefers the nearest anyway), so the search stops there.
+            // Outward by rings (Chebyshev distance): the prediction is usually within a few modules, and the first perfect match on the innermost ring is the answer (the tie-break prefers the nearest anyway), so the search stops there.
             for (var ring = 0; ring <= radius && bestScore < 25; ring++)
             {
                 if (ring >= SubFinderUnscreenedRings && !screenTried)
@@ -1004,8 +964,7 @@ internal static class RmQRImageDecoder
                     var step = ov == -ring || ov == ring ? 1 : 2 * ring;
                     for (var ou = -ring; ou <= ring; ou += step)
                     {
-                        // Two certain mismatches: the position scores under the floor, and a
-                        // score under the floor never becomes the answer
+                        // Two certain mismatches: the position scores under the floor, and a score under the floor never becomes the answer
                         if (screened && (survivors[ov + radius] >> (ou + radius) & 1) == 0)
                             continue;
 
@@ -1028,15 +987,9 @@ internal static class RmQRImageDecoder
                                     score++;
                             }
 
-                            // Once the rows still to come cannot lift the score to the
-                            // acceptance floor, this position is decided: stop sampling
-                            // it. A partial score may still be recorded as the best so
-                            // far, which cannot change the outcome — acceptance needs
-                            // SubFinderMinScore, and any position that reaches it
-                            // outranks every partial one. Checked per row of five rather
-                            // than per sample: the same early exit on the failing path
-                            // (which bails after one row) without adding a branch to the
-                            // 25-sample inner loop that the matching path runs in full.
+                            // Once the rows still to come cannot lift the score to the acceptance floor, this position is decided: stop sampling it.
+                            // A partial score may still be recorded as the best so far, which cannot change the outcome — acceptance needs SubFinderMinScore, and any position that reaches it outranks every partial one.
+                            // Checked per row of five rather than per sample: the same early exit on the failing path (which bails after one row) without adding a branch to the 25-sample inner loop that the matching path runs in full.
                             remaining -= 5;
                             if (score + remaining < SubFinderMinScore)
                                 break;
@@ -1132,8 +1085,7 @@ internal static class RmQRImageDecoder
         if (radius < 0 || side > MaxSubFinderScreenRows)
             return false;
 
-        // Every coordinate either expression forms is at most this large; each rounds a
-        // handful of times, 2^-24 of it at most, and the margin is 2^-18 of it
+        // Every coordinate either expression forms is at most this large; each rounds a handful of times, 2^-24 of it at most, and the margin is 2^-18 of it
         var reach = radius * 0.5f + 2f;
         var marginX = (Math.Abs(predictedX) + reach * (Math.Abs(uX) + Math.Abs(svX))) * (1f / 262144f);
         var marginY = (Math.Abs(predictedY) + reach * (Math.Abs(uY) + Math.Abs(svY))) * (1f / 262144f);
@@ -1454,9 +1406,7 @@ internal static class RmQRImageDecoder
         }
 
         // Affine frames have an exactly unit denominator, so both divisions drop out.
-        // This is not a heuristic about typical input: TryDecodeFrame builds the
-        // isotropic and anisotropic frames with perspectiveX = perspectiveY = 0, so
-        // every attempt before the perspective search lands here.
+        // This is not a heuristic about typical input: TryDecodeFrame builds the isotropic and anisotropic frames with perspectiveX = perspectiveY = 0, so every attempt before the perspective search lands here.
         if (transform.a13 == 0f && transform.a23 == 0f && transform.a33 == 1f)
         {
             SampleGridSimd128Affine(luminance, width, height, threshold, transform, columns, rows, modules);
@@ -1500,15 +1450,13 @@ internal static class RmQRImageDecoder
                 var xHi = (a11 * gridXHi + rowX + a31) / denominatorHi;
                 var yHi = (a12 * gridXHi + rowY + a32) / denominatorHi;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel
-                // containing the point, not the nearest one.
+                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel containing the point, not the nearest one.
                 var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
                     + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
                 var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
                     + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
 
-                // Lane extraction beats spilling the index vector to the stack: the
-                // reload was measured on the critical path of every gather.
+                // Lane extraction beats spilling the index vector to the stack: the reload was measured on the critical path of every gather.
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
                 Unsafe.Add(ref destination, 1) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(1)) < threshold ? (byte)1 : (byte)0;
@@ -1582,8 +1530,7 @@ internal static class RmQRImageDecoder
                 var xHi = a11 * gridXHi + rowX + a31;
                 var yHi = a12 * gridXHi + rowY + a32;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel
-                // containing the point, not the nearest one.
+                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel containing the point, not the nearest one.
                 var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
                     + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
                 var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
@@ -1665,12 +1612,9 @@ internal static class RmQRImageDecoder
         DecodeStatus.NotDetected => 0,
         DecodeStatus.InvalidMatrix => 1,
         DecodeStatus.FormatInformationInvalid => 1,
-        // The symbol was read (format + RS) and only the caller's buffer is short: above every
-        // other failure, a verdict on another symbol included, since a larger destination reads
-        // this one and the verdict holds at any size
+        // The symbol was read (format + RS) and only the caller's buffer is short: above every other failure, a verdict on another symbol included, since a larger destination reads this one and the verdict holds at any size
         DecodeStatus.DestinationTooSmall => 4,
-        // A verdict on the content comes after error correction too, so a wrong grid's
-        // correction failure tried before the right one cannot mask it
+        // A verdict on the content comes after error correction too, so a wrong grid's correction failure tried before the right one cannot mask it
         DecodeStatus.UnmappedCharacter or DecodeStatus.UnsupportedContent => 3,
         _ => 2, // got past format decoding
     };

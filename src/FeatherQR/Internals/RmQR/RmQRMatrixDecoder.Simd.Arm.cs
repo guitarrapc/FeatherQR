@@ -55,8 +55,7 @@ internal static partial class RmQRMatrixDecoder
         var align = Vector128.Create(-(32 - layout.FieldBits));
         var downwardLanes = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(layout.DownwardLanes));
 
-        // 2 bits x up to 15 data rows does not fit in a ushort, so the rows are
-        // accumulated in two groups of at most 8 and rejoined once per block.
+        // 2 bits x up to 15 data rows does not fit in a ushort, so the rows are accumulated in two groups of at most 8 and rejoined once per block.
         var dataRows = height - 2;
         var lowRows = dataRows < 8 ? dataRows : 8;
         var join = Vector128.Create(2 * lowRows);
@@ -107,9 +106,7 @@ internal static partial class RmQRMatrixDecoder
 
         while (current >= 0)
         {
-            // With a single block left the step overlaps the block above it, which has
-            // already been emitted; transposing it twice is cheaper than carrying a
-            // third step shape, and the emit below skips it.
+            // With a single block left the step overlaps the block above it, which has already been emitted; transposing it twice is cheaper than carrying a third step shape, and the emit below skips it.
             var start = current >= 1 ? current - 1 : 0;
             var upper = Vector128<ushort>.Zero;
             var lower = Vector128<ushort>.Zero;
@@ -144,8 +141,7 @@ internal static partial class RmQRMatrixDecoder
             accumulated -= 8;
             Unsafe.Add(ref dst, written++) = (byte)(accumulator >> accumulated);
         }
-        // The walk is truncated to whole codewords, so this only pads a stream whose
-        // final pair was cut off mid-byte, which the layout builder never produces.
+        // The walk is truncated to whole codewords, so this only pads a stream whose final pair was cut off mid-byte, which the layout builder never produces.
         for (; written < stream.Length; written++)
         {
             Unsafe.Add(ref dst, written) = 0;
@@ -217,16 +213,14 @@ internal static partial class RmQRMatrixDecoder
             var pack = Unsafe.Add(ref runs, at + 2);
             var bits = (word & Unsafe.Add(ref runs, at + 1)) >> (int)(pack & 0xFFFF);
 
-            // A pair contributes at most 2 * (17 - 2) = 30 bits and the accumulator is
-            // drained below 32 after every run, so it never holds more than 61.
+            // A pair contributes at most 2 * (17 - 2) = 30 bits and the accumulator is drained below 32 after every run, so it never holds more than 61.
             var count = (int)(pack >> 16);
             accumulator = (accumulator << count) | bits;
             accumulated += count;
             if (accumulated >= 32)
             {
                 accumulated -= 32;
-                // The stream is big-endian and the accumulator is not, which on ARM is
-                // one REV plus one store rather than four extracted byte stores.
+                // The stream is big-endian and the accumulator is not, which on ARM is one REV plus one store rather than four extracted byte stores.
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, written),
                     BinaryPrimitives.ReverseEndianness((uint)(accumulator >> accumulated)));
                 written += 4;

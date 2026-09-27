@@ -44,11 +44,8 @@ internal static partial class RmQRMatrixDecoder
     /// </remarks>
     private static void BuildColumnPlanes(ref byte src, int width, int height, ref ushort plane)
     {
-        // Preconditions, both guaranteed by the only caller: AVX2 is supported (the
-        // tier gate in ExtractCodewords requires it) and width >= 16 (the narrowest
-        // rMQR symbol is 27 wide, and the overread argument above needs width >= 15).
-        // They are asserted rather than branched on, so this file has one honest entry
-        // condition instead of a scalar half that can never run and is never tested.
+        // Preconditions, both guaranteed by the only caller: AVX2 is supported (the tier gate in ExtractCodewords requires it) and width >= 16 (the narrowest rMQR symbol is 27 wide, and the overread argument above needs width >= 15).
+        // They are asserted rather than branched on, so this file has one honest entry condition instead of a scalar half that can never run and is never tested.
         Debug.Assert(Avx2.IsSupported, "The bit-plane tier is only dispatched on AVX2.");
         Debug.Assert(width >= 16, "The 16-byte column step needs at least 16 columns.");
 
@@ -100,8 +97,7 @@ internal static partial class RmQRMatrixDecoder
                       | Bmi2.ParallelBitDeposit(Bmi2.ParallelBitExtract(left, Unsafe.Add(ref p, k + 3)), Unsafe.Add(ref p, k + 4)))
                       ^ Unsafe.Add(ref p, k + 5);
 
-            // A pair contributes at most 2 * (17 - 2) = 30 bits and the accumulator is
-            // drained below 32 after every pair, so it never holds more than 61.
+            // A pair contributes at most 2 * (17 - 2) = 30 bits and the accumulator is drained below 32 after every pair, so it never holds more than 61.
             var count = (int)(header >> 16);
             accumulator = (accumulator << count) | bits;
             accumulated += count;
@@ -122,8 +118,7 @@ internal static partial class RmQRMatrixDecoder
             accumulated -= 8;
             Unsafe.Add(ref dst, written++) = (byte)(accumulator >> accumulated);
         }
-        // The walk is truncated to whole codewords, so this only pads a stream whose
-        // final pair was cut off mid-byte, which the layout builder never produces.
+        // The walk is truncated to whole codewords, so this only pads a stream whose final pair was cut off mid-byte, which the layout builder never produces.
         for (; written < codewords; written++)
         {
             Unsafe.Add(ref dst, written) = 0;
