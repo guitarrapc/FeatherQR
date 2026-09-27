@@ -1,4 +1,5 @@
 using FeatherQR;
+using FeatherQR.Internals;
 using System.Text;
 
 // The gate is the publish itself (see the csproj): TrimmerRootAssembly roots the whole library,
@@ -48,4 +49,17 @@ foreach (var (pattern, charset) in new[]
         }
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
+
+// Which SIMD tier each kernel runs in this native build: the instruction sets the build and the
+// CPU give, then every kernel's tiers, most preferred first, with the one it takes marked.
+Console.WriteLine("SIMD instruction sets:");
+foreach (var (tier, available) in SimdTiers.IsaReport())
+    Console.WriteLine($"  {tier,-10} {(available ? "yes" : "no")}");
+Console.WriteLine("SIMD tiers per kernel (* = taken):");
+foreach (var kernel in SimdTiers.Report())
+{
+    var active = kernel.Active;
+    var tiers = string.Join(" > ", kernel.Tiers.Select(t => (t.Tier == active ? "*" : "") + t.Tier).Append((active == SimdTier.Scalar ? "*" : "") + nameof(SimdTier.Scalar)));
+    Console.WriteLine($"  {kernel.Name,-24} {tiers}");
+}
 return 0;

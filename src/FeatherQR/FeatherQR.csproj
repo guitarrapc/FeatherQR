@@ -40,6 +40,9 @@
          through internals during the split; every use is enumerated in the architecture
          record and gets a public replacement or a recorded reason. -->
     <InternalsVisibleTo Include="FeatherQR.SkiaSharp, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
+    <!-- The NativeAOT gate prints Internals.SimdTiers.Report() from a native build: which SIMD tier
+         each kernel runs there is the build's answer, and no public API carries it. -->
+    <InternalsVisibleTo Include="FeatherQR.AotAnalysis, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
     <InternalsVisibleTo Include="FeatherQR.Tests, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
   </ItemGroup>
 
