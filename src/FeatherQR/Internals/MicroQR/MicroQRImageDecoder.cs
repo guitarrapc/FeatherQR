@@ -858,12 +858,11 @@ internal static class MicroQRImageDecoder
             DecodeStatus.NotDetected => 0,
             DecodeStatus.InvalidMatrix => 1,
             DecodeStatus.FormatInformationInvalid => 1,
-            // The symbol was read (format + RS) and only the caller's buffer is short:
-            // this outranks every failure short of the content, so a wrong-size attempt that reaches RS
-            // first — sizes are tried 17 down to 11 — cannot mask it. Matches the rMQR
-            // decoder's ranking; without it M3-L reported DataUncorrectable for a short
-            // buffer while every other version reported DestinationTooSmall.
-            DecodeStatus.DestinationTooSmall => 3,
+            // The symbol was read (format + RS) and only the caller's buffer is short: above every
+            // other failure, a wrong size's RS failure tried first (M4 down to M1) and a verdict on
+            // another symbol included, since a larger destination reads this one and the verdict
+            // holds at any size
+            DecodeStatus.DestinationTooSmall => 4,
             // A verdict on the content comes after error correction too, so a wrong grid's
             // correction failure tried before the right one cannot mask it
             DecodeStatus.UnmappedCharacter or DecodeStatus.UnsupportedContent => 3,

@@ -273,6 +273,43 @@ public class ContentVerdictImageDecodeTest
         await Assert.That(info.EccLevel).IsEqualTo(RmQREccLevel.H);
     }
 
+    /// <summary>
+    /// The Micro QR case of the one above: the symbol too long for the destination is reported over the other's verdict, whichever is tried first.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task MicroQR_UnmappedSymbolAndOneTooLongForTheDestination_ReportsDestinationTooSmall(bool verdictFirst)
+    {
+        const string longContent = "MICRO 12345";
+        const int quietZone = 4;
+        var (unmapped, size, _) = BuildMicroQR(Unmapped);
+        var (unmappedM, _, _) = BuildMicroQR(Unmapped, MicroQREccLevel.M);
+        var tooLong = MicroQRCodeGenerator.Create(longContent, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        // The top symbol at 6 px/module is confirmed on more rows than the bottom one at 4, so it is tried first
+        (byte[] Luminance, int Width, int Height) RenderUnmapped(byte[] modules, float pixelsPerModule)
+            => NearestNeighbourRenderer.Render((row, column) => IsDark(modules, size, size, row, column, quietZone), size + 2 * quietZone, size + 2 * quietZone, pixelsPerModule, 0f, 0f);
+        (byte[] Luminance, int Width, int Height) RenderTooLong(float pixelsPerModule)
+            => NearestNeighbourRenderer.Render((row, column) => row >= quietZone && column >= quietZone && row - quietZone < tooLong.Size && column - quietZone < tooLong.Size && tooLong[row - quietZone, column - quietZone], tooLong.Size + 2 * quietZone, tooLong.Size + 2 * quietZone, pixelsPerModule, 0f, 0f);
+
+        // Premise: of two verdicts the top one's is reported, so the top symbol is tried first
+        var (premise, premiseWidth, premiseHeight) = Stack(RenderUnmapped(unmapped, 6f), RenderUnmapped(unmappedM, 4f));
+        MicroQRCodeDecoder.TryDecodeImage(premise, premiseWidth, premiseHeight, out _, out var premiseInfo);
+        await Assert.That((premiseInfo.Status, premiseInfo.EccLevel)).IsEqualTo((DecodeStatus.UnmappedCharacter, MicroQREccLevel.L));
+
+        var (luminance, width, height) = verdictFirst ? Stack(RenderUnmapped(unmapped, 6f), RenderTooLong(4f)) : Stack(RenderTooLong(6f), RenderUnmapped(unmapped, 4f));
+        var sized = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
+        await Assert.That(MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, sized, out var sizedWritten, out _)).IsTrue();
+        await Assert.That(new string(sized, 0, sizedWritten)).IsEqualTo(longContent);
+
+        var ok = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[8], out var written, out var info);
+
+        await Assert.That(ok).IsFalse();
+        await Assert.That(written).IsEqualTo(0);
+        await Assert.That(info.Status).IsEqualTo(DecodeStatus.DestinationTooSmall);
+        await Assert.That(info.EccLevel).IsEqualTo(MicroQREccLevel.M);
+    }
+
     /// <summary>Two tiles, one above the other, on paper.</summary>
     private static (byte[] Luminance, int Width, int Height) Stack((byte[] Luminance, int Width, int Height) top, (byte[] Luminance, int Width, int Height) bottom)
     {
