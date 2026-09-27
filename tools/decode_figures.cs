@@ -34,6 +34,10 @@ const string Payload = "FeatherQR decoder";
 var v2 = Matrix(QRCodeGenerator.Create(Payload, QREccLevel.M, new QRCodeGeneratorOptions(version: QRVersionRange.Exactly(2), quietZoneSize: 0)));
 const string MeshPayload = "FeatherQR decoder, a version 14 symbol for the mesh figure";
 var v14 = Matrix(QRCodeGenerator.Create(MeshPayload, QREccLevel.M, new QRCodeGeneratorOptions(version: QRVersionRange.Exactly(14), quietZoneSize: 0)));
+// Its bottom-right alignment pattern painted over, so nothing anchors the four-point transform's fourth corner
+for (var r = 73 - 9; r <= 73 - 5; r++)
+    for (var c = 73 - 9; c <= 73 - 5; c++)
+        v14[r, c] = false;
 
 // Data modules read the wrong way in the damaged figure
 (int R, int C)[] flips = [(10, 11), (12, 14), (14, 9), (15, 13), (11, 19), (19, 10), (21, 13), (13, 21)];
@@ -882,7 +886,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-light-on-dark.svg"), qrBoxes,
     [0, 0],
     "KUUSUUUSUSCSU", 8);
 
-// Large version: the mesh
+// Large version: the mesh, with the bottom-right alignment pattern lost
 InputFigure(Path.Combine(qrDir, "decode-input-large-version.svg"), qrBoxes,
     (sb, x, y, s) =>
     {
@@ -897,16 +901,17 @@ InputFigure(Path.Combine(qrDir, "decode-input-large-version.svg"), qrBoxes,
             lattice.Append(Line(map.Map(cc + 0.5, coords[0] + 0.5), map.Map(cc + 0.5, coords[^1] + 0.5), "lat"));
         }
         sb.Append(lattice);
+        // The coordinate-6 row and column are extrapolated, and the painted-over node is predicted from the others
         foreach (var r in coords)
             foreach (var c in coords)
             {
                 var p = map.Map(c + 0.5, r + 0.5);
-                sb.Append(r == 6 || c == 6 ? $"<circle class=\"predr\" cx=\"{F(p.X)}\" cy=\"{F(p.Y)}\" r=\"3\"/>" : Dot(p, 3));
+                sb.Append(r == 6 || c == 6 || (r == 66 && c == 66) ? $"<circle class=\"predr\" cx=\"{F(p.X)}\" cy=\"{F(p.Y)}\" r=\"3\"/>" : Dot(p, 3));
             }
-        return ["det|searched node", "predr|extrapolated node", "lat|mesh"];
+        return ["det|found node", "predr|predicted node", "lat|mesh"];
     },
-    [4, 8, Bar],
-    "UUUSKUUUCCCSK", 8);
+    [7],
+    "UUUSUUUKCCCSU", 8);
 
 // ---------- The Micro QR input figures ----------
 

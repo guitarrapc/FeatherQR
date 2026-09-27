@@ -20,8 +20,6 @@ public class QRCodeDecoderPerspectiveTest
     [Arguments(10, 0.08f)]
     [Arguments(15, 0.04f)]
     [Arguments(15, 0.06f)]
-    // Version 14+ engages the piecewise alignment mesh: local anchors extend the
-    // envelope where the single global homography's fourth anchor degrades
     [Arguments(15, 0.08f)]
     [Arguments(20, 0.04f)] // regression guard: snapped one version low / bent global anchor before the mesh
     [Arguments(25, 0.04f)]
