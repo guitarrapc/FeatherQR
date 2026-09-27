@@ -12,6 +12,7 @@
 .detl{stroke:#0969da;fill:none;stroke-width:1.6}
 .detd{stroke:#0969da;fill:none;stroke-width:1.4;stroke-dasharray:5 3}
 .pred{stroke:#bf8700;fill:none;stroke-width:1.6;stroke-dasharray:4 3}
+.twopx{fill:#bf8700;fill-opacity:.35}
 .predr{stroke:#bf8700;fill:#ffffff;stroke-width:1.6}
 .est{stroke:#6e7781;fill:none;stroke-width:1.4;stroke-dasharray:3 3}
 .estx{stroke:#57606a;fill:none;stroke-width:2.4}

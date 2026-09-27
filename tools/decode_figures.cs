@@ -25,8 +25,10 @@ var root = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal
 var preview = args.Contains("--preview");
 var qrDir = Path.Combine(root, "standardqr");
 var microDir = Path.Combine(root, "microqr");
+var rmqrDir = Path.Combine(root, "rmqr");
 Directory.CreateDirectory(qrDir);
 Directory.CreateDirectory(microDir);
+Directory.CreateDirectory(rmqrDir);
 
 const string Payload = "FeatherQR decoder";
 var v2 = Matrix(QRCodeGenerator.Create(Payload, QREccLevel.M, new QRCodeGeneratorOptions(version: QRVersionRange.Exactly(2), quietZoneSize: 0)));
@@ -43,9 +45,8 @@ foreach (var (r, c) in flips)
 var failures = new List<string>();
 void Check(string name, bool[,] m, string payload, Func<double, double, double, H> shape, int size, int supersample, Func<double, double, double>? light = null, bool invert = false, bool blur = false, bool expectCorrections = false)
 {
-    var dim = m.GetLength(0);
     var map = shape(0, 0, size);
-    var luminance = Render(m, dim, map, size, size, supersample, light, invert, blur);
+    var luminance = Render(m, map, size, size, supersample, light, invert, blur);
     var ok = QRCodeDecoder.TryDecodeImage(luminance, size, size, out var text, out var info);
     var corrected = info.ErrorsCorrected;
     var pass = ok && text == payload && (!expectCorrections || corrected > 0);
@@ -61,7 +62,7 @@ Check("grey edges and wrong modules", damaged, Payload, (x, y, s) => Square(25, 
 Check("uneven lighting", v2, Payload, (x, y, s) => Square(25, x, y, s), 33 * 4, 1, light: Shadow(33 * 4, 0.5, 3 * 4));
 // The figure says the global threshold falls between lit and shadowed paper, so shadowed paper reads as ink
 {
-    var lit = Render(v2, 25, Square(25, 0, 0, 33 * 4), 33 * 4, 33 * 4, 1, Shadow(33 * 4, 0.5, 3 * 4), false, false);
+    var lit = Render(v2, Square(25, 0, 0, 33 * 4), 33 * 4, 33 * 4, 1, Shadow(33 * 4, 0.5, 3 * 4), false, false);
     var threshold = Otsu(lit);
     var shadowedPaper = 220 * 0.5;
     var below = shadowedPaper < threshold;
@@ -81,8 +82,7 @@ var m4 = MicroMatrix(MicroQRCodeGenerator.Create(MicroPayload4, MicroQREccLevel.
 
 void CheckMicro(string name, bool[,] m, string payload, Func<double, double, double, H> shape, int size, int supersample, bool blur = false)
 {
-    var dim = m.GetLength(0);
-    var luminance = Render(m, dim, shape(0, 0, size), size, size, supersample, null, false, blur);
+    var luminance = Render(m, shape(0, 0, size), size, size, supersample, null, false, blur);
     var ok = MicroQRCodeDecoder.TryDecodeImage(luminance, size, size, out var text, out var info);
     var pass = ok && text == payload;
     Console.WriteLine($"{(pass ? "ok  " : "FAIL")} micro {name}: {size}x{size} px, {info.Status}, {info.Version}, corrected {info.ErrorsCorrected}");
@@ -97,9 +97,52 @@ const bool MicroGreyBlur = false;
 CheckMicro("clean", m3, MicroPayload, (x, y, s) => Square(15, x, y, s, 2), 19 * 4, 1);
 CheckMicro("rotated and mirrored", Transposed(m4), MicroPayload4, (x, y, s) => Rotated(17, x, y, s, MicroTurn, 2), MicroRotatedPx, 4);
 CheckMicro("keystone", m4, MicroPayload4, (x, y, s) => Keystone(17, x, y, s, MicroShrink, 2), MicroKeystonePx, 4);
+CheckMicro("grey edges", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroGreyPx, 4, blur: MicroGreyBlur);
 CheckMicro("snapped scale", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroSnapPx, 1);
 CheckMicro("low density", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroLowPx, 1);
-CheckMicro("grey edges", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2), MicroGreyPx, 4, blur: MicroGreyBlur);
+
+// rMQR: an R11x77 for most figures; each input is a map in image pixels and the image's size
+const string RmqrPayload = "FEATHERQR RMQR";
+var r11 = RmqrMatrix(RmQRCodeGenerator.Create(RmqrPayload, RmQREccLevel.M, new RmQRCodeGeneratorOptions(version: RmQRVersion.R11x77, quietZoneSize: 0)));
+// The strip draws a shorter symbol, so its panels stay legible
+var r43 = RmqrMatrix(RmQRCodeGenerator.Create("FEATHERQR", RmQREccLevel.M, new RmQRCodeGeneratorOptions(version: RmQRVersion.R11x43, quietZoneSize: 0)));
+
+void CheckRmqr(string name, bool[,] m, string payload, (H Map, int Width, int Height) input, int supersample, bool blur = false)
+{
+    var luminance = Render(m, input.Map, input.Width, input.Height, supersample, null, false, blur);
+    var ok = RmQRCodeDecoder.TryDecodeImage(luminance, input.Width, input.Height, out var text, out var info);
+    var pass = ok && text == payload;
+    Console.WriteLine($"{(pass ? "ok  " : "FAIL")} rmqr {name}: {input.Width}x{input.Height} px, {info.Status}, {info.Version}, corrected {info.ErrorsCorrected}");
+    if (!pass)
+        failures.Add("rmqr " + name);
+}
+
+// The inputs as rendered, shared with their figures
+const double RmqrPitch = 4, RmqrTurn = 30, RmqrKeystonePitch = 8, RmqrShrink = 0.08, RmqrWide = 4, RmqrTall = 3, RmqrGreyPitch = 1.55, RmqrGreyTurn = 3, RmqrLowPitch = 1.2;
+const char RmqrShrunkEdge = 'T';
+const int RmqrSnapWidth = 137;
+const bool RmqrGreyBlur = false;
+// The 5 x 5 sub-finder in the bottom-right corner painted to paper
+var r11Hidden = (bool[,])r11.Clone();
+for (var r = r11.GetLength(0) - 5; r < r11.GetLength(0); r++)
+    for (var c = r11.GetLength(1) - 5; c < r11.GetLength(1); c++)
+        r11Hidden[r, c] = false;
+var rmqrClean = RectUpright(r11, RmqrPitch, RmqrPitch);
+var rmqrRotated = RectRotated(MirroredX(r11), RmqrPitch, RmqrTurn);
+var rmqrKeystone = RectKeystone(r11, RmqrKeystonePitch, RmqrShrink, RmqrShrunkEdge);
+var rmqrNonSquare = RectUpright(r11, RmqrWide, RmqrTall);
+var rmqrGrey = RectRotated(r11, RmqrGreyPitch, RmqrGreyTurn);
+var rmqrHidden = RectUpright(r11Hidden, RmqrPitch, RmqrPitch);
+var rmqrSnapped = RectUpright(r11, RmqrSnapWidth / 81.0, RmqrSnapWidth / 81.0);
+var rmqrLow = RectUpright(r11, RmqrLowPitch, RmqrLowPitch);
+CheckRmqr("clean", r11, RmqrPayload, rmqrClean, 1);
+CheckRmqr("rotated and mirrored", MirroredX(r11), RmqrPayload, rmqrRotated, 4);
+CheckRmqr("keystone", r11, RmqrPayload, rmqrKeystone, 4);
+CheckRmqr("non-square modules", r11, RmqrPayload, rmqrNonSquare, 1);
+CheckRmqr("grey edges", r11, RmqrPayload, rmqrGrey, 4, RmqrGreyBlur);
+CheckRmqr("hidden sub-finder", r11Hidden, RmqrPayload, rmqrHidden, 1);
+CheckRmqr("snapped scale", r11, RmqrPayload, rmqrSnapped, 1);
+CheckRmqr("low density", r11, RmqrPayload, rmqrLow, 1);
 
 // ---------- Drawing ----------
 
@@ -119,6 +162,7 @@ string Style() => $$"""
 .detl{stroke:#0969da;fill:none;stroke-width:1.6}
 .detd{stroke:#0969da;fill:none;stroke-width:1.4;stroke-dasharray:5 3}
 .pred{stroke:#bf8700;fill:none;stroke-width:1.6;stroke-dasharray:4 3}
+.twopx{fill:#bf8700;fill-opacity:.35}
 .predr{stroke:#bf8700;fill:#ffffff;stroke-width:1.6}
 .est{stroke:#6e7781;fill:none;stroke-width:1.4;stroke-dasharray:3 3}
 .estx{stroke:#57606a;fill:none;stroke-width:2.4}
@@ -152,13 +196,13 @@ string Poly(H map, double u0, double v0, double u1, double v1)
 }
 string Symbol(H map, bool[,] m, string ink = "#1f2328", string paper = "#ffffff")
 {
-    var dim = m.GetLength(0);
+    var rows = m.GetLength(0); var cols = m.GetLength(1);
     var path = new StringBuilder();
-    for (var r = 0; r < dim; r++)
-        for (var c = 0; c < dim; c++)
+    for (var r = 0; r < rows; r++)
+        for (var c = 0; c < cols; c++)
             if (m[r, c])
                 path.Append(Poly(map, c, r, c + 1, r + 1));
-    return $"<path fill=\"{paper}\" stroke=\"#d0d7de\" d=\"{Poly(map, -2, -2, dim + 2, dim + 2)}\"/><path fill=\"{ink}\" stroke=\"{ink}\" stroke-width=\"0.35\" d=\"{path}\"/>";
+    return $"<path fill=\"{paper}\" stroke=\"#d0d7de\" d=\"{Poly(map, -2, -2, cols + 2, rows + 2)}\"/><path fill=\"{ink}\" stroke=\"{ink}\" stroke-width=\"0.35\" d=\"{path}\"/>";
 }
 string Dot((double X, double Y) p, double r = 4, string cls = "det") => $"<circle class=\"{cls}\" cx=\"{F(p.X)}\" cy=\"{F(p.Y)}\" r=\"{F(r)}\"/>";
 string Line((double X, double Y) a, (double X, double Y) b, string cls) => $"<line class=\"{cls}\" x1=\"{F(a.X)}\" y1=\"{F(a.Y)}\" x2=\"{F(b.X)}\" y2=\"{F(b.Y)}\"/>";
@@ -430,6 +474,111 @@ string Card(int width, int height, string defs = "")
     File.WriteAllText(Path.Combine(microDir, "decode-overview.svg"), sb.ToString());
 }
 
+// ---------- The rMQR stage strip ----------
+{
+    // Two rows of three: a wide symbol needs wide panels
+    const double P = 320, PH = 116, S = 36, Gap = 28, X0 = 24, Y0 = 20, RowGap = 48;
+    const int W = 1080, H0 = (int)(Y0 + 2 * (PH + S) + RowGap + 22 + 20);
+    var sb = new StringBuilder();
+    sb.Append(Card(W, H0,
+        "<filter id=\"lens\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"0.8\"/></filter><linearGradient id=\"light\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ffffff\" stop-opacity=\".35\"/><stop offset=\"1\" stop-color=\"#000000\" stop-opacity=\".22\"/></linearGradient>"));
+    string[] labels = ["Luminance", "Global threshold", "Finder candidates", "Finder-side format copy", "Sub-finder", "Isotropic grid"];
+    int rows = r43.GetLength(0), cols = r43.GetLength(1);
+    (double U, double V) finder = (3.5, 3.5), sub = (cols - 2.5, rows - 2.5);
+    for (var i = 0; i < 6; i++)
+    {
+        var x = X0 + i % 3 * (P + Gap); var y = Y0 + i / 3 * (PH + S + RowGap);
+        sb.Append($"<rect class=\"box\" x=\"{F(x)}\" y=\"{F(y)}\" width=\"{P}\" height=\"{PH + S}\" rx=\"8\"/>");
+        sb.Append(Line((x, y + PH), (x + P, y + PH), "sep"));
+        var pitch = (P - 20) / (cols + 4);
+        var map = H.Affine(x + 10 + 2 * pitch, y + (PH - (rows + 4) * pitch) / 2 + 2 * pitch, pitch, 0, 0, pitch);
+        var sy = y + PH;
+        switch (i)
+        {
+            case 0:
+                sb.Append($"<g filter=\"url(#lens)\">{Symbol(map, r43, "#4a4a48", "#e7e3db")}</g>");
+                sb.Append($"<path fill=\"url(#light)\" d=\"{Poly(map, -2, -2, cols + 2, rows + 2)}\"/>");
+                sb.Append(Histogram(x + 40, sy + 7, P - 80, 22));
+                break;
+            case 1:
+                sb.Append(Symbol(map, r43));
+                sb.Append(Histogram(x + 40, sy + 7, P - 80, 22));
+                var tx = x + 40 + 0.52 * (P - 80);
+                sb.Append(Line((tx, sy + 4), (tx, sy + 31), "thr"));
+                break;
+            case 2:
+                sb.Append($"<g opacity=\"0.3\">{Symbol(map, r43)}</g>");
+                sb.Append(Line(map.Map(-1.5, finder.V), map.Map(8.5, finder.V), "detl"));
+                sb.Append(Dot(map.Map(finder.U, finder.V)));
+                var unit = 15.0; var bx = x + (P - 7 * unit) / 2; var by = sy + 7;
+                int[] runs = [1, 1, 3, 1, 1];
+                var rx = bx;
+                for (var k = 0; k < runs.Length; k++)
+                {
+                    var wdt = runs[k] * unit;
+                    sb.Append(k % 2 == 0
+                        ? $"<rect class=\"ink\" x=\"{F(rx)}\" y=\"{F(by)}\" width=\"{F(wdt)}\" height=\"9\"/>"
+                        : $"<rect fill=\"#ffffff\" stroke=\"#8c959f\" x=\"{F(rx)}\" y=\"{F(by)}\" width=\"{F(wdt)}\" height=\"9\"/>");
+                    sb.Append(Text(rx + wdt / 2, by + 22, runs[k].ToString(CultureInfo.InvariantCulture), "xs", "middle"));
+                    rx += wdt;
+                }
+                break;
+            case 3:
+                // Finder side: rows 1-5 of columns 8-10, then rows 1-3 of column 11
+                sb.Append($"<g opacity=\"0.3\">{Symbol(map, r43)}</g>");
+                var fmt = new StringBuilder();
+                for (var c = 8; c <= 11; c++)
+                    for (var r = 1; r <= (c == 11 ? 3 : 5); r++)
+                        fmt.Append(Poly(map, c + 0.1, r + 0.1, c + 0.9, r + 0.9));
+                sb.Append($"<path class=\"fmt\" d=\"{fmt}\"/>");
+                sb.Append($"<rect class=\"fmt\" x=\"{F(x + 90)}\" y=\"{F(sy + 12)}\" width=\"10\" height=\"10\"/>");
+                sb.Append(Text(x + 106, sy + 21, "format copy", "xs"));
+                break;
+            case 4:
+                sb.Append($"<g opacity=\"0.3\">{Symbol(map, r43)}</g>");
+                sb.Append(Window(map, sub, 3.5, "pred"));
+                sb.Append(Dot(map.Map(sub.U, sub.V)));
+                sb.Append($"<rect class=\"pred\" x=\"{F(x + 90)}\" y=\"{F(sy + 12)}\" width=\"10\" height=\"10\"/>");
+                sb.Append(Text(x + 106, sy + 21, "search", "xs"));
+                sb.Append(Dot((x + 170, sy + 17), 4));
+                sb.Append(Text(x + 180, sy + 21, "found centre", "xs"));
+                break;
+            case 5:
+                sb.Append($"<g opacity=\"0.3\">{Symbol(map, r43)}</g>");
+                var pts = new StringBuilder();
+                for (var r = 0; r < rows; r++)
+                    for (var c = 0; c < cols; c++)
+                    {
+                        var p = map.Map(c + 0.5, r + 0.5);
+                        pts.Append($"M{F(p.X - 0.9)} {F(p.Y)}a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0");
+                    }
+                sb.Append($"<path class=\"pt\" d=\"{pts}\"/>");
+                sb.Append(Line(map.Map(finder.U, finder.V), map.Map(sub.U, sub.V), "detl"));
+                sb.Append(Dot(map.Map(finder.U, finder.V)));
+                sb.Append(Dot(map.Map(sub.U, sub.V)));
+                sb.Append(Line((x + 60, sy + 18), (x + 80, sy + 18), "detl"));
+                sb.Append(Text(x + 86, sy + 22, "finder to sub-finder", "xs"));
+                sb.Append(Dot((x + 210, sy + 17), 2.2, "pt"));
+                sb.Append(Text(x + 217, sy + 21, "sample point", "xs"));
+                break;
+        }
+        sb.Append(Text(x + P / 2, y + PH + S + 22, labels[i], "h", "middle"));
+        if (i % 3 < 2)
+        {
+            var ax = x + P + 6; var ay = y + PH / 2;
+            sb.Append($"<path class=\"arrow\" d=\"M{F(ax)} {F(ay)}h{Gap - 12}m-5 -5l5 5l-5 5\"/>");
+        }
+        else if (i == 2)
+        {
+            var nx = X0 + P / 2; var ny = Y0 + PH + S + RowGap;
+            var mid = y + PH + S + 36;
+            sb.Append($"<path class=\"arrow\" d=\"M{F(x + P / 2)} {F(y + PH + S + 28)}V{F(mid)}H{F(nx)}V{F(ny - 4)}m-5 -5l5 5l5 -5\"/>");
+        }
+    }
+    sb.Append("</svg>");
+    File.WriteAllText(Path.Combine(rmqrDir, "decode-overview.svg"), sb.ToString());
+}
+
 // ---------- The input figures ----------
 
 // The image-level outline's stages, in its order; the matrix decode every grid goes through is the bar under them
@@ -454,20 +603,29 @@ const int Bar = -1;
 // The picture on the left, the path through the outline's stages on the right. marks lists the boxes
 // that carry the design record's numbered notes, in the notes' order; Bar is the matrix decode.
 void InputFigure(string path, string[] boxes, Func<StringBuilder, double, double, double, string[]> picture, int[] marks, string states, int dashedFrom, string defs = "")
+    => Figure(path, boxes, (sb, x, y, w, h) => picture(sb, x, y, w), 0, marks, states, dashedFrom, defs);
+
+// A wide symbol's figure: the picture across the top, pictureHeight high, and the path under it
+void InputFigureWide(string path, string[] boxes, Func<StringBuilder, double, double, double, double, string[]> picture, double pictureHeight, int[] marks, string states, int dashedFrom, string defs = "")
+    => Figure(path, boxes, picture, pictureHeight, marks, states, dashedFrom, defs);
+
+void Figure(string path, string[] boxes, Func<StringBuilder, double, double, double, double, string[]> picture, double wideHeight, int[] marks, string states, int dashedFrom, string defs)
 {
     const double PX = 24, PY = 20, PS = 260;
     const double BW = 132, BH = 62, BG = 20, RG = 30;
-    const double FX = PX + PS + 32, FW = 4 * BW + 3 * BG;
+    const double FW = 4 * BW + 3 * BG;
+    var wide = wideHeight > 0;
+    var pw = wide ? FW : PS; var ph = wide ? wideHeight : PS;
     var body = new StringBuilder();
 
-    body.Append($"<rect class=\"box\" x=\"{PX}\" y=\"{PY}\" width=\"{PS}\" height=\"{PS}\" rx=\"8\"/>");
-    var legend = picture(body, PX, PY, PS);
-    var lx = PX; var ly = PY + PS + 24;
+    body.Append($"<rect class=\"box\" x=\"{PX}\" y=\"{PY}\" width=\"{F(pw)}\" height=\"{F(ph)}\" rx=\"8\"/>");
+    var legend = picture(body, PX, PY, pw, ph);
+    var lx = PX; var ly = PY + ph + 24;
     foreach (var item in legend)
     {
         var parts = item.Split('|');
         var width = 20 + parts[1].Length * 6.0 + 18;
-        if (lx + width > PX + PS + 10)
+        if (lx + width > PX + pw + 10)
         {
             lx = PX;
             ly += 20;
@@ -478,6 +636,7 @@ void InputFigure(string path, string[] boxes, Func<StringBuilder, double, double
             "detl" => Line((lx, ly - 4), (lx + 14, ly - 4), "detl"),
             "detd" => Line((lx, ly - 4), (lx + 14, ly - 4), "detd"),
             "pred" => $"<rect class=\"pred\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
+            "twopx" => $"<rect class=\"twopx\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
             "predr" => $"<circle class=\"predr\" cx=\"{F(lx + 6)}\" cy=\"{F(ly - 4)}\" r=\"4\"/>",
             "est" => Cross((lx + 6, ly - 4), 4, "estx"),
             "estl" => Line((lx, ly - 4), (lx + 14, ly - 4), "est"),
@@ -486,6 +645,8 @@ void InputFigure(string path, string[] boxes, Func<StringBuilder, double, double
             "err" => $"<rect class=\"err\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
             "lat" => Line((lx, ly - 4), (lx + 14, ly - 4), "lat"),
             "blk" => $"<rect class=\"blk\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
+            "px" => $"<rect fill=\"none\" stroke=\"#8c959f\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
+            "fmt" => $"<rect class=\"fmt\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
             "shade" => $"<rect fill=\"#1f2328\" fill-opacity=\".35\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
             _ => "",
         });
@@ -501,8 +662,10 @@ void InputFigure(string path, string[] boxes, Func<StringBuilder, double, double
         list.Add(i + 1);
     }
 
-    // Three rows of four stages, then the matrix decode every grid goes through
-    (double X, double Y) At(int b) => (FX + (b % 4) * (BW + BG), PY + (b / 4) * (BH + RG));
+    // Rows of four stages, then the matrix decode every grid goes through; beside the picture, or under a wide one
+    var FX = wide ? PX : PX + PS + 32;
+    var FY = wide ? ly + 28 : PY;
+    (double X, double Y) At(int b) => (FX + (b % 4) * (BW + BG), FY + (b / 4) * (BH + RG));
     (string Box, string Text) Classes(char state) => state switch
     {
         'K' => ("bk", "bkt"),
@@ -537,7 +700,7 @@ void InputFigure(string path, string[] boxes, Func<StringBuilder, double, double
         }
     }
     var rows = (boxes.Length + 3) / 4;
-    var barY = PY + rows * BH + (rows - 1) * RG + 14;
+    var barY = FY + rows * BH + (rows - 1) * RG + 14;
     {
         var (box, t) = Classes(states[boxes.Length]);
         body.Append($"<rect class=\"{box}\" x=\"{F(FX)}\" y=\"{F(barY)}\" width=\"{F(FW)}\" height=\"30\" rx=\"8\"/>");
@@ -676,7 +839,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-low-density.svg"), qrBoxes,
     {
         // The render itself, pixel by pixel
         const int px = 43;
-        var raster = Render(v2, 25, Square(25, 0, 0, px), px, px, 1, null, false, false);
+        var raster = Render(v2, Square(25, 0, 0, px), px, px, 1, null, false, false);
         var cell = (s - 40) / px;
         var dark = new StringBuilder();
         for (var r = 0; r < px; r++)
@@ -701,7 +864,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-low-density.svg"), qrBoxes,
             var d = map.Map(6.5, k); var dy = y + 20 + Math.Round(d.Y) * cell;
             sb.Append(Line((x + 20 + map.Map(6, 0).X * cell - 2, dy), (x + 20 + map.Map(7, 0).X * cell + 2, dy), "tick"));
         }
-        return ["tick|module boundary", "blk|pixel"];
+        return ["tick|module boundary", "px|pixel"];
     },
     [1, 3, 3],
     "UKUKSSSSSSSSU", 8);
@@ -768,7 +931,7 @@ const int MicroDashedFrom = 3;
 double Raster(StringBuilder sb, bool[,] m, int px, int supersample, bool blur, double x, double y, double s)
 {
     var dim = m.GetLength(0);
-    var raster = Render(m, dim, Square(dim, 0, 0, px, 2), px, px, supersample, null, false, blur);
+    var raster = Render(m, Square(dim, 0, 0, px, 2), px, px, supersample, null, false, blur);
     var cell = (s - 40) / px;
     var levels = new SortedDictionary<byte, StringBuilder>();
     for (var r = 0; r < px; r++)
@@ -856,6 +1019,16 @@ InputFigure(Path.Combine(microDir, "decode-input-keystone.svg"), microBoxes,
     [4, 7, 8, 9, Bar],
     "UUUUKCSKKCK", MicroDashedFrom);
 
+// Grey edges: each pixel at its own grey
+InputFigure(Path.Combine(microDir, "decode-input-grey-edges.svg"), microBoxes,
+    (sb, x, y, s) =>
+    {
+        Raster(sb, m4, MicroGreyPx, 4, MicroGreyBlur, x, y, s);
+        return ["px|pixel, at its grey"];
+    },
+    [4, Bar],
+    "UUUUKCSCCCK", MicroDashedFrom);
+
 // Snapped scale: whole pixels a module at the finder, the symbol's own pitch along the timing patterns
 InputFigure(Path.Combine(microDir, "decode-input-snapped.svg"), microBoxes,
     (sb, x, y, s) =>
@@ -898,29 +1071,238 @@ InputFigure(Path.Combine(microDir, "decode-input-low-density.svg"), microBoxes,
             // A module two pixels wide
             if (k < 17 && FirstPixel(map.Map(k + 1, 0).X) - e == 2)
             {
-                sb.Append($"<rect class=\"pred\" x=\"{F(P(e, row0).X)}\" y=\"{F(P(e, row0).Y)}\" width=\"{F(2 * cell)}\" height=\"{F((row1 - row0) * cell)}\"/>");
-                sb.Append($"<rect class=\"pred\" x=\"{F(P(row0, e).X)}\" y=\"{F(P(row0, e).Y)}\" width=\"{F((row1 - row0) * cell)}\" height=\"{F(2 * cell)}\"/>");
+                sb.Append($"<rect class=\"twopx\" x=\"{F(P(e, row0).X)}\" y=\"{F(P(e, row0).Y)}\" width=\"{F(2 * cell)}\" height=\"{F((row1 - row0) * cell)}\"/>");
+                sb.Append($"<rect class=\"twopx\" x=\"{F(P(row0, e).X)}\" y=\"{F(P(row0, e).Y)}\" width=\"{F((row1 - row0) * cell)}\" height=\"{F(2 * cell)}\"/>");
             }
         }
-        return ["tick|module boundary", "pred|two-pixel module", "blk|pixel"];
+        return ["tick|module boundary", "twopx|two-pixel module", "px|pixel"];
     },
     [6],
     "UUUUSCKCCCU", MicroDashedFrom);
 
-// Grey edges: each pixel at its own grey
-InputFigure(Path.Combine(microDir, "decode-input-grey-edges.svg"), microBoxes,
-    (sb, x, y, s) =>
+// ---------- The rMQR input figures ----------
+
+// The rMQR image-level outline's stages, in its order
+string[] rmqrBoxes =
+[
+    "Binarization pass",
+    "Finder candidates",
+    "Axis-aligned frames",
+    "Arbitrary orientation",
+    "Low density",
+    "Finder-side format copy",
+    "Sub-finder",
+    "Isotropic grid",
+    "Anisotropic grid",
+    "Perspective search",
+    "Unrefined frame",
+    "Coverage re-read",
+];
+
+// The wide panel's inner width, and the tallest a picture may be
+const double WidePanel = 4 * 132 + 3 * 20, WideMaxHeight = 260;
+
+// The scale that fits an input's image into the wide panel, and the panel height it needs
+(double Scale, double Height) WideFit((H Map, int Width, int Height) input)
+{
+    var k = Math.Min((WidePanel - 40) / input.Width, (WideMaxHeight - 40) / input.Height);
+    return (k, input.Height * k + 40);
+}
+
+// The input's map drawn in the panel at (x, y): centred, at the fitted scale
+H WideMap((H Map, int Width, int Height) input, double x, double y)
+{
+    var (k, h) = WideFit(input);
+    return input.Map.Scaled(k, x + (WidePanel - input.Width * k) / 2, y + 20);
+}
+
+// A rendered input drawn pixel by pixel in the panel, each pixel at its own grey; returns the size of one pixel
+double RasterWide(StringBuilder sb, bool[,] m, (H Map, int Width, int Height) input, int supersample, bool blur, double x, double y)
+{
+    var raster = Render(m, input.Map, input.Width, input.Height, supersample, null, false, blur);
+    var (cell, _) = WideFit(input);
+    var ox = x + (WidePanel - input.Width * cell) / 2; var oy = y + 20;
+    var levels = new SortedDictionary<byte, StringBuilder>();
+    for (var r = 0; r < input.Height; r++)
+        for (var c = 0; c < input.Width; c++)
+        {
+            var v = raster[r * input.Width + c];
+            if (v >= 220)
+                continue;
+            if (!levels.TryGetValue(v, out var path))
+                levels[v] = path = new StringBuilder();
+            path.Append($"M{F(ox + c * cell)} {F(oy + r * cell)}h{F(cell)}v{F(cell)}h{F(-cell)}Z");
+        }
+    sb.Append($"<rect fill=\"#ffffff\" stroke=\"#d0d7de\" x=\"{F(ox)}\" y=\"{F(oy)}\" width=\"{F(input.Width * cell)}\" height=\"{F(input.Height * cell)}\"/>");
+    foreach (var (v, path) in levels)
     {
-        Raster(sb, m4, MicroGreyPx, 4, MicroGreyBlur, x, y, s);
-        return ["blk|pixel, at its grey"];
+        var g = (int)Math.Round(0x1f + (255 - 0x1f) * (v - 30) / 190.0);
+        sb.Append($"<path fill=\"#{g:x2}{g:x2}{g:x2}\" d=\"{path}\"/>");
+    }
+    var pixelGrid = new StringBuilder();
+    for (var k = 0; k <= input.Width; k++)
+        pixelGrid.Append($"M{F(ox + k * cell)} {F(oy)}v{F(input.Height * cell)}");
+    for (var k = 0; k <= input.Height; k++)
+        pixelGrid.Append($"M{F(ox)} {F(oy + k * cell)}h{F(input.Width * cell)}");
+    sb.Append($"<path stroke=\"#8c959f\" stroke-opacity=\".45\" stroke-width=\".5\" fill=\"none\" d=\"{pixelGrid}\"/>");
+    return cell;
+}
+
+// Past the isotropic grid, every stage runs only when the grids before it failed
+const int RmqrDashedFrom = 7;
+
+// The finder-side format copy: rows 1-5 of columns 8-10, then rows 1-3 of column 11
+string FormatCopy(H map)
+{
+    var fmt = new StringBuilder();
+    for (var c = 8; c <= 11; c++)
+        for (var r = 1; r <= (c == 11 ? 3 : 5); r++)
+            fmt.Append(Poly(map, c + 0.1, r + 0.1, c + 0.9, r + 0.9));
+    return $"<path class=\"fmt\" d=\"{fmt}\"/>";
+}
+
+// Module coordinates of the two centres in an R11x77
+(double U, double V) rFinder = (3.5, 3.5), rSub = (77 - 2.5, 11 - 2.5);
+
+// Clean
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-clean.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        var map = WideMap(rmqrClean, x, y);
+        sb.Append(Symbol(map, r11));
+        sb.Append(FormatCopy(map));
+        sb.Append(Line(map.Map(rFinder.U, rFinder.V), map.Map(rSub.U, rSub.V), "detd"));
+        sb.Append(Dot(map.Map(rFinder.U, rFinder.V), 5));
+        sb.Append(Dot(map.Map(rSub.U, rSub.V), 4));
+        return ["det|found centre", "fmt|format copy", "detd|finder to sub-finder"];
     },
-    [4, Bar],
-    "UUUUKCSCCCK", MicroDashedFrom);
+    WideFit(rmqrClean).Height, [], "UUUCSUUUCCCSU", RmqrDashedFrom);
+
+// Rotated or mirrored: in the mirror the finder is at the right end and the sub-finder at the left
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-rotated.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        var map = WideMap(rmqrRotated, x, y);
+        sb.Append(Symbol(map, MirroredX(r11)));
+        (double U, double V) finder = (77 - 3.5, 3.5), sub = (2.5, 11 - 2.5);
+        var c = map.Map(finder.U, finder.V);
+        var unit = Math.Sqrt(Math.Pow(map.Map(1, 0).X - map.Map(0, 0).X, 2) + Math.Pow(map.Map(1, 0).Y - map.Map(0, 0).Y, 2));
+        var rays = new StringBuilder();
+        for (var deg = 0; deg < 180; deg += 15)
+        {
+            var rad = deg * Math.PI / 180;
+            rays.Append(Line((c.X - 5 * unit * Math.Cos(rad), c.Y - 5 * unit * Math.Sin(rad)), (c.X + 5 * unit * Math.Cos(rad), c.Y + 5 * unit * Math.Sin(rad)), "row"));
+        }
+        sb.Append($"<g opacity=\".35\">{rays}</g>");
+        sb.Append(Line(map.Map(finder.U - 5, finder.V), map.Map(finder.U + 5, finder.V), "detl"));
+        sb.Append(Line(map.Map(finder.U, finder.V - 5), map.Map(finder.U, finder.V + 5), "detl"));
+        sb.Append(Line(c, map.Map(sub.U, sub.V), "detd"));
+        sb.Append(Dot(c, 5));
+        sb.Append(Dot(map.Map(sub.U, sub.V), 4));
+        return ["det|found centre", "row|sweep direction", "detl|finder axes", "detd|finder to sub-finder"];
+    },
+    WideFit(rmqrRotated).Height, [3, 6, 7], "UUUKSUKKCCCCU", RmqrDashedFrom);
+
+// Keystone: the isotropic grid, one turn and one scale from the finder to the sub-finder, against the symbol's edge
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-keystone.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        var map = WideMap(rmqrKeystone, x, y);
+        sb.Append(Symbol(map, r11));
+        var f = map.Map(rFinder.U, rFinder.V); var s = map.Map(rSub.U, rSub.V);
+        double du = rSub.U - rFinder.U, dv = rSub.V - rFinder.V, dx = s.X - f.X, dy = s.Y - f.Y, den = du * du + dv * dv;
+        double zr = (dx * du + dy * dv) / den, zi = (dy * du - dx * dv) / den;
+        (double X, double Y) Iso(double u, double v) => (f.X + zr * (u - rFinder.U) - zi * (v - rFinder.V), f.Y + zi * (u - rFinder.U) + zr * (v - rFinder.V));
+        var a = Iso(0, 0); var b = Iso(77, 0); var cc = Iso(77, 11); var d = Iso(0, 11);
+        sb.Append($"<path class=\"est\" d=\"M{F(a.X)} {F(a.Y)}L{F(b.X)} {F(b.Y)}L{F(cc.X)} {F(cc.Y)}L{F(d.X)} {F(d.Y)}Z\"/>");
+        sb.Append($"<path class=\"detl\" d=\"{Poly(map, 0, 0, 77, 11)}\"/>");
+        sb.Append(Dot(f, 5));
+        sb.Append(Dot(s, 4));
+        return ["det|found centre", "estl|isotropic grid", "detl|symbol edge"];
+    },
+    WideFit(rmqrKeystone).Height, [6, 9, Bar], "UUUCSUKUUKSUK", RmqrDashedFrom);
+
+// Non-square modules: a module size along each axis, six modules each
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-non-square.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        var map = WideMap(rmqrNonSquare, x, y);
+        sb.Append(Symbol(map, r11));
+        sb.Append(Line(map.Map(1, rFinder.V - 0.25), map.Map(7, rFinder.V - 0.25), "tick"));
+        sb.Append(Line(map.Map(rFinder.U + 0.25, 1), map.Map(rFinder.U + 0.25, 7), "tick"));
+        sb.Append(Dot(map.Map(rFinder.U, rFinder.V), 4));
+        return ["det|found centre", "tick|six modules along each axis"];
+    },
+    WideFit(rmqrNonSquare).Height, [2], "UUKCSUUUCCCSU", RmqrDashedFrom);
+
+// Grey edges: each pixel at its own grey
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-grey-edges.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        RasterWide(sb, r11, rmqrGrey, 4, RmqrGreyBlur, x, y);
+        var map = WideMap(rmqrGrey, x, y);
+        sb.Append(Line(map.Map(rFinder.U, rFinder.V), map.Map(rSub.U, rSub.V), "detd"));
+        sb.Append(Dot(map.Map(rFinder.U, rFinder.V), 4));
+        sb.Append(Dot(map.Map(rSub.U, rSub.V), 3.5));
+        return ["px|pixel, at its grey", "det|found centre", "detd|finder to sub-finder"];
+    },
+    WideFit(rmqrGrey).Height, [6, 7, 11], "UUUCUUKKCCSKU", RmqrDashedFrom);
+
+// Hidden sub-finder: painted to paper, so no grid can be anchored on it
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-hidden-sub-finder.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        var map = WideMap(rmqrHidden, x, y);
+        sb.Append(Symbol(map, r11Hidden));
+        sb.Append(FormatCopy(map));
+        sb.Append($"<path class=\"pred\" d=\"{Poly(map, 72, 6, 77, 11)}\"/>");
+        sb.Append(Dot(map.Map(rFinder.U, rFinder.V), 5));
+        return ["det|found centre", "fmt|format copy", "pred|sub-finder, painted out"];
+    },
+    WideFit(rmqrHidden).Height, [10], "UUUCSUUSSSKSU", RmqrDashedFrom);
+
+// Snapped scale: modules one or two whole pixels wide, and the format copy they carry
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-snapped.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        RasterWide(sb, r11, rmqrSnapped, 1, false, x, y);
+        sb.Append($"<g opacity=\".75\">{FormatCopy(WideMap(rmqrSnapped, x, y))}</g>");
+        return ["fmt|format copy", "px|pixel"];
+    },
+    WideFit(rmqrSnapped).Height, [5, 6], "UUUCSKKUCCCSU", RmqrDashedFrom);
+
+// Low density: module boundaries read off the timing patterns, at whole pixels
+InputFigureWide(Path.Combine(rmqrDir, "decode-input-low-density.svg"), rmqrBoxes,
+    (sb, x, y, w, h) =>
+    {
+        var cell = RasterWide(sb, r11, rmqrLow, 1, false, x, y);
+        var ox = x + (WidePanel - rmqrLow.Width * cell) / 2; var oy = y + 20;
+        (double X, double Y) P(double px, double py) => (ox + px * cell, oy + py * cell);
+        var map = rmqrLow.Map;
+        var row0 = FirstPixel(map.Map(0, 0).Y); var row1 = FirstPixel(map.Map(0, 1).Y);
+        var col0 = FirstPixel(map.Map(0, 0).X); var col1 = FirstPixel(map.Map(1, 0).X);
+        for (var k = 7; k <= 77; k++)
+        {
+            var e = FirstPixel(map.Map(k, 0).X);
+            sb.Append(Line(P(e, row0 - 0.6), P(e, row1 + 0.6), "tick"));
+            if (k < 77 && FirstPixel(map.Map(k + 1, 0).X) - e == 2)
+                sb.Append($"<rect class=\"twopx\" x=\"{F(P(e, row0).X)}\" y=\"{F(P(e, row0).Y)}\" width=\"{F(2 * cell)}\" height=\"{F((row1 - row0) * cell)}\"/>");
+        }
+        for (var k = 7; k <= 11; k++)
+        {
+            var e = FirstPixel(map.Map(0, k).Y);
+            sb.Append(Line(P(col0 - 0.6, e), P(col1 + 0.6, e), "tick"));
+            if (k < 11 && FirstPixel(map.Map(0, k + 1).Y) - e == 2)
+                sb.Append($"<rect class=\"twopx\" x=\"{F(P(col0, e).X)}\" y=\"{F(P(col0, e).Y)}\" width=\"{F((col1 - col0) * cell)}\" height=\"{F(2 * cell)}\"/>");
+        }
+        return ["tick|module boundary", "twopx|two-pixel module", "px|pixel"];
+    },
+    WideFit(rmqrLow).Height, [1, 4], "UKUCKCCCCCCSU", RmqrDashedFrom);
 
 // Preview: every figure on a light and on a dark page
 if (preview)
 {
-    var files = new[] { qrDir, microDir }
+    var files = new[] { qrDir, microDir, rmqrDir }
         .SelectMany(d => Directory.GetFiles(d, "*.svg").OrderBy(p => Path.GetFileName(p) == "decode-overview.svg" ? 0 : 1).ThenBy(p => p, StringComparer.Ordinal))
         .Select(p => Path.GetRelativePath(root, p).Replace(Path.DirectorySeparatorChar, '/'))
         .ToArray();
@@ -945,6 +1327,64 @@ Console.WriteLine($"written to {root}");
 return 0;
 
 // ---------- Geometry and rendering ----------
+
+static bool[,] RmqrMatrix(RmQRCodeData qr)
+{
+    var m = new bool[qr.Height, qr.Width];
+    for (var r = 0; r < qr.Height; r++)
+        for (var c = 0; c < qr.Width; c++)
+            m[r, c] = qr[r, c];
+    return m;
+}
+
+// The symbol seen in a mirror: columns reversed
+static bool[,] MirroredX(bool[,] m)
+{
+    var rows = m.GetLength(0); var cols = m.GetLength(1);
+    var t = new bool[rows, cols];
+    for (var r = 0; r < rows; r++)
+        for (var c = 0; c < cols; c++)
+            t[r, cols - 1 - c] = m[r, c];
+    return t;
+}
+
+// A rectangular symbol upright, its modules pitchX by pitchY pixels, with a two-module quiet zone
+static (H Map, int Width, int Height) RectUpright(bool[,] m, double pitchX, double pitchY, int qz = 2)
+{
+    var rows = m.GetLength(0); var cols = m.GetLength(1);
+    var width = (int)Math.Round((cols + 2 * qz) * pitchX); var height = (int)Math.Round((rows + 2 * qz) * pitchY);
+    return (H.Affine(qz * pitchX, qz * pitchY, pitchX, 0, 0, pitchY), width, height);
+}
+
+// The same turned by degrees about the image centre, the image just holding the symbol and its quiet zone
+static (H Map, int Width, int Height) RectRotated(bool[,] m, double pitch, double degrees, int qz = 2)
+{
+    var rows = m.GetLength(0); var cols = m.GetLength(1);
+    var rad = degrees * Math.PI / 180;
+    var cos = Math.Cos(rad); var sin = Math.Sin(rad);
+    double lw = (cols + 2 * qz) * pitch, lh = (rows + 2 * qz) * pitch;
+    var width = (int)Math.Ceiling(Math.Abs(cos) * lw + Math.Abs(sin) * lh); var height = (int)Math.Ceiling(Math.Abs(sin) * lw + Math.Abs(cos) * lh);
+    double ux = pitch * cos, uy = pitch * sin, vx = -pitch * sin, vy = pitch * cos;
+    return (H.Affine(width / 2.0 - cols / 2.0 * ux - rows / 2.0 * vx, height / 2.0 - cols / 2.0 * uy - rows / 2.0 * vy, ux, uy, vx, vy), width, height);
+}
+
+// The same in perspective: one edge ('T', 'B', 'L' or 'R') of the symbol with its quiet zone shortened by
+// shrink of its length, half at each end
+static (H Map, int Width, int Height) RectKeystone(bool[,] m, double pitch, double shrink, char edge, int qz = 2)
+{
+    var rows = m.GetLength(0); var cols = m.GetLength(1);
+    double w = (cols + 2 * qz) * pitch, h = (rows + 2 * qz) * pitch;
+    double iw = shrink * w / 2, ih = shrink * h / 2;
+    (double X, double Y) p0 = (0, 0), p1 = (w, 0), p2 = (w, h), p3 = (0, h);
+    switch (edge)
+    {
+        case 'T': p0 = (iw, 0); p1 = (w - iw, 0); break;
+        case 'B': p3 = (iw, h); p2 = (w - iw, h); break;
+        case 'L': p0 = (0, ih); p3 = (0, h - ih); break;
+        default: p1 = (w, ih); p2 = (w, h - ih); break;
+    }
+    return (H.QuadRect(cols + 2 * qz, rows + 2 * qz, p0, p1, p2, p3).Translated(qz, qz), (int)Math.Ceiling(w), (int)Math.Ceiling(h));
+}
 
 static bool[,] MicroMatrix(MicroQRCodeData qr)
 {
@@ -1041,7 +1481,7 @@ static Func<double, double, double> Shadow(double size, double depth, double edg
         return 1 - depth * t * t * (3 - 2 * t);
     };
 
-static byte[] Render(bool[,] m, int dim, H map, int width, int height, int supersample, Func<double, double, double>? light, bool invert, bool blur)
+static byte[] Render(bool[,] m, H map, int width, int height, int supersample, Func<double, double, double>? light, bool invert, bool blur)
 {
     const double Ink = 30, Paper = 220;
     var inverse = map.Inverse();
@@ -1054,7 +1494,7 @@ static byte[] Render(bool[,] m, int dim, H map, int width, int height, int super
                 for (var i = 0; i < supersample; i++)
                 {
                     var (u, v) = inverse.Map(px + (i + 0.5) / supersample, py + (j + 0.5) / supersample);
-                    var dark = u >= 0 && v >= 0 && u < dim && v < dim && m[(int)v, (int)u];
+                    var dark = u >= 0 && v >= 0 && u < m.GetLength(1) && v < m.GetLength(0) && m[(int)v, (int)u];
                     sum += dark ? Ink : Paper;
                 }
             pixels[py * width + px] = sum / (supersample * supersample);
@@ -1113,6 +1553,16 @@ readonly record struct H(double A, double B, double C, double D, double E, doubl
         double d = p1.Y - p0.Y + g * p1.Y, e = p3.Y - p0.Y + h * p3.Y;
         return new(a / side, b / side, p0.X, d / side, e / side, p0.Y, g / side, h / side, 1);
     }
+
+    // The rectangle [0, cols] × [0, rows] onto the quad p0 (0, 0), p1 (cols, 0), p2 (cols, rows), p3 (0, rows)
+    public static H QuadRect(double cols, double rows, (double X, double Y) p0, (double X, double Y) p1, (double X, double Y) p2, (double X, double Y) p3)
+    {
+        var unit = Quad(1, p0, p1, p2, p3);
+        return new(unit.A / cols, unit.B / rows, unit.C, unit.D / cols, unit.E / rows, unit.F, unit.G / cols, unit.Hh / rows, unit.I);
+    }
+
+    // The map drawn at scale k and moved by (dx, dy)
+    public H Scaled(double k, double dx, double dy) => new(k * A + dx * G, k * B + dx * Hh, k * C + dx * I, k * D + dy * G, k * E + dy * Hh, k * F + dy * I, G, Hh, I);
 
     // The map of (u + du, v + dv)
     public H Translated(double du, double dv) => this with { C = A * du + B * dv + C, F = D * du + E * dv + F, I = G * du + Hh * dv + I };

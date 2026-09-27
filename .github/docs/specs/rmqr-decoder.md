@@ -24,6 +24,112 @@ Behavior: in each of the [shared image decode passes](qrcode-symbologies.md#imag
 
 On success the result carries the symbol's four corners in image coordinates (`RmQRCodeDecodeInfo.Corners`; contract in [qrcode-symbologies.md](qrcode-symbologies.md#public-api-direction)), taken from the winning frame's transform. The frames carry a mirrored capture in their axes rather than by transposing the sampled grid, so that transform is always in symbol order and the corners need no swap. The two far corners (top-right and bottom-left) carry the residual of the bounded perspective search; which is worse depends on the version and tilt, so the first draft's "top-right is the worst" was as wrong as the second's "bottom-left". Measured at 8 px per module against the rendered scene (a payload sweep gives bit-identical numbers, so it is the transform, not the data; figures from the shipped code, an earlier set was taken with a half-pixel shift since removed): R11x59 at 2 % top-right 0.90 module and bottom-left 0.87, at 3 % bottom-left 1.24, at 4 % bottom-left 1.22, with the anchors within 0.5 (top-left) and 0.25 (bottom-right), and 4 to 6 `ErrorsCorrected` on a noise-free render, meaning the accepted grid already mis-samples a few modules; R7x43 at 4 % top-right 1.04 with even the anchors drifting (top-left 0.93, bottom-right 0.72); R17x139 under 0.65 throughout (0.64 at 2 %, under 0.5 from 3 %); left/right-shrunk keystones under 0.4 everywhere; R11x59 keeps decoding to 8 % with the bottom-left at 1.4. The reported left edge on R11x59 at 4 % leans 3.6° where the true lean is 12°: the shear search covers the true angle, but `TryPerspectiveVariants` returns the first transform that decodes, and a wrong shear compensated by the projective terms decodes fine under ECC M. The contract therefore states about a module for rMQR under perspective and a module and a half from 2 % up (at 2 % nine versions pass a module, worst R7x99 1.22 and R15x99 1.19; only at 1 % does everything stay under 0.95, so 2 % is the real threshold and it is not only the short symbols); a sub-degree refit of the winning frame after decode would tighten it and is a follow-up.
 
+### Image decode figures
+
+These figures show how the decoder reads each kind of input. [decode_figures.cs](../../../tools/decode_figures.cs) draws them from the library's own symbols and decodes each input through the public API, so no figure can show a read that does not happen. Rerun it when the pipeline changes.
+
+#### Stage by stage
+
+A clean R11x43 on the main path.
+
+![Stage by stage: luminance, global threshold, finder candidates, finder-side format copy, sub-finder, isotropic grid](../images/rmqr/decode-overview.svg)
+
+- **Luminance:** the grey input.
+- **Global threshold:** one Otsu split of the histogram into ink and paper.
+- **Finder candidates:** patterns that read 1:1:3:1:1 along a line through their centre and pass the cross-checks, most confirmed first.
+- **Finder-side format copy:** read beside the finder before any grid is fitted. It names the version, and so the width and height.
+- **Sub-finder:** searched for near the corner the version predicts.
+- **Isotropic grid:** one turn and one scale take the finder centre to the sub-finder centre, and the grid is sampled at every module.
+
+#### Reading the input figures
+
+Each figure shows the input, with what the decoder finds drawn over it, above the path through the [image-level stages](rmqr-spec-map.md#image-detection-and-sampling). Every pass runs this path: the global threshold, the inverted image, the regional pass, then the midpoint sweep (see [image decode passes](qrcode-symbologies.md#image-decode-passes)). A mirrored capture is read by a frame with its axes swapped; no grid is read transposed.
+
+Green and grey boxes run for this input; green marks the stages it depends on.
+
+- **Key** (green): without this stage, the input would not read, or would read only after more grids fail than with it. A grid is one sampling; its coverage read is the same grid.
+- **Runs** (grey): runs as for any input.
+- **Only if needed** (dashed): runs only when the grids before it fail.
+- **Skipped** (faded): does not run for this input.
+
+The numbers on the boxes match the numbered notes.
+
+#### Clean
+
+An upright, crisp R11x77.
+
+![Clean R11x77 and its path through the pipeline](../images/rmqr/decode-input-clean.svg)
+
+The format copy reads at the measured scale and names R11x77. The sub-finder is where that version puts it, and the isotropic grid anchored on it reads first. With only two grey levels, the grey-level stages stay off, and at this density the boundary table is not used.
+
+#### Rotated or mirrored
+
+An R11x77, turned and seen in a mirror.
+
+![Rotated and mirrored R11x77 and its path through the pipeline](../images/rmqr/decode-input-rotated.svg)
+
+1. **Arbitrary orientation:** the axis-aligned frames sample no grid. The angular sweep finds the finder's own axes, and one of its frames, with the axes swapped, reads the format copy; that is how the mirror is read.
+2. **Sub-finder:** found near the corner the version predicts, and refined to its centre.
+3. **Isotropic grid:** one turn and one scale from the finder to the sub-finder. It reads.
+
+#### Keystone distortion
+
+An R11x77 in perspective, its top edge shortened as far as the tests go.
+
+![Keystoned R11x77 and its path through the pipeline](../images/rmqr/decode-input-keystone.svg)
+
+1. **Sub-finder:** found more than a module from where the version predicts it, and refined to its centre. Every later grid is anchored on it.
+2. **Perspective search:** the isotropic grid (dashed) and the anisotropic grid fail. The search then tries two projective coefficients and the row axis's shear. Each candidate must first pass the sub-finder-side format copy and the timing rows along the top and bottom edges; only then is a grid sampled. Here the first grid sampled reads.
+3. **Matrix decode:** Reed-Solomon corrects the data modules the grid still gets wrong; without correction, more grids fail first.
+
+The perspective search starts only after the isotropic or the anisotropic grid gets past its format information.
+
+#### Non-square modules
+
+An upright R11x77 whose modules are wider than tall.
+
+![R11x77 with non-square modules and its path through the pipeline](../images/rmqr/decode-input-non-square.svg)
+
+1. **Axis-aligned frames:** the module size is measured along each axis on its own, from a dark-light-dark run through the finder centre spanning six modules. Without the two sizes, a sweep frame reads, after one more failed grid.
+
+The isotropic grid scales the frame uniformly, so it keeps both sizes and reads first; the anisotropic grid is not needed.
+
+#### Grey edges
+
+An anti-aliased R11x77 at about one and a half pixels per module, slightly turned.
+
+![Anti-aliased R11x77 and its path through the pipeline](../images/rmqr/decode-input-grey-edges.svg)
+
+1. **Sub-finder:** found several modules from where the version predicts it, and refined to its centre.
+2. **Isotropic grid:** its turn from the finder to the sub-finder follows the symbol's, which the axis-aligned frame does not.
+3. **Coverage re-read:** the grid fails but gets past its format information, so it is read again with each module's luminance interpolated at its centre and split halfway between the two levels. That read succeeds.
+
+#### Hidden sub-finder
+
+An upright R11x77 whose sub-finder is painted out, as damage or a label would.
+
+![R11x77 with its sub-finder painted out, and its path through the pipeline](../images/rmqr/decode-input-hidden-sub-finder.svg)
+
+1. **Unrefined frame:** no sub-finder is found, so no grid can be anchored on one. The frame at the scale that read the format copy is sampled on its own, and it reads.
+
+#### Snapped scale
+
+A crisp R11x77 at a non-integer scale, with modules snapped to whole pixels.
+
+![R11x77 at a snapped scale and its path through the pipeline](../images/rmqr/decode-input-snapped.svg)
+
+1. **Finder-side format copy:** the finder measures a scale a few percent over the symbol's pitch, and at that scale the copy gives no word. At a scale a few percent smaller it reads and names the version.
+2. **Sub-finder:** found about a module from where the version predicts it. The isotropic grid anchored on it corrects the scale and reads. Without it, the unrefined frame reads, with corrections, after one more failed grid.
+
+#### Low density
+
+A crisp R11x77 at a little over one pixel per module.
+
+![R11x77 at low density and its path through the pipeline](../images/rmqr/decode-input-low-density.svg)
+
+1. **Finder candidates:** the row-strided scan misses the finder, and the sweep of every row finds it.
+2. **Low density:** each module is one or two whole pixels, which a fitted grid rarely follows. The module boundaries are read along the top row and the left column, and each module is sampled between its own boundaries. The width and height they count name the version, and the grid reads before the format copy is tried. Two-pixel modules are marked.
+
 ### Supported
 
 | Area | Coverage |
