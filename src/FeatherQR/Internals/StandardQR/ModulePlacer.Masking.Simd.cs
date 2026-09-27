@@ -56,15 +56,11 @@ internal static partial class ModulePlacer
     // ---------------------------------
     // Shared SIMD pieces
     // ---------------------------------
-    // Operand-order note: the cross-platform helper Vector256.AndNot(left, right)
-    // computes left & ~right ("bitwise-and of a given vector and the ones
-    // complement of another vector"). This is the OPPOSITE operand convention of
-    // the hardware intrinsic Avx2.AndNot(left, right) = ~left & right (vpandn) —
-    // the JIT swaps the operands when it emits vpandn for the helper. Every
-    // AndNot in this file is the cross-platform helper, so e.g.
-    // Vector256.AndNot(rowMask, x) == ~x & rowMask and
-    // Vector256.AndNot(y5, y5 << 1) == y5 & ~(y5 << 1), matching the scalar code
-    // (verified byte-for-byte by ModulePlacerMaskSimdParityTest).
+    // Operand-order note: the cross-platform helper Vector256.AndNot(left, right) computes left & ~right ("bitwise-and of a given vector and the ones complement of another vector").
+    // This is the OPPOSITE operand convention of the hardware intrinsic Avx2.AndNot(left, right) = ~left & right (vpandn) — the JIT swaps the operands when it emits vpandn for the helper.
+    // Every AndNot in this file is the cross-platform helper, so
+    // e.g. Vector256.AndNot(rowMask, x) == ~x & rowMask and Vector256.AndNot(y5, y5 << 1) == y5 & ~(y5 << 1),
+    // matching the scalar code (verified byte-for-byte by ModulePlacerMaskSimdParityTest).
 
     /// <summary>Nibble LUT for the Mula vector popcount (per-4-bit set-bit counts).</summary>
     private static readonly Vector256<byte> PopLut256 = Vector256.Create(
@@ -291,8 +287,7 @@ internal static partial class ModulePlacer
 
     private static MaskLayout64 GetMaskLayout64(int version, int size)
     {
-        // The tables are cached per version, so a version/size mismatch must never
-        // reach the builder (it would poison the slot for every later caller).
+        // The tables are cached per version, so a version/size mismatch must never reach the builder (it would poison the slot for every later caller).
         if (version < 1 || version > 11 || size != QRCodeData.SizeFromVersion(version))
             throw new ArgumentException($"size {size} does not match a single-word version {version} (1-11)", nameof(size));
         ref var slot = ref maskLayouts64[version];
@@ -337,8 +332,7 @@ internal static partial class ModulePlacer
             }
         }
 
-        // format overlays: copy 1 at (FormatXs1[i], FormatYs1[i]), copy 2 at (size-1-i, 8)
-        // for i < 8 and (8, size-15+i) for i >= 8 — the same coordinates PokeFormatBits64 uses.
+        // format overlays: copy 1 at (FormatXs1[i], FormatYs1[i]), copy 2 at (size-1-i, 8) for i < 8 and (8, size-15+i) for i >= 8 — the same coordinates PokeFormatBits64 uses.
         var fmt = new Vector256<ulong>[8 * size];
         var lanes = new ulong[4][];
         for (var e = 0; e < 4; e++)
@@ -370,15 +364,11 @@ internal static partial class ModulePlacer
 
     internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // The per-version tables are derived from the version's canonical blocked mask,
-        // not from the parameter (kept for signature parity with the scalar and ARM
-        // tiers, which do read it): callers must pass that same mask, which every
-        // production caller does (WriteQRMatrix hands over layout.BlockedMask).
+        // The per-version tables are derived from the version's canonical blocked mask, not from the parameter (kept for signature parity with the scalar and ARM tiers, which do read it): callers must pass that same mask, which every production caller does (WriteQRMatrix hands over layout.BlockedMask).
         var layout = GetMaskLayout64(version, size);
         System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCode64Simd requires the version's canonical blocked mask");
 
-        // Defense in depth for the unchecked wide loads / table indexing below; the
-        // production caller already guarantees both.
+        // Defense in depth for the unchecked wide loads / table indexing below; the production caller already guarantees both.
         if (buffer.Length < size * size)
             throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
         if ((uint)eccLevel > 3)
@@ -404,8 +394,7 @@ internal static partial class ModulePlacer
         }
 
         // rows4[y] = row y of the group's four candidates (masked, format bits in);
-        // scratch for the complements and the vertical-equality rows (the 5-run marker
-        // is a rolling register in the scorer)
+        // scratch for the complements and the vertical-equality rows (the 5-run marker is a rolling register in the scorer)
         Span<Vector256<ulong>> rows4 = stackalloc Vector256<ulong>[64];
         Span<Vector256<ulong>> nrows4 = stackalloc Vector256<ulong>[64];
         Span<Vector256<ulong>> eq4 = stackalloc Vector256<ulong>[64];
@@ -532,9 +521,7 @@ internal static partial class ModulePlacer
             prev = cur;
         }
 
-        // Checkpoint (second group only): the remaining rule-3-column and balance
-        // terms are non-negative, so the partial is a lower bound of each lane's
-        // total — if every lane already exceeds the best total, skip the loop.
+        // Checkpoint (second group only): the remaining rule-3-column and balance terms are non-negative, so the partial is a lower bound of each lane's total — if every lane already exceeds the best total, skip the loop.
         if (abortAbove != int.MaxValue)
         {
             var partial = accOnes + Vector256.ShiftLeft(accTwos, 1)
@@ -844,11 +831,7 @@ internal static partial class ModulePlacer
             score1 += v5.PopCount() + 2 * v5.AndNotWith(prev).PopCount();
         }
 
-        // Checkpoint: the remaining rule-3-column and balance terms are non-negative,
-        // so the partial is a lower bound — a pattern already above the best total
-        // cannot win or tie, and the heaviest loop below is skipped. The first
-        // pattern has no bound yet (abortAbove == int.MaxValue), so skip the
-        // reductions too.
+        // Checkpoint: the remaining rule-3-column and balance terms are non-negative, so the partial is a lower bound — a pattern already above the best total cannot win or tie, and the heaviest loop below is skipped. The first pattern has no bound yet (abortAbove == int.MaxValue), so skip the reductions too.
         if (abortAbove != int.MaxValue)
         {
             var partial = score1 + score2 + score3

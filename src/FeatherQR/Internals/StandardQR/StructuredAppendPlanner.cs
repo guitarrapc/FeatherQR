@@ -78,12 +78,7 @@ internal static partial class StructuredAppendPlanner
         // What no split can cost less than, priced once; every search below is gated on it.
         var cheapest = CheapestPayloadBits(text, charset);
 
-        // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the
-        // two are the same number for content holding no run dense enough to repay a mode
-        // header. Deciding that once, in one pass, is what keeps the searches below off the
-        // segmentation program, whose every probe is a pass of its own: the split it would find
-        // is the split the closed-form cost finds, so the searches run as Single and the symbols
-        // are still written exactly as the caller asked.
+        // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the two are the same number for content holding no run dense enough to repay a mode header. Deciding that once, in one pass, is what keeps the searches below off the segmentation program, whose every probe is a pass of its own, the split it would find is the split the closed-form cost finds, so the searches run as Single and the symbols are still written exactly as the caller asked.
         var searched = segmentation == QRSegmentation.Optimal && CanPlanHelp(text, singleMode, out oneRunPlans)
             ? QRSegmentation.Optimal
             : QRSegmentation.Single;
@@ -92,31 +87,24 @@ internal static partial class StructuredAppendPlanner
         if (!CanHold(largest, MaxSymbols, cheapest, charset))
             return false;
 
-        // The minimal plan for the whole text, per count indicator band, taken on first use and
-        // shared by the count, the version scan and the budget search.
+        // The minimal plan for the whole text, per count indicator band, taken on first use and shared by the count, the version scan and the budget search.
         Span<int> wholeTextPlans = stackalloc int[3];
         wholeTextPlans.Fill(-1);
-        // The walk that last held the count: its split is the answer's when the search ends on its
-        // budget; a failing probe overwrites the caller's buffer, so it is kept aside.
+        // The walk that last held the count: its split is the answer's when the search ends on its budget; a failing probe overwrites the caller's buffer, so it is kept aside.
         Span<int> settledEnds = stackalloc int[MaxSymbols];
         var settledBudget = -1;
         var settledCount = 0;
         var settledBand = -1;
-        // The walk that last failed to hold failedCount chunks at failedBand's widths, and its first
-        // failedCount ends: a floor for the budget, and with the settled walk what a probe between
-        // the two can skip.
+        // The walk that last failed to hold failedCount chunks at failedBand's widths, and its first failedCount ends: a floor for the budget, and with the settled walk what a probe between the two can skip.
         Span<int> failedEnds = stackalloc int[MaxSymbols];
         var failedBudget = -1;
         var failedBand = -1;
         var failedCount = 0;
         var setHeaders = HeaderBits + charset.GetStandardQrHeaderBits();
-        // Several budgets walked at once, where that pays: not under a byte order mark, whose
-        // first chunk is priced by its own rule.
+        // Several budgets walked at once, where that pays: not under a byte order mark, whose first chunk is priced by its own rule.
         var lanes = allowLanes && searched == QRSegmentation.Optimal && !(utf8Bom && charset == EciMode.Utf8);
 
-        // Fewest symbols, reached at the largest version. Under Optimal a walk is a pass of the
-        // segmentation program, so the count is settled by one walk placed where it also serves
-        // the two searches after it, instead of a walk at the capacity.
+        // Fewest symbols, reached at the largest version. Under Optimal a walk is a pass of the segmentation program, so the count is settled by one walk placed where it also serves the two searches after it, instead of a walk at the capacity.
         var count = -1;
         if (searched == QRSegmentation.Optimal)
         {
@@ -131,12 +119,9 @@ internal static partial class StructuredAppendPlanner
                 return true;
             }
 
-            // The chunks' plans cost at least the whole text's plan between them, so the count is
-            // at least fewest; a walk near the plan's floor that holds fewest chunks therefore
-            // settles it, and measured balanced budgets sit within FloorMarginBits of that floor.
+            // The chunks' plans cost at least the whole text's plan between them, so the count is at least fewest; a walk near the plan's floor that holds fewest chunks therefore settles it, and measured balanced budgets sit within FloorMarginBits of that floor.
             var whole = WholeTextPlanBits(text, charset, maxVersion, wholeTextPlans);
-            // No stream of the text costs less than its plan, so a plan the largest symbol does not hold
-            // without the set header rules the one symbol out.
+            // No stream of the text costs less than its plan, so a plan the largest symbol does not hold without the set header rules the one symbol out.
             mayBeOneSymbol = whole + charset.GetStandardQrHeaderBits() <= largest;
             var perSymbol = largest - setHeaders;
             if (whole < ModeSegmenter.Unreachable && perSymbol > 0)
@@ -146,8 +131,7 @@ internal static partial class StructuredAppendPlanner
                     return false;
                 if (fewest <= 1)
                 {
-                    // One chunk's plan is the whole text's, unless a byte order mark forces its
-                    // single-mode stream or it is past what any plan covers.
+                    // One chunk's plan is the whole text's, unless a byte order mark forces its single-mode stream or it is past what any plan covers.
                     if (!bom && text.Length <= QRSegmentPlanner.MaxPlannableChars && whole + setHeaders <= largest)
                     {
                         chunkEnds[0] = text.Length;
@@ -156,9 +140,7 @@ internal static partial class StructuredAppendPlanner
                 }
                 else
                 {
-                    // Attempted only with headroom: when the bound's count leaves each symbol less than
-                    // two margins of slack, packing losses usually put it out of reach and the walk
-                    // would be wasted, so the walk at the capacity counts as it always did.
+                    // Attempted only with headroom: when the bound's count leaves each symbol less than two margins of slack, packing losses usually put it out of reach and the walk would be wasted, so the walk at the capacity counts as it always did.
                     var floor = setHeaders + (whole + fewest - 1) / fewest;
                     var target = floor + FloorMarginBits;
                     if (target + FloorMarginBits < largest)
@@ -166,8 +148,7 @@ internal static partial class StructuredAppendPlanner
                         int unusedLow = floor, unusedHigh = largest;
                         if (lanes && TryNarrowWithLanes(text, charset, maxVersion, floor, largest, fewest, ref unusedLow, ref unusedHigh, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget, fromFloor: true))
                         {
-                            // Eight walks from the floor at once: the cheapest that holds the bound's
-                            // count settles it, and the one below it is the failed neighbour.
+                            // Eight walks from the floor at once: the cheapest that holds the bound's count settles it, and the one below it is the failed neighbour.
                             if (settledBudget >= 0)
                             {
                                 count = settledCount;
@@ -202,8 +183,7 @@ internal static partial class StructuredAppendPlanner
             }
         }
 
-        // Searched as single-mode streams, the one symbol is its stream's closed form, which reads the text: not one too long
-        // for a symbol at the best a mode does, ten bits on three characters.
+        // Searched as single-mode streams, the one symbol is its stream's closed form, which reads the text: not one too long for a symbol at the best a mode does, ten bits on three characters.
         if (searched == QRSegmentation.Single)
             mayBeOneSymbol = text.Length * 10L <= largest * 3L
                 && SingleModeLength(text, charset, maxVersion, utf8Bom && charset == EciMode.Utf8, largest - charset.GetStandardQrHeaderBits() - ModeIndicatorBits, out _, out _) == text.Length;
@@ -220,11 +200,7 @@ internal static partial class StructuredAppendPlanner
         }
 
         // Smallest version that still holds that many; a version the bounds rule out is not walked.
-        // Under Optimal a walk is a pass over the text, so a version the rate bound admits is also
-        // checked against the whole text's minimal plan, which on mixed content is thousands of
-        // bits nearer the truth and turns away the versions just below the answer; and a version
-        // whose capacity holds the settled walk's budget at the same count indicator widths holds
-        // that very split, so it is not walked either.
+        // Under Optimal a walk is a pass over the text, so a version the rate bound admits is also checked against the whole text's minimal plan, which on mixed content is thousands of bits nearer the truth and turns away the versions just below the answer; and a version whose capacity holds the settled walk's budget at the same count indicator widths holds that very split, so it is not walked either.
         version = maxVersion;
         for (var candidate = minVersion; candidate < maxVersion; candidate++)
         {
@@ -254,9 +230,7 @@ internal static partial class StructuredAppendPlanner
         var high = Capacity(version, eccLevel);
         if (searched == QRSegmentation.Optimal)
         {
-            // Under Optimal a probe is a pass, so the bracket is the exact cost model's: below, a
-            // split costs at least the whole text's plan, so its fullest chunk is at least the
-            // average of that plus the headers every symbol pays; above, the settled walk's budget.
+            // Under Optimal a probe is a pass, so the bracket is the exact cost model's: below, a split costs at least the whole text's plan, so its fullest chunk is at least the average of that plus the headers every symbol pays; above, the settled walk's budget.
             var answerBand = Band(version);
             var wholeText = WholeTextPlanBits(text, charset, version, wholeTextPlans);
             if (wholeText < ModeSegmenter.Unreachable)
@@ -276,12 +250,8 @@ internal static partial class StructuredAppendPlanner
             {
                 settledBudget = -1;
 
-                // No walk has bracketed this band yet: the bracket opens from the floor, where the
-                // answer is, not from the middle of one that ends at the capacity; in one batch of
-                // lanes where they pay, else by probes in widening steps. Content whose characters
-                // are wide (a surrogate pair is 32 bits that cannot be cut) sits 32 to 47 bits above
-                // its floor, so the second step keeps the first margin; each step that fails raises
-                // the floor.
+                // No walk has bracketed this band yet: the bracket opens from the floor, where the answer is, not from the middle of one that ends at the capacity, in one batch of
+                // lanes where they pay, else by probes in widening steps. Content whose characters are wide (a surrogate pair is 32 bits that cannot be cut) sits 32 to 47 bits above its floor, so the second step keeps the first margin; each step that fails raises the floor.
                 if (lanes)
                     TryNarrowWithLanes(text, charset, version, low, high, count, ref low, ref high, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget, fromFloor: true, ceilingHolds: true);
 
@@ -315,8 +285,7 @@ internal static partial class StructuredAppendPlanner
             }
         }
 
-        // Under Optimal the rest of the bracket is walked eight budgets at a time, each batch leaving
-        // at most the gap between two of its budgets; what is left of it is bisected.
+        // Under Optimal the rest of the bracket is walked eight budgets at a time, each batch leaving at most the gap between two of its budgets; what is left of it is bisected.
         if (lanes)
         {
             while (high - low >= 2
@@ -329,9 +298,7 @@ internal static partial class StructuredAppendPlanner
         {
             var middle = low + (high - low) / 2;
 
-            // A chunk's end is monotone in the budget, so from one start a walk between a failed
-            // budget and a held one ends its chunk between theirs: the leading chunks those two
-            // walks share are this probe's too, and it resumes after them. No chunk's cost is needed.
+            // A chunk's end is monotone in the budget, so from one start a walk between a failed budget and a held one ends its chunk between theirs: the leading chunks those two walks share are this probe's too, and it resumes after them. No chunk's cost is needed.
             var shared = searched == QRSegmentation.Optimal
                 ? SharedChunks(settledEnds, settledBudget, settledCount, failedEnds, failedBudget, count, middle)
                 : 0;
@@ -623,8 +590,7 @@ internal static partial class StructuredAppendPlanner
     /// </remarks>
     internal static int LongestChunkEnd(ReadOnlySpan<char> text, int start, EciMode charset, int version, QRSegmentation segmentation, bool utf8Bom, int budgetBits)
     {
-        // No chunk is longer than the most any symbol holds, so nothing past that is a
-        // candidate; the window never ends inside a pair either.
+        // No chunk is longer than the most any symbol holds, so nothing past that is a candidate; the window never ends inside a pair either.
         var length = Math.Min(text.Length - start, QRSegmentPlanner.MaxPlannableChars);
         if (start + length < text.Length && char.IsHighSurrogate(text[start + length - 1]) && char.IsLowSurrogate(text[start + length]))
             length--;
@@ -636,15 +602,11 @@ internal static partial class StructuredAppendPlanner
         if (segmentation != QRSegmentation.Optimal)
             return single == 0 ? -1 : start + single;
 
-        // The single-mode end fell inside a digit run: one Numeric run is the optimum of
-        // all-digit content, so the plan ends where the single mode does. When the run
-        // ends exactly there, a plan may still open another run past it.
+        // The single-mode end fell inside a digit run: one Numeric run is the optimum of all-digit content, so the plan ends where the single mode does. When the run ends exactly there, a plan may still open another run past it.
         if (single == length || single < digitRun)
             return single == 0 ? -1 : start + single;
 
-        // A byte order mark is written only into a Byte-mode chunk, where it costs 24 bits
-        // and forces the single-mode stream; a prefix inside the alphanumeric alphabet
-        // carries none, so under a mark that prefix is all a plan may cover.
+        // A byte order mark is written only into a Byte-mode chunk, where it costs 24 bits and forces the single-mode stream; a prefix inside the alphanumeric alphabet carries none, so under a mark that prefix is all a plan may cover.
         var planWindow = window;
         if (bom)
         {
@@ -668,9 +630,7 @@ internal static partial class StructuredAppendPlanner
     {
         var n = window.Length;
 
-        // The two boundaries: the first character outside 0-9, then the first outside the
-        // 45-character alphabet. A prefix is Numeric up to the one and Alphanumeric up to
-        // the other, and Byte past it, which is how the analyser classifies it.
+        // The two boundaries: the first character outside 0-9, then the first outside the 45-character alphabet. A prefix is Numeric up to the one and Alphanumeric up to the other, and Byte past it, which is how the analyser classifies it.
         StructuredAppendScanner.ModeBoundaries(window, out var d, out var a);
         digitRun = d;
         alnumRun = a;

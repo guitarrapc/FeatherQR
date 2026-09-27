@@ -44,8 +44,7 @@ internal static partial class ModulePlacer
     // ---------------------------------
     // Shared NEON pieces
     // ---------------------------------
-    // Operand-order note: Vector128.AndNot(left, right) computes left & ~right
-    // (same helper convention as the Vector256 helper used in the AVX2 file);
+    // Operand-order note: Vector128.AndNot(left, right) computes left & ~right (same helper convention as the Vector256 helper used in the AVX2 file);
     // the JIT emits bic. Every AndNot in this file is the cross-platform helper.
 
     /// <summary>
@@ -256,8 +255,7 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Each allowed row (~blocked) is a contiguous bit slice of the blocked
-        // bitmask; a padded copy makes the two 8-byte slice reads always legal.
+        // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask; a padded copy makes the two 8-byte slice reads always legal.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 16];
         padded.Clear();
         blockedMask.CopyTo(padded);

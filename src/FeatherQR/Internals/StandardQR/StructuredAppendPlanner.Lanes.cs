@@ -95,8 +95,8 @@ internal static partial class StructuredAppendPlanner
             if (!WalkLanes(text, charset, version, budgets.Slice(0, used), limit, shared, start, counts, laneEnds, out _))
                 return walked;
 
-            // Lanes are ordered by budget and holding is monotone: failures, then holds. The shared
-            // chunks are already in both buffers, which is what shared means.
+            // Lanes are ordered by budget and holding is monotone: failures, then holds.
+            // The shared chunks are already in both buffers, which is what shared means.
             var firstHeld = used;
             for (var lane = 0; lane < used; lane++)
             {
@@ -122,11 +122,8 @@ internal static partial class StructuredAppendPlanner
             }
             walked = true;
 
-            // Cuts kept off runs of U+FEFF can leave the answer above every budget near the floor, by
-            // up to the longest run; one more batch from the highest that failed reaches that far, and
-            // the texts whose answer is near the floor keep their first batch as it was.
-            // Under a ceiling not known to hold the count the answer can be past it, and a batch the ceiling cuts to a
-            // few budgets is then a walk the caller's fallback repeats, so it is taken only when at least half of it fits.
+            // Cuts kept off runs of U+FEFF can leave the answer above every budget near the floor, by up to the longest run; one more batch from the highest that failed reaches that far, and the texts whose answer is near the floor keep their first batch as it was.
+            // Under a ceiling not known to hold the count the answer can be past it, and a batch the ceiling cuts to a few budgets is then a walk the caller's fallback repeats, so it is taken only when at least half of it fits.
             if (!fromFloor || firstHeld < used || spread > 0)
                 return true;
             spread = KeptOffBits(text, charset);
@@ -172,8 +169,7 @@ internal static partial class StructuredAppendPlanner
         return true;
     }
 
-    // A pair needs no rule of its own while stepping: it is priced whole on its first half, so a
-    // budget it breaks is broken there and on its second half alike, and either way the chunk ends
+    // A pair needs no rule of its own while stepping: it is priced whole on its first half, so a budget it breaks is broken there and on its second half alike, and either way the chunk ends
     // before the pair.
     /// <summary>
     /// The end a chunk from <paramref name="chunkStart"/> takes when it closes before <paramref name="position"/>: before a pair whose second half is there, since a split never cuts one, and off a U+FEFF as the scalar walk keeps it (<see cref="BeforeMark"/>).
@@ -228,8 +224,7 @@ internal static partial class StructuredAppendPlanner
         ref var origin = ref MemoryMarshal.GetReference(text);
         int s0 = start, s1 = start, s2 = start, s3 = start, s4 = start, s5 = start, s6 = start, s7 = start;
 
-        // The vector loop runs until the lane furthest ahead reaches the end of the text; the others
-        // are a few characters behind and finish in scalar code.
+        // The vector loop runs until the lane furthest ahead reaches the end of the text; the others are a few characters behind and finish in scalar code.
         var step = 0;
         apartSteps = 0;
         var stop = length - start;
@@ -314,14 +309,11 @@ internal static partial class StructuredAppendPlanner
                 nn0 = Vector256.ConditionalSelect(isDigit, n2 + Vector256.Create(3), unreachable);
                 na1 = Vector256.ConditionalSelect(isAlnum, Vector256.Min(a0 + Vector256.Create(6), cheapest + vOpenAlnum), unreachable);
                 na0 = Vector256.ConditionalSelect(isAlnum, a1 + Vector256.Create(5), unreachable);
-                // No rule for a U+FEFF here: a lane that moves while the lanes are apart is at the head of its chunk, one
-                // character and then the marks its cut was kept off, where continuing that character's run is never dearer than opening another.
+                // No rule for a U+FEFF here: a lane that moves while the lanes are apart is at the head of its chunk, one character and then the marks its cut was kept off, where continuing that character's run is never dearer than opening another.
                 nb = Vector256.Min(b, cheapest + vOpenByte) + byteBits;
                 next = Vector256.Min(Vector256.Min(Vector256.Min(nn0, nn1), Vector256.Min(nn2, na0)), Vector256.Min(na1, nb));
 
-                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this
-                // character again, so the lanes are back at one character a few steps after a close, whatever
-                // the close cost each of them (a pair is two characters back, a cut kept off a mark more).
+                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this character again, so the lanes are back at one character a few steps after a close, whatever the close cost each of them (a pair is two characters back, a cut kept off a mark more).
                 var lowest = Math.Min(Math.Min(Math.Min(s0, s1), Math.Min(s2, s3)), Math.Min(Math.Min(s4, s5), Math.Min(s6, s7)));
                 var hold = Vector256.GreaterThan(Vector256.Create(s0, s1, s2, s3, s4, s5, s6, s7), Vector256.Create(lowest));
                 nn0 = Vector256.ConditionalSelect(hold, n0, nn0);
@@ -365,8 +357,7 @@ internal static partial class StructuredAppendPlanner
                 continue;
             }
 
-            // Some lane's chunk closes before this character, which starts its next chunk: the lane
-            // re-reads it on the next step, with fresh states.
+            // Some lane's chunk closes before this character, which starts its next chunk: the lane re-reads it on the next step, with fresh states.
             for (var lane = 0; lane < Lanes; lane++)
             {
                 if ((overBits & (1u << lane)) == 0)
@@ -388,8 +379,7 @@ internal static partial class StructuredAppendPlanner
                 }
                 else if (end == chunkStart[lane])
                 {
-                    // It reports nothing any more and cannot place this character: let it through
-                    // rather than close on it for ever.
+                    // It reports nothing any more and cannot place this character: let it through rather than close on it for ever.
                     budget[lane] = int.MaxValue;
                 }
                 chunkStart[lane] = end;

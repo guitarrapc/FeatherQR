@@ -96,11 +96,8 @@ internal static class QRSegmentPlanner
         useSegments = false;
         var charset = analysis.EciMode;
 
-        // Ceiling: the version single-mode encoding lands on, when there is one. When
-        // there is none the scan runs to the window's end instead of stopping early,
-        // because content that overflows every version in one mode can still fit once
-        // the modes are mixed (3000 letters followed by 4000 digits is 7000 Byte-mode
-        // characters, far over the largest Byte capacity, but fits as two runs).
+        // Ceiling: the version single-mode encoding lands on, when there is one.
+        // When there is none the scan runs to the window's end instead of stopping early, because content that overflows every version in one mode can still fit once the modes are mixed (3000 letters followed by 4000 digits is 7000 Byte-mode characters, far over the largest Byte capacity, but fits as two runs).
         var hasSingle = QRCodeGenerator.TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, charset, utf8BOM: false, minVersion, maxVersion, out var single);
 
         if (!CanPlanBeatSingleMode(analysis.EncodingMode))
@@ -109,8 +106,7 @@ internal static class QRSegmentPlanner
             return hasSingle;
         }
 
-        // Unplannable content skips the scan before any cost run, which is what keeps
-        // a pathological length from paying for one.
+        // Unplannable content skips the scan before any cost run, which is what keeps a pathological length from paying for one.
         if (text.Length is 0 or > MaxPlannableChars)
         {
             selected = single;
@@ -119,9 +115,7 @@ internal static class QRSegmentPlanner
 
         var eciBits = charset == EciMode.Default ? 0 : EciHeaderBits;
 
-        // Strictly below the single-mode fit: at that version the single-mode stream
-        // already fits, and emitting it unchanged is the blast-radius bound the
-        // feature is designed around.
+        // Strictly below the single-mode fit: at that version the single-mode stream already fits, and emitting it unchanged is the blast-radius bound the feature is designed around.
         var top = hasSingle ? Math.Min(single - 1, maxVersion) : maxVersion;
         if (top < minVersion)
         {
@@ -129,10 +123,8 @@ internal static class QRSegmentPlanner
             return hasSingle;
         }
 
-        // One O(n) pass pricing each character at the cheapest rate any mode could
-        // give it: a lower bound on any plan at any version, so it may only reject.
-        // It is what keeps Optimal roughly free on content no split can shrink — a
-        // candidate only pays for a cost run when it could hold at least this much.
+        // One O(n) pass pricing each character at the cheapest rate any mode could give it: a lower bound on any plan at any version, so it may only reject.
+        // It is what keeps Optimal roughly free on content no split can shrink — a candidate only pays for a cost run when it could hold at least this much.
         var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
 
         var band = -1;
@@ -251,20 +243,15 @@ internal static class QRSegmentPlanner
     /// </summary>
     private static bool TryAcceptPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, int plannedBits, Span<ModeSegment> segments, ref int segmentCount, out int planBits)
     {
-        // Re-cost the reconstructed plan from the byte counts the encoder will
-        // actually emit. Disagreeing with the dynamic programming cost model is a bug
-        // in the model (the version scan would have compared the wrong number against
-        // a capacity), so it fails loudly in Debug and rejects the plan in Release
-        // rather than becoming a stream that overruns the data codewords.
+        // Re-cost the reconstructed plan from the byte counts the encoder will actually emit.
+        // Disagreeing with the dynamic programming cost model is a bug in the model (the version scan would have compared the wrong number against a capacity), so it fails loudly in Debug and rejects the plan in Release rather than becoming a stream that overruns the data codewords.
         planBits = PricePlan(text, charset, version, segments.Slice(0, segmentCount));
         Debug.Assert(planBits < 0 || planBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
         if (planBits != plannedBits || planBits + (charset == EciMode.Default ? 0 : EciHeaderBits) > capacityBits)
         {
-            // A plan the decoder would misread, a model that disagreed, or a version that
-            // simply cannot hold the plan (a legitimate answer for a caller that asked
-            // about a specific version).
+            // A plan the decoder would misread, a model that disagreed, or a version that simply cannot hold the plan (a legitimate answer for a caller that asked about a specific version).
             segmentCount = 0;
             planBits = 0;
             return false;

@@ -33,17 +33,12 @@ internal static partial class ModulePlacer
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
 #if NET8_0_OR_GREATER
-        // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion),
-        // see ModulePlacer.Masking.Simd.cs. Measured 1.3-2x over the scalar
-        // bit-packed paths below (findings log, round 5).
+        // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion), see ModulePlacer.Masking.Simd.cs. Measured 1.3-2x over the scalar bit-packed paths below (findings log, round 5).
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // ARM64 NEON port of the same tiers (Vector128 lane-per-row scorer),
-        // see ModulePlacer.Masking.Simd.Arm.cs. Measured 2.4-3x (versions 1-11)
-        // and 1.15-1.2x (12-40) over the scalar paths below on Apple M2
-        // (MaskCodeArm findings log).
+        // ARM64 NEON port of the same tiers (Vector128 lane-per-row scorer), see ModulePlacer.Masking.Simd.Arm.cs. Measured 2.4-3x (versions 1-11) and 1.15-1.2x (12-40) over the scalar paths below on Apple M2 (MaskCodeArm findings log).
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
         {
             return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);
@@ -134,8 +129,7 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Each allowed row (~blocked) is a contiguous bit slice of the blocked
-        // bitmask; a padded copy makes the two 8-byte slice reads always legal.
+        // Each allowed row (~blocked) is a contiguous bit slice of the blocked bitmask; a padded copy makes the two 8-byte slice reads always legal.
         Span<byte> padded = stackalloc byte[blockedMask.Length + 16];
         padded.Clear();
         blockedMask.CopyTo(padded);
@@ -359,8 +353,7 @@ internal static partial class ModulePlacer
             spread |= spread >> 1;
             spread &= 0x0101010101010101UL;
             ref var p = ref Unsafe.Add(ref rowRef, c);
-            // cur round-trips through the same byte order, so only the spread
-            // (logical little-endian) needs normalizing before the XOR store.
+            // cur round-trips through the same byte order, so only the spread (logical little-endian) needs normalizing before the XOR store.
             var cur = Unsafe.ReadUnaligned<ulong>(ref p);
             Unsafe.WriteUnaligned(ref p, cur ^ NormalizeEndianness(spread));
         }
@@ -459,10 +452,8 @@ internal static partial class ModulePlacer
 
     // ---------------------------------
     // Basic penalty calculations for reference.
-    // The plain byte-per-module formulation of ISO/IEC 18004 Section 8.8.2 that
-    // the bit-parallel scorers in this file must reproduce exactly. A runnable
-    // copy is kept in tests (ModulePlacerMaskPackedParityTest.ReferenceScore)
-    // and gates every change.
+    // The plain byte-per-module formulation of ISO/IEC 18004 Section 8.8.2 that the bit-parallel scorers in this file must reproduce exactly.
+    // A runnable copy is kept in tests (ModulePlacerMaskPackedParityTest.ReferenceScore) and gates every change.
     // ---------------------------------
     // // Penalty 1: Consecutive modules (runs of the same color, length >= 5:
     // // +3 at the 5th module, +1 for each module beyond)

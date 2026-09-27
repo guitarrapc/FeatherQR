@@ -55,15 +55,9 @@ internal static class AlignmentPatternFinder
         if (maxX - minX < 3 * moduleSize || maxY - minY < 3 * moduleSize)
             return false;
 
-        // Scan rows outward from the middle of the window and keep the cross-checked
-        // hit nearest the prediction: data can pass every check too, and the first
-        // hit in scan order was measured to be a false one while the real pattern
-        // sat on the prediction. A row farther than the best hit plus the cross
-        // check's recentering (under a module and a pixel) cannot beat it.
-        // Row stride: the pattern's center dark run is ~1 module tall, so scanning
-        // every half-run-th row cannot miss it, and the vertical cross-check
-        // recenters exactly regardless of which row inside the run was hit
-        // (measured 4x on the not-found sweep; see the AlignmentFind findings log).
+        // Scan rows outward from the middle of the window and keep the cross-checked hit nearest the prediction: data can pass every check too, and the first hit in scan order was measured to be a false one while the real pattern sat on the prediction.
+        // A row farther than the best hit plus the cross check's recentering (under a module and a pixel) cannot beat it.
+        // Row stride: the pattern's center dark run is ~1 module tall, so scanning every half-run-th row cannot miss it, and the vertical cross-check recenters exactly regardless of which row inside the run was hit (measured 4x on the not-found sweep; see the AlignmentFind findings log).
         var expected = ExpectedRuns.FromAxes(axisX, axisY, moduleSize);
         var best = new NearestHit(expectedX, expectedY);
         var step = Math.Max(1, (int)(expected.Column / 2f));
@@ -82,9 +76,7 @@ internal static class AlignmentPatternFinder
         if (!best.Found)
             return false;
 
-        // Each row hit centers x on its own row, and a row off the pattern's middle
-        // cuts the center module short, so the nearest of them leans toward the
-        // prediction. Re-center x on the dark run of the refined center row.
+        // Each row hit centers x on its own row, and a row off the pattern's middle cuts the center module short, so the nearest of them leans toward the prediction. Re-center x on the dark run of the refined center row.
         centerX = RecenterX(luminance, width, height, threshold, best.X, best.Y, expected.Row);
         centerY = best.Y;
         return true;
@@ -119,9 +111,8 @@ internal static class AlignmentPatternFinder
 
         public static ExpectedRuns FromAxes((float X, float Y) axisX, (float X, float Y) axisY, float moduleSize)
         {
-            // Grid step per pixel along the image x and y axes: columns of the
-            // inverse of [axisX axisY]. A line through a unit cell's center stays
-            // inside it for 1 / max(|gx|, |gy|) pixels.
+            // Grid step per pixel along the image x and y axes: columns of the inverse of [axisX axisY].
+            // A line through a unit cell's center stays inside it for 1 / max(|gx|, |gy|) pixels.
             var determinant = axisX.X * axisY.Y - axisY.X * axisX.Y;
             if (Math.Abs(determinant) < 1e-6f)
                 return new ExpectedRuns(moduleSize, moduleSize);
@@ -164,11 +155,7 @@ internal static class AlignmentPatternFinder
     private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, bool forceScalar, ref NearestHit best)
     {
 #if NET8_0_OR_GREATER
-        // SIMD path: classify pixels into a dark bitmask with vector compares
-        // (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then
-        // walk RUNS via tzcnt instead of pixels (measured 6.4x on the x64
-        // not-found sweep). Vector256 acceleration implies Vector128, so one
-        // gate covers x64, ARM64 and WASM SIMD.
+        // SIMD path: classify pixels into a dark bitmask with vector compares (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then walk RUNS via tzcnt instead of pixels (measured 6.4x on the x64 not-found sweep). Vector256 acceleration implies Vector128, so one gate covers x64, ARM64 and WASM SIMD.
         if (!forceScalar && Vector128.IsHardwareAccelerated && maxX - minX + 1 >= 16)
         {
             ScanRowMask(luminance, width, height, threshold, y, minX, maxX, expected, axisX, axisY, ref best);
@@ -181,8 +168,7 @@ internal static class AlignmentPatternFinder
 
     private static void ScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, ExpectedRuns expected, (float X, float Y) axisX, (float X, float Y) axisY, ref NearestHit best)
     {
-        // Track the last three completed runs as [light, dark, light]; a window is
-        // evaluated whenever a light run completes (light → dark transition).
+        // Track the last three completed runs as [light, dark, light]; a window is evaluated whenever a light run completes (light → dark transition).
         Span<int> runs = stackalloc int[3];
         runs.Clear();
         var runIndex = -1; // -1: waiting for the first light run
@@ -227,9 +213,7 @@ internal static class AlignmentPatternFinder
                     best.Offer(centerX, centerY);
             }
 
-            // Slide: keep [dark, light] as the new [?, light]... the window must
-            // start with a light run, so the completed dark+light become runs 1-2
-            // shifted down by one color pair.
+            // Slide: keep [dark, light] as the new [?, light]... the window must start with a light run, so the completed dark+light become runs 1-2 shifted down by one color pair.
             runs[0] = runs[2];
             runs[1] = 1; // the incoming dark run
             runs[2] = 0;
@@ -271,14 +255,11 @@ internal static class AlignmentPatternFinder
             }
             else
             {
-                // 128-bit lanes: LessThan on byte lanes is an unsigned compare
-                // (cmhi on NEON), so no min-trick is needed.
+                // 128-bit lanes: LessThan on byte lanes is an unsigned compare (cmhi on NEON), so no min-trick is needed.
                 var thr = Vector128.Create(threshold);
                 if (AdvSimd.Arm64.IsSupported)
                 {
-                    // NEON has no movemask; fold 64 pixels straight into one mask
-                    // word instead: 4 compares select per-byte bit weights, then a
-                    // chain of pairwise adds reduces them (simdjson bulk-movemask shape).
+                    // NEON has no movemask; fold 64 pixels straight into one mask word instead: 4 compares select per-byte bit weights, then a chain of pairwise adds reduces them (simdjson bulk-movemask shape).
                     for (; i + 64 <= length; i += 64)
                     {
                         var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;
@@ -304,8 +285,7 @@ internal static class AlignmentPatternFinder
                 mask[i >> 6] |= 1ul << (i & 63);
         }
 
-        // Walk dark runs; a leading dark run is skipped (the scalar walk waits for
-        // the first light pixel before opening a window).
+        // Walk dark runs; a leading dark run is skipped (the scalar walk waits for the first light pixel before opening a window).
         var pos = NextBit(mask, 0, length, set: false);
         var lightStart = pos;
         var previousDarkLength = 0;
@@ -432,11 +412,8 @@ internal static class AlignmentPatternFinder
 
         var refinedY = candidateY + (down - up) / 2f + 1f;
 
-        // Ring check: the light-dark-light core signature also matches any
-        // isolated dark data module (light on all four sides), extremely common in
-        // data areas, and a false positive here shears the whole sampling transform.
-        // Only the real pattern has both rings around its center: the eight samples
-        // at ±1 module light and the eight at ±2 modules dark.
+        // Ring check: the light-dark-light core signature also matches any isolated dark data module (light on all four sides), extremely common in data areas, and a false positive here shears the whole sampling transform.
+        // Only the real pattern has both rings around its center: the eight samples at ±1 module light and the eight at ±2 modules dark.
         if (!IsRingPattern(luminance, width, height, threshold, candidateX, refinedY, axisX, axisY))
             return false;
 
@@ -451,9 +428,7 @@ internal static class AlignmentPatternFinder
 
     private static bool IsRing(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, (float X, float Y) axisX, (float X, float Y) axisY, float distance, bool dark)
     {
-        // Ring samples follow the GRID axes (from the finder geometry), not the
-        // image axes: under rotation, image-axis offsets land outside the rotated
-        // rings and reject the true pattern.
+        // Ring samples follow the GRID axes (from the finder geometry), not the image axes: under rotation, image-axis offsets land outside the rotated rings and reject the true pattern.
         for (var stepY = -1; stepY <= 1; stepY++)
         {
             for (var stepX = -1; stepX <= 1; stepX++)

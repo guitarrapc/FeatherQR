@@ -29,9 +29,7 @@ internal static partial class ModulePlacer
 #if NET8_0_OR_GREATER
         if (Avx2.IsSupported)
         {
-            // 4 message bytes -> 32 module bytes per step: broadcast the 4 bytes, in-lane
-            // shuffle replicates byte j over lanes 8j..8j+7, AND with the per-lane bit
-            // mask + compare-equal yields 0/1 bytes
+            // 4 message bytes -> 32 module bytes per step: broadcast the 4 bytes, in-lane shuffle replicates byte j over lanes 8j..8j+7, AND with the per-lane bit mask + compare-equal yields 0/1 bytes
             var sel = Vector256.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3);
             var bitm = Vector256.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
             var one = Vector256.Create((byte)1);

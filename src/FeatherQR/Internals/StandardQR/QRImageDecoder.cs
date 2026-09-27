@@ -68,9 +68,7 @@ internal static partial class QRImageDecoder
         if (IsTerminal(status))
             return status;
 
-        // Reflectance reversal: if no symbol was read, invert into a rented buffer and
-        // retry once. Taken only on that failure path, so success and a genuinely short
-        // destination stay allocation-free.
+        // Reflectance reversal: if no symbol was read, invert into a rented buffer and retry once. Taken only on that failure path, so success and a genuinely short destination stay allocation-free.
         var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
@@ -266,11 +264,8 @@ internal static partial class QRImageDecoder
     /// <summary>A triple with its corners assigned, through the timing frame and then the grids its centres and sizes give.</summary>
     private static DecodeStatus DecodeCorners(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
-        // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth
-        // of a pixel to spare, which no grid extrapolated from the finder centres keeps. The
-        // timing patterns mark every module boundary between the finders. First, because where
-        // both grids read, this one's corners are the symbol's own edges and the other's are
-        // extrapolated to within a module; two lines that do not read cost a few hundred pixels.
+        // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth of a pixel to spare, which no grid extrapolated from the finder centres keeps. The
+        // timing patterns mark every module boundary between the finders. First, because where both grids read, this one's corners are the symbol's own edges and the other's are extrapolated to within a module; two lines that do not read cost a few hundred pixels.
         var frameStatus = DecodeThroughTimingFrame(luminance, width, height, threshold, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
         if (IsSettled(frameStatus))
             return frameStatus;
@@ -326,8 +321,7 @@ internal static partial class QRImageDecoder
         var frame = FinderFrame.Create(topLeft, topRight, bottomLeft, moduleSizes);
         if (!TryEstimateDimension(topLeft, topRight, bottomLeft, moduleSizes, frame, out var dimension, out var secondaryDimension))
         {
-            // Snapped finders at versions 39-40 measure a few percent small, which puts the
-            // estimate past the largest version; the count does not depend on it.
+            // Snapped finders at versions 39-40 measure a few percent small, which puts the estimate past the largest version; the count does not depend on it.
             if (moduleSize >= 1f)
             {
                 timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
@@ -348,8 +342,8 @@ internal static partial class QRImageDecoder
         if (IsSettled(status))
             return status;
 
-        // The timing patterns count the modules the estimate only measures. Counted
-        // only once the estimate has failed, so a successful decode never pays for it.
+        // The timing patterns count the modules the estimate only measures.
+        // Counted only once the estimate has failed, so a successful decode never pays for it.
         if (!timingCounted)
             timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
         if (timingDimension != 0 && timingDimension != dimension)
@@ -363,8 +357,7 @@ internal static partial class QRImageDecoder
             }
         }
 
-        // Version 7+ states its own version next to two finders, where a slightly
-        // wrong dimension still samples it, so it overrules the estimate.
+        // Version 7+ states its own version next to two finders, where a slightly wrong dimension still samples it, so it overrules the estimate.
         if (versionDimension != 0 && versionDimension != dimension && versionDimension != timingDimension && versionDimension != matchedDimension)
         {
             var versionStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, versionDimension, moduleSize, destination, out var versionCharsWritten, out var versionInfo, out _);
@@ -376,8 +369,7 @@ internal static partial class QRImageDecoder
             }
         }
 
-        // A module size measured a few percent off puts the estimate a version or two out, and blur or a turn breaks the
-        // counted runs; the timing modules still alternate on the grid of the right dimension
+        // A module size measured a few percent off puts the estimate a version or two out, and blur or a turn breaks the counted runs, the timing modules still alternate on the grid of the right dimension
         if (matchedDimension < 0 && moduleSize >= 1f)
         {
             matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
@@ -393,10 +385,8 @@ internal static partial class QRImageDecoder
             }
         }
 
-        // The dimension estimate can land between two valid sizes (module-size
-        // measurement quantizes to pixels); when a plausible runner-up exists,
-        // one retry with it rescues estimates that snapped to the wrong version. A guess
-        // gets no finder fallback: on a wrong size it only doubles the failure's cost.
+        // The dimension estimate can land between two valid sizes (module-size measurement quantizes to pixels); when a plausible runner-up exists, one retry with it rescues estimates that snapped to the wrong version.
+        // A guess gets no finder fallback: on a wrong size it only doubles the failure's cost.
         if (secondaryDimension != 0 && secondaryDimension != versionDimension && secondaryDimension != timingDimension && secondaryDimension != matchedDimension)
         {
             var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _, finderFallback: false);
@@ -513,10 +503,7 @@ internal static partial class QRImageDecoder
         versionDimension = 0;
         var transform = BuildGridTransform(luminance, width, height, threshold, grey, frame, dimension, moduleSize, out var alignmentAnchored);
 
-        // Version 14+ symbols carry a lattice of 4 × 4 alignment positions or more; when at
-        // least half of the interior ones searched are detected, a piecewise mesh is decoded
-        // before the single global homography (local anchors absorb the measurement noise
-        // that otherwise scales with distance across large symbols).
+        // Version 14+ symbols carry an alignment lattice of 4×4 or more; when at least half of its searched nodes are detected, a piecewise mesh replaces the single global homography (local anchors absorb the measurement noise that otherwise scales with distance across large symbols).
         Span<float> meshGridCoords = stackalloc float[MaxMeshNodes];
         Span<float> meshNodeXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
         Span<float> meshNodeYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
@@ -533,19 +520,13 @@ internal static partial class QRImageDecoder
                 var meshStatus = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var meshTransposed);
                 if (IsSettled(meshStatus))
                 {
-                    // The corners follow the mesh, because the mesh is what decoded: the
-                    // global fit's fourth anchor is unvalidated on this path, and on large
-                    // symbols under keystone it can sit on a neighbouring alignment pattern
-                    // 18-30 modules from the truth while the mesh reads the symbol cleanly.
+                    // The corners follow the mesh, because the mesh is what decoded: the global fit's fourth anchor is unvalidated on this path, and on large symbols under keystone it can sit on a neighbouring alignment pattern 18-30 modules from the truth while the mesh reads the symbol cleanly.
                     if (meshStatus == DecodeStatus.Success)
                         info = info.WithCorners(SymbolGeometry.FromTransform(MeshAnchoredTransform(topLeft, topRight, bottomLeft, meshGridCoords, meshNodeXs, meshNodeYs, meshSize, dimension), dimension, dimension, meshTransposed));
                     return meshStatus;
                 }
 
-                // Mesh fallback: a partially-detected mesh (unfound nodes keep
-                // extrapolated predictions) can sample worse than the single global
-                // homography, retrying globally guarantees the mesh path never
-                // regresses below it. Failure-path cost only.
+                // Mesh fallback: a partially-detected mesh (unfound nodes keep extrapolated predictions) can sample worse than the single global homography, retrying globally guarantees the mesh path never regresses below it. Failure-path cost only.
             }
 
             SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
@@ -579,16 +560,13 @@ internal static partial class QRImageDecoder
             // The mirror retry above left the first sampling transposed
             TransposeInPlace(modules, dimension);
 
-            // Alignment fallback: the alignment centre is pixel-resolved, which at about
-            // 2 px/module is a third of a module, and the transform extrapolates that
-            // error across the bottom-right block as perspective. The finders alone are
-            // exact for a flat symbol. Failure-path cost only.
+            // Alignment fallback: the alignment centre is pixel-resolved, which at about 2 px/module is a third of a module, and the transform extrapolates that error across the bottom-right block as perspective.
+            // The finders alone are exact for a flat symbol. Failure-path cost only.
             if (alignmentAnchored)
                 return DecodeOtherGrid(luminance, width, height, threshold, grey, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, modules, coverage: false, destination, status, ref charsWritten, ref info);
 
-            // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the
-            // finders' foreshortening places it under perspective. Not first, because on a flat symbol
-            // under 2 px/module that foreshortening is measurement noise of a percent or two
+            // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the finders' foreshortening places it under perspective.
+            // Not first, because on a flat symbol under 2 px/module that foreshortening is measurement noise of a percent or two
             if (!frame.IsAffine)
                 return DecodeOtherGrid(luminance, width, height, threshold, grey, frame.Transform(dimension), dimension, modules, coverage: grey.IsEnabled, destination, status, ref charsWritten, ref info);
             return status;
@@ -610,8 +588,7 @@ internal static partial class QRImageDecoder
             var modules = rented.AsSpan(0, dimension * dimension);
             SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
 
-            // The same modules decode the same way: an alignment centre found where the finders put it,
-            // or a frame that foreshortens by under a pixel, samples identically, as on any damaged symbol
+            // The same modules decode the same way: an alignment centre found where the finders put it, or a frame that foreshortens by under a pixel, samples identically, as on any damaged symbol
             if (modules.SequenceEqual(firstSampling))
                 return status;
 
@@ -801,8 +778,7 @@ internal static partial class QRImageDecoder
         var a = patterns[corner == 0 ? 1 : 0];
         var b = patterns[corner == 2 ? 1 : 2];
 
-        // Image coordinates have y pointing down, so for the standard QR layout the
-        // cross product (a-topLeft) × (b-topLeft) is positive when a is top-right.
+        // Image coordinates have y pointing down, so for the standard QR layout the cross product (a-topLeft) × (b-topLeft) is positive when a is top-right.
         var cross = (a.X - topLeft.X) * (b.Y - topLeft.Y) - (a.Y - topLeft.Y) * (b.X - topLeft.X);
         if (cross > 0)
         {
@@ -840,8 +816,7 @@ internal static partial class QRImageDecoder
 
         var estimate = EstimateModules(topLeft, topRight, bottomLeft, moduleSizes, frame);
 
-        // Snap to the nearest valid dimension, clamped to the version range so an
-        // estimate just past version 40 (or below 1) still snaps; reject wild ones
+        // Snap to the nearest valid dimension, clamped to the version range so an estimate just past version 40 (or below 1) still snaps; reject wild ones
         var versionExact = (estimate - 17f) / 4f;
         var version = Math.Min(40, Math.Max(1, (int)Math.Round(versionExact)));
 
@@ -900,8 +875,7 @@ internal static partial class QRImageDecoder
         Accumulate(alongV.Near, ref sum, ref count);
         Accumulate(alongV.Far, ref sum, ref count);
 
-        // All measurements clipped (pattern at the image border): fall back to the
-        // horizontal-scan estimate, valid for near-axis-aligned inputs.
+        // All measurements clipped (pattern at the image border): fall back to the horizontal-scan estimate, valid for near-axis-aligned inputs.
         var mean = count > 0 ? sum / count : (topLeft.ModuleSize + topRight.ModuleSize + bottomLeft.ModuleSize) / 3f;
         return new FinderModuleSizes(alongU.Near, alongV.Near, alongU.Far, alongV.Far, mean, alongU.SubPixel, alongV.SubPixel);
 
@@ -1036,8 +1010,7 @@ internal static partial class QRImageDecoder
         if (length < 14f)
             return 0; // version 1 spans 14 modules between the centers, so a module is under a pixel
 
-        // Four samples per module: enough to tell a one-module run from a merged one, and
-        // a one-pixel module crossed obliquely is still sampled
+        // Four samples per module: enough to tell a one-module run from a merged one, and a one-pixel module crossed obliquely is still sampled
         var step = moduleSize / 4f;
         var steps = (int)(length / step);
         var stepX = dx / length * step;
@@ -1090,18 +1063,18 @@ internal static partial class QRImageDecoder
     private const int MaxMeshNodes = 7;
 
     /// <summary>
-    /// Builds the piecewise sampling mesh for version 14+ symbols: nodes at every alignment lattice position (grid coordinate c + 0.5 for each Annex E center coordinate c).
-    /// Interior nodes are searched around a wavefront prediction seeded from the finders; while some are missing, the missing ones are searched again, round by round, through a homography anchored on the three finder centres and the found node farthest along the lattice. Unfound nodes keep the prediction.
-    /// The coordinate-6 row and column, the finder corners among them, are not searched and are extrapolated from the interior nodes once the mesh is kept.
+    /// Builds the piecewise sampling mesh for version 14+ symbols: nodes at every alignment lattice position (grid coordinate c + 0.5 for each Annex E center coordinate c), located by the alignment finder around a wavefront prediction seeded from the finders' affine frame.
+    /// Unfound interior nodes keep the prediction; the coordinate-6 row and column, finder corners included, are not searched and are re-derived by extrapolation along their lattice lines.
     /// </summary>
-    /// <returns>True when the mesh should be used: at least half of the searched nodes were actually detected. With mostly-predicted nodes the mesh is merely a bilinear approximation of the global homography, strictly worse, so the caller keeps the global transform instead.</returns>
+    /// <returns>True when the mesh should be used: at least half of the searched nodes were actually detected. Below that the nodes are mostly predictions, so the caller keeps the global transform instead.</returns>
     internal static bool TryBuildSampleMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<float> gridCoords, Span<float> nodeXs, Span<float> nodeYs, out int meshSize, out int searchedNodes, out int foundNodes)
     {
         meshSize = 0;
         searchedNodes = 0;
         foundNodes = 0;
         var version = (dimension - 17) / 4;
-        if (version < 7)
+        // Mesh from version 14, the first with a 4×4 lattice: the quadratic edge extrapolation needs three interior nodes per line, and linear through two misplaces the first cell band. Smaller symbols keep the global homography.
+        if (version < 14)
             return false;
 
         var baseValues = QRCodeConstants.AlignmentPatternBaseValues.Slice((version - 1) * 7, 7);
@@ -1111,27 +1084,13 @@ internal static partial class QRImageDecoder
             if (baseValues[i] != 0)
                 gridCoords[count++] = baseValues[i] + 0.5f;
         }
-        // Mesh needs a 4×4 lattice (version 14+): quadratic edge extrapolation
-        // requires three interior nodes per line, and the linear fallback re-breaks
-        // the first cell band through the same foreshortening drift it is meant to
-        // fix. Below that the global homography's envelope is fine anyway (small
-        // spans keep its fourth-anchor error inside the alignment search window).
-        if (count < 4)
-            return false;
         meshSize = count;
 
         var span = dimension - 7;
         (float X, float Y) axisX = ((topRight.X - topLeft.X) / span, (topRight.Y - topLeft.Y) / span);
         (float X, float Y) axisY = ((bottomLeft.X - topLeft.X) / span, (bottomLeft.Y - topLeft.Y) / span);
 
-        // Wavefront propagation from the top-left: each interior node is predicted
-        // from its three already-processed neighbors via the local parallelogram
-        // P(i,j) = P(i-1,j) + P(i,j-1) - P(i-1,j-1). Local extrapolation tracks the
-        // perspective cell by cell, so predictions stay within the small search
-        // window even where the global transform has drifted, its fourth anchor
-        // carries the full parallelogram error (≈ 2·keystone-shrink, many modules on
-        // large symbols), so predicting every node through it would make detection
-        // fail exactly when the mesh is needed most.
+        // Wavefront propagation from the top-left: each interior node is predicted from its three already-processed neighbors via the local parallelogram P(i,j) = P(i-1,j) + P(i,j-1) - P(i-1,j-1). Local extrapolation tracks the perspective cell by cell, so predictions stay within the small search window even where the global transform has drifted, its fourth anchor carries the full parallelogram error (≈ 2·keystone-shrink, many modules on large symbols), so predicting every node through it would make detection fail exactly when the mesh is needed most.
         var searched = 0;
         var found = 0;
         Span<bool> nodeFound = stackalloc bool[MaxMeshNodes * MaxMeshNodes];
@@ -1152,10 +1111,7 @@ internal static partial class QRImageDecoder
                 }
                 else
                 {
-                    // First lattice row/column: seeded from the finder-only affine
-                    // frame, NOT the global transform, the global fourth anchor
-                    // carries the parallelogram/detection error and would bend these
-                    // seeds (and with them every wavefront prediction downstream).
+                    // First lattice row/column: seeded from the finder-only affine frame, NOT the global transform, the global fourth anchor carries the parallelogram/detection error and would bend these seeds (and with them every wavefront prediction downstream).
                     // Along the top/left edges the finder affine is nearly exact.
                     predictedX = topLeft.X + (gridCoords[i] - 3.5f) * axisX.X + (gridCoords[j] - 3.5f) * axisY.X;
                     predictedY = topLeft.Y + (gridCoords[i] - 3.5f) * axisX.Y + (gridCoords[j] - 3.5f) * axisY.Y;
@@ -1163,22 +1119,13 @@ internal static partial class QRImageDecoder
                 nodeXs[node] = predictedX;
                 nodeYs[node] = predictedY;
 
-                // Only interior lattice nodes are searched. Coordinate-6 rows/columns
-                // lie ON the timing lines, whose perfect 1-module alternation floods
-                // the light-dark-light scan with false candidates (a single accepted
-                // fake bends the whole top/left mesh band); the finder corners have
-                // no alignment pattern at all. Both keep the prediction.
+                // Only interior lattice nodes are searched. Coordinate-6 rows/columns lie ON the timing lines, whose perfect 1-module alternation floods the light-dark-light scan with false candidates (a single accepted fake bends the whole top/left mesh band); the finder corners have no alignment pattern at all. Both keep the prediction.
                 if (baseValues[i] == 6 || baseValues[j] == 6)
                     continue;
 
                 searched++;
-                // Adaptive window: wavefront starters (no detected node among the
-                // parallelogram sources) still carry the affine seeds' foreshortening
-                // drift and get a wider window; once a detected neighbor feeds the
-                // prediction, drift differences cancel and the tight window applies.
-                // Keeping the wide window rare matters, a wide-window false positive
-                // does not stay local, the wavefront propagates it downstream
-                // (measured as a broad regression when every node searched wide).
+                // Adaptive window: wavefront starters (no detected node among the parallelogram sources) still carry the affine seeds' foreshortening drift and get a wider window, once a detected neighbor feeds the prediction, drift differences cancel and the tight window applies.
+                // Keeping the wide window rare matters, a wide-window false positive does not stay local, the wavefront propagates it downstream (measured as a broad regression when every node searched wide).
                 var window = anySourceFound ? 2.5f : 4f;
                 if (TryFindAlignment(luminance, width, height, threshold, grey, predictedX, predictedY, moduleSize, axisX, axisY, window, out var foundX, out var foundY))
                 {
@@ -1190,15 +1137,8 @@ internal static partial class QRImageDecoder
             }
         }
 
-        // Refinement pass: when nodes were missed, rebuild a homography from the
-        // three finder centers plus the detected node closest to the bottom-right
-        // lattice corner (a reliable, ring-validated fourth correspondence, unlike
-        // the global transform's swept-window anchor), then re-search the missed
-        // nodes around its predictions. For an exact-homography distortion four
-        // exact correspondences reproduce the mapping, so the remaining nodes land
-        // within the tight window even where the wavefront seeds drifted.
-        // Iterated: each round can push the anchor further toward the bottom-right,
-        // improving the next round's predictions; stops when a round finds nothing.
+        // Refinement pass: when nodes were missed, rebuild a homography from the three finder centers plus the detected node closest to the bottom-right lattice corner (a reliable, ring-validated fourth correspondence, unlike the global transform's swept-window anchor), then re-search the missed nodes around its predictions. For an exact-homography distortion four exact correspondences reproduce the mapping, so the remaining nodes land within the tight window even where the wavefront seeds drifted.
+        // Iterated: each round can push the anchor further toward the bottom-right, improving the next round's predictions; stops when a round finds nothing.
         for (var round = 0; round < 4 && found > 0 && found < searched; round++)
         {
             var best = -1;
@@ -1215,8 +1155,7 @@ internal static partial class QRImageDecoder
                 }
             }
 
-            // Require the anchor to be genuinely interior-far so the four
-            // correspondences form a non-degenerate quad
+            // Require the anchor to be genuinely interior-far so the four correspondences form a non-degenerate quad
             if (best < 0 || bestRank < 2)
                 break;
 
@@ -1264,39 +1203,27 @@ internal static partial class QRImageDecoder
         if (found * 2 < searched)
             return false;
 
-        // Second pass: re-derive the prediction-only edge nodes (coordinate-6 row
-        // and column plus the finder corners) from the detected interior nodes by
-        // extrapolation along their lattice row/column. The affine seeds are good
-        // enough to FIND patterns, but not to SAMPLE with: projective foreshortening
-        // makes lattice spacing non-uniform, and the affine (average-slope) edge
-        // prediction drifts up to ~1.5 modules mid-edge, enough to garble the whole
-        // first cell band. LINEAR extrapolation fails for the same reason (points on
-        // the lattice line are collinear, but their spacing along it is projective):
-        // quadratic (Lagrange) extrapolation through three interior nodes captures
-        // the first-order foreshortening change (measured ~1 px residual where
-        // linear was ~12 px off). Falls back to linear when only two interior nodes
-        // exist (mesh size 3, versions 7-13, where spans are small).
+        // Second pass: re-derive the coordinate-6 row and column, finder corners included, from the interior nodes. The affine seeds find patterns but drift too far to sample with, and lattice spacing along a line is projective, so the extrapolation is quadratic, not linear.
         for (var i = 1; i < count; i++)
         {
-            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: i, stride: count, first: count + i);
+            Extrapolate(nodeXs, nodeYs, gridCoords, target: i, stride: count, first: count + i);
         }
         for (var j = 1; j < count; j++)
         {
-            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: j * count, stride: 1, first: j * count + 1);
+            Extrapolate(nodeXs, nodeYs, gridCoords, target: j * count, stride: 1, first: j * count + 1);
         }
-        // Top-left corner: average of the row and column extrapolations through the
-        // just-corrected edge nodes
+        // Top-left corner: average of the row and column extrapolations through the just-corrected edge nodes
         {
             Span<float> cornerX = stackalloc float[2];
             Span<float> cornerY = stackalloc float[2];
             var saveX = nodeXs[0];
             var saveY = nodeYs[0];
-            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: 0, stride: 1, first: 1);
+            Extrapolate(nodeXs, nodeYs, gridCoords, target: 0, stride: 1, first: 1);
             cornerX[0] = nodeXs[0];
             cornerY[0] = nodeYs[0];
             nodeXs[0] = saveX;
             nodeYs[0] = saveY;
-            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: 0, stride: count, first: count);
+            Extrapolate(nodeXs, nodeYs, gridCoords, target: 0, stride: count, first: count);
             cornerX[1] = nodeXs[0];
             cornerY[1] = nodeYs[0];
             nodeXs[0] = (cornerX[0] + cornerX[1]) / 2f;
@@ -1305,31 +1232,18 @@ internal static partial class QRImageDecoder
 
         return true;
 
-        // Extrapolates the node at `target` (grid parameter gridCoords[0]) from the
-        // nodes at `first`, `first + stride`, (and `first + 2*stride` when available)
-        // whose grid parameters are gridCoords[1..3].
-        static void Extrapolate(Span<float> nodeXs, Span<float> nodeYs, ReadOnlySpan<float> gridCoords, int count, int target, int stride, int first)
+        // Quadratic Lagrange extrapolation of the node at `target` (grid parameter gridCoords[0]) through the nodes at `first`, `first + stride` and `first + 2*stride` (grid parameters gridCoords[1..3]).
+        static void Extrapolate(Span<float> nodeXs, Span<float> nodeYs, ReadOnlySpan<float> gridCoords, int target, int stride, int first)
         {
             var t0 = gridCoords[0];
             var t1 = gridCoords[1];
             var t2 = gridCoords[2];
-
-            if (count >= 4)
-            {
-                // Quadratic Lagrange through three interior nodes
-                var t3 = gridCoords[3];
-                var l1 = (t0 - t2) * (t0 - t3) / ((t1 - t2) * (t1 - t3));
-                var l2 = (t0 - t1) * (t0 - t3) / ((t2 - t1) * (t2 - t3));
-                var l3 = (t0 - t1) * (t0 - t2) / ((t3 - t1) * (t3 - t2));
-                nodeXs[target] = l1 * nodeXs[first] + l2 * nodeXs[first + stride] + l3 * nodeXs[first + 2 * stride];
-                nodeYs[target] = l1 * nodeYs[first] + l2 * nodeYs[first + stride] + l3 * nodeYs[first + 2 * stride];
-                return;
-            }
-
-            // Linear through two interior nodes
-            var ratio = (t0 - t1) / (t2 - t1);
-            nodeXs[target] = nodeXs[first] + (nodeXs[first + stride] - nodeXs[first]) * ratio;
-            nodeYs[target] = nodeYs[first] + (nodeYs[first + stride] - nodeYs[first]) * ratio;
+            var t3 = gridCoords[3];
+            var l1 = (t0 - t2) * (t0 - t3) / ((t1 - t2) * (t1 - t3));
+            var l2 = (t0 - t1) * (t0 - t3) / ((t2 - t1) * (t2 - t3));
+            var l3 = (t0 - t1) * (t0 - t2) / ((t3 - t1) * (t3 - t2));
+            nodeXs[target] = l1 * nodeXs[first] + l2 * nodeXs[first + stride] + l3 * nodeXs[first + 2 * stride];
+            nodeYs[target] = l1 * nodeYs[first] + l2 * nodeYs[first + stride] + l3 * nodeYs[first + 2 * stride];
         }
     }
 
@@ -1341,8 +1255,7 @@ internal static partial class QRImageDecoder
     private static PerspectiveTransform MeshAnchoredTransform(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension)
     {
         // Finder centres sit at grid 3.5 / dimension − 3.5; the last lattice coordinate is dimension − 6.5.
-        // When that node was not detected the refinement rounds have already re-predicted it, so
-        // anchoring on the nearest detected node instead measured byte-identical and was dropped.
+        // When that node was not detected the refinement rounds have already re-predicted it, so anchoring on the nearest detected node instead measured byte-identical and was dropped.
         var last = meshSize - 1;
         var lastGrid = gridCoords[last];
         var lastNode = last * meshSize + last;
@@ -1434,16 +1347,14 @@ internal static partial class QRImageDecoder
         var topRight = frame.TopRight;
         var bottomLeft = frame.BottomLeft;
 
-        // Version 2+ has an alignment pattern centered 6.5 modules in from the
-        // bottom-right corner
+        // Version 2+ has an alignment pattern centered 6.5 modules in from the bottom-right corner
         if (dimension >= 25)
         {
             float expectedX, expectedY;
             (float X, float Y) axisX, axisY;
             if (frame.IsAffine)
             {
-                // Parallelogram estimate of the bottom-right corner (grid dimension−3.5), pulled
-                // toward the top-left by 3 modules on both axes
+                // Parallelogram estimate of the bottom-right corner (grid dimension−3.5), pulled toward the top-left by 3 modules on both axes
                 var cornerX = topRight.X + bottomLeft.X - topLeft.X;
                 var cornerY = topRight.Y + bottomLeft.Y - topLeft.Y;
                 var correction = 1f - 3f / (dimension - 7);
@@ -1457,8 +1368,7 @@ internal static partial class QRImageDecoder
             }
             else
             {
-                // Where the foreshortening puts it, and the grid axes there, which a keystone
-                // turns and scales away from the ones at the finders
+                // Where the foreshortening puts it, and the grid axes there, which a keystone turns and scales away from the ones at the finders
                 frame.Map(dimension - 6.5f, dimension - 6.5f, dimension, out expectedX, out expectedY);
                 frame.Axes(dimension - 6.5f, dimension - 6.5f, dimension, out axisX, out axisY);
             }
@@ -1590,10 +1500,7 @@ internal static partial class QRImageDecoder
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast, so both take
-                // the pixel containing the point (ConvertToInt32Native is the one that
-                // follows the platform's rounding); out-of-range lanes differ from scalar
-                // saturation but are clamped into bounds either way.
+                // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point (ConvertToInt32Native is the one that follows the platform's rounding); out-of-range lanes differ from scalar saturation but are clamped into bounds either way.
                 var px = Vector256.ConvertToInt32(x);
                 var py = Vector256.ConvertToInt32(y);
                 px = Vector256.Max(Vector256.Min(px, maxPx), zero);
@@ -1657,9 +1564,7 @@ internal static partial class QRImageDecoder
             var rowNumeratorY = Vector128.Create(transform.a22 * gridY + transform.a32);
             var rowDenominator = Vector128.Create(transform.a23 * gridY + transform.a33);
 
-            // Two independent 4-lane chains per iteration: the second fdiv
-            // overlaps the first (fdiv 4S latency would otherwise stall the
-            // 4-lane loop) and per-iteration loop overhead is halved.
+            // Two independent 4-lane chains per iteration: the second fdiv overlaps the first (fdiv 4S latency would otherwise stall the 4-lane loop) and per-iteration loop overhead is halved.
             var u = 0;
             for (; u + 8 <= dimension; u += 8)
             {
@@ -1673,10 +1578,7 @@ internal static partial class QRImageDecoder
                 var xHi = (a11 * gridXHi + rowNumeratorX) * reciprocalHi;
                 var yHi = (a12 * gridXHi + rowNumeratorY) * reciprocalHi;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast, so both take
-                // the pixel containing the point (ConvertToInt32Native is the one that
-                // follows the platform's rounding); out-of-range lanes differ from scalar
-                // saturation but are clamped into bounds either way.
+                // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point (ConvertToInt32Native is the one that follows the platform's rounding); out-of-range lanes differ from scalar saturation but are clamped into bounds either way.
                 var pxLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
                 var pyLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero);
                 var pxHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
@@ -1691,8 +1593,7 @@ internal static partial class QRImageDecoder
                 }
             }
 
-            // 4-lane cleanup keeps the per-row scalar tail under 4 modules
-            // (dimension mod 8 can be 4-7, e.g. 77 leaves 5 without this block).
+            // 4-lane cleanup keeps the per-row scalar tail under 4 modules (dimension mod 8 can be 4-7, e.g. 77 leaves 5 without this block).
             if (u + 4 <= dimension)
             {
                 var gridX = laneOffsetsLo + Vector128.Create((float)u);
