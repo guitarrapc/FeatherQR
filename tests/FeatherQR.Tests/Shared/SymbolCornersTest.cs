@@ -256,9 +256,9 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// Micro QR's far corners are held to a module, not half. The affine paths absorb a mild
-    /// keystone (2 % axis-aligned, 4 % scale variants); only 5 % and up reach the single-finder
-    /// perspective search, so those rows are what cover its two attach sites.
+    /// Micro QR's far corners are held to a module, not half. Only the 8 % rows need the
+    /// single-finder perspective search (the others read with it removed): the plain row covers
+    /// its untransposed attach site, the mirrored row its transposed one.
     /// </summary>
     [Test]
     [Arguments(0.02f, false, 1f)]

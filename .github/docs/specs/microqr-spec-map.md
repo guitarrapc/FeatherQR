@@ -153,7 +153,7 @@ those the strided scan tried, unless it ended in a verdict), and the scan report
 
 The supported envelope, its measurements and the reasons behind its limits are in the [design record](microqr-decoder.md#supported).
 
-Reference tests: [MicroQRCodeDecoderImageTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRCodeDecoderImageTest.cs) (clean renders for every version × ECC, arbitrary rotation, uniform scale, non-square modules drawn through a canvas scale, mirror/inversion/translation/quiet-zone variants, deterministic degradation subset per test strategy §7, negative cases both symbology directions), [MicroQRCodeDecoderPerspectiveTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRCodeDecoderPerspectiveTest.cs) (measured keystone envelope and rotation/mirror combinations), [MicroQRFixtureTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRFixtureTest.cs) (committed external-encoder PNG corpus through the image path).
+Reference tests: [MicroQRCodeDecoderImageTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRCodeDecoderImageTest.cs) (clean renders for every version × ECC, arbitrary rotation, uniform scale, non-square modules drawn through a canvas scale, mirror/inversion/translation/quiet-zone variants, deterministic degradation subset per test strategy §7, negative cases both symbology directions), [MicroQRCodeDecoderPerspectiveTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRCodeDecoderPerspectiveTest.cs) (the keystone envelope on each edge and at its lowest densities, rotation and mirror combinations, and keystones only the perspective search reads), [MicroQRFixtureTest](../../../tests/FeatherQR.Tests/MicroQR/MicroQRFixtureTest.cs) (committed external-encoder PNG corpus through the image path).
 
 ## Data Model and Serialization
 
