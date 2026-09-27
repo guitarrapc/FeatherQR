@@ -1,3 +1,4 @@
+using static FeatherQR.Internals.SimdTier;
 #if NET8_0_OR_GREATER
 using Arm = System.Runtime.Intrinsics.Arm;
 using X86 = System.Runtime.Intrinsics.X86;
@@ -37,6 +38,35 @@ internal enum SimdTier : byte
     AdvSimd,
     /// <summary>ARM64 AdvSimd with the ARMv8.2 dot product, which Cortex-A53/A72-class cores lack.</summary>
     AdvSimdDp,
+}
+
+/// <summary>
+/// What a build and the CPUs it runs on give a process, as far as <see cref="SimdTiers.Expected"/> is concerned: the instruction sets it always has, those it never has, and those it leaves to the CPU (<see cref="SimdTiers.Definition"/>).
+/// </summary>
+internal enum SimdBuildClass : byte
+{
+    /// <summary>x64 without AVX: a default NativeAOT publish, or the JIT under <c>DOTNET_EnableAVX=0</c>. GFNI is left to the CPU.</summary>
+    X64Sse,
+    /// <summary>x64 with AVX2: the JIT on an AVX2 CPU, or a NativeAOT publish for <c>x86-64-v3</c>. GFNI and fast PEXT are left to the CPU.</summary>
+    X64Avx2,
+    /// <summary>ARM64: the JIT, or a default NativeAOT publish. The dot product is left to the CPU.</summary>
+    Arm64,
+}
+
+/// <summary>One kernel's row of <see cref="SimdTiers.Expected"/>.</summary>
+internal sealed class SimdExpectation(string kernel, SimdTier[] x64Sse, SimdTier[] x64Avx2, SimdTier[] arm64)
+{
+    /// <summary>The kernel, as <see cref="SimdKernel.Name"/> names it.</summary>
+    internal string Kernel { get; } = kernel;
+
+    /// <summary>The cell for a build class: the tier the kernel takes there or, where the CPU decides, the tiers it takes, most preferred first.</summary>
+    internal SimdTier[] For(SimdBuildClass buildClass) => buildClass switch
+    {
+        SimdBuildClass.X64Sse => x64Sse,
+        SimdBuildClass.X64Avx2 => x64Avx2,
+        SimdBuildClass.Arm64 => arm64,
+        _ => throw new ArgumentOutOfRangeException(nameof(buildClass), buildClass, "Unknown build class."),
+    };
 }
 
 /// <summary>One kernel's tiers in the order its dispatch prefers them, each with whether it can run in this process.</summary>
@@ -213,4 +243,117 @@ internal static class SimdTiers
         // RmQRImageDecoder.SampleGrid: the perspective sampler
         new("RmQRSampleGrid", (SimdTier.Vector128, Isa.Vector128)),
     ];
+
+    /// <summary>
+    /// The instruction sets a build class always has, those it never has, and those it leaves to the CPU, in groups a CPU has or lacks together
+    /// (with AVX present, a CPU with GFNI has its 256-bit form too).
+    /// </summary>
+    internal static (SimdTier[] Present, SimdTier[] Absent, SimdTier[][] LeftToCpu) Definition(SimdBuildClass buildClass) => buildClass switch
+    {
+        SimdBuildClass.X64Sse => ([Vector128, Sse2, Ssse3, Sse41], [Vector256, Avx2, Avx2Pext, GfniV256, AdvSimd, AdvSimdDp], [[Gfni]]),
+        SimdBuildClass.X64Avx2 => ([Vector128, Vector256, Sse2, Ssse3, Sse41, Avx2], [AdvSimd, AdvSimdDp], [[Gfni, GfniV256], [Avx2Pext]]),
+        SimdBuildClass.Arm64 => ([Vector128, AdvSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256], [[AdvSimdDp]]),
+        _ => throw new ArgumentOutOfRangeException(nameof(buildClass), buildClass, "Unknown build class."),
+    };
+
+    /// <summary>
+    /// Which tier each kernel takes per build class: the answer to "which kernel runs which tier on which build", and CI holds every build to it (tests/FeatherQR.AotAnalysis <c>--simd-class</c>).
+    /// A cell with one tier is that tier. A cell with more lists what the CPU decides between, most preferred first: the first whose instruction set the process has is expected, and the last when it has none of them.
+    /// </summary>
+    internal static SimdExpectation[] Expected() =>
+    [
+        //  kernel                     x64, no AVX      x64, AVX2             ARM64
+
+        // ---- Shared across symbologies ----
+        new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd]),
+        new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd]),
+        new("ModeSegmenterLanes",      [Scalar],        [Vector256],          [AdvSimd]),
+        new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd]),
+        new("EccBinaryDecoder",        [Scalar],        [GfniV256, Scalar],   [AdvSimd]),
+        new("LuminanceConverter",      [Scalar],        [Avx2],               [AdvSimdDp, Scalar]),
+        new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128]),
+        new("Binarizer",               [Scalar],        [Vector256],          [AdvSimd]),
+        new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128]),
+        new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd]),
+        new("FinderRowEdges",          [Scalar],        [Vector256],          [AdvSimd]),
+
+        // ---- Standard QR ----
+        new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd]),
+        new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd]),
+        new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd]),
+        new("QRSampleGrid",            [Vector128],     [Vector256],          [Vector128]),
+        new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd]),
+        new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd]),
+        new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd]),
+        new("StructuredAppendScanner", [Scalar],        [Scalar],             [AdvSimd]),
+
+        // ---- Micro QR ----
+        new("MicroQRByteSegment",      [Sse2],          [Sse2],               [AdvSimd]),
+        new("MicroQRModulePlacer",     [Ssse3],         [Avx2Pext, Ssse3],    [AdvSimd]),
+        new("MicroQRSampleGrid",       [Vector128],     [Vector128],          [Vector128]),
+
+        // ---- rMQR ----
+        new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar]),
+        new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128]),
+        new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd]),
+        new("RmQRExtractCodewords",    [Scalar],        [Avx2Pext, Scalar],   [AdvSimd]),
+        new("RmQRSubFinderLattice",    [Vector128],     [Vector128],          [Vector128]),
+        new("RmQRSampleGrid",          [Vector128],     [Vector128],          [Vector128]),
+    ];
+
+    /// <summary>What in this process disagrees with <see cref="Expected"/> for <paramref name="buildClass"/>; empty when nothing does.</summary>
+    internal static List<string> Check(SimdBuildClass buildClass) => Check(buildClass, Report(), IsaReport());
+
+    /// <summary>
+    /// <see cref="Check(SimdBuildClass)"/> over the given kernels and instruction sets.
+    /// A process that is not of the build class, one with an instruction set the class never has or without one it always has, is reported as that alone: every kernel would only repeat it.
+    /// </summary>
+    internal static List<string> Check(SimdBuildClass buildClass, SimdKernel[] kernels, (SimdTier Tier, bool Available)[] isa)
+    {
+        var problems = new List<string>();
+        var (present, absent, _) = Definition(buildClass);
+        foreach (var (tier, available) in isa)
+        {
+            if (!available && Array.IndexOf(present, tier) >= 0)
+                problems.Add($"{buildClass} always has {tier}, and this process does not");
+            else if (available && Array.IndexOf(absent, tier) >= 0)
+                problems.Add($"{buildClass} never has {tier}, and this process does");
+        }
+        if (problems.Count > 0)
+            return problems;
+
+        var rows = Expected();
+        foreach (var kernel in kernels)
+        {
+            var row = Array.Find(rows, r => r.Kernel == kernel.Name);
+            if (row is null)
+            {
+                problems.Add($"{kernel.Name} has no row in the table");
+                continue;
+            }
+            var cell = row.For(buildClass);
+            var expected = cell[cell.Length - 1];
+            for (var i = 0; i < cell.Length - 1; i++)
+            {
+                if (IsAvailable(isa, cell[i]))
+                {
+                    expected = cell[i];
+                    break;
+                }
+            }
+            if (kernel.Active != expected)
+                problems.Add($"{kernel.Name} takes {kernel.Active}, and the table expects {expected} on {buildClass}");
+        }
+        return problems;
+    }
+
+    private static bool IsAvailable((SimdTier Tier, bool Available)[] isa, SimdTier tier)
+    {
+        foreach (var (candidate, available) in isa)
+        {
+            if (candidate == tier)
+                return available;
+        }
+        return false;
+    }
 }
