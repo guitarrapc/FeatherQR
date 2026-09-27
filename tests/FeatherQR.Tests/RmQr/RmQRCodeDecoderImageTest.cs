@@ -152,8 +152,9 @@ public class RmQRCodeDecoderImageTest
 
     /// <summary>
     /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
-    /// not square, so the two finder axes must keep independent module scales. Up to about 1.38:1
-    /// every right-angle rotation decodes; this is 1.25:1, 8 x 10 px.
+    /// not square, so the two finder axes must keep independent module scales. Every right-angle
+    /// rotation decodes to 2.35:1 either way, where the finder cross-check's 12:5 window ends; this is
+    /// 1.25:1, 8 x 10 px.
     /// </summary>
     [Test]
     [Arguments(0)]
@@ -174,13 +175,12 @@ public class RmQRCodeDecoderImageTest
         await Assert.That(text).IsEqualTo(content);
     }
 
-    /// <summary>
-    /// From about 1.4:1 the decoder reads modules wider than tall, to about 1.65:1, but not modules
-    /// taller than wide. This pins the half it supports, at 1.5:1 (12 x 8 px), upright and upside down.
-    /// </summary>
+    /// <summary>Modules 1.5:1 wider than tall (12 x 8 px): a finder whose column is more than 40 % off its row.</summary>
     [Test]
     [Arguments(0)]
+    [Arguments(90)]
     [Arguments(180)]
+    [Arguments(270)]
     public async Task Decode_NonSquareModules_WiderThanTall(int degrees)
     {
         const string content = "RMQR IMAGE 123";
@@ -193,6 +193,57 @@ public class RmQRCodeDecoderImageTest
 
         await Assert.That(success).IsTrue().Because($"degrees={degrees}, status={info.Status}");
         await Assert.That(text).IsEqualTo(content);
+    }
+
+    /// <summary>The same taller than wide (8 x 12 px).</summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(90)]
+    [Arguments(180)]
+    [Arguments(270)]
+    public async Task Decode_NonSquareModules_TallerThanWide(int degrees)
+    {
+        const string content = "RMQR IMAGE 123";
+        using var rendered = RenderStretched(content, scaleX: 1f, scaleY: 1.5f);
+        var (across, down) = StretchedSymbol.FinderStoneRuns(rendered);
+        await Assert.That((float)down / across).IsEqualTo(1.5f).Within(0.05f).Because($"finder stone {across}x{down}");
+        using var bitmap = Rotate(rendered, degrees);
+
+        var success = RmQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"degrees={degrees}, status={info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// Modules wider than tall with rows under 2 px, drawn crisp: the grid turned onto the sub-finder turns a tenth to a fifth of a degree and misses the rows at the far end, and only the grid scaled per axis without a turn reads.
+    /// Outside the non-square envelope above; this input class is why that grid is kept.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(CrispRowsUnderTwoPixels))]
+    public async Task Decode_NonSquareModules_CrispRowsUnderTwoPixels(RmQRVersion version, float pixelsPerModuleX, float pixelsPerModuleY, int quarterTurns)
+    {
+        const int QuietZone = 2;
+        var content = ContentFor(version);
+        var data = Create(content, RmQREccLevel.M, version, quietZone: 0);
+        var (rendered, renderedWidth, renderedHeight) = NearestNeighbourRenderer.Render(
+            (row, column) => row >= QuietZone && column >= QuietZone && row - QuietZone < data.Height && column - QuietZone < data.Width && data[row - QuietZone, column - QuietZone],
+            data.Width + 2 * QuietZone, data.Height + 2 * QuietZone, pixelsPerModuleX, pixelsPerModuleY, 0f, 0f);
+        var (luminance, width, height) = NearestNeighbourRenderer.Turn(rendered, renderedWidth, renderedHeight, quarterTurns, mirror: false);
+
+        var success = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModuleX} x {pixelsPerModuleY} px, turned {quarterTurns * 90}°: {info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    public static IEnumerable<(RmQRVersion, float, float, int)> CrispRowsUnderTwoPixels()
+    {
+        foreach (var (version, pixelsPerModuleX, pixelsPerModuleY) in new[] { (RmQRVersion.R17x139, 2.5f, 1.75f), (RmQRVersion.R15x139, 3.05f, 1.75f), (RmQRVersion.R17x139, 3.05f, 1.65f) })
+        {
+            for (var quarterTurns = 0; quarterTurns < 4; quarterTurns++)
+                yield return (version, pixelsPerModuleX, pixelsPerModuleY, quarterTurns);
+        }
     }
 
     private static SKBitmap RenderStretched(string content, float scaleX, float scaleY)
