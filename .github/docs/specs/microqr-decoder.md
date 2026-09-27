@@ -140,6 +140,7 @@ Image envelope, measured (Tier 1 to 2, kept conservative because a single finder
 - crisp M2 to M4 renders between 1 and 1.5 px/module, read through a table of module boundaries instead of a fitted grid;
 - anti-aliased and resampled renders from 1.5 px/module: the finder centre is the centroid of its darkness, a grid whose format word reads exactly is read again by coverage, and, after every other attempt, a finder scan runs at the midpoint of the two levels for a polarity where the global threshold found none (see the image detection lessons in [standardqr-decoder.md](standardqr-decoder.md));
 - non-square modules within the envelope the symbologies share ([qrcode-symbologies.md](qrcode-symbologies.md));
+- rings printed or read thicker or thinner than their modules (ink spread, a thin print, blur), found by the shared finder check through the distances between edges of the same polarity ([qrcode-symbologies.md](qrcode-symbologies.md), drawn in [standardqr-decoder.md](standardqr-decoder.md#thin-or-thick-rings)): symbols whose dark edges all moved by 0.1, 0.15, 0.2 and 0.24 of a module (M1 to M4, 3-6 px/module, turned 0-60°, grey or binarized) read 600, 586, 463 and 208 of 600;
 - translation and quiet-zone variants;
 - mild optical degradation: JPEG artifacts, low contrast, additive noise;
 - keystone: any one edge inset by up to 8 % of the symbol's width (quiet zone included) at each end, at any rotation, mirrored or not, from 5 px/module drawn crisp and from 3 px/module with grey edges.

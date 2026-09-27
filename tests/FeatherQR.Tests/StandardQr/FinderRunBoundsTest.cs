@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The bounds the axis cross-checks stop their walk at (<see cref="FinderPatternFinder.AxisRunBounds"/>) are exact only if no cross section the verdict could accept lies outside them.
-/// That is a property of the verdict alone, so it is held here against the verdict's own checks, not against images: every run vector that passes the total check and either ratio check has to be inside every bound.
+/// That is a property of the verdict alone, so it is held here against the verdict's own checks, not against images: every run vector that passes the total check and a ratio check, or like edges, has to be inside every bound.
 /// Each test runs for both total windows: the row again within 40 % of the row, and the column within 5/12 to 12/5 of it.
 /// The grey second look is left out on purpose: it is asked only of runs that already pass the near-miss check, so it can refuse more and never accept more.
 /// </summary>
@@ -201,19 +201,57 @@ public class FinderRunBoundsTest
         }
     }
 
-    /// <summary>The verdict of an axis cross-check without its grey second look: the total inside its window, and the strict ratio or the near-miss one with four non-empty side runs.</summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EveryAcceptableShiftedRing_IsInsideTheBounds_LargeTotals(bool acrossAxes)
+    {
+        // Like edges take runs whose dark parts are all longer or shorter by one amount, which the vectors above, each run moved on its own, seldom draw
+        var random = new Random(20260927);
+        var acceptable = 0L;
+        string? first = null;
+        Span<int> runs = stackalloc int[5];
+        for (var trial = 0; trial < 4_000_000; trial++)
+        {
+            var module = 2 + random.NextDouble() * 300;
+            var shift = (random.NextDouble() * 1.1 - 0.55) * module;
+            for (var i = 0; i < 5; i++)
+            {
+                var dark = i % 2 == 0;
+                var nominal = (i == 2 ? 3 : 1) * module + (dark ? -shift : shift);
+                runs[i] = Math.Max(0, (int)Math.Round(nominal + (random.NextDouble() * 2 - 1) * (module / 2 + 1)));
+            }
+            var total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
+            // Anywhere in the row's window, which is where like edges are taken, and at its two ends
+            foreach (var expected in new[] { Math.Max(1, (int)(total * (0.72 + 0.94 * random.NextDouble()))), 5 * total / 3, 5 * total / 7 + 1 })
+            {
+                if (expected < 1 || !CouldBeAccepted(expected, runs, acrossAxes))
+                    continue;
+                acceptable++;
+                if (Violation(FinderPatternFinder.AxisRunBounds.From(expected, acrossAxes), runs) is { } violation)
+                    first ??= $"expected={expected}, runs=[{runs[0]},{runs[1]},{runs[2]},{runs[3]},{runs[4]}]: {violation}";
+            }
+        }
+
+        await Assert.That(first).IsNull();
+        await Assert.That(acceptable).IsGreaterThan(100_000);
+    }
+
+    /// <summary>The verdict of an axis cross-check without its grey second look: the total inside its window, and the strict ratio or the near-miss one with four non-empty side runs, or like edges inside the row's window under either sign of the row's shift.</summary>
     internal static bool CouldBeAccepted(int expected, ReadOnlySpan<int> runs, bool acrossAxes)
     {
         var total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
         // Written out rather than calling IsTotalInWindow, so that the window the bounds are derived for is stated here too
+        var inRowWindow = 5 * Math.Abs(total - expected) < 2 * expected;
         var inWindow = acrossAxes
             ? 12 * total > 5 * expected && 5 * total < 12 * expected
-            : 5 * Math.Abs(total - expected) < 2 * expected;
+            : inRowWindow;
         if (!inWindow)
             return false;
         return FinderPatternFinder.IsSmallCrispFinderRuns(runs[0], runs[1], runs[2], runs[3], runs[4])
             || FinderPatternFinder.IsFinderRatio(runs)
-            || (runs[0] != 0 && runs[1] != 0 && runs[3] != 0 && runs[4] != 0 && FinderPatternFinder.IsNearFinderRatio(runs[0], runs[1], runs[2], runs[3], runs[4]));
+            || (runs[0] != 0 && runs[1] != 0 && runs[3] != 0 && runs[4] != 0 && FinderPatternFinder.IsNearFinderRatio(runs[0], runs[1], runs[2], runs[3], runs[4]))
+            || (inRowWindow && FinderPatternFinder.IsFinderRatioByLikeEdges(runs[0], runs[1], runs[2], runs[3], runs[4], out _));
     }
 
     private static int SmallestTotal(int expected, bool acrossAxes) => acrossAxes ? 5 * expected / 12 + 1 : 3 * expected / 5 + 1;

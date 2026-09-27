@@ -47,10 +47,10 @@ foreach (var (r, c) in flips)
 
 // Every input class, rendered and decoded
 var failures = new List<string>();
-void Check(string name, bool[,] m, string payload, Func<double, double, double, H> shape, int size, int supersample, Func<double, double, double>? light = null, bool invert = false, bool blur = false, bool expectCorrections = false)
+void Check(string name, bool[,] m, string payload, Func<double, double, double, H> shape, int size, int supersample, Func<double, double, double>? light = null, bool invert = false, bool blur = false, bool expectCorrections = false, double spread = 0)
 {
     var map = shape(0, 0, size);
-    var luminance = Render(m, map, size, size, supersample, light, invert, blur);
+    var luminance = Render(m, map, size, size, supersample, light, invert, blur, spread);
     var ok = QRCodeDecoder.TryDecodeImage(luminance, size, size, out var text, out var info);
     var corrected = info.ErrorsCorrected;
     var pass = ok && text == payload && (!expectCorrections || corrected > 0);
@@ -63,6 +63,25 @@ Check("clean", v2, Payload, (x, y, s) => Square(25, x, y, s), 33 * 4, 1);
 Check("rotated and mirrored", Transposed(v2), Payload, (x, y, s) => Rotated(25, x, y, s, 30), 180, 4);
 Check("keystone", v2, Payload, (x, y, s) => Keystone(25, x, y, s, 0.25), 150, 4);
 Check("grey edges and wrong modules", damaged, Payload, (x, y, s) => Square(25, x, y, s), 109, 4, blur: true, expectCorrections: true);
+// Thin rings: every dark edge moved inward by ThinSpread of a module
+const double ThinTurn = 11, ThinSpread = -0.18;
+const int ThinPx = 155;
+Check("thin rings", v2, Payload, (x, y, s) => Rotated(25, x, y, s, ThinTurn), ThinPx, 4, spread: ThinSpread);
+// The figure says the row scan finds each finder on a row that reads 1:1:3:1:1, and that the lines through its centre miss the ratio and read by like edges
+{
+    var map = Rotated(25, 0, 0, ThinPx, ThinTurn);
+    var thin = Render(v2, map, ThinPx, ThinPx, 4, null, false, false, ThinSpread);
+    var threshold = Otsu(thin);
+    foreach (var f in new[] { (U: 3.5, V: 3.5), (U: 21.5, V: 3.5), (U: 3.5, V: 21.5) })
+    {
+        var (cx, cy) = map.Map(f.U, f.V);
+        var rowReads = Enumerable.Range(-3, 7).Any(dy => FinderRuns(thin, ThinPx, (int)cx, (int)cy + dy, 1, 0, threshold) is { } runs && IsRatio(runs));
+        var centreLines = new[] { (1, 0), (0, 1), (1, 1), (1, -1) }.All(d => FinderRuns(thin, ThinPx, (int)cx, (int)cy, d.Item1, d.Item2, threshold) is { } runs && !IsRatio(runs) && IsLikeEdges(runs));
+        Console.WriteLine($"{(rowReads && centreLines ? "ok  " : "FAIL")} thin rings: finder at ({f.U}, {f.V}), a row reads the ratio {rowReads}, the centre's lines read by like edges only {centreLines}");
+        if (!rowReads || !centreLines)
+            failures.Add($"thin rings finder ({f.U}, {f.V})");
+    }
+}
 Check("uneven lighting", v2, Payload, (x, y, s) => Square(25, x, y, s), 33 * 4, 1, light: Shadow(33 * 4, 0.5, 3 * 4));
 // The figure says the global threshold falls between lit and shadowed paper, so shadowed paper reads as ink
 {
@@ -208,8 +227,28 @@ string Symbol(H map, bool[,] m, string ink = "#1f2328", string paper = "#ffffff"
                 path.Append(Poly(map, c, r, c + 1, r + 1));
     return $"<path fill=\"{paper}\" stroke=\"#d0d7de\" d=\"{Poly(map, -2, -2, cols + 2, rows + 2)}\"/><path fill=\"{ink}\" stroke=\"{ink}\" stroke-width=\"0.35\" d=\"{path}\"/>";
 }
+// A symbol whose dark edges all moved by spread of a module, outward when positive: each dark module grown by it, or the
+// light modules grown into the ink, with the round corners the render's distance rule gives. An affine map only
+string SpreadSymbol(H map, bool[,] m, double spread)
+{
+    string P(double v) => v.ToString("0.#####", CultureInfo.InvariantCulture);
+    var rows = m.GetLength(0); var cols = m.GetLength(1);
+    var reach = Math.Abs(spread);
+    var grown = new StringBuilder();
+    for (var r = 0; r < rows; r++)
+        for (var c = 0; c < cols; c++)
+            if (m[r, c] == spread > 0)
+                grown.Append($"<rect x=\"{F(c - reach)}\" y=\"{F(r - reach)}\" width=\"{F(1 + 2 * reach)}\" height=\"{F(1 + 2 * reach)}\" rx=\"{F(reach)}\"/>");
+    var paper = $"<path fill=\"#ffffff\" stroke=\"#d0d7de\" d=\"{Poly(map, -2, -2, cols + 2, rows + 2)}\"/>";
+    var transform = $"matrix({P(map.A)} {P(map.D)} {P(map.B)} {P(map.E)} {P(map.C)} {P(map.F)})";
+    return spread > 0
+        ? $"{paper}<g transform=\"{transform}\" fill=\"#1f2328\">{grown}</g>"
+        : $"{paper}<g transform=\"{transform}\"><rect fill=\"#1f2328\" x=\"{F(reach)}\" y=\"{F(reach)}\" width=\"{F(cols - 2 * reach)}\" height=\"{F(rows - 2 * reach)}\"/><g fill=\"#ffffff\">{grown}</g></g>";
+}
 string Dot((double X, double Y) p, double r = 4, string cls = "det") => $"<circle class=\"{cls}\" cx=\"{F(p.X)}\" cy=\"{F(p.Y)}\" r=\"{F(r)}\"/>";
 string Line((double X, double Y) a, (double X, double Y) b, string cls) => $"<line class=\"{cls}\" x1=\"{F(a.X)}\" y1=\"{F(a.Y)}\" x2=\"{F(b.X)}\" y2=\"{F(b.Y)}\"/>";
+// A line read by like edges, styled in place: a class would enter every figure's style block
+string LikeLine((double X, double Y) a, (double X, double Y) b) => $"<line stroke=\"#0969da\" stroke-width=\"2.4\" stroke-linecap=\"round\" x1=\"{F(a.X)}\" y1=\"{F(a.Y)}\" x2=\"{F(b.X)}\" y2=\"{F(b.Y)}\"/>";
 string Text(double x, double y, string s, string cls, string anchor = "start") => $"<text class=\"{cls}\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{Esc(s)}</text>";
 string Cross((double X, double Y) p, double s, string cls) => Line((p.X - s, p.Y - s), (p.X + s, p.Y + s), cls) + Line((p.X - s, p.Y + s), (p.X + s, p.Y - s), cls);
 string Window(H map, (double U, double V) centre, double half, string cls) => $"<path class=\"{cls}\" d=\"{Poly(map, centre.U - half, centre.V - half, centre.U + half, centre.V + half)}\"/>";
@@ -645,6 +684,7 @@ void Figure(string path, string[] boxes, Func<StringBuilder, double, double, dou
             "est" => Cross((lx + 6, ly - 4), 4, "estx"),
             "estl" => Line((lx, ly - 4), (lx + 14, ly - 4), "est"),
             "row" => Line((lx, ly - 4), (lx + 14, ly - 4), "row"),
+            "like" => LikeLine((lx, ly - 4), (lx + 14, ly - 4)),
             "tick" => Line((lx + 2, ly - 4), (lx + 12, ly - 4), "tick"),
             "err" => $"<rect class=\"err\" x=\"{F(lx + 1)}\" y=\"{F(ly - 10)}\" width=\"12\" height=\"12\"/>",
             "lat" => Line((lx, ly - 4), (lx + 14, ly - 4), "lat"),
@@ -811,6 +851,30 @@ InputFigure(Path.Combine(qrDir, "decode-input-degraded.svg"), qrBoxes,
     [9, Bar],
     "UUUSUUUSUCCSK", 8,
     "<filter id=\"soft\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"1.2\"/></filter>");
+
+// Thin rings: the top-left finder's row that reads 1:1:3:1:1, and the column through its centre, which reads only by like edges
+InputFigure(Path.Combine(qrDir, "decode-input-thin-rings.svg"), qrBoxes,
+    (sb, x, y, s) =>
+    {
+        var map = Rotated(25, x + 20, y + 20, s - 40, ThinTurn);
+        sb.Append(SpreadSymbol(map, v2, ThinSpread));
+        // In the render's pixels, then scaled into the picture
+        var render = Rotated(25, 0, 0, ThinPx, ThinTurn);
+        var thin = Render(v2, render, ThinPx, ThinPx, 4, null, false, false, ThinSpread);
+        var threshold = Otsu(thin);
+        var (cx, cy) = render.Map(tl.U, tl.V);
+        var row = (int)cy + Enumerable.Range(-3, 7).First(dy => FinderRuns(thin, ThinPx, (int)cx, (int)cy + dy, 1, 0, threshold) is { } runs && IsRatio(runs));
+        var k = (s - 40) / ThinPx;
+        var reach = 5.5 * render.Map(1, 0).X - 5.5 * render.Map(0, 0).X;
+        (double X, double Y) At(double px, double py) => (x + 20 + px * k, y + 20 + py * k);
+        sb.Append(Line(At(cx - reach, row + 0.5), At(cx + reach, row + 0.5), "row"));
+        sb.Append(LikeLine(At((int)cx + 0.5, cy - reach), At((int)cx + 0.5, cy + reach)));
+        foreach (var f in new[] { tl, tr, bl })
+            sb.Append(Dot(map.Map(f.U, f.V), 4));
+        return ["det|found centre", "row|a row reading 1:1:3:1:1", "like|read by like edges"];
+    },
+    [1],
+    "UKUSUUUSUCCSU", 8);
 
 // Uneven lighting
 InputFigure(Path.Combine(qrDir, "decode-input-lighting.svg"), qrBoxes,
@@ -1478,6 +1542,50 @@ static int Otsu(byte[] pixels)
     return threshold;
 }
 
+// The five runs through (x, y) along (dx, dy) at the threshold, dark centre first, as a cross-check walks them; null off a dark pixel
+static int[]? FinderRuns(byte[] image, int size, int x, int y, int dx, int dy, int threshold)
+{
+    bool Inside(int px, int py) => px >= 0 && py >= 0 && px < size && py < size;
+    bool Dark(int px, int py) => Inside(px, py) && image[py * size + px] < threshold;
+    int Walk(ref int px, ref int py, int sx, int sy, bool dark)
+    {
+        var n = 0;
+        while (Inside(px, py) && Dark(px, py) == dark)
+        {
+            n++;
+            px += sx;
+            py += sy;
+        }
+        return n;
+    }
+    if (!Dark(x, y))
+        return null;
+    int bx = x, by = y, fx = x + dx, fy = y + dy;
+    var centre = Walk(ref bx, ref by, -dx, -dy, true) + Walk(ref fx, ref fy, dx, dy, true);
+    var r1 = Walk(ref bx, ref by, -dx, -dy, false);
+    var r0 = Walk(ref bx, ref by, -dx, -dy, true);
+    var r3 = Walk(ref fx, ref fy, dx, dy, false);
+    var r4 = Walk(ref fx, ref fy, dx, dy, true);
+    return [r0, r1, centre, r3, r4];
+}
+
+// 1:1:3:1:1, each run within half a module of its share of the total
+static bool IsRatio(int[] r)
+{
+    double module = r.Sum() / 7.0, variance = module / 2;
+    return r.All(x => x > 0) && Math.Abs(r[0] - module) < variance && Math.Abs(r[1] - module) < variance && Math.Abs(r[3] - module) < variance && Math.Abs(r[4] - module) < variance && Math.Abs(r[2] - 3 * module) < 3 * variance;
+}
+
+// The distances between edges of the same polarity at 2, 4, 4 and 2 modules, each within half a module, the edges moved by under a quarter of one, and a module of 2 px or more
+static bool IsLikeEdges(int[] r)
+{
+    var twelve = r[0] + 2 * (r[1] + r[2] + r[3]) + r[4];
+    return r.All(x => x > 0) && twelve >= 24
+        && Math.Abs(24 * (r[0] + r[1]) - 4 * twelve) < twelve && Math.Abs(24 * (r[1] + r[2]) - 8 * twelve) < twelve
+        && Math.Abs(24 * (r[2] + r[3]) - 8 * twelve) < twelve && Math.Abs(24 * (r[3] + r[4]) - 4 * twelve) < twelve
+        && Math.Abs(24 * (r[1] + r[3] - r[0] - r[2] - r[4]) + 6 * twelve) < 5 * twelve;
+}
+
 // A soft-edged shadow over the lower right: the light falls by depth across an edge of the given width
 static Func<double, double, double> Shadow(double size, double depth, double edge)
     => (x, y) =>
@@ -1487,7 +1595,31 @@ static Func<double, double, double> Shadow(double size, double depth, double edg
         return 1 - depth * t * t * (3 - 2 * t);
     };
 
-static byte[] Render(bool[,] m, H map, int width, int height, int supersample, Func<double, double, double>? light, bool invert, bool blur)
+static bool IsDarkModule(bool[,] m, int r, int c) => r >= 0 && c >= 0 && r < m.GetLength(0) && c < m.GetLength(1) && m[r, c];
+
+// Whether grid point (u, v) is ink once every dark edge has moved by spread of a module, outward when positive: a point
+// changes when a module of the other colour lies within reach of it, measured to that module's nearest point
+static bool IsInk(bool[,] m, double u, double v, double spread)
+{
+    var c = (int)Math.Floor(u); var r = (int)Math.Floor(v);
+    var own = IsDarkModule(m, r, c);
+    if (spread == 0 || own == spread > 0)
+        return own;
+    double fu = u - c, fv = v - r, reach = Math.Abs(spread);
+    for (var dr = -1; dr <= 1; dr++)
+        for (var dc = -1; dc <= 1; dc++)
+        {
+            if ((dr == 0 && dc == 0) || IsDarkModule(m, r + dr, c + dc) == own)
+                continue;
+            var du = dc < 0 ? fu : dc > 0 ? 1 - fu : 0;
+            var dv = dr < 0 ? fv : dr > 0 ? 1 - fv : 0;
+            if (du * du + dv * dv < reach * reach)
+                return !own;
+        }
+    return own;
+}
+
+static byte[] Render(bool[,] m, H map, int width, int height, int supersample, Func<double, double, double>? light, bool invert, bool blur, double spread = 0)
 {
     const double Ink = 30, Paper = 220;
     var inverse = map.Inverse();
@@ -1500,8 +1632,7 @@ static byte[] Render(bool[,] m, H map, int width, int height, int supersample, F
                 for (var i = 0; i < supersample; i++)
                 {
                     var (u, v) = inverse.Map(px + (i + 0.5) / supersample, py + (j + 0.5) / supersample);
-                    var dark = u >= 0 && v >= 0 && u < m.GetLength(1) && v < m.GetLength(0) && m[(int)v, (int)u];
-                    sum += dark ? Ink : Paper;
+                    sum += IsInk(m, u, v, spread) ? Ink : Paper;
                 }
             pixels[py * width + px] = sum / (supersample * supersample);
         }

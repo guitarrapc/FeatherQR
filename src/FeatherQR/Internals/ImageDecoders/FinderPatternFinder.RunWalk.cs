@@ -128,16 +128,23 @@ internal static partial class FinderPatternFinder
     /// What the runs of a cross section an axis cross-check could still accept are bounded by, given the total it expects.
     /// </summary>
     /// <remarks>
-    /// Every bound is a consequence of the cross-check's own accept conditions and of nothing else: the total inside the window of <see cref="IsTotalInWindow"/>, and either the strict ratio (each side run within half a module of one module, the centre within a module and a half of three) or the near-miss one (each run within ten sevenths of a pixel), which is also the only door to the grey second look, or, in the mode that hands its runs back, the small crisp runs, which turn out to lie inside the same bounds.
+    /// Every bound is a consequence of the cross-check's own accept conditions and of nothing else: the total inside the window of <see cref="IsTotalInWindow"/>, and either the strict ratio (each side run within half a module of one module, the centre within a module and a half of three) or the near-miss one (each run within ten sevenths of a pixel), which is also the only door to the grey second look, or, in the mode that hands its runs back, the small crisp runs, which turn out to lie inside the same bounds, or, with a total inside the row's own window, the like-edge distances (<see cref="IsFinderRatioByLikeEdges"/>).
     /// The strict ratio puts every side run below the centre run, and the near-miss one ties it to a third of the centre, so the bound on a side run is known as soon as the centre has been measured.
-    /// A walk that stops at these bounds can therefore only stop where the verdict would have been a refusal. <c>FinderRunBoundsTest</c> holds each bound against the ratio checks themselves.
+    /// Like edges need no centre bound of their own, since their centres lie inside the ratio's; their side runs are bounded by the centre and the row's window.
+    /// A walk that stops at these bounds can therefore only stop where the verdict would have been a refusal. <c>FinderRunBoundsTest</c> holds each bound against the checks themselves.
     /// </remarks>
     internal readonly struct AxisRunBounds
     {
         /// <summary>The smallest total either ratio check accepts.</summary>
         private const int MinTotal = 7;
 
+        /// <summary>The smallest total the like-edge check accepts: twelve modules of 2 px, 24, need a total over 61 · 24 / 120.</summary>
+        private const int MinLikeEdgeTotal = 13;
+
         private readonly int _totalHigh;
+
+        /// <summary>The largest total the like-edge check may take, the row window's; 0 when it takes none.</summary>
+        private readonly int _likeTotalHigh;
 
         /// <summary>Shortest centre run of an acceptable cross section.</summary>
         public readonly int CentreLow;
@@ -145,9 +152,10 @@ internal static partial class FinderPatternFinder
         /// <summary>Longest centre run of an acceptable cross section; below <see cref="CentreLow"/> when nothing is acceptable.</summary>
         public readonly int CentreHigh;
 
-        private AxisRunBounds(int totalHigh, int centreLow, int centreHigh)
+        private AxisRunBounds(int totalHigh, int likeTotalHigh, int centreLow, int centreHigh)
         {
             _totalHigh = totalHigh;
+            _likeTotalHigh = likeTotalHigh;
             CentreLow = centreLow;
             CentreHigh = centreHigh;
         }
@@ -158,18 +166,29 @@ internal static partial class FinderPatternFinder
             var totalLow = Math.Max((acrossAxes ? 5 * expectedTotal / 12 : 3 * expectedTotal / 5) + 1, MinTotal);
             var totalHigh = acrossAxes ? (12 * expectedTotal - 1) / 5 : (7 * expectedTotal - 1) / 5;
             if (totalHigh < totalLow)
-                return new AxisRunBounds(totalHigh, 1, 0);
+                return new AxisRunBounds(totalHigh, 0, 1, 0);
 
             // Strict: 3·total < 14·centre < 9·total. Near miss: |3·total − 7·centre| <= 10.
             var centreLow = Math.Min(3 * totalLow / 14 + 1, (3 * totalLow - 10 + 6) / 7);
             // The near-miss form of the upper bound, (3·total + 10) / 7, is below the strict one from a total of 7 up
             var centreHigh = (9 * totalHigh - 1) / 14;
-            return new AxisRunBounds(totalHigh, centreLow, centreHigh);
+
+            // Like edges, only inside the row's window
+            var likeTotalHigh = (7 * expectedTotal - 1) / 5;
+            return new AxisRunBounds(totalHigh, likeTotalHigh >= MinLikeEdgeTotal ? likeTotalHigh : 0, centreLow, centreHigh);
         }
 
-        /// <summary>Longest side run beside a centre run of this length. Strict: 14·side &lt; 3·total &lt; 14·centre. Near miss: 21·side &lt;= 3·total + 30 &lt;= 7·centre + 40.</summary>
+        /// <summary>
+        /// Longest side run beside a centre run of this length. Strict: 14·side &lt; 3·total &lt; 14·centre. Near miss: 21·side &lt;= 3·total + 30 &lt;= 7·centre + 40.
+        /// Like edges: a side run is under 16/19 of the centre and a third of the total, the largest ratios the like-edge conditions allow.
+        /// </summary>
         public int SideCap(int centre)
-            => Math.Max(Math.Min(centre - 1, (3 * _totalHigh - 1) / 14), Math.Min((7 * centre + 40) / 21, (_totalHigh + 10) / 7));
+        {
+            var ratio = Math.Max(Math.Min(centre - 1, (3 * _totalHigh - 1) / 14), Math.Min((7 * centre + 40) / 21, (_totalHigh + 10) / 7));
+            if (_likeTotalHigh == 0)
+                return ratio;
+            return Math.Max(ratio, Math.Min((16 * centre - 1) / 19, (_likeTotalHigh - 1) / 3));
+        }
 
         /// <summary>Largest total around a centre run of this length: 3·total &lt; 14·centre. The near-miss form, (7·centre + 10) / 3, is the larger one only below a centre of 2, which is never acceptable.</summary>
         public int TotalCap(int centre)

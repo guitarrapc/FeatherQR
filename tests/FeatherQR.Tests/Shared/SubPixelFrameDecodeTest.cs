@@ -178,13 +178,12 @@ public class SubPixelFrameDecodeTest
     }
 
     /// <summary>
-    /// Scaled up bilinearly to about 2.5 px/module, the finder's light ring keeps one pixel above the global threshold, which edge greys pull toward light, and no 1:1:3:1:1 run is found at it; halfway between the two levels the ring is its width.
+    /// Scaled up bilinearly to about 2.5 px/module, the finder's light ring keeps one pixel above the global threshold, which edge greys pull toward light, and no line reads 1:1:3:1:1 at it, by its runs or by its like edges; halfway between the two levels the ring is its width.
     /// The premise is asserted: no finder candidate at the global threshold, one at the midpoint.
     /// </summary>
     [Test]
+    [Arguments(MicroQRVersion.M1, 2.52f)]
     [Arguments(MicroQRVersion.M1, 2.54f)]
-    [Arguments(MicroQRVersion.M2, 2.52f)]
-    [Arguments(MicroQRVersion.M3, 2.53f)]
     public async Task MicroQR_FinderBlurredPastTheGlobalThreshold_Decodes(MicroQRVersion version, float pixelsPerModule)
     {
         var content = version <= MicroQRVersion.M2 ? "01234" : "FQR 2.0";
@@ -199,7 +198,8 @@ public class SubPixelFrameDecodeTest
     }
 
     [Test]
-    [Arguments(RmQRVersion.R11x59, 2.51f)]
+    [Arguments(RmQRVersion.R7x43, 2.52f)]
+    [Arguments(RmQRVersion.R7x77, 2.544f)]
     public async Task RmQR_FinderBlurredPastTheGlobalThreshold_Decodes(RmQRVersion version, float pixelsPerModule)
     {
         const string content = "RMQR 01";
