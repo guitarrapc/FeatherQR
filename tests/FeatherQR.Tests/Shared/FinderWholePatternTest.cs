@@ -52,14 +52,14 @@ public class FinderWholePatternTest
     }
 
     /// <summary>
-    /// Fine two-level noise is where a looser ratio floods the candidate list. The counts are the ones the scan gave before small crisp patterns were accepted: nothing in the noise reads as a whole finder.
+    /// Fine two-level noise is where a looser ratio floods the candidate list. The counts are the ones the scan gave before small crisp patterns were accepted, nothing in the noise reading as a whole finder, but for the 2 px cells of seed 7, where the like-edge cross-checks take one more.
     /// </summary>
     [Test]
     [Arguments(1, 0.5, 42, 2)]
     [Arguments(1, 0.5, 7, 0)]
     [Arguments(1, 0.5, 99, 2)]
     [Arguments(2, 0.5, 42, 1)]
-    [Arguments(2, 0.5, 7, 2)]
+    [Arguments(2, 0.5, 7, 3)]
     [Arguments(2, 0.5, 99, 2)]
     [Arguments(1, 0.3, 42, 0)]
     [Arguments(1, 0.4, 7, 0)]

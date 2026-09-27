@@ -18,6 +18,7 @@ public class FinderCrossCheckParityTest
         var compared = 0L;
         var accepted = 0L;
         var handedBack = 0L;
+        var byLikeEdges = 0L;
         foreach (var (lines, length) in sizes)
         {
             foreach (var module in new[] { 1, 2, 3, 4, 7 })
@@ -28,8 +29,8 @@ public class FinderCrossCheckParityTest
                     var rows = Transpose(columns, lines, length);
                     foreach (var expected in ExpectedTotals(module))
                     {
-                        var mismatch = CompareEveryCentre(columns, lines, length, 128, default, vertical: true, expected, ref compared, ref accepted, ref handedBack)
-                            ?? CompareEveryCentre(rows, length, lines, 128, default, vertical: false, expected, ref compared, ref accepted, ref handedBack);
+                        var mismatch = CompareEveryCentre(columns, lines, length, 128, default, vertical: true, expected, ref compared, ref accepted, ref handedBack, ref byLikeEdges)
+                            ?? CompareEveryCentre(rows, length, lines, 128, default, vertical: false, expected, ref compared, ref accepted, ref handedBack, ref byLikeEdges);
                         await Assert.That(mismatch).IsNull().Because($"{lines} lines of {length}, module={module}, seed={seed}, expected={expected}");
                     }
                 }
@@ -41,6 +42,8 @@ public class FinderCrossCheckParityTest
         await Assert.That(compared - accepted).IsGreaterThan(100_000);
         // The mode that hands its runs back accepts small crisp runs only, which the 1 px a module scenes are made of
         await Assert.That(handedBack).IsGreaterThan(500);
+        // Shifted rings the ratio refuses, taken by like edges in both walks
+        await Assert.That(byLikeEdges).IsGreaterThan(1_000);
     }
 
     [Test]
@@ -51,6 +54,7 @@ public class FinderCrossCheckParityTest
         // spreads each edge evenly over the pixels beside it, so coverage measures the whole-pixel runs again; those columns hold the grey refusals.
         var compared = 0L;
         var handedBack = 0L;
+        var byLikeEdges = 0L;
         var acceptedGrey = new long[2]; // columns, rows
         var acceptedCrisp = new long[2];
         foreach (var (lines, length) in sizes)
@@ -70,14 +74,14 @@ public class FinderCrossCheckParityTest
 
                     foreach (var expected in ExpectedTotals(module))
                     {
-                        var mismatch = CompareEveryCentre(columns, lines, length, threshold, grey, vertical: true, expected, ref compared, ref acceptedGrey[0], ref handedBack)
-                            ?? CompareEveryCentre(rows, length, lines, threshold, grey, vertical: false, expected, ref compared, ref acceptedGrey[1], ref handedBack);
+                        var mismatch = CompareEveryCentre(columns, lines, length, threshold, grey, vertical: true, expected, ref compared, ref acceptedGrey[0], ref handedBack, ref byLikeEdges)
+                            ?? CompareEveryCentre(rows, length, lines, threshold, grey, vertical: false, expected, ref compared, ref acceptedGrey[1], ref handedBack, ref byLikeEdges);
                         await Assert.That(mismatch).IsNull().Because($"{lines} lines of {length}, module={module}, expected={expected}, grey");
 
                         // The same centres with the grey levels off, which is also where these scenes are held to the reference without them
                         var unused = 0L;
-                        var crispMismatch = CompareEveryCentre(columns, lines, length, threshold, default, vertical: true, expected, ref unused, ref acceptedCrisp[0], ref unused)
-                            ?? CompareEveryCentre(rows, length, lines, threshold, default, vertical: false, expected, ref unused, ref acceptedCrisp[1], ref unused);
+                        var crispMismatch = CompareEveryCentre(columns, lines, length, threshold, default, vertical: true, expected, ref unused, ref acceptedCrisp[0], ref unused, ref unused)
+                            ?? CompareEveryCentre(rows, length, lines, threshold, default, vertical: false, expected, ref unused, ref acceptedCrisp[1], ref unused, ref unused);
                         await Assert.That(crispMismatch).IsNull().Because($"{lines} lines of {length}, module={module}, expected={expected}, grey off");
                     }
                 }
@@ -150,7 +154,7 @@ public class FinderCrossCheckParityTest
     /// The cross-check through both walks from every pixel, in its ordinary mode and in the small-crisp mode that hands its runs back.
     /// Returns the first disagreement, or null.
     /// </summary>
-    private static string? CompareEveryCentre(byte[] image, int width, int height, byte threshold, GreyLevels grey, bool vertical, int expected, ref long compared, ref long accepted, ref long acceptedHandingRunsBack)
+    private static string? CompareEveryCentre(byte[] image, int width, int height, byte threshold, GreyLevels grey, bool vertical, int expected, ref long compared, ref long accepted, ref long acceptedHandingRunsBack, ref long acceptedByLikeEdges)
     {
         Span<int> boundedRuns = stackalloc int[5];
         Span<int> referenceRuns = stackalloc int[5];
@@ -158,12 +162,13 @@ public class FinderCrossCheckParityTest
         {
             for (var x = 0; x < width; x++)
             {
-                foreach (var crispMode in new[] { false, true })
+                // The ordinary mode under each sign the row's shift can have, which decides what like edges take
+                foreach (var (crispMode, rowShiftSign) in new[] { (false, -1), (false, 0), (false, 1), (true, 0) })
                 {
                     boundedRuns.Clear();
                     referenceRuns.Clear();
-                    var bounded = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, referenceWalk: false, out var boundedTotal, crispMode ? boundedRuns : default);
-                    var reference = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, referenceWalk: true, out var referenceTotal, crispMode ? referenceRuns : default);
+                    var bounded = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, rowShiftSign, referenceWalk: false, out var boundedTotal, out var boundedLike, crispMode ? boundedRuns : default);
+                    var reference = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, rowShiftSign, referenceWalk: true, out var referenceTotal, out var referenceLike, crispMode ? referenceRuns : default);
 
                     compared++;
                     if (BitConverter.SingleToInt32Bits(bounded) != BitConverter.SingleToInt32Bits(reference))
@@ -173,8 +178,10 @@ public class FinderCrossCheckParityTest
                     accepted++;
                     if (crispMode)
                         acceptedHandingRunsBack++;
-                    if (boundedTotal != referenceTotal || !boundedRuns.SequenceEqual(referenceRuns))
-                        return $"centre=({x},{y}), crispMode={crispMode}: bounded total {boundedTotal}, reference {referenceTotal}";
+                    if (referenceLike)
+                        acceptedByLikeEdges++;
+                    if (boundedTotal != referenceTotal || !boundedRuns.SequenceEqual(referenceRuns) || boundedLike != referenceLike)
+                        return $"centre=({x},{y}), crispMode={crispMode}, row shift {rowShiftSign}: bounded total {boundedTotal} like {boundedLike}, reference {referenceTotal} {referenceLike}";
                 }
             }
         }
@@ -191,7 +198,7 @@ public class FinderCrossCheckParityTest
 
     /// <summary>
     /// <paramref name="lines"/> columns of <paramref name="length"/> pixels, each its own sequence of dark and light runs.
-    /// A third of the sequences are 1:1:3:1:1 at the module size with every run moved by up to half a module and a pixel, so they sit on both sides of every tolerance; the rest are data-like runs of one to four modules.
+    /// A third of the sequences are 1:1:3:1:1 at the module size with every run moved by up to half a module and a pixel, so they sit on both sides of every tolerance, half of them with every dark run longer or shorter by one amount up to 0.6 of a module and the light runs the other way, around the like-edge bounds; the rest are data-like runs of one to four modules.
     /// </summary>
     private static byte[] BuildRunColumns(int lines, int length, int module, int seed)
     {
@@ -206,10 +213,14 @@ public class FinderCrossCheckParityTest
                 if (dark && random.Next(3) == 0)
                 {
                     // a finder-like cross section: dark, light, dark x3, light, dark
+                    var shifted = random.Next(2) == 0;
+                    var shift = (int)Math.Round((random.NextDouble() * 1.2 - 0.6) * module);
                     for (var part = 0; part < 5 && y < length; part++, dark = !dark)
                     {
                         var nominal = part == 2 ? 3 * module : module;
-                        var run = Math.Max(1, nominal + random.Next(-(nominal / 2) - 1, nominal / 2 + 2));
+                        var run = shifted
+                            ? Math.Max(1, nominal + (dark ? shift : -shift) + random.Next(-1, 2))
+                            : Math.Max(1, nominal + random.Next(-(nominal / 2) - 1, nominal / 2 + 2));
                         var level = Level(random, dark);
                         for (var k = 0; k < run && y < length; k++, y++)
                             image[y * lines + x] = level;
