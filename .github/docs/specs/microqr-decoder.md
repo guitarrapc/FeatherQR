@@ -76,7 +76,7 @@ Here the sweep's first frame lies along the symbol's axes, and its first grid re
 
 #### Keystone distortion
 
-A flat M4 tilted away at the bottom. Its far edge is inset by as much as the measured envelope insets the top edge, on the finder's side.
+A flat M4 tilted away at the bottom, its far edge inset by 4 % of the width at each end.
 
 ![Keystoned M4 and its path through the pipeline](../images/microqr/decode-input-keystone.svg)
 
@@ -142,7 +142,7 @@ Image envelope, measured (Tier 1 to 2, kept conservative because a single finder
 - non-square modules within the envelope the symbologies share ([qrcode-symbologies.md](qrcode-symbologies.md));
 - translation and quiet-zone variants;
 - mild optical degradation: JPEG artifacts, low contrast, additive noise;
-- keystone as measured: a symmetric top-edge inset of 2 % of the symbol width for M1 and M2, and 4 % for M3 and M4, with representative combinations of keystone and rotation, and of keystone and mirroring.
+- keystone: any one edge inset by up to 8 % of the symbol's width (quiet zone included) at each end, at any rotation, mirrored or not, from 5 px/module drawn crisp and from 3 px/module with grey edges.
 
 ### Not supported
 
@@ -170,4 +170,4 @@ Image envelope, measured (Tier 1 to 2, kept conservative because a single finder
 - The ECC codeword counts include the misdecode-protection codewords p (ISO Table 9): a decoder wired directly to full Reed-Solomon strength would silently correct ⌊ecc/2⌋ errors where the standard allows only t (for example 2 against 1 for M2-L). The capacity cap is enforced after correction and has its own equivalence-class tests.
 - Quiet-zone stripping cannot reuse Standard QR's dark-bounding-box trick: Micro QR has a single finder, so the right and bottom edges are data modules with no darkness guarantee. The top-left dark module is the finder's corner, and a uniform border gives the core size.
 - libzint (through the ZXingCpp wrapper) rejects UTF-8 Micro QR payloads outright ("Invalid UTF-8 in input"), and a Latin-1 payload with diacritics came back from the round trip transliterated ("naïve café" became "naive cafe"). UTF-8 fixture coverage therefore comes from the qrtool lineage only, and the sanity gate's payload comparison is what catches such silent drift before a fixture is committed.
-- Inside the measured keystone envelope the perspective search almost never reads what the other stages miss. Over keystones of 2 to 4 % a side at 40 to 160 px it was never the stage that read; the scale search read a few, more as the tilt grew. On a close copy of the tests' geometry it read 1 of 844 renders (4 % a side, about 1.8 px/module), after 1,475 failed grids, and none at 5 or 6 % a side; at 7 % a side, outside the envelope, it read 4 of 71. Found by switching stages off while choosing the keystone figure's input (2026-09-27). Whether it earns its place is open.
+- The perspective search reads what the scale search cannot from about 8 % keystone a side, so the envelope was widened to where it was measured instead of the search being dropped. Inside the range first stated (2 % a side for M1 and M2, 4 % for M3 and M4, top edge only) it read nothing the scale search missed, at 4 to 8 px/module drawn crisp and 2 to 8 with grey edges. Below 4 px/module drawn crisp the two searches compete for the attempt budget: without it, 17 renders were lost at 3 px/module, and 85 lost and 61 gained at 2. At 8 px/module, over 19 symbols, 4 edges, 36 angles and both mirrorings (5,472 renders), it reads all of them at 8 % a side and 5,392 at 10 %; without it, 5,131 and 2,522. It costs about a quarter of the grids a failing image decodes: without it, failures ran 16 to 29 % faster where the attempt budget holds, and 4 to 17 % on noise, which exhausts the budget on every candidate (measured 2026-09-27).

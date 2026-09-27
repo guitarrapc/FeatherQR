@@ -3,12 +3,13 @@ using SkiaSharp;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Micro QR image decoding in mild perspective (keystone), including
-/// composition with arbitrary rotation and mirroring. Micro QR has no alignment
-/// patterns, so its measured perspective envelope is intentionally conservative.
+/// Micro QR image decoding under keystone, alone and with rotation or mirroring,
+/// across the measured envelope.
 /// </summary>
 public class MicroQRCodeDecoderPerspectiveTest
 {
+    public enum KeystoneEdge { Top, Bottom, Left, Right }
+
     [Test]
     [Arguments(MicroQRVersion.M1, MicroQREccLevel.ErrorDetectionOnly, "123", 0.02f)]
     [Arguments(MicroQRVersion.M2, MicroQREccLevel.L, "12345", 0.02f)]
@@ -22,6 +23,68 @@ public class MicroQRCodeDecoderPerspectiveTest
         var success = MicroQRCodeDecoder.TryDecode(bitmap, out var decoded, out var info);
 
         await Assert.That(success).IsTrue().Because($"version={version}, tilt={tilt:P0}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
+    public static IEnumerable<(MicroQRVersion Version, MicroQREccLevel EccLevel, string Content, KeystoneEdge Edge)> EnvelopeEdgeCases()
+    {
+        foreach (var edge in new[] { KeystoneEdge.Top, KeystoneEdge.Bottom, KeystoneEdge.Left, KeystoneEdge.Right })
+        {
+            yield return (MicroQRVersion.M1, MicroQREccLevel.ErrorDetectionOnly, "123", edge);
+            yield return (MicroQRVersion.M2, MicroQREccLevel.L, "12345", edge);
+            yield return (MicroQRVersion.M3, MicroQREccLevel.L, "HELLO WORLD", edge);
+            yield return (MicroQRVersion.M4, MicroQREccLevel.M, "MICRO QR M4 TEST", edge);
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(EnvelopeEdgeCases))]
+    public async Task Decode_Keystone8Percent_EachEdge(MicroQRVersion version, MicroQREccLevel eccLevel, string content, KeystoneEdge edge)
+    {
+        using var bitmap = RenderKeystone(content, version, eccLevel, 0.08f, rotateDegrees: 0, edge);
+
+        var success = MicroQRCodeDecoder.TryDecode(bitmap, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"version={version}, edge={edge}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
+    /// <summary>
+    /// The lowest densities the envelope was measured at: 5 px/module drawn crisp, 3 px/module with grey edges.
+    /// </summary>
+    [Test]
+    [Arguments(5, false)]
+    [Arguments(3, true)]
+    public async Task Decode_Keystone8Percent_LowestDensity(int pixelsPerModule, bool greyEdges)
+    {
+        const string content = "MICRO QR M4 TEST";
+        using var bitmap = RenderKeystone(content, MicroQRVersion.M4, MicroQREccLevel.M, 0.08f, rotateDegrees: 0, KeystoneEdge.Bottom, pixelsPerModule, greyEdges);
+
+        var success = MicroQRCodeDecoder.TryDecode(bitmap, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"px/module={pixelsPerModule}, greyEdges={greyEdges}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// Keystones only the perspective search read when measured (2026-09-27): with the search removed, each of these fails.
+    /// </summary>
+    [Test]
+    [Arguments(MicroQRVersion.M4, MicroQREccLevel.L, "MICRO QR M4 TEST L", KeystoneEdge.Top, 0, false)]
+    [Arguments(MicroQRVersion.M4, MicroQREccLevel.L, "MICRO QR M4 TEST L", KeystoneEdge.Left, 0, false)]
+    [Arguments(MicroQRVersion.M4, MicroQREccLevel.M, "MICRO QR M4 TEST", KeystoneEdge.Bottom, 0, false)]
+    [Arguments(MicroQRVersion.M4, MicroQREccLevel.M, "MICRO QR M4 TEST", KeystoneEdge.Bottom, 0, true)]
+    [Arguments(MicroQRVersion.M4, MicroQREccLevel.M, "MICRO QR M4 TEST", KeystoneEdge.Right, 170, false)]
+    [Arguments(MicroQRVersion.M3, MicroQREccLevel.L, "HELLO WORLD", KeystoneEdge.Bottom, 80, false)]
+    public async Task Decode_Keystone8Percent_PerspectiveSearchCases(MicroQRVersion version, MicroQREccLevel eccLevel, string content, KeystoneEdge edge, int degrees, bool mirrored)
+    {
+        using var bitmap = RenderKeystone(content, version, eccLevel, 0.08f, degrees, edge, mirrored: mirrored);
+
+        var success = MicroQRCodeDecoder.TryDecode(bitmap, out var decoded, out var info);
+
+        await Assert.That(success).IsTrue().Because($"version={version}, edge={edge}, degrees={degrees}, mirrored={mirrored}, status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
         await Assert.That(info.Version).IsEqualTo(version);
     }
@@ -43,14 +106,7 @@ public class MicroQRCodeDecoderPerspectiveTest
     public async Task Decode_MirrorPlusKeystone()
     {
         const string content = "MICRO QR M4 TEST";
-        using var source = RenderKeystone(content, MicroQRVersion.M4, MicroQREccLevel.M, tilt: 0.02f, rotateDegrees: 0);
-        using var mirrored = new SKBitmap(new SKImageInfo(source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
-        using (var canvas = new SKCanvas(mirrored))
-        {
-            canvas.Clear(SKColors.White);
-            canvas.Scale(-1, 1, source.Width / 2f, 0);
-            canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
-        }
+        using var mirrored = RenderKeystone(content, MicroQRVersion.M4, MicroQREccLevel.M, tilt: 0.02f, rotateDegrees: 0, mirrored: true);
 
         var success = MicroQRCodeDecoder.TryDecode(mirrored, out var decoded, out var info);
 
@@ -58,15 +114,22 @@ public class MicroQRCodeDecoderPerspectiveTest
         await Assert.That(decoded).IsEqualTo(content);
     }
 
+    /// <summary>
+    /// The symbol with a 2-module quiet zone, one edge shortened by <paramref name="tilt"/> of its width at each end, then turned about the canvas centre and optionally mirrored.
+    /// </summary>
     private static SKBitmap RenderKeystone(
         string content,
         MicroQRVersion version,
         MicroQREccLevel eccLevel,
         float tilt,
-        float rotateDegrees)
+        float rotateDegrees,
+        KeystoneEdge edge = KeystoneEdge.Top,
+        int pixelsPerModule = 8,
+        bool greyEdges = false,
+        bool mirrored = false)
     {
         var qr = MicroQRCodeGenerator.Create(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = 2 });
-        var qrPx = qr.Size * 8;
+        var qrPx = qr.Size * pixelsPerModule;
 
         using var flat = new SKBitmap(new SKImageInfo(qrPx, qrPx, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(flat))
@@ -81,15 +144,17 @@ public class MicroQRCodeDecoderPerspectiveTest
         {
             canvas.Clear(SKColors.White);
 
-            var margin = (canvasPx - qrPx) / 2f;
-            var shrink = tilt * qrPx;
-            var warp = SquareToQuad(
-                qrPx,
-                qrPx,
-                new SKPoint(margin + shrink, margin),
-                new SKPoint(margin + qrPx - shrink, margin),
-                new SKPoint(margin + qrPx, margin + qrPx),
-                new SKPoint(margin, margin + qrPx));
+            var m = (canvasPx - qrPx) / 2f;
+            var s = tilt * qrPx;
+            var q = (float)qrPx;
+            var (topLeft, topRight, bottomRight, bottomLeft) = edge switch
+            {
+                KeystoneEdge.Top => (new SKPoint(m + s, m), new SKPoint(m + q - s, m), new SKPoint(m + q, m + q), new SKPoint(m, m + q)),
+                KeystoneEdge.Bottom => (new SKPoint(m, m), new SKPoint(m + q, m), new SKPoint(m + q - s, m + q), new SKPoint(m + s, m + q)),
+                KeystoneEdge.Left => (new SKPoint(m, m + s), new SKPoint(m + q, m), new SKPoint(m + q, m + q), new SKPoint(m, m + q - s)),
+                _ => (new SKPoint(m, m), new SKPoint(m + q, m + s), new SKPoint(m + q, m + q - s), new SKPoint(m, m + q)),
+            };
+            var warp = SquareToQuad(q, q, topLeft, topRight, bottomRight, bottomLeft);
 
             if (rotateDegrees != 0)
             {
@@ -98,11 +163,22 @@ public class MicroQRCodeDecoderPerspectiveTest
             }
 
             canvas.SetMatrix(warp);
-            canvas.DrawBitmap(flat, 0, 0, SKSamplingOptions.Default);
+            canvas.DrawBitmap(flat, 0, 0, greyEdges ? new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None) : SKSamplingOptions.Default);
             canvas.Flush();
         }
 
-        return result;
+        if (!mirrored)
+            return result;
+
+        using (result)
+        {
+            var mirror = new SKBitmap(new SKImageInfo(result.Width, result.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
+            using var canvas = new SKCanvas(mirror);
+            canvas.Clear(SKColors.White);
+            canvas.Scale(-1, 1, result.Width / 2f, 0);
+            canvas.DrawBitmap(result, 0, 0, SKSamplingOptions.Default);
+            return mirror;
+        }
     }
 
     private static SKMatrix SquareToQuad(float width, float height, SKPoint topLeft, SKPoint topRight, SKPoint bottomRight, SKPoint bottomLeft)
