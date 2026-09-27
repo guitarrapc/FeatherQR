@@ -142,6 +142,7 @@ jobs:
   # The JIT steps hold the JIT on the same runner to its class, and show the side of a class the runner's
   # CPU does not: the no-AVX dispatch on an AVX2 machine, and ARM64 without the dot product.
   aot-analysis:
+    name: aot-analysis (${{ matrix.rid }}, ${{ matrix.simd-class }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     permissions:

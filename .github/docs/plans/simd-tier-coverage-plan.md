@@ -145,3 +145,13 @@ Lessons:
 - **Every subset of what a class leaves to the CPU is not a CPU.** The first simulation gave x64 with AVX2 GFNI without its 256-bit form, and the table failed there on a machine that cannot exist: with AVX present, a CPU with GFNI has both. A class now leaves instruction sets to the CPU in groups that come and go together.
 
 Open: the CI run, which answers the `Dp` question on linux-arm64 and win-arm64 and runs the JIT legs on the runners' CPUs.
+
+### 2026-09-28: phase 2 on CI
+
+Done:
+
+- [Run 36344497429](https://github.com/guitarrapc/FeatherQR/actions/runs/36344497429) of guitarrapc/FeatherQR#435 at 73c8905: all five `aot-analysis` legs pass, and each of their eleven checks reports that the tiers match the table (five NativeAOT builds, three JIT runs, three JIT runs under a knob).
+- `Dp` reads true under the default NativeAOT publish on linux-arm64, win-arm64 and osx-arm64 alike, and under the JIT on all three, so `LuminanceConverter` takes its dot-product tier on every ARM64 runner. `DOTNET_EnableArm64Dp=0` moves it to scalar under the JIT on all three, the table's second choice. The `Dp` question is answered for the runners; a core without the dot product is covered by the knob only.
+- The linux-x64 runner had no GFNI and fast PEXT, so the x64 cells ran their no-GFNI side there: `EccBinaryEncoder` on SSSE3, `EccBinaryDecoder` scalar with AVX2, and the two PEXT kernels on their PEXT tier. The GFNI side has run only on the Windows box.
+
+Phase 2's exit is met. The simulated plants cover every class and state; the real-build plants ran on x64 only.
