@@ -7,16 +7,20 @@ namespace FeatherQR.Tests;
 internal static class NearestNeighbourRenderer
 {
     public static (byte[] Luminance, int Width, int Height) Render(Func<int, int, bool> isDark, int columns, int rows, float pixelsPerModule, float offsetX, float offsetY)
+        => Render(isDark, columns, rows, pixelsPerModule, pixelsPerModule, offsetX, offsetY);
+
+    /// <summary>The same with modules <paramref name="pixelsPerModuleX"/> wide and <paramref name="pixelsPerModuleY"/> tall.</summary>
+    public static (byte[] Luminance, int Width, int Height) Render(Func<int, int, bool> isDark, int columns, int rows, float pixelsPerModuleX, float pixelsPerModuleY, float offsetX, float offsetY)
     {
-        var width = (int)MathF.Ceiling(columns * pixelsPerModule) + 2;
-        var height = (int)MathF.Ceiling(rows * pixelsPerModule) + 2;
+        var width = (int)MathF.Ceiling(columns * pixelsPerModuleX) + 2;
+        var height = (int)MathF.Ceiling(rows * pixelsPerModuleY) + 2;
         var luminance = new byte[width * height];
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
-                var column = (int)MathF.Floor((x + 0.5f - offsetX) / pixelsPerModule);
-                var row = (int)MathF.Floor((y + 0.5f - offsetY) / pixelsPerModule);
+                var column = (int)MathF.Floor((x + 0.5f - offsetX) / pixelsPerModuleX);
+                var row = (int)MathF.Floor((y + 0.5f - offsetY) / pixelsPerModuleY);
                 luminance[y * width + x] = row >= 0 && column >= 0 && row < rows && column < columns && isDark(row, column) ? (byte)0 : (byte)255;
             }
         }

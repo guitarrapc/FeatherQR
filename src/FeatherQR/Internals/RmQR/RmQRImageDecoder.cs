@@ -644,7 +644,8 @@ internal static class RmQRImageDecoder
                     return status;
                 frameStatus = Deeper(frameStatus, status);
 
-                // (b) Anisotropic rescale without rotation: exact for a symbol rendered with non-square modules (independent per-axis scale error).
+                // (b) Anisotropic rescale without rotation. Non-square modules already read above, since the frame scales each axis on its own.
+                // This grid reads crisp rows under 2 px: there the snapped rows put the sub-finder off its predicted row, and the turn (a) makes of that misses the far rows.
                 var determinant = dX * dY * (uX * vY - uY * vX);
                 if (Math.Abs(determinant) > 1e-6f)
                 {
