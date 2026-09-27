@@ -61,8 +61,7 @@ internal static partial class StructuredAppendPlanner
         ref var origin = ref MemoryMarshal.GetReference(text);
         int s0 = start, s1 = start, s2 = start, s3 = start, s4 = start, s5 = start, s6 = start, s7 = start;
 
-        // The vector loop runs until the lane furthest ahead reaches the end of the text; the others
-        // are a few characters behind and finish in scalar code.
+        // The vector loop runs until the lane furthest ahead reaches the end of the text; the others are a few characters behind and finish in scalar code.
         var step = 0;
         apartSteps = 0;
         var stop = length - start;
@@ -83,8 +82,7 @@ internal static partial class StructuredAppendPlanner
                         : Vector128.Min(AdvSimd.AddSaturate(b, eight), AdvSimd.AddSaturate(cheapest, vOpenByte8));
                     if (AdvSimd.Arm64.MaxAcross(Vector128.GreaterThan(nb, vBudget)).ToScalar() == 0)
                     {
-                        // Only Byte is reachable now, and every further character outside the
-                        // alphabet extends its run: one add and the budget test.
+                        // Only Byte is reachable now, and every further character outside the alphabet extends its run: one add and the budget test.
                         n0 = n1 = n2 = a0 = a1 = unreachable;
                         b = nb;
                         step++;
@@ -147,14 +145,11 @@ internal static partial class StructuredAppendPlanner
                 nn0 = Vector128.ConditionalSelect(isDigit, AdvSimd.AddSaturate(n2, NeonCosts(3)), unreachable);
                 na1 = Vector128.ConditionalSelect(isAlnum, Vector128.Min(AdvSimd.AddSaturate(a0, NeonCosts(6)), AdvSimd.AddSaturate(cheapest, vOpenAlnum)), unreachable);
                 na0 = Vector128.ConditionalSelect(isAlnum, AdvSimd.AddSaturate(a1, NeonCosts(5)), unreachable);
-                // No rule for a U+FEFF here: a lane that moves while the lanes are apart is at the head of its chunk, one
-                // character and then the marks its cut was kept off, where continuing that character's run is never dearer than opening another.
+                // No rule for a U+FEFF here: a lane that moves while the lanes are apart is at the head of its chunk, one character and then the marks its cut was kept off, where continuing that character's run is never dearer than opening another.
                 nb = AdvSimd.AddSaturate(Vector128.Min(b, AdvSimd.AddSaturate(cheapest, vOpenByte)), byteBits);
                 next = Vector128.Min(Vector128.Min(Vector128.Min(nn0, nn1), Vector128.Min(nn2, na0)), Vector128.Min(na1, nb));
 
-                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this
-                // character again, so the lanes are back at one character a few steps after a close, whatever
-                // the close cost each of them (a pair is two characters back, a cut kept off a mark more).
+                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this character again, so the lanes are back at one character a few steps after a close, whatever the close cost each of them (a pair is two characters back, a cut kept off a mark more).
                 var lowest = Math.Min(Math.Min(Math.Min(s0, s1), Math.Min(s2, s3)), Math.Min(Math.Min(s4, s5), Math.Min(s6, s7)));
                 var hold = NeonHoldOffsets(s0, s1, s2, s3, s4, s5, s6, s7, lowest);
                 nn0 = Vector128.ConditionalSelect(hold, n0, nn0);
@@ -198,8 +193,7 @@ internal static partial class StructuredAppendPlanner
             }
 
             var overBits = over.ExtractMostSignificantBits();
-            // Some lane's chunk closes before this character, which starts its next chunk: the lane
-            // re-reads it on the next step, with fresh states.
+            // Some lane's chunk closes before this character, which starts its next chunk: the lane re-reads it on the next step, with fresh states.
             for (var lane = 0; lane < Lanes; lane++)
             {
                 if ((overBits & (1u << lane)) == 0)
@@ -321,8 +315,7 @@ internal static partial class StructuredAppendPlanner
         return true;
     }
 
-    // Keep this copy of ModeSegmenter.ByteCost inline in the NEON walk: a call in the
-    // UTF-8 loop makes the JIT spill live vector state around each character cost.
+    // Keep this copy of ModeSegmenter.ByteCost inline in the NEON walk: a call in the UTF-8 loop makes the JIT spill live vector state around each character cost.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int LaneByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
     {

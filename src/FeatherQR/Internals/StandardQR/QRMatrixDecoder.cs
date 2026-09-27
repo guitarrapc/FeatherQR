@@ -58,8 +58,7 @@ internal static partial class QRMatrixDecoder
         var totalCodewords = eccInfo.TotalDataCodewords + totalBlocks * eccInfo.ECCPerBlock;
 
         // Working buffer: [interleaved codewords | per-block codewords].
-        // After deinterleaving, the interleaved half is reused to gather the
-        // corrected data codewords for bitstream decoding.
+        // After deinterleaving, the interleaved half is reused to gather the corrected data codewords for bitstream decoding.
         byte[]? rented = null;
         var workSize = totalCodewords * 2;
         Span<byte> work = workSize <= StackAllocThreshold
@@ -78,8 +77,7 @@ internal static partial class QRMatrixDecoder
             // 4. Deinterleave into per-block [data | ecc] codewords
             DeinterleaveCodewords(interleaved, blocks, eccInfo);
 
-            // 5. Reed-Solomon correction per block; corrected data codewords are
-            // gathered sequentially (block order matches the encoder's split).
+            // 5. Reed-Solomon correction per block; corrected data codewords are gathered sequentially (block order matches the encoder's split).
             var data = interleaved.Slice(0, eccInfo.TotalDataCodewords);
             var errorsCorrected = 0;
             var dataOffset = 0;

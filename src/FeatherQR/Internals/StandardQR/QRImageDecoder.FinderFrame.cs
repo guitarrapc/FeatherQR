@@ -37,9 +37,7 @@ internal static partial class QRImageDecoder
         {
             var uWeight = Weight(sizes.TopLeftAlongU, sizes.TopRight, sizes.SubPixelAlongU);
             var vWeight = Weight(sizes.TopLeftAlongV, sizes.BottomLeft, sizes.SubPixelAlongV);
-            // A plane in front of the camera keeps the denominator positive over the whole symbol, whose
-            // corners lie at a and b from −0.25 to 1.25 at version 1 and closer in above it; sizes that put
-            // the horizon across the symbol were measured wrong
+            // A plane in front of the camera keeps the denominator positive over the whole symbol, whose corners lie at a and b from −0.25 to 1.25 at version 1 and closer in above it; sizes that put the horizon across the symbol were measured wrong
             if (!(Lowest(uWeight) + Lowest(vWeight) > -1f))
                 return new FinderFrame(topLeft, topRight, bottomLeft, 1f, 1f);
             return new FinderFrame(topLeft, topRight, bottomLeft, uWeight, vWeight);

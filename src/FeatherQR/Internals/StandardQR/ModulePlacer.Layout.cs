@@ -75,14 +75,11 @@ internal static partial class ModulePlacer
         var blockedMask = new byte[(size * size + 7) / 8];
         QRCodeGenerator.PlaceFunctionModulesReference(template, size, version, blockedMask);
 
-        // The same walk as PlaceDataWords (2-column strips from the right, column 6
-        // skipped, direction alternating), recording free modules in stream order and
-        // segmenting rows where both modules are free into runs.
+        // The same walk as PlaceDataWords (2-column strips from the right, column 6 skipped, direction alternating), recording free modules in stream order and segmenting rows where both modules are free into runs.
         var index = new List<ushort>();
         var ops = new List<PlacementOp>();
         var up = true;
-        // size is odd, so x walks the even columns down to 8, then (after the column-6
-        // skip) the odd columns 5, 3, 1: the pair (x, x-1) always exists, hence x > 0.
+        // size is odd, so x walks the even columns down to 8, then (after the column-6 skip) the odd columns 5, 3, 1: the pair (x, x-1) always exists, hence x > 0.
         for (var x = size - 1; x > 0; x -= 2)
         {
             if (x == 6) x--;
@@ -153,8 +150,7 @@ internal static partial class ModulePlacer
         if (streamBits == 0) return;
         var byteCount = (streamBits + 7) / 8;
 
-        // Bit-per-module scratch for the stream: fixed stack budget (versions 1-2 with
-        // the vector store slack), pool rental above it.
+        // Bit-per-module scratch for the stream: fixed stack budget (versions 1-2 with the vector store slack), pool rental above it.
         if (free + VectorSlack <= StackBitBudget)
         {
             Span<byte> bits = stackalloc byte[StackBitBudget];

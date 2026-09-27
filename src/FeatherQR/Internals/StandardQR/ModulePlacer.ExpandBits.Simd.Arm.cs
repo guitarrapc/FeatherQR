@@ -34,8 +34,7 @@ internal static partial class ModulePlacer
         // Restrict this setup to long streams; short streams keep their original start.
         if (byteCount >= 256 && ((nuint)Unsafe.AsPointer(ref dst) & 15) == 8)
         {
-            // Only inspect the address for an alignment hint. All accesses still use
-            // tracked refs and unaligned stores, so a GC move cannot affect correctness.
+            // Only inspect the address for an alignment hint. All accesses still use tracked refs and unaligned stores, so a GC move cannot affect correctness.
             Unsafe.WriteUnaligned(ref dst, ExpandByte(src));
             k = 1;
         }
@@ -51,8 +50,7 @@ internal static partial class ModulePlacer
             (AdvSimd.ShiftLogical(AdvSimd.Arm64.VectorTableLookup(v, sel5), shift) & one).StoreUnsafe(ref dst, (nuint)(k * 8 + 80));
             (AdvSimd.ShiftLogical(AdvSimd.Arm64.VectorTableLookup(v, sel6), shift) & one).StoreUnsafe(ref dst, (nuint)(k * 8 + 96));
             (AdvSimd.ShiftLogical(AdvSimd.Arm64.VectorTableLookup(v, sel7), shift) & one).StoreUnsafe(ref dst, (nuint)(k * 8 + 112));
-            // Re-expand the last complete block when the length is not a multiple of
-            // sixteen. Overlap is safe, and every load/store stays within logical bounds.
+            // Re-expand the last complete block when the length is not a multiple of sixteen. Overlap is safe, and every load/store stays within logical bounds.
             if (k == last) break;
             k = Math.Min(k + 16, last);
         }

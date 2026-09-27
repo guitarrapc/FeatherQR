@@ -47,8 +47,7 @@ internal static partial class StructuredAppendPlanner
         return (byte)parity;
     }
 
-    // Match the Byte writer: modern targets replace each unrepresentable code unit,
-    // while the downlevel writer narrows it. Only the low byte contributes to the result.
+    // Match the Byte writer: modern targets replace each unrepresentable code unit, while the downlevel writer narrows it. Only the low byte contributes to the result.
     private static int Latin1ParityValue(char c)
 #if NET5_0_OR_GREATER
         => c <= 0xFF ? c : '?';
@@ -162,8 +161,7 @@ internal static partial class StructuredAppendPlanner
                     var next = nextVectors[v];
                     var pair = Vector128.Equals(c & Vector128.Create((ushort)0xFC00), Vector128.Create((ushort)0xD800))
                         & Vector128.Equals(next & Vector128.Create((ushort)0xFC00), Vector128.Create((ushort)0xDC00));
-                    // Every surrogate contributes U+FFFD first. The two replacements of a
-                    // valid pair cancel, so only that pair's real byte XOR must be added.
+                    // Every surrogate contributes U+FFFD first. The two replacements of a valid pair cancel, so only that pair's real byte XOR must be added.
                     // q = (high - D800) + 64, lo = low - DC00: code point = (q << 10) | lo.
                     // Bit 15 of q is free and records the number of pairs modulo two.
                     var q = c - Vector128.Create((ushort)0xD7C0);
@@ -173,16 +171,14 @@ internal static partial class StructuredAppendPlanner
                 }
             }
             raw ^= c;
-            // UTF-8 payload shifts/masks are linear under XOR; apply them once after the
-            // loop. These groups need bits 6..11 and 12..15 respectively, leaving bit 0
-            // free to record their count parity for the encoded-byte prefix constants.
+            // UTF-8 payload shifts/masks are linear under XOR; apply them once after the loop.
+            // These groups need bits 6..11 and 12..15 respectively, leaving bit 0 free to record their count parity for the encoded-byte prefix constants.
             var tagged = c | Vector128.Create((ushort)1);
             nonAscii ^= tagged & Vector128.GreaterThan(c, Vector128.Create((ushort)0x7F));
             threeByte ^= tagged & Vector128.GreaterThan(c, Vector128.Create((ushort)0x07FF));
         }
 
-        // A low surrogate paired with the last vector's high half is deliberately read
-        // as U+FFFD here: it cancels that high half's replacement, whose true pair parity
+        // A low surrogate paired with the last vector's high half is deliberately read as U+FFFD here: it cancels that high half's replacement, whose true pair parity
         // was already accumulated. All pairs wholly inside the tail are priced normally.
         for (var i = v * 8; i < text.Length; i++)
             parity ^= Utf8ParityValue(text, ref i);
