@@ -21,9 +21,9 @@ It fixes WHAT changes, in WHICH order, and WHY. HOW each piece is verified follo
 | Migration table and a mechanical replacement script | Readability heuristics for styled output |
 | 128-bit tiers where x64 without AVX or WebAssembly runs scalar | The instruction set a NativeAOT publish targets, and README guidance on it |
 
-Features are additive and could ship in 2.1.0 without breaking anyone. They are in 2.0.0 because the maintainer chose to make the major a feature-complete line rather than a rename-only one. Kanji encoding is the largest and last of them precisely so it can be demoted to 2.1.0 without disturbing anything else if it slips.
+Features are additive and could ship in 2.1.0 without breaking anyone. They are in 2.0.0 because the maintainer chose to make the major a feature-complete line rather than a rename-only one. Kanji encoding is the largest and last of them. It was placed last so it could be demoted to 2.1.0 if it slipped, but that option is closed: **decided 2026-09-29, Kanji encoding ships in 2.0.0 and does not move to 2.1.0.** It changes the default output for Japanese text, which D5 accepts in a major and nowhere else, so a slip delays 2.0.0 instead of demoting the phase.
 
-The 128-bit tiers are internal and could ship in any 2.x. They are in 2.0.0 because the design treats NativeAOT and WebAssembly as first-class, and 2.0.0 is the release most users will first measure. Like Kanji, they move to 2.1.0 if they slip.
+The 128-bit tiers are internal and could ship in any 2.x. They are in 2.0.0 because the design treats NativeAOT and WebAssembly as first-class, and 2.0.0 is the release most users will first measure. Unlike Kanji, they move to 2.1.0 if they slip: they change no output, so a minor can carry them.
 
 ## The naming rule
 
@@ -207,7 +207,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script; README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry, 128-bit tiers); fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot simply be folded in as history; F1's renderer half landed and is already recorded in the specs) | Approved API listing frozen |
 | 8 | Release | Below | `2.0.0` on nuget.org |
 
-Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last so that it can move to 2.1.0 without reopening anything. Phase 6b touches no public API, so it can run beside 4-6 or after the freeze; it must land before Phase 8 to be in 2.0.0, and moves to 2.1.0 like Phase 6 if it slips. Phase 3b was found after Phase 4 shipped and runs in that order; it belongs to the cleanup, which is why it is numbered with it rather than appended, and it means Phase 3's "API-final" line held for the types it named and not for the builder's option signatures.
+Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last, and it is in 2.0.0 whatever it takes (decided 2026-09-29, see Scope): Phase 8 waits for it. Phase 6b touches no public API, so it can run beside 4-6 or after the freeze; it must land before Phase 8 to be in 2.0.0, and moves to 2.1.0 if it slips. Phase 3b was found after Phase 4 shipped and runs in that order; it belongs to the cleanup, which is why it is numbered with it rather than appended, and it means Phase 3's "API-final" line held for the types it named and not for the builder's option signatures.
 
 ## Release checklist (Phase 8)
 
