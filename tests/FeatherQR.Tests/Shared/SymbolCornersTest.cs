@@ -150,8 +150,8 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// An alignment pattern the decoder cannot find drops any version onto the finders-only fit
-    /// version 1 gets, while error correction still returns <see cref="DecodeStatus.Success"/>.
+    /// An alignment pattern the decoder cannot find drops versions 2 to 6, which have no other,
+    /// onto the finders-only fit version 1 gets, while error correction still returns <see cref="DecodeStatus.Success"/>.
     /// One damaged module is enough, so version 1 is not the only loose case.
     /// The version 2 tilt is taken in both keystone directions: 3 % used to read only with the
     /// top edge shrinking, because the sampler read half a pixel toward the bottom-right, the
@@ -162,8 +162,6 @@ public class SymbolCornersTest
     [Arguments(2, -0.02f)]
     [Arguments(5, 0.01f)]
     [Arguments(6, 0.01f)]
-    [Arguments(10, 0.0075f)]
-    [Arguments(10, -0.0075f)]
     public async Task QR_AlignmentPatternNotFound_CornersStayWithinAModuleAndAHalf(int version, float tilt)
     {
         using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version);
@@ -183,16 +181,20 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// The same damage on a mesh-sampled version takes the other branch: fifteen other alignment
-    /// nodes remain, so there is no fallback and the corners stay inside half a module. This is
-    /// what covers the mesh's corner anchor when its diagonal-last node is a prediction.
+    /// The same damage on a mesh-sampled version takes the other branch: other alignment nodes
+    /// remain (three from version 7, fifteen at version 20), so there is no fallback and the corners
+    /// stay inside half a module. This is what covers the mesh's corner anchor when its
+    /// diagonal-last node is a prediction.
     /// </summary>
     [Test]
-    public async Task QR_MeshPath_AnchorsOnADetectedNodeWhenTheLastOneIsMissing()
+    [Arguments(10, 0.0075f)]
+    [Arguments(10, -0.0075f)]
+    [Arguments(20, 0.05f)]
+    public async Task QR_MeshPath_AnchorsOnADetectedNodeWhenTheLastOneIsMissing(int version, float tilt)
     {
-        using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version: 20);
-        EraseBottomRightAlignmentPattern(flat, version: 20);
-        var matrix = Keystone(flat, 0.05f);
+        using var flat = RenderQr("CORNERS UNDER PERSPECTIVE", version);
+        EraseBottomRightAlignmentPattern(flat, version);
+        var matrix = Keystone(flat, tilt);
         using var scene = Compose(flat, matrix);
 
         await Assert.That(QRCodeImageDecoder.TryDecode(scene, out _, out var info)).IsTrue().Because($"status={info.Status}");

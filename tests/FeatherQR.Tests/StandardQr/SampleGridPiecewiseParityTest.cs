@@ -29,7 +29,7 @@ public class SampleGridPiecewiseParityTest
 
     private sealed record Scene(byte[] Luminance, int Width, int Height, float[] GridCoords, float[] NodeXs, float[] NodeYs, int MeshSize, int Dimension);
 
-    public static IEnumerable<int> MeshVersions() => Enumerable.Range(14, 27);
+    public static IEnumerable<int> MeshVersions() => Enumerable.Range(7, 34);
 
     private static IEnumerable<(string Name, Sampler Fn)> Tiers()
     {

@@ -21,11 +21,11 @@ namespace FeatherQR.Internals.StandardQR;
 ///    a. Low density, upright or at a right angle: a grid of module boundaries read off the timing patterns
 ///    b. Finder centres and module sizes
 ///    c. Finders' frame and dimension candidates
-///    d. Per dimension: alignment search, then grids in turn: mesh (version 14+, half its searched nodes found)
+///    d. Per dimension: alignment search, then grids in turn: mesh (version 7+, half its searched nodes found)
 ///       when nothing anchored, four-point transform (alignment-anchored, else the parallelogram), coverage
-///       re-read (grey levels), mesh when the search anchored, then the parallelogram after an anchored grid,
-///       or the frame grid and its coverage re-read when nothing anchored and the frame foreshortens; neither
-///       at the runner-up
+///       re-read (grey levels), mesh when the search anchored, then, each with its coverage re-read, the
+///       parallelogram after an anchored grid or the frame grid when nothing anchored and the frame
+///       foreshortens; neither at the runner-up
 /// 3. When that does not settle, a-d from each other corner whose timing patterns read
 /// 4. When the selected triple does not settle and more than three candidates were found, the next two triples: each a-d once, from the first of its corners whose timing patterns read, or skipped when none does
 /// </code>
@@ -512,7 +512,7 @@ internal static partial class QRImageDecoder
             // Nothing anchored the fourth corner, so the transform below is the finders' parallelogram; the rest of the alignment lattice anchors the mesh
             if (!alignmentAnchored)
             {
-                var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, modules, destination, out charsWritten, out info);
+                var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, frame, dimension, moduleSize, modules, destination, out charsWritten, out info);
                 if (IsSettled(meshStatus))
                     return meshStatus;
             }
@@ -550,7 +550,7 @@ internal static partial class QRImageDecoder
                 var meshRented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
                 try
                 {
-                    var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, meshRented.AsSpan(0, dimension * dimension), destination, out var meshCharsWritten, out var meshInfo);
+                    var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, frame, dimension, moduleSize, meshRented.AsSpan(0, dimension * dimension), destination, out var meshCharsWritten, out var meshInfo);
                     if (IsSettled(meshStatus))
                     {
                         charsWritten = meshCharsWritten;
@@ -571,9 +571,9 @@ internal static partial class QRImageDecoder
             TransposeInPlace(modules, dimension);
 
             // Alignment fallback: the alignment centre is pixel-resolved, which at about 2 px/module is a third of a module, and the transform extrapolates that error across the bottom-right block as perspective.
-            // The finders alone are exact for a flat symbol. Failure-path cost only.
+            // The finders alone are exact for a flat symbol, and read by coverage too: an alignment pattern drawn as dots anchors a fifth of a module off. Failure-path cost only.
             if (alignmentAnchored)
-                return DecodeOtherGrid(luminance, width, height, threshold, grey, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, modules, coverage: false, destination, status, ref charsWritten, ref info);
+                return DecodeOtherGrid(luminance, width, height, threshold, grey, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, modules, coverage: grey.IsEnabled, destination, status, ref charsWritten, ref info);
 
             // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the finders' foreshortening places it under perspective.
             // Not first, because on a flat symbol under 2 px/module that foreshortening is measurement noise of a percent or two
@@ -588,23 +588,26 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// The grid sampled through the mesh over the alignment lattice and decoded, or <see cref="DecodeStatus.NotDetected"/> without sampling when no mesh is kept (<see cref="TryBuildSampleMesh"/>).
+    /// The grid sampled through the mesh over the alignment lattice and decoded, or <see cref="DecodeStatus.NotDetected"/> without sampling when no mesh is kept (<see cref="TryBuildSmallSampleMesh"/> for versions 7 to 13, <see cref="TryBuildSampleMesh"/> above).
     /// </summary>
-    private static DecodeStatus DecodeThroughMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeThroughMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderFrame frame, int dimension, float moduleSize, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
         info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
         Span<float> gridCoords = stackalloc float[MaxMeshNodes];
         Span<float> nodeXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
         Span<float> nodeYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
-        if (!TryBuildSampleMesh(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out var meshSize, out _, out _))
+        var built = (dimension - 17) / 4 < 14
+            ? TryBuildSmallSampleMesh(luminance, width, height, threshold, grey, frame, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out var meshSize, out _, out _)
+            : TryBuildSampleMesh(luminance, width, height, threshold, grey, frame.TopLeft, frame.TopRight, frame.BottomLeft, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out meshSize, out _, out _);
+        if (!built)
             return DecodeStatus.NotDetected;
 
         SampleGridPiecewise(luminance, width, height, threshold, gridCoords.Slice(0, meshSize), nodeXs, nodeYs, meshSize, dimension, modules);
         var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
         // The corners follow the mesh, because the mesh is what decoded: the four-point transform had no fourth anchor, or did not read
         if (status == DecodeStatus.Success)
-            info = info.WithCorners(SymbolGeometry.FromTransform(MeshAnchoredTransform(topLeft, topRight, bottomLeft, gridCoords, nodeXs, nodeYs, meshSize, dimension), dimension, dimension, transposed));
+            info = info.WithCorners(SymbolGeometry.FromTransform(MeshAnchoredTransform(frame.TopLeft, frame.TopRight, frame.BottomLeft, gridCoords, nodeXs, nodeYs, meshSize, dimension), dimension, dimension, transposed));
         return status;
     }
 
@@ -1094,6 +1097,69 @@ internal static partial class QRImageDecoder
     private const int MaxMeshNodes = 7;
 
     /// <summary>
+    /// The piecewise sampling mesh for versions 7 to 13, whose 3×3 alignment lattice has four interior nodes: each searched where the finders' frame puts it, and every other node, the coordinate-6 row and column with the finder corners and any interior node not found, placed by the plane that best fits the three finder centres and the nodes found (<see cref="ProjectiveFit"/>).
+    /// </summary>
+    /// <remarks>
+    /// Two interior nodes on a lattice line cannot carry the quadratic extrapolation the larger lattices place their edge lines by (<see cref="TryBuildSampleMesh"/>), and four nodes leave a wavefront nothing to carry: the frame's prediction already follows perspective.
+    /// Each node is searched in a tight window, then a wider one: the tight window alone misses the nodes a deep bow moves, and the wide one alone found none of the nodes of a dotted symbol the tight one finds all four of.
+    /// </remarks>
+    /// <returns>True when the mesh should be used: at least half of the searched nodes were found, as for the larger lattices.</returns>
+    internal static bool TryBuildSmallSampleMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderFrame frame, int dimension, float moduleSize, Span<float> gridCoords, Span<float> nodeXs, Span<float> nodeYs, out int meshSize, out int searchedNodes, out int foundNodes)
+    {
+        meshSize = 0;
+        searchedNodes = 0;
+        foundNodes = 0;
+        var version = (dimension - 17) / 4;
+        if (version < 7 || version >= 14)
+            return false;
+
+        var baseValues = QRCodeConstants.AlignmentPatternBaseValues.Slice((version - 1) * 7, 7);
+        for (var i = 0; i < 3; i++)
+            gridCoords[i] = baseValues[i] + 0.5f;
+
+        var topLeft = frame.TopLeft;
+        var topRight = frame.TopRight;
+        var bottomLeft = frame.BottomLeft;
+        var fit = new ProjectiveFit((topRight.X + bottomLeft.X) / 2f, (topRight.Y + bottomLeft.Y) / 2f, Math.Max(1f, Distance(topRight, bottomLeft)));
+        fit.Add(3.5f, 3.5f, topLeft.X, topLeft.Y);
+        fit.Add(dimension - 3.5f, 3.5f, topRight.X, topRight.Y);
+        fit.Add(3.5f, dimension - 3.5f, bottomLeft.X, bottomLeft.Y);
+
+        Span<bool> found = stackalloc bool[9];
+        found.Clear();
+        for (var j = 1; j < 3; j++)
+        {
+            for (var i = 1; i < 3; i++)
+            {
+                searchedNodes++;
+                frame.Map(gridCoords[i], gridCoords[j], dimension, out var predictedX, out var predictedY);
+                frame.Axes(gridCoords[i], gridCoords[j], dimension, out var axisX, out var axisY);
+                if (!TryFindAlignment(luminance, width, height, threshold, grey, predictedX, predictedY, moduleSize, axisX, axisY, 2.5f, out var x, out var y)
+                    && !TryFindAlignment(luminance, width, height, threshold, grey, predictedX, predictedY, moduleSize, axisX, axisY, 4f, out x, out y))
+                {
+                    continue;
+                }
+                var node = j * 3 + i;
+                nodeXs[node] = x;
+                nodeYs[node] = y;
+                found[node] = true;
+                foundNodes++;
+                fit.Add(gridCoords[i], gridCoords[j], x, y);
+            }
+        }
+        if (foundNodes * 2 < searchedNodes || !fit.TrySolve(out var plane))
+            return false;
+
+        for (var node = 0; node < 9; node++)
+        {
+            if (!found[node])
+                plane.Transform(gridCoords[node % 3], gridCoords[node / 3], out nodeXs[node], out nodeYs[node]);
+        }
+        meshSize = 3;
+        return true;
+    }
+
+    /// <summary>
     /// Builds the piecewise sampling mesh for version 14+ symbols: nodes at every alignment lattice position (grid coordinate c + 0.5 for each Annex E center coordinate c), located by the alignment finder around a wavefront prediction seeded from the finders' affine frame.
     /// Unfound interior nodes keep the prediction; the coordinate-6 row and column, finder corners included, are not searched and are re-derived by extrapolation along their lattice lines.
     /// </summary>
@@ -1286,7 +1352,7 @@ internal static partial class QRImageDecoder
     private static PerspectiveTransform MeshAnchoredTransform(in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension)
     {
         // Finder centres sit at grid 3.5 / dimension − 3.5; the last lattice coordinate is dimension − 6.5.
-        // When that node was not detected the refinement rounds have already re-predicted it, so anchoring on the nearest detected node instead measured byte-identical and was dropped.
+        // When that node was not detected it is already placed: re-predicted by the refinement rounds from version 14, by the least-squares plane at versions 7 to 13. Anchoring on the nearest detected node instead measured byte-identical from version 14 and was dropped.
         var last = meshSize - 1;
         var lastGrid = gridCoords[last];
         var lastNode = last * meshSize + last;
