@@ -87,11 +87,13 @@ public class StructuredAppendLaneWalkTest
         var laneEnds = new int[8 * StructuredAppendPlanner.MaxSymbols];
         var counts = new int[8];
         var worstApart = 0;
-        foreach (var version in new[] { 9, 12, 26, 27, 40 })
+        // Both sides of each count indicator band's edge and the largest version; the full batch and the smallest.
+        // A mid-band version and a middle lane count caught no planted lane fault the others miss; the spacing of 4 did.
+        foreach (var version in new[] { 9, 26, 27, 40 })
         {
             var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
             foreach (var spacing in new[] { 1, 4, 13 })
-                foreach (var lanes in new[] { 8, 5, 2 })
+                foreach (var lanes in new[] { 8, 2 })
                 {
                     var budgets = new int[lanes];
                     for (var lane = 0; lane < lanes; lane++)
@@ -165,7 +167,8 @@ public class StructuredAppendLaneWalkTest
                     for (var lane = 0; lane < 8; lane++)
                         budgets[lane] = capacity - shift - spacing * (7 - lane);
 
-                    for (var filler = 0; filler < 250; filler++)
+                    // Every fifth filler: each planted fault in the lanes' tail was caught at a fifth of the fillers or more
+                    for (var filler = 0; filler < 250; filler += 5)
                     {
                         var text = Repeat("order 20260915 item 0000123456 qty 42 " + new string(mark, 6), 1_500) + new string('x', filler) + new string('7', 30) + mark;
                         await Assert.That(StructuredAppendPlanner.WalkLanes(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out _)).IsTrue();
@@ -303,8 +306,10 @@ public class StructuredAppendLaneWalkTest
         var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
         var withLanes = new int[StructuredAppendPlanner.MaxSymbols];
         var withoutLanes = new int[StructuredAppendPlanner.MaxSymbols];
-        foreach (var (minVersion, maxVersion) in new[] { (1, 40), (40, 40), (10, 26), (9, 12), (26, 28), (20, 33) })
-            foreach (var ecc in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+        // The whole range, the top version alone, and a range across each count indicator band's edge, at the largest and the smallest capacity:
+        // the ranges inside or across two bands and the middle levels caught no planted fault these miss.
+        foreach (var (minVersion, maxVersion) in new[] { (1, 40), (40, 40), (9, 12), (26, 28) })
+            foreach (var ecc in new[] { QREccLevel.L, QREccLevel.H })
                 foreach (var bom in analysis.EciMode == EciMode.Utf8 ? new[] { false, true } : new[] { false })
                 {
                     Array.Clear(withLanes);
