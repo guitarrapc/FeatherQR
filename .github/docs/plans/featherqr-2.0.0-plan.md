@@ -1,8 +1,8 @@
-# 2.0.0: API cleanup, the announced removals, and three feature gaps
+# 2.0.0: API cleanup, the announced removals, three feature gaps and 128-bit tiers
 
 ## Purpose
 
-The core split shipped as `2.0.0-preview.2`: three packages, new namespaces, new repository name. Nothing about the *shape* of the API changed in it, and that was deliberate — the split plan called the renames "a separate workstream that lands in the same major after this plan". This document is that workstream, plus the three feature gaps that the 2026-09-04 reference-library evaluation identified as worth closing before the major closes.
+The core split shipped as `2.0.0-preview.2`: three packages, new namespaces, new repository name. Nothing about the *shape* of the API changed in it, and that was deliberate — the split plan called the renames "a separate workstream that lands in the same major after this plan". This document is that workstream, plus the three feature gaps that the 2026-09-04 reference-library evaluation identified as worth closing before the major closes. It also gives 128-bit tiers to the kernels that run scalar on a default NativeAOT publish and on WebAssembly.
 
 It fixes WHAT changes, in WHICH order, and WHY. HOW each piece is verified follows the mandatory test-first workflow. When the plan completes, its durable content graduates into [specs/qrcode-symbologies.md](../specs/qrcode-symbologies.md) and the per-symbology records, and this file is deleted.
 
@@ -19,8 +19,11 @@ It fixes WHAT changes, in WHICH order, and WHY. HOW each piece is verified follo
 | Structured Append, encode and decode (Standard QR only) | `EciMode` as a value type — decided against, see D7 |
 | Kanji encoding for all three symbologies | Additional renderer packages |
 | Migration table and a mechanical replacement script | Readability heuristics for styled output |
+| 128-bit tiers where x64 without AVX or WebAssembly runs scalar | The instruction set a NativeAOT publish targets, and README guidance on it |
 
 Features are additive and could ship in 2.1.0 without breaking anyone. They are in 2.0.0 because the maintainer chose to make the major a feature-complete line rather than a rename-only one. Kanji encoding is the largest and last of them precisely so it can be demoted to 2.1.0 without disturbing anything else if it slips.
+
+The 128-bit tiers are internal and could ship in any 2.x. They are in 2.0.0 because the design treats NativeAOT and WebAssembly as first-class, and 2.0.0 is the release most users will first measure. Like Kanji, they move to 2.1.0 if they slip.
 
 ## The naming rule
 
@@ -145,6 +148,19 @@ Today all three symbologies decode Kanji mode and none of them writes it; the sc
 
 Two decisions inside the phase. **D5:** whether single-mode selection picks Kanji automatically. It is the cheapest single mode for Japanese text, so saying yes changes the bytes the library emits by default for existing callers — acceptable in a major, and it is what other libraries do, but it must be a decision and a migration note rather than a side effect. **D6:** whether a plan may mix Kanji segments with ECI-tagged Byte segments in one symbol. Legal per the standard, historically uneven across readers; the oracle sweep from piece 4 answers it, and the conservative fallback is to suppress Kanji whenever an ECI header is emitted.
 
+## 128-bit tiers for builds without AVX2
+
+The [SIMD tier table](../specs/qrcode-symbologies.md#simd-tier-inventory) records which tier each kernel takes per build class. On 2026-09-28, 11 of 28 kernels ran scalar on x64 without AVX (a default NativeAOT publish), 19 on WebAssembly and 1 on ARM64. A rough first measurement put a default NativeAOT publish 2.6x behind the JIT on encode and about 4x on image decode ([cross-language-benchmark-plan.md](cross-language-benchmark-plan.md#what-was-already-measured)).
+
+- **A tier ships only if it beats scalar on the build it is for.** A tier on every scalar cell would add parity tests, a table row and CI time where it does not pay. A kernel under about 3 % of every benchmark shape on that build stays scalar, with the measured reason in a comment beside its row in `SimdTiers.Expected`.
+- **Portable `Vector128` first.** One tier fills x64 without AVX, WebAssembly and ARM64's one scalar cell (the rMQR value writers). Where x64 with AVX2 runs scalar too, it fills that cell as well: the Structured Append parity and scanner on every CPU, the syndrome pass without GFNI and the rMQR extraction without fast PEXT.
+- **Existing tiers stay.** Eight kernels are scalar on WebAssembly but not on x64 without AVX, because their 128-bit tier is x64 SSE: `TextAnalyzer`, `ModuleBitPacker`, `EccBinaryEncoder`, `ModulePlacer.ExpandBits`, the Micro QR byte segment and placer, and the rMQR value writers and placer. The portable tier goes after the SSE tier, and replaces it only where both compile to the same x64 code.
+- **Each build is measured on itself.** x64 without AVX is ranked under `DOTNET_EnableAVX=0` and confirmed on a real default NativeAOT build, since the knob runs the JIT's code, not ILC's. WebAssembly is timed on WebAssembly, interpreted and AOT-compiled, since both take the same tier. A 128-bit form measured on x64 says nothing about WebAssembly.
+- **Earlier refutations are measured again.** `Binarizer` records a 128-bit tier as measured and left out, but against the 256-bit tier under the JIT, not against scalar.
+- **GFNI is left to the CPU on x64 without AVX.** A 128-bit GFNI syndrome tier fills `EccBinaryDecoder`'s cell on GFNI CPUs only; WebAssembly and older x64 need another form.
+
+Out of scope: the instruction set a NativeAOT publish targets. It is the application's setting, and the README note on `IlcInstructionSet` waits for the measured gap (phase 3 of the cross-language benchmark plan). Even with the 128-bit tiers, a default publish runs no 256-bit tier.
+
 ## Open decisions
 
 | # | Decision | Recommendation |
@@ -196,10 +212,11 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 4 | Symbol geometry | D3, the geometry members on all three `*DecodeInfo`, all three image decode paths | Matrix-level decode behaviour documented and tested |
 | 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over the whole input's bytes as the set writes them | Round-trip plus oracle cross-check |
 | 6 | Kanji encoding | D5, D6, reverse table, segmenter state, `EncodingMode`, capacity docs | Oracle sweep green. Tag `2.0.0-preview.4` |
-| 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script; README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry); fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot simply be folded in as history; F1's renderer half landed and is already recorded in the specs) | Approved API listing frozen |
+| 6b | 128-bit tiers | The section above: kernels ranked by their share of each benchmark shape on x64 without AVX and on WebAssembly, tiers added from the top | Every scalar cell in those two columns raised in `SimdTiers.Expected` or carrying its measured reason; per tier, parity with scalar and planted faults caught; on build classes whose cell did not change, the dispatch compiles as before (disassembly); public API unchanged |
+| 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script; README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry, 128-bit tiers); fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot simply be folded in as history; F1's renderer half landed and is already recorded in the specs) | Approved API listing frozen |
 | 8 | Release | Below | `2.0.0` on nuget.org |
 
-Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last so that it can move to 2.1.0 without reopening anything. Phase 3b was found after Phase 4 shipped and runs in that order; it belongs to the cleanup, which is why it is numbered with it rather than appended, and it means Phase 3's "API-final" line held for the types it named and not for the builder's option signatures.
+Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last so that it can move to 2.1.0 without reopening anything. Phase 6b touches no public API, so it can run beside 4-6 or after the freeze; it must land before Phase 8 to be in 2.0.0, and moves to 2.1.0 like Phase 6 if it slips. Phase 3b was found after Phase 4 shipped and runs in that order; it belongs to the cleanup, which is why it is numbered with it rather than appended, and it means Phase 3's "API-final" line held for the types it named and not for the builder's option signatures.
 
 ## Release checklist (Phase 8)
 
