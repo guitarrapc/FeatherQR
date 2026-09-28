@@ -205,6 +205,7 @@ Do not pass `-r browser-wasm` on the CLI, it propagates to the multi-targeted li
 - Cross-validate decoder changes with ZXing.Net (`QRCodeDecoderZXingCrossTest`) when the bug is about accepting externally generated symbols.
 - Round-trip tests (`QRCodeDecoderRoundTripTest`) are the primary guard for encoder+decoder consistency, extend them when adding encoding modes or ECI handling.
 - Avoid tests whose only assertion is that a private helper returns a constant; test the observable matrix, decode result, or rendered output.
+- Size a heavy test's data (trials, seeds, rows, versions) against planted faults rather than by feel: `tools/mutation_check.cs` writes each fault into `src`, runs the suite, puts the file back, and tells which tests and which sub-cases caught it; `evaluate` shows what a smaller data set would stop catching, and `compare` checks the reduced test against the same faults. Its header has the workflow. Keep an axis that carries meaning (a count indicator band, a surrogate edge) even where no planted fault needs it.
 
 ## Classification Logic: Equivalence Class Coverage
 
