@@ -41,7 +41,7 @@ Reference tests: [TryGetRequiredBufferSizeTest](../../../tests/FeatherQR.Tests/S
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Section 8.5 | Generator polynomial and polynomial division over GF(2^8) | [EccBinaryEncoder.CalculateECC](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.cs), scalar kernel plus SIMD variants ([SSSE3 / GFNI](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.Simd.cs), [ARM AdvSimd](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.Simd.Arm.cs)), shared across symbologies |
+| Section 8.5 | Generator polynomial and polynomial division over GF(2^8) | [EccBinaryEncoder.CalculateECC](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.cs), scalar kernel plus SIMD variants ([SSSE3 / GFNI](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.X86.cs), [ARM AdvSimd](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.Arm64.cs)), shared across symbologies |
 | Annex I | Worked encoding example | Used as test vectors in [EccBinaryEncoderUnitTest](../../../tests/FeatherQR.Tests/Shared/EccBinaryEncoderUnitTest.cs) |
 
 Reference tests: [EccBinaryEncoderKernelParityTest](../../../tests/FeatherQR.Tests/Shared/EccBinaryEncoderKernelParityTest.cs), every SIMD kernel is checked against a naive Section 8.5 reference implementation.
@@ -72,7 +72,7 @@ Reference tests: [ModulePlacerPlaceDataWordsParityTest](../../../tests/FeatherQR
 | Spec reference | Topic | Implementation |
 |---|---|---|
 | Section 7.8.2 | The 8 mask pattern formulas (patterns 0–7) | [ModulePlacer.MaskCode / Pattern0–Pattern7](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.cs) |
-| Section 8.8.2 | Penalty scoring rules 1–4 for mask selection | [ModulePlacer.Masking.cs](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.Masking.cs), bit-parallel implementation of all four rules, plus SIMD variants ([x64 AVX2](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.Masking.Simd.cs), [ARM AdvSimd](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.Masking.Simd.Arm.cs)) selected at runtime |
+| Section 8.8.2 | Penalty scoring rules 1–4 for mask selection | [ModulePlacer.Masking.cs](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.Masking.cs), bit-parallel implementation of all four rules, plus SIMD variants ([x64 AVX2](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.Masking.X86.cs), [ARM AdvSimd](../../../src/FeatherQR/Internals/StandardQR/ModulePlacer.Masking.Arm64.cs)) selected at runtime |
 
 Reference tests: [ModulePlacerMaskPackedParityTest](../../../tests/FeatherQR.Tests/StandardQr/ModulePlacerMaskPackedParityTest.cs), packed masking/scoring vs. naive byte-per-module reference formulas; [ModulePlacerMaskSimdParityTest](../../../tests/FeatherQR.Tests/StandardQr/ModulePlacerMaskSimdParityTest.cs) / [ModulePlacerMaskAdvSimdParityTest](../../../tests/FeatherQR.Tests/StandardQr/ModulePlacerMaskAdvSimdParityTest.cs), vectorized tiers vs. the scalar bit-packed kernels.
 

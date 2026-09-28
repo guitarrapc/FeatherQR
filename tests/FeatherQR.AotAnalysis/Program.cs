@@ -4,6 +4,11 @@ using System.Text;
 // The gate is the publish itself (see the csproj): TrimmerRootAssembly roots the whole library,
 // so ILC analyzes every public and internal member regardless of what runs here.
 // This entry point is a minimal encode/decode smoke so the produced binary is still runnable.
+// With --simd-class, it also holds the SIMD tiers this build takes to SimdTiers.Expected for that
+// build class and fails on a disagreement; CI passes the class each build is meant to be.
+if (!SimdReport.TryParseClass(args, out var simdClass))
+    return 2;
+
 var content = "FeatherQR AOT analysis gate";
 var qr = QRCodeGenerator.Create(content, QREccLevel.M);
 if (!QRCodeDecoder.TryDecode(qr, out var decoded) || decoded != content)
@@ -48,4 +53,6 @@ foreach (var (pattern, charset) in new[]
         }
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
-return 0;
+
+// Which SIMD tier each kernel runs in this native build, held to the table for --simd-class.
+return SimdReport.PrintAndCheck(simdClass);

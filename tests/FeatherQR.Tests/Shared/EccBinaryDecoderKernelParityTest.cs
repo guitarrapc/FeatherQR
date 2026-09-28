@@ -112,7 +112,7 @@ public class EccBinaryDecoderKernelParityTest
     public async Task GfniIsomorphismConstants_MatchFirstPrinciplesConstruction()
     {
         // Rebuild the GF(0x11D) 竊・GF(0x11B) isomorphism from scratch and verify the
-        // constants baked into EccBinaryDecoder.Simd.cs. ﾎｲ is the first root of
+        // constants baked into EccBinaryDecoder.X86.cs. ﾎｲ is the first root of
         // x^8+x^4+x^3+x^2+1 in GF(0x11B); ﾏ・maps by linearity over the ﾎｲ^i basis.
         var beta = 0;
         for (var cand = 2; cand < 256; cand++)

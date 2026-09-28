@@ -33,12 +33,12 @@ internal static partial class ModulePlacer
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
 #if NET8_0_OR_GREATER
-        // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion), see ModulePlacer.Masking.Simd.cs. Measured 1.3-2x over the scalar bit-packed paths below (findings log, round 5).
+        // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion), see ModulePlacer.Masking.X86.cs. Measured 1.3-2x over the scalar bit-packed paths below (findings log, round 5).
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // ARM64 NEON port of the same tiers (Vector128 lane-per-row scorer), see ModulePlacer.Masking.Simd.Arm.cs. Measured 2.4-3x (versions 1-11) and 1.15-1.2x (12-40) over the scalar paths below on Apple M2 (MaskCodeArm findings log).
+        // ARM64 NEON port of the same tiers (Vector128 lane-per-row scorer), see ModulePlacer.Masking.Arm64.cs. Measured 2.4-3x (versions 1-11) and 1.15-1.2x (12-40) over the scalar paths below on Apple M2 (MaskCodeArm findings log).
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
         {
             return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);

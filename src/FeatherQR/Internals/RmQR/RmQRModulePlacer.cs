@@ -24,7 +24,7 @@ namespace FeatherQR.Internals.RmQR;
 /// <item><see cref="PlaceSymbol(Span{byte}, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte})"/>
 /// is the fast path (benchmark-driven, 16-27x over the reference).
 /// Everything derived from the version alone is built once and cached (<see cref="Layout"/>); placement is then a template copy, one vector pass that expands the message bits and XORs the masks, and a store pass.
-/// The store pass is documented on <see cref="ScatterPairs"/>, its ARM64 tier in RmQRModulePlacer.Simd.Arm.cs.
+/// The store pass is documented on <see cref="ScatterPairs"/>, its ARM64 tier in RmQRModulePlacer.Arm64.cs.
 /// Zero allocations after the one-time tables.</item>
 /// </list>
 ///
@@ -475,7 +475,7 @@ internal static partial class RmQRModulePlacer
         public readonly byte[] Masks;        // mask bit per walk position
         public readonly int DataModuleCount; // 8 * total codewords + remainder bits
         public readonly PairSegment[] Pairs;
-        // ARM64 store tier (RmQRModulePlacer.Simd.Arm.cs); empty on other targets.
+        // ARM64 store tier (RmQRModulePlacer.Arm64.cs); empty on other targets.
         public readonly BlockSegment[] Blocks;   // 4 consecutive clean pairs = 8 consecutive columns
         public readonly RunSegment[] Runs;       // stretches of rows where both columns of a pair are data
         public readonly int[] Singles;           // walk positions no block or run covers

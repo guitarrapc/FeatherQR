@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// </code>
 /// Corrects up to ⌊eccCount/2⌋ byte errors per block, in place.
 /// <para>
-/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has three tiers: a GFNI kernel on net10.0+ x64 (see EccBinaryDecoder.Simd.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Simd.Arm.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
+/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has three tiers: a GFNI kernel on net10.0+ x64 (see EccBinaryDecoder.X86.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
 /// All three produce byte-identical output; see the decoder kernel parity tests.
 /// Berlekamp-Massey, Chien and Forney stay scalar on every target.
 /// </para>
@@ -219,7 +219,7 @@ internal static partial class EccBinaryDecoder
     /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes long, not <paramref name="eccCount"/>: both vector kernels store their accumulator registers whole and only the first <paramref name="eccCount"/> lanes are meaningful.
     /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode; EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes and .AdvSimdKernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
     /// <para>
-    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once) or the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Simd.Arm.cs); both keep every syndrome in vector lanes rather than walking the codeword once per syndrome.
+    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once) or the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs); both keep every syndrome in vector lanes rather than walking the codeword once per syndrome.
     /// </para>
     /// <para>
     /// The scalar path keeps the Horner multiply in log domain — the multiplier's log is the constant i, so each step is one zero-check + one log load + one exp load (measured 0.84-0.90x of the GaloisField.Multiply form) — and runs four syndromes per pass over the codeword.

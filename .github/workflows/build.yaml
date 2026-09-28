@@ -17,7 +17,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
@@ -133,27 +133,6 @@ jobs:
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
 
-  # NativeAOT compatibility gate: publish tests/FeatherQR.AotAnalysis, which roots the
-  # whole library (TrimmerRootAssembly) so ILC analyzes every member, and fails on any trim/AOT
-  # warning (TreatWarningsAsErrors in that csproj). One runner is enough: IL-level analysis does
-  # not depend on the host OS; the `run` job already exercises real AOT publish+run per RID.
-  aot-analysis:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
-        with:
-          dotnet-version: 10.0.x
-      - name: Publish AOT analysis gate
-        run: dotnet publish tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj -c Release -r linux-x64 -o publish/aot-analysis/
-      - name: Run AOT analysis binary
-        run: ./publish/aot-analysis/FeatherQR.AotAnalysis
-
   # Playground native relink (SkiaSharp + Emscripten) only happens on publish, so the
   # matrix `dotnet build` above stays managed-only. Verify the publish path on one leg.
   # AOT is disabled here for speed; the Deploy Playground workflow publishes with full AOT.
@@ -176,8 +155,139 @@ jobs:
       - name: Publish Playground (browser-wasm Release, no AOT)
         run: dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
 
+  # NativeAOT compatibility gate and SIMD tier check. Publishing tests/FeatherQR.AotAnalysis roots
+  # the whole library (TrimmerRootAssembly) so ILC analyzes every member, and fails on any trim/AOT
+  # warning (TreatWarningsAsErrors in that csproj); that part needs one runner, since IL-level analysis
+  # does not depend on the host OS. The binary then holds the SIMD tier each kernel takes in that build
+  # to the table in src/FeatherQR/Internals/SimdTiers.cs (--simd-class), so each leg is one build class:
+  # the default x64 publish (no AVX), an x86-64-v3 publish, and the default publish on each ARM64 OS.
+  # The JIT steps hold the JIT on the same runner to its class, and show the side of a class the runner's
+  # CPU does not: the no-AVX dispatch on an AVX2 machine, and ARM64 without the dot product.
+  aot-analysis:
+    name: aot-analysis (${{ matrix.rid }}, ${{ matrix.simd-class }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rid: linux-x64
+            ext: ""
+            ilc-instruction-set: ""
+            simd-class: X64Sse
+            jit-simd-class: X64Avx2
+            jit-knob: DOTNET_EnableAVX=0
+            jit-knob-simd-class: X64Sse
+          - os: ubuntu-24.04
+            rid: linux-x64
+            ext: ""
+            ilc-instruction-set: x86-64-v3
+            simd-class: X64Avx2
+            jit-simd-class: ""
+            jit-knob: ""
+            jit-knob-simd-class: ""
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            ext: ""
+            ilc-instruction-set: ""
+            simd-class: Arm64
+            jit-simd-class: Arm64
+            jit-knob: DOTNET_EnableArm64Dp=0
+            jit-knob-simd-class: Arm64
+          - os: windows-11-arm
+            rid: win-arm64
+            ext: ".exe"
+            ilc-instruction-set: ""
+            simd-class: Arm64
+            jit-simd-class: Arm64
+            jit-knob: DOTNET_EnableArm64Dp=0
+            jit-knob-simd-class: Arm64
+          - os: macos-26
+            rid: osx-arm64
+            ext: ""
+            ilc-instruction-set: ""
+            simd-class: Arm64
+            jit-simd-class: Arm64
+            jit-knob: DOTNET_EnableArm64Dp=0
+            jit-knob-simd-class: Arm64
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish AOT analysis gate
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+          ILC_INSTRUCTION_SET: ${{ matrix.ilc-instruction-set }}
+        run: |
+          args=(-c Release -r "$RID" -o publish/aot-analysis/)
+          if [[ -n "$ILC_INSTRUCTION_SET" ]]; then
+            args+=("-p:IlcInstructionSet=$ILC_INSTRUCTION_SET")
+          fi
+          dotnet publish tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj "${args[@]}"
+      - name: Run AOT analysis binary and check its SIMD tiers
+        shell: bash
+        env:
+          EXT: ${{ matrix.ext }}
+          SIMD_CLASS: ${{ matrix.simd-class }}
+        run: ./publish/aot-analysis/FeatherQR.AotAnalysis"$EXT" --simd-class "$SIMD_CLASS"
+      - name: Check SIMD tiers under the JIT
+        if: ${{ matrix.jit-simd-class != '' }}
+        shell: bash
+        env:
+          JIT_SIMD_CLASS: ${{ matrix.jit-simd-class }}
+          JIT_KNOB: ${{ matrix.jit-knob }}
+          JIT_KNOB_SIMD_CLASS: ${{ matrix.jit-knob-simd-class }}
+        run: |
+          dotnet build tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj -c Release
+          dll=tests/FeatherQR.AotAnalysis/bin/Release/net10.0/FeatherQR.AotAnalysis.dll
+          dotnet "$dll" --simd-class "$JIT_SIMD_CLASS"
+          env "$JIT_KNOB" dotnet "$dll" --simd-class "$JIT_KNOB_SIMD_CLASS"
+
+  # SIMD tier check for WebAssembly: tests/FeatherQR.WasmReport holds a WebAssembly build of the library to
+  # the Wasm column of the table in src/FeatherQR/Internals/SimdTiers.cs, run headless under Node.js, which has
+  # the WebAssembly SIMD a browser has. Interpreted is what a Blazor WebAssembly app runs by default; AOT-compiled
+  # is what the Playground ships.
+  wasm-simd:
+    name: wasm-simd (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [interpreter, aot]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        with:
+          dotnet-version: 10.0
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
+      - name: Publish the WebAssembly report
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          aot=false
+          if [[ "$MODE" == "aot" ]]; then
+            aot=true
+          fi
+          dotnet publish tests/FeatherQR.WasmReport/FeatherQR.WasmReport.csproj -c Release "-p:RunAOTCompilation=$aot" -o publish/wasm-report/
+      - name: Run the WebAssembly report and check its SIMD tiers
+        run: node publish/wasm-report/wwwroot/main.mjs --simd-class Wasm
+
   build-complete:
-    needs: [build, run, aot-analysis, build-playground]
+    needs: [build, run, aot-analysis, build-playground, wasm-simd]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

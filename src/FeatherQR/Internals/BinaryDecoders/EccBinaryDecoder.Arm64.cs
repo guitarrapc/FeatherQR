@@ -10,7 +10,7 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// ARM64 / NEON syndrome kernel: all ≤30 syndrome accumulators live in two 128-bit registers, and every group of eight data bytes updates every syndrome with two PMULL pairs plus six table reads (measured 11-61x the scalar log-domain kernel as a four-byte step; the eight-byte tree below is a further 2.3x on version 40 blocks).
 /// </summary>
 /// <remarks>
-/// This is deliberately NOT a transliteration of the GFNI kernel in EccBinaryDecoder.Simd.cs.
+/// This is deliberately NOT a transliteration of the GFNI kernel in EccBinaryDecoder.X86.cs.
 /// GF2P8MULB multiplies every lane by a per-lane constant in one instruction but is hardwired to the AES polynomial, so the x64 kernel spends its design on a field isomorphism to borrow it.
 /// NEON has no such instruction, but PMULL/PMUL carry no fixed modulus — so ARM needs no isomorphism at all and instead pays for the reduction mod 0x11D itself.
 /// The force applies at the opposite end, and the resulting kernel shape is different:

@@ -29,7 +29,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// The detector therefore recovers the finder's local axes from angular dark-light-dark runs and searches the two projective coefficients that remain unknown.
 /// This supports arbitrary rotation and mild perspective; strong perspective remains out of scope.
 /// </remarks>
-internal static class MicroQRImageDecoder
+internal static partial class MicroQRImageDecoder
 {
     /// <summary>Candidates actually tried, most-confirmed first (false hits rank behind).</summary>
     private const int MaxCandidatesToTry = 8;
@@ -1102,52 +1102,6 @@ internal static class MicroQRImageDecoder
 #endif
         SampleGridScalar(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
     }
-
-#if NET8_0_OR_GREATER
-    internal static void SampleGridVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float originX, float originY, float uX, float uY, float vX, float vY, int size, Span<byte> modules)
-    {
-        var laneCentres = Vector128.Create(0.5f, 1.5f, 2.5f, 3.5f);
-        var columnX = Vector128.Create(uX);
-        var columnY = Vector128.Create(uY);
-        var maxPx = Vector128.Create(width - 1);
-        var maxPy = Vector128.Create(height - 1);
-        var stride = Vector128.Create(width);
-        Span<int> indices = stackalloc int[4];
-        for (var v = 0; v < size; v++)
-        {
-            var gridV = v + 0.5f;
-            var rowX = originX + gridV * vX;
-            var rowY = originY + gridV * vY;
-            var rowXs = Vector128.Create(rowX);
-            var rowYs = Vector128.Create(rowY);
-            var rowBase = v * size;
-
-            var u = 0;
-            for (; u + 4 <= size; u += 4)
-            {
-                // u + lane + 0.5 is exact, as the scalar gridU is
-                var gridU = laneCentres + Vector128.Create((float)u);
-                var px = Vector128.ConvertToInt32(rowXs + gridU * columnX);
-                var py = Vector128.ConvertToInt32(rowYs + gridU * columnY);
-                px = Vector128.Max(Vector128.Min(px, maxPx), Vector128<int>.Zero);
-                py = Vector128.Max(Vector128.Min(py, maxPy), Vector128<int>.Zero);
-                (py * stride + px).CopyTo(indices);
-                modules[rowBase + u] = luminance[indices[0]] < threshold ? (byte)1 : (byte)0;
-                modules[rowBase + u + 1] = luminance[indices[1]] < threshold ? (byte)1 : (byte)0;
-                modules[rowBase + u + 2] = luminance[indices[2]] < threshold ? (byte)1 : (byte)0;
-                modules[rowBase + u + 3] = luminance[indices[3]] < threshold ? (byte)1 : (byte)0;
-            }
-
-            for (; u < size; u++)
-            {
-                var gridU = u + 0.5f;
-                var px = Math.Min(Math.Max((int)(rowX + gridU * uX), 0), width - 1);
-                var py = Math.Min(Math.Max((int)(rowY + gridU * uY), 0), height - 1);
-                modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
-            }
-        }
-    }
-#endif
 
     internal static void SampleGridScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float originX, float originY, float uX, float uY, float vX, float vY, int size, Span<byte> modules)
     {

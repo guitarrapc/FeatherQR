@@ -130,9 +130,9 @@ internal static partial class RmQRMatrixDecoder
     /// </summary>
     /// <remarks>
     /// Everything the walk derives from the version alone (which modules are function modules, their order, the mask bit at each one) is hoisted into lazily built per-version tables, exactly as the placer does for the encode direction.
-    /// Two tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2 (see RmQRMatrixDecoder.Simd.cs) and a portable table walk everywhere else.
+    /// Two tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2 (see RmQRMatrixDecoder.X86.cs) and a portable table walk everywhere else.
     /// Measured 16-64x and 8-12x respectively over the per-module reference walk across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
-    /// ARM64 has a third tier (RmQRMatrixDecoder.Simd.Arm.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP; it is 1.1-3.3x the portable tier.
+    /// ARM64 has a third tier (RmQRMatrixDecoder.Arm64.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP; it is 1.1-3.3x the portable tier.
     /// </remarks>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream)
         => ExtractCodewords(modules, width, height, version, stream, ExtractKernel.Auto);
