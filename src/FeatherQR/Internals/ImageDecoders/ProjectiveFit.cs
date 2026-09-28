@@ -73,6 +73,8 @@ internal struct ProjectiveFit
 
         // Unknowns h0..h7: x = (h0·u + h1·v + h2) / (h6·u + h7·v + 1), y = (h3·u + h4·v + h5) / (the same)
         Span<double> m = stackalloc double[8 * 9];
+        // The x and y blocks share no terms, and stackalloc memory is not guaranteed to be zeroed
+        m.Clear();
         Set(m, 0, 0, _uu); Set(m, 0, 1, _uv); Set(m, 0, 2, _u);
         Set(m, 1, 1, _vv); Set(m, 1, 2, _v);
         Set(m, 2, 2, _n);
