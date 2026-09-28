@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Tests;
@@ -92,7 +93,7 @@ public class FinderRunWalkParityTest
                     var centreY = stepY == -1 ? centre - (1 - ppm % 2) : centre;
                     var ok = FinderPatternFinder.MeasureRuns(scene, width, height, 128, centre, centreY, stepX, stepY, FinderPatternFinder.NoRunCap, runs, out _);
                     await Assert.That(ok).IsTrue();
-                    await Assert.That(runs).IsEquivalentTo(new[] { ppm, ppm, 3 * ppm, ppm, ppm }).Because($"ppm={ppm}, step=({stepX},{stepY})");
+                    await Assert.That(runs).IsEquivalentTo(new[] { ppm, ppm, 3 * ppm, ppm, ppm }, CollectionOrdering.Matching).Because($"ppm={ppm}, step=({stepX},{stepY})");
                 }
             }
         }

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
 using FeatherQR.Internals;
@@ -136,7 +137,7 @@ public class RmQRSegmentationTest
                 if (optimal.Version != single.Version)
                     continue;
 
-                await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+                await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
             }
         }
     }
@@ -284,7 +285,7 @@ public class RmQRSegmentationTest
         var explicitSingle = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Single });
 
         await Assert.That(implicitDefault.Version).IsEqualTo(explicitSingle.Version);
-        await Assert.That(implicitDefault.GetRawData()).IsEquivalentTo(explicitSingle.GetRawData());
+        await Assert.That(implicitDefault.GetRawData()).IsEquivalentTo(explicitSingle.GetRawData(), CollectionOrdering.Matching);
     }
 
     // -----------------------------------------------------------------
@@ -338,7 +339,7 @@ public class RmQRSegmentationTest
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     /// <summary>Content that a single mode already encodes optimally must not move.</summary>
@@ -436,7 +437,7 @@ public class RmQRSegmentationTest
         var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal });
 
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]

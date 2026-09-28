@@ -34,7 +34,7 @@ public class QRCodeDecoderPerspectiveTest
         using var bitmap = RenderKeystone(content, version, tilt, rotateDegrees: 0);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"v={version}, tilt={tilt:P0}, status={info.Status}, detected v{info.Version}");
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
         await Assert.That(info.Version).IsEquivalentTo(version);
     }
 
@@ -50,7 +50,7 @@ public class QRCodeDecoderPerspectiveTest
         using var bitmap = RenderKeystone(content, version: 1, tilt: tilt, rotateDegrees: 0);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
     [Test]
@@ -64,7 +64,7 @@ public class QRCodeDecoderPerspectiveTest
         using var bitmap = RenderKeystone(content, version, tilt, degrees);
 
         await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"v={version}, rot={degrees}, tilt={tilt:P0}, status={info.Status}");
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class QRCodeDecoderPerspectiveTest
         }
 
         await Assert.That(QRCodeDecoder.TryDecode(mirrored, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
     /// <summary>

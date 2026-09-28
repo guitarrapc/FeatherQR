@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 
 namespace FeatherQR.Tests;
@@ -84,7 +85,7 @@ public class ModuleBitPackerParityTest
         ModuleBitPacker.Unpack(bits, actual.AsSpan(0, length));
         if (!actual.AsSpan(0, length).SequenceEqual(expected))
             Assert.Fail($"unpack mismatch at length {length}");
-        await Assert.That(actual.AsSpan(length).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5 });
+        await Assert.That(actual.AsSpan(length).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5 }, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -98,7 +99,7 @@ public class ModuleBitPackerParityTest
             ModuleBitPacker.Pack(modules, bits);
             var back = new byte[n];
             ModuleBitPacker.Unpack(bits, back);
-            await Assert.That(back).IsEquivalentTo(modules);
+            await Assert.That(back).IsEquivalentTo(modules, CollectionOrdering.Matching);
         }
     }
 

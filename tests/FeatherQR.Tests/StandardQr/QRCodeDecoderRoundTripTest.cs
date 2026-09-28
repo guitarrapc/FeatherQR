@@ -52,7 +52,7 @@ public class QRCodeDecoderRoundTripTest
         var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = true, EciMode = EciMode.Utf8 });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
         await Assert.That(info.Status).IsEquivalentTo(DecodeStatus.Success);
     }
 
@@ -244,7 +244,7 @@ public class QRCodeDecoderRoundTripTest
         }
     }
 
-    private static async Task WriteFormatPattern(byte[] modules, int size, ushort pattern)
+    private static void WriteFormatPattern(byte[] modules, int size, ushort pattern)
     {
         // Same positions as ModulePlacer.PlaceFormat (bit i, LSB first)
         var positions = new (int x1, int y1, int x2, int y2)[]

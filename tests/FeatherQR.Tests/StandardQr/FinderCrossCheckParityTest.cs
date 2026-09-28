@@ -23,16 +23,14 @@ public class FinderCrossCheckParityTest
         {
             foreach (var module in new[] { 1, 2, 3, 4, 7 })
             {
-                foreach (var seed in new[] { 3, 17 })
+                // One scene a size and module: of the bound and walk faults planted by hand, a second seed caught none this one misses
+                var columns = BuildRunColumns(lines, length, module, seed: 17);
+                var rows = Transpose(columns, lines, length);
+                foreach (var expected in ExpectedTotals(module))
                 {
-                    var columns = BuildRunColumns(lines, length, module, seed);
-                    var rows = Transpose(columns, lines, length);
-                    foreach (var expected in ExpectedTotals(module))
-                    {
-                        var mismatch = CompareEveryCentre(columns, lines, length, 128, default, vertical: true, expected, ref compared, ref accepted, ref handedBack, ref byLikeEdges)
-                            ?? CompareEveryCentre(rows, length, lines, 128, default, vertical: false, expected, ref compared, ref accepted, ref handedBack, ref byLikeEdges);
-                        await Assert.That(mismatch).IsNull().Because($"{lines} lines of {length}, module={module}, seed={seed}, expected={expected}");
-                    }
+                    var mismatch = CompareEveryCentre(columns, lines, length, 128, default, vertical: true, expected, ref compared, ref accepted, ref handedBack, ref byLikeEdges)
+                        ?? CompareEveryCentre(rows, length, lines, 128, default, vertical: false, expected, ref compared, ref accepted, ref handedBack, ref byLikeEdges);
+                    await Assert.That(mismatch).IsNull().Because($"{lines} lines of {length}, module={module}, expected={expected}");
                 }
             }
         }

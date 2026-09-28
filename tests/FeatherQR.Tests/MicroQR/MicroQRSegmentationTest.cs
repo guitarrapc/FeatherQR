@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.SkiaSharp;
 using SkiaSharp;
 
@@ -66,7 +67,7 @@ public class MicroQRSegmentationTest
         if (optimal.Version != single.Version)
             return; // a genuine gain; the round-trip test covers it
 
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -93,7 +94,7 @@ public class MicroQRSegmentationTest
         var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -283,7 +284,7 @@ public class MicroQRSegmentationTest
         var optimal = MicroQRCodeGenerator.Create("", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -300,7 +301,7 @@ public class MicroQRSegmentationTest
         var single = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRCodeGeneratorOptions.Default);
         var optimal = MicroQRCodeGenerator.Create("12345", MicroQREccLevel.ErrorDetectionOnly, options);
         await Assert.That(optimal.Version).IsEqualTo(MicroQRVersion.M1);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -314,7 +315,7 @@ public class MicroQRSegmentationTest
         var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = range, Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -359,7 +360,7 @@ public class MicroQRSegmentationTest
         var optimal = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);

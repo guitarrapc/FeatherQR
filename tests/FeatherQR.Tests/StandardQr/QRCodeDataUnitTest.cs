@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 public class QRCodeDataUnitTest
@@ -125,7 +126,7 @@ public class QRCodeDataUnitTest
         // Verify core data was set correctly
         var retrievedCoreData = new byte[baseSize * baseSize];
         qrCode.GetCoreData(retrievedCoreData);
-        await Assert.That(retrievedCoreData).IsEquivalentTo(coreData);
+        await Assert.That(retrievedCoreData).IsEquivalentTo(coreData, CollectionOrdering.Matching);
     }
 
     // Serialization Tests
@@ -419,7 +420,7 @@ public class QRCodeDataUnitTest
 
         // Assert
         await Assert.That(bytesWritten).IsEqualTo(arrayResult.Length);
-        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(arrayResult);
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(arrayResult, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -461,7 +462,7 @@ public class QRCodeDataUnitTest
 
         // Assert
         await Assert.That(bytesWritten2).IsEqualTo(bytesWritten1);
-        await Assert.That(data2).IsEquivalentTo(data1);
+        await Assert.That(data2).IsEquivalentTo(data1, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -500,7 +501,7 @@ public class QRCodeDataUnitTest
         // Assert
         await Assert.That(restored.Version).IsEqualTo(original.Version);
         await Assert.That(restored.Size).IsEqualTo(original.Size);
-        AssertQRCodeDataEqual(original, restored);
+        await AssertQRCodeDataEqual(original, restored);
     }
 
     [Test]

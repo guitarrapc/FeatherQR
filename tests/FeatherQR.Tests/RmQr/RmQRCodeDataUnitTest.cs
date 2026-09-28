@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Buffers;
 using FeatherQR.Internals.RmQR;
 
@@ -74,7 +75,7 @@ public class RmQRCodeDataUnitTest
 
         var back = new byte[source.Length];
         data.GetCoreData(back);
-        await Assert.That(back).IsEquivalentTo(source);
+        await Assert.That(back).IsEquivalentTo(source, CollectionOrdering.Matching);
 
         // Indexer and GetCoreModule agree with the byte-per-module view.
         var w = data.GetCoreWidth();
@@ -158,7 +159,7 @@ public class RmQRCodeDataUnitTest
         var actual = new byte[expected.Length];
         original.GetCoreData(expected);
         restored.GetCoreData(actual);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -195,7 +196,7 @@ public class RmQRCodeDataUnitTest
         var written = data.GetRawData(writer);
 
         await Assert.That(written).IsEqualTo(data.GetRawDataSize());
-        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(data.GetRawData());
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(data.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -240,7 +241,7 @@ public class RmQRCodeDataUnitTest
         var dirty = (byte[])raw.Clone();
         dirty[^1] |= 0x07;
         var restored = new RmQRCodeData(dirty, 0);
-        await Assert.That(restored.GetRawData()).IsEquivalentTo(raw);
+        await Assert.That(restored.GetRawData()).IsEquivalentTo(raw, CollectionOrdering.Matching);
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Tests;
@@ -86,7 +87,7 @@ public class RegionalRetryTest
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(calls.Inputs.Count).IsEqualTo(1);
-        await Assert.That(calls.Inputs[0]).IsEquivalentTo(Expected(luminance, side, side));
+        await Assert.That(calls.Inputs[0]).IsEquivalentTo(Expected(luminance, side, side), CollectionOrdering.Matching);
         await AssertHistogramIsTheInputs(calls, 0);
     }
 
@@ -95,7 +96,7 @@ public class RegionalRetryTest
         var expected = new int[Binarizer.HistogramBins];
         foreach (var value in calls.Inputs[index])
             expected[value]++;
-        await Assert.That(calls.Histograms[index]).IsEquivalentTo(expected);
+        await Assert.That(calls.Histograms[index]).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     /// <summary>The negative is binarized from its own pixels, not the positive's output inverted.</summary>
@@ -111,7 +112,7 @@ public class RegionalRetryTest
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(calls.Inputs.Count).IsEqualTo(2);
-        await Assert.That(calls.Inputs[1]).IsEquivalentTo(Expected(negative, side, side));
+        await Assert.That(calls.Inputs[1]).IsEquivalentTo(Expected(negative, side, side), CollectionOrdering.Matching);
         await AssertHistogramIsTheInputs(calls, 1);
     }
 
@@ -213,7 +214,7 @@ public class RegionalRetryTest
 
         await Assert.That(status).IsEqualTo(DecodeStatus.NotDetected);
         await Assert.That(calls.Inputs.Count).IsEqualTo(1);
-        await Assert.That(calls.Inputs[0]).IsEquivalentTo(Expected(negative, side, side));
+        await Assert.That(calls.Inputs[0]).IsEquivalentTo(Expected(negative, side, side), CollectionOrdering.Matching);
     }
 
     /// <summary>

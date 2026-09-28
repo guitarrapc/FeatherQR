@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.RmQR;
 
@@ -84,7 +85,7 @@ public class RmQRConstantsUnitTest
     {
         var width = RmQRConstants.GetWidth(version);
         var columns = RmQRConstants.GetAlignmentColumns(version).ToArray();
-        await Assert.That(columns.Select(c => (int)c).ToArray()).IsEquivalentTo(RmQRNaiveReference.AlignmentColumns(width));
+        await Assert.That(columns.Select(c => (int)c).ToArray()).IsEquivalentTo(RmQRNaiveReference.AlignmentColumns(width), CollectionOrdering.Matching);
         foreach (var c in columns)
         {
             // A 3×3 alignment pattern around the column must not touch the finder

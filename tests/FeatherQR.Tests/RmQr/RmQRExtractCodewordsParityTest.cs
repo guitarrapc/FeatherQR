@@ -48,7 +48,7 @@ public class RmQRExtractCodewordsParityTest
             backing.AsSpan().Fill(0xA5);
             RmQRMatrixDecoder.ExtractCodewords(grid, width, height, version, backing.AsSpan(0, length), RmQRMatrixDecoder.ExtractKernel.Auto);
 
-            await Assert.That(backing.AsSpan(0, length).ToArray()).IsEquivalentTo(full.AsSpan(0, length).ToArray())
+            await Assert.That(backing.AsSpan(0, length).ToArray()).IsEquivalentTo(full.AsSpan(0, length).ToArray(), CollectionOrdering.Matching)
                 .Because($"{version}: a {length}-byte stream must be the full stream's prefix");
             for (var i = length; i < total; i++)
             {

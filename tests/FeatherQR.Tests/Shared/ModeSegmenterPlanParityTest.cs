@@ -87,6 +87,12 @@ public class ModeSegmenterPlanParityTest
         }
     }
 
+    /// <summary>
+    /// The corpus without its long periodic row, which the prefix search prices at every budget a prefix turns on: a third of the test's time,
+    /// and of the budget and class faults planted by hand it caught none the shorter rows miss.
+    /// </summary>
+    public static IEnumerable<(string Name, string Text)> PrefixCorpus() => Corpus().Where(static row => row.Name != "mixed-long");
+
     [Test]
     [MethodDataSource(nameof(Corpus))]
     public async Task ReconstructedPlan_MatchesTheAllStatesReference(string name, string text)
@@ -132,7 +138,7 @@ public class ModeSegmenterPlanParityTest
     }
 
     [Test]
-    [MethodDataSource(nameof(Corpus))]
+    [MethodDataSource(nameof(PrefixCorpus))]
     public async Task LongestPrefixWithinBudget_StopsWhereTheReferenceStops(string name, string text)
     {
         foreach (var charset in new[] { EciMode.Default, EciMode.Utf8 })

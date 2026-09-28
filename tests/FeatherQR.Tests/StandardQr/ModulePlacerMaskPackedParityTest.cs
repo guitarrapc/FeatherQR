@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals;
 
@@ -38,7 +39,7 @@ public class ModulePlacerMaskPackedParityTest
                 var actualBest = ModulePlacer.MaskCode(actualBuffer, size, version, blockedMask, eccLevel);
 
                 await Assert.That(actualBest).IsEquivalentTo(expectedBest);
-                await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer);
+                await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer, CollectionOrdering.Matching);
             }
         }
     }
@@ -67,7 +68,7 @@ public class ModulePlacerMaskPackedParityTest
             var actualBest = ModulePlacer.MaskCode(actualBuffer, size, version, blockedMask, QREccLevel.M);
 
             await Assert.That(actualBest).IsEquivalentTo(expectedBest);
-            await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer);
+            await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer, CollectionOrdering.Matching);
         }
     }
 

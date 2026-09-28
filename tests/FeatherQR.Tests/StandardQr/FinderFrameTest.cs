@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.StandardQR;
 
@@ -74,7 +75,7 @@ public class FinderFrameTest
         await Assert.That(frame.IsAffine).IsTrue();
         float[] actual = [transform.a11, transform.a12, transform.a13, transform.a21, transform.a22, transform.a23, transform.a31, transform.a32, transform.a33];
         float[] expected = [parallelogram.a11, parallelogram.a12, parallelogram.a13, parallelogram.a21, parallelogram.a22, parallelogram.a23, parallelogram.a31, parallelogram.a32, parallelogram.a33];
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     /// <summary>

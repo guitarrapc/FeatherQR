@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Text;
 namespace FeatherQR.Tests;
 
@@ -43,7 +44,7 @@ public class StructuredAppendEncodeTest
         await Assert.That(QRCodeDecoder.TryDecode(symbols[0], out var text, out var info)).IsTrue();
         await Assert.That(text).IsEqualTo("fits in one");
         await Assert.That(info.StructuredAppend.IsEmpty).IsTrue();
-        await Assert.That(ModulesOf(symbols[0])).IsEquivalentTo(ModulesOf(expected));
+        await Assert.That(ModulesOf(symbols[0])).IsEquivalentTo(ModulesOf(expected), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -175,7 +176,7 @@ public class StructuredAppendEncodeTest
             await Assert.That(QRCodeDecoder.TryDecode(symbol, out _, out var info)).IsTrue();
             plainLevels.Add(info.EccLevel);
         }
-        await Assert.That(plainLevels.Distinct()).IsEquivalentTo([QREccLevel.L]);
+        await Assert.That(plainLevels.Distinct()).IsEquivalentTo([QREccLevel.L], CollectionOrdering.Matching);
 
         var boostedLevels = new List<QREccLevel>();
         foreach (var symbol in boostedSymbols)
@@ -246,7 +247,7 @@ public class StructuredAppendEncodeTest
 
         await Assert.That(optimalSymbols.Length).IsEqualTo(singleSymbols.Length);
         for (var i = 0; i < singleSymbols.Length; i++)
-            await Assert.That(ModulesOf(optimalSymbols[i])).IsEquivalentTo(ModulesOf(singleSymbols[i])).Because($"symbol {i}");
+            await Assert.That(ModulesOf(optimalSymbols[i])).IsEquivalentTo(ModulesOf(singleSymbols[i]), CollectionOrdering.Matching).Because($"symbol {i}");
     }
 
     [Test]
@@ -263,7 +264,7 @@ public class StructuredAppendEncodeTest
 
         await Assert.That(optimalSymbols.Length).IsEqualTo(singleSymbols.Length);
         for (var i = 0; i < singleSymbols.Length; i++)
-            await Assert.That(ModulesOf(optimalSymbols[i])).IsEquivalentTo(ModulesOf(singleSymbols[i])).Because($"symbol {i}");
+            await Assert.That(ModulesOf(optimalSymbols[i])).IsEquivalentTo(ModulesOf(singleSymbols[i]), CollectionOrdering.Matching).Because($"symbol {i}");
         await Assert.That(string.Concat(await DecodeSet(optimalSymbols, QREccLevel.M))).IsEqualTo(text);
     }
 
@@ -291,7 +292,7 @@ public class StructuredAppendEncodeTest
         var symbols = QRCodeGenerator.CreateStructuredAppend("", QREccLevel.L);
 
         await Assert.That(symbols.Length).IsEqualTo(1);
-        await Assert.That(ModulesOf(symbols[0])).IsEquivalentTo(ModulesOf(QRCodeGenerator.Create("", QREccLevel.L)));
+        await Assert.That(ModulesOf(symbols[0])).IsEquivalentTo(ModulesOf(QRCodeGenerator.Create("", QREccLevel.L)), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -303,7 +304,7 @@ public class StructuredAppendEncodeTest
         var symbols = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M);
 
         await Assert.That(symbols.Length).IsEqualTo(1);
-        await Assert.That(ModulesOf(symbols[0])).IsEquivalentTo(ModulesOf(QRCodeGenerator.Create(text, QREccLevel.M)));
+        await Assert.That(ModulesOf(symbols[0])).IsEquivalentTo(ModulesOf(QRCodeGenerator.Create(text, QREccLevel.M)), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -314,7 +315,7 @@ public class StructuredAppendEncodeTest
         var symbols = QRCodeGenerator.CreateStructuredAppend(Repeat(Sentence, 300), QREccLevel.M, options);
 
         await Assert.That(symbols.Length).IsGreaterThan(1);
-        await Assert.That(symbols.Select(s => s.Version).Distinct()).IsEquivalentTo([4]);
+        await Assert.That(symbols.Select(s => s.Version).Distinct()).IsEquivalentTo([4], CollectionOrdering.Matching);
         await Assert.That(string.Concat(await DecodeSet(symbols, QREccLevel.M))).IsEqualTo(Repeat(Sentence, 300));
     }
 

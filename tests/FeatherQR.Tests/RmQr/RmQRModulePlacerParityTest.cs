@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
@@ -72,7 +73,7 @@ public class RmQRModulePlacerParityTest
             var tight = new byte[size];
             Array.Fill(tight, (byte)0xA5);
             RmQRModulePlacer.PlaceSymbol(tight, width, version, ecc, message, RmQRModulePlacer.PlaceKernel.Neon);
-            await Assert.That(tight).IsEquivalentTo(expected);
+            await Assert.That(tight).IsEquivalentTo(expected, CollectionOrdering.Matching);
 
             // Strided: 4 modules of quiet zone on every side; the bytes between rows
             // must survive untouched.
@@ -84,7 +85,7 @@ public class RmQRModulePlacerParityTest
             for (var row = 0; row < height; row++)
             {
                 var actualRow = padded.AsSpan((Quiet + row) * stride + Quiet, width).ToArray();
-                await Assert.That(actualRow).IsEquivalentTo(expected.AsSpan(row * width, width).ToArray());
+                await Assert.That(actualRow).IsEquivalentTo(expected.AsSpan(row * width, width).ToArray(), CollectionOrdering.Matching);
             }
             for (var row = 0; row < height; row++)
             {
@@ -126,7 +127,7 @@ public class RmQRModulePlacerParityTest
             var portable = new byte[size];
             portable.AsSpan().Fill(0xA5);
             RmQRModulePlacer.PlaceSymbol(portable, coreWidth, version, ecc, message, RmQRModulePlacer.PlaceKernel.Portable);
-            await Assert.That(portable).IsEquivalentTo(expected);
+            await Assert.That(portable).IsEquivalentTo(expected, CollectionOrdering.Matching);
 
             // Strided as well as tight. `ScatterPairs` branches on `strided` and derives
             // its own row pitch, so the two arms are different code; pinning only the
@@ -140,7 +141,7 @@ public class RmQRModulePlacerParityTest
             for (var row = 0; row < coreHeight; row++)
             {
                 await Assert.That(portablePadded.AsSpan((PortableQuiet + row) * portableStride + PortableQuiet, coreWidth).ToArray())
-                    .IsEquivalentTo(expected.AsSpan(row * coreWidth, coreWidth).ToArray());
+                    .IsEquivalentTo(expected.AsSpan(row * coreWidth, coreWidth).ToArray(), CollectionOrdering.Matching);
                 for (var q = 0; q < PortableQuiet; q++)
                 {
                     await Assert.That(portablePadded[(PortableQuiet + row) * portableStride + q]).IsEqualTo((byte)0x5A);
@@ -159,7 +160,7 @@ public class RmQRModulePlacerParityTest
                 var width = RmQRConstants.GetWidth(version);
                 Assert.Fail($"{version}-{ecc} msg[0]={message[0]:X2}: first mismatch at {first} (row {first / width}, col {first % width}): expected {expected[first]}, actual {actual[first]}");
             }
-            await Assert.That(actual.AsSpan(size).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5 });
+            await Assert.That(actual.AsSpan(size).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5 }, CollectionOrdering.Matching);
         }
     }
 
@@ -249,7 +250,7 @@ public class RmQRModulePlacerStridedParityTest
                     if (buffer[row * stride + c] != 0xA5)
                         Assert.Fail($"{version}-{ecc} stride {stride}: gap byte written at row {row} col {c}");
             }
-            await Assert.That(buffer.AsSpan(stride * height).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5, 0xA5 });
+            await Assert.That(buffer.AsSpan(stride * height).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5, 0xA5 }, CollectionOrdering.Matching);
         }
     }
 
