@@ -150,16 +150,7 @@ Two decisions inside the phase. **D5:** whether single-mode selection picks Kanj
 
 ## 128-bit tiers for builds without AVX2
 
-The [SIMD tier table](../specs/qrcode-symbologies.md#simd-tier-inventory) records which tier each kernel takes per build class. On 2026-09-28, 11 of 28 kernels ran scalar on x64 without AVX (a default NativeAOT publish), 19 on WebAssembly and 1 on ARM64. A rough first measurement put a default NativeAOT publish 2.6x behind the JIT on encode and about 4x on image decode ([cross-language-benchmark-plan.md](cross-language-benchmark-plan.md#what-was-already-measured)).
-
-- **A tier ships only if it beats scalar on the build it is for.** A tier on every scalar cell would add parity tests, a table row and CI time where it does not pay. A kernel under about 3 % of every benchmark shape on that build stays scalar, with the measured reason in a comment beside its row in `SimdTiers.Expected`.
-- **Portable `Vector128` first.** One tier fills x64 without AVX, WebAssembly and ARM64's one scalar cell (the rMQR value writers). Where x64 with AVX2 runs scalar too, it fills that cell as well: the Structured Append parity and scanner on every CPU, the syndrome pass without GFNI and the rMQR extraction without fast PEXT.
-- **Existing tiers stay.** Eight kernels are scalar on WebAssembly but not on x64 without AVX, because their 128-bit tier is x64 SSE: `TextAnalyzer`, `ModuleBitPacker`, `EccBinaryEncoder`, `ModulePlacer.ExpandBits`, the Micro QR byte segment and placer, and the rMQR value writers and placer. The portable tier goes after the SSE tier, and replaces it only where both compile to the same x64 code.
-- **Each build is measured on itself.** x64 without AVX is ranked under `DOTNET_EnableAVX=0` and confirmed on a real default NativeAOT build, since the knob runs the JIT's code, not ILC's. WebAssembly is timed on WebAssembly, interpreted and AOT-compiled, since both take the same tier. A 128-bit form measured on x64 says nothing about WebAssembly.
-- **Earlier refutations are measured again.** `Binarizer` records a 128-bit tier as measured and left out, but against the 256-bit tier under the JIT, not against scalar.
-- **GFNI is left to the CPU on x64 without AVX.** A 128-bit GFNI syndrome tier fills `EccBinaryDecoder`'s cell on GFNI CPUs only; WebAssembly and older x64 need another form.
-
-Out of scope: the instruction set a NativeAOT publish targets. It is the application's setting, and the README note on `IlcInstructionSet` waits for the measured gap (phase 3 of the cross-language benchmark plan). Even with the 128-bit tiers, a default publish runs no 256-bit tier.
+Planned in [simd-128bit-tiers-plan.md](simd-128bit-tiers-plan.md): the inventory of scalar cells, the rules a tier ships under, how each build is measured, and the phases. This plan keeps only the timing: the tiers are internal, must land before Phase 8 to be in 2.0.0, and move to 2.1.0 if they slip.
 
 ## Open decisions
 
@@ -212,7 +203,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 4 | Symbol geometry | D3, the geometry members on all three `*DecodeInfo`, all three image decode paths | Matrix-level decode behaviour documented and tested |
 | 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over the whole input's bytes as the set writes them | Round-trip plus oracle cross-check |
 | 6 | Kanji encoding | D5, D6, reverse table, segmenter state, `EncodingMode`, capacity docs; sub-phases 6.1-6.9 in [kanji-encoding-plan.md](kanji-encoding-plan.md) | Oracle sweep green. Tag `2.0.0-preview.4` |
-| 6b | 128-bit tiers | The section above: kernels ranked by their share of each benchmark shape on x64 without AVX and on WebAssembly, tiers added from the top | Every scalar cell in those two columns raised in `SimdTiers.Expected` or carrying its measured reason; per tier, parity with scalar and planted faults caught; on build classes whose cell did not change, the dispatch compiles as before (disassembly); public API unchanged |
+| 6b | 128-bit tiers | [simd-128bit-tiers-plan.md](simd-128bit-tiers-plan.md) | That plan's exit: every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` raised or carrying its measured reason; public API unchanged |
 | 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script; README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry, 128-bit tiers); fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot simply be folded in as history; F1's renderer half landed and is already recorded in the specs) | Approved API listing frozen |
 | 8 | Release | Below | `2.0.0` on nuget.org |
 
