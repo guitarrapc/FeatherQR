@@ -302,6 +302,28 @@ Because every other table test constrains only *which* cells are assigned and wo
 whose readings were permuted, a golden digest over all 8,192 entries pins the values themselves;
 regenerating the table is expected to change it, in the same reviewed commit.
 
+**The encoder's reverse table is the forward table's inverse, minus seven cells.**
+`ShiftJisKanjiReverseTable` maps a UTF-16 code unit to the 13-bit value of its cell, and holds
+6,872 of them: the 6,879 above without the seven CP932 reads differently. Neither reading of those
+seven has a cell to write, because a symbol written there decodes to different text in a CP932
+reader and in this library, whichever reading was written. The same generator emits it from the
+forward table and refuses unless, over every UTF-16 code unit, it is the exact inverse of the
+forward table on those cells and misses everything else, both readings of the seven included. A
+golden digest over all 65,536 lookups pins it, as the forward table's digest pins that one.
+
+Its layout was chosen by measurement (2026-09-29, .NET 10, x64, 1,000 characters of Japanese
+prose and the 6,872 cells shuffled): a directory over the high byte, a 10-byte record per 64 code
+units (a membership word and the count of members before it), and the values in code-unit order
+packed at 13 bits. That is 15,146 bytes of RVA data and 2 to 3 ns a character. Binary search over
+sorted pairs took 27 KB and 14 ns; a perfect hash checked through the forward table, 14 KB and 7 ns;
+unpacked 16-bit values, 17.7 KB, over the 16 KB target, and not consistently faster (9 % ahead on
+prose in one run, 26 % behind in the other, level on the shuffled cells in both). Keeping the word and its count in
+separate arrays, so that a lookup touches two tables for them instead of one record, was 3 to 27 %
+slower. Removing the bounds checks gained 0.2
+to 0.5 ns, which does not pay for unsafe code. Until a generator writes Kanji nothing
+references the table, so trimming removes it; the trimmed-size delta is recorded here when that
+changes.
+
 Two failure causes are kept apart on the error path: a structurally impossible byte pair is
 `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing
 arithmetic sits on the error path only, so the happy path stays a single indexed load.

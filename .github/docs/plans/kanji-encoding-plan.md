@@ -123,4 +123,29 @@ Each phase follows the test-first workflow, updates the affected specs and `docs
 
 Entries are appended per phase: what was done, what was learned, and the benchmark delta or an explicit statement that no hot path moved.
 
-(empty)
+### 6.1 Reverse table (2026-09-29)
+
+**Done.** `generate-kanji-table` now also emits `src/FeatherQR/Internals/ShiftJisKanjiReverseTable.cs` (`ReverseTable` in `tools/QRInteropFixtures/KanjiReverseTable.cs`), built from the validated forward table rather than from the sweep a second time, so the two cannot come from different data. Both tables are validated before either is written. The gate runs the emitted lookup on the emitted bytes over all 65,536 code units: the exact inverse of the forward table without the seven cells, 6,872 hits, and both readings of each of the seven (the JIS X 0208 one and the CP932 one) miss. `ShiftJisKanjiReverseTableUnitTest` repeats that against the shipped forward table and adds the ASCII range, NEC row 13, the IBM extensions, halfwidth katakana, JIS X 0201's ¥ and ‾, surrogates, the unassigned rows, 15 spot cells across the scripts and both Kanji-mode ranges, and a golden digest over every lookup. Nothing outside the tests references the table; `PublicAPI.approved.txt` is unchanged. `tools/mutation_check.cs` planted 20 faults in the lookup, and each one failed at least three test methods: six slips in the lookup itself (the membership test, the rank's mask, the 13-bit shift, mask and stride, the block index) and each of the 14 readings of the seven cells mapped back to its cell. A remark in `ShiftJisKanjiTableUnitTest` that still named `UnsupportedContent` now names `UnmappedCharacter`.
+
+**Measured** (self-contained BenchmarkDotNet harness outside the repo, .NET 10, x64; the correctness gate compared every variant with an inversion of the forward table over all 65,536 code units before any timing). Per character, 1,000 characters of Japanese prose / the 6,872 cells shuffled:
+
+| Layout | Bytes | Prose | All cells |
+|---|---|---|---|
+| Sorted pairs, binary search | 27,488 | 14.2 ns | 37 ns |
+| Hash and displace, 16-bit seeds, checked through the forward table | 14,034 (+ forward) | 7.3 ns | 5.6 ns |
+| Directory + word + rank in separate arrays, 16-bit values | 17,720 | 2.9-3.0 ns | 2.4-2.7 ns |
+| The same, 13-bit values | 15,146 | 2.8-3.4 ns | 2.7-3.2 ns |
+| The same, rank per 256-code-unit page | 14,588 | 4.1 ns | 3.6 ns |
+| **Directory + fused 10-byte record + 13-bit values (shipped)** | **15,146** | **2.2-3.3 ns** | **2.4-2.8 ns** |
+| The shipped layout without bounds checks | 15,146 | 2.0 ns | 2.3 ns |
+
+Ranges are two runs (the second with three launches); compare within a run.
+
+**Lessons.**
+
+- The perfect hash lost although it is the smallest: two multiply-heavy hashes plus a load into the 16 KB forward table cost more than the bitmap's directory, record and value loads. With 8-bit seeds it did not build at all at any load factor tried (a bucket of 3 to 5 found no free slots in 256 seeds once half the table was full); 16-bit seeds at λ = 5 do.
+- Fusing the word and its rank into one record is what makes 13-bit packing free: with separate arrays packing cost 3-27 %, with the record it is level with the unpacked 16-bit layout on the shuffled cells and within run-to-run noise of it on prose (9 % behind in one run, 26 % ahead in the other), and that layout misses the 16 KB target anyway.
+- The committed forward file had drifted from its generator: its comments had been reflowed to one sentence per line by hand and the template had not. Regeneration therefore rewrote 31 lines of comments with no data change. The template now matches, and regeneration reproduces the committed file byte for byte; a hand edit to a generated file has to go into the generator too.
+- The trimmed-size delta cannot be measured yet, since trimming removes an unreferenced table. It is recorded when 6.3 first references the table.
+
+**Benchmark delta.** No hot path moved: no production code references the new table, and the forward table is byte-identical.
