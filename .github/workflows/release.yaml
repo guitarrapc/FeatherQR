@@ -68,7 +68,7 @@ jobs:
           echo "- **Tag:** \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Version:** \`${PROPS_VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
         with:
           restore-wasm-workload: true
           dotnet-version: |
@@ -98,7 +98,7 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ needs.validate.outputs.tag }}
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
         with:
           restore-wasm-workload: true
           dotnet-version: |
@@ -140,7 +140,7 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ needs.validate.outputs.tag }}
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
@@ -195,7 +195,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
       # nuget
       - name: NuGet login (OIDC → temp API key)
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
@@ -210,7 +210,7 @@ jobs:
         run: ls -al ./nuget
       # release
       - name: Create Release
-        uses: guitarrapc/actions/.github/actions/create-release@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        uses: guitarrapc/actions/.github/actions/create-release@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
         with:
           tag: ${{ needs.validate.outputs.tag }}
           title: ${{ needs.validate.outputs.tag }}
