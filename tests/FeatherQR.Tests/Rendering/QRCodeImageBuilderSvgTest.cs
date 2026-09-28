@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Globalization;
 using SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
@@ -27,15 +28,15 @@ public class QRCodeImageBuilderSvgTest
             .SaveToSvg(stream);
 
         var doc = ParseSvg(stream.ToArray());
-        await Assert.That(doc.Root!.Name.LocalName).IsEquivalentTo("svg");
-        await Assert.That(doc.Root.Attribute("width")?.Value).IsEquivalentTo("512");
-        await Assert.That(doc.Root.Attribute("height")?.Value).IsEquivalentTo("512");
+        await Assert.That(doc.Root!.Name.LocalName).IsEqualTo("svg");
+        await Assert.That(doc.Root.Attribute("width")?.Value).IsEqualTo("512");
+        await Assert.That(doc.Root.Attribute("height")?.Value).IsEqualTo("512");
 
         // Background rect plus dark module rects must be present.
         var ns = doc.Root.Name.Namespace;
         var rects = doc.Descendants(ns + "rect").ToArray();
         await Assert.That(rects.Length > 1).IsTrue().Because($"Expected background + module rects, got {rects.Length}.");
-        await Assert.That(rects[0].Attribute("fill")?.Value).IsEquivalentTo("white");
+        await Assert.That(rects[0].Attribute("fill")?.Value).IsEqualTo("white");
     }
 
     [Test]
@@ -48,7 +49,7 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        await Assert.That(doc.Root!.Attribute("viewBox")?.Value).IsEquivalentTo("0 0 512 512");
+        await Assert.That(doc.Root!.Attribute("viewBox")?.Value).IsEqualTo("0 0 512 512");
     }
 
     [Test]
@@ -61,7 +62,7 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        await Assert.That(doc.Root!.Attribute("shape-rendering")?.Value).IsEquivalentTo("crispEdges");
+        await Assert.That(doc.Root!.Attribute("shape-rendering")?.Value).IsEqualTo("crispEdges");
     }
 
     [Test]
@@ -192,7 +193,7 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        await Assert.That(doc.Root!.Attribute("shape-rendering")?.Value).IsEquivalentTo("crispEdges");
+        await Assert.That(doc.Root!.Attribute("shape-rendering")?.Value).IsEqualTo("crispEdges");
     }
 
     [Test]
@@ -206,7 +207,7 @@ public class QRCodeImageBuilderSvgTest
         var writer = new ArrayBufferWriter<byte>();
         builder.SaveToSvg(writer);
 
-        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(stream.ToArray());
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(stream.ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -233,7 +234,7 @@ public class QRCodeImageBuilderSvgTest
         var writer = new SegmentCappedBufferWriter(maxSegmentSize: 64);
         builder.SaveToSvg(writer);
 
-        await Assert.That(writer.WrittenBytes).IsEquivalentTo(expected.ToArray());
+        await Assert.That(writer.WrittenBytes).IsEquivalentTo(expected.ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -254,7 +255,7 @@ public class QRCodeImageBuilderSvgTest
         }
 
         var result = Encoding.UTF8.GetString(output.ToArray());
-        await Assert.That(result).IsEquivalentTo(document.Replace("<svg ", "<svg viewBox=\"0 0 8 8\" "));
+        await Assert.That(result).IsEqualTo(document.Replace("<svg ", "<svg viewBox=\"0 0 8 8\" "));
     }
 
     [Test]
@@ -269,7 +270,7 @@ public class QRCodeImageBuilderSvgTest
             injector.Write(payload, 0, payload.Length);
         }
 
-        await Assert.That(output.ToArray()).IsEquivalentTo(payload);
+        await Assert.That(output.ToArray()).IsEquivalentTo(payload, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -285,7 +286,7 @@ public class QRCodeImageBuilderSvgTest
             injector.Write(payload, 0, payload.Length);
         }
 
-        await Assert.That(output.ToArray()).IsEquivalentTo(payload);
+        await Assert.That(output.ToArray()).IsEquivalentTo(payload, CollectionOrdering.Matching);
     }
 
     /// <summary>
@@ -319,7 +320,7 @@ public class QRCodeImageBuilderSvgTest
             .WithErrorCorrection(QREccLevel.H)
             .ToSvgString();
 
-        await Assert.That(QRCodeImageBuilder.GetSvgString(TestContent, QREccLevel.H, size: 512)).IsEquivalentTo(expected);
+        await Assert.That(QRCodeImageBuilder.GetSvgString(TestContent, QREccLevel.H, size: 512)).IsEqualTo(expected);
     }
 
     [Test]
@@ -328,7 +329,7 @@ public class QRCodeImageBuilderSvgTest
         var writer = new ArrayBufferWriter<byte>();
         QRCodeImageBuilder.WriteSvg(TestContent, writer, QREccLevel.M, size: 256);
 
-        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(QRCodeImageBuilder.GetSvgBytes(TestContent, QREccLevel.M, size: 256));
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(QRCodeImageBuilder.GetSvgBytes(TestContent, QREccLevel.M, size: 256), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -362,7 +363,7 @@ public class QRCodeImageBuilderSvgTest
         using var stream = new MemoryStream();
         builder.SaveToSvg(stream);
 
-        await Assert.That(builder.ToSvgString()).IsEquivalentTo(Encoding.UTF8.GetString(stream.ToArray()));
+        await Assert.That(builder.ToSvgString()).IsEqualTo(Encoding.UTF8.GetString(stream.ToArray()));
     }
 
     [Test]
@@ -372,7 +373,7 @@ public class QRCodeImageBuilderSvgTest
             .WithSize(256, 256)
             .WithGradient(new GradientOptions([SKColors.Blue, SKColors.Purple], GradientDirection.TopLeftToBottomRight));
 
-        await Assert.That(builder.ToSvgString()).IsEquivalentTo(builder.ToSvgString());
+        await Assert.That(builder.ToSvgString()).IsEqualTo(builder.ToSvgString());
     }
 
     [Test]
@@ -381,7 +382,7 @@ public class QRCodeImageBuilderSvgTest
         var bytes = QRCodeImageBuilder.GetSvgBytes(TestContent, QREccLevel.H, size: 300);
 
         var doc = ParseSvg(bytes);
-        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("300");
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEqualTo("300");
     }
 
     [Test]
@@ -391,7 +392,7 @@ public class QRCodeImageBuilderSvgTest
         var bytes = QRCodeImageBuilder.GetSvgBytes(qr, size: 300);
 
         var doc = ParseSvg(bytes);
-        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("300");
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEqualTo("300");
     }
 
     [Test]
@@ -401,7 +402,7 @@ public class QRCodeImageBuilderSvgTest
         QRCodeImageBuilder.SaveSvg(TestContent, stream, QREccLevel.M, size: 256);
 
         var doc = ParseSvg(stream.ToArray());
-        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("256");
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEqualTo("256");
     }
 
     [Test]
@@ -412,7 +413,7 @@ public class QRCodeImageBuilderSvgTest
         QRCodeImageBuilder.SaveSvg(qr, stream, size: 256);
 
         var doc = ParseSvg(stream.ToArray());
-        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("256");
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEqualTo("256");
     }
 
     [Test]
@@ -476,8 +477,8 @@ public class QRCodeImageBuilderSvgTest
 
         var doc = XDocument.Parse(svg);
         var expected = (qr.Size * modulePixelSize).ToString();
-        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo(expected);
-        await Assert.That(doc.Root.Attribute("height")?.Value).IsEquivalentTo(expected);
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEqualTo(expected);
+        await Assert.That(doc.Root.Attribute("height")?.Value).IsEqualTo(expected);
     }
 
     [Test]
@@ -499,11 +500,11 @@ public class QRCodeImageBuilderSvgTest
         var rects = doc.Descendants(ns + "rect").ToArray();
 
         // First rect is the full-canvas clear, second is the QR background offset by the pad.
-        await Assert.That(rects[0].Attribute("fill")?.Value).IsEquivalentTo("#102030");
-        await Assert.That(rects[0].Attribute("width")?.Value).IsEquivalentTo(canvasSide.ToString());
-        await Assert.That(rects[1].Attribute("fill")?.Value).IsEquivalentTo("white");
-        await Assert.That(rects[1].Attribute("x")?.Value).IsEquivalentTo("20");
-        await Assert.That(rects[1].Attribute("width")?.Value).IsEquivalentTo(contentSide.ToString());
+        await Assert.That(rects[0].Attribute("fill")?.Value).IsEqualTo("#102030");
+        await Assert.That(rects[0].Attribute("width")?.Value).IsEqualTo(canvasSide.ToString());
+        await Assert.That(rects[1].Attribute("fill")?.Value).IsEqualTo("white");
+        await Assert.That(rects[1].Attribute("x")?.Value).IsEqualTo("20");
+        await Assert.That(rects[1].Attribute("width")?.Value).IsEqualTo(contentSide.ToString());
     }
 
     private static XDocument ParseSvg(byte[] utf8Bytes)

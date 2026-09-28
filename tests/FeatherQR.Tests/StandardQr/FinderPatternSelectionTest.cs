@@ -30,7 +30,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (35f, 35f), (179f, 35f), (179f, 155f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (35f, 35f), (179f, 35f), (179f, 155f) }, CollectionOrdering.Any);
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (204f, 60f), (60f, 204f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (204f, 60f), (60f, 204f) }, CollectionOrdering.Any);
     }
 
     [Test]
@@ -56,7 +56,7 @@ public class FinderPatternSelectionTest
         foreach (var order in Permutations([0, 1, 2, 3]))
         {
             var selected = Select(order.Select(i => candidates[i]).ToArray());
-            await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (204f, 60f), (60f, 204f) }).Because(string.Join(",", order));
+            await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (204f, 60f), (60f, 204f) }, CollectionOrdering.Any).Because(string.Join(",", order));
         }
     }
 
@@ -71,7 +71,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (204f, 60f), (60f, 204f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (204f, 60f), (60f, 204f) }, CollectionOrdering.Any);
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (3.74f, 3.42f), (33.26f, 3.42f), (3.58f, 33.34f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (3.74f, 3.42f), (33.26f, 3.42f), (3.58f, 33.34f) }, CollectionOrdering.Any);
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 64f), (64f, 196f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 64f), (64f, 196f) }, CollectionOrdering.Any);
     }
 
     /// <summary>
@@ -119,7 +119,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 64f), (64f, 196f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 64f), (64f, 196f) }, CollectionOrdering.Any);
     }
 
     /// <summary>
@@ -137,7 +137,7 @@ public class FinderPatternSelectionTest
         foreach (var order in Permutations([0, 1, 2, 3]))
         {
             var (selected, leftOut) = SelectFlagged(order.Select(i => candidates[i]).ToArray());
-            await Assert.That(selected).IsEquivalentTo(new[] { (14.5f, 14.5f), (180.5f, 14.5f), (28f, 165f) }).Because(string.Join(",", order));
+            await Assert.That(selected).IsEquivalentTo(new[] { (14.5f, 14.5f), (180.5f, 14.5f), (28f, 165f) }, CollectionOrdering.Any).Because(string.Join(",", order));
             await Assert.That(leftOut).IsTrue().Because(string.Join(",", order));
         }
     }
@@ -169,7 +169,7 @@ public class FinderPatternSelectionTest
 
         var (selected, leftOut) = SelectFlagged(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 60f), (skewedX, 200f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (60f, 60f), (200f, 60f), (skewedX, 200f) }, CollectionOrdering.Any);
         await Assert.That(leftOut).IsEqualTo(expected);
     }
 
@@ -200,7 +200,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { (40f, 40f), (160f, 40f), (40f, 160f) }).Or.IsEquivalentTo(new[] { (40f, 400f), (250f, 400f), (40f, 610f) });
+        await Assert.That(selected).IsEquivalentTo(new[] { (40f, 40f), (160f, 40f), (40f, 160f) }, CollectionOrdering.Any).Or.IsEquivalentTo(new[] { (40f, 400f), (250f, 400f), (40f, 610f) }, CollectionOrdering.Any);
     }
 
     [Test]
@@ -218,7 +218,7 @@ public class FinderPatternSelectionTest
 
         var selected = Select(candidates);
 
-        await Assert.That(selected).IsEquivalentTo(new[] { tl, tr, bl });
+        await Assert.That(selected).IsEquivalentTo(new[] { tl, tr, bl }, CollectionOrdering.Any);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Text;
 using FeatherQR.Internals;
 using FeatherQR.Internals.MicroQR;
@@ -177,7 +178,7 @@ public class MicroQRBinaryEncoderParityTest
         var written = MicroQRBinaryEncoder.EncodeDataCodewords("123".AsSpan(), MicroQRVersion.M1, MicroQREccLevel.ErrorDetectionOnly, EncodingMode.Numeric, buffer);
 
         await Assert.That(written).IsEqualTo(3);
-        await Assert.That(buffer).IsEquivalentTo(expected);
+        await Assert.That(buffer).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     // ---------------------------------------------------------------
@@ -193,7 +194,7 @@ public class MicroQRBinaryEncoderParityTest
         var written = MicroQRBinaryEncoder.EncodeDataCodewords(text.AsSpan(), version, ecc, mode, buffer);
 
         await Assert.That(written).IsEqualTo(expected.Length);
-        await Assert.That(buffer[..written]).IsEquivalentTo(expected);
+        await Assert.That(buffer[..written]).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     private static byte[] EncodeReference(string text, MicroQRVersion version, MicroQREccLevel ecc, EncodingMode mode)

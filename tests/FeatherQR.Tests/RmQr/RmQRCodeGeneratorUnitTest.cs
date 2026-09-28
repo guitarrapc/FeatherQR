@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.RmQR;
 
 namespace FeatherQR.Tests;
@@ -150,7 +151,7 @@ public class RmQRCodeGeneratorUnitTest
             for (var col = 0; col < size.Width; col++)
                 if ((destination[row * size.Width + col] != 0) != latin1[row, col])
                     Assert.Fail($"ECI span/class module ({row},{col}) differs");
-        await Assert.That(destination.AsSpan(size.BufferSize).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 });
+        await Assert.That(destination.AsSpan(size.BufferSize).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 }, CollectionOrdering.Matching);
         await Assert.That(RmQRCodeDecoder.TryDecode(destination.AsSpan(0, size.BufferSize), size.Width, size.Height, out var spanDecoded, out _)).IsTrue();
         await Assert.That(spanDecoded).IsEqualTo("Café");
     }
@@ -272,7 +273,7 @@ public class RmQRCodeGeneratorUnitTest
                 for (var col = 0; col < data.Width; col++)
                     if ((buffer[row * data.Width + col] != 0) != data[row, col] || buffer[row * data.Width + col] > 1)
                         Assert.Fail($"{version}-{ecc} qz {quietZone}: module ({row},{col}) = {buffer[row * data.Width + col]}, class API {data[row, col]}");
-            await Assert.That(buffer.AsSpan(size.BufferSize).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 });
+            await Assert.That(buffer.AsSpan(size.BufferSize).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 }, CollectionOrdering.Matching);
         }
     }
 }

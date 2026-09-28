@@ -4,7 +4,8 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <IsTestProject>true</IsTestProject>
-    <NoWarn>CS4014</NoWarn>
+    <!-- An unawaited async assertion helper cannot fail its test: its exception stays inside the dropped Task. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS4014</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

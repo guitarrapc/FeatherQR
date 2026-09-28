@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.BinaryDecoders;
 using FeatherQR.Internals.BinaryEncoders;
 
@@ -17,7 +18,7 @@ public class EccBinaryDecoderUnitTest
         // Assert
         await Assert.That(result).IsTrue();
         await Assert.That(errorsCorrected).IsEquivalentTo(0);
-        await Assert.That(codeword.AsSpan(0, 4).ToArray()).IsEquivalentTo(new byte[] { 64, 86, 134, 86 });
+        await Assert.That(codeword.AsSpan(0, 4).ToArray()).IsEquivalentTo(new byte[] { 64, 86, 134, 86 }, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -43,7 +44,7 @@ public class EccBinaryDecoderUnitTest
         // Assert
         await Assert.That(result).IsTrue();
         await Assert.That(errorsCorrected).IsEquivalentTo(errorCount);
-        await Assert.That(codeword).IsEquivalentTo(expected);
+        await Assert.That(codeword).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -86,7 +87,7 @@ public class EccBinaryDecoderUnitTest
         // Assert
         await Assert.That(result).IsTrue();
         await Assert.That(errorsCorrected).IsEquivalentTo(capacity);
-        await Assert.That(codeword).IsEquivalentTo(expected);
+        await Assert.That(codeword).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -114,7 +115,7 @@ public class EccBinaryDecoderUnitTest
             // Assert
             await Assert.That(result).IsTrue().Because($"round {round}: dataLength={dataLength}, eccCount={eccCount}, errors={errors}");
             await Assert.That(errorsCorrected).IsEquivalentTo(errors);
-            await Assert.That(codeword).IsEquivalentTo(expected);
+            await Assert.That(codeword).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals.MicroQR;
@@ -106,13 +107,13 @@ public class MicroQRMatrixExtractionTest
         var expectedData = new byte[16];
         var analysis = TextAnalyzer.Analyze(text.AsSpan(), EciMode.Default);
         var written = MicroQRBinaryEncoder.EncodeDataCodewords(text.AsSpan(), expectedVersion, ecc, analysis.EncodingMode, expectedData);
-        await Assert.That(extractedData).IsEquivalentTo(expectedData.AsSpan(0, written).ToArray());
+        await Assert.That(extractedData).IsEquivalentTo(expectedData.AsSpan(0, written).ToArray(), CollectionOrdering.Matching);
 
         // 5. Recomputed Reed-Solomon ECC over the extracted data must equal the
         // placed ECC codewords.
         var recomputedEcc = new byte[eccCount];
         EccBinaryEncoder.CalculateECC(extractedData, recomputedEcc, eccCount);
-        await Assert.That(extractedEcc).IsEquivalentTo(recomputedEcc);
+        await Assert.That(extractedEcc).IsEquivalentTo(recomputedEcc, CollectionOrdering.Matching);
     }
 
     private static bool MaskBit(int mask, int row, int col) => mask switch

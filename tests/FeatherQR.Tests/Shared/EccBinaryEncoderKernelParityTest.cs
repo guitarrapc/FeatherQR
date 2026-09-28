@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryEncoders;
 
@@ -39,7 +40,7 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateECC(data, actual, eccCount);
 
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -55,7 +56,7 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccScalar(data, actual, eccCount);
 
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -77,7 +78,7 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccSsse3(data, actual, eccCount);
 
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -99,7 +100,7 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccAdvSimd(data, actual, eccCount);
 
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -122,7 +123,7 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccGfni(data, actual, eccCount);
 
-             await Assert.That(actual).IsEquivalentTo(expected);
+             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -170,7 +171,7 @@ public class EccBinaryEncoderKernelParityTest
         var actual = new byte[eccCount];
         EccBinaryEncoder.CalculateECC(data, actual, eccCount);
 
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -188,11 +189,11 @@ public class EccBinaryEncoderKernelParityTest
 
             var viaPublicApi = new byte[eccCount];
             EccBinaryEncoder.CalculateECC(data, viaPublicApi, eccCount);
-            await Assert.That(viaPublicApi).IsEquivalentTo(expected);
+            await Assert.That(viaPublicApi).IsEquivalentTo(expected, CollectionOrdering.Matching);
 
             var viaScalarKernel = new byte[eccCount];
             EccBinaryEncoder.CalculateEccScalar(data, viaScalarKernel, eccCount);
-            await Assert.That(viaScalarKernel).IsEquivalentTo(expected);
+            await Assert.That(viaScalarKernel).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 

@@ -73,7 +73,7 @@ public class BitReaderUnitTests
             var reader = new BitReader(data);
             reader.Reads(bitCount);
         });
-        await Assert.That(exception.ParamName).IsEquivalentTo(nameof(bitCount));
+        await Assert.That(exception.ParamName).IsEqualTo(nameof(bitCount));
     }
 
     // 32-bit checks

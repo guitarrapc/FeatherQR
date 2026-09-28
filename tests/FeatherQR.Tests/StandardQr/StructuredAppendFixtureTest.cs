@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.SkiaSharp;
 using SkiaSharp;
 namespace FeatherQR.Tests;
@@ -146,7 +147,7 @@ public class StructuredAppendFixtureTest
         await Assert.That(members.Count).IsEqualTo(count);
         await Assert.That(members.Select(m => m.Count).Distinct().Count()).IsEqualTo(1);
         await Assert.That(members.Select(m => m.Parity).Distinct().Count()).IsEqualTo(1);
-        await Assert.That(members.Select(m => m.Index).OrderBy(i => i)).IsEquivalentTo(Enumerable.Range(0, count));
+        await Assert.That(members.Select(m => m.Index).OrderBy(i => i)).IsEquivalentTo(Enumerable.Range(0, count), CollectionOrdering.Matching);
         await Assert.That(count).IsBetween(2, 16);
     }
 

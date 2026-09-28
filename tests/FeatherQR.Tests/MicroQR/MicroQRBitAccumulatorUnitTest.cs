@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Text;
 using FeatherQR.Internals.MicroQR;
 
@@ -28,7 +29,7 @@ public class MicroQRBitAccumulatorUnitTest
         AppendValueBits(bits, value, 64);
 
         await Assert.That(p).IsEqualTo(pos + 64);
-        await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()));
+        await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()), CollectionOrdering.Matching);
     }
 
     public static IEnumerable<(int Pos, int BitCount)> AppendCases()
@@ -67,7 +68,7 @@ public class MicroQRBitAccumulatorUnitTest
         AppendValueBits(bits, (uint)value, bitCount);
 
         await Assert.That(p).IsEqualTo(pos + bitCount);
-        await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()));
+        await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()), CollectionOrdering.Matching);
     }
 
     public static IEnumerable<(int Pos, int BitCount)> AppendWideCases()
@@ -105,7 +106,7 @@ public class MicroQRBitAccumulatorUnitTest
         AppendValueBits(bits, value, bitCount);
 
         await Assert.That(p).IsEqualTo(pos + bitCount);
-        await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()));
+        await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()), CollectionOrdering.Matching);
     }
 
     /// <summary>Advances the accumulator and the reference bit string by

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.MicroQR;
 
@@ -20,7 +21,7 @@ public class MicroQRBinaryEncoderUnitTest
         var written = MicroQRBinaryEncoder.EncodeDataCodewords(text.AsSpan(), MicroQRVersion.M1, MicroQREccLevel.ErrorDetectionOnly, EncodingMode.Numeric, buffer);
 
         await Assert.That(written).IsEqualTo(3);
-        await Assert.That(buffer[..3]).IsEquivalentTo(expected);
+        await Assert.That(buffer[..3]).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -33,7 +34,7 @@ public class MicroQRBinaryEncoderUnitTest
         var written = MicroQRBinaryEncoder.EncodeDataCodewords("01234567".AsSpan(), MicroQRVersion.M2, MicroQREccLevel.L, EncodingMode.Numeric, buffer);
 
         await Assert.That(written).IsEqualTo(5);
-        await Assert.That(buffer[..5]).IsEquivalentTo(new byte[] { 0x40, 0x18, 0xAC, 0xC3, 0x00 });
+        await Assert.That(buffer[..5]).IsEquivalentTo(new byte[] { 0x40, 0x18, 0xAC, 0xC3, 0x00 }, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -53,7 +54,7 @@ public class MicroQRBinaryEncoderUnitTest
         var written = MicroQRBinaryEncoder.EncodeDataCodewords("AC-42".AsSpan(), MicroQRVersion.M2, MicroQREccLevel.L, EncodingMode.Alphanumeric, buffer);
 
         await Assert.That(written).IsEqualTo(5);
-        await Assert.That(buffer[..5]).IsEquivalentTo(expected);
+        await Assert.That(buffer[..5]).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -74,7 +75,7 @@ public class MicroQRBinaryEncoderUnitTest
         var written = MicroQRBinaryEncoder.EncodeDataCodewords("hello".AsSpan(), MicroQRVersion.M4, MicroQREccLevel.M, EncodingMode.Byte, buffer);
 
         await Assert.That(written).IsEqualTo(14);
-        await Assert.That(buffer[..14]).IsEquivalentTo(expected);
+        await Assert.That(buffer[..14]).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -90,7 +91,7 @@ public class MicroQRBinaryEncoderUnitTest
         var written = MicroQRBinaryEncoder.EncodeDataCodewords("123".AsSpan(), MicroQRVersion.M3, MicroQREccLevel.M, EncodingMode.Numeric, buffer);
 
         await Assert.That(written).IsEqualTo(9);
-        await Assert.That(buffer[..9]).IsEquivalentTo(expected);
+        await Assert.That(buffer[..9]).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     private static string ToBits(int value, int count)

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.SkiaSharp;
 
 namespace FeatherQR.Tests;
@@ -29,7 +30,7 @@ public class ImageBuilderVersionRangeTest
         var viaBuilder = new QRCodeImageBuilder(Content).WithVersion(range).ToByteArray();
         var viaData = new QRCodeImageBuilder(QRCodeGenerator.Create(Content, QREccLevel.M, options)).ToByteArray();
 
-        await Assert.That(viaBuilder).IsEquivalentTo(viaData);
+        await Assert.That(viaBuilder).IsEquivalentTo(viaData, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -60,9 +61,9 @@ public class ImageBuilderVersionRangeTest
         var any = new QRCodeImageBuilder(Content).WithVersion(QRVersionRange.Any).ToByteArray();
         var nullable = new QRCodeImageBuilder(Content).WithVersion(absent).ToByteArray();
 
-        await Assert.That(minusOne).IsEquivalentTo(untouched);
-        await Assert.That(any).IsEquivalentTo(untouched);
-        await Assert.That(nullable).IsEquivalentTo(untouched);
+        await Assert.That(minusOne).IsEquivalentTo(untouched, CollectionOrdering.Matching);
+        await Assert.That(any).IsEquivalentTo(untouched, CollectionOrdering.Matching);
+        await Assert.That(nullable).IsEquivalentTo(untouched, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -117,7 +118,7 @@ public class ImageBuilderVersionRangeTest
         var viaBuilder = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(range).ToByteArray();
         var viaData = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.Create(MicroContent, MicroQREccLevel.L, options)).ToByteArray();
 
-        await Assert.That(viaBuilder).IsEquivalentTo(viaData);
+        await Assert.That(viaBuilder).IsEquivalentTo(viaData, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -128,7 +129,7 @@ public class ImageBuilderVersionRangeTest
         var pinned = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(version).ToByteArray();
         var ranged = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(MicroQRVersionRange.Exactly(version)).ToByteArray();
 
-        await Assert.That(ranged).IsEquivalentTo(pinned);
+        await Assert.That(ranged).IsEquivalentTo(pinned, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -137,7 +138,7 @@ public class ImageBuilderVersionRangeTest
         var untouched = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).ToByteArray();
         var any = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(MicroQRVersionRange.Any).ToByteArray();
 
-        await Assert.That(any).IsEquivalentTo(untouched);
+        await Assert.That(any).IsEquivalentTo(untouched, CollectionOrdering.Matching);
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals;
 
@@ -46,7 +47,7 @@ public class ModulePlacerPlaceDataWordsParityTest
                 var actual = (byte[])pristine.Clone();
                 ModulePlacer.PlaceDataWords(actual, size, data, blockedMask);
 
-                await Assert.That(actual).IsEquivalentTo(expected);
+                await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
             }
         }
     }
@@ -70,7 +71,7 @@ public class ModulePlacerPlaceDataWordsParityTest
             var actual = (byte[])pristine.Clone();
             ModulePlacer.PlaceDataWords(actual, size, data, blockedMask);
 
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 

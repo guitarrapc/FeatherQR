@@ -104,7 +104,7 @@ public class QRCodeDecoderRobustnessTest
 
             if (QRCodeDecoder.TryDecode(modules, size, out var text, out _))
             {
-                await Assert.That(text).IsEquivalentTo(content);
+                await Assert.That(text).IsEqualTo(content);
             }
         }
     }

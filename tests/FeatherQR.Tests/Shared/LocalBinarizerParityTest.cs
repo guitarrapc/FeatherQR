@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Tests;
@@ -41,10 +42,10 @@ public class LocalBinarizerParityTest
         Array.Clear(scratch);
         var scalarDiffers = LocalBinarizer.TryBinarizeScalar(luminance, width, height, negative, globalThreshold, scalar, scratch, out var scalarDark);
 
-        await Assert.That(scalar).IsEquivalentTo(expected);
+        await Assert.That(scalar).IsEquivalentTo(expected, CollectionOrdering.Matching);
         await Assert.That(scalarDark).IsEqualTo(expectedDark);
         await Assert.That(scalarDiffers).IsEqualTo(expectedDiffers);
-        await Assert.That(vector).IsEquivalentTo(expected);
+        await Assert.That(vector).IsEquivalentTo(expected, CollectionOrdering.Matching);
         await Assert.That(vectorDark).IsEqualTo(expectedDark);
         await Assert.That(vectorDiffers).IsEqualTo(expectedDiffers);
     }

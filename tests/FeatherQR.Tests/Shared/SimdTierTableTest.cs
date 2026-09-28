@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 
 namespace FeatherQR.Tests;
@@ -26,7 +27,7 @@ public class SimdTierTableTest
         var rows = SimdTiers.Expected().Select(e => e.Kernel).ToArray();
 
         await Assert.That(rows.Distinct().Count()).IsEqualTo(rows.Length);
-        await Assert.That(rows.Order(StringComparer.Ordinal).ToArray()).IsEquivalentTo(reported);
+        await Assert.That(rows.Order(StringComparer.Ordinal).ToArray()).IsEquivalentTo(reported, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -38,7 +39,7 @@ public class SimdTierTableTest
             var all = present.Concat(absent).Concat(leftToCpu.SelectMany(g => g)).ToArray();
 
             await Assert.That(all.Distinct().Count()).IsEqualTo(all.Length).Because($"each tier is in one part: {buildClass}");
-            await Assert.That(all.Order().ToArray()).IsEquivalentTo(Enum.GetValues<SimdTier>().Where(t => t != SimdTier.Scalar).Order().ToArray()).Because($"{buildClass}");
+            await Assert.That(all.Order().ToArray()).IsEquivalentTo(Enum.GetValues<SimdTier>().Where(t => t != SimdTier.Scalar).Order().ToArray(), CollectionOrdering.Matching).Because($"{buildClass}");
             await Assert.That(leftToCpu.All(g => g.Length > 0)).IsTrue().Because($"{buildClass}");
             await Assert.That(present).Contains(SimdTier.Vector128).Because($"every build class runs 128-bit vectors: {buildClass}");
         }
@@ -140,7 +141,7 @@ public class SimdTierTableTest
         {
             SimdTier[] expected = kernels[row.Kernel].Tiers.Any(t => t.Tier == SimdTier.Vector128) ? [SimdTier.Vector128] : [SimdTier.Scalar];
 
-            await Assert.That(row.For(SimdBuildClass.Wasm)).IsEquivalentTo(expected).Because(row.Kernel);
+            await Assert.That(row.For(SimdBuildClass.Wasm)).IsEquivalentTo(expected, CollectionOrdering.Matching).Because(row.Kernel);
         }
     }
 

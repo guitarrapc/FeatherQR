@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
 
@@ -31,7 +32,7 @@ public class SymbolRendererRunMergeParityTest
         var merged = RenderPixels(qr, imageSize, moduleShape: null);
         var perModule = RenderPixels(qr, imageSize, moduleShape: new PerModuleRectangleShape());
 
-        await Assert.That(merged).IsEquivalentTo(perModule);
+        await Assert.That(merged).IsEquivalentTo(perModule, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -43,7 +44,7 @@ public class SymbolRendererRunMergeParityTest
         var merged = RenderPixels(qr, 512, moduleShape: null, gradientOptions: gradient);
         var perModule = RenderPixels(qr, 512, moduleShape: new PerModuleRectangleShape(), gradientOptions: gradient);
 
-        await Assert.That(merged).IsEquivalentTo(perModule);
+        await Assert.That(merged).IsEquivalentTo(perModule, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -63,7 +64,7 @@ public class SymbolRendererRunMergeParityTest
         var merged = RenderTransformedPixels(qr, moduleShape: null, dx, dy, scale);
         var perModule = RenderTransformedPixels(qr, new PerModuleRectangleShape(), dx, dy, scale);
 
-        await Assert.That(merged).IsEquivalentTo(perModule);
+        await Assert.That(merged).IsEquivalentTo(perModule, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -76,7 +77,7 @@ public class SymbolRendererRunMergeParityTest
         var merged = RenderPixels(qr, 512, moduleShape: null, finderPatternShape: RectangleFinderPatternShape.Default);
         var perModule = RenderPixels(qr, 512, moduleShape: new PerModuleRectangleShape(), finderPatternShape: RectangleFinderPatternShape.Default);
 
-        await Assert.That(merged).IsEquivalentTo(perModule);
+        await Assert.That(merged).IsEquivalentTo(perModule, CollectionOrdering.Matching);
     }
 
     private static byte[] RenderTransformedPixels(QRCodeData qr, ModuleShape? moduleShape, float dx, float dy, float scale)

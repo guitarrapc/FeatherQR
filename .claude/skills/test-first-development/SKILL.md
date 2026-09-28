@@ -158,13 +158,15 @@ Use TUnit async assertions in `async Task` test methods:
 
 ```csharp
 await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
-await Assert.That(decoded).IsEquivalentTo(content);
-await Assert.That(actual).IsEquivalentTo(expected);
+await Assert.That(decoded).IsEqualTo(content);
+await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
 await Assert.That(info.Version).IsEqualTo(version);
 await Assert.That(info.MaskPattern).IsBetween(0, 7);
 ```
 
-Use `IsEqualTo` for scalars and strings; use `IsEquivalentTo` for collections and byte arrays.
+Use `IsEqualTo` for scalars and strings; use `IsEquivalentTo(expected, CollectionOrdering.Matching)` (`using TUnit.Assertions.Enums;`) for collections and byte arrays.
+TUnit's `IsEquivalentTo` without an ordering compares as a multiset: a mirrored bitmap, reordered codewords, or a string with its characters shuffled all pass, and on a large array it is super-linear (about 10 s for a 600x600 bitmap, against about 10 ms with `Matching`).
+Pass `CollectionOrdering.Any` only where the result is a set by contract, and say so by writing it out (e.g. the three finders `TrySelectBestThree` picks, in no promised order).
 
 ### Line endings
 
@@ -204,6 +206,7 @@ Do not pass `-r browser-wasm` on the CLI, it propagates to the multi-targeted li
 - An image decoder change that moves reads is measured with `tools/QRImageDecodeSweep` (`sweep` and `corpus`, then `compare`) against the commit before, image for image, under the rules in `.github/docs/specs/qrcode-test-fixtures.md` (Image decode sweep): no misread, every lost render listed by kind, failure paths measured on failing images, and the finder's candidate counts on noise stated when the finder changes. Its tests are renders of the failing class with their drawn corners asserted, each red with its own mechanism removed and reading under small nudges, each asserting its premises (which pass reads it, that the others fail), plus the negative the repair must not admit.
 - Round-trip tests (`QRCodeDecoderRoundTripTest`) are the primary guard for encoder+decoder consistency, extend them when adding encoding modes or ECI handling.
 - Avoid tests whose only assertion is that a private helper returns a constant; test the observable matrix, decode result, or rendered output.
+- Size a heavy test's data (trials, seeds, rows, versions) against planted faults rather than by feel: `tools/mutation_check.cs` writes each fault into `src`, runs the suite, puts the file back, and tells which tests and which sub-cases caught it; `evaluate` shows what a smaller data set would stop catching, and `compare` checks the reduced test against the same faults. Its header has the workflow. Keep an axis that carries meaning (a count indicator band, a surrogate edge) even where no planted fault needs it.
 
 ## Classification Logic: Equivalence Class Coverage
 

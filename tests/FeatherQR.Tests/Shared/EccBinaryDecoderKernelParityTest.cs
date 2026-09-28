@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryDecoders;
 
@@ -29,7 +30,7 @@ public class EccBinaryDecoderKernelParityTest
             var actualHasError = EccBinaryDecoder.ComputeSyndromesScalar(codeword, eccCount, actual);
 
             await Assert.That(actualHasError).IsEquivalentTo(expectedHasError);
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -65,7 +66,7 @@ public class EccBinaryDecoderKernelParityTest
             var actualHasError = EccBinaryDecoder.ComputeSyndromesGfni(codeword, eccCount, actual);
 
             await Assert.That(actualHasError).IsEquivalentTo(expectedHasError);
-            await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected);
+            await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -224,7 +225,7 @@ public class EccBinaryDecoderKernelParityTest
             var actualHasError = EccBinaryDecoder.ComputeSyndromesAdvSimd(codeword, eccCount, actual);
 
             await Assert.That(actualHasError).IsEquivalentTo(expectedHasError);
-            await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected);
+            await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -305,7 +306,7 @@ public class EccBinaryDecoderKernelParityTest
                     var actualHasError = EccBinaryDecoder.ComputeSyndromesAdvSimd(codeword, eccCount, actual);
 
                     await Assert.That(actualHasError).IsEquivalentTo(expectedHasError);
-                    await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected);
+                    await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
                 }
             }
         }

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Text;
 using FeatherQR.Internals;
 using static FeatherQR.QRCodeGenerator;
@@ -706,7 +707,7 @@ public class QRCodeGeneratorUnitTest
 
         // Assert
         await Assert.That(writtenFromString).IsEqualTo(writtenFromSpan);
-        await Assert.That(bufferFromString).IsEquivalentTo(bufferFromSpan);
+        await Assert.That(bufferFromString).IsEquivalentTo(bufferFromSpan, CollectionOrdering.Matching);
     }
 
 #if !DEBUG
