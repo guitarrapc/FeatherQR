@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.RmQR;
 
@@ -209,6 +210,59 @@ public class RmQRSubFinderScreenParityTest
         }
 
         await Assert.That(mismatches).IsEqualTo(0).Because(first);
+#else
+        await Task.CompletedTask;
+#endif
+    }
+
+    /// <summary>
+    /// The same where a margin ends exactly on a border: x − margin at the width, x + margin at −1, and so for y.
+    /// Random frames never put a float exactly there, and there an outside test written with a strict comparison calls the point uncertain on one path and outside on the other.
+    /// Only the outside tests can differ: a margin ending exactly on a border from inside leaves its two ends in different pixels, uncertain either way.
+    /// </summary>
+    [Test]
+    [Arguments("left")]
+    [Arguments("right")]
+    [Arguments("top")]
+    [Arguments("bottom")]
+    public async Task Lattice_Vector128AndScalar_AreIdentical_WhereAMarginEndsOnTheBorder(string border)
+    {
+#if NET8_0_OR_GREATER
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+
+        const int Width = 64;
+        const int Height = 48;
+        const int Side = 9;
+        const float Margin = 0.5f;
+        var luminance = new byte[Width * Height];
+        new Random(7).NextBytes(luminance);
+
+        // The lattice runs along the other axis only, so every point is on the tie along this one, and inside the image along the other
+        var horizontal = border is "left" or "right";
+        var tie = border switch { "left" or "top" => -1f - Margin, "right" => Width + Margin, _ => Height + Margin };
+        var (predictedX, predictedY) = horizontal ? (tie, Height / 2f + 0.25f) : (Width / 2f + 0.25f, tie);
+        var (uX, uY, svX, svY) = horizontal ? (0f, 1f, 0f, 0.5f) : (1f, 0f, 0.5f, 0f);
+        var (marginX, marginY) = horizontal ? (Margin, 0.1f) : (0.1f, Margin);
+
+        var scalarDark = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
+        var scalarLight = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
+        var vectorDark = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
+        var vectorLight = new ulong[RmQRImageDecoder.MaxSubFinderScreenRows];
+        RmQRImageDecoder.ClassifySubFinderLatticeScalar(luminance, Width, Height, 128, predictedX, predictedY, uX, uY, svX, svY, Side, marginX, marginY, scalarDark, scalarLight);
+        RmQRImageDecoder.ClassifySubFinderLatticeVector128(luminance, Width, Height, 128, predictedX, predictedY, uX, uY, svX, svY, Side, marginX, marginY, vectorDark, vectorLight);
+
+        // The premise: every point is on the tie and the scalar path calls it outside, a mismatch either way
+        var outside = 0;
+        for (var row = 0; row < Side; row++)
+            outside += System.Numerics.BitOperations.PopCount(scalarDark[row] & scalarLight[row]);
+        await Assert.That(outside).IsEqualTo(Side * Side).Because(border);
+
+        await Assert.That(vectorDark).IsEquivalentTo(scalarDark, CollectionOrdering.Matching).Because(border);
+        await Assert.That(vectorLight).IsEquivalentTo(scalarLight, CollectionOrdering.Matching).Because(border);
 #else
         await Task.CompletedTask;
 #endif
