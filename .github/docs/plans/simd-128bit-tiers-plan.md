@@ -13,7 +13,7 @@ It was split out of [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md) (Phase 6b
 | In | Out |
 |---|---|
 | Portable `Vector128` tiers for the scalar cells of `SimdTiers.Expected` on x64 without AVX and on WebAssembly | The instruction set a NativeAOT publish targets, and README guidance on it (phase 3 of the cross-language plan). Even with these tiers, a default publish runs no 256-bit tier |
-| The same tier where it also fills ARM64's scalar cells (rMQR value writers; luminance conversion without the dot product) and x64 AVX2's (Structured Append parity and scanner; syndromes without GFNI; rMQR extraction without fast PEXT) | New 256-bit or 512-bit tiers, and tiers for AVX without AVX2 (`x86-64-v2,avx`) |
+| The same tier where it also fills ARM64's scalar cells (rMQR value writers; luminance conversion without the dot product) and x64 AVX2's (Structured Append parity and scanner; syndromes without GFNI; rMQR extraction without fast PEXT) | New 256-bit or 512-bit tiers, tiers for AVX without AVX2 (`x86-64-v2,avx`), and new x86-specific tiers, SSE-family or 128-bit GFNI (D2, D4) |
 | A timing mode that runs on a default NativeAOT build and on WebAssembly, interpreted and AOT-compiled | The netstandard builds, which have no intrinsics |
 | The nine portable tiers WebAssembly already runs, timed there against scalar for the first time | A .NET 8 WebAssembly app: the WebAssembly report builds net10.0 |
 | | Public API, output bytes and allocations: none change |
@@ -58,7 +58,7 @@ Cells as of 2026-09-28. "Start from" is the existing tier whose structure a port
 
 ### What is already known
 
-- **`ModulePlacerMaskCode`.** No SSE or 128-bit x64 tier was ever measured. The AVX2 tier predates the finding that a default NativeAOT publish has no AVX. The ARM64 128-bit tier runs 2.4-3x scalar at v1-10 and 1.14-1.2x at v20-40 (Apple M2). Under AVX2, lane-per-pattern beat lane-per-row 1.6-1.9x at v1-10; at 128 bits it holds two patterns a vector. Popcount is the cost, and neither `psadbw` nor `i8x16.popcnt` is portable, so this kernel is the likeliest case for D2 and D3.
+- **`ModulePlacerMaskCode`.** No SSE or 128-bit x64 tier was ever measured. The AVX2 tier predates the finding that a default NativeAOT publish has no AVX. The ARM64 128-bit tier runs 2.4-3x scalar at v1-10 and 1.14-1.2x at v20-40 (Apple M2). Under AVX2, lane-per-pattern beat lane-per-row 1.6-1.9x at v1-10; at 128 bits it holds two patterns a vector. Popcount is the cost. Neither .NET 8 nor .NET 10 has a portable vector popcount. A nibble-table popcount needs a variable shuffle: `ShuffleNative` on .NET 10, a software loop on .NET 8. `i8x16.popcnt` exists only through `PackedSimd`, so this kernel is the likeliest case for D3.
 - **`Binarizer`.** A 128-bit tier was measured on x64 under the JIT, where it never runs. At 16 pixels a step it ran gradients 1.85x slower than scalar. The 32-pixel cadence fixed that and was still 8 % behind on gradients. No other image kind was recorded. The spec summary ("against the 256-bit tier, not scalar", [qrcode-symbologies.md](../specs/qrcode-symbologies.md#simd-tier-inventory)) is inaccurate; phase 1 corrects it with the new numbers.
 - **`FinderRowEdges`.** Its scalar cell does not run scalar code. Without the edge-list kernel, rows go to `FinderRowMask`'s 128-bit mask walk, so a new tier must beat that walk. A scalar edge list measured level with it. Sixteen windows as two eight-lane halves lost 5-30 % on ARM64.
 - **`LuminanceConverter`.** Scalar is 14-30x slower than the AVX2 tier. Before any tier, conversion was 69 % of `TryDecode(SKBitmap)`. A candidate form, unmeasured: keep pixels as 32-bit lanes, mask R/B and G into 16-bit lanes, multiply there, fold. All of those ops are native on SSE2 and WebAssembly. It would also fill ARM64 cores without the dot product, a case the rMQR decoder record names for a revisit.
@@ -82,7 +82,7 @@ With AVX but not AVX2 (`x86-64-v2,avx`), `Avx2` reads true and `Vector256.IsHard
 - **A tier ships only if it beats what the build runs today, on that build.** That is scalar, except for `FinderRowEdges` (the mask walk). It must win where the kernel matters and lose nowhere beyond noise. A kernel under about 3 % of every benchmark shape on a build stays as it is there, with the measured reason in a comment beside its row.
 - **Each build is measured on itself.** x64 without AVX is ranked under `DOTNET_EnableAVX=0` and confirmed on a real default NativeAOT build, since the knob runs the JIT's code, not ILC's. WebAssembly is timed on WebAssembly. A form measured on x64 says nothing about WebAssembly.
 - **Interpreted and AOT-compiled WebAssembly take the same tier.** One flag gates both, so a tier is judged on both (D1).
-- **Portable `Vector128` first.** One tier then serves x64 without AVX, WebAssembly, and any ARM64 or AVX2 cell it reaches.
+- **New tiers are portable `Vector128`.** One tier then serves x64 without AVX, WebAssembly, and any ARM64 or AVX2 cell it reaches. On x64 it compiles to SSE2 to SSE4.1. No new x86-specific tier is added (D2, D4); a `PackedSimd` tier only as D3 allows.
 - **Existing tiers stay.** A portable step goes after an SSE or AdvSimd tier. It replaces one only where both compile to the same code on that architecture.
 - **Output identical to scalar.** Each tier gets a parity test through a direct entry, since the dispatch hides a lower tier on a machine with a higher one. Planted faults in it must fail the tests.
 - **Unchanged cells compile as before.** Where a class's cell stays, the dispatch's disassembly stays identical: JIT on .NET 8 and 10 with and without AVX, ILC for default x64, `x86-64-v3` and ARM64. An added branch can change what the JIT inlines.
@@ -92,9 +92,10 @@ With AVX but not AVX2 (`x86-64-v2,avx`), `Avx2` reads true and `Vector256.IsHard
 
 ## Measuring
 
-- **Timing mode.** Phase 1 adds a timing mode to `tests/FeatherQR.AotAnalysis` (NativeAOT) and `tests/FeatherQR.WasmReport` (WebAssembly under Node.js), from one source file shared like `SimdReport.cs` (D5). It times the benchmark shapes' inputs end to end, and each kernel alone on the inputs those shapes feed it. Each kernel's tier and its scalar entry are called directly. Both projects already see the internals.
+- **x64 without AVX under the JIT.** The existing `FeatherQR.Benchmark` with `--envVars DOTNET_EnableAVX:0` ranks shapes and variants, with the same statistics as every other benchmark number.
+- **Real builds.** An opt-in timing mode in `tests/FeatherQR.AotAnalysis` (NativeAOT) and `tests/FeatherQR.WasmReport` (WebAssembly under Node.js), from one source file shared like `SimdReport.cs` (D5). It times the benchmark shapes end to end, and each kernel alone on the inputs those shapes feed it, its tier and its scalar entry called directly. Inputs are built from module matrices without SkiaSharp, since the WebAssembly report has only the core.
 - **Per build and shape:** end-to-end time, each kernel's share, and the kernel's time against scalar.
-- **Where variants are ranked.** BenchmarkDotNet under `DOTNET_EnableAVX=0` ranks variants for x64 without AVX; the timing mode confirms them on the real builds. Variants for WebAssembly are ranked on WebAssembly.
+- **Variants for WebAssembly are ranked on WebAssembly.**
 
 ## Phases
 
@@ -102,11 +103,11 @@ Each phase appends a Progress log entry: Done, Lessons, and the benchmark delta 
 
 | # | Phase | Contents | Exit |
 |---|---|---|---|
-| 1 | Harness and ranking | The timing mode; baselines on x64 without AVX (knob and NativeAOT) and WebAssembly (interpreted and AOT); per-shape kernel shares; the nine existing WebAssembly tiers against scalar; `Binarizer`'s record measured again and the spec corrected | A ranked list per build. Kernels under the bar named with their numbers. Any WebAssembly tier that loses to scalar reported |
+| 1 | Harness and ranking | The timing mode; baselines on x64 without AVX (knob and NativeAOT) and WebAssembly (interpreted and AOT); per-shape kernel shares; the nine existing WebAssembly tiers against scalar; the D3 probe; `Binarizer`'s record measured again and the spec corrected | A ranked list per build. Kernels under the bar named with their numbers. Any WebAssembly tier that loses to scalar reported |
 | 2 | Near ports | Kernels whose ARM64 or SSE tier is close to portable: `FinderRowEdges`, `StructuredAppendParity`, `StructuredAppendScanner`, `TextAnalyzer`, `ModuleBitPacker`, and the expand steps (`ModulePlacerExpandBits`, `RmQRModulePlacer`, `MicroQRModulePlacer`, `MicroQRByteSegment`) | Each cell raised, or carrying its reason |
 | 3 | Image decode | `Binarizer`, `LuminanceConverter` (also ARM64 without the dot product), `QRSampleGridPiecewise` | As phase 2 |
 | 4 | Encode lanes and mask scoring | `ModulePlacerMaskCode`, `ModeSegmenterLanes`, `StructuredAppendLanes` | As phase 2 |
-| 5 | GF(256) and bit planes | `EccBinaryEncoder` (WebAssembly), `EccBinaryDecoder` with D4, `RmQRExtractCodewords` | As phase 2 |
+| 5 | GF(256) and bit planes | `EccBinaryEncoder` (WebAssembly), `EccBinaryDecoder`, `RmQRExtractCodewords` | As phase 2 |
 | 6 | rMQR value writers | `RmQRValueSegments`, decided from phase 1's shares; a rewrite only if it clears the bar | As phase 2 |
 | 7 | Confirm and fold | End-to-end before and after on default NativeAOT (linux-x64, win-x64) and WebAssembly (interpreted, AOT). Spec inventory, scope row and per-symbology records updated. Plan deleted | Every scalar cell in the x64-without-AVX and WebAssembly columns raised, or carrying its measured reason. Public API unchanged |
 
@@ -116,11 +117,11 @@ Phases 2-6 group kernels by shared work. Phase 1's ranking sets the order, so th
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | A tier wins on AOT-compiled WebAssembly and loses interpreted, or the reverse | Ship only if it loses on neither beyond noise. Blazor WebAssembly publishes interpreted unless the app opts into AOT, so the interpreted build is what most users run |
-| D2 | An x86 SSSE3/SSE4.1 tier where the portable form loses on x64 without AVX (the `psadbw` popcount for mask scoring, `pmaddubsw` for luminance) | Allowed under the same bar, after the portable tier, and only by a measured margin over it: it serves no other build |
-| D3 | A WebAssembly `PackedSimd` tier where the portable form lacks an instruction WebAssembly has (`i8x16.popcnt`, `i32x4.dot_i16x8_s`, `i8x16.swizzle`) | Not by default. It needs a new `SimdTier` and a new flag family in the tests. Consider it only where phase 1 shows the portable form losing for exactly that instruction |
-| D4 | A 128-bit GFNI syndrome tier | After the portable tier, and only if it beats it on a GFNI CPU without AVX. It fills that cell on GFNI CPUs only, and CI's x64 runner had no GFNI on 2026-09-28, so only a developer machine would run it |
-| D5 | Where the timing harness lives | The shared timing mode above. If the cross-language benchmark CLI lands first, use it instead: it times the same builds |
+| D1 | A tier wins on AOT-compiled WebAssembly and loses interpreted, or the reverse | **Decided 2026-09-29: ship only if it loses on neither beyond noise.** Blazor WebAssembly publishes interpreted unless the app opts into AOT, so the interpreted build is what most users run |
+| D2 | A new x86-specific SSE-family tier where the portable form loses on x64 without AVX | **Decided 2026-09-29: no.** The portable tier already compiles to SSE2 to SSE4.1 there; what it cannot reach is `psadbw` (mask scoring's popcount sum), `pmaddubsw`/`pmaddwd` (luminance) and `phaddd` (rMQR value writers), and a tier for those would serve no other build. Existing SSE tiers stay. Revisit when phase 1 shows one of those kernels still far behind on a default NativeAOT publish with its portable tier |
+| D3 | A WebAssembly `PackedSimd` tier | **Open, answered by phase 1.** WebAssembly SIMD has four instructions the planned tiers want and portable `Vector128` does not name: `i8x16.popcnt` (mask scoring), `i32x4.dot_i16x8_s` (luminance), `i8x16.swizzle` (variable byte shuffle: ECC encoder, nibble-table popcount; `ShuffleNative` on .NET 10 may already reach it) and `extadd_pairwise` (reductions). Each has a portable emulation a few instructions longer. The cost: a new `SimdTier` and flag family, and code the test suite never runs, since tests run on x64 and ARM64; its parity tests would have to run inside the WebAssembly report. Phase 1 probes each portable op the planned tiers use against its `PackedSimd` form, interpreted and AOT, since the interpreter may not intrinsify every portable API. A `PackedSimd` tier is considered only where a kernel above the bar loses on exactly such an op. Expected: mask scoring at most |
+| D4 | A 128-bit GFNI syndrome tier | **Decided 2026-09-29: no.** GFNI is x64 only, so it does nothing for WebAssembly; on x64 it fills the no-AVX cell only on GFNI CPUs, which D2 rules out as an x86-specific tier. The portable syndrome tier fills that cell on every CPU and on WebAssembly |
+| D5 | Where the timing harness lives | **Decided 2026-09-29:** BenchmarkDotNet under `--envVars DOTNET_EnableAVX:0` for JIT ranking, and an opt-in timing mode shared by the two report projects for the real builds (Measuring). They already build every class needed (default NativeAOT on five RIDs, `x86-64-v3`, WebAssembly interpreted and AOT), already see the internals, and already run in CI; a new project would repeat that for two SDKs and add two `InternalsVisibleTo` grants. BenchmarkDotNet 0.15.8 has NativeAOT and WebAssembly toolchains, but the benchmark project references SkiaSharp and other readers, and building it for WebAssembly is unverified. If the cross-language benchmark CLI lands first, its end-to-end numbers replace the timing mode's; kernel timing still needs the internals |
 
 ## Progress log
 
