@@ -45,7 +45,7 @@ Every text that is not eligible is written exactly as today, bit for bit.
 
 | Rule | Reason |
 |---|---|
-| A set is eligible when the whole text is. An eligible set carries no ECI header in any symbol | One charset per set, as today ([structured-append-plan.md](structured-append-plan.md)) |
+| A set is eligible when the whole text is. An eligible set carries no ECI header in any symbol | One charset per set, as today ([standardqr-encoder.md](../specs/standardqr-encoder.md#structured-append)) |
 | The parity of an eligible set is the XOR of the whole text's Shift_JIS bytes, ASCII characters taken as their single byte. It is computed once, before splitting | Those bytes do not depend on the plan, so the "computed once" rule survives. For the corpus sentence 「こんにちは世界、QRコードの分割テストです。」×3 this gives 176, the value CodeGlyphX writes in its Kanji-mode set; QrCodeGenerator's UTF-8 set of the same text carries 6 |
 | Under `Single` segmentation, an eligible set is written in Kanji mode only when every character has a cell. Otherwise the set is today's UTF-8 set | Every chunk must be one segment, and a chunk holding both kana and ASCII cannot be one Kanji segment |
 | Under `Optimal`, the Kanji set is compared to today's UTF-8 set the way `Create` compares a plan with the single stream. It is taken only when it needs fewer symbols, or the same number at a lower version | `Optimal` must never give a larger set than today's. The balanced-split rules apply unchanged inside either set |
@@ -53,7 +53,7 @@ Every text that is not eligible is written exactly as today, bit for bit.
 | A text that fits in one symbol still returns `Create`'s symbol, byte for byte | As today |
 | The cost model learns Kanji. A text's single mode can now be Kanji; the closed-form chunk end gains a Kanji prefix; the lower bound prices a character with a cell at 13 bits | Two premises stop holding in the eligible path: that a text's single mode changes at most twice along it (Numeric, Alphanumeric, Byte), and that a character outside the alphanumeric alphabet extends only a Byte run |
 
-This closes S8 of the Structured Append plan: the encoder-side Japanese parity cases are added in 6.5.
+This closes the encoder record's decision that the parity follows the bytes ([standardqr-encoder.md](../specs/standardqr-encoder.md#decisions)): the encoder-side Japanese parity cases are added in 6.5.
 
 ## Decisions
 
