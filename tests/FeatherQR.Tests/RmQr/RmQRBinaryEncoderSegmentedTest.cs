@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.RmQR;
 
@@ -84,7 +85,7 @@ public class RmQRBinaryEncoderSegmentedTest
             plan.Select(s => (ModeName(s.Mode), content.Substring(s.Start, s.Length), RmQRConstants.GetCountIndicatorLength(version, s.Mode))).ToArray(),
             utf8: false);
 
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -103,7 +104,7 @@ public class RmQRBinaryEncoderSegmentedTest
             utf8: true,
             eciMode: EciMode.Utf8);
 
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     public static IEnumerable<string> Latin1Contents() =>
@@ -133,7 +134,7 @@ public class RmQRBinaryEncoderSegmentedTest
             utf8: false,
             eciMode: EciMode.Iso8859_1);
 
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         await Assert.That(DecodeStream(actual, version)).IsEqualTo(content);
     }
 
@@ -151,7 +152,7 @@ public class RmQRBinaryEncoderSegmentedTest
         var segmented = EncodePlan(content, version, ecc, EciMode.Default, plan);
         var single = EncodeSingle(content, version, ecc, EciMode.Default);
 
-        await Assert.That(segmented).IsEquivalentTo(single);
+        await Assert.That(segmented).IsEquivalentTo(single, CollectionOrdering.Matching);
     }
 
     [Test]

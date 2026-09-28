@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.RmQR;
 
@@ -39,7 +40,7 @@ public class RmQRBinaryEncoderUnitTest
         // Read from the qrtool R7x43-M "1" symbol during pre-verification:
         // 001 (numeric) + 0001 (count, 4 bits) + 0001 ('1') + 000 (terminator) + align → 22 20, then EC 11 EC 11.
         var actual = Encode("1", RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.Numeric, EciMode.Default, 1);
-        await Assert.That(actual).IsEquivalentTo(new byte[] { 0x22, 0x20, 0xEC, 0x11, 0xEC, 0x11 });
+        await Assert.That(actual).IsEquivalentTo(new byte[] { 0x22, 0x20, 0xEC, 0x11, 0xEC, 0x11 }, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -60,13 +61,13 @@ public class RmQRBinaryEncoderUnitTest
     {
         // R7x43-H byte: 3 data codewords = 24 bits; mode 3 + count 3 + 2 bytes 16 = 22 bits → 2-bit terminator, no pad.
         var actual = Encode("ab", RmQRVersion.R7x43, RmQREccLevel.H, EncodingMode.Byte, EciMode.Default, 2);
-        await Assert.That(actual).IsEquivalentTo(RmQRNaiveReference.NaiveDataCodewords("ab", 3, 0b011, 3, "Byte", utf8: false));
+        await Assert.That(actual).IsEquivalentTo(RmQRNaiveReference.NaiveDataCodewords("ab", 3, 0b011, 3, "Byte", utf8: false), CollectionOrdering.Matching);
         // 011 010 01100001 01100010 00 → 0x69 0x85 0x88
-        await Assert.That(actual).IsEquivalentTo(new byte[] { 0x69, 0x85, 0x88 });
+        await Assert.That(actual).IsEquivalentTo(new byte[] { 0x69, 0x85, 0x88 }, CollectionOrdering.Matching);
 
         // R7x43-M numeric 12 digits: 3 + 4 + 40 = 47 bits of 48 → 1-bit terminator.
         var digits = Encode("012345678901", RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.Numeric, EciMode.Default, 12);
-        await Assert.That(digits).IsEquivalentTo(RmQRNaiveReference.NaiveDataCodewords("012345678901", 6, 0b001, 4, "Numeric", utf8: false));
+        await Assert.That(digits).IsEquivalentTo(RmQRNaiveReference.NaiveDataCodewords("012345678901", 6, 0b001, 4, "Numeric", utf8: false), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -74,7 +75,7 @@ public class RmQRBinaryEncoderUnitTest
     {
         // 011 + count(3 bits) 000 + terminator 000 → 0x00 (9 bits → aligned to 16 → 00 00) then pads.
         var actual = Encode("", RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.Byte, EciMode.Default, 0);
-        await Assert.That(actual).IsEquivalentTo(new byte[] { 0x60, 0x00, 0xEC, 0x11, 0xEC, 0x11 });
+        await Assert.That(actual).IsEquivalentTo(new byte[] { 0x60, 0x00, 0xEC, 0x11, 0xEC, 0x11 }, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -83,7 +84,7 @@ public class RmQRBinaryEncoderUnitTest
         // ECI mode 111 + assignment 26 + Byte mode 011 + count 3 + "こ" = E3 81 93
         // + terminator/alignment: 111 00011010 011 011 E3 81 93 000 0000.
         var actual = Encode("こ", RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.Byte, EciMode.Utf8, 3);
-        await Assert.That(actual).IsEquivalentTo(new byte[] { 0xE3, 0x4D, 0xF1, 0xC0, 0xC9, 0x80 });
+        await Assert.That(actual).IsEquivalentTo(new byte[] { 0xE3, 0x4D, 0xF1, 0xC0, 0xC9, 0x80 }, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -91,7 +92,7 @@ public class RmQRBinaryEncoderUnitTest
     {
         // ECI mode 111 + assignment 3 + Byte mode 011 + count 1 + E9 + terminator/alignment.
         var actual = Encode("é", RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.Byte, EciMode.Iso8859_1, 1);
-        await Assert.That(actual).IsEquivalentTo(new byte[] { 0xE0, 0x6C, 0xF4, 0x80, 0xEC, 0x11 });
+        await Assert.That(actual).IsEquivalentTo(new byte[] { 0xE0, 0x6C, 0xF4, 0x80, 0xEC, 0x11 }, CollectionOrdering.Matching);
     }
 
     public static IEnumerable<string> FixtureIdsWithoutEci()
@@ -123,6 +124,6 @@ public class RmQRBinaryEncoderUnitTest
         var written = RmQRBinaryEncoder.EncodeDataCodewords(manifest.PayloadText, version, ecc, in analysis, destination);
 
         await Assert.That(written).IsEqualTo(oracleData.Length);
-        await Assert.That(destination).IsEquivalentTo(oracleData).Because($"{fixtureId}: {manifest.Generator} {manifest.VersionName}-{manifest.ErrorCorrectionLevel} {manifest.Mode} \"{manifest.PayloadText}\"");
+        await Assert.That(destination).IsEquivalentTo(oracleData, CollectionOrdering.Matching).Because($"{fixtureId}: {manifest.Generator} {manifest.VersionName}-{manifest.ErrorCorrectionLevel} {manifest.Mode} \"{manifest.PayloadText}\"");
     }
 }

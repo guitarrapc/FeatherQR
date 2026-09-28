@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Text;
 using FeatherQR.Internals;
 using FeatherQR.Internals.StandardQR;
@@ -238,7 +239,7 @@ public class StructuredAppendPlannerTest
 
                     var because = $"{kind} {length} in {segmentation} at {ecc}, versions {minVersion}-{maxVersion}";
                     await Assert.That(count).IsEqualTo(expected).Because(because);
-                    await Assert.That(ends.Take(count)).IsEquivalentTo(reference.Take(expected)).Because(because);
+                    await Assert.That(ends.Take(count)).IsEquivalentTo(reference.Take(expected), CollectionOrdering.Matching).Because(because);
                 }
             }
         }
@@ -274,7 +275,7 @@ public class StructuredAppendPlannerTest
         // At the limit: the count, and the same chunk ends the reference walk found.
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
         await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget, expected, ends)).IsEqualTo(expected);
-        await Assert.That(ends.Take(expected)).IsEquivalentTo(referenceEnds);
+        await Assert.That(ends.Take(expected)).IsEquivalentTo(referenceEnds, CollectionOrdering.Matching);
 
         // Above it: unchanged.
         await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, segmentation, version, budget, StructuredAppendPlanner.MaxSymbols, ends)).IsEqualTo(expected);

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals;
 using System.Text;
@@ -93,7 +94,7 @@ public class QRBinaryEncoderUnitTest
         encoder.WriteCharacterCount(count, bitsLength);
 
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
-        await Assert.That(actual).IsEquivalentTo(expectedBits);
+        await Assert.That(actual).IsEqualTo(expectedBits);
     }
 
     // WriteData
@@ -114,7 +115,7 @@ public class QRBinaryEncoderUnitTest
 
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         var expected = expectedBits.Replace("_", "");
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEqualTo(expected);
     }
 
     [Test]
@@ -135,7 +136,7 @@ public class QRBinaryEncoderUnitTest
 
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         var expected = expectedBits.Replace("_", "");
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEqualTo(expected);
     }
 
     // should be same result as text is EciMode.Iso8859_1
@@ -155,7 +156,7 @@ public class QRBinaryEncoderUnitTest
 
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         var expected = expectedBits.Replace("_", "");
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEqualTo(expected);
     }
 
     // should be same result as text is EciMode.Utf8
@@ -183,7 +184,7 @@ public class QRBinaryEncoderUnitTest
         // Assert
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         await Assert.That(analysisResult.EncodingMode).IsEqualTo(EncodingMode.Byte);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEqualTo(expected);
     }
 
     [Test]
@@ -209,7 +210,7 @@ public class QRBinaryEncoderUnitTest
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         await Assert.That(analysisResult.EncodingMode).IsEqualTo(EncodingMode.Byte);
         await Assert.That(analysisResult.EciMode).IsEqualTo(EciMode.Utf8);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEqualTo(expected);
     }
 
     // WritePadding
@@ -293,7 +294,7 @@ public class QRBinaryEncoderUnitTest
         encoder.WritePadding(32);
         var afterPadding = encoder.GetEncodedData().ToArray();
 
-        await Assert.That(afterPadding).IsEquivalentTo(beforePadding);
+        await Assert.That(afterPadding).IsEquivalentTo(beforePadding, CollectionOrdering.Matching);
     }
 
     // Full pipeline parity (mode + count + data + padding)
@@ -319,7 +320,7 @@ public class QRBinaryEncoderUnitTest
         var byteCount = encoder.ByteCount;
         var encoded = encoder.GetEncodedData().ToArray();
         await Assert.That(byteCount).IsEqualTo(16);
-        await Assert.That(encoded).IsEquivalentTo(expected);
+        await Assert.That(encoded).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     // Exact capacity fit: 14 bytes data in version 1-M (16 data codewords)
@@ -364,7 +365,7 @@ public class QRBinaryEncoderUnitTest
 
         var bitPosition = encoder.BitPosition;
 
-        await Assert.That(after).IsEquivalentTo(before);
+        await Assert.That(after).IsEquivalentTo(before, CollectionOrdering.Matching);
         await Assert.That(bitPosition).IsEqualTo(35);
     }
 

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.MicroQR;
 
 namespace FeatherQR.Tests;
@@ -76,7 +77,7 @@ public class MicroQRModulePlacerParityTest
         var actualMask = MicroQRModulePlacer.PlaceSymbol(actual, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     /// <summary>
@@ -116,7 +117,7 @@ public class MicroQRModulePlacerParityTest
         var actualMask = MicroQRModulePlacer.PlaceSymbolScalar(actual, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     /// <summary>
@@ -171,7 +172,7 @@ public class MicroQRModulePlacerParityTest
         var actualMask = MicroQRModulePlacer.PlaceSymbolBmi2(actual, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
 #else
         Skip.Test("BMI2 kernel requires net8.0+.");
         await Task.CompletedTask;
@@ -222,7 +223,7 @@ public class MicroQRModulePlacerParityTest
         var actualMask = MicroQRModulePlacer.PlaceSymbolSsse3(actual, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
 #else
         Skip.Test("SSSE3 kernel requires net8.0+.");
         await Task.CompletedTask;
@@ -273,7 +274,7 @@ public class MicroQRModulePlacerParityTest
         var actualMask = MicroQRModulePlacer.PlaceSymbolAdvSimd(actual, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
 #else
         Skip.Test("AdvSimd kernel requires net8.0+.");
         await Task.CompletedTask;
@@ -321,7 +322,7 @@ public class MicroQRModulePlacerParityTest
             var actualMask = MicroQRModulePlacer.PlaceSymbol(actual, size, data, eccBytes, dataBitCount, version, ecc, mask);
 
             await Assert.That(actualMask).IsEqualTo(mask);
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 
@@ -359,7 +360,7 @@ public class MicroQRModulePlacerParityTest
             var actualMask = MicroQRModulePlacer.PlaceSymbolScalar(actual, size, data, eccBytes, dataBitCount, version, ecc, mask);
 
             await Assert.That(actualMask).IsEqualTo(mask);
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 

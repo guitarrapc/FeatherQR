@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.SkiaSharp;
 
 namespace FeatherQR.Tests;
@@ -70,7 +71,7 @@ public class EccBoostTest
         var releasedWritten = QRCodeGenerator.Create(text.AsSpan(), expectedBoosted, fromReleased, new QRCodeGeneratorOptions { Version = expectedVersion });
 
         await Assert.That(optionsWritten).IsEqualTo(releasedWritten);
-        await Assert.That(fromOptions).IsEquivalentTo(fromReleased);
+        await Assert.That(fromOptions).IsEquivalentTo(fromReleased, CollectionOrdering.Matching);
 
         await Assert.That(boosted.GetRawData().AsSpan().SequenceEqual(
             QRCodeGenerator.Create(text, expectedBoosted, new QRCodeGeneratorOptions { Version = expectedVersion }).GetRawData())).IsTrue();
@@ -202,7 +203,7 @@ public class EccBoostTest
             .ToByteArray();
         var viaData = new QRCodeImageBuilder(boostedData).ToByteArray();
 
-        await Assert.That(viaBuilder).IsEquivalentTo(viaData);
+        await Assert.That(viaBuilder).IsEquivalentTo(viaData, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -215,6 +216,6 @@ public class EccBoostTest
             .ToByteArray();
         var viaData = new QRCodeImageBuilder(unboostedData).ToByteArray();
 
-        await Assert.That(viaBuilder).IsEquivalentTo(viaData);
+        await Assert.That(viaBuilder).IsEquivalentTo(viaData, CollectionOrdering.Matching);
     }
 }

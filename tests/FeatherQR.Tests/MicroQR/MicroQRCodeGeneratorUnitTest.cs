@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.MicroQR;
 
 namespace FeatherQR.Tests;
@@ -257,6 +258,6 @@ public class MicroQRCodeGeneratorUnitTest
     {
         var first = MicroQRCodeGenerator.Create("HELLO WORLD 14", MicroQREccLevel.L);
         var second = MicroQRCodeGenerator.Create("HELLO WORLD 14", MicroQREccLevel.L);
-        await Assert.That(first.GetRawData()).IsEquivalentTo(second.GetRawData());
+        await Assert.That(first.GetRawData()).IsEquivalentTo(second.GetRawData(), CollectionOrdering.Matching);
     }
 }

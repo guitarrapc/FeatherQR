@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals.RmQR;
@@ -62,7 +63,7 @@ public class RmQRCodewordEncoderUnitTest
 
         // Data part deinterleaves back to the input (naive reference).
         var back = RmQRNaiveReference.DeinterleaveData(output, blocks, info.BlocksInGroup1, info.CodewordsInGroup1);
-        await Assert.That(back).IsEquivalentTo(data);
+        await Assert.That(back).IsEquivalentTo(data, CollectionOrdering.Matching);
 
         // ECC part: block b, codeword e sits at data + e * blocks + b, and equals the
         // shared RS kernel over that block's data.

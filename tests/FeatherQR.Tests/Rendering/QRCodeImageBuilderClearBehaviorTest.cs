@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
 
@@ -21,7 +22,7 @@ public class QRCodeImageBuilderClearBehaviorTest
         var actual = BuilderPixels(new QRCodeImageBuilder(qr).WithSize(300, 300));
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300), clearColor: null, backgroundColor: null);
 
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -47,7 +48,7 @@ public class QRCodeImageBuilderClearBehaviorTest
         var expected = ExtensionPixels(qr, canvasSide, canvasSide,
             SKRect.Create(origin, origin, contentSide, contentSide),
             clearColor: SKColors.Red, backgroundColor: null);
-        await Assert.That(bitmap.Bytes).IsEquivalentTo(expected);
+        await Assert.That(bitmap.Bytes).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -64,7 +65,7 @@ public class QRCodeImageBuilderClearBehaviorTest
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
             clearColor: SKColors.Red, backgroundColor: translucentWhite);
 
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -80,7 +81,7 @@ public class QRCodeImageBuilderClearBehaviorTest
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
             clearColor: SKColors.Red, backgroundColor: null);
 
-        await Assert.That(actual).IsEquivalentTo(expected);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     private static byte[] BuilderPixels(QRCodeImageBuilder builder)

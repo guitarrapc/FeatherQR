@@ -52,7 +52,7 @@ public class QRCodeDecoderRoundTripTest
         var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = true, EciMode = EciMode.Utf8 });
 
         await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
         await Assert.That(info.Status).IsEquivalentTo(DecodeStatus.Success);
     }
 

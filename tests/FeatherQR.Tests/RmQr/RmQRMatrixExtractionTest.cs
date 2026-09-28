@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals.RmQR;
 
@@ -62,13 +63,13 @@ public class RmQRMatrixExtractionTest
         // Independent walk: same interleaved stream, bit for bit, incl. zero remainder.
         var extracted = RmQRNaiveReference.ExtractInterleavedStream(core, height, width, out var bitCount);
         await Assert.That(bitCount).IsEqualTo(8 * RmQRConstants.GetTotalCodewordCount(version) + RmQRConstants.GetRemainderBitCount(version));
-        await Assert.That(extracted).IsEquivalentTo(message);
+        await Assert.That(extracted).IsEquivalentTo(message, CollectionOrdering.Matching);
 
         // Deinterleave and recompute ECC per block.
         var info = RmQRConstants.GetEccInfo(version, ecc);
         var blocks = info.BlocksInGroup1 + info.BlocksInGroup2;
         var back = RmQRNaiveReference.DeinterleaveData(extracted, blocks, info.BlocksInGroup1, info.CodewordsInGroup1);
-        await Assert.That(back).IsEquivalentTo(data);
+        await Assert.That(back).IsEquivalentTo(data, CollectionOrdering.Matching);
         var dataOffset = 0;
         for (var b = 0; b < blocks; b++)
         {

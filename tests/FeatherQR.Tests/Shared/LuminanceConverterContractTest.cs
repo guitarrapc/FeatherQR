@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.SkiaSharp.Internals;
 using SkiaSharp;
@@ -154,7 +155,7 @@ public class LuminanceConverterContractTest
             if (reference is null)
                 reference = luminance;
             else
-                await Assert.That(luminance).IsEquivalentTo(reference).Because($"{layout} differs from {ColorLayouts[0]}");
+                await Assert.That(luminance).IsEquivalentTo(reference, CollectionOrdering.Matching).Because($"{layout} differs from {ColorLayouts[0]}");
         }
 
         // and against the formula, pixel by pixel
@@ -171,7 +172,7 @@ public class LuminanceConverterContractTest
 
         LuminanceConverter.Convert(pixels, width, height, rowBytes, PixelLayout.Gray8, false, luminance);
 
-        await Assert.That(luminance).IsEquivalentTo(new byte[] { 1, 2, 3, 4, 5, 6 });
+        await Assert.That(luminance).IsEquivalentTo(new byte[] { 1, 2, 3, 4, 5, 6 }, CollectionOrdering.Matching);
     }
 
     /// <summary>The last row needs only its pixels, not a full stride, as the doc promises.</summary>
@@ -279,7 +280,7 @@ public class LuminanceConverterContractTest
         using var pixmap = bitmap.PeekPixels();
         LuminanceConverter.Convert(pixmap.GetPixelSpan(), width, height, pixmap.RowBytes, layout, alphaType == SKAlphaType.Premul, direct);
 
-        await Assert.That(viaAdapter).IsEquivalentTo(direct);
+        await Assert.That(viaAdapter).IsEquivalentTo(direct, CollectionOrdering.Matching);
     }
 
     /// <summary>A color type outside the four is redrawn once; the result is still luminance, not garbage.</summary>

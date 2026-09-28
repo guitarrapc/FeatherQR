@@ -158,13 +158,15 @@ Use TUnit async assertions in `async Task` test methods:
 
 ```csharp
 await Assert.That(QRCodeDecoder.TryDecode(qr, out var decoded, out var info)).IsTrue();
-await Assert.That(decoded).IsEquivalentTo(content);
-await Assert.That(actual).IsEquivalentTo(expected);
+await Assert.That(decoded).IsEqualTo(content);
+await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
 await Assert.That(info.Version).IsEqualTo(version);
 await Assert.That(info.MaskPattern).IsBetween(0, 7);
 ```
 
-Use `IsEqualTo` for scalars and strings; use `IsEquivalentTo` for collections and byte arrays.
+Use `IsEqualTo` for scalars and strings; use `IsEquivalentTo(expected, CollectionOrdering.Matching)` (`using TUnit.Assertions.Enums;`) for collections and byte arrays.
+TUnit's `IsEquivalentTo` without an ordering compares as a multiset: a mirrored bitmap, reordered codewords, or a string with its characters shuffled all pass, and on a large array it is super-linear (about 10 s for a 600x600 bitmap, against about 10 ms with `Matching`).
+Pass `CollectionOrdering.Any` only where the result is a set by contract, and say so by writing it out (e.g. the three finders `TrySelectBestThree` picks, in no promised order).
 
 ### Line endings
 

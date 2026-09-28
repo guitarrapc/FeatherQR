@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Text.RegularExpressions;
 using FeatherQR.Internals;
 
@@ -79,7 +80,7 @@ public class SimdTiersTest
         var reported = SimdTiers.Report().Select(k => k.Name).Order(StringComparer.Ordinal).ToArray();
 
         await Assert.That(reported.Distinct().Count()).IsEqualTo(reported.Length);
-        await Assert.That(KernelFiles.Keys.Order(StringComparer.Ordinal).ToArray()).IsEquivalentTo(reported);
+        await Assert.That(KernelFiles.Keys.Order(StringComparer.Ordinal).ToArray()).IsEquivalentTo(reported, CollectionOrdering.Matching);
         foreach (var file in KernelFiles.Values.SelectMany(f => f).Distinct())
         {
             await Assert.That(File.Exists(Path.Combine(InternalsRoot(), file))).IsTrue().Because(file);
@@ -89,7 +90,7 @@ public class SimdTiersTest
     [Test]
     public async Task EveryTier_HasItsReads()
     {
-        await Assert.That(TierReads.Keys.Order().ToArray()).IsEquivalentTo(Enum.GetValues<SimdTier>().Where(t => t != SimdTier.Scalar).Order().ToArray());
+        await Assert.That(TierReads.Keys.Order().ToArray()).IsEquivalentTo(Enum.GetValues<SimdTier>().Where(t => t != SimdTier.Scalar).Order().ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -155,7 +156,7 @@ public class SimdTiersTest
             list.Add(reads);
         }
 
-        await Assert.That(conditions.Keys.Order().ToArray()).IsEquivalentTo(TierReads.Keys.Order().ToArray());
+        await Assert.That(conditions.Keys.Order().ToArray()).IsEquivalentTo(TierReads.Keys.Order().ToArray(), CollectionOrdering.Matching);
         foreach (var (tier, list) in conditions)
         {
             foreach (var reads in list)
@@ -197,7 +198,7 @@ public class SimdTiersTest
     {
         var reported = SimdTiers.IsaReport().Select(t => t.Tier).ToArray();
 
-        await Assert.That(reported).IsEquivalentTo(Enum.GetValues<SimdTier>().Where(t => t != SimdTier.Scalar).ToArray());
+        await Assert.That(reported).IsEquivalentTo(Enum.GetValues<SimdTier>().Where(t => t != SimdTier.Scalar).ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -223,7 +224,7 @@ public class SimdTiersTest
     {
         var source = "/* if (Avx2.IsSupported) */ var a = 1;\n/*\n Vector128.IsHardwareAccelerated\n*/\nif (Sse2.IsSupported) { }";
 
-        await Assert.That(FindIsaReads(source).ToArray()).IsEquivalentTo(new[] { (5, "Sse2") });
+        await Assert.That(FindIsaReads(source).ToArray()).IsEquivalentTo(new[] { (5, "Sse2") }, CollectionOrdering.Matching);
     }
 
     /// <summary>1-based line and flag of every instruction-set read outside a comment: <c>Avx2</c>, <c>Gfni.V256</c>, <c>AdvSimd.Arm64</c>, <c>Vector128</c>, <c>HasFastPext</c>.</summary>

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals;
 using static FeatherQR.Internals.StandardQR.QRCodeConstants;
@@ -142,7 +143,7 @@ public class BinaryInterleaverParityTest
             var actual = new byte[outputSize];
             BinaryInterleaver.InterleaveCodewords(data, ecc, actual, eccInfo);
 
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }
 

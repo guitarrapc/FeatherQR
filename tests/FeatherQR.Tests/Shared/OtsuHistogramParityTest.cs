@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using FeatherQR.Internals.ImageDecoders;
@@ -68,7 +69,7 @@ public class OtsuHistogramParityTest
 
         var expected = new int[256];
         expected[77] = flat.Length;
-        await Assert.That(histogram).IsEquivalentTo(expected);
+        await Assert.That(histogram).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     /// <summary>The tiers store through unchecked references, so a histogram that cannot hold 256 bins is refused rather than overrun.</summary>

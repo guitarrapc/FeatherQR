@@ -39,7 +39,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("12A!");
+        await Assert.That(text).IsEqualTo("12A!");
     }
 
     [Test]
@@ -54,7 +54,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("あ");
+        await Assert.That(text).IsEqualTo("あ");
     }
 
     [Test]
@@ -68,7 +68,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("A");
+        await Assert.That(text).IsEqualTo("A");
     }
 
     [Test]
@@ -85,7 +85,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("ï»¿A");
+        await Assert.That(text).IsEqualTo("ï»¿A");
     }
 
     [Test]
@@ -98,7 +98,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("A");
+        await Assert.That(text).IsEqualTo("A");
     }
 
     [Test]
@@ -113,7 +113,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("X");
+        await Assert.That(text).IsEqualTo("X");
     }
 
     [Test]
@@ -122,7 +122,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode([], out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo(string.Empty);
+        await Assert.That(text).IsEqualTo(string.Empty);
     }
 
     [Test]
@@ -134,7 +134,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("7");
+        await Assert.That(text).IsEqualTo("7");
     }
 
     // Unsupported content (recognized but rejected, never misdecoded). Structured Append
@@ -198,7 +198,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("こんにちは世界");
+        await Assert.That(text).IsEqualTo("こんにちは世界");
     }
 
     /// <summary>A Kanji segment can sit beside the other modes in one stream.</summary>
@@ -214,7 +214,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("A亜7");
+        await Assert.That(text).IsEqualTo("A亜7");
     }
 
     /// <summary>The wave dash is the cell a CP932-derived table would silently get wrong.</summary>
@@ -226,7 +226,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("〜");
+        await Assert.That(text).IsEqualTo("〜");
     }
 
     /// <summary>
@@ -246,7 +246,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("日本語亜");
+        await Assert.That(text).IsEqualTo("日本語亜");
     }
 
     /// <summary>
@@ -264,7 +264,7 @@ public class QRBinaryDecoderUnitTest
         var status = Decode(data, out var text);
 
         await Assert.That(status).IsEquivalentTo(DecodeStatus.Success);
-        await Assert.That(text).IsEquivalentTo("7");
+        await Assert.That(text).IsEqualTo("7");
     }
 
     /// <summary>NEC row 13 is CP932-only: well-formed, but outside the chosen repertoire.</summary>

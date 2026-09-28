@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Text;
@@ -71,7 +72,7 @@ public class StructuredAppendLaneWalkTest
         await Assert.That(count).IsEqualTo(expectedCount);
         await Assert.That(version).IsEqualTo(expectedVersion);
         await Assert.That(budget).IsEqualTo(expectedBudget);
-        await Assert.That(actual.AsSpan(0, count).ToArray()).IsEquivalentTo(expected.AsSpan(0, count).ToArray());
+        await Assert.That(actual.AsSpan(0, count).ToArray()).IsEquivalentTo(expected.AsSpan(0, count).ToArray(), CollectionOrdering.Matching);
         await Assert.That(batches).IsGreaterThan(0);
     }
 

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Security.Cryptography;
 
 namespace FeatherQR.Tests;
@@ -143,7 +144,7 @@ public class GeneratorOptionsTest
         await Assert.That(viaOptions.Version).IsEqualTo(c.Version);
         await Assert.That(viaOptions.Size).IsEqualTo(c.Size);
         await Assert.That(Sha(viaOptions.GetRawData())).IsEqualTo(c.RawSha);
-        await Assert.That(viaOptionsSpan.GetRawData()).IsEquivalentTo(viaOptions.GetRawData());
+        await Assert.That(viaOptionsSpan.GetRawData()).IsEquivalentTo(viaOptions.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -163,7 +164,7 @@ public class GeneratorOptionsTest
         await Assert.That(written).IsEqualTo(size.BufferSize);
         await Assert.That(writtenString).IsEqualTo(written);
         await Assert.That(Sha(fromOptions)).IsEqualTo(c.BufferSha);
-        await Assert.That(fromOptionsString).IsEquivalentTo(fromOptions);
+        await Assert.That(fromOptionsString).IsEquivalentTo(fromOptions, CollectionOrdering.Matching);
     }
 
     // ---- Micro QR: the released output, frozen as values ------------------------------
@@ -201,7 +202,7 @@ public class GeneratorOptionsTest
         await Assert.That(viaOptions.Version).IsEqualTo(c.Version);
         await Assert.That(viaOptions.Size).IsEqualTo(c.Size);
         await Assert.That(Sha(viaOptions.GetRawData())).IsEqualTo(c.RawSha);
-        await Assert.That(viaOptionsSpan.GetRawData()).IsEquivalentTo(viaOptions.GetRawData());
+        await Assert.That(viaOptionsSpan.GetRawData()).IsEquivalentTo(viaOptions.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using SkiaSharp;
 using FeatherQR.SkiaSharp;
 
@@ -80,7 +81,7 @@ public class QRSegmentationTest
         if (optimal.Version != single.Version)
             return; // a genuine gain; the round-trip test covers it
 
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -108,7 +109,7 @@ public class QRSegmentationTest
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -256,7 +257,7 @@ public class QRSegmentationTest
         var optimal = QRCodeGenerator.Create("", QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -330,7 +331,7 @@ public class QRSegmentationTest
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = true, Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -343,7 +344,7 @@ public class QRSegmentationTest
         var optimal = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = new QRVersionRange(4, 40), Segmentation = QRSegmentation.Optimal });
 
         await Assert.That(optimal.Version).IsEqualTo(single.Version);
-        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -432,7 +433,7 @@ public class QRSegmentationTest
         // not disturb it.
         await Assert.That(withBom.Version).IsLessThan(single.Version);
         await Assert.That(withBom.Version).IsEqualTo(withoutBom.Version);
-        await Assert.That(withBom.GetRawData()).IsEquivalentTo(withoutBom.GetRawData());
+        await Assert.That(withBom.GetRawData()).IsEquivalentTo(withoutBom.GetRawData(), CollectionOrdering.Matching);
 
         await Assert.That(QRCodeDecoder.TryDecode(withBom, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);

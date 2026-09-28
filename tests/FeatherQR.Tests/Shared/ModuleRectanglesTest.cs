@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
@@ -171,7 +172,7 @@ public class ModuleRectanglesTest
         var ok = data.TryGetModuleRectangles(buffer, out var written);
         await Assert.That(ok).IsTrue();
         await Assert.That(written).IsEqualTo(expected.Length);
-        await Assert.That(buffer).IsEquivalentTo(expected);
+        await Assert.That(buffer).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]

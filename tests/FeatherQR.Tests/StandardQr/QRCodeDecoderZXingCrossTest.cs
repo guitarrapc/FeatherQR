@@ -49,7 +49,7 @@ public class QRCodeDecoderZXingCrossTest
             var modules = EncodeWithZXing(content, zxingLevel, characterSet: null, out var size);
 
             await Assert.That(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue().Because($"level={zxingLevel}, status={info.Status}");
-            await Assert.That(decoded).IsEquivalentTo(content);
+            await Assert.That(decoded).IsEqualTo(content);
             await Assert.That(info.EccLevel).IsEquivalentTo(expectedLevel);
         }
     }
@@ -61,7 +61,7 @@ public class QRCodeDecoderZXingCrossTest
         var modules = EncodeWithZXing(content, ErrorCorrectionLevel.Q, characterSet: null, out var size);
 
         await Assert.That(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
         await Assert.That(info.Version > 5).IsTrue().Because($"expected a higher version, got {info.Version}");
     }
 
@@ -70,7 +70,7 @@ public class QRCodeDecoderZXingCrossTest
         var modules = EncodeWithZXing(content, level, characterSet, out var size);
 
         await Assert.That(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue().Because($"decode failed: status={info.Status}, version={info.Version}");
-        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
     private static byte[] EncodeWithZXing(string content, ErrorCorrectionLevel level, string? characterSet, out int size)

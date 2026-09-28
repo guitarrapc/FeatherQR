@@ -276,7 +276,7 @@ public class QRCodeDecodabilityTest
         await Assert.That(result.BarcodeFormat).IsEquivalentTo(BarcodeFormat.QR_CODE);
 
         // Assert content matches (some decoders surface the BOM as a leading U+FEFF)
-        await Assert.That(result.Text.TrimStart('\uFEFF')).IsEquivalentTo(expectedContent);
+        await Assert.That(result.Text.TrimStart('\uFEFF')).IsEqualTo(expectedContent);
 
         // Additional metadata checks
         if (result.ResultMetadata != null)
@@ -286,7 +286,7 @@ public class QRCodeDecodabilityTest
             {
                 var decodedEccLevel = result.ResultMetadata[ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL].ToString();
                 var expectedEccString = eccLevel.ToString();
-                await Assert.That(decodedEccLevel).IsEquivalentTo(expectedEccString);
+                await Assert.That(decodedEccLevel).IsEqualTo(expectedEccString);
             }
         }
     }
@@ -306,7 +306,7 @@ public class QRCodeDecodabilityTest
         await Assert.That(result.BarcodeFormat).IsEquivalentTo(BarcodeFormat.QR_CODE);
 
         // Assert content matches (some decoders surface the BOM as a leading U+FEFF)
-        await Assert.That(result.Text.TrimStart('\uFEFF')).IsEquivalentTo(expectedContent);
+        await Assert.That(result.Text.TrimStart('\uFEFF')).IsEqualTo(expectedContent);
 
         // Additional metadata checks
         if (result.ResultMetadata != null)
@@ -316,7 +316,7 @@ public class QRCodeDecodabilityTest
             {
                 var decodedEccLevel = result.ResultMetadata[ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL].ToString();
                 var expectedEccString = eccLevel.ToString();
-                await Assert.That(decodedEccLevel).IsEquivalentTo(expectedEccString);
+                await Assert.That(decodedEccLevel).IsEqualTo(expectedEccString);
             }
         }
     }

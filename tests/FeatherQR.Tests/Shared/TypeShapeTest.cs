@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using System.Reflection;
 using FeatherQR.SkiaSharp;
 using SkiaSharp;
@@ -397,7 +398,7 @@ public class TypeShapeTest
 
         await Assert.That(open.Where(n => !extensionPoints.Contains(n))).IsEmpty()
             .Because("a public class with no designed extension point is sealed");
-        await Assert.That(open).IsEquivalentTo(extensionPoints)
+        await Assert.That(open).IsEquivalentTo(extensionPoints, CollectionOrdering.Matching)
             .Because("a new extension point is a design decision, so it is declared here");
     }
 
