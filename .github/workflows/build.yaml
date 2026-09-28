@@ -133,6 +133,28 @@ jobs:
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
 
+  # Playground native relink (SkiaSharp + Emscripten) only happens on publish, so the
+  # matrix `dotnet build` above stays managed-only. Verify the publish path on one leg.
+  # AOT is disabled here for speed; the Deploy Playground workflow publishes with full AOT.
+  build-playground:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        with:
+          dotnet-version: 10.0
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
+      # No -r browser-wasm: it would propagate to the multi-targeted library reference
+      # and require the wasm-tools-net8 workload; the WebAssembly SDK defaults the RID anyway.
+      - name: Publish Playground (browser-wasm Release, no AOT)
+        run: dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
+
   # NativeAOT compatibility gate and SIMD tier check. Publishing tests/FeatherQR.AotAnalysis roots
   # the whole library (TrimmerRootAssembly) so ILC analyzes every member, and fails on any trim/AOT
   # warning (TreatWarningsAsErrors in that csproj); that part needs one runner, since IL-level analysis
@@ -228,14 +250,20 @@ jobs:
           dotnet "$dll" --simd-class "$JIT_SIMD_CLASS"
           env "$JIT_KNOB" dotnet "$dll" --simd-class "$JIT_KNOB_SIMD_CLASS"
 
-  # Playground native relink (SkiaSharp + Emscripten) only happens on publish, so the
-  # matrix `dotnet build` above stays managed-only. Verify the publish path on one leg.
-  # AOT is disabled here for speed; the Deploy Playground workflow publishes with full AOT.
-  build-playground:
+  # SIMD tier check for WebAssembly: tests/FeatherQR.WasmReport holds a WebAssembly build of the library to
+  # the Wasm column of the table in src/FeatherQR/Internals/SimdTiers.cs, run headless under Node.js, which has
+  # the WebAssembly SIMD a browser has. Interpreted is what a Blazor WebAssembly app runs by default; AOT-compiled
+  # is what the Playground ships.
+  wasm-simd:
+    name: wasm-simd (${{ matrix.mode }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [interpreter, aot]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -245,13 +273,21 @@ jobs:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
-      # No -r browser-wasm: it would propagate to the multi-targeted library reference
-      # and require the wasm-tools-net8 workload; the WebAssembly SDK defaults the RID anyway.
-      - name: Publish Playground (browser-wasm Release, no AOT)
-        run: dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
+      - name: Publish the WebAssembly report
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          aot=false
+          if [[ "$MODE" == "aot" ]]; then
+            aot=true
+          fi
+          dotnet publish tests/FeatherQR.WasmReport/FeatherQR.WasmReport.csproj -c Release "-p:RunAOTCompilation=$aot" -o publish/wasm-report/
+      - name: Run the WebAssembly report and check its SIMD tiers
+        run: node publish/wasm-report/wwwroot/main.mjs --simd-class Wasm
 
   build-complete:
-    needs: [build, run, aot-analysis, build-playground]
+    needs: [build, run, aot-analysis, build-playground, wasm-simd]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

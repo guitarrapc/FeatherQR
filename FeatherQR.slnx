@@ -21,6 +21,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj" />
     <Project Path="tests/FeatherQR.Tests/FeatherQR.Tests.csproj" />
+    <Project Path="tests/FeatherQR.WasmReport/FeatherQR.WasmReport.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/QRImageDecodeSweep/QRImageDecodeSweep.csproj" />

@@ -1,5 +1,4 @@
 using FeatherQR;
-using FeatherQR.Internals;
 using System.Text;
 
 // The gate is the publish itself (see the csproj): TrimmerRootAssembly roots the whole library,
@@ -7,18 +6,8 @@ using System.Text;
 // This entry point is a minimal encode/decode smoke so the produced binary is still runnable.
 // With --simd-class, it also holds the SIMD tiers this build takes to SimdTiers.Expected for that
 // build class and fails on a disagreement; CI passes the class each build is meant to be.
-SimdBuildClass? simdClass = null;
-for (var i = 0; i < args.Length; i++)
-{
-    if (args[i] != "--simd-class")
-        continue;
-    if (i + 1 >= args.Length || !Enum.TryParse<SimdBuildClass>(args[i + 1], ignoreCase: true, out var parsed))
-    {
-        Console.Error.WriteLine($"--simd-class takes one of {string.Join(", ", Enum.GetNames<SimdBuildClass>())}.");
-        return 2;
-    }
-    simdClass = parsed;
-}
+if (!SimdReport.TryParseClass(args, out var simdClass))
+    return 2;
 
 var content = "FeatherQR AOT analysis gate";
 var qr = QRCodeGenerator.Create(content, QREccLevel.M);
@@ -65,28 +54,5 @@ foreach (var (pattern, charset) in new[]
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
 
-// Which SIMD tier each kernel runs in this native build: the instruction sets the build and the
-// CPU give, then every kernel's tiers, most preferred first, with the one it takes marked.
-Console.WriteLine("SIMD instruction sets:");
-foreach (var (tier, available) in SimdTiers.IsaReport())
-    Console.WriteLine($"  {tier,-10} {(available ? "yes" : "no")}");
-Console.WriteLine("SIMD tiers per kernel (* = taken):");
-foreach (var kernel in SimdTiers.Report())
-{
-    var active = kernel.Active;
-    var tiers = string.Join(" > ", kernel.Tiers.Select(t => (t.Tier == active ? "*" : "") + t.Tier).Append((active == SimdTier.Scalar ? "*" : "") + nameof(SimdTier.Scalar)));
-    Console.WriteLine($"  {kernel.Name,-24} {tiers}");
-}
-if (simdClass is { } buildClass)
-{
-    var problems = SimdTiers.Check(buildClass);
-    if (problems.Count > 0)
-    {
-        Console.Error.WriteLine($"SIMD tiers disagree with the table for {buildClass}:");
-        foreach (var problem in problems)
-            Console.Error.WriteLine($"  {problem}");
-        return 1;
-    }
-    Console.WriteLine($"SIMD tiers match the table for {buildClass}.");
-}
-return 0;
+// Which SIMD tier each kernel runs in this native build, held to the table for --simd-class.
+return SimdReport.PrintAndCheck(simdClass);

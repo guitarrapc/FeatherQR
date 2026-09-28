@@ -51,10 +51,12 @@ internal enum SimdBuildClass : byte
     X64Avx2,
     /// <summary>ARM64: the JIT, or a default NativeAOT publish. The dot product is left to the CPU.</summary>
     Arm64,
+    /// <summary>WebAssembly with its SIMD proposal, the default (<c>WasmEnableSIMD</c>): 128-bit vectors through PackedSimd, interpreted or AOT-compiled alike.</summary>
+    Wasm,
 }
 
 /// <summary>One kernel's row of <see cref="SimdTiers.Expected"/>.</summary>
-internal sealed class SimdExpectation(string kernel, SimdTier[] x64Sse, SimdTier[] x64Avx2, SimdTier[] arm64)
+internal sealed class SimdExpectation(string kernel, SimdTier[] x64Sse, SimdTier[] x64Avx2, SimdTier[] arm64, SimdTier[] wasm)
 {
     /// <summary>The kernel, as <see cref="SimdKernel.Name"/> names it.</summary>
     internal string Kernel { get; } = kernel;
@@ -65,6 +67,7 @@ internal sealed class SimdExpectation(string kernel, SimdTier[] x64Sse, SimdTier
         SimdBuildClass.X64Sse => x64Sse,
         SimdBuildClass.X64Avx2 => x64Avx2,
         SimdBuildClass.Arm64 => arm64,
+        SimdBuildClass.Wasm => wasm,
         _ => throw new ArgumentOutOfRangeException(nameof(buildClass), buildClass, "Unknown build class."),
     };
 }
@@ -253,6 +256,7 @@ internal static class SimdTiers
         SimdBuildClass.X64Sse => ([Vector128, Sse2, Ssse3, Sse41], [Vector256, Avx2, Avx2Pext, GfniV256, AdvSimd, AdvSimdDp], [[Gfni]]),
         SimdBuildClass.X64Avx2 => ([Vector128, Vector256, Sse2, Ssse3, Sse41, Avx2], [AdvSimd, AdvSimdDp], [[Gfni, GfniV256], [Avx2Pext]]),
         SimdBuildClass.Arm64 => ([Vector128, AdvSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256], [[AdvSimdDp]]),
+        SimdBuildClass.Wasm => ([Vector128], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256, AdvSimd, AdvSimdDp], []),
         _ => throw new ArgumentOutOfRangeException(nameof(buildClass), buildClass, "Unknown build class."),
     };
 
@@ -262,43 +266,43 @@ internal static class SimdTiers
     /// </summary>
     internal static SimdExpectation[] Expected() =>
     [
-        //  kernel                     x64, no AVX      x64, AVX2             ARM64
+        //  kernel                     x64, no AVX      x64, AVX2             ARM64                 WebAssembly
 
         // ---- Shared across symbologies ----
-        new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd]),
-        new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd]),
-        new("ModeSegmenterLanes",      [Scalar],        [Vector256],          [AdvSimd]),
-        new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd]),
-        new("EccBinaryDecoder",        [Scalar],        [GfniV256, Scalar],   [AdvSimd]),
-        new("LuminanceConverter",      [Scalar],        [Avx2],               [AdvSimdDp, Scalar]),
-        new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128]),
-        new("Binarizer",               [Scalar],        [Vector256],          [AdvSimd]),
-        new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128]),
-        new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd]),
-        new("FinderRowEdges",          [Scalar],        [Vector256],          [AdvSimd]),
+        new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd],            [Scalar]),
+        new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
+        new("ModeSegmenterLanes",      [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [Scalar]),
+        new("EccBinaryDecoder",        [Scalar],        [GfniV256, Scalar],   [AdvSimd],            [Scalar]),
+        new("LuminanceConverter",      [Scalar],        [Avx2],               [AdvSimdDp, Scalar],  [Scalar]),
+        new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128],          [Vector128]),
+        new("Binarizer",               [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
+        new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
+        new("FinderRowEdges",          [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
 
         // ---- Standard QR ----
-        new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd]),
-        new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd]),
-        new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd]),
-        new("QRSampleGrid",            [Vector128],     [Vector256],          [Vector128]),
-        new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd]),
-        new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd]),
-        new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd]),
-        new("StructuredAppendScanner", [Scalar],        [Scalar],             [AdvSimd]),
+        new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
+        new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
+        new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
+        new("QRSampleGrid",            [Vector128],     [Vector256],          [Vector128],          [Vector128]),
+        new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
+        new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
+        new("StructuredAppendScanner", [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
 
         // ---- Micro QR ----
-        new("MicroQRByteSegment",      [Sse2],          [Sse2],               [AdvSimd]),
-        new("MicroQRModulePlacer",     [Ssse3],         [Avx2Pext, Ssse3],    [AdvSimd]),
-        new("MicroQRSampleGrid",       [Vector128],     [Vector128],          [Vector128]),
+        new("MicroQRByteSegment",      [Sse2],          [Sse2],               [AdvSimd],            [Scalar]),
+        new("MicroQRModulePlacer",     [Ssse3],         [Avx2Pext, Ssse3],    [AdvSimd],            [Scalar]),
+        new("MicroQRSampleGrid",       [Vector128],     [Vector128],          [Vector128],          [Vector128]),
 
         // ---- rMQR ----
-        new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar]),
-        new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128]),
-        new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd]),
-        new("RmQRExtractCodewords",    [Scalar],        [Avx2Pext, Scalar],   [AdvSimd]),
-        new("RmQRSubFinderLattice",    [Vector128],     [Vector128],          [Vector128]),
-        new("RmQRSampleGrid",          [Vector128],     [Vector128],          [Vector128]),
+        new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar],             [Scalar]),
+        new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128],          [Vector128]),
+        new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
+        new("RmQRExtractCodewords",    [Scalar],        [Avx2Pext, Scalar],   [AdvSimd],            [Scalar]),
+        new("RmQRSubFinderLattice",    [Vector128],     [Vector128],          [Vector128],          [Vector128]),
+        new("RmQRSampleGrid",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
     ];
 
     /// <summary>What in this process disagrees with <see cref="Expected"/> for <paramref name="buildClass"/>; empty when nothing does.</summary>

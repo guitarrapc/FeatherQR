@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <!-- The SIMD tier report for WebAssembly: the WebAssembly class of the table in
+       src/FeatherQR/Internals/SimdTiers.cs, checked from a WebAssembly build of the library.
+       It runs headless under Node.js, which has the same WebAssembly SIMD a browser has: publish,
+       then run wwwroot/main.mjs with node, passing the build class as the NativeAOT gate takes it
+       (the simd-class argument, Wasm); the exit code is the check's.
+       Publish with -p:RunAOTCompilation=true for the AOT-compiled build the Playground ships;
+       the default is the interpreter a Blazor WebAssembly app runs. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\FeatherQR.AotAnalysis\SimdReport.cs" Link="SimdReport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FeatherQR\FeatherQR.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -128,6 +128,22 @@ public class SimdTierTableTest
         }
     }
 
+    /// <summary>
+    /// WebAssembly has 128-bit vectors and no instruction set of its own that a kernel names, so a kernel takes its
+    /// portable 128-bit tier there when it has one and runs scalar when it does not.
+    /// </summary>
+    [Test]
+    public async Task Wasm_TakesThePortable128BitTier_OrScalar()
+    {
+        var kernels = SimdTiers.Report().ToDictionary(k => k.Name);
+        foreach (var row in SimdTiers.Expected())
+        {
+            SimdTier[] expected = kernels[row.Kernel].Tiers.Any(t => t.Tier == SimdTier.Vector128) ? [SimdTier.Vector128] : [SimdTier.Scalar];
+
+            await Assert.That(row.For(SimdBuildClass.Wasm)).IsEquivalentTo(expected).Because(row.Kernel);
+        }
+    }
+
     /// <summary>The live check: the build class this process is, held to the table. CI runs the same check on each NativeAOT build.</summary>
     [Test]
     public async Task ThisProcess_TakesWhatTheTableExpects()
