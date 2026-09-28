@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class KeystoneFinderDecodeTest
 {
-    private const string Content = "FQR KEYSTONE 0123";
+    internal const string Content = "FQR KEYSTONE 0123";
 
     /// <summary>The finder at the wide edge is drawn up to twice as tall as wide, and its column is refused by a 40 % window on the row's total.</summary>
     [Test]
@@ -203,7 +203,7 @@ public class KeystoneFinderDecodeTest
         await Assert.That(read).IsTrue();
     }
 
-    private static (byte[] Luminance, int Width, int Height, PerspectiveTransform Truth, int Size) Render(int version, float pixelsPerModule, float degrees, float keystone)
+    internal static (byte[] Luminance, int Width, int Height, PerspectiveTransform Truth, int Size) Render(int version, float pixelsPerModule, float degrees, float keystone)
     {
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version) });
         var (luminance, width, height) = SupersampledRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, pixelsPerModule, degrees, keystone);

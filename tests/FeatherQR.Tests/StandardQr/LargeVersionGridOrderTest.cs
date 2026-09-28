@@ -115,7 +115,7 @@ public class LargeVersionGridOrderTest
     }
 
     /// <summary>The symbol with its bottom-right alignment pattern painted over light.</summary>
-    private static Func<int, int, bool> WithoutBottomRightAlignment(QRCodeData qr)
+    internal static Func<int, int, bool> WithoutBottomRightAlignment(QRCodeData qr)
     {
         var centre = qr.Size - 7;
         return (row, column) => (Math.Abs(row - centre) > 2 || Math.Abs(column - centre) > 2) && qr[row, column];
