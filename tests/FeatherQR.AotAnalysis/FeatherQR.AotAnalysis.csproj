@@ -31,4 +31,10 @@
     <ProjectReference Include="..\..\src\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
   </ItemGroup>
 
+  <!-- The timing mode's images come from the test suite's renderers (no SkiaSharp, so the WebAssembly report draws the same pixels). -->
+  <ItemGroup>
+    <Compile Include="..\FeatherQR.Tests\Shared\NearestNeighbourRenderer.cs" Link="Renderers\NearestNeighbourRenderer.cs" />
+    <Compile Include="..\FeatherQR.Tests\Shared\SupersampledRenderer.cs" Link="Renderers\SupersampledRenderer.cs" />
+  </ItemGroup>
+
 </Project>

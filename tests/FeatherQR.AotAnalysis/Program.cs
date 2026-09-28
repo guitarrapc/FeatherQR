@@ -6,6 +6,9 @@ using System.Text;
 // This entry point is a minimal encode/decode smoke so the produced binary is still runnable.
 // With --simd-class, it also holds the SIMD tiers this build takes to SimdTiers.Expected for that
 // build class and fails on a disagreement; CI passes the class each build is meant to be.
+// With --time, it times the benchmark shapes on this build instead (TierTiming).
+if (TierTiming.TryRun(args, out var timingExit))
+    return timingExit;
 if (!SimdReport.TryParseClass(args, out var simdClass))
     return 2;
 

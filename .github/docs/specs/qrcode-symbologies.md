@@ -366,8 +366,8 @@ writers, SSE4.1 only) and 19 on WebAssembly, where only the portable 128-bit tie
 netstandard builds have no intrinsics and run scalar everywhere. Which instruction set a NativeAOT
 publish should target, and how much of the AVX2 territory 128-bit tiers should cover, are decisions
 that read this table; it makes neither. Where a kernel records a portable 128-bit tier as measured and
-left out (`Binarizer`), that measurement compared it with the 256-bit tier under the JIT, where the
-256-bit tier always runs, not with the scalar tier a default NativeAOT publish runs instead.
+left out (`Binarizer`), that measurement ran on x64 under the JIT, where the 256-bit tier always runs
+instead, and held it against the scalar walk on gradients only; no build that would run it was measured.
 
 What keeps the table true:
 
