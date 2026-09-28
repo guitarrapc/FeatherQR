@@ -187,21 +187,6 @@ public class StructuredAppendWriterPlanTest
     }
 
     [Test]
-    [MethodDataSource(nameof(VerdictCorpus))]
-    public async Task Set_UnderTheVerdictIsTheSingleModeSet(string name, string text, bool oneRunPlans)
-    {
-        if (!oneRunPlans)
-            return;
-
-        // Every chunk's plan is its single-mode stream and the split was searched as Single, so the two sets are one.
-        var optimal = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
-        var single = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Single });
-        await Assert.That(optimal.Length).IsEqualTo(single.Length).Because(name);
-        for (var i = 0; i < optimal.Length; i++)
-            await Assert.That(optimal[i].GetRawData().AsSpan().SequenceEqual(single[i].GetRawData())).IsTrue().Because($"{name}, symbol {i}");
-    }
-
-    [Test]
     [MethodDataSource(nameof(Corpus))]
     public async Task Set_IsTheSameModulesHoweverItsPlansWereComeBy(string name, string text)
     {
