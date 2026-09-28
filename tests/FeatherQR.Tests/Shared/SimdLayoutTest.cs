@@ -11,40 +11,45 @@ namespace FeatherQR.Tests;
 /// <c>{stem}.X86.cs</c> holds x86 intrinsics (with the portable vectors they work on), <c>{stem}.Arm64.cs</c>
 /// ARM intrinsics (with 128-bit vectors), <c>{stem}.Vector256.cs</c> and <c>{stem}.Vector128.cs</c> portable
 /// vectors of that width or narrower, where <c>{stem}</c> is the type, or the type and a feature
-/// (<c>ModulePlacer.Masking</c>). Every other file, the stem file among them, holds the entry, the dispatch
-/// and the scalar tier, and uses no vector instruction at all.
+/// (<c>ModulePlacer.Masking</c>). <c>{stem}.Simd.cs</c> holds a vector tier that picks its instructions per
+/// instruction set inside one method, so no single family's file can take it; a file whose code one family's
+/// file could take is named for that family instead. Every other file, the stem file among them, holds the
+/// entry, the dispatch and the scalar tier, and uses no vector instruction at all.
 /// </para>
 /// <para>
 /// Reading an instruction-set flag (<c>IsSupported</c>, <c>IsHardwareAccelerated</c>) or a vector's lane
 /// count is not using the instruction set: the dispatch reads flags where it branches, which the JIT needs
 /// (see the remarks on <c>SimdTiers</c>).
 /// </para>
+/// <para>
+/// A tier is moved to its file whole, as a method, never cut out of one: a loop taken out of the method it runs
+/// in changed what the JIT and ILC emit around it (see <see cref="InlineTiers"/>).
+/// </para>
 /// </remarks>
 public class SimdLayoutTest
 {
     /// <summary>
-    /// Files whose code still mixes families inside a method, paths under src/FeatherQR/Internals. Laying one
-    /// out removes it here; the list is empty when every file follows the rule.
+    /// Stem files that keep a tier inline, paths under src/FeatherQR/Internals, each with where. In each an entry
+    /// the scalar build also runs holds the vector steps and the scalar tail they hand over to, so the tier is not a
+    /// method of its own to move. Cutting the steps out into inlined methods kept every loop the same instructions
+    /// but added a few around them in the JIT's and ILC's code (the SIMD tier coverage plan's phase 3 log); a file
+    /// is laid out only by a change that makes its tier a method with no such cost.
     /// </summary>
-    private static readonly string[] NotYetLaidOut =
-    [
-        "ModuleBitPacker.cs",
-        "ImageDecoders/FinderPatternFinder.cs",
-        "ImageDecoders/FinderPatternFinder.RowEdges.cs",
-        "ImageDecoders/LuminanceInverter.cs",
-        "MicroQR/MicroQRBinaryEncoder.cs",
-        "MicroQR/MicroQRModulePlacer.PlaceSymbol.cs",
-        "RmQR/RmQRBinaryEncoder.cs",
-        "RmQR/RmQRModulePlacer.cs",
-        "StandardQR/AlignmentPatternFinder.cs",
-        "StandardQR/ModulePlacer.ExpandBits.cs",
-    ];
+    private static readonly Dictionary<string, string> InlineTiers = new()
+    {
+        ["ModuleBitPacker.cs"] = "Pack and Unpack run their AVX2 and SSSE3 / AdvSimd steps before the scalar tail they share",
+        ["ImageDecoders/LuminanceInverter.cs"] = "Invert runs its 256-bit and 128-bit loops before the scalar tail",
+        ["MicroQR/MicroQRBinaryEncoder.cs"] = "the Byte segment's AdvSimd and SSE2 steps sit in EncodeDataCodewords beside its scalar path",
+        ["RmQR/RmQRBinaryEncoder.cs"] = "the Numeric, Alphanumeric and Latin-1 writers run their vector steps before the SWAR and scalar tails",
+        ["RmQR/RmQRModulePlacer.cs"] = "ExpandBitsMasked runs its AVX2, SSSE3 and AdvSimd steps before the scalar tail",
+        ["StandardQR/ModulePlacer.ExpandBits.cs"] = "ExpandBits runs its AVX2 and SSSE3 steps before the scalar tail",
+    };
 
     [Test]
     public async Task EveryFile_UsesOnlyTheFamiliesItsNameAllows()
     {
         var violations = SourceFiles()
-            .Where(f => !NotYetLaidOut.Contains(f.Relative))
+            .Where(f => !InlineTiers.ContainsKey(f.Relative))
             .SelectMany(f => Violations(f.Relative, File.ReadAllText(f.Path)))
             .ToArray();
 
@@ -52,14 +57,14 @@ public class SimdLayoutTest
     }
 
     [Test]
-    public async Task NotYetLaidOut_ListsOnlyFilesThatStillBreakTheRule()
+    public async Task InlineTiers_ListsOnlyFilesThatStillKeepATierInline()
     {
         var files = SourceFiles().ToDictionary(f => f.Relative, f => f.Path);
-        foreach (var relative in NotYetLaidOut)
+        foreach (var relative in InlineTiers.Keys)
         {
             await Assert.That(files.ContainsKey(relative)).IsTrue().Because($"{relative} exists");
             await Assert.That(Violations(relative, File.ReadAllText(files[relative])).Any()).IsTrue()
-                .Because($"{relative} follows the rule now; take it off {nameof(NotYetLaidOut)}");
+                .Because($"{relative} follows the rule now; take it off {nameof(InlineTiers)}");
         }
     }
 
@@ -97,26 +102,46 @@ public class SimdLayoutTest
     [Arguments("Binarizer.Vector256.cs", "var v = Avx2.Shuffle(a, b); var w = Vector256.Create((byte)1);", false)]
     [Arguments("LocalBinarizer.Vector128.cs", "var v = Vector128.Create((byte)1); var w = Vector64.Create((byte)1);", true)]
     [Arguments("LocalBinarizer.Vector128.cs", "var v = Vector256.Create((byte)1);", false)]
+    [Arguments("FinderPatternFinder.Simd.cs", "var v = Vector256.Create((byte)1); var w = AdvSimd.Arm64.AddPairwise(a, b);", true)]
+    [Arguments("MicroQRModulePlacer.Simd.cs", "var v = Ssse3.Shuffle(a, b); var w = AdvSimd.Arm64.VectorTableLookup(a, b);", true)]
+    [Arguments("FinderPatternFinder.Simd.cs", "var v = Avx2.Shuffle(a, b); var w = Vector128.Create((byte)1);", false)]
+    [Arguments("FinderPatternFinder.Simd.cs", "var w = Vector128.Create((byte)1);", false)]
+    [Arguments("FinderPatternFinder.Simd.cs", "var x = 1;", false)]
     public async Task Violations_FollowTheFileName(string file, string source, bool follows)
     {
         await Assert.That(!Violations(file, source).Any()).IsEqualTo(follows);
     }
 
-    /// <summary>What the file breaks: a family its name does not allow, or, for a family file, none of its own family.</summary>
+    /// <summary>The single-family file kinds: what each may use, and the family it is named for.</summary>
+    private static readonly (string Suffix, string[] Allowed, string Own)[] FamilyFiles =
+    [
+        ("X86", ["X86", "Vector256", "Vector128"], "X86"),
+        ("Arm64", ["Arm", "Vector128"], "Arm"),
+        ("Vector256", ["Vector256", "Vector128"], "Vector256"),
+        ("Vector128", ["Vector128"], "Vector128"),
+    ];
+
+    /// <summary>
+    /// What the file breaks: a family its name does not allow; for a family file, none of its own family; for a
+    /// <c>.Simd.cs</c> file, code that one family's file could take.
+    /// </summary>
     private static IEnumerable<string> Violations(string relative, string source)
     {
         var name = Path.GetFileNameWithoutExtension(relative);
         var suffix = name.Contains('.') ? name[(name.LastIndexOf('.') + 1)..] : "";
-        (string[] Allowed, string? Own) rule = suffix switch
-        {
-            "X86" => (["X86", "Vector256", "Vector128"], "X86"),
-            "Arm64" => (["Arm", "Vector128"], "Arm"),
-            "Vector256" => (["Vector256", "Vector128"], "Vector256"),
-            "Vector128" => (["Vector128"], "Vector128"),
-            _ => ([], null),
-        };
         var families = Families(source).ToArray();
-        foreach (var family in families.Where(f => !rule.Allowed.Contains(f)))
+        if (suffix == "Simd")
+        {
+            var fits = FamilyFiles.FirstOrDefault(r => families.All(r.Allowed.Contains) && families.Contains(r.Own));
+            if (families.Length == 0)
+                yield return $"{relative} is named for mixed families and uses none";
+            else if (fits.Suffix is not null)
+                yield return $"{relative} uses only what a .{fits.Suffix}.cs file may use: {string.Join(", ", families)}";
+            yield break;
+        }
+        var rule = FamilyFiles.FirstOrDefault(r => r.Suffix == suffix);
+        var allowed = rule.Allowed ?? [];
+        foreach (var family in families.Where(f => !allowed.Contains(f)))
             yield return $"{relative} uses {family}";
         if (rule.Own is { } own && !families.Contains(own))
             yield return $"{relative} is named for {own} and uses none";
