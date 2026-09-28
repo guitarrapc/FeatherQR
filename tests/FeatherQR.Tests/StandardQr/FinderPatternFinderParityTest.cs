@@ -206,7 +206,7 @@ public class FinderPatternFinderParityTest
         return scene;
     }
 
-    private static async Task FillModule(byte[] scene, int width, int ppm, int moduleX, int moduleY, byte value)
+    private static void FillModule(byte[] scene, int width, int ppm, int moduleX, int moduleY, byte value)
     {
         for (var y = moduleY * ppm; y < (moduleY + 1) * ppm; y++)
         {

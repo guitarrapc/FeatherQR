@@ -244,7 +244,7 @@ public class QRCodeDecoderRoundTripTest
         }
     }
 
-    private static async Task WriteFormatPattern(byte[] modules, int size, ushort pattern)
+    private static void WriteFormatPattern(byte[] modules, int size, ushort pattern)
     {
         // Same positions as ModulePlacer.PlaceFormat (bit i, LSB first)
         var positions = new (int x1, int y1, int x2, int y2)[]

@@ -26,10 +26,10 @@ public class QRCodeDecodabilityTest
     [Arguments("0123456789", QREccLevel.L, EciMode.Utf8)]
     [Arguments("Hello, World!", QREccLevel.L, EciMode.Utf8)]
     [Arguments("special", QREccLevel.L, EciMode.Utf8)]
-    public void Create_Default_ascii_words_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
+    public async Task Create_Default_ascii_words_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
     {
         // default is ISO-8859-1 for ASCII-only
-        AssertQrCodeIsDecodable(content, eccLevel, eciMode);
+        await AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
     [Test]
@@ -42,10 +42,10 @@ public class QRCodeDecodabilityTest
     [Arguments("Résumé", QREccLevel.M, EciMode.Utf8)]
     [Arguments("Naïve", QREccLevel.Q, EciMode.Utf8)]
     [Arguments("Zürich", QREccLevel.H, EciMode.Utf8)]
-    public void Create_Default_utf8_words_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
+    public async Task Create_Default_utf8_words_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
     {
         // automatic ECI mode selection should match Utf8 for non-ASCII
-        AssertQrCodeIsDecodable(content, eccLevel, eciMode);
+        await AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
     [Test]
@@ -61,9 +61,9 @@ public class QRCodeDecodabilityTest
     [Arguments("Résumé", QREccLevel.M, EciMode.Utf8)]
     [Arguments("Naïve", QREccLevel.Q, EciMode.Utf8)]
     [Arguments("Zürich", QREccLevel.H, EciMode.Utf8)]
-    public void Create_Utf8_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
+    public async Task Create_Utf8_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
     {
-        AssertQrCodeIsDecodable(content, eccLevel, eciMode);
+        await AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
     [Test]
@@ -76,9 +76,9 @@ public class QRCodeDecodabilityTest
     [Arguments("Résumé", QREccLevel.M, EciMode.Iso8859_1)]
     [Arguments("Naïve", QREccLevel.Q, EciMode.Iso8859_1)]
     [Arguments("Zürich", QREccLevel.H, EciMode.Iso8859_1)]
-    public void Create_Iso8859_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
+    public async Task Create_Iso8859_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
     {
-        AssertQrCodeIsDecodable(content, eccLevel, eciMode);
+        await AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
     [Test]
@@ -131,9 +131,9 @@ public class QRCodeDecodabilityTest
     [Arguments(" ", QREccLevel.Q, EciMode.Default)]
     [Arguments("\t", QREccLevel.H, EciMode.Default)]
     [Arguments("\n", QREccLevel.L, EciMode.Utf8)]
-    public void Create_EdgeCases_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
+    public async Task Create_EdgeCases_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
     {
-        AssertQrCodeIsDecodable(content, eccLevel, eciMode);
+        await AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
     [Test]
@@ -145,10 +145,10 @@ public class QRCodeDecodabilityTest
     [Arguments(QREccLevel.Q, 28)]  // Version 2 min
     [Arguments(QREccLevel.H, 17)]  // Version 1 max
     [Arguments(QREccLevel.H, 18)]  // Version 2 min
-    public void Create_VersionBoundaries_Number_IsDecodable(QREccLevel eccLevel, int charCount)
+    public async Task Create_VersionBoundaries_Number_IsDecodable(QREccLevel eccLevel, int charCount)
     {
         var content = new string('1', charCount);
-        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
+        await AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
     [Test]
@@ -160,10 +160,10 @@ public class QRCodeDecodabilityTest
     [Arguments(QREccLevel.Q, 17)]  // Version 2 min
     [Arguments(QREccLevel.H, 10)]  // Version 1 max
     [Arguments(QREccLevel.H, 11)]  // Version 2 min
-    public void Create_VersionBoundaries_Alphanumeric_IsDecodable(QREccLevel eccLevel, int charCount)
+    public async Task Create_VersionBoundaries_Alphanumeric_IsDecodable(QREccLevel eccLevel, int charCount)
     {
         var content = new string('A', charCount);
-        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
+        await AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
     [Test]
@@ -175,10 +175,10 @@ public class QRCodeDecodabilityTest
     [Arguments(QREccLevel.Q, 4)]  // Version 2 min
     [Arguments(QREccLevel.H, 2)]  // Version 1 max
     [Arguments(QREccLevel.H, 3)]  // Version 2 min
-    public void Create_VersionBoundaries_Byte_IsDecodable(QREccLevel eccLevel, int charCount)
+    public async Task Create_VersionBoundaries_Byte_IsDecodable(QREccLevel eccLevel, int charCount)
     {
         var content = new string('あ', charCount);
-        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
+        await AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
     [Test]
@@ -186,10 +186,10 @@ public class QRCodeDecodabilityTest
     [Arguments(QREccLevel.M, 500)]
     [Arguments(QREccLevel.Q, 1000)]
     [Arguments(QREccLevel.H, 200)]
-    public void Create_LargeData_IsDecodable(QREccLevel eccLevel, int charCount)
+    public async Task Create_LargeData_IsDecodable(QREccLevel eccLevel, int charCount)
     {
         var content = new string('A', charCount);
-        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
+        await AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
     [Test]
@@ -199,20 +199,20 @@ public class QRCodeDecodabilityTest
     [Arguments("🎉🎊🎈", QREccLevel.L, EciMode.Utf8)]
     [Arguments("Zürich", QREccLevel.H, EciMode.Utf8)]
     [Arguments("Résumé", QREccLevel.M, EciMode.Default)]
-    public void Create_Utf8Bom_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
+    public async Task Create_Utf8Bom_IsDecodable(string content, QREccLevel eccLevel, EciMode eciMode)
     {
         // BOM bytes are part of the Byte-mode data stream, so the character count
         // indicator must include them (ISO/IEC 18004). Decoders strip the BOM.
-        AssertQrCodeIsDecodable(content, eccLevel, eciMode, utf8BOM: true);
+        await AssertQrCodeIsDecodable(content, eccLevel, eciMode, utf8BOM: true);
     }
 
     [Test]
     [Arguments("あ", QREccLevel.L)]
     [Arguments("ああ", QREccLevel.L)]
-    public void Create_Utf8Bom_ShortMultibyteText_IsDecodable(string content, QREccLevel eccLevel)
+    public async Task Create_Utf8Bom_ShortMultibyteText_IsDecodable(string content, QREccLevel eccLevel)
     {
         // 1-2 char multi-byte text: encode buffer must reserve room for the 3 BOM bytes
-        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Utf8, utf8BOM: true);
+        await AssertQrCodeIsDecodable(content, eccLevel, EciMode.Utf8, utf8BOM: true);
     }
 
     [Test]
@@ -255,10 +255,10 @@ public class QRCodeDecodabilityTest
     /// <summary>
     /// Assert that generated QR code is decodable and content matches.
     /// </summary>
-    private void AssertQrCodeIsDecodable(string expectedContent, QREccLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
+    private async Task AssertQrCodeIsDecodable(string expectedContent, QREccLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
-        AssertQrCodeIsDecodableBinary(expectedContent, eccLevel, eciMode, utf8BOM);
-        AssertQrCodeIsDecodableString(expectedContent, eccLevel, eciMode, utf8BOM);
+        await AssertQrCodeIsDecodableBinary(expectedContent, eccLevel, eciMode, utf8BOM);
+        await AssertQrCodeIsDecodableString(expectedContent, eccLevel, eciMode, utf8BOM);
     }
 
     private async Task AssertQrCodeIsDecodableBinary(string expectedContent, QREccLevel eccLevel, EciMode eciMode, bool utf8BOM = false)

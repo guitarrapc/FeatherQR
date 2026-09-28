@@ -44,7 +44,7 @@ public class QRCodeVisualCompatibilityTest
     [Arguments("ﾃ双ﾃｱo", QREccLevel.Q)]
     public async Task Create_Default_PixelsMatchSample(string content, QREccLevel eccLevel)
     {
-        AssertPixelsMatchSample(content, eccLevel, EciMode.Default);
+        await AssertPixelsMatchSample(content, eccLevel, EciMode.Default);
     }
 
     [Test]
@@ -61,7 +61,7 @@ public class QRCodeVisualCompatibilityTest
     [Arguments("ﾃ双ﾃｱo", QREccLevel.Q)]
     public async Task Create_Utf8_PixelsMatchSample(string content, QREccLevel eccLevel)
     {
-        AssertPixelsMatchSample(content, eccLevel, EciMode.Utf8);
+        await AssertPixelsMatchSample(content, eccLevel, EciMode.Utf8);
     }
 
     [Test]
@@ -71,7 +71,7 @@ public class QRCodeVisualCompatibilityTest
     [Arguments("Zﾃｼrich", QREccLevel.H)]
     public async Task Create_Iso8859_1_PixelsMatchSample(string content, QREccLevel eccLevel)
     {
-        AssertPixelsMatchSample(content, eccLevel, EciMode.Iso8859_1);
+        await AssertPixelsMatchSample(content, eccLevel, EciMode.Iso8859_1);
     }
 
     // edge cases
@@ -83,7 +83,7 @@ public class QRCodeVisualCompatibilityTest
     [Arguments("", QREccLevel.H, EciMode.Default)]
     public async Task Create_EmptyString_PixelsMatchTest(string content, QREccLevel eccLevel, EciMode eciMode)
     {
-        AssertPixelsMatchSample(content, eccLevel, eciMode);
+        await AssertPixelsMatchSample(content, eccLevel, eciMode);
     }
 
     [Test]
@@ -94,7 +94,7 @@ public class QRCodeVisualCompatibilityTest
     [Arguments("\n", QREccLevel.L, EciMode.Utf8)]    // Newline
     public async Task Create_EdgeCases_PixelsMatchSample(string content, QREccLevel eccLevel, EciMode eciMode)
     {
-        AssertPixelsMatchSample(content, eccLevel, eciMode);
+        await AssertPixelsMatchSample(content, eccLevel, eciMode);
     }
 
     [Test]
@@ -115,7 +115,7 @@ public class QRCodeVisualCompatibilityTest
         };
 
         var content = new string('1', maxChars);
-        AssertPixelsMatchSample(content, eccLevel, EciMode.Default);
+        await AssertPixelsMatchSample(content, eccLevel, EciMode.Default);
     }
 
     // Version Boundary Tests
@@ -130,7 +130,7 @@ public class QRCodeVisualCompatibilityTest
         await Assert.That(qr.Version).IsEqualTo(expectedVersion);
 
         // Verify pixels match golden
-        AssertPixelsMatchSample(content, eccLevel, eciMode);
+        await AssertPixelsMatchSample(content, eccLevel, eciMode);
     }
 
     // generator
@@ -268,7 +268,7 @@ public class QRCodeVisualCompatibilityTest
     /// Save pixel data with metadata.
     /// Format: [4 bytes size][pixel data]
     /// </summary>
-    private static async Task SavePixelData(string path, byte[] pixels, int size)
+    private static void SavePixelData(string path, byte[] pixels, int size)
     {
         using var fs = File.Create(path);
         using var writer = new BinaryWriter(fs);

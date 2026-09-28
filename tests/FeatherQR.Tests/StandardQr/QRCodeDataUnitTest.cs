@@ -501,7 +501,7 @@ public class QRCodeDataUnitTest
         // Assert
         await Assert.That(restored.Version).IsEqualTo(original.Version);
         await Assert.That(restored.Size).IsEqualTo(original.Size);
-        AssertQRCodeDataEqual(original, restored);
+        await AssertQRCodeDataEqual(original, restored);
     }
 
     [Test]
