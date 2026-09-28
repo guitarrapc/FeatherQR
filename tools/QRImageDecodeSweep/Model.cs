@@ -38,7 +38,7 @@ internal static class Symbologies
 
     public static int QuietZone(string symbology) => symbology == StandardQr ? 4 : 2;
 
-    /// <summary>The baseline's case counts: ten per Standard QR version, a hundred per Micro QR version, twenty per rMQR version.</summary>
+    /// <summary>The recorded tables' case counts: ten per Standard QR version, a hundred per Micro QR version, twenty per rMQR version.</summary>
     public static int DefaultCases(string symbology) => symbology switch
     {
         StandardQr => 400,

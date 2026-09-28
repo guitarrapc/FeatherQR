@@ -129,7 +129,7 @@ internal static partial class FinderPatternFinder
     /// Strided like <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/>, but with no fallback of its own: this scan has only a flat candidate list, and every signal available inside it is a statement about the image rather than about the symbol being looked for.
     /// A confirmation test (any candidate seen on two or more rows) reads like a per-symbol signal but is not one — a second QR code, a printed logo, or salt-and-pepper noise confirms by itself and would suppress the pass the real symbol needed.
     /// The only question that distinguishes them is "did anything actually decode", which only the caller can answer, so the widening lives there: the image decoders run this scan first and re-run <see cref="FindCandidatesFullSweep"/> when nothing decoded.
-    /// Skipping three rows in four is most of the rMQR image path: end to end the span decode of the widest symbol is 2.7x a strideless build's (see the plan's benchmark tables).
+    /// Skipping three rows in four is most of the rMQR image path: end to end the span decode of the widest symbol is 2.7x a strideless build's.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
