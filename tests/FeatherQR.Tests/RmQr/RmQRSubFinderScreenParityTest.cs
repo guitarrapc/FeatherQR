@@ -16,7 +16,8 @@ public class RmQRSubFinderScreenParityTest
     private const float FinderCenter = 3.5f;
     private const int SubFinderMinScore = 24;
 
-    public static IEnumerable<int> Seeds() => Enumerable.Range(0, 24);
+    // Six seeds: of the screen faults planted by hand, the drop test caught each one it catches on every seed of 24, and the float-margin faults were caught only by the lattice test, never by more seeds here
+    public static IEnumerable<int> Seeds() => Enumerable.Range(0, 6);
 
     [Test]
     [MethodDataSource(nameof(Seeds))]

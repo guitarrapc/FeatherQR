@@ -54,12 +54,13 @@ public class FinderRunBoundsTest
     public async Task EveryAcceptableCrossSection_IsInsideTheBounds_LargeTotalsAtTheEdges(bool acrossAxes)
     {
         // Large totals cannot be enumerated, so the vectors are built where a bound could be wrong: around 1:1:3:1:1 at a module size, every run pushed to and past its tolerance
+        // 400,000 draws: of the bound faults planted by hand, each one four million draws caught is caught within these, or by the exhaustive or the window-corner walk in this class
         var random = new Random(20260922);
         var acceptable = 0L;
         string? first = null;
         Span<int> runs = stackalloc int[5];
         Span<int> expectedTotals = stackalloc int[5];
-        for (var trial = 0; trial < 4_000_000; trial++)
+        for (var trial = 0; trial < 400_000; trial++)
         {
             var module = random.Next(1, 400);
             for (var i = 0; i < 5; i++)
@@ -211,7 +212,7 @@ public class FinderRunBoundsTest
         var acceptable = 0L;
         string? first = null;
         Span<int> runs = stackalloc int[5];
-        for (var trial = 0; trial < 4_000_000; trial++)
+        for (var trial = 0; trial < 400_000; trial++)
         {
             var module = 2 + random.NextDouble() * 300;
             var shift = (random.NextDouble() * 1.1 - 0.55) * module;
