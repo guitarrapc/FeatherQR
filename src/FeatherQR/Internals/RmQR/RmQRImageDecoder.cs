@@ -76,103 +76,29 @@ internal static partial class RmQRImageDecoder
     /// </summary>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
-        var status = DecodeLuminanceAttempts(luminance, width, height, destination, out charsWritten, out info);
-        // No text unless it decoded: a failing decode can stop after a segment was written
-        if (status != DecodeStatus.Success)
-            charsWritten = 0;
-        return status;
-    }
-
-    private static DecodeStatus DecodeLuminanceAttempts(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
-    {
-        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
-        {
-            charsWritten = 0;
-            info = NotDetected();
-            return DecodeStatus.NotDetected;
-        }
-
-        luminance = luminance.Slice(0, pixelCount);
-        // One count serves both polarities: the negative's histogram is this one mirrored
-        Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
-        Binarizer.FillHistogram(luminance, histogram);
-        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out var noFinder, out var positiveThreshold, out var positiveGrey);
-        if (IsTerminal(status))
-            return status;
-
-        // Reflectance reversal: invert into a rented buffer and retry once.
-        // Taken only on the failure path, so the normal case stays allocation-free.
-        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
-        try
-        {
-            var inverted = rented.AsSpan(0, pixelCount);
-            LuminanceInverter.Invert(luminance, inverted);
-            Binarizer.InvertHistogram(histogram);
-
-            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo, out var invertedNoFinder, out var negativeThreshold, out var negativeGrey);
-            if (IsTerminal(invertedStatus))
-            {
-                // Success, or the symbol was read but the caller's destination is too small: both polarities report the same way.
-                info = invertedInfo;
-                return invertedStatus;
-            }
-
-            // A verdict skips the regional pass, which looks for a symbol the global threshold did not see
-            if (RegionalRetry.IsContentVerdict(status))
-                return status;
-            if (RegionalRetry.IsContentVerdict(invertedStatus))
-            {
-                info = invertedInfo;
-                return invertedStatus;
-            }
-
-            // Uneven lighting: each polarity binarized again against each region's own level
-            var regional = new RegionalAttempt();
-            var regionalStatus = RegionalRetry.Decode<RegionalAttempt, RmQRCodeDecodeInfo>(ref regional, luminance, inverted, histogram, width, height, destination, out charsWritten, out var regionalInfo);
-            if (IsTerminal(regionalStatus) || RegionalRetry.IsContentVerdict(regionalStatus))
-            {
-                info = regionalInfo;
-                return regionalStatus;
-            }
-
-            // Last, and only for a polarity whose global threshold found no finder at all: a symbol the regional pass reads never pays for it
-            if (noFinder)
-            {
-                var midpointStatus = DecodeAtMidpoint(luminance, positiveThreshold, positiveGrey, width, height, destination, out charsWritten, out var midpointInfo);
-                if (IsSettled(midpointStatus))
-                {
-                    info = midpointInfo;
-                    return midpointStatus;
-                }
-            }
-            if (invertedNoFinder)
-            {
-                // The regional pass wrote its binarization into this buffer
-                LuminanceInverter.Invert(luminance, inverted);
-                var midpointStatus = DecodeAtMidpoint(inverted, negativeThreshold, negativeGrey, width, height, destination, out charsWritten, out var midpointInfo);
-                if (IsSettled(midpointStatus))
-                {
-                    info = midpointInfo;
-                    return midpointStatus;
-                }
-            }
-
-            // Every attempt failed short of the content: report the first one's diagnostics
-            return status;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
+        var pass = new SymbolPass();
+        return ImageDecodePasses.Decode<SymbolPass, RmQRCodeDecodeInfo>(ref pass, luminance, width, height, destination, out charsWritten, out info);
     }
 
     private static RmQRCodeDecodeInfo NotDetected() => new(DecodeStatus.NotDetected, default, default, 0);
 
-    /// <summary>The regional retry's decode: this decoder's attempt on a binarized image.</summary>
-    private readonly struct RegionalAttempt : ILuminanceAttempt<RmQRCodeDecodeInfo>
+    /// <summary>
+    /// This decoder's pass through the shared image decode passes: the strided scan and the sweep (<see cref="DecodeLuminanceCore(ReadOnlySpan{byte}, ReadOnlySpan{int}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/>), and at the midpoint the sweep alone, its edges located at the midpoint too.
+    /// </summary>
+    private readonly struct SymbolPass : ISymbolPass<RmQRCodeDecodeInfo>
     {
+        public bool HasMidpointPass => true;
+
+        public RmQRCodeDecodeInfo NotDetected => RmQRImageDecoder.NotDetected();
+
+        public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
+            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out noFinder, out threshold, out grey);
+
         public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
             => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
+
+        public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+            => DecodeLuminanceScan(luminance, width, height, threshold, grey, grey.Midpoint, destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
     }
 
     /// <summary>
@@ -215,22 +141,6 @@ internal static partial class RmQRImageDecoder
 
         // Both failed: keep the strided pass's diagnostic, which is the one whose candidate ranking the caller would have seen before this retry existed.
         return status;
-    }
-
-    /// <summary>
-    /// The sweep at the midpoint of the two levels, for a polarity where the global threshold found no finder at all.
-    /// Edge greys pull the global threshold toward light, and a blurred finder's light ring can keep too few pixels above it; halfway between the levels the ring reads its width.
-    /// </summary>
-    private static DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, byte threshold, in GreyLevels grey, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
-    {
-        charsWritten = 0;
-        info = NotDetected();
-        if (!grey.IsEnabled)
-            return DecodeStatus.NotDetected;
-        var midpoint = (byte)Math.Round(grey.Midpoint);
-        if (midpoint == threshold)
-            return DecodeStatus.NotDetected;
-        return DecodeLuminanceScan(luminance, width, height, midpoint, grey, grey.Midpoint, destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
     }
 
     /// <summary>

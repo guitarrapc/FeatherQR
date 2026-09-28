@@ -45,77 +45,37 @@ internal static partial class QRImageDecoder
     /// <param name="info">Diagnostic information.</param>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
-        var status = DecodeLuminanceAttempts(luminance, width, height, destination, out charsWritten, out info);
-        // No text unless it decoded: a failing decode can stop after a segment was written
-        if (status != DecodeStatus.Success)
-            charsWritten = 0;
-        return status;
+        var pass = new SymbolPass();
+        return ImageDecodePasses.Decode<SymbolPass, QRCodeDecodeInfo>(ref pass, luminance, width, height, destination, out charsWritten, out info);
     }
 
-    private static DecodeStatus DecodeLuminanceAttempts(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    /// <summary>
+    /// This decoder's pass through the shared image decode passes: the finder triple and the stages from it (<see cref="DecodeLuminanceCore"/>).
+    /// No midpoint pass: the finder sweep reads the blurred finders that pass is for.
+    /// </summary>
+    private readonly struct SymbolPass : ISymbolPass<QRCodeDecodeInfo>
     {
-        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
+        public bool HasMidpointPass => false;
+
+        public QRCodeDecodeInfo NotDetected => new(DecodeStatus.NotDetected, 0, default, -1, 0);
+
+        public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
         {
-            charsWritten = 0;
-            info = new QRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
-            return DecodeStatus.NotDetected;
+            noFinder = false;
+            threshold = 0;
+            grey = default;
+            return DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
         }
 
-        luminance = luminance.Slice(0, pixelCount);
-        // One count serves both polarities: the negative's histogram is this one mirrored
-        Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
-        Binarizer.FillHistogram(luminance, histogram);
-        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
-        if (IsTerminal(status))
-            return status;
-
-        // Reflectance reversal: if no symbol was read, invert into a rented buffer and retry once. Taken only on that failure path, so success and a genuinely short destination stay allocation-free.
-        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
-        try
-        {
-            var inverted = rented.AsSpan(0, pixelCount);
-            LuminanceInverter.Invert(luminance, inverted);
-            Binarizer.InvertHistogram(histogram);
-
-            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo);
-            if (IsTerminal(invertedStatus))
-            {
-                info = invertedInfo;
-                return invertedStatus;
-            }
-
-            // A verdict skips the regional pass, which looks for a symbol the global threshold did not see
-            if (RegionalRetry.IsContentVerdict(status))
-                return status;
-            if (RegionalRetry.IsContentVerdict(invertedStatus))
-            {
-                info = invertedInfo;
-                return invertedStatus;
-            }
-
-            // Uneven lighting: each polarity binarized again against each region's own level
-            var regional = new RegionalAttempt();
-            var regionalStatus = RegionalRetry.Decode<RegionalAttempt, QRCodeDecodeInfo>(ref regional, luminance, inverted, histogram, width, height, destination, out charsWritten, out var regionalInfo);
-            if (IsTerminal(regionalStatus) || RegionalRetry.IsContentVerdict(regionalStatus))
-            {
-                info = regionalInfo;
-                return regionalStatus;
-            }
-
-            // Every attempt failed short of the content: report the first one's diagnostics
-            return status;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
-    }
-
-    /// <summary>The regional retry's decode: this decoder's attempt on a binarized image.</summary>
-    private readonly struct RegionalAttempt : ILuminanceAttempt<QRCodeDecodeInfo>
-    {
         public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
             => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
+
+        public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+        {
+            charsWritten = 0;
+            info = NotDetected;
+            return DecodeStatus.NotDetected;
+        }
     }
 
     internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)

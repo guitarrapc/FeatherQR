@@ -1,4 +1,3 @@
-using System.Buffers;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 #endif
@@ -47,101 +46,27 @@ internal static partial class MicroQRImageDecoder
     /// </summary>
     public static DecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
-        var status = DecodeLuminanceAttempts(luminance, width, height, destination, out charsWritten, out info);
-        // No text unless it decoded: a failing decode can stop after a segment was written
-        if (status != DecodeStatus.Success)
-            charsWritten = 0;
-        return status;
+        var pass = new SymbolPass();
+        return ImageDecodePasses.Decode<SymbolPass, MicroQRCodeDecodeInfo>(ref pass, luminance, width, height, destination, out charsWritten, out info);
     }
 
-    private static DecodeStatus DecodeLuminanceAttempts(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    /// <summary>
+    /// This decoder's pass through the shared image decode passes: the strided scan and the sweep (<see cref="DecodeLuminanceCore(ReadOnlySpan{byte}, ReadOnlySpan{int}, int, int, Span{char}, out int, out MicroQRCodeDecodeInfo)"/>), and at the midpoint the sweep alone.
+    /// </summary>
+    private readonly struct SymbolPass : ISymbolPass<MicroQRCodeDecodeInfo>
     {
-        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
-        {
-            charsWritten = 0;
-            info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
-            return DecodeStatus.NotDetected;
-        }
+        public bool HasMidpointPass => true;
 
-        luminance = luminance.Slice(0, pixelCount);
-        // One count serves both polarities: the negative's histogram is this one mirrored
-        Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
-        Binarizer.FillHistogram(luminance, histogram);
-        var status = DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out var noFinder, out var positiveThreshold, out var positiveGrey);
-        if (IsTerminal(status))
-            return status;
+        public MicroQRCodeDecodeInfo NotDetected => new(DecodeStatus.NotDetected, 0, default, -1, 0);
 
-        // Reflectance reversal: if no symbol was read, invert into a rented buffer and
-        // retry once. Taken only on that failure path, so success and a genuinely short
-        // destination stay allocation-free.
-        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
-        try
-        {
-            var inverted = rented.AsSpan(0, pixelCount);
-            LuminanceInverter.Invert(luminance, inverted);
-            Binarizer.InvertHistogram(histogram);
+        public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
+            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out noFinder, out threshold, out grey);
 
-            var invertedStatus = DecodeLuminanceCore(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo, out var invertedNoFinder, out var negativeThreshold, out var negativeGrey);
-            if (IsTerminal(invertedStatus))
-            {
-                info = invertedInfo;
-                return invertedStatus;
-            }
-
-            // A verdict skips the regional pass: the symbol was seen
-            if (RegionalRetry.IsContentVerdict(status))
-                return status;
-            if (RegionalRetry.IsContentVerdict(invertedStatus))
-            {
-                info = invertedInfo;
-                return invertedStatus;
-            }
-
-            // Uneven lighting: each polarity binarized again against each region's own level
-            var regional = new RegionalAttempt();
-            var regionalStatus = RegionalRetry.Decode<RegionalAttempt, MicroQRCodeDecodeInfo>(ref regional, luminance, inverted, histogram, width, height, destination, out charsWritten, out var regionalInfo);
-            if (IsTerminal(regionalStatus) || RegionalRetry.IsContentVerdict(regionalStatus))
-            {
-                info = regionalInfo;
-                return regionalStatus;
-            }
-
-            // Last, and only for a polarity whose global threshold found no finder at all: a symbol the regional pass reads never pays for it
-            if (noFinder)
-            {
-                var midpointStatus = DecodeAtMidpoint(luminance, positiveThreshold, positiveGrey, width, height, destination, out charsWritten, out var midpointInfo);
-                if (IsSettled(midpointStatus))
-                {
-                    info = midpointInfo;
-                    return midpointStatus;
-                }
-            }
-            if (invertedNoFinder)
-            {
-                // The regional pass wrote its binarization into this buffer
-                LuminanceInverter.Invert(luminance, inverted);
-                var midpointStatus = DecodeAtMidpoint(inverted, negativeThreshold, negativeGrey, width, height, destination, out charsWritten, out var midpointInfo);
-                if (IsSettled(midpointStatus))
-                {
-                    info = midpointInfo;
-                    return midpointStatus;
-                }
-            }
-
-            // Report the first attempt's diagnostics: every attempt failed short of the content
-            return status;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
-    }
-
-    /// <summary>The regional retry's decode: this decoder's attempt on a binarized image.</summary>
-    private readonly struct RegionalAttempt : ILuminanceAttempt<MicroQRCodeDecodeInfo>
-    {
         public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
             => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
+
+        public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+            => DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
     }
 
     /// <summary>
@@ -188,22 +113,6 @@ internal static partial class MicroQRImageDecoder
         }
 
         return status;
-    }
-
-    /// <summary>
-    /// The sweep at the midpoint of the two levels, for a polarity where the global threshold found no finder at all.
-    /// Edge greys pull the global threshold toward light, and a blurred finder's light ring can keep too few pixels above it; halfway between the levels the ring reads its width.
-    /// </summary>
-    private static DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, byte threshold, in GreyLevels grey, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
-    {
-        charsWritten = 0;
-        info = new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0);
-        if (!grey.IsEnabled)
-            return DecodeStatus.NotDetected;
-        var midpoint = (byte)Math.Round(grey.Midpoint);
-        if (midpoint == threshold)
-            return DecodeStatus.NotDetected;
-        return DecodeLuminanceScan(luminance, width, height, midpoint, grey, destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
     }
 
     /// <summary>

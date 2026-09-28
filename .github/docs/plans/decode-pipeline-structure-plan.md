@@ -48,7 +48,7 @@ Measured in Release before phase 1, 1,000 calls after warm-up, every span overlo
 ## Phases
 
 1. **Allocation guards (done 2026-09-29).** One test class over the three decoders: the matrix span overloads with and without a quiet zone; the image span overloads on each path the image level reads through (upright, turned, mirrored, keystone, the next triple, the mesh first and after the anchored grid, the timing frame, low density, the anisotropic grid, the perspective search, light on dark, uneven light), and on failing inputs (noise, another symbology's symbol). Each input is one another test already pins to its path where one exists. Planted allocations, one per stage, show which stages the guard reaches (`tools/mutation_check.cs`).
-2. **Shared outer passes.** One driver for positive, inverted, content verdict, regional and midpoint, over an attempt struct. The midpoint pass is a per-decoder switch, off for Standard QR (D1).
+2. **Shared outer passes (done 2026-09-29).** One driver for positive, inverted, content verdict, regional and midpoint, over an attempt struct. The midpoint pass is a per-decoder switch, off for Standard QR (D1).
 3. **Shared result rule and mirror retry.** One accumulator decides what settles and which failure is reported, holding each decoder's current rule (D2). One mirror retry, or a stated reason per decoder where the three strategies must stay apart: rMQR samples again because its grid is not square.
 4. **Image context.** A `readonly ref struct` carrying the image, its size, threshold and grey levels (and rMQR's edge level) through the stages, and the module buffer owned by the scan, as Micro QR and rMQR already do.
 5. **Matrix level.** The deinterleave and block loop shared by Standard QR and rMQR, as the inverse of the interleaver the encoders share. rMQR's format bit positions stated once. The sampler Micro QR borrows moves to `ImageDecoders/` if both keep it.
@@ -84,6 +84,13 @@ The guards come first because every later phase is judged against them. Phase 6 
 - **Steady state.** Warm up first (the JIT, the static tables, the pools), then take the quietest of a few rounds of calls. The shared array pool can drop a buffer when a collection runs, so a single round can see one rent allocate. A call that allocates every time allocates in every round.
 - **Alone.** A test that measures a decoder's allocations runs `[NotInParallel]`, as the repository's other allocation tests already did. The pool's thread slot holds one array a size, and a second array of that size comes from per-core stacks that tests running beside it drain.
 - **A planted allocation has to escape.** `GC.KeepAlive(new byte[1])` is caught where `new byte[1].Length` at the same stage was not, on .NET 10: an array that never leaves the method need not be allocated at all.
+- **The baseline in a worktree of its own.** The commit before is checked out with `git worktree add --detach`, and the sweep, the corpus and the timings run there, so nothing built from the tree being changed leaks into the baseline.
+- **Timing a refactor: the fastest of interleaved runs, not one short benchmark.** On this machine (Ryzen 9 7950X3D, 2026-09-29), measured as follows:
+  - The repository's `ShortRun` job (three iterations) reported error bars as large as the mean on some shapes (Micro QR `M2_512px`, 5,613 ± 15,843 µs).
+  - Three launches of fifteen iterations still moved one tree up to 23 % between two runs (Standard QR v40 at 3 px, 112.7 and 91.4 µs).
+  - One process of the same build could be 2.5 times another on a 4 µs decode (Micro QR M4: 3.79 to 9.36 µs over eight processes).
+  - A small harness run against both trees, alternating eight times and keeping each shape's fastest round, is what this plan judges by.
+- **The corpus file is not byte-identical between runs.** zxing-cpp's column moved on 9 of 624 rows, all at rotation 0, with this library unchanged. Compare this library's columns (`compare` counts only them), not the whole file.
 
 ## Progress log
 
@@ -109,3 +116,31 @@ The guards come first because every later phase is judged against them. Phase 6 
 
 - D1: no midpoint pass for Standard QR; phase 2's driver switches it off per decoder.
 - D2: phase 3 keeps both reporting rules. Moving Standard QR to the furthest failure became D5, a change of its own after phase 3.
+
+### Phase 2, shared outer passes (2026-09-29)
+
+- `ImageDecodePasses` ([src/FeatherQR/Internals/ImageDecoders](../../../src/FeatherQR/Internals/ImageDecoders/ImageDecodePasses.cs)) runs the passes for the three decoders. Each decoder gives it `ISymbolPass<TInfo>` as a struct, which has four parts:
+  - the global pass, which also returns the threshold, the grey levels and whether it found no finder candidate;
+  - the regional pass, the `ILuminanceAttempt` that `RegionalRetry` already took;
+  - the midpoint sweep;
+  - `HasMidpointPass`, the D1 switch, off for Standard QR.
+- Moved in with the driver: the midpoint's two conditions (grey levels, a midpoint off the threshold) and the rule that a decode that did not read reports no characters.
+- Gone from the decoders: the three `DecodeLuminanceAttempts`, Micro QR's and rMQR's `DecodeAtMidpoint`, and the three `RegionalAttempt` structs. That is 278 lines out and 58 in across the three decoders, against 161 in the driver.
+- The code differs in one place and the behavior in none. The negative's buffer is inverted again before its midpoint sweep only when that sweep runs; before, it was inverted whenever that polarity found no finder.
+- `ImageDecodePassesTest` holds the architecture record's rules one by one against a recording pass, 30 cases a target:
+  - the terminal results and verdicts of each pass, and which one is reported;
+  - the regional pass after both global ones;
+  - the midpoint pass per polarity: its switch, and a finder found, no grey levels or a midpoint on the threshold each skipping it;
+  - the negative's midpoint read from its own pixels after the regional pass overwrote them;
+  - the image's dimensions.
+- The test did not compile without the driver, and passed against the driver before any decoder moved onto it. The case whose midpoint rounds to its threshold was found by a probe (levels 118 and 160, a ramp 38 px wide). The first family searched, 1,024 images with a ramp 8 px wide, had none.
+- Reads unchanged:
+  - The sweep's result files for all three symbologies (102,240 images) are byte-identical to those of the commit before.
+  - The corpus is identical in every column this library writes, over 624 images.
+  - The sweep records status but not corners. The corners come from the same functions as before, and the corner tests pass.
+- The allocation guards pass, and so does the full suite (29,513 tests, both targets).
+- Time, measured as the fastest of eight alternating runs of a harness over 18 shapes (success, light on dark, shadow, noise, gradient, another symbology), against both trees: every shape within ±2.5 %.
+  - Micro QR M4 upright: 3.79 → 3.87 µs.
+  - Standard QR noise 740 × 740: 2,891 → 2,938 µs.
+  - rMQR noise: 25,243 → 24,887 µs.
+- The repository's benchmarks with three launches of fifteen iterations, run twice each way, showed no direction beyond their spread.
