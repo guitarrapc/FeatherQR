@@ -32,8 +32,8 @@ public class SimdLayoutTest
     /// Stem files that keep a tier inline, paths under src/FeatherQR/Internals, each with where. In each an entry
     /// the scalar build also runs holds the vector steps and the scalar tail they hand over to, so the tier is not a
     /// method of its own to move. Cutting the steps out into inlined methods kept every loop the same instructions
-    /// but added a few around them in the JIT's and ILC's code (the SIMD tier coverage plan's phase 3 log); a file
-    /// is laid out only by a change that makes its tier a method with no such cost.
+    /// but added a few around them in the JIT's and ILC's code (Lessons learned in .github/docs/specs/qrcode-symbologies.md);
+    /// a file is laid out only by a change that makes its tier a method with no such cost.
     /// </summary>
     private static readonly Dictionary<string, string> InlineTiers = new()
     {

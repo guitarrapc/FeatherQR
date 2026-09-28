@@ -107,7 +107,7 @@ internal sealed class SimdKernel
 /// </summary>
 /// <remarks>
 /// <para>
-/// What a build runs is printed from that build (tests/FeatherQR.AotAnalysis does it for NativeAOT) instead of read off the code, and SimdTiersTest keeps this table and the code together:
+/// What a build runs is printed from that build (tests/FeatherQR.AotAnalysis for native builds, tests/FeatherQR.WasmReport for WebAssembly) instead of read off the code, and SimdTiersTest keeps this table and the code together:
 /// every instruction-set flag a kernel's files read must be the condition of a tier declared here for that kernel, and every tier declared here must be read there.
 /// </para>
 /// <para>
@@ -261,7 +261,7 @@ internal static class SimdTiers
     };
 
     /// <summary>
-    /// Which tier each kernel takes per build class: the answer to "which kernel runs which tier on which build", and CI holds every build to it (tests/FeatherQR.AotAnalysis <c>--simd-class</c>).
+    /// Which tier each kernel takes per build class: the answer to "which kernel runs which tier on which build", and CI holds every build to it (<c>--simd-class</c> of tests/FeatherQR.AotAnalysis and tests/FeatherQR.WasmReport); .github/docs/specs/qrcode-symbologies.md says what keeps it true.
     /// A cell with one tier is that tier. A cell with more lists what the CPU decides between, most preferred first: the first whose instruction set the process has is expected, and the last when it has none of them.
     /// </summary>
     internal static SimdExpectation[] Expected() =>

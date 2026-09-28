@@ -337,10 +337,42 @@ that one-time build to the call that happened to trigger it.
 
 ### SIMD tier inventory
 
-Shared primitives that already have both an x64 and an ARM64/Vector128 tier, and must be
-treated as controls rather than reimplemented when a new symbology or kernel arrives:
-`TextAnalyzer`, `EccBinaryEncoder`, `EccBinaryDecoder` (syndrome pass), `ModuleBitPacker`,
-`LuminanceConverter`, `LuminanceInverter`, `LocalBinarizer` (portable `Vector128` for its three passes), finder/alignment row-mask construction, the histogram fill (`Binarizer`), the finder search's edge-list row kernel (`FinderPatternFinder.RowEdges`), the Standard QR piecewise mesh sampler (`QRImageDecoder.SampleGridPiecewise`), and, portable `Vector128` only, the Micro QR affine grid sampler (`MicroQRImageDecoder.SampleGridVector128`) and the rMQR sub-finder lattice classification (`RmQRImageDecoder.ClassifySubFinderLatticeVector128`).
+Which SIMD tier each kernel runs on which build is not listed here: it is declared in one table,
+[SimdTiers.cs](../../../src/FeatherQR/Internals/SimdTiers.cs), and checked against real builds. The
+table holds every kernel with its tiers in the order its dispatch prefers them, each tier's condition,
+and per build class the tier the kernel takes there. A build prints its own answer:
+`tests/FeatherQR.AotAnalysis` for native builds and `tests/FeatherQR.WasmReport` for WebAssembly (run
+under Node.js, which has a browser's WebAssembly SIMD) print the instruction sets the build and the CPU
+give and every kernel's tiers with the one it takes, and given `--simd-class` fail when the build
+disagrees with the table. The shared kernels there are the controls a new symbology or kernel reuses
+rather than reimplements.
+
+| Build class | Builds | Left to the CPU |
+|---|---|---|
+| x64 without AVX | A default NativeAOT publish; the JIT under `DOTNET_EnableAVX=0`, which reads the same flags | GFNI |
+| x64 with AVX2 | The JIT on an AVX2 CPU; NativeAOT for `x86-64-v3` | GFNI with its 256-bit form; fast PEXT (not on AMD before Zen 3) |
+| ARM64 | The JIT; a default NativeAOT publish | The ARMv8.2 dot product |
+| WebAssembly | With its SIMD proposal (the default), interpreted or AOT-compiled | Nothing |
+
+A cell of the table is one tier or, where the class leaves an instruction set to the CPU, the tiers the
+CPU decides between; on each machine it pins exactly one. When the table was drawn (2026-09-28), 11 of
+28 kernels ran scalar on x64 without AVX (nine whose only x64 tiers are AVX2 or 256-bit, and the
+Structured Append parity and scanner, which have no x64 tier), 2 with AVX2, 1 on ARM64 (the rMQR value
+writers, SSE4.1 only) and 19 on WebAssembly, where only the portable 128-bit tiers run; the
+netstandard builds have no intrinsics and run scalar everywhere. Which instruction set a NativeAOT
+publish should target, and how much of the AVX2 territory 128-bit tiers should cover, are decisions
+that read this table; it makes neither. Where a kernel records a portable 128-bit tier as measured and
+left out (`Binarizer`), that measurement compared it with the 256-bit tier under the JIT, where the
+256-bit tier always runs, not with the scalar tier a default NativeAOT publish runs instead.
+
+What keeps the table true:
+
+- **The dispatch reads its own flags, and a source test ties the table to them.** `SimdTiersTest`: every instruction-set flag a kernel's files read is the condition of a tier the table declares for that kernel, every declared tier's flags are read there, each tier's own condition reads its flags, and no other file reads one (`HardwareCapabilities` aside). The order a dispatch tries its tiers in is the one thing it cannot see. The dispatch does not read the table, because the JIT inlines a dispatch into its caller only when the dispatch reads `IsSupported` itself (Lessons learned).
+- **The table states the tier, not a floor.** A floor passes a table that understates (a kernel gains a tier, or loses its GFNI tier on a runner that has GFNI); a plain snapshot flaps, because hosted runners change CPU between jobs. `SimdTierTableTest` checks the table in every CPU state each class allows, ARM64 and WebAssembly included on any machine, and that removing the tier a kernel takes fails the check in every state where it was taken, the change the source test lets through when the code and the declaration lose it together. It also holds the test process to its own class, so every test leg checks its JIT.
+- **CI runs every build class.** The `aot-analysis` job publishes the NativeAOT gate as the default linux-x64 build, an `x86-64-v3` build and the default build on linux-arm64, win-arm64 and osx-arm64, runs each with `--simd-class`, and runs the JIT on the same runners, under `DOTNET_EnableAVX=0` on x64 and `DOTNET_EnableArm64Dp=0` on ARM64 for the side of a class the runner's CPU does not show. The linux-x64 runner had no GFNI when the job was first run (2026-09-28), so the GFNI side of the x64 cells has run only on a developer machine. The `wasm-simd` job runs the WebAssembly report interpreted and AOT-compiled; a report of its own, run headless, rather than one read out of the Playground, which would need a browser and would put the library's internals into an app that ships.
+- **A file's name says which instruction families it may use.** `{stem}.X86.cs` holds x86 intrinsics with the vectors they work on, `{stem}.Arm64.cs` ARM intrinsics with 128-bit vectors, `{stem}.Vector256.cs` and `{stem}.Vector128.cs` portable vectors of that width or narrower, and `{stem}.Simd.cs` a tier that picks its instructions per instruction set inside one method; the stem file holds the entry, the dispatch and the scalar tier and uses no vector instruction. Tiers move between files only as whole methods (Lessons learned). Six stem files keep a tier inline, where an entry the scalar build also runs holds the vector steps beside the scalar tail they hand over to; `SimdLayoutTest.InlineTiers` lists them with where, and fails when one of them stops or another file starts.
+- **A new kernel or tier** needs its row in the table and its files in `SimdTiersTest`; the tests fail until both are there.
+
 Architecture-neutral work already benefits every target: cached per-version layouts, pair
 stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
 finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
@@ -368,8 +400,9 @@ a no-symbol image, bound by its branches as on x64) and then the sampler's colum
 eight windows a step; the sampler on four lanes, two steps a body). What the x64 round found
 there transferred as structure and not as instructions, and each tier was searched again on the
 M2 against its own reference (see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)). WASM runs the scalar fill, the mask walk and
-the column table: the 128-bit forms measured on x64 say nothing about it, and it is unmeasured.
+[standardqr-decoder.md](standardqr-decoder.md)). WASM runs the scalar fill and the column table and
+the 128-bit mask walk (the table's WebAssembly column); how fast is unmeasured, since the 128-bit forms
+measured on x64 say nothing about it.
 The queue is closed again behind them, on the same rule.
 
 ## Scope decisions
@@ -392,6 +425,8 @@ The queue is closed again behind them, on the same rule.
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |
 | Interoperability runs against external encoders/decoders | Manual, not a CI job. `tools/QRInteropFixtures` spot-checks (`spot-check-rmqr`, `spot-check-microqr`) are run by hand before a release; pull-request CI stays self-contained and consumes the committed fixture corpus instead | A regression the committed corpus cannot catch, or an external oracle that installs cleanly enough for scheduled CI under the pinning policy in [qrcode-test-fixtures.md](qrcode-test-fixtures.md) |
 | Physical scanner acceptance | Not automated, and deliberately never a conformance gate: a phone scanner disagreeing proves an interoperability problem, never a specification violation. Run ad hoc against a representative print/screen set before a symbology's first release | A field report that the committed corpus and the image-degradation tests both pass but real scanners fail |
+| SIMD tier table | One table in `Internals/SimdTiers.cs`, per kernel and build class, checked by source and table tests and by every build class in CI; the dispatch keeps its own flag reads; tiers move between files only as whole methods, six kept inline and listed | A JIT that inlines a dispatch through a property, which would let the dispatch read the table; a kept-inline tier rewritten as a method of its own for another reason |
+| NativeAOT instruction-set target; 128-bit tiers where x64 without AVX runs scalar | Not decided: the tier table is what either decision reads, and no public API or README text says anything about `IlcInstructionSet` | A plan for either |
 
 ## Lessons learned
 
@@ -424,3 +459,13 @@ The queue is closed again behind them, on the same rule.
 - **Product name, package ID and repository URL are three strings that used to be one.** After the rename `FeatherQR` is the product, `SkiaSharp.QrCode` survives only as the metapackage ID, and the repository URL changed last. The mechanical rewrite worked only with a lookbehind for the repository owner and a lookahead for dotted project names; the header and installation blocks of the README were written by hand.
 - **GitHub Pages project sites do not follow a repository rename**, and shared Playground links carry their settings in the URL hash, which a meta refresh drops. The user-site stub therefore forwards by script and keeps the meta refresh only as the no-script fallback. `user.github.io/<name>/` resolves to the project site first and the user site's folder second, so the stub is invisible until the project site is gone, which is expected rather than a deployment failure.
 - **Transitive pinning, a file-based tool and a rename each have a blast radius the plan underestimated.** The plan's Phase 1 inventory expected one `InternalsVisibleTo` use and found three; expected zero core dependencies and found the netstandard shims; expected the dependency assertion to be a literal table and had to decide the pinning question first. Each was caught by a check that ran against the artifact rather than the source: the metadata test, the nupkg guard, the compiler with the grant removed.
+
+- **A default NativeAOT publish on x64 drops everything from AVX on, and the JIT can show that dispatch without an AOT compile.** Under ILCompiler 10.0.9 `Vector256`, `Avx2` and `Bmi2` read false on any CPU, while SSE2 to SSE4.2, POPCNT and GFNI survive, so SSE-family tiers keep running. `DOTNET_EnableAVX=0` makes the JIT read exactly the same flags; `DOTNET_EnableHWIntrinsic=0` reads none. `x86-x64-v3`, a spelling older documents carry, is rejected as an unknown instruction set; the name is `x86-64-v3`.
+- **Only a dispatch that reads `IsSupported` itself compiles as it does today.** Moving every dispatch onto `bool` properties declared in one table kept ILC's code and the JIT's machine code for the kernels, but not the JIT's inlining: `ModulePlacer.MaskCode` stopped being inlined into its caller, and `TextAnalyzer.Analyze` inlined 167 methods instead of 9 before dropping its dead tiers. Of a property, an aggressively inlined property, a `static readonly` field and the direct read, the JIT inlined the dispatch into its caller only for the direct read. Under ILC a tier enum the dispatch compares keeps a compare per branch and every unreachable branch, where a `bool` property folds like the read. So the table is checked against the dispatch rather than read by it.
+- **A list of tiers read off the code is wrong where it matters.** The first inventory, made by reading the gates, put `EccBinaryEncoder` on SSSE3 under a default NativeAOT publish (it runs 128-bit GFNI there) and missed the three kernels with no tier for one architecture: the Structured Append parity and scanner have none for x64, the rMQR value writers none for ARM64. Each was in the code; the builds' own reports found them.
+- **A tier's name is the least it needs, and a kernel can ask more.** `EccBinaryDecoder` runs 256-bit GFNI on `Gfni.V256` alone, `EccBinaryEncoder` also asks for AVX2, and `Gfni.V256` stays true under `DOTNET_EnableAVX2=0`, so the table keeps each kernel's own condition. Nor is every combination of what a class leaves to the CPU a CPU: with AVX present, GFNI comes with its 256-bit form, so the class leaves the two to the CPU as one group.
+- **On ARM64 the useful knob is `DOTNET_EnableArm64Dp=0`.** It shows on an Apple M2 what a core without the dot product runs. `DOTNET_EnableArm64AdvSimd=0` turns everything off on .NET 8 and is ignored on .NET 10, and a NativeAOT binary ignores both. ILC checks the dot product at run time rather than taking it from the target: it reads true under `IlcInstructionSet=armv8-a` on an M2, and on the linux-arm64, win-arm64 and osx-arm64 runners alike.
+- **A loop moved out of its method is not the same code, even when every loop is the same instructions.** Cutting the Standard QR row-mask and bit-expansion loops into inlined methods in their family files kept every loop instruction for instruction under the JIT (.NET 8 and 10, with and without AVX) and ILC (x64, `x86-64-v3`, ARM64), but added 2 to 22 instructions a call around them (a larger frame, a spill, reloads, reordered blocks); handing the index and the threshold vector through removed one. Nothing in C# pins register allocation or block layout, and a file layout is not worth code the compilers emit differently, so tiers move only as whole methods, whose disassembly stayed identical in all seven configurations.
+- **This machine cannot measure a few instructions a call.** ShortRun and 20-iteration rounds of the image decode and encode benchmarks, before and after alternating, put the same build 9 to 37 % apart from itself on half the rows. Disassembly identical to the previous commit is what a layout change is held to.
+- **ILC produces ARM64 code on an x64 machine without an ARM64 linker.** The publish stops at its linker check before ILC runs, but ILC itself, run on the x64 response file retargeted to ARM64, compiles and writes its disassembly, which is all a codegen comparison needs.
+- **Interpreted and AOT-compiled WebAssembly run the same tiers.** The Mono interpreter reports 128-bit vectors accelerated as the AOT build does, so a Blazor WebAssembly app that never turns AOT on runs the same nine vector tiers the Playground does, and one build class covers both.
