@@ -72,15 +72,15 @@ public class LargeVersionGridOrderTest
     public async Task BowedSymbol_ReadsThroughTheMeshAfterTheAnchoredTransform(int version, float pixelsPerModule, float degrees, float bowModules)
     {
         var qr = Symbol(version);
-        var (luminance, side) = RenderBowed(qr, pixelsPerModule, degrees, bowModules);
+        var (luminance, side) = BowedRenderer.Render(qr, pixelsPerModule, degrees, bowModules);
 
         // Premise: the transform through the true finder centres and the true bottom-right alignment centre does not read it
         var threshold = Binarizer.ComputeOtsuThreshold(luminance);
         var d = qr.Size;
-        var (x0, y0) = BowedToPixel(d, pixelsPerModule, degrees, bowModules, side, 3.5f, 3.5f);
-        var (x1, y1) = BowedToPixel(d, pixelsPerModule, degrees, bowModules, side, d - 3.5f, 3.5f);
-        var (x2, y2) = BowedToPixel(d, pixelsPerModule, degrees, bowModules, side, d - 6.5f, d - 6.5f);
-        var (x3, y3) = BowedToPixel(d, pixelsPerModule, degrees, bowModules, side, 3.5f, d - 3.5f);
+        var (x0, y0) = BowedRenderer.ToPixel(d, pixelsPerModule, degrees, bowModules, side, 3.5f, 3.5f);
+        var (x1, y1) = BowedRenderer.ToPixel(d, pixelsPerModule, degrees, bowModules, side, d - 3.5f, 3.5f);
+        var (x2, y2) = BowedRenderer.ToPixel(d, pixelsPerModule, degrees, bowModules, side, d - 6.5f, d - 6.5f);
+        var (x3, y3) = BowedRenderer.ToPixel(d, pixelsPerModule, degrees, bowModules, side, 3.5f, d - 3.5f);
         var fourPoint = PerspectiveTransform.QuadrilateralToQuadrilateral(3.5f, 3.5f, d - 3.5f, 3.5f, d - 6.5f, d - 6.5f, 3.5f, d - 3.5f, x0, y0, x1, y1, x2, y2, x3, y3);
         var modules = new byte[d * d];
         QRImageDecoder.SampleGridScalar(luminance, side, side, threshold, fourPoint, d, modules);
@@ -134,55 +134,6 @@ public class LargeVersionGridOrderTest
             worst = MathF.Max(worst, off);
         }
         return worst;
-    }
-
-    /// <summary>
-    /// The symbol, with a 4-module quiet zone, with its rows bent into arcs that sag <paramref name="bowModules"/> at the middle column, then turned about the centre of a square canvas; 2×2 supersampled.
-    /// </summary>
-    private static (byte[] Luminance, int Side) RenderBowed(QRCodeData qr, float pixelsPerModule, float degrees, float bowModules)
-    {
-        var span = qr.Size + 8;
-        var side = (int)((span + 2 * bowModules) * pixelsPerModule * 1.45f) + 8;
-        var luminance = new byte[side * side];
-        Array.Fill(luminance, (byte)255);
-        var radians = degrees * Math.PI / 180.0;
-        double cos = Math.Cos(radians), sin = Math.Sin(radians);
-        var centre = side / 2.0;
-        var half = span * pixelsPerModule / 2.0;
-        for (var y = 0; y < side; y++)
-        {
-            for (var x = 0; x < side; x++)
-            {
-                var dark = 0;
-                for (var sy = 0; sy < 2; sy++)
-                {
-                    for (var sx = 0; sx < 2; sx++)
-                    {
-                        double px = x + 0.25 + sx * 0.5 - centre, py = y + 0.25 + sy * 0.5 - centre;
-                        // Undo the turn, then the bow
-                        var s = (px * cos + py * sin + half) / pixelsPerModule;
-                        var t = (-px * sin + py * cos + half) / pixelsPerModule - bowModules * Math.Sin(Math.PI * s / span);
-                        var column = (int)Math.Floor(s) - 4;
-                        var row = (int)Math.Floor(t) - 4;
-                        if (row >= 0 && column >= 0 && row < qr.Size && column < qr.Size && qr[row, column])
-                            dark++;
-                    }
-                }
-                luminance[y * side + x] = (byte)((4 - dark) * 255 / 4);
-            }
-        }
-        return (luminance, side);
-    }
-
-    /// <summary>Where <see cref="RenderBowed"/> draws grid point (<paramref name="u"/>, <paramref name="v"/>) of the symbol, quiet zone excluded.</summary>
-    private static (float X, float Y) BowedToPixel(int size, float pixelsPerModule, float degrees, float bowModules, int side, float u, float v)
-    {
-        var span = size + 8;
-        var s = u + 4.0;
-        var fx = s * pixelsPerModule - span * pixelsPerModule / 2.0;
-        var fy = (v + 4.0 + bowModules * Math.Sin(Math.PI * s / span)) * pixelsPerModule - span * pixelsPerModule / 2.0;
-        var radians = degrees * Math.PI / 180.0;
-        return ((float)(side / 2.0 + fx * Math.Cos(radians) - fy * Math.Sin(radians)), (float)(side / 2.0 + fx * Math.Sin(radians) + fy * Math.Cos(radians)));
     }
 
     /// <summary>The corrections a mesh built from the true finder centres reads the render with, or -1 when it does not read.</summary>
