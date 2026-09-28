@@ -319,18 +319,24 @@ public class SymbolCornersTest
     }
 
     /// <summary>
-    /// rMQR's bounded perspective search under-recovers the column-axis lean, so the two far
-    /// corners carry the residual and which is worse depends on version and tilt (R11x59: 0.9
-    /// module at 2 % on the top-right, 1.24 at 3 % on the bottom-left; R7x43 1.04 at 4 %).
+    /// A grid anchored on the sub-finder reads a keystone through error correction without following
+    /// it, so its far corners carry the residual, more on some versions than others (measured
+    /// 2026-09-28: R11x59 0.89 module at 2 % a side and 1.21 at 4 %, R7x43 1.07 at 4 %, R17x43 1.86
+    /// at 8 %, R11x27 2.10 at 10 %). A grid traced round the perimeter, which reads the stronger
+    /// keystones, is fitted to the symbol's own edges (R17x139 0.16 at 10 %).
     /// </summary>
     [Test]
     [Arguments(RmQRVersion.R11x59, "RMQR CORNERS", 0.02f, 1f)]
     [Arguments(RmQRVersion.R11x59, "RMQR CORNERS", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R7x43, "RMQR", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R17x139, "RMQR CORNERS ARE RECTANGULAR", 0.04f, 1f)]
-    // The two versions closest to the stated bounds: R9x43 at 1.30 modules, R13x77 at 1.05.
+    // Measured: R9x43 1.12 at 4 %, R13x77 1.00 at 2 %
     [Arguments(RmQRVersion.R9x43, "RMQR", 0.04f, 1.5f)]
     [Arguments(RmQRVersion.R13x77, "RMQR CORNERS", 0.02f, 1.5f)]
+    // The contract's "about two modules" at its largest measured
+    [Arguments(RmQRVersion.R17x43, "RMQR", 0.08f, 2f)]
+    [Arguments(RmQRVersion.R11x27, "RMQR", 0.1f, 2.25f)]
+    [Arguments(RmQRVersion.R17x139, "RMQR CORNERS", 0.1f, 0.25f)]
     public async Task RmQR_Keystone_CornersAreTheWarpedQuadrilateral(RmQRVersion version, string content, float tilt, float toleranceModules)
     {
         using var flat = RenderRm(content, version);

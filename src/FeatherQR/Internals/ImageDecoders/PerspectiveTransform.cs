@@ -69,6 +69,10 @@ internal readonly struct PerspectiveTransform
             perspectiveX, perspectiveY, 1f);
     }
 
+    /// <summary>The transform with these coefficients: (x, y) maps to ((a11·x + a21·y + a31) / d, (a12·x + a22·y + a32) / d), d = a13·x + a23·y + a33.</summary>
+    internal static PerspectiveTransform FromCoefficients(float a11, float a21, float a31, float a12, float a22, float a32, float a13, float a23, float a33)
+        => new(a11, a21, a31, a12, a22, a32, a13, a23, a33);
+
     /// <summary>
     /// Transforms (x, y) through the projective map.
     /// </summary>

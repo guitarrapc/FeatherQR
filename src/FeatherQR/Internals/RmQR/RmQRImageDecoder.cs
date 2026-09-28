@@ -18,20 +18,21 @@ namespace FeatherQR.Internals.RmQR;
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
 /// 1. Frames: four right angles, each also with its axes swapped (mirror); first from the axis-aligned module sizes
-///    (one pixel or more), then from each axis pair of an angular sweep
-/// 2. Per frame:
+///    (one pixel or more), then from the finder's own outline, shear included, each whose finder-side format copy
+///    decodes having its perimeter traced, then from each axis pair of an angular sweep
+/// 2. Per frame of the first and the last kind:
 ///    a. Low density (module under 1.75 px, along the image axes): module boundaries, whose count names the version
 ///    b. Finder-side format copy at the measured scale, then, under 6 px per module, at scales a few percent off
 ///       (an exact codeword there); a copy that reads names the version, so the width and height
-///    c. Sub-finder near the corner that version predicts: the isotropic grid, the anisotropic grid, then, once
-///       either gets past its format information, the perspective search, each candidate gated by the
-///       sub-finder-side format copy and the edge timing rows
-///    d. The unrefined frame when no refined grid got past its format information; the scales stop once a grid
-///       anchored on the sub-finder did
+///    c. Sub-finder near the corner that version predicts: the isotropic grid and the anisotropic grid
+///    d. The perimeter traced from the frame, when its copy read an exact codeword
+///    e. Once an anchored grid gets past its format information, the perspective search, each candidate gated by
+///       the sub-finder-side format copy and the edge timing rows
+///    f. The unrefined frame when no anchored grid got past its format information; the scales stop once one did
 /// 3. Each grid: the matrix level, then, on an image with grey levels, a coverage re-read of a grid past its format information
 /// </code>
 /// </remarks>
-internal static class RmQRImageDecoder
+internal static partial class RmQRImageDecoder
 {
     /// <summary>Candidates actually tried, most-confirmed first (false hits rank behind).</summary>
     private const int MaxCandidatesToTry = 8;
@@ -190,9 +191,10 @@ internal static class RmQRImageDecoder
     {
         // Hoisted: the two scans binarize the same buffer
         threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out grey);
+        var level = grey.EdgeLevel(threshold);
 
         Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
-        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, grey, level, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
         noFinder = false;
         // Terminal, not just successful: DestinationTooSmall is only reached after the symbol has been located, sampled, RS-corrected and its segment found to fit the bitstream, so the buffer is the only thing missing and a wider finder scan cannot change it. (That ordering is a precondition, not a given: the segment decoders check bitstream sufficiency before destination sufficiency precisely so a malformed count cannot masquerade as a short buffer here.)
         // A verdict on the content does not end it: the sweep can find another symbol that reads.
@@ -201,7 +203,7 @@ internal static class RmQRImageDecoder
 
         // A candidate the strided scan tried decodes the same way in the sweep, so it is not tried again; unless that scan settled, when every candidate stays
         var skip = IsSettled(status) ? default : tried.Slice(0, triedCount);
-        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _, out var sweptFound);
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, grey, level, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _, out var sweptFound);
         noFinder = stridedFound == 0 && sweptFound == 0;
         // Settled, not just successful: when the sweep is the pass that reads the symbol, its DestinationTooSmall or its verdict on the content is the answer.
         if (IsSettled(sweptStatus))
@@ -228,7 +230,7 @@ internal static class RmQRImageDecoder
         var midpoint = (byte)Math.Round(grey.Midpoint);
         if (midpoint == threshold)
             return DecodeStatus.NotDetected;
-        return DecodeLuminanceScan(luminance, width, height, midpoint, grey, destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
+        return DecodeLuminanceScan(luminance, width, height, midpoint, grey, grey.Midpoint, destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
     }
 
     /// <summary>
@@ -237,7 +239,7 @@ internal static class RmQRImageDecoder
     /// <remarks>
     /// A candidate's decode depends only on its position and module size, the image and the threshold, so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
     /// </remarks>
-    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount, out int found)
+    private static DecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, float level, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount, out int found)
     {
         charsWritten = 0;
         triedCount = 0;
@@ -287,7 +289,7 @@ internal static class RmQRImageDecoder
                 // The frames see only this candidate's results: a read that did not fit on another one ends none of them
                 var candidateStatus = DecodeStatus.NotDetected;
                 var candidateInfo = NotDetected();
-                var status = DecodeCandidate(luminance, width, height, threshold, grey, candidates[c], modules, orientations, destination, out charsWritten, out info, ref candidateStatus, ref candidateInfo);
+                var status = DecodeCandidate(luminance, width, height, threshold, grey, level, candidates[c], modules, orientations, destination, out charsWritten, out info, ref candidateStatus, ref candidateInfo);
                 if (status == DecodeStatus.Success)
                     return status;
                 TrackBestFailure(candidateStatus, candidateInfo, ref bestStatus, ref bestInfo);
@@ -304,7 +306,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// One finder candidate within its budget of decodes: the axis-aligned frames, then those of each axis pair from the angular sweep.
+    /// One finder candidate within its budget of decodes: the axis-aligned frames, then those of the finder's outline, then those of each axis pair from the angular sweep.
     /// Ends at a read, or at a read that did not fit, since its symbol was read and no other frame of this finder can change that.
     /// </summary>
     private static DecodeStatus DecodeCandidate(
@@ -313,6 +315,7 @@ internal static class RmQRImageDecoder
         int height,
         byte threshold,
         in GreyLevels grey,
+        float level,
         FinderPattern finder,
         Span<byte> modules,
         Span<OrientationCandidate> orientations,
@@ -330,7 +333,7 @@ internal static class RmQRImageDecoder
         {
             ConcentricCentroid.TryRefine(luminance, width, height, grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref finder.X, ref finder.Y, out _);
             var status = TryFrames(
-                luminance, width, height, threshold, grey, finder,
+                luminance, width, height, threshold, grey, level, finder,
                 horizontalModuleSize, 0f, 0f, verticalModuleSize,
                 modules, destination, out charsWritten, out info,
                 ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -340,6 +343,18 @@ internal static class RmQRImageDecoder
 
         // Arbitrary rotation: recover the finder's local axes from the angular sweep.
         var orientationCount = FinderAxisEstimator.FindOrientationCandidates(luminance, width, height, threshold, finder, orientations);
+
+        // The finder's own frame, shear included, before the sweep's square ones: under perspective the finder is not the square they assume, and a rotated one reads through its outline as soon as through them.
+        // Seeded from a square frame, the first measurement's chords cross the ring at a slant; along its own axes they cross it square
+        if (TryMeasureOutline(luminance, width, height, level, finder, orientations.Slice(0, orientationCount), out var outline))
+        {
+            if (outline.TryRefine(luminance, width, height, level, out var refined))
+                outline = refined;
+            var status = TryOutlineFrames(luminance, width, height, threshold, level, grey, outline, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            if (IsTerminal(status))
+                return status;
+        }
+
         for (var o = 0; o < orientationCount && attemptsRemaining > 0; o++)
         {
             ref readonly var frame = ref orientations[o];
@@ -347,7 +362,7 @@ internal static class RmQRImageDecoder
             var candidate = finder;
             ConcentricCentroid.TryRefine(luminance, width, height, grey, frame.UX, frame.UY, frame.VX, frame.VY, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
             var status = TryFrames(
-                luminance, width, height, threshold, grey, candidate,
+                luminance, width, height, threshold, grey, level, candidate,
                 frame.UX, frame.UY, frame.VX, frame.VY,
                 modules, destination, out charsWritten, out info,
                 ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -360,6 +375,112 @@ internal static class RmQRImageDecoder
         return bestStatus;
     }
 
+    /// <summary>The finder's outline, seeded from each of the sweep's frames until one measures it.</summary>
+    private static bool TryMeasureOutline(ReadOnlySpan<byte> luminance, int width, int height, float level, in FinderPattern finder, ReadOnlySpan<OrientationCandidate> orientations, out FinderOutline outline)
+    {
+        for (var o = 0; o < orientations.Length; o++)
+        {
+            ref readonly var frame = ref orientations[o];
+            if (FinderOutline.TryMeasure(luminance, width, height, level, finder.X, finder.Y, frame.UX, frame.UY, frame.VX, frame.VY, out outline))
+                return true;
+        }
+        outline = default;
+        return false;
+    }
+
+    /// <summary>
+    /// The eight frames of the finder's outline, made as <see cref="TryFrames"/> makes a frame's: each whose finder-side format copy decodes, as at the measured scale, has its perimeter traced.
+    /// </summary>
+    private static DecodeStatus TryOutlineFrames(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        float level,
+        in GreyLevels grey,
+        in FinderOutline outline,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out RmQRCodeDecodeInfo info,
+        ref DecodeStatus bestStatus,
+        ref RmQRCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining)
+    {
+        charsWritten = 0;
+        info = bestInfo;
+        for (var orientation = 0; orientation < 4; orientation++)
+        {
+            for (var mirror = 0; mirror < 2; mirror++)
+            {
+                if (attemptsRemaining <= 0)
+                    break;
+                OutlineFrame(outline, orientation, mirror, out var uX, out var uY, out var vX, out var vY);
+                var affine = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, outline.CenterX, outline.CenterY, uX, uY, vX, vY, 0f, 0f);
+                var raw = ReadFormatCopy(luminance, width, height, threshold, affine, subFinderSide: false, 0, 0);
+                if (!RmQRFormatInformationDecoder.TryDecodeCopy(raw, subFinderSide: false, out var version, out _, out _))
+                    continue;
+
+                var status = TryTracedFrame(luminance, width, height, threshold, level, grey, outline.CenterX, outline.CenterY, uX, uY, vX, vY, version, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                if (IsTerminal(status))
+                    return status;
+            }
+        }
+
+        charsWritten = 0;
+        info = bestInfo;
+        return bestStatus;
+    }
+
+    /// <summary>One of the eight frames of an outline's axes, in <see cref="TryFrames"/>'s order.</summary>
+    private static void OutlineFrame(in FinderOutline outline, int orientation, int mirror, out float uX, out float uY, out float vX, out float vY)
+    {
+        var (aX, aY, bX, bY) = orientation switch
+        {
+            0 => (outline.UX, outline.UY, outline.VX, outline.VY),
+            1 => (outline.VX, outline.VY, -outline.UX, -outline.UY),
+            2 => (-outline.UX, -outline.UY, -outline.VX, -outline.VY),
+            _ => (-outline.VX, -outline.VY, outline.UX, outline.UY),
+        };
+        (uX, uY, vX, vY) = mirror == 0 ? (aX, aY, bX, bY) : (bX, bY, aX, aY);
+    }
+
+    /// <summary>
+    /// The perimeter traced from a frame at the finder, sampled and decoded.
+    /// <see cref="DecodeStatus.NotDetected"/> when the budget is spent or the trace fails.
+    /// </summary>
+    private static DecodeStatus TryTracedFrame(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        float level,
+        in GreyLevels grey,
+        float centerX,
+        float centerY,
+        float uX,
+        float uY,
+        float vX,
+        float vY,
+        RmQRVersion version,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out RmQRCodeDecodeInfo info,
+        ref DecodeStatus bestStatus,
+        ref RmQRCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining)
+    {
+        charsWritten = 0;
+        info = bestInfo;
+        if (attemptsRemaining <= 0)
+            return DecodeStatus.NotDetected;
+        if (!TryTracePerimeter(luminance, width, height, level, centerX, centerY, uX, uY, vX, vY, version, out var transform))
+            return DecodeStatus.NotDetected;
+        var samplingSlack = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
+        return Attempt(luminance, width, height, threshold, grey, transform, RmQRConstants.GetWidth(version), RmQRConstants.GetHeight(version), samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+    }
+
     /// <summary>
     /// Tries the eight frames one axis pair generates: four right-angle rotations, each with and without the axes swapped (a mirrored capture keeps the finder geometry and transposes the grid).
     /// </summary>
@@ -369,6 +490,7 @@ internal static class RmQRImageDecoder
         int height,
         byte threshold,
         in GreyLevels grey,
+        float level,
         in FinderPattern candidate,
         float uX,
         float uY,
@@ -399,7 +521,7 @@ internal static class RmQRImageDecoder
 
                 var (colX, colY, rowX, rowY) = mirror == 0 ? (aX, aY, bX, bY) : (bX, bY, aX, aY);
                 var status = TryFrame(
-                    luminance, width, height, threshold, grey, candidate,
+                    luminance, width, height, threshold, grey, level, candidate,
                     colX, colY, rowX, rowY,
                     modules, destination, out charsWritten, out info,
                     ref bestStatus, ref bestInfo, ref attemptsRemaining);
@@ -414,7 +536,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// One local frame (finder center at grid (3.5, 3.5), <c>u</c> = column axis, <c>v</c> = row axis in pixels per module): read the finder-side format copy to learn the version, anchor the far end on the sub-finder, then decode.
+    /// One local frame (finder center at grid (3.5, 3.5), <c>u</c> = column axis, <c>v</c> = row axis in pixels per module): read the finder-side format copy to learn the version, anchor the far end on the sub-finder or trace the perimeter, then decode.
     /// </summary>
     private static DecodeStatus TryFrame(
         ReadOnlySpan<byte> luminance,
@@ -422,6 +544,7 @@ internal static class RmQRImageDecoder
         int height,
         byte threshold,
         in GreyLevels grey,
+        float level,
         in FinderPattern candidate,
         float uX,
         float uY,
@@ -469,8 +592,8 @@ internal static class RmQRImageDecoder
 
             formatRead = true;
             var status = TryScaledFrame(
-                luminance, width, height, threshold, grey, candidate,
-                scale * uX, scale * uY, scale * vX, scale * vY, version, affine,
+                luminance, width, height, threshold, grey, level, candidate,
+                scale * uX, scale * uY, scale * vX, scale * vY, version, distance == 0, affine,
                 modules, destination, out charsWritten, out info,
                 ref bestStatus, ref bestInfo, ref attemptsRemaining, out var anchoredStatus);
 
@@ -585,7 +708,7 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
-    /// The frame at a scale whose finder-side format copy read <paramref name="version"/>: anchors the far end on the sub-finder, then decodes.
+    /// The frame at a scale whose finder-side format copy read <paramref name="version"/>, an exact codeword when <paramref name="exactCopy"/>: anchors the far end on the sub-finder or traces the perimeter, then decodes.
     /// </summary>
     private static DecodeStatus TryScaledFrame(
         ReadOnlySpan<byte> luminance,
@@ -593,12 +716,14 @@ internal static class RmQRImageDecoder
         int height,
         byte threshold,
         in GreyLevels grey,
+        float level,
         in FinderPattern candidate,
         float uX,
         float uY,
         float vX,
         float vY,
         RmQRVersion version,
+        bool exactCopy,
         in PerspectiveTransform affine,
         Span<byte> modules,
         Span<char> destination,
@@ -616,21 +741,25 @@ internal static class RmQRImageDecoder
 
         var frameStatus = DecodeStatus.NotDetected;
         anchoredStatus = DecodeStatus.NotDetected;
+        // Predicted (affine) and observed offsets from the finder center to the sub-finder center.
+        var dX = symbolWidth - 2.5f - FinderCenter;
+        var dY = symbolHeight - 2.5f - FinderCenter;
+        var observed = false;
+        var observedX = 0f;
+        var observedY = 0f;
         var subFinderFound = TryLocateSubFinder(luminance, width, height, threshold, candidate, uX, uY, vX, vY, symbolWidth, symbolHeight, out var subX, out var subY);
         if (subFinderFound)
         {
             ConcentricCentroid.TryRefine(luminance, width, height, grey, uX, uY, vX, vY, 1f, 1f, 0.5f, ref subX, ref subY, out _);
-            // Predicted (affine) and observed offsets from the finder center to the sub-finder center.
-            var dX = symbolWidth - 2.5f - FinderCenter;
-            var dY = symbolHeight - 2.5f - FinderCenter;
             var predictedX = dX * uX + dY * vX;
             var predictedY = dX * uY + dY * vY;
-            var observedX = subX - candidate.X;
-            var observedY = subY - candidate.Y;
+            observedX = subX - candidate.X;
+            observedY = subY - candidate.Y;
             var predictedLength = (float)Math.Sqrt(predictedX * predictedX + predictedY * predictedY);
             var observedLength = (float)Math.Sqrt(observedX * observedX + observedY * observedY);
             if (predictedLength > 0f && observedLength > 0f)
             {
+                observed = true;
                 // (a) Rotation-corrected, isotropically rescaled frame: exact for a
                 // rotated or uniformly mis-scaled affine capture.
                 var scale = observedLength / predictedLength;
@@ -660,20 +789,31 @@ internal static class RmQRImageDecoder
                         frameStatus = Deeper(frameStatus, status);
                     }
                 }
-
-                // (c) Perspective: only after an affine attempt got past format decoding (the grid is roughly right, RS still fails). Search the two projective coefficients; for each, the sub-finder fixes the Jacobian column scale and the frame rotation exactly, and the sub-finder-side format copy must read back consistently before the full grid is sampled.
-                if (IsPlausibleRefinement(frameStatus))
-                {
-                    status = TryPerspectiveVariants(
-                        luminance, width, height, threshold, grey, candidate,
-                        uX, uY, vX, vY, version, symbolWidth, symbolHeight, samplingSlack,
-                        observedX, observedY, dX, dY,
-                        modules, destination, out charsWritten, out info,
-                        ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (IsTerminal(status))
-                        return status;
-                }
             }
+        }
+
+        // (c) The perimeter traced from this frame: it needs no sub-finder, and it measures the perspective the search below can only try, so it comes first.
+        // Every frame traces its own, even where another traced from the same side: under noise the start decides the trace.
+        // Only from an exact copy, as at a corrected scale: within 3 bits a quarter of random reads name a version, and each would start a trace on another symbology's image.
+        // A traced grid that fails leaves the frame's status to the anchored ones: at low density it can get past the format information and would stop the scales before one whose anchored grid reads
+        if (exactCopy)
+        {
+            var status = TryTracedFrame(luminance, width, height, threshold, level, grey, candidate.X, candidate.Y, uX, uY, vX, vY, version, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            if (IsTerminal(status))
+                return status;
+        }
+
+        // (d) Perspective: only after an attempt got past format decoding (the grid is roughly right, RS still fails) and with the sub-finder observed. Search the two projective coefficients; for each, the sub-finder fixes the Jacobian column scale and the frame rotation exactly, and the sub-finder-side format copy must read back consistently before the full grid is sampled.
+        if (observed && IsPlausibleRefinement(frameStatus))
+        {
+            var status = TryPerspectiveVariants(
+                luminance, width, height, threshold, grey, candidate,
+                uX, uY, vX, vY, version, symbolWidth, symbolHeight, samplingSlack,
+                observedX, observedY, dX, dY,
+                modules, destination, out charsWritten, out info,
+                ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            if (IsTerminal(status))
+                return status;
         }
 
         anchoredStatus = frameStatus;

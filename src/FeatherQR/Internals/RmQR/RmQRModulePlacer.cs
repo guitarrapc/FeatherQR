@@ -481,6 +481,7 @@ internal static partial class RmQRModulePlacer
         public readonly int[] Singles;           // walk positions no block or run covers
         public readonly byte[] ReverseIndex;     // TBL index flipping the first (h-2) lanes into row order
         private readonly byte[] _functionTemplate; // function modules painted, format modules 0
+        public byte[] FunctionTemplate => _functionTemplate;
         private byte[]? _templateM;
         private byte[]? _templateH;
 
@@ -512,6 +513,11 @@ internal static partial class RmQRModulePlacer
     }
 
     private static readonly Layout?[] layouts = new Layout?[RmQRConstants.VersionCount + 1];
+
+    /// <summary>
+    /// The version's function modules painted, row-major over its width, format modules 0: what the image decoder expects along the symbol's edges.
+    /// </summary>
+    internal static ReadOnlySpan<byte> GetFunctionTemplate(RmQRVersion version) => GetLayout(version).FunctionTemplate;
 
     private static Layout GetLayout(RmQRVersion version)
     {

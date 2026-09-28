@@ -141,7 +141,7 @@ void CheckRmqr(string name, bool[,] m, string payload, (H Map, int Width, int He
 }
 
 // The inputs as rendered, shared with their figures
-const double RmqrPitch = 4, RmqrTurn = 30, RmqrKeystonePitch = 8, RmqrShrink = 0.08, RmqrWide = 4, RmqrTall = 3, RmqrGreyPitch = 1.55, RmqrGreyTurn = 3, RmqrLowPitch = 1.2;
+const double RmqrPitch = 4, RmqrTurn = 30, RmqrKeystonePitch = 8, RmqrShrink = 0.16, RmqrWide = 4, RmqrTall = 3, RmqrGreyPitch = 1.55, RmqrGreyTurn = 3, RmqrLowPitch = 1.2;
 const char RmqrShrunkEdge = 'T';
 const int RmqrSnapWidth = 137;
 const bool RmqrGreyBlur = false;
@@ -1157,12 +1157,14 @@ string[] rmqrBoxes =
     "Binarization pass",
     "Finder candidates",
     "Axis-aligned frames",
+    "Finder outline",
     "Arbitrary orientation",
     "Low density",
     "Finder-side format copy",
     "Sub-finder",
     "Isotropic grid",
     "Anisotropic grid",
+    "Perimeter trace",
     "Perspective search",
     "Unrefined frame",
     "Coverage re-read",
@@ -1218,7 +1220,7 @@ double RasterWide(StringBuilder sb, bool[,] m, (H Map, int Width, int Height) in
 }
 
 // Past the isotropic grid, every stage runs only when the grids before it failed
-const int RmqrDashedFrom = 7;
+const int RmqrDashedFrom = 8;
 
 // The finder-side format copy: rows 1-5 of columns 8-10, then rows 1-3 of column 11
 string FormatCopy(H map)
@@ -1233,6 +1235,35 @@ string FormatCopy(H map)
 // Module coordinates of the two centres in an R11x77
 (double U, double V) rFinder = (3.5, 3.5), rSub = (77 - 2.5, 11 - 2.5);
 
+// A tick across the edge at each end of every dark run of an R11x77 the perimeter trace meets: the top row from the first
+// column past the separator, the left column below the finder, and the bottom row; drawn mirrored left to right when asked
+string TracedRunEnds(H map, bool[,] m, bool mirrored)
+{
+    (double X, double Y) At(double column, double row) => map.Map(mirrored ? 77 - column : column, row);
+    var ticks = new StringBuilder();
+    void RunEnds(bool alongRow, int line, int first, int last)
+    {
+        bool Dark(int k) => alongRow ? m[line, k] : m[k, line];
+        for (var k = first; k <= last; k++)
+        {
+            if (!Dark(k) || (k > first && Dark(k - 1)))
+                continue;
+            var end = k;
+            while (end < last && Dark(end + 1))
+                end++;
+            foreach (var b in new[] { k, end + 1 })
+            {
+                var (p, q) = alongRow ? (At(b, line + 0.15), At(b, line + 0.85)) : (At(line + 0.15, b), At(line + 0.85, b));
+                ticks.Append($"M{F(p.X)} {F(p.Y)}L{F(q.X)} {F(q.Y)}");
+            }
+        }
+    }
+    RunEnds(true, 0, 8, 76);
+    RunEnds(false, 0, 8, 10);
+    RunEnds(true, 10, 0, 76);
+    return $"<path class=\"tick\" style=\"stroke-width:1.5\" d=\"{ticks}\"/>";
+}
+
 // Clean
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-clean.svg"), rmqrBoxes,
     (sb, x, y, w, h) =>
@@ -1245,7 +1276,7 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-clean.svg"), rmqrBoxes,
         sb.Append(Dot(map.Map(rSub.U, rSub.V), 4));
         return ["det|found centre", "fmt|format copy", "detd|finder to sub-finder"];
     },
-    WideFit(rmqrClean).Height, [], "UUUCSUUUCCCSU", RmqrDashedFrom);
+    WideFit(rmqrClean).Height, [], "UUUCCSUUUCCCCSU", RmqrDashedFrom);
 
 // Rotated or mirrored: in the mirror the finder is at the right end and the sub-finder at the left
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-rotated.svg"), rmqrBoxes,
@@ -1253,7 +1284,7 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-rotated.svg"), rmqrBoxes,
     {
         var map = WideMap(rmqrRotated, x, y);
         sb.Append(Symbol(map, MirroredX(r11)));
-        (double U, double V) finder = (77 - 3.5, 3.5), sub = (2.5, 11 - 2.5);
+        (double U, double V) finder = (77 - 3.5, 3.5);
         var c = map.Map(finder.U, finder.V);
         var unit = Math.Sqrt(Math.Pow(map.Map(1, 0).X - map.Map(0, 0).X, 2) + Math.Pow(map.Map(1, 0).Y - map.Map(0, 0).Y, 2));
         var rays = new StringBuilder();
@@ -1263,33 +1294,28 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-rotated.svg"), rmqrBoxes,
             rays.Append(Line((c.X - 5 * unit * Math.Cos(rad), c.Y - 5 * unit * Math.Sin(rad)), (c.X + 5 * unit * Math.Cos(rad), c.Y + 5 * unit * Math.Sin(rad)), "row"));
         }
         sb.Append($"<g opacity=\".35\">{rays}</g>");
-        sb.Append(Line(map.Map(finder.U - 5, finder.V), map.Map(finder.U + 5, finder.V), "detl"));
-        sb.Append(Line(map.Map(finder.U, finder.V - 5), map.Map(finder.U, finder.V + 5), "detl"));
-        sb.Append(Line(c, map.Map(sub.U, sub.V), "detd"));
+        sb.Append($"<path class=\"detl\" d=\"{Poly(map, 71, 1, 76, 6)}\"/>");
+        sb.Append(TracedRunEnds(map, r11, mirrored: true));
         sb.Append(Dot(c, 5));
-        sb.Append(Dot(map.Map(sub.U, sub.V), 4));
-        return ["det|found centre", "row|sweep direction", "detl|finder axes", "detd|finder to sub-finder"];
+        return ["det|found centre", "row|sweep direction", "detl|finder outline", "tick|run end traced"];
     },
-    WideFit(rmqrRotated).Height, [3, 6, 7], "UUUKSUKKCCCCU", RmqrDashedFrom);
+    WideFit(rmqrRotated).Height, [3, 10], "UUUUCSUUSSUCCCU", RmqrDashedFrom);
 
-// Keystone: the isotropic grid, one turn and one scale from the finder to the sub-finder, against the symbol's edge
+// Keystone: the square frame the finder's run lengths give, against the outline of its light ring, and the run ends the trace meets on the three edges it follows
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-keystone.svg"), rmqrBoxes,
     (sb, x, y, w, h) =>
     {
         var map = WideMap(rmqrKeystone, x, y);
         sb.Append(Symbol(map, r11));
-        var f = map.Map(rFinder.U, rFinder.V); var s = map.Map(rSub.U, rSub.V);
-        double du = rSub.U - rFinder.U, dv = rSub.V - rFinder.V, dx = s.X - f.X, dy = s.Y - f.Y, den = du * du + dv * dv;
-        double zr = (dx * du + dy * dv) / den, zi = (dy * du - dx * dv) / den;
-        (double X, double Y) Iso(double u, double v) => (f.X + zr * (u - rFinder.U) - zi * (v - rFinder.V), f.Y + zi * (u - rFinder.U) + zr * (v - rFinder.V));
-        var a = Iso(0, 0); var b = Iso(77, 0); var cc = Iso(77, 11); var d = Iso(0, 11);
-        sb.Append($"<path class=\"est\" d=\"M{F(a.X)} {F(a.Y)}L{F(b.X)} {F(b.Y)}L{F(cc.X)} {F(cc.Y)}L{F(d.X)} {F(d.Y)}Z\"/>");
-        sb.Append($"<path class=\"detl\" d=\"{Poly(map, 0, 0, 77, 11)}\"/>");
+        var f = map.Map(rFinder.U, rFinder.V);
+        var ux = map.Map(rFinder.U + 1, rFinder.V).X - f.X; var vy = map.Map(rFinder.U, rFinder.V + 1).Y - f.Y;
+        sb.Append($"<path class=\"est\" d=\"M{F(f.X - 2.5 * ux)} {F(f.Y - 2.5 * vy)}H{F(f.X + 2.5 * ux)}V{F(f.Y + 2.5 * vy)}H{F(f.X - 2.5 * ux)}Z\"/>");
+        sb.Append($"<path class=\"detl\" d=\"{Poly(map, 1, 1, 6, 6)}\"/>");
+        sb.Append(TracedRunEnds(map, r11, mirrored: false));
         sb.Append(Dot(f, 5));
-        sb.Append(Dot(s, 4));
-        return ["det|found centre", "estl|isotropic grid", "detl|symbol edge"];
+        return ["det|found centre", "estl|square frame", "detl|finder outline", "tick|run end traced"];
     },
-    WideFit(rmqrKeystone).Height, [6, 9, Bar], "UUUCSUKUUKSUK", RmqrDashedFrom);
+    WideFit(rmqrKeystone).Height, [3, 10], "UUUKCSUSSSKCCCU", RmqrDashedFrom);
 
 // Non-square modules: a module size along each axis, six modules each
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-non-square.svg"), rmqrBoxes,
@@ -1302,7 +1328,7 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-non-square.svg"), rmqrBoxes,
         sb.Append(Dot(map.Map(rFinder.U, rFinder.V), 4));
         return ["det|found centre", "tick|six modules along each axis"];
     },
-    WideFit(rmqrNonSquare).Height, [2], "UUKCSUUUCCCSU", RmqrDashedFrom);
+    WideFit(rmqrNonSquare).Height, [2], "UUKCCSUUUCCCCSU", RmqrDashedFrom);
 
 // Grey edges: each pixel at its own grey
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-grey-edges.svg"), rmqrBoxes,
@@ -1315,7 +1341,7 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-grey-edges.svg"), rmqrBoxes,
         sb.Append(Dot(map.Map(rSub.U, rSub.V), 3.5));
         return ["px|pixel, at its grey", "det|found centre", "detd|finder to sub-finder"];
     },
-    WideFit(rmqrGrey).Height, [6, 7, 11], "UUUCUUKKCCSKU", RmqrDashedFrom);
+    WideFit(rmqrGrey).Height, [7, 8, 13], "UUUCCUUKKCCCSKU", RmqrDashedFrom);
 
 // Hidden sub-finder: painted to paper, so no grid can be anchored on it
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-hidden-sub-finder.svg"), rmqrBoxes,
@@ -1325,10 +1351,11 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-hidden-sub-finder.svg"), rmq
         sb.Append(Symbol(map, r11Hidden));
         sb.Append(FormatCopy(map));
         sb.Append($"<path class=\"pred\" d=\"{Poly(map, 72, 6, 77, 11)}\"/>");
+        sb.Append(TracedRunEnds(map, r11Hidden, mirrored: false));
         sb.Append(Dot(map.Map(rFinder.U, rFinder.V), 5));
-        return ["det|found centre", "fmt|format copy", "pred|sub-finder, painted out"];
+        return ["det|found centre", "fmt|format copy", "pred|sub-finder, painted out", "tick|run end traced"];
     },
-    WideFit(rmqrHidden).Height, [10], "UUUCSUUSSSKSU", RmqrDashedFrom);
+    WideFit(rmqrHidden).Height, [10, 12], "UUUCCSUUSSUSCSU", RmqrDashedFrom);
 
 // Snapped scale: modules one or two whole pixels wide, and the format copy they carry
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-snapped.svg"), rmqrBoxes,
@@ -1338,7 +1365,7 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-snapped.svg"), rmqrBoxes,
         sb.Append($"<g opacity=\".75\">{FormatCopy(WideMap(rmqrSnapped, x, y))}</g>");
         return ["fmt|format copy", "px|pixel"];
     },
-    WideFit(rmqrSnapped).Height, [5, 6], "UUUCSKKUCCCSU", RmqrDashedFrom);
+    WideFit(rmqrSnapped).Height, [6, 7], "UUUCCSKUUCCCCSU", RmqrDashedFrom);
 
 // Low density: module boundaries read off the timing patterns, at whole pixels
 InputFigureWide(Path.Combine(rmqrDir, "decode-input-low-density.svg"), rmqrBoxes,
@@ -1366,7 +1393,7 @@ InputFigureWide(Path.Combine(rmqrDir, "decode-input-low-density.svg"), rmqrBoxes
         }
         return ["tick|module boundary", "twopx|two-pixel module", "px|pixel"];
     },
-    WideFit(rmqrLow).Height, [1, 4], "UKUCKCCCCCCSU", RmqrDashedFrom);
+    WideFit(rmqrLow).Height, [1, 5], "UKUCCKCCCCCCCSU", RmqrDashedFrom);
 
 // Preview: every figure on a light and on a dark page
 if (preview)

@@ -15,13 +15,17 @@ internal readonly struct GreyLevels
     /// <summary>1 / (light − dark), 0 when disabled.</summary>
     private readonly float _scale;
 
+    /// <summary>Halfway between the two levels, disabled or not; 0 for an image of one class.</summary>
+    private readonly float _edge;
+
     /// <summary>The two classes have to be apart for a level between them to mean coverage.</summary>
     private const int MinimumRange = 32;
 
-    private GreyLevels(float light, float scale)
+    private GreyLevels(float light, float scale, float edge)
     {
         _light = light;
         _scale = scale;
+        _edge = edge;
     }
 
     /// <summary>False for <c>default</c> and for an image the levels say nothing about, where every caller must read whole pixels.</summary>
@@ -35,6 +39,12 @@ internal readonly struct GreyLevels
 
     /// <summary>The luminance of a pixel half dark: halfway between the two levels.</summary>
     public float Midpoint => _light - 0.5f / _scale;
+
+    /// <summary>
+    /// The luminance an edge between the two classes is located at, from samples either side of it: <see cref="Midpoint"/>, also on an image with no grey pixel; <paramref name="threshold"/> on an image of one class.
+    /// Not the threshold otherwise: on a two-level image it lies a level above the dark one, which puts every edge on the centre of its dark pixel, half a pixel into the dark.
+    /// </summary>
+    public float EdgeLevel(int threshold) => IsEnabled ? Midpoint : _edge > 0f ? _edge : threshold;
 
     /// <summary>The share of the pixel that is dark, 0 to 1.</summary>
     public float Darkness(byte luminance)
@@ -75,9 +85,10 @@ internal readonly struct GreyLevels
             lightSum += (long)i * histogram[i];
         }
         var light = (float)lightSum / lightCount;
+        var edge = 0.5f * (dark + light);
 
         if (light - dark < MinimumRange)
-            return default;
+            return new GreyLevels(0f, 0f, edge);
 
         // No pixel strictly between the levels: every share is 0 or 1. The bounds come from the integer sums, not the
         // float means: past 2^24 in a weighted sum the float mean of a class at 255 rounds above 255, and a scan bounded
@@ -94,6 +105,6 @@ internal readonly struct GreyLevels
                 break;
             }
         }
-        return any ? new GreyLevels(light, 1f / (light - dark)) : default;
+        return any ? new GreyLevels(light, 1f / (light - dark), edge) : new GreyLevels(0f, 0f, edge);
     }
 }
