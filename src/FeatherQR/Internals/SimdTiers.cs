@@ -187,9 +187,9 @@ internal static class SimdTiers
         // ---- Shared across symbologies ----
 
         // TextAnalyzer.Analyze: the mode and charset scan of the input text
-        new("TextAnalyzer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Sse2, Isa.Sse2), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        new("TextAnalyzer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Sse2, Isa.Sse2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // ModuleBitPacker.Pack / Unpack: byte-per-module to MSB-first bits and back; the SSSE3 / AdvSimd step also finishes what the AVX2 step leaves
-        new("ModuleBitPacker", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        new("ModuleBitPacker", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // ModeSegmenter.ComputeCostsLanes: the mixed-mode cost walk over eight pieces at once
         new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // EccBinaryEncoder.CalculateEcc: Reed-Solomon remainder; GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2
@@ -206,8 +206,8 @@ internal static class SimdTiers
         new("LocalBinarizer", (SimdTier.Vector128, Isa.Vector128)),
         // FinderPatternFinder.ScanRowMask: a row's dark bitmask for the finder search's mask walk
         new("FinderRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // FinderPatternFinder.ScanRowEdges: the finder search's edge-list row kernel, sixteen windows a step on 256-bit vectors and eight on ARM64
-        new("FinderRowEdges", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // FinderPatternFinder.ScanRowEdges: the finder search's edge-list row kernel, sixteen windows a step on 256-bit vectors and eight on 128-bit ones; ARM64 folds its rows into words
+        new("FinderRowEdges", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
 
         // ---- Standard QR ----
 
@@ -244,7 +244,7 @@ internal static class SimdTiers
         // RmQRBinaryEncoder.WriteLatin1: the Byte segment's narrowing
         new("RmQRLatin1Segment", (SimdTier.Sse2, Isa.Sse2), (SimdTier.Vector128, Isa.Vector128)),
         // RmQRModulePlacer: masked bit expansion (the SSSE3 step also finishes what the AVX2 step leaves) and, on ARM64, the block and run stores
-        new("RmQRModulePlacer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        new("RmQRModulePlacer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // RmQRMatrixDecoder.ExtractCodewords: codeword extraction, x64 bit planes or ARM64 pair planes
         new("RmQRExtractCodewords", (SimdTier.Avx2Pext, Isa.Avx2Pext), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // RmQRImageDecoder.ClassifySubFinderLattice: the sub-finder lattice classification; coordinates converted as QRSampleGrid's
@@ -275,8 +275,8 @@ internal static class SimdTiers
         //  kernel                     x64, no AVX      x64, AVX2             ARM64                 WebAssembly
 
         // ---- Shared across symbologies ----
-        new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd],            [Scalar]),
-        new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
+        new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),
+        new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
         new("ModeSegmenterLanes",      [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
         new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [Scalar]),
         new("EccBinaryDecoder",        [Scalar],        [GfniV256, Scalar],   [AdvSimd],            [Scalar]),
@@ -285,9 +285,10 @@ internal static class SimdTiers
         new("Binarizer",               [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
         new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
         new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
-        new("FinderRowEdges",          [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("FinderRowEdges",          [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
 
         // ---- Standard QR ----
+        // WebAssembly stays scalar: the expand is 0.5 % of a version 40 encode AOT-compiled and 0.3 % interpreted
         new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
         new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
         // WebAssembly keeps the 128-bit tier though the interpreter runs it 16-21 % slower than scalar: AOT-compiled it is 1.5x faster, and the search is under 2 % of any shape there
@@ -295,18 +296,22 @@ internal static class SimdTiers
         new("QRSampleGrid",            [Sse2],          [Vector256],          [Vector128],          [PackedSimd]),
         new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
         new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        // x64 and WebAssembly stay scalar: the parity pass is 1.2 % of a 45,000-character set on a default NativeAOT publish, 0.7 to 0.8 % with AVX2, 0.8 % on WebAssembly AOT
         new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
+        // x64 and WebAssembly stay scalar: the scanner is 0.2 % or less of a Structured Append encode on a default NativeAOT publish (0.3 % with AVX2, the same scalar time over a shorter encode), 0.1 % on WebAssembly AOT
         new("StructuredAppendScanner", [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
 
         // ---- Micro QR ----
+        // WebAssembly stays scalar: a vector step for the 8 to 15 chars saves 1.5 % of an M4 Byte encode AOT-compiled and 2.5 % interpreted
         new("MicroQRByteSegment",      [Sse2],          [Sse2],               [AdvSimd],            [Scalar]),
+        // WebAssembly stays scalar: the 16-module vector unpack places an M4 symbol in 0.25 µs against 0.27 AOT-compiled, and 1.59 against 1.43 interpreted
         new("MicroQRModulePlacer",     [Ssse3],         [Avx2Pext, Ssse3],    [AdvSimd],            [Scalar]),
         new("MicroQRSampleGrid",       [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
 
         // ---- rMQR ----
         new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar],             [Scalar]),
         new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128],          [Vector128]),
-        new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
+        new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
         new("RmQRExtractCodewords",    [Scalar],        [Avx2Pext, Scalar],   [AdvSimd],            [Scalar]),
         new("RmQRSubFinderLattice",    [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
         new("RmQRSampleGrid",          [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),

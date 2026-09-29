@@ -163,7 +163,8 @@ jobs:
   # on the code ILC emitted (--parity), so each leg is one build class:
   # the default x64 publish (no AVX), an x86-64-v3 publish, and the default publish on each ARM64 OS.
   # The JIT steps hold the JIT on the same runner to its class, and show the side of a class the runner's
-  # CPU does not: the no-AVX dispatch on an AVX2 machine, and ARM64 without the dot product.
+  # CPU does not: the no-AVX dispatch on an AVX2 machine, and ARM64 without the dot product, with that side's
+  # vector tiers held to their scalar forms too (--parity), since the test suite runs only the side the CPU picks.
   aot-analysis:
     name: aot-analysis (${{ matrix.rid }}, ${{ matrix.simd-class }})
     runs-on: ${{ matrix.os }}
@@ -238,7 +239,7 @@ jobs:
           EXT: ${{ matrix.ext }}
           SIMD_CLASS: ${{ matrix.simd-class }}
         run: ./publish/aot-analysis/FeatherQR.AotAnalysis"$EXT" --simd-class "$SIMD_CLASS" --parity
-      - name: Check SIMD tiers under the JIT
+      - name: Check SIMD tiers under the JIT, and parity on the knob's side
         if: ${{ matrix.jit-simd-class != '' }}
         shell: bash
         env:
@@ -249,7 +250,7 @@ jobs:
           dotnet build tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj -c Release
           dll=tests/FeatherQR.AotAnalysis/bin/Release/net10.0/FeatherQR.AotAnalysis.dll
           dotnet "$dll" --simd-class "$JIT_SIMD_CLASS"
-          env "$JIT_KNOB" dotnet "$dll" --simd-class "$JIT_KNOB_SIMD_CLASS"
+          env "$JIT_KNOB" dotnet "$dll" --simd-class "$JIT_KNOB_SIMD_CLASS" --parity
 
   # SIMD tier check for WebAssembly: tests/FeatherQR.WasmReport holds a WebAssembly build of the library to
   # the Wasm column of the table in src/FeatherQR/Internals/SimdTiers.cs and its vector tiers to their scalar forms

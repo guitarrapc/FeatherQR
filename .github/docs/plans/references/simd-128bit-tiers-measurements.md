@@ -391,3 +391,73 @@ SampleGridVector128 12p                 282 ->  275
 ```
 
 The scalar samplers, the scalar lattice and Standard QR's 256-bit tier are unchanged on every target. The first ARM64 form (`fmax` with zero, `fmin`, `fcvtzs`) was +7 instructions: ILC rebuilt the zero constant before every `fmax` instead of keeping it in a register, which the unsigned conversion avoids.
+
+## Phase 2: near ports
+
+Kernels alone are timed inside one build: the new tier through the dispatch, beside the scalar or the old path through its own entry. Three runs each; the range of the three.
+
+### FinderRowEdges against the mask walk
+
+µs a search, every row, FinderCandidates:
+
+| Build | v40 at 3 px, mask walk | edge list | 740 × 740 noise, mask walk | edge list |
+|---|---|---|---|---|
+| NativeAOT default | 495.3-503.5 | 212.2-214.4 | 4,842.8-4,885.1 | 2,610.0-2,629.0 |
+| WebAssembly AOT | 773.6-776.2 | 187.2-191.7 | 7,619.8-7,728.9 | 3,743.7-3,787.8 |
+| WebAssembly interpreted | 5,362.1-5,514.1 | 1,480.4-1,530.5 | 50,580.6-54,414.1 | 24,017.9-24,563.5 |
+
+Image decode, each shape over `LocalBinarizer` from its run, median of three alternations, the edge list against the mask walk (raw µs of the mask walk's build):
+
+| Shape | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| image/qr-v40-3px | 0.790 (492.8) | 0.591 (714.2) | 0.553 (3,197.2) |
+| image/qr-v40-3.4px | 0.793 (568.4) | 0.610 (800.1) | 0.566 (3,420.2) |
+| image/qr-v40-4px-rot17 | 0.813 (752.8) | 0.591 (1,131.9) | 0.584 (4,489.7) |
+| image/qr-v40-4px-soft | 0.705 (591.4) | 0.531 (889.4) | 0.541 (4,498.4) |
+| image/qr-v25-4px-keystone15 | 0.584 (674.2) | 0.360 (1,173.4) | 0.378 (5,353.7) |
+| image/qr-v6-4px | 0.837 (29.7) | 0.601 (47.8) | 0.643 (271.4) |
+| image/none-noise | 0.661 (8,585.5) | 0.549 (11,689.1) | 0.580 (78,615.0) |
+| image/none-gradient | 0.954 (939.2) | 0.591 (2,200.9) | 0.880 (5,683.9) |
+| image/micro-m4-8px | 0.903 (11.4) | 0.622 (18.6) | 0.748 (85.0) |
+| image/rmqr-r7x43-8px | 0.856 (13.4) | 0.605 (21.8) | 0.726 (128.0) |
+| image/rmqr-r17x139-8px | 0.818 (74.6) | 0.575 (115.3) | 0.648 (616.6) |
+| image/rmqr-r17x139-4px-keystone15 | 0.953 (208.4) | 0.672 (382.9) | 0.937 (2,549.9) |
+| bitmap/qr-v40-3px | 0.847 (819.2) | 0.759 (1,053.6) | 0.686 (4,261.0) |
+| bitmap/rmqr-r17x139-8px | 0.959 (261.5) | 0.796 (330.4) | 0.825 (1,313.0) |
+
+The whole-phase run against the build before phase 2 (every `encode/`, `matrix/`, `image/` and `bitmap/` shape, three alternations) was taken while the machine swung between speed states: `encode/qr-v40-byte-L` on default NativeAOT, whose code is identical in both builds, read 102-139 µs before and 98-161 after. Only the image rows stand out of that spread, version 40 at 3 px 666-671 → 392-501 µs default NativeAOT, 692-832 → 451-515 WebAssembly AOT, 3,147-4,704 → 1,702-2,155 interpreted.
+
+### WebAssembly steps
+
+`TextAnalyzer`, µs, scalar pass → the tier:
+
+| Text | Interpreted | AOT |
+|---|---|---|
+| 2,900 ASCII chars (Byte) | 8.53-8.60 → 1.12-1.15 | 3.85-5.29 → 0.32-0.41 |
+| 2,900 digits | 15.7-16.1 → 5.86-5.89 | 4.57-5.11 → 0.44-0.62 |
+| the short URL | 0.211-0.212 → 0.199-0.208 | 0.069-0.074 → 0.028-0.033 |
+
+`ModuleBitPacker`, an R17x139 core, µs, scalar → the step: pack 1.195-1.199 → 0.524-0.532 interpreted, 0.289-0.292 → 0.132-0.133 AOT; unpack 2.136-2.157 → 0.514-0.529 interpreted, 0.588-0.599 → 0.156-0.157 AOT. The span entries (`encode/`, `matrix/`) never call it: only the data-object API does, `Create` returning `RmQRCodeData` or `MicroQRCodeData` and `TryDecode` taking one (`data/` shapes). Those, µs, same-state runs, before → after: interpreted R17x139 encode 19.15-19.26 → 18.52-18.64, decode 24.47-24.54 → 22.91-22.92, M4 encode 3.63-3.70 → 3.56-3.63, decode 3.94-4.00 → 3.70-3.77; AOT R17x139 encode 3.43-3.63 → 3.22-3.46, decode 6.99-7.46 → 6.52-6.99, M4 decode 0.94-1.05 → 0.91-0.97.
+
+`RmQRModulePlacer`, an R17x139 symbol, µs, the portable path → the dispatch: interpreted 4.02-4.03 → 3.84-3.86, AOT 0.893-0.899 → 0.833-0.844 (with the swizzle; the portable shuffle gave 4.05-4.12 → 3.87-4.06 and 0.91-1.15 → 0.86-1.11).
+
+The expand itself, 16 bits to 16 module bytes, 4,096 times, µs:
+
+| Form | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| two SWAR spreads of 8 (the scalar placers) | 8.64-8.65 | 9.96-10.09 | 64.97-65.22 |
+| portable constant shuffle, bit kept, min with 1 | 47.8-48.2 | 5.08-5.17 | 24.53-24.61 |
+| WebAssembly's swizzle for the shuffle | - | 5.07-5.17 | 21.58-22.15 |
+| each byte broadcast by a 64-bit multiply | 4.48 | 7.79-7.87 | 46.39-46.42 |
+
+(The portable shuffle on default NativeAOT is the SSE2 software fallback; the x64 tiers use `Ssse3.Shuffle`.)
+
+### Left scalar
+
+| Kernel | Build | Measured |
+|---|---|---|
+| `MicroQRModulePlacer` | WebAssembly | An M4 symbol, µs, scalar → the vector unpack: AOT 0.270-0.274 → 0.246-0.248, interpreted 1.419-1.441 → 1.586-1.591 (the vector core entered directly: 1.58-1.74). Both paths are traced whole by the jiterpreter; the expand alone wins 2.6x interpreted (above), so the loss is elsewhere in the vector core, not found |
+| `MicroQRByteSegment` | WebAssembly | The Byte codeword encoder for 14 chars, µs, scalar → a vector step: interpreted 0.234-0.242 → 0.149-0.166, AOT 0.039-0.040 → 0.030-0.033; an M4 Byte encode is 3.4 and 0.6 µs, so 2.5 and 1.5 % |
+| `ModulePlacerExpandBits` | WebAssembly | A version 40 message, 2.85-3.76 µs of a 606-659 µs encode AOT (0.5 %), 4.27-7.19 of 1,354-2,049 interpreted (0.3 %) |
+| `StructuredAppendParity`, `StructuredAppendScanner` | x64, WebAssembly | Phase 1: parity 1.2 % of a 45,000-character set without AVX, 0.7-0.8 % with AVX2 (7.95 of 1,197 µs JIT, 11.7 of 1,511 NativeAOT `x86-64-v3`), 0.8 % on WebAssembly AOT; scanner 0.2 % or less, 0.1 % |
+

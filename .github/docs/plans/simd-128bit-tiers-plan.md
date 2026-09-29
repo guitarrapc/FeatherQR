@@ -87,6 +87,7 @@ With AVX but not AVX2 (`x86-64-v2,avx`), `Avx2` reads true and `Vector256.IsHard
 - **Output identical to scalar.** Each tier gets a parity test through a direct entry, since the dispatch hides a lower tier on a machine with a higher one. Planted faults in it must fail the tests. A tier is also added to `--parity` of the report projects, which CI runs on every NativeAOT build and on WebAssembly, where the test suite never runs; out-of-range and NaN inputs included, since what a runtime's cast does with them differs (phase 1b).
 - **Refactoring never costs instructions.** Splitting a method, sharing a helper between kernels or moving code between files must leave each kernel's machine code no worse on every build it runs on, checked by disassembly (JIT on .NET 8 and 10, ILC for default x64, `x86-64-v3` and ARM64) and not by timing alone. A shared helper is inlined into every kernel; where it is not, the kernel keeps its own copy. Sharing code is a convenience; the instructions are the product.
 - **Unchanged cells compile as before.** Where a class's cell stays, the dispatch's disassembly stays identical: JIT on .NET 8 and 10 with and without AVX, ILC for default x64, `x86-64-v3` and ARM64. An added branch can change what the JIT inlines.
+- **A step only WebAssembly needs is gated on `PackedSimd.IsSupported`.** Where x64 and ARM64 keep their own tiers, a portable step behind `Vector128.IsHardwareAccelerated` would still be compiled into a default NativeAOT publish, whose SSSE3 check runs at run time, so that cell would not compile as before. The `PackedSimd` flag is a constant false on x64 and ARM64. The table names such a tier `PackedSimd`, for what it reads.
 - **The table and the files follow.** Each new tier gets its row in `SimdTiers`, its files in `SimdTiersTest.KernelFiles`, and a file named for its family (`{stem}.Vector128.cs`). A tier added to an inline stem file updates `SimdLayoutTest.InlineTiers`.
 - **Both .NET targets compile every tier.** `ShuffleNative`, `AddSaturate`, `NarrowWithSaturation` and `MinNative`/`MaxNative` exist on .NET 10 only. A tier that uses them has a .NET 8 form, or leaves .NET 8 on its current tier. Shuffle lowering is checked on every target a tier runs on.
 - **No public API, no allocation.** The zero-allocation tests stay green in Release.
@@ -268,3 +269,42 @@ The four tiers are 11-15 % faster than 1b on default NativeAOT and 1-14 % on Web
 - Judge the interpreter per kernel, not by op counts or probes. `MONO_VERBOSE_METHOD` prints the interpreter's code and the jiterpreter's traces; read both before trusting a probe.
 - A constant built inside a helper costs the interpreter on every call. The caller hoists it.
 - A guard next to a clamp belongs in the clamp.
+
+### Phase 2, near ports (2026-09-30)
+
+**Done.**
+- **`FinderRowEdges` runs on every 128-bit target.** x64 without AVX and WebAssembly had kept the mask walk. The row's word there is four 16-byte compares with a movemask each; the rest is the ARM64 form. Cells: `Vector128` on x64 without AVX and on WebAssembly.
+- **WebAssembly steps, gated on `PackedSimd`** (the rule above):
+  - `TextAnalyzer`: a portable tier, 16 chars a step (`TextAnalyzer.Vector128.cs`). A block with a char above U+00FF settles every flag, so where the tier narrows to bytes the narrowing is exact. The alphanumeric set is four ranges and a space.
+  - `ModuleBitPacker`: pack and unpack, 16 modules a step, WebAssembly's swizzle for the byte shuffle.
+  - `RmQRModulePlacer`: the masked expand, 16 modules a step, the swizzle and a min with 1 for the compare and AND.
+- **Left scalar, the measured reason beside each row:** `MicroQRModulePlacer` and `MicroQRByteSegment` on WebAssembly, `ModulePlacerExpandBits` on WebAssembly, `StructuredAppendParity` and `StructuredAppendScanner` on x64 and WebAssembly.
+- **`--parity`** holds the edge list, the rMQR placer, the bit packer and the text analysis to their scalar forms. CI's JIT run under `DOTNET_EnableAVX=0` (and `DOTNET_EnableArm64Dp=0`) passes `--parity` too, since the test suite runs only the side of a class the runner's CPU picks.
+- **Tests:** `TextAnalyzerVector128ParityTest` enters the tier directly on every 128-bit machine, with chars above U+00FF whose low byte is a digit or alphanumeric. The finder tests pass with AVX off, where they used to skip.
+- **Planted faults**, each caught: a shift in the edge list's movemask word (unit tests and `--parity`); the settle check, the `-` to `:` range and the digit bound of the text analysis (unit test); a bit weight in the rMQR expand, the pack reversal and the unpack's min (`--parity`, WebAssembly).
+- Harness: `kernel/` shapes for each kernel beside its scalar path, `data/` shapes for the data-object API, `probe/expand-*`.
+
+**Numbers** (tables in the [measurements](references/simd-128bit-tiers-measurements.md#phase-2-near-ports)):
+
+| Kernel | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| `FinderRowEdges` against the mask walk, v40 3 px / noise | 0.43 / 0.54 | 0.25 / 0.49 | 0.28 / 0.47 |
+| `TextAnalyzer`, 2,900 chars, Byte / digits | x64 tier unchanged | 12x / 10x faster | 7.6x / 2.7x faster |
+| `ModuleBitPacker`, R17x139, pack / unpack | x64 tier unchanged | 2.2x / 3.8x faster | 2.3x / 4.1x faster |
+| `RmQRModulePlacer`, R17x139 | x64 tier unchanged | 0.93 | 0.96 |
+
+Image decode with the edge list: 0.58 to 0.96 on default NativeAOT, 0.36 to 0.80 on WebAssembly AOT, 0.38 to 0.94 interpreted. The data-object API, where the bit packer runs: rMQR R17x139 decode 0.93 and encode 0.97 interpreted, Micro QR M4 decode 0.94. The whole-phase run against the build before phase 2 was taken while this machine swung between speed states, runs of one build spreading 30 to 50 % on shapes whose code did not change, so it reads only the image rows. They agree with the edge list's run above: version 40 at 3 px, 666-671 → 392-501 µs on default NativeAOT, 692-832 → 451-515 on WebAssembly AOT, 3,147-4,704 → 1,702-2,155 interpreted. The text analysis and the rMQR placer can move their encodes by at most their shares, under 5 %, inside that spread; their evidence is the kernel runs.
+
+**Machine code.** Every cell that stays compiles as before: `Analyze`, `Pack`, `Unpack`, the rMQR `PlaceSymbol` and its expand, and the finder's row methods are identical instruction for instruction on the JIT with and without AVX and ILC for default x64, `x86-64-v3` and ARM64. ILC ARM64's `RentEdgeBuffer` is 2 instructions shorter, its gate now one constant flag. On the changed cells, default NativeAOT's `ExtractRowEdges` went from 303 to 290 instructions: the NEON fold it compiled there, never run, became the movemask.
+
+**Found on the way.**
+- **A `Vector128` gate after an SSSE3 step compiles into a default NativeAOT publish.** SSSE3 is a run-time check there, so the step would sit in x64 code that never runs it. Hence the `PackedSimd` gate.
+- **The Micro QR placer's vector unpack loses interpreted, though its expand wins alone.** The expand is 2.6x faster than the SWAR spread in a probe, and the jiterpreter traces both placers whole, yet the vector core took 1.58 to 1.74 µs against 1.43. The cause was not found; the kernel stays scalar there.
+- **The harness's encode and matrix shapes never call the bit packer.** They use the span API; only the data-object API packs and unpacks. A 4x kernel showed nothing end to end until the `data/` shapes were added.
+- **WebAssembly's swizzle beats the portable constant shuffle interpreted** (21.6-22.2 against 24.5-24.6 µs a probe) and ties AOT, so the WebAssembly-only steps use it.
+- **Restoring a planted fault with `mv` kept the faulted binary again**, the trap the decoder spec's lessons already name; `cp` or a `touch` after the move.
+
+**Lessons.**
+- Take a kernel's share on the entry that runs it. The span API and the data-object API run different code.
+- On the interpreter a probe that wins can still lose inside the kernel. Ship on the kernel and end to end.
+

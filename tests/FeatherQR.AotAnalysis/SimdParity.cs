@@ -1,8 +1,11 @@
 using System.Runtime.Intrinsics;
+using FeatherQR;
+using FeatherQR.Internals;
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
 using FeatherQR.Internals.StandardQR;
+using FeatherQR.Tests;
 
 /// <summary>
 /// With <c>--parity</c>: vector tiers held to their scalar forms on the build itself, for the code a test run never executes:
@@ -29,6 +32,10 @@ internal static class SimdParity
         failures += Report("MicroQRImageDecoder.SampleGridVector128", MicroSamplerMismatches);
         failures += Report("RmQRImageDecoder.SampleGridSimd128", RmQRSamplerMismatches);
         failures += Report("RmQRImageDecoder.ClassifySubFinderLatticeVector128", LatticeMismatches);
+        failures += Report("FinderPatternFinder edge-list kernel", FinderEdgeListMismatches);
+        failures += Report("RmQRModulePlacer", RmQRPlacerMismatches);
+        failures += Report("ModuleBitPacker", BitPackerMismatches);
+        failures += Report("TextAnalyzer", TextAnalyzerMismatches);
         return failures == 0 ? 0 : 1;
     }
 
@@ -236,5 +243,269 @@ internal static class SimdParity
                 mismatches.Add($"trial {trial}");
         }
         return mismatches;
+    }
+
+    /// <summary>
+    /// The finder search's candidates with the edge-list row kernel against the scalar walk's, bit for bit and in order: symbols from
+    /// under two pixels a module up, crisp and blurred, every row and strided; noise at widths around the 16-pixel compares, the
+    /// 64-pixel words and the eight-window steps, thresholds at the extremes, the grey second look on and off; and a finder flush
+    /// against the right edge behind bars that move a row's last window across every lane of a step.
+    /// </summary>
+    private static List<string> FinderEdgeListMismatches()
+    {
+        var mismatches = new List<string>();
+        var reference = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        var actual = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        var compared = 0;
+        void Compare(string name, byte[] luminance, int width, int height, byte threshold, GreyLevels grey, int stride)
+        {
+            Array.Clear(reference);
+            Array.Clear(actual);
+            var expected = FinderPatternFinder.FindCandidatesWith(luminance, width, height, threshold, reference, grey, stride, FinderRowKernel.Scalar);
+            var count = FinderPatternFinder.FindCandidatesWith(luminance, width, height, threshold, actual, grey, stride, FinderRowKernel.EdgeList);
+            compared += expected;
+            var same = count == expected;
+            for (var i = 0; same && i < expected; i++)
+            {
+                same = BitConverter.SingleToInt32Bits(actual[i].X) == BitConverter.SingleToInt32Bits(reference[i].X)
+                    && BitConverter.SingleToInt32Bits(actual[i].Y) == BitConverter.SingleToInt32Bits(reference[i].Y)
+                    && BitConverter.SingleToInt32Bits(actual[i].ModuleSize) == BitConverter.SingleToInt32Bits(reference[i].ModuleSize)
+                    && actual[i].Count == reference[i].Count;
+            }
+            if (!same)
+                mismatches.Add($"{name}: {count} candidates, reference {expected}");
+        }
+
+        foreach (var version in new[] { 1, 7, 20 })
+        {
+            var data = QRCodeGenerator.Create($"row kernel {version}", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version) });
+            foreach (var pitch in new[] { 1.3f, 2f, 2.2f, 3f, 3.4f, 7f })
+            {
+                var (crisp, width, height) = NearestNeighbourRenderer.Render((row, column) => data[row, column], data.Size, data.Size, pitch, 18.5f, 2.5f);
+                foreach (var blurred in new[] { false, true })
+                {
+                    var scene = blurred ? BoxBlur(crisp, width, height) : crisp;
+                    var threshold = Binarizer.ComputeOtsuThreshold(scene, out var grey);
+                    foreach (var stride in new[] { 1, 3 })
+                        Compare($"version {version}, pitch {pitch}, blurred {blurred}, stride {stride}", scene, width, height, threshold, grey, stride);
+                }
+            }
+        }
+
+        foreach (var width in new[] { 16, 17, 31, 32, 33, 47, 63, 64, 65, 96, 127, 128, 129, 191, 192, 193, 255, 256, 257 })
+        {
+            foreach (var threshold in new byte[] { 0, 1, 128, 255 })
+            {
+                const int Height = 24;
+                var noise = new byte[width * Height];
+                var random = new Random(width * 31 + threshold);
+                random.NextBytes(noise);
+                // All dark, all light, starting dark, ending dark: the rows a kernel gets wrong at its ends
+                noise.AsSpan(0, width).Fill(0);
+                noise.AsSpan(width, width).Fill(255);
+                noise[2 * width] = 0;
+                noise[3 * width - 1] = 0;
+                // Runs of two to five pixels in the lower rows, so ratios hold more often than in pixel noise
+                for (var y = 12; y < Height; y++)
+                {
+                    for (var x = 0; x < width;)
+                    {
+                        var run = random.Next(2, 6);
+                        var level = random.Next(2) == 0 ? (byte)0 : (byte)255;
+                        for (var k = 0; k < run && x < width; k++, x++)
+                            noise[y * width + x] = level;
+                    }
+                }
+                var histogram = new int[256];
+                foreach (var value in noise)
+                    histogram[value]++;
+                Compare($"noise {width} px, threshold {threshold}, grey on", noise, width, Height, threshold, GreyLevels.FromHistogram(histogram, threshold), 1);
+                Compare($"noise {width} px, threshold {threshold}, grey off", noise, width, Height, threshold, default, 1);
+            }
+        }
+
+        // Fields of finders, every one accepted, the phase moving them across the 64-pixel words and the steps of windows
+        foreach (var module in new[] { 2, 3, 4, 6 })
+        {
+            for (var phase = 0; phase < 8; phase++)
+            {
+                var cell = 9 * module + 3;
+                var width = 6 * cell + phase * 9 + 40;
+                var height = 4 * cell + 8;
+                var field = new byte[width * height];
+                field.AsSpan().Fill(255);
+                for (var gy = 0; gy < 4; gy++)
+                {
+                    for (var gx = 0; gx < 6; gx++)
+                        WriteFinder(field, width, phase * 9 + 5 + gx * cell + (gy & 1) * module, 4 + gy * cell, module);
+                }
+                foreach (var stride in new[] { 1, 3 })
+                    Compare($"finder field, module {module}, phase {phase}, stride {stride}", field, width, height, 128, default, stride);
+            }
+        }
+
+        foreach (var module in new[] { 2, 3, 4 })
+        {
+            for (var bars = 0; bars < 16; bars++)
+            {
+                var x0 = 30 + bars * 2 * module;
+                var width = x0 + 7 * module;
+                var height = 9 * module + 2;
+                var scene = new byte[width * height];
+                scene.AsSpan().Fill(255);
+                for (var y = 0; y < height; y++)
+                {
+                    for (var bar = 0; bar < bars; bar++)
+                        scene.AsSpan(y * width + 10 + bar * 2 * module, module).Fill(0);
+                }
+                WriteFinder(scene, width, x0, module, module);
+                // One row's right ring light: its last window stops a dark run short of the row above's
+                scene.AsSpan((module + 3 * module) * width + x0 + 6 * module, module).Fill(255);
+                Compare($"notched finder at the right edge, module {module}, {bars} bars", scene, width, height, 128, default, 1);
+            }
+        }
+        // A comparison over next to no candidates would pass whatever the kernel did
+        if (compared < 1_000)
+            mismatches.Add($"{compared} candidates compared, fewer than expected");
+        return mismatches;
+    }
+
+    /// <summary>A finder of <paramref name="module"/>-pixel modules at (<paramref name="x0"/>, <paramref name="y0"/>) with a light module of quiet zone around it.</summary>
+    private static void WriteFinder(byte[] image, int width, int x0, int y0, int module)
+    {
+        for (var my = -1; my <= 7; my++)
+        {
+            for (var mx = -1; mx <= 7; mx++)
+            {
+                var ring = mx is >= 0 and <= 6 && my is >= 0 and <= 6 ? Math.Max(Math.Abs(mx - 3), Math.Abs(my - 3)) : 2;
+                var level = ring == 2 ? (byte)255 : (byte)0;
+                for (var y = y0 + my * module; y < y0 + (my + 1) * module; y++)
+                {
+                    for (var x = x0 + mx * module; x < x0 + (mx + 1) * module; x++)
+                    {
+                        if (x >= 0 && x < width && y >= 0)
+                            image[y * width + x] = level;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>rMQR placement through the dispatch against the reference placer: every version and level, messages all 0, all 1 and random.</summary>
+    private static List<string> RmQRPlacerMismatches()
+    {
+        var mismatches = new List<string>();
+        foreach (var version in Enum.GetValues<RmQRVersion>())
+        {
+            foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
+            {
+                var size = RmQRConstants.GetWidth(version) * RmQRConstants.GetHeight(version);
+                var message = new byte[RmQRConstants.GetTotalCodewordCount(version)];
+                for (var kind = 0; kind < 3; kind++)
+                {
+                    if (kind == 1)
+                        Array.Fill(message, (byte)0xFF);
+                    else if (kind == 2)
+                        new Random((int)version * 7 + (int)ecc).NextBytes(message);
+                    var expected = new byte[size];
+                    var actual = new byte[size];
+                    RmQRModulePlacer.PlaceSymbolReference(expected, version, ecc, message);
+                    RmQRModulePlacer.PlaceSymbol(actual, version, ecc, message);
+                    if (!expected.AsSpan().SequenceEqual(actual))
+                        mismatches.Add($"{version} {ecc}, message {(kind == 0 ? "all 0" : kind == 1 ? "all 1" : "random")}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// Pack and Unpack against a loop of single bits, at every length to 300 modules and an R17x139 core, dark modules any
+    /// non-zero byte.
+    /// </summary>
+    private static List<string> BitPackerMismatches()
+    {
+        var mismatches = new List<string>();
+        var random = new Random(17);
+        foreach (var count in Enumerable.Range(0, 301).Append(17 * 139))
+        {
+            var modules = new byte[count];
+            for (var i = 0; i < count; i++)
+                modules[i] = random.Next(3) == 0 ? (byte)0 : (byte)random.Next(1, 256);
+            var expected = new byte[(count + 7) / 8];
+            for (var i = 0; i < count; i++)
+            {
+                if (modules[i] != 0)
+                    expected[i >> 3] |= (byte)(0x80 >> (i & 7));
+            }
+            var packed = new byte[expected.Length];
+            ModuleBitPacker.Pack(modules, packed);
+            if (!packed.AsSpan().SequenceEqual(expected))
+                mismatches.Add($"pack {count}");
+
+            var unpacked = new byte[count];
+            ModuleBitPacker.Unpack(expected, unpacked);
+            for (var i = 0; i < count; i++)
+            {
+                if (unpacked[i] != (modules[i] != 0 ? 1 : 0))
+                {
+                    mismatches.Add($"unpack {count}, module {i}");
+                    break;
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The text analysis through the dispatch against the scalar pass: each boundary char, U+0130 among them (a narrowing that
+    /// dropped the high byte would read it as '0'), at every position of every length from 1 to 40, among digits and alphanumerics.
+    /// </summary>
+    private static List<string> TextAnalyzerMismatches()
+    {
+        var mismatches = new List<string>();
+        const string Fillers = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+        char[] boundaries = ['/', '0', '9', ':', ';', '@', 'A', 'Z', '[', ' ', '!', '$', '%', '&', '*', '+', ',', '-', '.', 'a',
+            '\u007F', '\u0080', '\u00FF', '\u0100', '\u0120', '\u012D', '\u0130', '\u013A', '\u0141', '\u01FF', '\u8000', '\uFFFD'];
+        foreach (var c in boundaries)
+        {
+            for (var length = 1; length <= 40; length++)
+            {
+                for (var position = 0; position < length; position++)
+                {
+                    var chars = new char[length];
+                    for (var k = 0; k < length; k++)
+                        chars[k] = Fillers[(k * 7 + length) % Fillers.Length];
+                    chars[position] = c;
+                    var text = new string(chars);
+                    foreach (var eci in new[] { EciMode.Default, EciMode.Utf8 })
+                    {
+                        if (TextAnalyzer.Analyze(text, eci) != TextAnalyzer.AnalyzeScalar(text, eci))
+                            mismatches.Add($"U+{(int)c:X4} at {position} of {length}, {eci}");
+                    }
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>A 3 x 3 box blur, edges clamped: grey pixels for the second look.</summary>
+    private static byte[] BoxBlur(byte[] luminance, int width, int height)
+    {
+        var soft = new byte[luminance.Length];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var sum = 0;
+                for (var dy = -1; dy <= 1; dy++)
+                {
+                    for (var dx = -1; dx <= 1; dx++)
+                        sum += luminance[Math.Clamp(y + dy, 0, height - 1) * width + Math.Clamp(x + dx, 0, width - 1)];
+                }
+                soft[y * width + x] = (byte)(sum / 9);
+            }
+        }
+        return soft;
     }
 }

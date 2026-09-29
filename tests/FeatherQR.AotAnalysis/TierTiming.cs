@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Wasm;
@@ -150,6 +151,11 @@ internal static class TierTiming
         new("encode/rmqr-r7x43-num", () => RmQREncode("012345678901", RmQRVersion.R7x43)),
         new("encode/rmqr-r11x59-alnum", () => RmQREncode("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.", RmQRVersion.R11x59)),
         new("encode/rmqr-r17x139-byte", () => RmQREncode(RmQRByte, RmQRVersion.R17x139)),
+        // The data-object API: the symbol packed to bits by the generator, unpacked again by the decoder
+        new("data/micro-m4-byte-encode", () => () => MicroQRCodeGenerator.Create("bytes m4 mode", MicroQREccLevel.M).Size),
+        new("data/micro-m4-byte-decode", () => MicroDataDecode("bytes m4 mode", MicroQREccLevel.M)),
+        new("data/rmqr-r17x139-byte-encode", () => RmQRDataEncode(RmQRByte, RmQRVersion.R17x139)),
+        new("data/rmqr-r17x139-byte-decode", () => RmQRDataDecode(RmQRByte, RmQRVersion.R17x139)),
         new("encode/sa-byte-45k-single", () => StructuredAppend(Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRSegmentation.Single)),
         new("encode/sa-mixed-40k-single", () => StructuredAppend(Repeat("order 20260915 item 0000123456 qty 42 ", 40_000), QRSegmentation.Single)),
         new("encode/sa-mixed-40k-optimal", () => StructuredAppend(Repeat("order 20260915 item 0000123456 qty 42 ", 40_000), QRSegmentation.Optimal)),
@@ -208,6 +214,8 @@ internal static class TierTiming
         new("kernel/FinderRowMask-v40-scalar", () => FinderRows(Crisp(Large(), 3f), FinderRowKernel.Scalar)),
         new("kernel/FinderRowMask-noise", () => FinderRows(Noise(740), FinderRowKernel.MaskWalk)),
         new("kernel/FinderRowMask-noise-scalar", () => FinderRows(Noise(740), FinderRowKernel.Scalar)),
+        new("kernel/FinderRowEdges-v40", () => FinderRows(Crisp(Large(), 3f), FinderRowKernel.EdgeList)),
+        new("kernel/FinderRowEdges-noise", () => FinderRows(Noise(740), FinderRowKernel.EdgeList)),
         new("kernel/AlignmentRowMask", () => Alignment(scalar: false)),
         new("kernel/AlignmentRowMask-scalar", () => Alignment(scalar: true)),
         new("kernel/QRSampleGrid", () => QRSample(scalar: false)),
@@ -218,6 +226,20 @@ internal static class TierTiming
         new("kernel/RmQRSampleGrid-scalar", () => RmQRSample(scalar: true)),
         new("kernel/RmQRSubFinderLattice", () => RmQRLattice(scalar: false)),
         new("kernel/RmQRSubFinderLattice-scalar", () => RmQRLattice(scalar: true)),
+        new("kernel/TextAnalyzer-byte-2900", () => AnalyzeText(DeterministicText(2900), scalar: false)),
+        new("kernel/TextAnalyzer-byte-2900-scalar", () => AnalyzeText(DeterministicText(2900), scalar: true)),
+        new("kernel/TextAnalyzer-digits-2900", () => AnalyzeText(Repeat("0123456789", 2900), scalar: false)),
+        new("kernel/TextAnalyzer-digits-2900-scalar", () => AnalyzeText(Repeat("0123456789", 2900), scalar: true)),
+        new("kernel/TextAnalyzer-url", () => AnalyzeText(ShortUrl, scalar: false)),
+        new("kernel/TextAnalyzer-url-scalar", () => AnalyzeText(ShortUrl, scalar: true)),
+        new("kernel/ModuleBitPacker-pack-r17x139", () => BitPack(unpack: false)),
+        new("kernel/ModuleBitPacker-unpack-r17x139", () => BitPack(unpack: true)),
+        new("kernel/ModulePlacerExpandBits-v40", () => ExpandV40),
+        new("kernel/MicroQRByteSegment-m4", () => MicroByteCodewords),
+        new("kernel/MicroQRModulePlacer", () => MicroPlace(scalar: false)),
+        new("kernel/MicroQRModulePlacer-scalar", () => MicroPlace(scalar: true)),
+        new("kernel/RmQRModulePlacer", () => RmQRPlace(RmQRModulePlacer.PlaceKernel.Auto)),
+        new("kernel/RmQRModulePlacer-portable", () => RmQRPlace(RmQRModulePlacer.PlaceKernel.Portable)),
         new("kernel/RmQRLatin1Segment", () => Latin1(scalar: false)),
         new("kernel/RmQRLatin1Segment-scalar", () => Latin1(scalar: true)),
 
@@ -248,6 +270,10 @@ internal static class TierTiming
         new("probe/clamp-unsigned", () => Probe(ClampUnsigned)),
         new("probe/clamp-signfix", () => Probe(ClampSignFix)),
         new("probe/clamp-pixelindex", () => Probe(ClampPixelIndex)),
+        new("probe/expand-swar", () => Probe(ExpandSwar)),
+        new("probe/expand-shuffle", () => Probe(ExpandShuffle)),
+        new("probe/expand-swizzle", () => Probe(ExpandSwizzle), PackedSimd.IsSupported),
+        new("probe/expand-multiply", () => Probe(ExpandMultiply)),
         new("probe/movemask-portable", () => Probe(MovemaskPortable)),
         new("probe/movemask-packedsimd", () => Probe(MovemaskPackedSimd), PackedSimd.IsSupported),
     ];
@@ -274,6 +300,24 @@ internal static class TierTiming
         var destination = new byte[1 << 13];
         var options = new RmQRCodeGeneratorOptions { Version = version };
         return () => RmQRCodeGenerator.Create(text, RmQREccLevel.M, destination, options);
+    }
+
+    private static Func<int> RmQRDataEncode(string text, RmQRVersion version)
+    {
+        var options = new RmQRCodeGeneratorOptions { Version = version };
+        return () => RmQRCodeGenerator.Create(text, RmQREccLevel.M, options).Width;
+    }
+
+    private static Func<int> RmQRDataDecode(string text, RmQRVersion version)
+    {
+        var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        return Checked(() => RmQRCodeDecoder.TryDecode(data, out var decoded) ? decoded.Length : 0, text.Length);
+    }
+
+    private static Func<int> MicroDataDecode(string text, MicroQREccLevel ecc)
+    {
+        var data = MicroQRCodeGenerator.Create(text, ecc);
+        return Checked(() => MicroQRCodeDecoder.TryDecode(data, out var decoded) ? decoded.Length : 0, text.Length);
     }
 
     private static Func<int> StructuredAppend(string content, QRSegmentation segmentation)
@@ -607,6 +651,81 @@ internal static class TierTiming
         {
             QRImageDecoder.SampleGrid(image.Luminance, image.Width, image.Height, 128, transform, 177, modules);
             return modules[200];
+        };
+    }
+
+    /// <summary>An R17x139 core, 2,363 modules, packed to bits or unpacked from them, as the data model stores it.</summary>
+    private static Func<int> BitPack(bool unpack)
+    {
+        var modules = new byte[17 * 139];
+        var bits = new byte[(modules.Length + 7) / 8];
+        var random = new Random(3);
+        for (var i = 0; i < modules.Length; i++)
+            modules[i] = (byte)random.Next(2);
+        ModuleBitPacker.Pack(modules, bits);
+        if (unpack)
+            return () => { ModuleBitPacker.Unpack(bits, modules); return modules[7]; };
+        return () => { ModuleBitPacker.Pack(modules, bits); return bits[3]; };
+    }
+
+    /// <summary>A version 40 message, 3,706 codewords, expanded to module bytes as the Standard QR placer does.</summary>
+    private static readonly byte[] ExpandMessage = CreateExpandMessage();
+    private static readonly byte[] ExpandBits = new byte[3706 * 8];
+
+    private static byte[] CreateExpandMessage()
+    {
+        var message = new byte[3706];
+        new Random(5).NextBytes(message);
+        return message;
+    }
+
+    private static int ExpandV40()
+    {
+        ModulePlacer.ExpandBits(ExpandMessage, ExpandMessage.Length, ExpandBits);
+        return ExpandBits[9];
+    }
+
+    private static readonly byte[] MicroCodewords = new byte[64];
+
+    /// <summary>Micro QR's data codewords for a 14-character Byte payload at M4-L, the encoder the Byte segment kernel sits in.</summary>
+    private static int MicroByteCodewords()
+        => MicroQRBinaryEncoder.EncodeDataCodewords("MICRO QR BYTE!", MicroQRVersion.M4, MicroQREccLevel.L, EncodingMode.Byte, MicroCodewords);
+
+    private static Func<int> AnalyzeText(string text, bool scalar)
+        => scalar
+            ? () => TextAnalyzer.AnalyzeScalar(text, EciMode.Default).DataLength
+            : () => TextAnalyzer.Analyze(text, EciMode.Default).DataLength;
+
+    /// <summary>An M4-L symbol placed, masked and its mask chosen, from random codewords.</summary>
+    private static Func<int> MicroPlace(bool scalar)
+    {
+        const MicroQRVersion Version = MicroQRVersion.M4;
+        const MicroQREccLevel Ecc = MicroQREccLevel.L;
+        var size = MicroQRConstants.SizeFromVersion(Version);
+        var data = new byte[MicroQRConstants.GetDataCodewordCount(Version, Ecc)];
+        var ecc = new byte[MicroQRConstants.GetEccCodewordCount(Version, Ecc)];
+        var random = new Random(7);
+        random.NextBytes(data);
+        random.NextBytes(ecc);
+        var bits = MicroQRConstants.GetDataBitCapacity(Version, Ecc);
+        var matrix = new byte[size * size];
+        return scalar
+            ? () => MicroQRModulePlacer.PlaceSymbolScalar(matrix, size, data, ecc, bits, Version, Ecc)
+            : () => MicroQRModulePlacer.PlaceSymbol(matrix, size, data, ecc, bits, Version, Ecc);
+    }
+
+    /// <summary>An R17x139-M symbol placed from random codewords, through the dispatch or pinned to the portable path.</summary>
+    private static Func<int> RmQRPlace(RmQRModulePlacer.PlaceKernel kernel)
+    {
+        const RmQRVersion Version = RmQRVersion.R17x139;
+        var width = RmQRConstants.GetWidth(Version);
+        var core = new byte[width * RmQRConstants.GetHeight(Version)];
+        var message = new byte[RmQRConstants.GetTotalCodewordCount(Version)];
+        new Random(11).NextBytes(message);
+        return () =>
+        {
+            RmQRModulePlacer.PlaceSymbol(core, width, Version, RmQREccLevel.M, message, kernel);
+            return core[core.Length / 2];
         };
     }
 
@@ -1007,6 +1126,79 @@ internal static class TierTiming
         var limit = 160 + (data.Length & 1);
         for (var i = 0; i < data.Length; i += 4)
             sum += PixelIndex.Clamp(data[i] * 0.75f - 20f, limit);
+        return sum;
+    }
+
+    /// <summary>16 bits to 16 module bytes (0 or 1), bit k to byte k, 4,096 times: two SWAR spreads of 8, as the scalar Micro QR placer writes.</summary>
+    private static int ExpandSwar(byte[] data)
+    {
+        var output = new byte[16];
+        ref var o = ref MemoryMarshal.GetArrayDataReference(output);
+        var sum = 0;
+        for (var i = 0; i < ProbeVectors; i++)
+        {
+            ulong bits = Unsafe.ReadUnaligned<ushort>(ref data[i * 2 & (data.Length - 2)]);
+            for (var half = 0; half < 2; half++)
+            {
+                var spread = (((bits >> (8 * half)) & 0xFF) * 0x0101010101010101UL) & 0x8040201008040201UL;
+                spread |= spread >> 4;
+                spread |= spread >> 2;
+                spread |= spread >> 1;
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref o, 8 * half), spread & 0x0101010101010101UL);
+            }
+            sum += output[i & 15];
+        }
+        return sum;
+    }
+
+    /// <summary>The same with the placers' WebAssembly step: broadcast, a constant byte shuffle, the bit kept, a min with 1.</summary>
+    private static int ExpandShuffle(byte[] data)
+    {
+        var output = new byte[16];
+        ref var o = ref MemoryMarshal.GetArrayDataReference(output);
+        var sum = 0;
+        for (var i = 0; i < ProbeVectors; i++)
+        {
+            var src = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref data[i * 2 & (data.Length - 2)])).AsByte();
+            var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+            var bitm = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
+            Vector128.Min(Vector128.Shuffle(src, sel) & bitm, Vector128<byte>.One).StoreUnsafe(ref o);
+            sum += output[i & 15];
+        }
+        return sum;
+    }
+
+    /// <summary>The same with WebAssembly's swizzle for the shuffle.</summary>
+    private static int ExpandSwizzle(byte[] data)
+    {
+        var output = new byte[16];
+        ref var o = ref MemoryMarshal.GetArrayDataReference(output);
+        var sum = 0;
+        for (var i = 0; i < ProbeVectors; i++)
+        {
+            var src = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref data[i * 2 & (data.Length - 2)])).AsByte();
+            var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+            var bitm = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
+            Vector128.Min(PackedSimd.Swizzle(src, sel) & bitm, Vector128<byte>.One).StoreUnsafe(ref o);
+            sum += output[i & 15];
+        }
+        return sum;
+    }
+
+    /// <summary>The same with each byte broadcast over a 64-bit lane by a multiply, no shuffle.</summary>
+    private static int ExpandMultiply(byte[] data)
+    {
+        var output = new byte[16];
+        ref var o = ref MemoryMarshal.GetArrayDataReference(output);
+        var sum = 0;
+        for (var i = 0; i < ProbeVectors; i++)
+        {
+            ulong bits = Unsafe.ReadUnaligned<ushort>(ref data[i * 2 & (data.Length - 2)]);
+            var src = Vector128.Create((bits & 0xFF) * 0x0101010101010101UL, (bits >> 8) * 0x0101010101010101UL).AsByte();
+            var bitm = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
+            Vector128.Min(src & bitm, Vector128<byte>.One).StoreUnsafe(ref o);
+            sum += output[i & 15];
+        }
         return sum;
     }
 

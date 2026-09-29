@@ -37,11 +37,11 @@ public class SimdLayoutTest
     /// </summary>
     private static readonly Dictionary<string, string> InlineTiers = new()
     {
-        ["ModuleBitPacker.cs"] = "Pack and Unpack run their AVX2 and SSSE3 / AdvSimd steps before the scalar tail they share",
+        ["ModuleBitPacker.cs"] = "Pack and Unpack run their AVX2, SSSE3 / AdvSimd and PackedSimd steps before the scalar tail they share",
         ["ImageDecoders/LuminanceInverter.cs"] = "Invert runs its 256-bit and 128-bit loops before the scalar tail",
         ["MicroQR/MicroQRBinaryEncoder.cs"] = "the Byte segment's AdvSimd and SSE2 steps sit in EncodeDataCodewords beside its scalar path",
         ["RmQR/RmQRBinaryEncoder.cs"] = "the Numeric, Alphanumeric and Latin-1 writers run their vector steps before the SWAR and scalar tails",
-        ["RmQR/RmQRModulePlacer.cs"] = "ExpandBitsMasked runs its AVX2, SSSE3 and AdvSimd steps before the scalar tail",
+        ["RmQR/RmQRModulePlacer.cs"] = "ExpandBitsMasked runs its AVX2, SSSE3, AdvSimd and PackedSimd steps before the scalar tail",
         ["StandardQR/ModulePlacer.ExpandBits.cs"] = "ExpandBits runs its AVX2 and SSSE3 steps before the scalar tail",
     };
 

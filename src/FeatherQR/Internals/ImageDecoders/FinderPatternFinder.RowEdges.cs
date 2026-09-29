@@ -1,23 +1,19 @@
 #if NET8_0_OR_GREATER
 using System.Buffers;
-using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.Arm;
 #endif
 
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// The edge-list row kernel of the finder search (net8.0+, 256-bit vectors or ARM64 AdvSimd).
+/// The edge-list row kernel of the finder search (net8.0+, 128-bit vectors or wider).
 /// </summary>
 /// <remarks>
 /// The mask walk goes through a row run by run and judges a window at the end of every dark run with up to fifteen compares that may each leave early. On a large symbol that is ten thousand windows a search and on an image without a symbol forty-five thousand, nearly all of them refused, and the branches are what it costs.
 /// Here the row's dark bitmask is never stored: 64 pixels become one word, and the word's rising and falling edges (the starts and the ends of dark runs) go straight into two arrays. A window is then three consecutive starts and ends, and sixteen windows are classified a step without a branch: the strict ratio, the near miss and the small crisp runs, the same three integer checks the other kernels make. Only the windows a check flags run scalar code, in row order, through the same follow-ups and the same cross-checks.
 /// The strict ratio is checked in integers, which gives the verdict of the float form on every input: the two can only differ where total / 7f is inexact, and equality in the check needs a total divisible by 14, where it is exact. <c>FinderRowKernelParityTest</c> holds the candidate list to the scalar kernel's, bit for bit.
 /// Positions are kept in sixteen bits, which is what bounds the row width: below 4,096 pixels every quantity of the checks fits a signed lane once 2·|d| &lt; t is written |d| &lt; (t + 1) / 2.
-/// On ARM64 the same kernel runs on 128-bit vectors, eight windows a step, with the two things that machine does differently: the row's word comes from the NEON fold the mask walk already used (there is no movemask), and a step's verdicts become bits only once one add across the OR of the three says a lane is flagged, because turning eight lanes into bits is a sequence there and nearly every step has nothing flagged.
+/// On 128-bit vectors the same kernel runs eight windows a step, and a step's verdicts become bits only once the OR of the three says a lane is flagged: nearly every step has nothing flagged, and on ARM64 turning eight lanes into bits is a sequence. ARM64, which has no movemask, makes the row's word with the NEON fold the mask walk already used; other 128-bit targets take a movemask each 16 pixels.
 /// </remarks>
 internal static partial class FinderPatternFinder
 {
@@ -30,12 +26,12 @@ internal static partial class FinderPatternFinder
     /// <summary>Whether this runtime and machine have the edge-list kernel at all.</summary>
     internal static bool IsEdgeListKernelSupported
 #if NET8_0_OR_GREATER
-        => Vector256.IsHardwareAccelerated || AdvSimd.Arm64.IsSupported;
+        => Vector128.IsHardwareAccelerated;
 #else
         => false;
 #endif
 
-    /// <summary>Windows <c>ClassifyWindows</c> judges in one call: sixteen with 256-bit vectors, eight on ARM64.</summary>
+    /// <summary>Windows <c>ClassifyWindows</c> judges in one call: sixteen with 256-bit vectors, eight with 128-bit ones.</summary>
     internal static int ClassifyWindowLanes
 #if NET8_0_OR_GREATER
         => Vector256.IsHardwareAccelerated ? 16 : 8;

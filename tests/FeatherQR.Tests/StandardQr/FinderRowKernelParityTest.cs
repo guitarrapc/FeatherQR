@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the row kernels of the finder search.
-/// The scalar walk judges the 1:1:3:1:1 window at the end of every dark run from the third on; the mask walk does the same from a dark bitmask; the edge-list kernel takes all edges of the row at once and classifies sixteen windows a step (eight on ARM64), handing only the flagged ones, in order, to the same follow-ups.
+/// The scalar walk judges the 1:1:3:1:1 window at the end of every dark run from the third on; the mask walk does the same from a dark bitmask; the edge-list kernel takes all edges of the row at once and classifies sixteen windows a step (eight with 128-bit vectors), handing only the flagged ones, in order, to the same follow-ups.
 /// All three have to leave the same candidate list behind: every centre, module size and count bit for bit, in the same order, because a candidate is a running average over its hits and the order of the hits is part of it.
 /// The scalar kernel also runs the reference cross-check walks, so this holds the whole search to its reference, row kernel and walks together.
 /// </summary>
@@ -15,7 +15,7 @@ public class FinderRowKernelParityTest
     {
         if (!FinderPatternFinder.IsEdgeListKernelSupported)
         {
-            Skip.Test("The edge-list kernel needs 256-bit vectors or ARM64 AdvSimd (net8.0+).");
+            Skip.Test("The edge-list kernel needs 128-bit vectors (net8.0+).");
             return;
         }
 
@@ -30,7 +30,7 @@ public class FinderRowKernelParityTest
     [Test]
     public async Task MaskWalkKernel_LeavesTheScalarKernelsCandidates()
     {
-        // The kernel TryFind picks where 128-bit vectors are accelerated but neither 256-bit vectors nor ARM64 AdvSimd are, and where they are, for rows of 16 to 31 pixels and of 4,096 and more; narrower rows and targets without 128-bit acceleration take the scalar walk. There the rows between reach it only through this test.
+        // The kernel TryFind picks for rows of 16 to 31 pixels and of 4,096 and more; narrower rows and targets without 128-bit acceleration take the scalar walk. The rows between reach it only through this test.
         var (scenes, candidates, widthLimitScenes, fewestAtWidthLimit) = await CompareOnEveryScene(FinderRowKernel.MaskWalk);
         await Assert.That(scenes).IsGreaterThan(150);
         await Assert.That(candidates).IsGreaterThan(1_000);
