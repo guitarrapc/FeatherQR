@@ -1,6 +1,4 @@
 #if NET8_0_OR_GREATER
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using FeatherQR.Internals.ImageDecoders;
 
@@ -15,9 +13,8 @@ internal static partial class QRImageDecoder
         var a11 = Vector128.Create(transform.a11);
         var a12 = Vector128.Create(transform.a12);
         var a13 = Vector128.Create(transform.a13);
-        var zero = Vector128<int>.Zero;
-        var maxPx = Vector128.Create(width - 1);
-        var maxPy = Vector128.Create(height - 1);
+        var lastX = Vector128.Create((float)(width - 1));
+        var lastY = Vector128.Create((float)(height - 1));
         var widthVector = Vector128.Create(width);
 
         Span<int> indices = stackalloc int[8];
@@ -44,11 +41,11 @@ internal static partial class QRImageDecoder
                 var xHi = (a11 * gridXHi + rowNumeratorX) * reciprocalHi;
                 var yHi = (a12 * gridXHi + rowNumeratorY) * reciprocalHi;
 
-                // VectorCast.ToInt32 truncates as the scalar tier does, and the clamp sends an out-of-range lane to the edge the scalar tier's does, so both take the pixel containing the point.
-                var pxLo = Vector128.Max(Vector128.Min(VectorCast.ToInt32(xLo), maxPx), zero);
-                var pyLo = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yLo), maxPy), zero);
-                var pxHi = Vector128.Max(Vector128.Min(VectorCast.ToInt32(xHi), maxPx), zero);
-                var pyHi = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yHi), maxPy), zero);
+                // The pixel the scalar tier's PixelIndex.Clamp takes
+                var pxLo = VectorCast.ToPixel(xLo, lastX);
+                var pyLo = VectorCast.ToPixel(yLo, lastY);
+                var pxHi = VectorCast.ToPixel(xHi, lastX);
+                var pyHi = VectorCast.ToPixel(yHi, lastY);
 
                 (pyLo * widthVector + pxLo).CopyTo(indices);
                 (pyHi * widthVector + pxHi).CopyTo(indices.Slice(4));
@@ -67,8 +64,8 @@ internal static partial class QRImageDecoder
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                var px = Vector128.Max(Vector128.Min(VectorCast.ToInt32(x), maxPx), zero);
-                var py = Vector128.Max(Vector128.Min(VectorCast.ToInt32(y), maxPy), zero);
+                var px = VectorCast.ToPixel(x, lastX);
+                var py = VectorCast.ToPixel(y, lastY);
 
                 (py * widthVector + px).CopyTo(indices);
 

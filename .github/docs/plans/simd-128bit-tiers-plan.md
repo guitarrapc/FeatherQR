@@ -201,7 +201,7 @@ Under the bar: `ModulePlacerExpandBits` (0.9 %), `StructuredAppendParity` (0.8 %
 ### Phase 1b, tiers that lose (2026-09-29)
 
 **Done.**
-- **`VectorCast.ToInt32`** (`ImageDecoders/VectorCast.Simd.cs`) converts the four tiers' coordinates. x64: `cvttps2dq` with the positive overflow flipped to `int.MaxValue`, all SSE2, so a default NativeAOT publish keeps it. WebAssembly: `PackedSimd.ConvertToInt32Saturate`, fed only values it converts exactly (`pmax` with 0, `pmin` with the largest float under 2^31). ARM64: `Vector128.ConvertToInt32` as before.
+- **`VectorCast.ToInt32`** (`ImageDecoders/VectorCast.Simd.cs`, replaced in the follow-up below) converts the four tiers' coordinates. x64: `cvttps2dq` with the positive overflow flipped to `int.MaxValue`, all SSE2, so a default NativeAOT publish keeps it. WebAssembly: `PackedSimd.ConvertToInt32Saturate`, fed only values it converts exactly (`pmax` with 0, `pmin` with the largest float under 2^31). ARM64: `Vector128.ConvertToInt32` as before.
 - **No tier depends on the runtime's cast outside the int range any more.** The scalar samplers and the vector tiers' scalar tails take the far edge before converting (`PixelIndex.Clamp`); the sub-finder lattice skips a NaN point in both tiers.
 - **Table:** a `PackedSimd` tier. The four kernels take `Sse2` on x64 and `PackedSimd` on WebAssembly; ARM64 keeps `Vector128`. The alignment row mask keeps its tier, with the reason beside its row.
 - **`--parity`** in both report projects: the conversion and the four kernels against their scalar forms on random scenes, NaN and out-of-range coordinates included. CI runs it on every NativeAOT leg and both WebAssembly modes.
@@ -216,9 +216,9 @@ Under the bar: `ModulePlacerExpandBits` (0.9 %), `StructuredAppendParity` (0.8 %
 | WebAssembly interpreted | 6-34 % slower (the lattice, with four conversions a step, most) | 1.5-13x faster | within noise |
 | JIT, with and without AVX | within noise | unchanged | within noise |
 
-BenchmarkDotNet under the JIT (the three image decode classes, ShortRun, old and new alternated): every row inside the spread between runs of one build, which reached 195 to 310 µs on `R17x139_Keystone15_Span`; allocations unchanged. The interpreter pays for the two guards on the conversion (122 against 105 µs per 4,096 vectors) and 4 % more for the call it only partly inlines. The tiers still win there, so D1 holds. On WebAssembly AOT the samplers are up to 11 % of an image decode.
+BenchmarkDotNet under the JIT (the three image decode classes, ShortRun, old and new alternated): every row inside the spread between runs of one build, which reached 195 to 310 µs on `R17x139_Keystone15_Span`; allocations unchanged. The interpreter pays for the two guards on the conversion (122 against 105 µs per 4,096 vectors) and 4 % more for the cap constant the helper builds on every call (first read as a call it only partly inlines; the follow-up found the constant). The tiers still win there, so D1 holds. On WebAssembly AOT the samplers are up to 11 % of an image decode.
 
-**Machine code.** Every method has as many instructions as before or fewer on ILC x64 (default and `x86-64-v3`) and the JIT. On ARM64 the vector tiers are identical, and the scalar samplers gain two to four instructions before the loop (the limits converted to float); their loop bodies are the same length. `VectorCast` and `PixelIndex` are inlined wherever they were checked.
+**Machine code.** Every method has as many instructions as before or fewer on ILC x64 (default and `x86-64-v3`) and the JIT. On ARM64 the vector tiers are within two instructions (Standard QR's +2, which the follow-up removes), and the scalar samplers gain two to four instructions before the loop (the limits converted to float); their loop bodies are the same length. `VectorCast` and `PixelIndex` are inlined wherever they were checked.
 
 **Found on the way.**
 - **The WebAssembly interpreter's cast writes `int.MinValue` for NaN and past 2^31; AOT-compiled code saturates; an AOT build interprets some methods.** So the scalar tiers' output past the image depended on how they ran, and the scalar sub-finder lattice, reading a NaN point at `int.MinValue`, threw `IndexOutOfRangeException` under the interpreter. A decode never reached that: `TryClassifySubFinderLattice` refuses NaN and infinite parameters first, and only the direct entry the parity check calls took them. CoreCLR from .NET 9 on behaves as before. .NET 8 on x64 and the interpreter now take the far edge for coordinates past 2^31, as CoreCLR does, and a NaN lattice point is skipped, not read.
@@ -228,5 +228,43 @@ BenchmarkDotNet under the JIT (the three image decode classes, ShortRun, old and
 
 **Lessons.**
 - The parity tests run under the JIT on x64 and ARM64. The WebAssembly semantics and the lattice crash were found only by running the same comparison on the build.
-- Measure a helper's cost on every build. It was free under the JIT and ILC, and cost 4 % interpreted.
+- Measure a helper's cost on every build. It was free under the JIT and ILC; interpreted, the constant it built cost 4 %.
 - On this machine, runs move by up to 40 % between speed states. Compare old and new alternately, and read pairs from the same state before trusting a normalized ratio.
+
+### Phase 1b follow-up, the interpreter (2026-09-29)
+
+**Question.** After phase 1b the four tiers ran 6-34 % slower interpreted, and the shared `VectorCast` seemed to cost 4 % of that. Can the code stay shared at no cost?
+
+**Done.**
+- **The clamp comes before the conversion** (`VectorCast.ToPixel(coordinate, last)`). The samplers clamped right after converting, so the conversion's guards were a second clamp. One clamp in front leaves the conversion only values it takes exactly.
+  - x64: `maxps`, `minps`, `cvttps2dq`.
+  - WebAssembly and ARM64: a min with the last pixel, then the unsigned saturating conversion, which sends NaN and the near side to 0 itself (`pmin` + `i32x4.trunc_sat_f32x4_u`, `fmin` + `fcvtzu`). No zero constant.
+- **The lattice converts plainly** (`VectorCast.ToInt32Native`). It reads only lanes inside the image, so it needs no guard.
+- `ToPixel` now equals `PixelIndex.Clamp` for every float, in `VectorCastParityTest` and `--parity`. The old contract allowed a range.
+- Harness: the `pixel-*` and `clamp-*` probes.
+
+**Numbers** (tables in the [measurements](references/simd-128bit-tiers-measurements.md#phase-1b-follow-up-the-interpreter)). Interpreted, from one speed state, five alternations:
+
+| Kernel, µs | Before 1b | 1b | Now |
+|---|---|---|---|
+| QR sampler | 240.8-243.3 | 257.3-259.8 | 236.1-238.7 |
+| Micro QR sampler | 2.29-2.30 | 2.73-2.77 | 2.32-2.34 |
+| rMQR sampler | 10.79-10.90 | 11.86-11.95 | 10.26-10.37 |
+| rMQR lattice | 1.29-1.30 | 1.66-1.68 | 1.29-1.31 |
+
+The four tiers are 11-15 % faster than 1b on default NativeAOT and 1-14 % on WebAssembly AOT. Image decodes: default NativeAOT within noise of 1b; WebAssembly AOT at most 1.5 % slower (version 40, where the unsigned conversion costs the sampler 1 %); interpreted within noise of before 1b.
+
+**Machine code.** Every vector kernel has fewer instructions than in 1b on every build: ILC x64 -16 to -68, `x86-64-v3` -6 to -15, ARM64 -2 to -5 (the lattice 0), JIT -7 to -33. ARM64 is now at or below its count before 1b. The scalar kernels are unchanged.
+
+**Found on the way.**
+- **Sharing costs the interpreter nothing.** It inlines `VectorCast` and `PixelIndex`; its compiled code has no call. Through the helper and written inline time the same, the helper no slower. 1b's 4 % was the cap `Vector128.Create(2147483520f)` inside the helper, rebuilt on every call: the interpreter hoists nothing out of a loop. Micro QR's four-lane core took 17 interpreter ops before 1b, 27 in 1b and 13 now.
+- **The WebAssembly runtime compiles hot interpreter code in traces** (the jiterpreter). A call ends a trace, and branch layout decides where the next one starts. A scalar clamp form moved QR's vector tier by 7 % through its one-module row tail, and rMQR's scalar sampler by 35 %, far more than their op counts explain.
+- **Scalar clamp forms tried:** 1b's float-first form, one unsigned test, and the old integer tests with a sign check. On default NativeAOT the unsigned test is about 20 % faster in the scalar samplers, but interpreted it slowed QR's vector tier 7 %. The scalar samplers run only as one-module tails on x64 and ARM64, so 1b's form stays.
+- **An overlapping last vector step for Micro QR**, as rMQR does: 2.88 against 2.48 µs interpreted. A vector step costs about three scalar modules there. Rejected.
+- **Unsigned against signed conversion on WebAssembly:** interpreted 5-8 % faster (Micro QR, rMQR), AOT 1-3 % slower. Unsigned, by D1's reasoning.
+- Micro QR's remaining 1-2 % interpreted lies outside its vector core, which now takes fewer ops than before 1b; the scalar row tail is the other code that changed.
+
+**Lessons.**
+- Judge the interpreter per kernel, not by op counts or probes. `MONO_VERBOSE_METHOD` prints the interpreter's code and the jiterpreter's traces; read both before trusting a probe.
+- A constant built inside a helper costs the interpreter on every call. The caller hoists it.
+- A guard next to a clamp belongs in the clamp.

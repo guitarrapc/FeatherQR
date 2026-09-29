@@ -239,10 +239,14 @@ internal static class TierTiming
         new("probe/convert-native", () => Probe(ConvertNative)),
         new("probe/convert-native-fixed", () => Probe(ConvertNativeFixed)),
         new("probe/convert-packedsimd", () => Probe(ConvertPackedSimd), PackedSimd.IsSupported),
-        new("probe/convert-packedsimd-min", () => Probe(ConvertPackedSimdMin), PackedSimd.IsSupported),
-        new("probe/convert-vectorcast", () => Probe(ConvertVectorCast)),
-        new("probe/convert-pseudo-inline", () => Probe(ConvertPseudoInline), PackedSimd.IsSupported),
+        new("probe/pixel-vectorcast", () => Probe(PixelVectorCast)),
+        new("probe/pixel-inline", () => Probe(PixelInline), PackedSimd.IsSupported),
+        new("probe/pixel-signed", () => Probe(PixelSigned), PackedSimd.IsSupported),
+        new("probe/pixel-intclamp", () => Probe(PixelIntClamp)),
+        new("probe/clamp-base", () => Probe(ClampBase)),
         new("probe/clamp-inline", () => Probe(ClampInline)),
+        new("probe/clamp-unsigned", () => Probe(ClampUnsigned)),
+        new("probe/clamp-signfix", () => Probe(ClampSignFix)),
         new("probe/clamp-pixelindex", () => Probe(ClampPixelIndex)),
         new("probe/movemask-portable", () => Probe(MovemaskPortable)),
         new("probe/movemask-packedsimd", () => Probe(MovemaskPackedSimd), PackedSimd.IsSupported),
@@ -875,41 +879,123 @@ internal static class TierTiming
         return acc.ToScalar() + acc.GetElement(3);
     }
 
-    /// <summary>The operations VectorCast.ToInt32 takes on WebAssembly, written in the loop, so a call the interpreter does not inline shows against it.</summary>
-    private static int ConvertPackedSimdMin(byte[] data)
+    /// <summary>VectorCast.ToPixel's WebAssembly operations written in the loop: against pixel-vectorcast, the cost of the call where it is not inlined.</summary>
+    private static int PixelInline(byte[] data)
     {
         ref var start = ref MemoryMarshal.GetArrayDataReference(data);
         var acc = Vector128<int>.Zero;
-        var cap = Vector128.Create(2147483520f);
-        for (nuint i = 0; i < ProbeVectors; i++)
-            acc += PackedSimd.ConvertToInt32Saturate(Vector128.Min(Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f, cap));
-        return acc.ToScalar() + acc.GetElement(3);
-    }
-
-    /// <summary>VectorCast.ToInt32's WebAssembly operations written in the loop: against convert-vectorcast, the cost of the call where it is not inlined.</summary>
-    private static int ConvertPseudoInline(byte[] data)
-    {
-        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
-        var acc = Vector128<int>.Zero;
-        var cap = Vector128.Create(2147483520f);
+        var last = Vector128.Create(4095f);
         for (nuint i = 0; i < ProbeVectors; i++)
         {
-            var v = Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f;
-            acc += PackedSimd.ConvertToInt32Saturate(PackedSimd.PseudoMin(PackedSimd.PseudoMax(Vector128<float>.Zero, v), cap));
+            var v = Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.09375f - Vector128.Create(1024f);
+            acc += PackedSimd.ConvertToUInt32Saturate(PackedSimd.PseudoMin(v, last)).AsInt32();
         }
         return acc.ToScalar() + acc.GetElement(3);
     }
 
-    /// <summary>The scalar samplers' clamp written in the loop, against clamp-pixelindex, which calls PixelIndex.Clamp: 16,384 coordinates a call.</summary>
+    /// <summary>Both edges clamped and the signed conversion, against pixel-inline's far edge and the unsigned one.</summary>
+    private static int PixelSigned(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        var zero = Vector128<float>.Zero;
+        var last = Vector128.Create(4095f);
+        for (nuint i = 0; i < ProbeVectors; i++)
+        {
+            var v = Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.09375f - Vector128.Create(1024f);
+            acc += PackedSimd.ConvertToInt32Saturate(PackedSimd.PseudoMin(PackedSimd.PseudoMax(zero, v), last));
+        }
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    /// <summary>The samplers before VectorCast: the saturating conversion, then the clamp on the integers.</summary>
+    private static int PixelIntClamp(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        var last = Vector128.Create(4095);
+        for (nuint i = 0; i < ProbeVectors; i++)
+        {
+            var v = Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.09375f - Vector128.Create(1024f);
+            acc += Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(v), last), Vector128<int>.Zero);
+        }
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    /// <summary>Coordinates from -1,024 to 5,120 into pixels of a 4,096-pixel line, a third of them clamped.</summary>
+    private static int PixelVectorCast(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        var last = Vector128.Create(4095f);
+        for (nuint i = 0; i < ProbeVectors; i++)
+            acc += VectorCast.ToPixel(Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.09375f - Vector128.Create(1024f), last);
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    /// <summary>The scalar samplers' clamp before PixelIndex: the cast, then both edges on the integer. 16,384 coordinates a call, a
+    /// sixth of them past an edge, into a limit the runtime cannot fold.</summary>
+    private static int ClampBase(byte[] data)
+    {
+        var sum = 0;
+        var limit = 160 + (data.Length & 1);
+        for (var i = 0; i < data.Length; i += 4)
+        {
+            var p = (int)(data[i] * 0.75f - 20f);
+            if (p < 0)
+                p = 0;
+            else if (p >= limit)
+                p = limit - 1;
+            sum += p;
+        }
+        return sum;
+    }
+
+    /// <summary>The far edge on the float, then the cast and the near edge, as PixelIndex.Clamp takes them on WebAssembly.</summary>
     private static int ClampInline(byte[] data)
     {
         var sum = 0;
+        var limit = 160 + (data.Length & 1);
         for (var i = 0; i < data.Length; i += 4)
         {
             var x = data[i] * 0.75f - 20f;
-            var p = x >= 160 ? 159 : (int)x;
+            var p = x >= limit ? limit - 1 : (int)x;
             if (p < 0)
                 p = 0;
+            sum += p;
+        }
+        return sum;
+    }
+
+    /// <summary>The cast, then one unsigned test for both edges; the coordinate's sign picks the edge.</summary>
+    private static int ClampUnsigned(byte[] data)
+    {
+        var sum = 0;
+        var limit = 160 + (data.Length & 1);
+        for (var i = 0; i < data.Length; i += 4)
+        {
+            var x = data[i] * 0.75f - 20f;
+            var p = (int)x;
+            if ((uint)p >= (uint)limit)
+                p = x > 0 ? limit - 1 : 0;
+            sum += p;
+        }
+        return sum;
+    }
+
+    /// <summary>The integer edges as before PixelIndex; a negative result from a positive coordinate is an overflow the cast did not saturate.</summary>
+    private static int ClampSignFix(byte[] data)
+    {
+        var sum = 0;
+        var limit = 160 + (data.Length & 1);
+        for (var i = 0; i < data.Length; i += 4)
+        {
+            var x = data[i] * 0.75f - 20f;
+            var p = (int)x;
+            if (p < 0)
+                p = x > 0 ? limit - 1 : 0;
+            else if (p >= limit)
+                p = limit - 1;
             sum += p;
         }
         return sum;
@@ -918,18 +1004,10 @@ internal static class TierTiming
     private static int ClampPixelIndex(byte[] data)
     {
         var sum = 0;
+        var limit = 160 + (data.Length & 1);
         for (var i = 0; i < data.Length; i += 4)
-            sum += PixelIndex.Clamp(data[i] * 0.75f - 20f, 160);
+            sum += PixelIndex.Clamp(data[i] * 0.75f - 20f, limit);
         return sum;
-    }
-
-    private static int ConvertVectorCast(byte[] data)
-    {
-        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
-        var acc = Vector128<int>.Zero;
-        for (nuint i = 0; i < ProbeVectors; i++)
-            acc += VectorCast.ToInt32(Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f);
-        return acc.ToScalar() + acc.GetElement(3);
     }
 
     private static int MovemaskPortable(byte[] data)

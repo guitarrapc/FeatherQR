@@ -245,7 +245,7 @@ The conversion alone, µs per 4,096 vectors:
 | the same with `pmax`/`pmin` guards, inline | - | 8.0 | 122 |
 | `VectorCast.ToInt32` | 1.7 | 8.0 | 127 |
 
-`VectorCast.ToInt32` costs what the same operations written inline cost on every build but the interpreter, which inlines it only in part (4 %). `PixelIndex.Clamp` costs what the inline clamp costs everywhere, 1.5 % more interpreted.
+`VectorCast.ToInt32` costs what the same operations written inline cost on every build but the interpreter, where it cost 4 % more. The follow-up below found why: the inline probe built the cap constant once, the helper on every call. `PixelIndex.Clamp` costs what the inline clamp costs everywhere, 1.5 % more interpreted.
 
 Machine code per method, instructions before → after (ILC ARM64 built against the ARM64 runtime pack; the listings of one thread). Methods are told apart by parameter count: 7p Standard QR, 8p rMQR, 12p Micro QR; `SampleGridSimd` is Standard QR's 256-bit tier, which ILC compiles for ARM64 though it never runs there. ARM64's added instructions in the scalar samplers are the two limits converted to float before the loop; the loop bodies are the same length.
 
@@ -299,3 +299,95 @@ SampleGridSimd128 7p                    375 ->  331
 SampleGridSimd128 8p                    390 ->  354
 SampleGridVector128 12p                 313 ->  282
 ```
+
+## Phase 1b follow-up: the interpreter
+
+Builds: before 1b, 1b (`HEAD`), and now (`VectorCast.ToPixel` and `ToInt32Native`), alternated.
+
+Kernels interpreted, raw µs, five alternations in one speed state (`LocalBinarizer` 1,328-1,348 µs in every run):
+
+| Kernel | Before 1b | 1b | Now |
+|---|---|---|---|
+| QRSampleGrid | 240.8-243.3 | 257.3-259.8 | 236.1-238.7 |
+| MicroQRSampleGrid | 2.29-2.30 | 2.73-2.77 | 2.32-2.34 |
+| RmQRSampleGrid | 10.79-10.90 | 11.86-11.95 | 10.26-10.37 |
+| RmQRSubFinderLattice | 1.29-1.30 | 1.66-1.68 | 1.29-1.31 |
+
+Each build, three alternations, each shape over `LocalBinarizer` from its run, median, as a ratio to before 1b (1b → now):
+
+| Shape | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| image/qr-v40-3px | 0.673 → 0.700 | 0.758 → 0.807 | 1.004 → 0.985 |
+| image/qr-v6-4px | 0.698 → 0.735 | 0.795 → 0.843 | 1.020 → 0.985 |
+| image/micro-m4-8px | 0.854 → 0.857 | 0.876 → 0.894 | 0.997 → 0.998 |
+| image/rmqr-r17x139-8px | 0.795 → 0.827 | 0.856 → 0.873 | 1.017 → 0.993 |
+| image/rmqr-r17x139-4px-keystone15 | 0.922 → 0.917 | 0.932 → 0.957 | 1.012 → 0.990 |
+| kernel/QRSampleGrid | 0.144 → 0.125 | 0.171 → 0.169 | 1.065 → 0.976 |
+| kernel/MicroQRSampleGrid | 0.128 → 0.114 | 0.209 → 0.205 | 1.193 → 1.013 |
+| kernel/RmQRSampleGrid | 0.105 → 0.091 | 0.145 → 0.141 | 1.104 → 0.955 |
+| kernel/RmQRSubFinderLattice | 0.079 → 0.067 | 0.161 → 0.138 | 1.289 → 0.993 |
+
+The AOT image rows that read slower come mostly from the normalization. Raw, default NativeAOT `qr-v40-3px` over six alternations: 1b 472-583, now 464-499 µs, both builds split between two speed states. WebAssembly AOT: 660-664 against 670-671 µs, 1.5 %, where the unsigned conversion costs the Standard QR sampler 1 % (below).
+
+The pixel conversion alone, µs per 4,096 vectors (coordinates from -1,024 to 5,120 into a 4,096-pixel line):
+
+| Form | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| `PackedSimd.ConvertToInt32Saturate`, no clamp | - | 6.6-6.7 | 103-104 |
+| before 1b: `Vector128.ConvertToInt32`, then clamp the integers | 55.8-56.1 | 53.9-55.2 | 131.7-134.1 |
+| `pmax`, `pmin`, signed conversion, inline | - | 9.1-9.3 | 129.2-131.2 |
+| `pmin`, unsigned conversion, inline | - | 10.7-10.9 | 131.4-132.4 |
+| `VectorCast.ToPixel` | 2.3 | 10.7-10.9 | 126.0-127.3 |
+
+Signed against unsigned inside the kernels, µs (the builds differ in nothing else):
+
+| Kernel | WebAssembly AOT, signed → unsigned | Interpreted, signed → unsigned |
+|---|---|---|
+| QRSampleGrid | 37.2 → 37.6 | 235.6 → 236.0 |
+| MicroQRSampleGrid | 0.40 → 0.40 | 2.50 → 2.31 |
+| RmQRSampleGrid | 2.16 → 2.22 | 10.79 → 10.26 |
+
+Interpreter ops in Micro QR's four-lane core, from its compiled code (`MONO_VERBOSE_METHOD`): 17 before 1b, 27 in 1b (the guards, and the cap built twice per step as `ldc.r4` and a splat), 13 now.
+
+Scalar clamp forms. Interpreted, each shape over `LocalBinarizer`, as a ratio to before 1b; the vector tiers all use the signed `ToPixel` here:
+
+| Shape | 1b's float-first form | One unsigned test |
+|---|---|---|
+| kernel/QRSampleGrid | 0.916 | 1.025 |
+| kernel/MicroQRSampleGrid | 1.011 | 1.027 |
+| kernel/QRSampleGrid-scalar | 1.056 | 1.068 |
+| kernel/MicroQRSampleGrid-scalar | 1.356 | 1.117 |
+| kernel/RmQRSampleGrid-scalar | 0.606 | 0.899 |
+
+Default NativeAOT, raw µs from the fast runs: `QRSampleGrid-scalar` 53.6-54.5 against 45.1-45.7, `MicroQRSampleGrid-scalar` 0.4 against 0.3, `RmQRSampleGrid-scalar` 5.2-5.3 against 4.0-4.1. The integer tests with a sign check: `QRSampleGrid-scalar` 628 µs interpreted, against 505 before 1b. Micro QR with an overlapping last vector step instead of the scalar tail: 2.88 against 2.48 µs interpreted.
+
+Machine code per method, instructions 1b → now (method names as in Phase 1b):
+
+```
+== ilc-x64
+ClassifySubFinderLatticeVector128 15p   271 ->  255
+SampleGridSimd128 7p                    404 ->  336
+SampleGridSimd128 8p                    427 ->  364
+SampleGridVector128 12p                 304 ->  286
+== ilc-v3
+ClassifySubFinderLatticeVector128 15p   236 ->  224
+SampleGridSimd128 7p                    309 ->  294
+SampleGridSimd128 8p                    333 ->  319
+SampleGridVector128 12p                 276 ->  270
+== ilc-arm64
+ClassifySubFinderLatticeVector128 15p   165 ->  165
+SampleGridSimd128 7p                    244 ->  239
+SampleGridSimd128 8p                    219 ->  214
+SampleGridVector128 12p                 202 ->  200
+== jit-avx2
+ClassifySubFinderLatticeVector128 15p   209 ->  200
+SampleGridSimd128 8p                    295 ->  262
+SampleGridVector128 12p                 243 ->  236
+== jit-noavx
+ClassifySubFinderLatticeVector128 15p   262 ->  247
+SampleGridSimd128 7p                    331 ->  311
+SampleGridSimd128 8p                    354 ->  338
+SampleGridVector128 12p                 282 ->  275
+```
+
+The scalar samplers, the scalar lattice and Standard QR's 256-bit tier are unchanged on every target. The first ARM64 form (`fmax` with zero, `fmin`, `fcvtzs`) was +7 instructions: ILC rebuilt the zero constant before every `fmax` instead of keeping it in a register, which the unsigned conversion avoids.

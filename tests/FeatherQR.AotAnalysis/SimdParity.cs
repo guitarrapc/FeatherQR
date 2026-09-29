@@ -24,7 +24,7 @@ internal static class SimdParity
         }
 
         var failures = 0;
-        failures += Report("VectorCast.ToInt32", CastMismatches);
+        failures += Report("VectorCast", CastMismatches);
         failures += Report("QRImageDecoder.SampleGridSimd128", QRSamplerMismatches);
         failures += Report("MicroQRImageDecoder.SampleGridVector128", MicroSamplerMismatches);
         failures += Report("RmQRImageDecoder.SampleGridSimd128", RmQRSamplerMismatches);
@@ -53,9 +53,12 @@ internal static class SimdParity
 
     private static readonly float[] Edges =
     [
-        float.NaN, float.PositiveInfinity, float.NegativeInfinity, 0f, -0f, 0.99999994f, -0.99999994f, -1.5f,
+        float.NaN, float.PositiveInfinity, float.NegativeInfinity, 0f, -0f, 0.99999994f, -0.99999994f, -1.5f, 4094.9998f, 4095f, 4095.9998f, 4096f,
         2147483520f, 2147483648f, 1e20f, float.MaxValue, -2147483520f, -2147483648f, -2147483904f, -1e20f, float.MinValue, float.Epsilon,
     ];
+
+    /// <summary>The image <see cref="CastMismatches"/> clamps into, 4,096 pixels across.</summary>
+    private const int CastLimit = 4096;
 
     private static List<string> CastMismatches()
     {
@@ -77,17 +80,16 @@ internal static class SimdParity
                 for (var lane = 0; lane < 4; lane++)
                     lanes[lane] = (trial & 1) == 0 ? BitConverter.Int32BitsToSingle(random.Next(int.MinValue, int.MaxValue)) : (float)(random.NextDouble() * 8192 - 4096);
             }
-            var actual = VectorCast.ToInt32(Vector128.Create(lanes));
+            var pixel = VectorCast.ToPixel(Vector128.Create(lanes), Vector128.Create((float)(CastLimit - 1)));
+            var native = VectorCast.ToInt32Native(Vector128.Create(lanes));
             for (var lane = 0; lane < 4; lane++)
             {
-                // Truncated from -1 up to 2^31, outside it the side it left: the callers clamp or skip those lanes
+                // The pixel the scalar samplers take; the unclamped conversion only where the lattice reads it
                 var value = lanes[lane];
-                var got = actual.GetElement(lane);
-                var ok = float.IsNaN(value) || value <= -1f ? got <= 0
-                    : value >= 2147483648f ? got >= 2147483520
-                    : got == (int)value;
-                if (!ok)
-                    mismatches.Add($"{value:R}: {got}");
+                if (pixel.GetElement(lane) != PixelIndex.Clamp(value, CastLimit))
+                    mismatches.Add($"{value:R}: pixel {pixel.GetElement(lane)}, scalar {PixelIndex.Clamp(value, CastLimit)}");
+                if (value > -1f && value < 2147483648f && native.GetElement(lane) != (int)value)
+                    mismatches.Add($"{value:R}: native {native.GetElement(lane)}");
             }
         }
         return mismatches;
@@ -171,7 +173,7 @@ internal static class SimdParity
                     var (v, u) = (k / size, k % size);
                     var x = originX + (v + 0.5f) * vX + (u + 0.5f) * uX;
                     var y = originY + (v + 0.5f) * vY + (u + 0.5f) * uY;
-                    mismatches.Add($"size {size}, trial {trial}, module ({u}, {v}): x {x:R} y {y:R}, cast ({(int)x}, {(int)y}), vector cast ({VectorCast.ToInt32(Vector128.Create(x)).ToScalar()}, {VectorCast.ToInt32(Vector128.Create(y)).ToScalar()})");
+                    mismatches.Add($"size {size}, trial {trial}, module ({u}, {v}): x {x:R} y {y:R}, cast ({(int)x}, {(int)y}), pixel ({PixelIndex.Clamp(x, width)}, {PixelIndex.Clamp(y, height)}), vector pixel ({VectorCast.ToPixel(Vector128.Create(x), Vector128.Create((float)(width - 1))).ToScalar()}, {VectorCast.ToPixel(Vector128.Create(y), Vector128.Create((float)(height - 1))).ToScalar()})");
                 }
             }
         }
