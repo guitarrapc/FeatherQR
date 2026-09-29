@@ -107,10 +107,10 @@ public class RmQRCodeDecoderRoundTripTest
     {
         foreach (var (version, ecc) in AllVersionEcc())
         {
+            // The stream and the blocks it is deinterleaved into are both the version's codewords long.
             var info = RmQRConstants.GetEccInfo(version, ecc);
-            var longest = Math.Max(info.CodewordsInGroup1, info.BlocksInGroup2 > 0 ? info.CodewordsInGroup2 : 0) + info.ECCPerBlock;
-            await Assert.That(longest).IsLessThanOrEqualTo(RmQRMatrixDecoder.MaxBlockCodewords);
-            await Assert.That(info.TotalDataCodewords).IsLessThanOrEqualTo(RmQRMatrixDecoder.MaxDataCodewords);
+            var blocks = info.BlocksInGroup1 + info.BlocksInGroup2;
+            await Assert.That(info.TotalDataCodewords + blocks * info.ECCPerBlock).IsEqualTo(RmQRConstants.GetTotalCodewordCount(version));
             await Assert.That(RmQRConstants.GetTotalCodewordCount(version)).IsLessThanOrEqualTo(RmQRMatrixDecoder.MaxTotalCodewords);
         }
     }

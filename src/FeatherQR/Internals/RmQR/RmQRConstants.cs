@@ -315,8 +315,54 @@ internal static class RmQRConstants
     public static int GetKanjiCountIndicatorLength(RmQRVersion version) => kanjiCountBits[Index(version)];
 
     /// <summary>
+    /// The module that carries bit <paramref name="bit"/> (0-17) of one format information copy.
+    /// Bits 0-14 fill a block of five rows by three columns, column by column; bits 15-17 are the three modules beyond it.
+    /// The finder-side copy sits right of the finder's separator (rows 1-5 of columns 8-10, then rows 1-3 of column 11); the sub-finder-side copy left of and above the sub-finder (rows h−6 to h−2 of columns w−8 to w−6, then columns w−5 to w−3 of row h−6).
+    /// </summary>
+    /// <remarks>
+    /// These positions are stated once, in <see cref="GetFormatBlock"/> and <see cref="GetFormatTail"/>, which this composes: the placer writes the copies there, the matrix decoder reads them there, and the image decoder samples them there. <see cref="IsFormatModule"/> is the same set of modules as regions.
+    /// </remarks>
+    public static void GetFormatModule(int bit, bool subFinderSide, int height, int width, out int row, out int col)
+    {
+        if (bit < 15)
+        {
+            GetFormatBlock(subFinderSide, height, width, out row, out col);
+            row += bit % 5;
+            col += bit / 5;
+        }
+        else
+        {
+            GetFormatTail(bit - 15, subFinderSide, height, width, out row, out col);
+        }
+    }
+
+    /// <summary>The top-left module of the block of five rows by three columns that carries bits 0-14 of one copy: bit 5·c + r sits r rows below and c columns right of it.</summary>
+    /// <remarks>
+    /// The image decoder's and the matrix decoder's readers walk the block from here with two loops rather than asking <see cref="GetFormatModule"/> for each bit, since they run for every frame and every grid an image decode tries: a bit at a time measured about 1 % slower on an rMQR image that does not read, and on a clean R17x139 matrix (2026-09-29).
+    /// </remarks>
+    public static void GetFormatBlock(bool subFinderSide, int height, int width, out int row, out int col)
+    {
+        row = subFinderSide ? height - 6 : 1;
+        col = subFinderSide ? width - 8 : 8;
+    }
+
+    /// <summary>The module of bit 15 + <paramref name="k"/> (k 0-2) of one copy, beyond its block: down column 11 on the finder side, along row h−6 on the sub-finder side.</summary>
+    public static void GetFormatTail(int k, bool subFinderSide, int height, int width, out int row, out int col)
+    {
+        row = subFinderSide ? height - 6 : k + 1;
+        col = subFinderSide ? width - 5 + k : 11;
+    }
+
+    /// <summary>Whether (<paramref name="row"/>, <paramref name="col"/>) carries a bit of either format information copy: the modules of <see cref="GetFormatModule"/>, as regions.</summary>
+    public static bool IsFormatModule(int row, int col, int height, int width)
+        => (row >= 1 && row <= 5 && col >= 8 && col <= 10)
+            || (row >= 1 && row <= 3 && col == 11)
+            || (row >= height - 6 && row <= height - 2 && col >= width - 8 && col <= width - 6)
+            || (row == height - 6 && col >= width - 5 && col <= width - 3);
+
+    /// <summary>
     /// Computes the 18 format information bits of one copy: 6 data bits (ECC level bit above the 5-bit version index) protected by BCH(18,6) with generator polynomial 0x1F25, XOR-masked with the copy's constant (finder side 0x1FAB2, sub-finder side 0x20A7B).
-    /// Bit i of the result is module i of the region in placement order (see the placer).
+    /// Bit i of the result is the module <see cref="GetFormatModule"/> gives for bit i.
     /// </summary>
     public static int GetFormatBits(RmQRVersion version, RmQREccLevel eccLevel, bool subFinderSide)
     {

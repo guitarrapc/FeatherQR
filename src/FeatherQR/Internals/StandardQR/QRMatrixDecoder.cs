@@ -74,31 +74,14 @@ internal static partial class QRMatrixDecoder
             Debug.Assert(totalCodewords == layout.FreeModules / 8, "a version's codewords fill its free modules up to the remainder bits");
             ExtractCodewords(modules, layout, maskPattern, interleaved);
 
-            // 4. Deinterleave into per-block [data | ecc] codewords
-            DeinterleaveCodewords(interleaved, blocks, eccInfo);
-
-            // 5. Reed-Solomon correction per block; corrected data codewords are gathered sequentially (block order matches the encoder's split).
-            var data = interleaved.Slice(0, eccInfo.TotalDataCodewords);
-            var errorsCorrected = 0;
-            var dataOffset = 0;
-            var blockOffset = 0;
-            for (var b = 0; b < totalBlocks; b++)
+            // 4-5. Deinterleave into Reed-Solomon blocks and correct each to the code's full strength (ISO/IEC 18004 Table 9's misdecode protection is not applied);
+            // the corrected data codewords are gathered over the front of the stream, in the encoder's block order.
+            if (!EccBlockDecoder.TryCorrect(interleaved, blocks, eccInfo, eccInfo.ECCPerBlock / 2, out var errorsCorrected))
             {
-                var dataCodewords = b < eccInfo.BlocksInGroup1 ? eccInfo.CodewordsInGroup1 : eccInfo.CodewordsInGroup2;
-                var blockLength = dataCodewords + eccInfo.ECCPerBlock;
-                var block = blocks.Slice(blockOffset, blockLength);
-
-                if (!EccBinaryDecoder.TryCorrect(block, eccInfo.ECCPerBlock, out var blockErrors))
-                {
-                    info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
-                    return DecodeStatus.DataUncorrectable;
-                }
-
-                errorsCorrected += blockErrors;
-                block.Slice(0, dataCodewords).CopyTo(data.Slice(dataOffset));
-                dataOffset += dataCodewords;
-                blockOffset += blockLength;
+                info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, maskPattern, errorsCorrected);
+                return DecodeStatus.DataUncorrectable;
             }
+            var data = interleaved.Slice(0, eccInfo.TotalDataCodewords);
 
             // 6. Bitstream → text
             var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out charsWritten, out var structuredAppend);
@@ -223,52 +206,4 @@ internal static partial class QRMatrixDecoder
         7 => (((row + col) % 2 + row * col % 3) & 1) == 0,
         _ => false,
     };
-
-    /// <summary>
-    /// Distributes interleaved codewords into per-block contiguous [data | ecc] layout, the exact inverse of <see cref="BinaryEncoders.BinaryInterleaver.InterleaveCodewords"/>.
-    /// </summary>
-    private static void DeinterleaveCodewords(ReadOnlySpan<byte> interleaved, Span<byte> blocks, in ECCInfo eccInfo)
-    {
-        var g1Blocks = eccInfo.BlocksInGroup1;
-        var g1Cw = eccInfo.CodewordsInGroup1;
-        var g2Blocks = eccInfo.BlocksInGroup2;
-        var g2Cw = g2Blocks > 0 ? eccInfo.CodewordsInGroup2 : 0;
-        var eccPerBlock = eccInfo.ECCPerBlock;
-        var g1BlockLength = g1Cw + eccPerBlock;
-        var g2BlockLength = g2Cw + eccPerBlock;
-        var group2Base = g1Blocks * g1BlockLength;
-
-        var pos = 0;
-
-        // Data rows where every block contributes
-        var common = g2Blocks > 0 ? Math.Min(g1Cw, g2Cw) : g1Cw;
-        for (var i = 0; i < common; i++)
-        {
-            for (var b = 0; b < g1Blocks; b++)
-                blocks[b * g1BlockLength + i] = interleaved[pos++];
-            for (var b = 0; b < g2Blocks; b++)
-                blocks[group2Base + b * g2BlockLength + i] = interleaved[pos++];
-        }
-
-        // Tail rows: only the group with longer blocks still has codewords
-        for (var i = common; i < g1Cw; i++)
-        {
-            for (var b = 0; b < g1Blocks; b++)
-                blocks[b * g1BlockLength + i] = interleaved[pos++];
-        }
-        for (var t = common; t < g2Cw; t++)
-        {
-            for (var b = 0; b < g2Blocks; b++)
-                blocks[group2Base + b * g2BlockLength + t] = interleaved[pos++];
-        }
-
-        // ECC rows: all blocks have exactly eccPerBlock codewords
-        for (var e = 0; e < eccPerBlock; e++)
-        {
-            for (var b = 0; b < g1Blocks; b++)
-                blocks[b * g1BlockLength + g1Cw + e] = interleaved[pos++];
-            for (var b = 0; b < g2Blocks; b++)
-                blocks[group2Base + b * g2BlockLength + g2Cw + e] = interleaved[pos++];
-        }
-    }
 }

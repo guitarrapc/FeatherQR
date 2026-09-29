@@ -57,15 +57,8 @@ internal static partial class RmQRModulePlacer
         // Corner patterns' inner light modules.
         if ((row == 1 && col == width - 2) || (row == height - 2 && col == 1))
             return true;
-        // Format information, finder side.
-        if (row >= 1 && row <= 5 && col >= 8 && col <= 10)
-            return true;
-        if (row >= 1 && row <= 3 && col == 11)
-            return true;
-        // Format information, sub-finder side.
-        if (row >= height - 6 && row <= height - 2 && col >= width - 8 && col <= width - 6)
-            return true;
-        if (row == height - 6 && col >= width - 5 && col <= width - 3)
+        // Format information, both copies.
+        if (RmQRConstants.IsFormatModule(row, col, height, width))
             return true;
         // Vertical timing columns and their 3×3 alignment patterns at both ends.
         var alignment = RmQRConstants.GetAlignmentColumns(version);
@@ -734,21 +727,12 @@ internal static partial class RmQRModulePlacer
         var finderSide = RmQRConstants.GetFormatBits(version, eccLevel, subFinderSide: false);
         var subFinderSide = RmQRConstants.GetFormatBits(version, eccLevel, subFinderSide: true);
 
-        // Bits 0-14: five rows × three columns, column-major (bit = col * 5 + row).
-        for (var c = 0; c < 3; c++)
+        for (var bit = 0; bit < 18; bit++)
         {
-            for (var r = 0; r < 5; r++)
-            {
-                var bit = c * 5 + r;
-                core[(r + 1) * width + (c + 8)] = (byte)((finderSide >> bit) & 1);
-                core[(height - 6 + r) * width + (width - 8 + c)] = (byte)((subFinderSide >> bit) & 1);
-            }
-        }
-        // Bits 15-17.
-        for (var k = 0; k < 3; k++)
-        {
-            core[(k + 1) * width + 11] = (byte)((finderSide >> (15 + k)) & 1);
-            core[(height - 6) * width + (width - 5 + k)] = (byte)((subFinderSide >> (15 + k)) & 1);
+            RmQRConstants.GetFormatModule(bit, subFinderSide: false, height, width, out var row, out var col);
+            core[row * width + col] = (byte)((finderSide >> bit) & 1);
+            RmQRConstants.GetFormatModule(bit, subFinderSide: true, height, width, out row, out col);
+            core[row * width + col] = (byte)((subFinderSide >> bit) & 1);
         }
     }
 

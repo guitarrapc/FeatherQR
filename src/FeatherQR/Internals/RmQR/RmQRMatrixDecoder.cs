@@ -16,8 +16,6 @@ namespace FeatherQR.Internals.RmQR;
 internal static partial class RmQRMatrixDecoder
 {
     internal const int MaxTotalCodewords = 232;  // R17x139
-    internal const int MaxDataCodewords = 152;   // R17x139-M
-    internal const int MaxBlockCodewords = 74;  // R15x59-M: 48 data + 26 ECC in one block (pinned by RmQRCodeDecoderRoundTripTest)
 
     public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
@@ -40,7 +38,6 @@ internal static partial class RmQRMatrixDecoder
 
         var eccInfo = RmQRConstants.GetEccInfo(version, eccLevel);
         var totalCodewords = RmQRConstants.GetTotalCodewordCount(version);
-        var blocks = eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2;
 
         // 3. Extract the interleaved codeword stream (inverse zigzag + unmask)
         Span<byte> stream = stackalloc byte[MaxTotalCodewords];
@@ -48,44 +45,15 @@ internal static partial class RmQRMatrixDecoder
 
         ExtractCodewords(modules, width, height, version, stream);
 
-        // 4. Deinterleave block by block, correct, and collect the data codewords
-        Span<byte> block = stackalloc byte[MaxBlockCodewords];
-        Span<byte> data = stackalloc byte[MaxDataCodewords];
-        data = data.Slice(0, eccInfo.TotalDataCodewords);
-        var errorsCorrected = 0;
-        var correctionCapacity = RmQRConstants.GetErrorCorrectionCapacity(version, eccLevel);
-        var dataOffset = 0;
-        for (var b = 0; b < blocks; b++)
+        // 4. Deinterleave into Reed-Solomon blocks, correct each, and gather the data codewords over the front of the stream.
+        // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋ (see the remarks on this class); it is the seam a reserved p would use.
+        Span<byte> blocks = stackalloc byte[MaxTotalCodewords];
+        if (!EccBlockDecoder.TryCorrect(stream, blocks.Slice(0, totalCodewords), eccInfo, RmQRConstants.GetErrorCorrectionCapacity(version, eccLevel), out var errorsCorrected))
         {
-            var dataLength = b < eccInfo.BlocksInGroup1 ? eccInfo.CodewordsInGroup1 : eccInfo.CodewordsInGroup2;
-            var blockSpan = block.Slice(0, dataLength + eccInfo.ECCPerBlock);
-
-            // Data codewords: round-robin rows across blocks; the extra codeword of the long blocks follows all short-length rows.
-            for (var k = 0; k < dataLength; k++)
-            {
-                var index = k < eccInfo.CodewordsInGroup1
-                    ? k * blocks + b
-                    : eccInfo.CodewordsInGroup1 * blocks + (b - eccInfo.BlocksInGroup1);
-                blockSpan[k] = stream[index];
-            }
-            // ECC codewords: round-robin after all data.
-            for (var e = 0; e < eccInfo.ECCPerBlock; e++)
-            {
-                blockSpan[dataLength + e] = stream[eccInfo.TotalDataCodewords + e * blocks + b];
-            }
-
-            // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋ (see the remarks on this class); it is the seam a reserved p would use.
-            if (!EccBinaryDecoder.TryCorrect(blockSpan, eccInfo.ECCPerBlock, out var blockErrors)
-                || blockErrors > correctionCapacity)
-            {
-                info = new RmQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, errorsCorrected + blockErrors);
-                return DecodeStatus.DataUncorrectable;
-            }
-            errorsCorrected += blockErrors;
-
-            blockSpan.Slice(0, dataLength).CopyTo(data.Slice(dataOffset, dataLength));
-            dataOffset += dataLength;
+            info = new RmQRCodeDecodeInfo(DecodeStatus.DataUncorrectable, version, eccLevel, errorsCorrected);
+            return DecodeStatus.DataUncorrectable;
         }
+        var data = stream.Slice(0, eccInfo.TotalDataCodewords);
 
         // 5. Bit stream → text
         var status = RmQRBinaryDecoder.DecodeBitStream(data, eccInfo.TotalDataCodewords * 8, version, destination, out charsWritten);
@@ -99,27 +67,34 @@ internal static partial class RmQRMatrixDecoder
     public static int GetMaxCharCount(RmQRVersion version)
         => RmQRConstants.GetDataCodewordCount(version, RmQREccLevel.M) * 3;
 
-    /// <summary>Reads both 18-bit copies (positions mirror <see cref="RmQRModulePlacer.PlaceFormat"/> exactly).</summary>
+    /// <summary>
+    /// Reads both 18-bit copies where <see cref="RmQRModulePlacer.PlaceFormat"/> writes them: each copy's block from <see cref="RmQRConstants.GetFormatBlock"/>, column by column, then the three modules <see cref="RmQRConstants.GetFormatTail"/> gives.
+    /// Walked as loops, as the image decoder's reader is, since this runs for every grid the image decoder tries (see <see cref="RmQRConstants.GetFormatBlock"/>).
+    /// </summary>
     private static void ReadFormatCopies(ReadOnlySpan<byte> modules, int width, int height, out int finderSide, out int subFinderSide)
     {
         finderSide = 0;
         subFinderSide = 0;
+        RmQRConstants.GetFormatBlock(subFinderSide: false, height, width, out var finderRow, out var finderCol);
+        RmQRConstants.GetFormatBlock(subFinderSide: true, height, width, out var subFinderRow, out var subFinderCol);
         for (var c = 0; c < 3; c++)
         {
             for (var r = 0; r < 5; r++)
             {
                 var bit = c * 5 + r;
-                if (modules[(r + 1) * width + (c + 8)] != 0)
+                if (modules[(finderRow + r) * width + finderCol + c] != 0)
                     finderSide |= 1 << bit;
-                if (modules[(height - 6 + r) * width + (width - 8 + c)] != 0)
+                if (modules[(subFinderRow + r) * width + subFinderCol + c] != 0)
                     subFinderSide |= 1 << bit;
             }
         }
         for (var k = 0; k < 3; k++)
         {
-            if (modules[(k + 1) * width + 11] != 0)
+            RmQRConstants.GetFormatTail(k, subFinderSide: false, height, width, out var row, out var col);
+            if (modules[row * width + col] != 0)
                 finderSide |= 1 << (15 + k);
-            if (modules[(height - 6) * width + (width - 5 + k)] != 0)
+            RmQRConstants.GetFormatTail(k, subFinderSide: true, height, width, out row, out col);
+            if (modules[row * width + col] != 0)
                 subFinderSide |= 1 << (15 + k);
         }
     }

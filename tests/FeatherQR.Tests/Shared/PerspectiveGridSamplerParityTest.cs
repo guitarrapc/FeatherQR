@@ -1,14 +1,13 @@
-using FeatherQR.Internals.StandardQR;
 using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Parity test for the grid sampling kernels: the SIMD path (net8.0+, AVX2) must
+/// Parity test for the tiers of <see cref="PerspectiveGridSampler"/>: each SIMD path (net8.0+, Vector256 and Vector128) must
 /// produce byte-identical module output to the scalar path for affine and
 /// projective transforms across dimensions.
 /// </summary>
-public class SampleGridParityTest
+public class PerspectiveGridSamplerParityTest
 {
     private const byte Threshold = 128;
 
@@ -31,10 +30,10 @@ public class SampleGridParityTest
                     var (luminance, width, transform) = BuildScene(dimension, projective, seed);
 
                     var scalar = new byte[dimension * dimension];
-                    QRImageDecoder.SampleGridScalar(luminance, width, width, Threshold, transform, dimension, scalar);
+                    PerspectiveGridSampler.SampleScalar(luminance, width, width, Threshold, transform, dimension, scalar);
 
                     var simd = new byte[dimension * dimension];
-                    QRImageDecoder.SampleGridSimd(luminance, width, width, Threshold, transform, dimension, simd);
+                    PerspectiveGridSampler.SampleVector256(luminance, width, width, Threshold, transform, dimension, simd);
 
                     await Assert.That(simd.AsSpan().SequenceEqual(scalar)).IsTrue().Because($"SIMD/scalar sampling mismatch (seed={seed}, dim={dimension}, projective={projective})");
                 }
@@ -62,10 +61,10 @@ public class SampleGridParityTest
                     var (luminance, width, transform) = BuildScene(dimension, projective, seed);
 
                     var scalar = new byte[dimension * dimension];
-                    QRImageDecoder.SampleGridScalar(luminance, width, width, Threshold, transform, dimension, scalar);
+                    PerspectiveGridSampler.SampleScalar(luminance, width, width, Threshold, transform, dimension, scalar);
 
                     var simd = new byte[dimension * dimension];
-                    QRImageDecoder.SampleGridSimd128(luminance, width, width, Threshold, transform, dimension, simd);
+                    PerspectiveGridSampler.SampleVector128(luminance, width, width, Threshold, transform, dimension, simd);
 
                     await Assert.That(simd.AsSpan().SequenceEqual(scalar)).IsTrue().Because($"SIMD128/scalar sampling mismatch (seed={seed}, dim={dimension}, projective={projective})");
                 }

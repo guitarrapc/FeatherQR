@@ -2,7 +2,6 @@
 using System.Runtime.Intrinsics;
 #endif
 using FeatherQR.Internals.ImageDecoders;
-using FeatherQR.Internals.StandardQR;
 using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 
 namespace FeatherQR.Internals.MicroQR;
@@ -494,7 +493,7 @@ internal static partial class MicroQRImageDecoder
                 if (!ProjectiveSymbolFitsImage(transform, size, image.Width, image.Height, samplingSlack))
                     continue;
 
-                QRImageDecoder.SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, size, modules);
+                PerspectiveGridSampler.Sample(image.Luminance, image.Width, image.Height, image.Threshold, transform, size, modules);
                 var grid = new ProjectiveGrid(transform);
                 attemptsRemaining -= 2;
                 if (DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus) == DecodeStatus.Success)

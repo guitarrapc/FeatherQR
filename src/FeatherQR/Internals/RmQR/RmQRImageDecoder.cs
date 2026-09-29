@@ -1216,13 +1216,12 @@ internal static partial class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Reads one 18-bit format copy through the transform: finder side (rows 1-5 × cols 8-10 column-major, then col 11 rows 1-3) or sub-finder side (rows h−6..h−2 × cols w−8..w−6, then row h−6 cols w−5..w−3), same bit order as the matrix decoder.
+    /// Reads one 18-bit format copy through the transform, each bit at the centre of its module: the block <see cref="RmQRConstants.GetFormatBlock"/> starts, column by column, then the three modules <see cref="RmQRConstants.GetFormatTail"/> gives. The matrix decoder's bit order.
     /// </summary>
     internal static int ReadFormatCopy(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, bool subFinderSide, int symbolWidth, int symbolHeight)
     {
         var raw = 0;
-        var rowBase = subFinderSide ? symbolHeight - 6 : 1;
-        var colBase = subFinderSide ? symbolWidth - 8 : 8;
+        RmQRConstants.GetFormatBlock(subFinderSide, symbolHeight, symbolWidth, out var rowBase, out var colBase);
         for (var c = 0; c < 3; c++)
         {
             for (var r = 0; r < 5; r++)
@@ -1233,8 +1232,7 @@ internal static partial class RmQRImageDecoder
         }
         for (var k = 0; k < 3; k++)
         {
-            var col = subFinderSide ? symbolWidth - 5 + k : 11;
-            var row = subFinderSide ? symbolHeight - 6 : k + 1;
+            RmQRConstants.GetFormatTail(k, subFinderSide, symbolHeight, symbolWidth, out var row, out var col);
             if (SampleDark(luminance, width, height, threshold, transform, col + 0.5f, row + 0.5f))
                 raw |= 1 << (15 + k);
         }

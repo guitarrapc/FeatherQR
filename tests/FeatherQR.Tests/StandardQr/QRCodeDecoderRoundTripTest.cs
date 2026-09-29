@@ -1,3 +1,6 @@
+using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals.StandardQR;
+
 namespace FeatherQR.Tests;
 
 /// <summary>
@@ -300,6 +303,65 @@ public class QRCodeDecoderRoundTripTest
         await Assert.That(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
         await Assert.That(info.ErrorsCorrected > 0).IsTrue().Because("expected ECC to correct at least one codeword");
+    }
+
+    /// <summary>
+    /// Every block carrying as many codeword errors as its ECC codewords correct, ⌊ecc/2⌋, reads: the matrix decoder
+    /// corrects to the code's full strength and reserves no misdecode protection (ISO/IEC 18004 Table 9's p).
+    /// </summary>
+    [Test]
+    [Arguments(5, QREccLevel.Q)]   // 2 + 2 blocks, 9 errors each
+    [Arguments(10, QREccLevel.H)]  // 6 + 2 blocks, 14 errors each
+    public async Task Decode_FullStrengthErrorsInEveryBlock_AreCorrected(int version, QREccLevel level)
+    {
+        const string content = "FULL STRENGTH";
+        var eccInfo = QRCodeConstants.GetEccInfo(version, level);
+        var modules = BuildSymbolWithErrors(version, level, content, errorsPerBlock: eccInfo.ECCPerBlock / 2);
+
+        await Assert.That(QRCodeDecoder.TryDecode(modules, 17 + 4 * version, out var decoded, out var info)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.ErrorsCorrected).IsEqualTo((eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * (eccInfo.ECCPerBlock / 2));
+    }
+
+    /// <summary>A Byte segment symbol whose first <paramref name="errorsPerBlock"/> data codewords of every block are changed after its ECC is computed.</summary>
+    private static byte[] BuildSymbolWithErrors(int version, QREccLevel level, string content, int errorsPerBlock)
+    {
+        var eccInfo = QRCodeConstants.GetEccInfo(version, level);
+        var size = 17 + 4 * version;
+
+        var data = new byte[eccInfo.TotalDataCodewords];
+        var writer = new BitWriter(data);
+        writer.Write(0b0100, 4);                                  // Byte mode indicator
+        writer.Write(content.Length, version <= 9 ? 8 : 16);      // count indicator
+        foreach (var c in content)
+            writer.Write(c, 8);
+        writer.Write(0b0000, 4);                                  // terminator
+        writer.Flush();
+        for (var i = writer.GetData().Length; i < data.Length; i++)
+            data[i] = (i & 1) == 0 ? (byte)0xEC : (byte)0x11;     // pad codewords
+
+        var blocks = eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2;
+        var ecc = new byte[blocks * eccInfo.ECCPerBlock];
+        for (int b = 0, d = 0; b < blocks; b++)
+        {
+            var length = b < eccInfo.BlocksInGroup1 ? eccInfo.CodewordsInGroup1 : eccInfo.CodewordsInGroup2;
+            EccBinaryEncoder.CalculateECC(data.AsSpan(d, length), ecc.AsSpan(b * eccInfo.ECCPerBlock, eccInfo.ECCPerBlock), eccInfo.ECCPerBlock);
+            for (var k = 0; k < errorsPerBlock; k++)
+                data[d + k] ^= 0xA5;
+            d += length;
+        }
+        var codewords = new byte[BinaryInterleaver.CalculateInterleavedSize(eccInfo, QRCodeConstants.GetRemainderBits(version))];
+        BinaryInterleaver.InterleaveCodewords(data, ecc, codewords, eccInfo);
+
+        var layout = ModulePlacer.GetLayout(version);
+        var modules = new byte[size * size];
+        layout.Template.AsSpan().CopyTo(modules);
+        ModulePlacer.PlaceDataWords(modules, layout, codewords);
+        var mask = ModulePlacer.MaskCode(modules, size, version, layout.BlockedMask, level);
+        ModulePlacer.PlaceFormat(modules, size, QRCodeConstants.GetFormatBits(level, mask));
+        if (version >= 7)
+            ModulePlacer.PlaceVersion(modules, size, QRCodeConstants.GetVersionBits(version));
+        return modules;
     }
 
     [Test]

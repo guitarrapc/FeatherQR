@@ -51,7 +51,7 @@ Measured in Release before phase 1, 1,000 calls after warm-up, every span overlo
 2. **Shared outer passes (done 2026-09-29).** One driver for positive, inverted, content verdict, regional and midpoint, over an attempt struct. The midpoint pass is a per-decoder switch, off for Standard QR (D1).
 3. **Shared result rule and mirror retry (done 2026-09-29).** One accumulator decides what settles and which failure is reported, holding each decoder's current rule (D2). One mirror retry, or a stated reason per decoder where the three strategies must stay apart: rMQR samples again because its grid is not square.
 4. **Image context (done 2026-09-29).** A `readonly ref struct` carrying the image, its size, threshold and grey levels (and rMQR's edge level) through the stages, and the module buffer owned by the scan, as Micro QR and rMQR already do.
-5. **Matrix level.** The deinterleave and block loop shared by Standard QR and rMQR, as the inverse of the interleaver the encoders share. rMQR's format bit positions stated once. The sampler Micro QR borrows moves to `ImageDecoders/` if both keep it.
+5. **Matrix level (done 2026-09-29).** The deinterleave and block loop shared by Standard QR and rMQR, as the inverse of the interleaver the encoders share. rMQR's format bit positions stated once. The sampler Micro QR borrows moves to `ImageDecoders/` if both keep it.
 6. **`charsWritten` on failure.** The matrix span overloads report 0 when they return `false`, as the image overloads do, with a test per symbology and a line in the migration notes.
 
 The guards come first because every later phase is judged against them. Phase 6 is independent and can land at any point before 2.0.0 (D4). D5, if taken, follows phase 3 as a change of its own.
@@ -204,3 +204,56 @@ The guards come first because every later phase is judged against them. Phase 6 
   - without the thread-static counters;
   - with the workspace renting one grid instead of three, enough for a read.
   - Each still measured +0.5 to +1.0 % fastest, so neither is the cause. It was not traced further. It is within what moving code between methods shifts, and recorded here as this change's cost.
+
+### Phase 5, matrix level (2026-09-29)
+
+- `EccBlockDecoder` ([src/FeatherQR/Internals/BinaryDecoders](../../../src/FeatherQR/Internals/BinaryDecoders/EccBlockDecoder.cs)) is the Reed-Solomon block stage of Standard QR's and rMQR's matrix decoders:
+  - it deinterleaves the stream into its blocks, the exact inverse of `BinaryInterleaver`;
+  - it corrects each block up to a capacity the decoder passes, and stops at the first block that does not read;
+  - it gathers the corrected data codewords over the front of the stream, in block order.
+- What moved into it:
+  - Standard QR's private deinterleave, unchanged, and its block loop.
+  - rMQR's fused loop, which gathered each block from the stream by index and corrected it before gathering the next. The stream and its blocks now both sit on the stack, 464 bytes where the stream, one block and the data took 458. `RmQRMatrixDecoder.MaxBlockCodewords` and `MaxDataCodewords` went with the loop.
+- The error count on failure is rMQR's rule: the blocks before the failing one, plus that block's own count when the capacity refused it. Standard QR's reported count does not change:
+  - Reed-Solomon reports no count for a block it cannot correct.
+  - Standard QR passes the full strength, ⌊ecc/2⌋, which Reed-Solomon never exceeds, so its capacity never refuses a block.
+- rMQR's format information positions are stated once, in `RmQRConstants`:
+  - `GetFormatBlock` gives the top-left module of the block of five rows by three columns that carries bits 0-14, and `GetFormatTail` the three modules beyond it;
+  - `GetFormatModule` composes them into the module of one bit, and `IsFormatModule` gives the same modules as regions;
+  - four places wrote the positions out before and now read them there: the placer, the function-module predicate, the matrix decoder and the image decoder.
+- The two readers, the image decoder's and the matrix decoder's, walk the block with loops, as they did before. `GetFormatModule` a bit at a time measured slower:
+  - The image decoder's reader runs for every frame tried. On rMQR noise, twelve alternating runs of the rMQR shapes: +0.9 % on the fastest, the first quartile and the median. With the helper marked for aggressive inlining: +0.9 %, +0.7 % and +0.8 %. With the reader's old loops back: −0.3 %, −0.1 % and −0.2 %. With loops over `GetFormatBlock` and `GetFormatTail`: −0.4 %, 0.0 % and −0.1 %.
+  - The matrix decoder's reader runs for every grid the image decoder tries. A clean R17x139 matrix, 0.95 µs: +1.1 %, +2.1 % and +1.0 % a bit at a time; −1.1 %, −1.0 % and 0.0 % with the loops.
+  - The placer writes the copies once per version and level, into a cached template, and asks for each bit.
+- `PerspectiveGridSampler` ([src/FeatherQR/Internals/ImageDecoders](../../../src/FeatherQR/Internals/ImageDecoders/PerspectiveGridSampler.cs)) is `QRImageDecoder.SampleGrid` and its 256-bit and 128-bit tiers.
+  - The methods moved whole, with their bodies unchanged, and the tier files moved with `git mv`.
+  - Standard QR and Micro QR call it there, so Micro QR no longer references the Standard QR namespace.
+  - Its row in the SIMD table is `PerspectiveGridSampler`, among the shared kernels; it was `QRSampleGrid`.
+  - rMQR keeps its own sampler, since its grid is not square and it has an affine tier.
+- Test first; each new test failed to compile before its code:
+  - `EccBlockDecoderTest`, 465 cases a target. The deinterleave inverts the interleaver, and a clean stream reads, over 228 block structures: every Standard QR and rMQR version and level, and four outside the tables. Errors in every block are counted, an uncorrectable block reports the blocks before it, and a block over the capacity adds its own.
+  - `RmQRFormatPositionTest`, 96 cases a target. Each bit's module is held against the naive reader in the tests, the regions against the bits, and the image decoder's reader bit by bit.
+  - `SymbologyDependencyTest`, 12 cases a target, holds the dependency rule of the architecture record over the source.
+  - The sampler's parity test moved with the sampler (`PerspectiveGridSamplerParityTest`).
+- Reach, measured by planting faults by hand:
+  - `tools/mutation_check.cs` needs the files it touches clean in git, and these were not, so a loop applied each fault, built and ran the relevant classes.
+  - 12 faults: the deinterleave's group 2 offsets (2), the failure count, the capacity comparison, where the data is gathered, the format positions (4), the capacity Standard QR passes, and a reference to another symbology through a second `using` on one line and through an alias (2).
+  - All 12 are caught. Two tests had to grow first:
+    - Standard QR passing one less than the full strength was caught by nothing, since no test gave a Standard QR block exactly ⌊ecc/2⌋ errors. `QRCodeDecoderRoundTripTest.Decode_FullStrengthErrorsInEveryBlock_AreCorrected` does now, on versions 5-Q and 10-H, and catches it.
+    - The dependency test first read only a `using` at the start of a line, which both reference faults get past. It now reads the namespace spelled out anywhere in code.
+  - Five more faults after the block and tail split, all caught:
+    - three by `RmQRFormatPositionTest`: the tail's row and column swapped in the image decoder's reader, the sub-finder block one column off, and that reader walking the block by rows;
+    - two in the matrix decoder's reader, the sub-finder block walked by rows and the finder side's tail read on the sub-finder side, by `RmQRCodeDecoderRobustnessTest` alone. Either copy reads a symbol, so only a test that damages the other copy sees a fault in reading one.
+- Reads unchanged:
+  - The sweep's result files for all three symbologies (102,240 images) are byte-identical to those of phase 4 and of phase 1's baseline.
+  - The corpus is identical in every column this library writes, over 624 images.
+  - After the matrix decoder's reader moved to the loops above, the rMQR sweep and the corpus were run again: identical again.
+- The full suite passes on the final tree, allocation guards included: 15,379 cases on .NET 10 and 15,366 on .NET 8. On each, 189 are skipped: the ARM64 tiers, on an x64 machine.
+- Time, against a worktree of the commit before: the fastest, first quartile and median of twelve alternating runs of a harness over 23 shapes. The shapes are the 18 image shapes of phases 2 to 4, and five matrix decodes: Standard QR versions 6 and 40, version 40 with 150 modules flipped, and rMQR R17x139-H clean and with 20 flipped.
+  - Image shapes: every one within ±1.4 % on all three measures, 15 of 18 within ±0.7 %.
+  - rMQR gradient measured +0.4 to +1.4 % in all six rMQR-only runs, including one with the old matrix loop back and one with the old reader back, and −1.0 to −1.4 % in both full runs. It follows which shapes the harness runs, not the code.
+  - Standard QR matrix decodes: within ±0.8 %, but for version 40's fastest, +1.9 %, whose first quartile and median were +0.4 and +0.5 %. Version 40 with 150 flips, where every block is corrected: −0.2 %, +0.1 % and 0.0 %.
+  - rMQR matrix decodes, after the loops above: within ±1.1 %. Before them, the matrix with 20 flips measured +0.3 %, +0.9 % and +0.6 % with the shared stage, and +1.9 %, +2.5 % and +3.4 % with rMQR's old fused loop put back and nothing else changed: the shared stage is not slower than the loop it replaced.
+  - The full run preceded the matrix decoder's reader moving to the loops; the rMQR numbers here are from a run of the rMQR shapes after it, and the rest of the code did not change between them.
+- Stages and their order are unchanged, so the decode diagrams stay as they were. The spec maps' rows point at the shared code, and the architecture record lists `EccBlockDecoder` and `PerspectiveGridSampler` among the shared primitives, with the dependency test beside the rule.
+- Library code: 274 lines in, 176 of them in the two new files, and 228 out.
