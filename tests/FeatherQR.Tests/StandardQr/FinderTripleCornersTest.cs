@@ -136,6 +136,20 @@ public class FinderTripleCornersTest
         await Assert.That(events).IsEqualTo("timing 1/013, timing 3/013, decode 3/013");
     }
 
+    /// <summary>
+    /// The selected triple failed at the format information and an alternative gets to Reed-Solomon: the selected triple's diagnostics stand, the main path's.
+    /// Standard QR's format word does not name a version, so a triple or grid that is not the symbol's own gets past it about half the time and reaches Reed-Solomon with the wrong version (D5, decode-pipeline-structure-plan.md).
+    /// </summary>
+    [Test]
+    public async Task Alternative_FailingFurther_LeavesTheSelectedTriplesDiagnostics()
+    {
+        var (status, info, events) = DecodeAlternatives(DecodeStatus.FormatInformationInvalid, reading: ["1/013"]);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.FormatInformationInvalid);
+        await Assert.That(info.Version).IsEqualTo(-1);
+        await Assert.That(events).IsEqualTo("timing 1/013, decode 1/013, timing 2/023, timing 3/023, timing 0/023");
+    }
+
     private static (DecodeStatus Status, QRCodeDecodeInfo Info, string Events) DecodeTriple(string[] reading, params (string Corner, DecodeStatus Result)[] results)
     {
         var corners = Recording(reading, results);
@@ -146,13 +160,17 @@ public class FinderTripleCornersTest
 
     /// <summary>The selected triple (centres 0 to 2) failed, and the list holds centre 3 as well.</summary>
     private static (DecodeStatus Status, QRCodeDecodeInfo Info, string Events) DecodeAlternatives(string[] reading, params (string Corner, DecodeStatus Result)[] results)
+        => DecodeAlternatives(DecodeStatus.DataUncorrectable, reading, results);
+
+    /// <summary>The selected triple (centres 0 to 2) failed with <paramref name="selected"/>, its version field -1, and the list holds centre 3 as well.</summary>
+    private static (DecodeStatus Status, QRCodeDecodeInfo Info, string Events) DecodeAlternatives(DecodeStatus selected, string[] reading, params (string Corner, DecodeStatus Result)[] results)
     {
         var corners = Recording(reading, results);
         var candidates = Points.ToArray();
         var charsWritten = 0;
-        var info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, -1, default, -1, 0);
+        var info = new QRCodeDecodeInfo(selected, -1, default, -1, 0);
         var modules = new QRImageDecoder.ModuleWorkspace();
-        var status = QRImageDecoder.DecodeAlternativeTriples(ref corners, default, candidates, Points.AsSpan(0, 3), ref modules, new char[16], DecodeStatus.DataUncorrectable, ref charsWritten, ref info);
+        var status = QRImageDecoder.DecodeAlternativeTriples(ref corners, default, candidates, Points.AsSpan(0, 3), ref modules, new char[16], selected, ref charsWritten, ref info);
         return (status, info, string.Join(", ", corners.Log.Events));
     }
 

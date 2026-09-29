@@ -54,7 +54,7 @@ Measured in Release before phase 1, 1,000 calls after warm-up, every span overlo
 5. **Matrix level (done 2026-09-29).** The deinterleave and block loop shared by Standard QR and rMQR, as the inverse of the interleaver the encoders share. rMQR's format bit positions stated once. The sampler Micro QR borrows moves to `ImageDecoders/` if both keep it.
 6. **`charsWritten` on failure (done 2026-09-30).** The matrix span overloads report 0 when they return `false`, as the image overloads do, with a test per symbology and a line in the migration notes.
 
-The guards come first because every later phase is judged against them. Phase 6 was independent of the others and landed last, before 2.0.0 (D4). D5, if taken, follows phase 3 as a change of its own.
+The guards come first because every later phase is judged against them. Phase 6 was independent of the others and landed last, before 2.0.0 (D4). D5 was tried after phase 6, measured, and declined.
 
 ## Decisions
 
@@ -66,19 +66,20 @@ The guards come first because every later phase is judged against them. Phase 6 
 - **D2, both reporting rules kept through phase 3 (2026-09-29).**
   - What: when every attempt of a pass fails, Standard QR reports the first attempt of its main path (the selected triple, the corner its shape names, the estimated dimension, the first grid). Micro QR and rMQR report the failure that went furthest: a read too long for the destination, then a verdict on the content, then a failure past the format information, then one before it, then not detected; the first on a tie. Across passes, and across Micro QR's and rMQR's two scans, all three already report the first. Phase 3's shared accumulator holds both rules as two policies.
   - Why: this plan is a refactor, and which failure is reported is observable. A change of behavior in the same diff as a refactor cannot be traced to either.
-  - Whether Standard QR moves to the furthest failure is D5, decided apart from this plan.
+  - Whether Standard QR moves to the furthest failure is D5, decided apart from this plan: it does not.
 - **D4, phase 6 before 2.0.0 (2026-09-30).**
   - What: the matrix span overloads report no characters written on failure from 2.0.0, rather than waiting for 3.0.0.
   - Why: it changes what a public `out` parameter holds, which a major version is for, and 2.0.0 was still in preview (2.0.0-preview.3). No signature changes, so it is a behavior change with a section in the migration guide, not a break a compiler reports.
+- **D5, Standard QR keeps its main path (declined 2026-09-30).**
+  - What was proposed: Standard QR would report the failure that went furthest, as Micro QR and rMQR do, so that a first grid failing at the format information and a later one reaching Reed-Solomon would report `DataUncorrectable` with the version and level, "a symbol is there and damaged".
+  - Why not: that premise holds only where getting past the format information means the grid lies on the symbol. Micro QR's format word names the symbol and rMQR's the version, so there it does. Standard QR's names no version, and about half of all 15-bit words (32 × 576 of 32,768) lie within the three bits BCH(15,5) corrects of a valid word, so a grid sampled at a guessed dimension gets past it by chance and fails at Reed-Solomon with that dimension's version.
+  - Measured with the rule changed (the progress log has the detail): 51 of 80 symbols with their format information destroyed went from `FormatInformationInvalid` with their own version to `DataUncorrectable` one version too small, every one of them wrong. No read changed; the sweep changed 65 failures of 54,400 renders, all at 1.00 to 1.25 px/module, and the corpus 8 of 548.
+  - Kept from the attempt: Standard QR's coverage re-read reports a skip as not tried, which changes nothing under its own rule, and tests that hold the main path on a whole image and between triples.
+  - Reopened only with a signal of its own for a Standard QR grid being on the symbol, such as a format word read with no bit corrected (by chance about 1 in 1,000 words); measured the same way.
 
 ## Open decisions
 
 - **D3, decoder options.** The generators take `in XxxGeneratorOptions`; the decoders take none. An options parameter placed before 2.0.0 freezes the API would let a caller trade passes for speed later without new overloads. It belongs to [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md), not here.
-- **D5, one reporting rule before 2.0.0.**
-  - What it would change: Standard QR would report the failure that went furthest, as Micro QR and rMQR do, so `info` on failure means the same thing in all three decoders. Where a first grid fails at the format information and a later one reaches Reed-Solomon, the caller would get `DataUncorrectable` with the version and level, "a symbol is there and damaged", instead of `FormatInformationInvalid`.
-  - Cost: it changes public behavior, so it needs a line in the migration notes, and the tests that pin a Standard QR failure status reviewed. Standard QR's coverage re-read reports a skipped re-read as `DataUncorrectable` with no version, which has to become not tried first (see the phase 3 log).
-  - When: its own change after phase 3, where the shared accumulator makes it a choice of policy. Worth taking before 2.0.0 fixes the API.
-  - Not considered: moving Micro QR and rMQR to the first attempt, which reports less.
 
 ## Measuring
 
@@ -281,3 +282,26 @@ The guards come first because every later phase is judged against them. Phase 6 
 - Reads unchanged: the sweep's result files for all three symbologies are byte-identical to phase 4's, and the corpus is identical in this library's columns.
 - The full suite passes: 15,387 cases on .NET 10 and 15,374 on .NET 8, 189 skipped on each (the ARM64 tiers).
 - Time, matrix decodes only, since the change is one branch after the bit stream: twelve alternating runs against a worktree of the commit before, with a Micro QR M4 matrix added to the harness. All six shapes within ±1.2 % on the fastest, the first quartile and the median.
+
+### D5 tried and declined (2026-09-30)
+
+- Tried in full, test first:
+  - The shared result kept one rule, the furthest failure, and Standard QR's search reported by it.
+  - A skipped coverage re-read reported as not tried, since a failure made up for it would outrank the grid's own under that rule.
+  - Two stand-in tests (another corner, an alternative triple, each getting to Reed-Solomon after a failure at the format information) failed on the old rule and passed on the new one.
+- What gave it away: an image-level test of symbols with their format information destroyed, meant to guard the skip, reported `DataUncorrectable` with version 1 for a version 2 symbol, and 6 for a 7, with the skip fixed.
+- A probe then decoded Standard QR renders of a known version under both rules:
+  - 80 symbols with their format information destroyed (versions 1 to 40, crisp and blurred 3 × 3, at 6 px/module). The old rule reported `FormatInformationInvalid` with the symbol's version for all 80. The new rule changed 51 of them to `DataUncorrectable`, each one version too small.
+  - 240 renders at 1.4, 1.7 and 2.0 px/module, turned 9° and 31°: 234 read under both rules, each reporting the right version, and the six failures did not change.
+- The sweep and the corpus under the new rule:
+  - Reads unchanged, 35,527 of 54,400 renders.
+  - 65 failures changed, all from `FormatInformationInvalid` to `DataUncorrectable`, all at 1.00 to 1.25 px/module anti-aliased.
+  - In the corpus, 8 of 548 Standard QR images changed the same way.
+  - Neither records the version reported, so whether those carried the right one is not known.
+- The full suite under the new rule failed only the image-level test: no existing test pinned a Standard QR failure the rule changed.
+- Declined; see D5 under Decisions. The rule change was reverted: the shared result keeps both rules, and the three decoders report as they did before the attempt.
+- Kept:
+  - The skip reported as not tried. Under the main path rule a re-read is only taken when it settles, which a skip never does, so nothing changes.
+  - `QRImageFailureReportTest`, 4 cases a target: a symbol with its format information destroyed reports `FormatInformationInvalid` with its own version, crisp and blurred, at versions 2 and 7.
+  - `FinderTripleCornersTest.Alternative_FailingFurther_LeavesTheSelectedTriplesDiagnostics`: an alternative triple that gets to Reed-Solomon does not replace the selected triple's failure at the format information. The corner level was already held by `NoCornerSettles_TheShapeCornersDiagnosticsStand`.
+- After the revert: the full suite passes (15,392 cases on .NET 10, 15,379 on .NET 8, 189 skipped on each), and the Standard QR sweep's result file is byte-identical to phase 6's, the corpus identical in this library's columns.

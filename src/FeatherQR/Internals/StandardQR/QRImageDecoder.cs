@@ -602,12 +602,13 @@ internal static partial class QRImageDecoder
     private static DecodeStatus DecodeByCoverage(in ImageView image, in PerspectiveTransform transform, int dimension, ReadOnlySpan<byte> transposedFailure, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         SampleGridByCoverage(image.Luminance, image.Width, image.Height, image.Grey.Midpoint, transform, dimension, modules);
-        // The grid that already failed decodes the same way again; the mirror retry left it transposed
+        // The grid that already failed decodes the same way again; the mirror retry left it transposed.
+        // Reported as not tried, which it was: a failure made up for it would outrank the grid's own under the rule Micro QR and rMQR report by
         if (IsTransposeOf(modules, transposedFailure, dimension))
         {
             charsWritten = 0;
-            info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, 0, default, -1, 0);
-            return DecodeStatus.DataUncorrectable;
+            info = NotDetectedInfo;
+            return DecodeStatus.NotDetected;
         }
         var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
         if (status == DecodeStatus.Success)
