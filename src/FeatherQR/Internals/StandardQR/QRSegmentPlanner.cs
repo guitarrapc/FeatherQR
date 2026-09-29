@@ -43,10 +43,11 @@ internal static class QRSegmentPlanner
     /// </summary>
     /// <remarks>
     /// All-Numeric content is already at the optimum: no mode prices a digit below Numeric, and every extra run adds a header, so one run is it.
-    /// Numeric only, since an Alphanumeric or Byte payload can still hide a digit run worth splitting off.
+    /// Kanji content is too: the analyser chooses Kanji only when every character has a Kanji cell, none of them is ASCII, and Byte could carry one only under an ECI header, so one Kanji run is the cheapest stream.
+    /// Not Alphanumeric or Byte, since those payloads can still hide a digit run worth splitting off.
     /// Every caller skips the whole cost run on a <c>false</c>, which changes the emitted stream if the rule is ever wrong, so <c>QRSegmentPlannerUnitTest</c> pins it against the program itself.
     /// </remarks>
-    public static bool CanPlanBeatSingleMode(EncodingMode singleMode) => singleMode != EncodingMode.Numeric;
+    public static bool CanPlanBeatSingleMode(EncodingMode singleMode) => singleMode is EncodingMode.Alphanumeric or EncodingMode.Byte;
 
     /// <summary>Shortest run of digits that could repay the one mode header splitting it out adds, at the version band whose headers are narrowest.</summary>
     /// <remarks>

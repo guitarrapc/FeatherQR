@@ -377,11 +377,11 @@ internal static class RmQRVersionSelector
         }
     }
 
-    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric characters, Byte encoded bytes.</summary>
+    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric and Kanji characters, Byte encoded bytes.</summary>
     private static string FormatDataLength(int dataLength, EncodingMode mode) => mode switch
     {
         EncodingMode.Numeric => $"{dataLength} digits",
-        EncodingMode.Alphanumeric => $"{dataLength} characters",
+        EncodingMode.Alphanumeric or EncodingMode.Kanji => $"{dataLength} characters",
         _ => $"{dataLength} bytes",
     };
 

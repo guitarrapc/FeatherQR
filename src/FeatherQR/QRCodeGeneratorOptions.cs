@@ -64,13 +64,13 @@ public readonly record struct QRCodeGeneratorOptions
 
     /// <summary>
     /// Character encoding declaration.
-    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content.
+    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content, or Kanji mode (no ECI) for text JIS X 0208 holds entirely.
     /// </summary>
     public EciMode EciMode { get; init; }
 
     /// <summary>
     /// Include a UTF-8 byte order mark.
-    /// Ignored unless the content is written as UTF-8 in Byte mode.
+    /// Ignored unless the content is written as UTF-8 in Byte mode; asking for one keeps text that would go out in Kanji mode in UTF-8.
     /// When a BOM would be written, <see cref="QRSegmentation.Optimal"/> emits the single-mode stream instead of a split (the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text).
     /// </summary>
     public bool Utf8Bom { get; init; }

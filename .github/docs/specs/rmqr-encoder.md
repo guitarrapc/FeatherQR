@@ -190,8 +190,8 @@ article on rMQR reproduces agrees with all 32 Kanji widths (and all 96 others), 
 column of its Table 7 transcription agrees with the capacity those widths give on 63 of 64 cells.
 The 64th, R11x77-M, is a corrupt row in that table, not a disagreement: its Numeric,
 Alphanumeric and Byte cells are R11x59-H's. Both checks live in `RmQRBinaryEncoderKanjiTest`,
-where the Kanji writers are tested. No generator selects Kanji yet; that is the Kanji encoding
-plan's flip.
+where the Kanji writers are tested. The generator writes Kanji for text whose every character has
+an encoder cell ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)).
 
 Data capacity in characters (Numeric / Alphanumeric / Byte), single segment, no ECI header:
 
@@ -282,7 +282,7 @@ The corollary is why this cannot be made free: whether a split helps is only kno
 
 **ECI.** One prefix ahead of the first run: an rMQR decoder carries the declared charset across the runs that follow, so a plan needs no repetition. Its 11 bits are part of the cost the version scan compares. The ECI does not shield everything, though: the shared byte-segment decoder consumes a leading EF BB BF of every segment even behind an explicit UTF-8 declaration, so the shared segmentation program opens no Byte run at a mid-content U+FEFF; the run opens a character early and keeps the mark interior (rationale: specs/standardqr-encoder.md, "Plans the byte-segment decoder would misread are never built").
 
-**Kanji.** Still not encoded, so a Japanese payload mixes Byte (UTF-8) with Numeric runs rather than reaching for 13-bit Kanji. The decoder reads Kanji segments other encoders produce.
+**Kanji.** A text whose every character has a Kanji cell is one Kanji run under both segmentations, and the planner returns before any cost run: no character of it fits another mode more cheaply, and Byte would need an ECI header ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)). A Japanese payload with ASCII in it still mixes Byte (UTF-8) with Numeric runs rather than Kanji runs; Kanji runs beside ASCII runs are the next phase of the Kanji encoding plan.
 
 ### 3. Fit the version
 
@@ -341,7 +341,7 @@ The single mask is applied to data modules while placing. Both format copies com
 | Default fit strategy | `MinimizeArea` (fewest modules), **confirmed in Phase 5.6**: both reference encoders choose the same versions automatically (libzint and qrtool with no version option: 12 digits at M → R11x27, 15 → R13x27, 100 → R11x77, measured by `probe-rmqr`), so the default keeps interoperability parity and the printable-area argument; the surprise case (12 digits at M: R11x27 (297) rather than the flatter R7x43 (301)) is documented in the generator XML docs and pinned by `RmQRCodeGeneratorUnitTest`; users wanting the flattest symbol use `MinimizeHeight` or a fixed `RmQRHeight` (README example lands with the rendering surface in 5.7) | User feedback after release |
 | Explicit-canvas layout | Uniform scale, centered (letterbox) | - |
 | ECI on encode | Implemented 2026-08-18: none for ASCII; assignment 3 for ISO-8859-1; assignment 26 for UTF-8. Only R7x43-H cannot hold an ECI header plus a one-byte payload | Additional charset demand (cross-symbology decision) |
-| Kanji | Not encoded; use Byte mode with UTF-8 ECI. Decoding is supported (JIS X 0208), so the tables' Kanji column is load-bearing | Encoding: a policy change backed by concrete demand |
+| Kanji | Written for text whose every character has an encoder cell, when the charset is the library's choice, as one Kanji run with no ECI header ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)); read with JIS X 0208. The Kanji capacity column is an encoding capacity now | Kanji runs beside ASCII runs under `Optimal`: the Kanji encoding plan |
 | Mixed-mode segmentation | Opt-in via `RmQRSegmentation.Optimal`, defaulting to `Single`. Changing the default would move the emitted bit stream and therefore the rendered symbol for every existing caller, and planning is a search that cannot be free (whether a split helps is only knowable by planning it). The bounds make it roughly free where it cannot help, which weakens but does not remove the argument | A major version allows changing the default, at which point `Single` is only ever better by accident; the breakage would be callers relying on the "too long" exception, plus any caller pinned to today's rendered dimensions (see the quiet-zone note above) |
 | Segmentation surface | Two values rather than three. A `WhenNeeded` middle value ("plan only when the single mode does not fit") was evaluated and rejected: for a requested version `Optimal` already costs nothing when the single mode fits, so the value only added the top-end rescue, and the bounds later made the ordinary case roughly free as well | A concrete caller needs the rescue without ever wanting a smaller symbol |
 | Interleaver | Lifted `BinaryInterleaver` to `Internals.BinaryEncoders` (Phase 5.4): it never used the version, only the `ECCInfo` block structure; the remainder-bit count became a parameter | - |

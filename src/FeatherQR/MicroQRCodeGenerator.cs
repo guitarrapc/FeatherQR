@@ -13,11 +13,10 @@ namespace FeatherQR;
 /// <list type="bullet">
 /// <item>M1: Numeric only, at <see cref="MicroQREccLevel.ErrorDetectionOnly"/>.</item>
 /// <item>M2: Numeric and Alphanumeric, at L or M.</item>
-/// <item>M3: adds Byte, at L or M.</item>
+/// <item>M3: adds Byte and Kanji, at L or M.</item>
 /// <item>M4: adds level Q.</item>
 /// </list>
-/// Micro QR has no ECI, so text outside ISO-8859-1 goes out as raw UTF-8 in Byte mode.
-/// Kanji mode is never written; <see cref="MicroQRCodeDecoder"/> does read Kanji that other encoders produce.
+/// Micro QR has no ECI. Text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) goes out in Kanji mode at 13 bits a character, which is the standard's own way to carry it; other text outside ISO-8859-1 goes out as raw UTF-8 in Byte mode, which a reader has to recognise as UTF-8.
 /// </remarks>
 public static class MicroQRCodeGenerator
 {
@@ -141,7 +140,7 @@ public static class MicroQRCodeGenerator
         size = default;
         ValidateQuietZone(quietZoneSize);
 
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true);
         if (!TrySelectVersion(in analysis, eccLevel, requestedVersion, out var version))
             return false;
 
@@ -240,10 +239,11 @@ public static class MicroQRCodeGenerator
     /// </summary>
     private static MicroQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion)
     {
-        // Micro QR has no ECI, so analysis runs with the default charset rules;
-        // for Byte mode the analyzer's DataLength is already the encoded byte
-        // count (ISO-8859-1 char count or UTF-8 byte count).
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
+        // Micro QR has no ECI, so analysis runs with the default charset rules,
+        // Kanji mode included; for Byte mode the analyzer's DataLength is already
+        // the encoded byte count (ISO-8859-1 char count or UTF-8 byte count), for
+        // Kanji mode the character count.
+        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true);
         if (TrySelectVersion(in analysis, eccLevel, requestedVersion, out var version))
             return new MicroQRConfiguration(version, eccLevel, analysis.EncodingMode);
 
@@ -339,7 +339,7 @@ public static class MicroQRCodeGenerator
         size = default;
         ValidateQuietZone(options.QuietZoneSize);
 
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true);
         if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
             return false;
 
@@ -355,7 +355,7 @@ public static class MicroQRCodeGenerator
 
         ValidateQuietZone(options.QuietZoneSize);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
+        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true);
         if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
 
@@ -370,7 +370,7 @@ public static class MicroQRCodeGenerator
         if (requestedVersion is { } version)
         {
             if (!MicroQRConstants.IsModeSupported(version, mode))
-                return new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: +Byte).", nameof(requestedVersion));
+                return new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: {(mode == EncodingMode.Kanji ? "+Byte and Kanji" : "+Byte")}).", nameof(requestedVersion));
 
             return new ArgumentException(
                 $"Content is too long for Micro QR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
@@ -400,7 +400,7 @@ public static class MicroQRCodeGenerator
         {
             return new ArgumentException(
                 $"Micro QR cannot encode {mode} mode at ECC level {eccLevel}: {nameof(MicroQREccLevel.ErrorDetectionOnly)} limits the symbol to M1 " +
-                "(Numeric only, 5 digits); Alphanumeric requires M2+, Byte requires M3+, and level Q requires M4. " +
+                $"(Numeric only, 5 digits); Alphanumeric requires M2+, {(mode == EncodingMode.Kanji ? "Byte and Kanji require" : "Byte requires")} M3+, and level Q requires M4. " +
                 "Choose another ECC level or use Standard QR (QRCodeGenerator).");
         }
 
@@ -410,11 +410,11 @@ public static class MicroQRCodeGenerator
             "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.");
     }
 
-    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric characters, Byte encoded bytes (UTF-8 for non-Latin-1 text).</summary>
+    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric and Kanji characters, Byte encoded bytes (UTF-8 for non-Latin-1 text).</summary>
     private static string FormatDataLength(int dataLength, EncodingMode mode) => mode switch
     {
         EncodingMode.Numeric => $"{dataLength} digits",
-        EncodingMode.Alphanumeric => $"{dataLength} characters",
+        EncodingMode.Alphanumeric or EncodingMode.Kanji => $"{dataLength} characters",
         _ => $"{dataLength} bytes",
     };
 
@@ -490,7 +490,7 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
+        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true);
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
@@ -523,7 +523,7 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
+        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true);
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
@@ -591,7 +591,7 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true);
         if (!MicroQRSegmentPlanner.TrySelectVersion(text, in analysis, eccLevel, options.Version, out var version, out var useSegments))
             return false;
 

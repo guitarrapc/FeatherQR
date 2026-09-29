@@ -223,7 +223,7 @@ Two behaviours were introduced with the range and are now unconditional. Both di
 
 **ECI.** One prefix ahead of the first run: a decoder carries the declared charset across the runs that follow, so a plan needs no repetition. Its 12 bits are part of the cost the version scan compares.
 
-**Kanji.** Still not encoded, so a Japanese payload mixes Byte (UTF-8) with Numeric runs rather than reaching for 13-bit Kanji. The decoder reads Kanji segments other encoders produce.
+**Kanji.** A text whose every character has a Kanji cell is one Kanji run under both segmentations, and the planner returns before any cost run: no character of it fits another mode more cheaply, and Byte would need an ECI header ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)). A Japanese payload with ASCII in it still mixes Byte (UTF-8) with Numeric runs rather than Kanji runs; Kanji runs beside ASCII runs are the next phase of the Kanji encoding plan.
 
 ### 4. Build the data codewords
 
@@ -354,7 +354,7 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 ## Decisions
 
 - **Single segment per input, by default.** It keeps the default path auditable and makes mode selection a single pass; the trade-off, non-minimal symbols for mixed-mode payloads, is answered by the opt-in `QRSegmentation.Optimal`, which never changes the emitted stream unless it lowers the version.
-- **No Kanji mode when encoding.** Unicode input is represented as UTF-8 Byte mode with ECI 26, at the cost of lower capacity for Japanese text. This originally also avoided shipping a Shift_JIS table; that argument lapsed when Kanji DECODING shipped and the assembly gained the 16 KB JIS X 0208 table, so the remaining reasons are output stability and not adding an encoding dependency.
+- **Kanji mode for text JIS X 0208 holds, from 2.0.0.** Through 1.x all Unicode input went out as UTF-8 Byte mode with ECI 26, at the cost of capacity for Japanese text; the reasons were output stability and, before Kanji decoding shipped, not carrying a Shift_JIS table. 2.0.0 is a major, so output stability no longer binds, and the table is generated rather than taken from `System.Text.Encoding.CodePages`, so no dependency is added. A text whose every character has an encoder cell is now one Kanji segment with no ECI header, when the charset is the library's choice and no byte order mark is asked for; the rule and why it is not wider are in [When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written).
 - **ASCII omits ECI by default.** This minimizes overhead and maximizes compatibility. Latin-1 and wider Unicode receive explicit ECI declarations under automatic selection.
 - **BOM is explicit and UTF-8-only.** `QRCodeGeneratorOptions.Utf8Bom` affects the stream only when the selected data mode is Byte and the effective ECI is UTF-8.
 - **Version can be forced.** Fixed-size applications need control over symbol dimensions, so a pinned `QRCodeGeneratorOptions.Version` bypasses minimum-fit selection rather than acting as a lower bound.

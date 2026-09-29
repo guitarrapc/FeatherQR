@@ -49,9 +49,11 @@ public static class RmQRSpotCheck
                     var results = reader.From(image);
 
                     var expectedVersion = version.ToString();
-                    var expectedBytes = eciMode == EciMode.Utf8 || text.Any(c => c > 0xFF)
-                        ? Encoding.UTF8.GetBytes(text)
-                        : Encoding.Latin1.GetBytes(text);
+                    var expectedBytes = mode == "kanji"
+                        ? KanjiPayload.ToShiftJisBytes(text, null)
+                        : eciMode == EciMode.Utf8 || text.Any(c => c > 0xFF)
+                            ? Encoding.UTF8.GetBytes(text)
+                            : Encoding.Latin1.GetBytes(text);
                     var ok = results.Length == 1
                         && results[0].Bytes.AsSpan().SequenceEqual(expectedBytes)
                         && results[0].Text == text
@@ -67,9 +69,9 @@ public static class RmQRSpotCheck
             }
         }
 
-        if (total != 318 || eci3Total != 63 || eci26Total != 63)
+        if (total != 382 || eci3Total != 63 || eci26Total != 63)
         {
-            Console.Error.WriteLine($"FAIL: expected 318 total / 63 ECI 3 / 63 ECI 26 symbols, got {total} / {eci3Total} / {eci26Total}");
+            Console.Error.WriteLine($"FAIL: expected 382 total (64 of them Kanji) / 63 ECI 3 / 63 ECI 26 symbols, got {total} / {eci3Total} / {eci26Total}");
             return 1;
         }
 
@@ -96,6 +98,25 @@ public static class RmQRSpotCheck
         var utf8 = LargestUtf8Payload(version, ecc, entry.Capacity(ecc.ToString(), "Byte"));
         if (utf8 is not null)
             yield return ("utf8-eci26", utf8, EciMode.Utf8);
+
+        // Text whose every character has a Kanji cell, at the default charset: the
+        // generator writes it in Kanji mode, so zxing-cpp reports its raw Shift_JIS bytes.
+        // Every version holds at least one, so this covers every Kanji count width (2-7).
+        yield return ("kanji", LargestKanjiPayload(version, ecc), EciMode.Default);
+    }
+
+    private const string KanjiAlphabet = "日本語漢字符号化試験用文字列あいうえおカキクケコ、。";
+
+    private static string LargestKanjiPayload(RmQRVersion version, RmQREccLevel ecc)
+    {
+        for (var count = 92; count > 0; count--)
+        {
+            var text = Cyclic(KanjiAlphabet, count);
+            if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { Version = version }))
+                return text;
+        }
+
+        throw new InvalidOperationException($"{version}-{ecc} holds no Kanji character.");
     }
 
     private static string? LargestUtf8Payload(RmQRVersion version, RmQREccLevel ecc, int byteCapacity)
@@ -110,21 +131,12 @@ public static class RmQRSpotCheck
         return FitsWithEci("é", version, ecc, EciMode.Utf8) ? "é" : null;
     }
 
+    // Asks the sizing API directly: false is its "does not fit". Sizing.Required throws
+    // on that answer, and this used to catch the ArgumentException the throwing API of the
+    // time raised, so once sizing stopped throwing it the first symbol that could not
+    // hold "é" behind an ECI header took the whole check down.
     private static bool FitsWithEci(string text, RmQRVersion version, RmQREccLevel ecc, EciMode eciMode)
-    {
-        try
-        {
-            Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version });
-            return true;
-        }
-        // Every caller supplies a valid version from the constants table. On this
-        // fixed-version sizing API, requestedVersion is therefore only blamed when
-        // the content does not fit; do not couple the fixture to exception wording.
-        catch (ArgumentException ex) when (ex.ParamName == "requestedVersion")
-        {
-            return false;
-        }
-    }
+        => RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version });
 
     private static string Cyclic(string alphabet, int length)
     {

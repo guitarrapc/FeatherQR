@@ -270,19 +270,5 @@ public class RmQRBinaryEncoderKanjiTest
     }
 
     private static string Decode(byte[] data, RmQRVersion version, RmQREccLevel ecc)
-    {
-        var finalMessage = new byte[RmQRCodewordEncoder.GetFinalMessageSize(version)];
-        RmQRCodewordEncoder.AssembleFinalMessage(data, version, ecc, finalMessage);
-
-        var width = RmQRConstants.GetWidth(version);
-        var height = RmQRConstants.GetHeight(version);
-        var modules = new byte[width * height];
-        RmQRModulePlacer.PlaceSymbol(modules, version, ecc, finalMessage);
-
-        var destination = new char[RmQRMatrixDecoder.GetMaxCharCount(version)];
-        var status = RmQRMatrixDecoder.DecodeMatrix(modules, width, height, destination, out var written, out _);
-        if (status != DecodeStatus.Success)
-            throw new InvalidOperationException($"decode failed: {status}");
-        return new string(destination, 0, written);
-    }
+        => KanjiSymbolBuilder.DecodeRmQr(KanjiSymbolBuilder.RmQr(data, version, ecc), version);
 }

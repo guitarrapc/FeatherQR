@@ -257,43 +257,7 @@ public class QRBinaryEncoderKanjiTest
         }
     }
 
-    /// <summary>The generator's pipeline after the data stream, assembled from its internal parts: ECC per block, interleave, place, mask 0, format and version information.</summary>
-    private static byte[] BuildSymbol(byte[] data, int version, QREccLevel ecc)
-    {
-        var eccInfo = QRCodeConstants.GetEccInfo(version, ecc);
-        var eccCodewords = new byte[(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock];
-        var dataOffset = 0;
-        var eccOffset = 0;
-        for (var block = 0; block < eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2; block++)
-        {
-            var length = block < eccInfo.BlocksInGroup1 ? eccInfo.CodewordsInGroup1 : eccInfo.CodewordsInGroup2;
-            EccBinaryEncoder.CalculateECC(data.AsSpan(dataOffset, length), eccCodewords.AsSpan(eccOffset, eccInfo.ECCPerBlock), eccInfo.ECCPerBlock);
-            dataOffset += length;
-            eccOffset += eccInfo.ECCPerBlock;
-        }
+    private static byte[] BuildSymbol(byte[] data, int version, QREccLevel ecc) => KanjiSymbolBuilder.StandardQr(data, version, ecc, mask: 0);
 
-        var interleaved = new byte[BinaryInterleaver.CalculateInterleavedSize(eccInfo, QRCodeConstants.GetRemainderBits(version))];
-        BinaryInterleaver.InterleaveCodewords(data, eccCodewords, interleaved, eccInfo);
-
-        var size = 17 + 4 * version;
-        var layout = ModulePlacer.GetLayout(version);
-        var modules = new byte[size * size];
-        layout.Template.AsSpan().CopyTo(modules);
-        ModulePlacer.PlaceDataWords(modules, layout, interleaved);
-        ModulePlacer.ApplyMaskPattern(modules, size, layout.BlockedMask, 0);
-        ModulePlacer.PlaceFormat(modules, size, QRCodeConstants.GetFormatBits(ecc, 0));
-        if (version >= 7)
-            ModulePlacer.PlaceVersion(modules, size, QRCodeConstants.GetVersionBits(version));
-        return modules;
-    }
-
-    private static string Decode(byte[] modules, int version)
-    {
-        var size = 17 + 4 * version;
-        var destination = new char[QRMatrixDecoder.GetMaxCharCount(version)];
-        var status = QRMatrixDecoder.DecodeMatrix(modules, size, destination, out var written, out _);
-        if (status != DecodeStatus.Success)
-            throw new InvalidOperationException($"decode failed: {status}");
-        return new string(destination, 0, written);
-    }
+    private static string Decode(byte[] modules, int version) => KanjiSymbolBuilder.DecodeStandardQr(modules, version);
 }

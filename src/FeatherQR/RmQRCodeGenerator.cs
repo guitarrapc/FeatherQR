@@ -13,8 +13,8 @@ namespace FeatherQR;
 /// Pick a version outright, or let <see cref="RmQRFitStrategy"/> choose among those that hold the content, optionally within one height.
 /// The default <see cref="RmQRFitStrategy.MinimizeArea"/> takes the fewest modules, which can mean a taller and narrower code: 12 digits at level M give R11x27 (297 modules) rather than R7x43 (301).
 /// Use <see cref="RmQRFitStrategy.MinimizeHeight"/> or a fixed <see cref="RmQRHeight"/> when you want the flattest code instead.
-/// Writes Numeric, Alphanumeric and Byte mode, the last with ECI assignment 3 for ISO-8859-1 or 26 for UTF-8.
-/// Kanji mode is never written, so Japanese text goes out as UTF-8; <see cref="RmQRCodeDecoder"/> does read Kanji that other encoders produce.
+/// Writes Numeric, Alphanumeric and Byte mode, the last with ECI assignment 3 for ISO-8859-1 or 26 for UTF-8, and Kanji mode.
+/// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header; it is chosen when <see cref="RmQRCodeGeneratorOptions.EciMode"/> is left at <see cref="EciMode.Default"/>.
 /// The quiet zone defaults to the 2 modules ISO/IEC 23941 asks for.
 /// </remarks>
 public static class RmQRCodeGenerator
@@ -197,7 +197,7 @@ public static class RmQRCodeGenerator
         else
         {
             ValidateEci(text, options.EciMode);
-            var analysis = TextAnalyzer.Analyze(text, options.EciMode);
+            var analysis = TextAnalyzer.Analyze(text, options.EciMode, allowKanji: true);
             fits = RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, options.Version, options.FitStrategy, options.Height, out version);
         }
 
@@ -218,7 +218,7 @@ public static class RmQRCodeGenerator
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, eciMode);
+        var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: true);
         if (!RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out version, out var useSegments))
             return false;
 
@@ -264,8 +264,10 @@ public static class RmQRCodeGenerator
         ValidateEci(textSpan, eciMode);
 
         // Default resolves to no ECI for ASCII, assignment 3 for Latin-1 beyond
-        // ASCII, and assignment 26 for Unicode. DataLength is the encoded byte count.
-        var analysis = TextAnalyzer.Analyze(textSpan, eciMode);
+        // ASCII, Kanji mode (no ECI) for text JIS X 0208 holds entirely, and
+        // assignment 26 for other Unicode. DataLength is the encoded byte count, or
+        // the character count in Kanji mode.
+        var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: true);
         var version = analysis.EciMode == EciMode.Default
             ? RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, eccLevel, requestedVersion, fitStrategy, height)
             : RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
@@ -385,7 +387,7 @@ public static class RmQRCodeGenerator
     /// </summary>
     private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<ModeSegment> plan, out int segmentCount)
     {
-        var analysis = TextAnalyzer.Analyze(textSpan, eciMode);
+        var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: true);
         var version = RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var useSegments);
         segmentCount = 0;
 

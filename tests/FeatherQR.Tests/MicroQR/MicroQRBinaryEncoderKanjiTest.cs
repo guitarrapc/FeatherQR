@@ -235,19 +235,5 @@ public class MicroQRBinaryEncoderKanjiTest
     }
 
     private static string Decode(byte[] data, MicroQRVersion version, MicroQREccLevel ecc)
-    {
-        var eccCount = MicroQRConstants.GetEccCodewordCount(version, ecc);
-        var eccCodewords = new byte[eccCount];
-        EccBinaryEncoder.CalculateECC(data, eccCodewords, eccCount);
-
-        var size = MicroQRConstants.SizeFromVersion(version);
-        var modules = new byte[size * size];
-        MicroQRModulePlacer.PlaceSymbol(modules, size, data, eccCodewords, MicroQRConstants.GetDataBitCapacity(version, ecc), version, ecc);
-
-        var destination = new char[MicroQRMatrixDecoder.GetMaxCharCount(version)];
-        var status = MicroQRMatrixDecoder.DecodeMatrix(modules, size, destination, out var written, out _);
-        if (status != DecodeStatus.Success)
-            throw new InvalidOperationException($"decode failed: {status}");
-        return new string(destination, 0, written);
-    }
+        => KanjiSymbolBuilder.DecodeMicroQr(KanjiSymbolBuilder.MicroQr(data, version, ecc, mask: -1), version);
 }

@@ -10,8 +10,9 @@ namespace FeatherQR;
 /// Encodes text into a Standard QR code (ISO/IEC 18004), versions 1 to 40.
 /// </summary>
 /// <remarks>
-/// Writes Numeric, Alphanumeric and Byte mode, the last as ISO-8859-1 or UTF-8 with an ECI header.
-/// Kanji mode is never written, so Japanese text goes out as UTF-8 in Byte mode; <see cref="QRCodeDecoder"/> does read Kanji that other encoders produce.
+/// Writes Numeric, Alphanumeric and Byte mode, the last as ISO-8859-1 or UTF-8 with an ECI header, and Kanji mode.
+/// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header, where UTF-8 would take 16 or 24; it is chosen when <see cref="QRCodeGeneratorOptions.EciMode"/> is left at <see cref="EciMode.Default"/> and no byte order mark is asked for.
+/// Structured Append sets are still written in Byte mode.
 /// </remarks>
 public static class QRCodeGenerator
 {
@@ -283,7 +284,7 @@ public static class QRCodeGenerator
         if (options.Segmentation != QRSegmentation.Single)
             ValidateOptimalEntry(options.Segmentation);
 
-        var analysisResult = TextAnalyzer.Analyze(text, options.EciMode);
+        var analysisResult = TextAnalyzer.Analyze(text, options.EciMode, allowKanji: !options.Utf8Bom);
         if (!TryResolveVersion(text, eccLevel, in analysisResult, in options, out var version))
             return false;
 
@@ -346,7 +347,9 @@ public static class QRCodeGenerator
             ValidateOptimalEntry(options.Segmentation);
 
         // The charset is decided once, from the whole text: "the bytes of the whole input" has to
-        // name one byte sequence, and every symbol then declares it.
+        // name one byte sequence, and every symbol then declares it. A set is not written in Kanji
+        // mode yet, so its analysis never resolves to it; a text that is one symbol goes through
+        // Create below and gets whatever Create writes.
         var wholeText = TextAnalyzer.Analyze(textSpan, options.EciMode);
         var charset = wholeText.EciMode;
 
@@ -668,7 +671,7 @@ public static class QRCodeGenerator
 
         ValidateQuietZoneSize(options.QuietZoneSize);
 
-        var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: !options.Utf8Bom);
         if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom, options.Version.Min, options.Version.Max, out var version))
         {
             if (options.Version.IsAny)
@@ -725,7 +728,7 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion)
     {
-        var analysisResult = TextAnalyzer.Analyze(textSpan, eciMode);
+        var analysisResult = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: !utf8BOM);
 
         // Select QR code version (auto or manual)
         var version = requestedVersion == -1
@@ -1191,7 +1194,7 @@ public static class QRCodeGenerator
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: !options.Utf8Bom);
 
         // The BOM is a stream-level prefix written only into UTF-8 Byte-mode streams:
         // a split would relocate it into the middle of the decoded text, so that
@@ -1251,7 +1254,7 @@ public static class QRCodeGenerator
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: !options.Utf8Bom);
 
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {

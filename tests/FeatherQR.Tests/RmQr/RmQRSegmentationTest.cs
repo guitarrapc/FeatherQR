@@ -193,7 +193,7 @@ public class RmQRSegmentationTest
     /// </summary>
     private static RmQRVersion ExhaustiveBestVersion(string content, RmQREccLevel ecc, RmQRFitStrategy strategy)
     {
-        var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default);
+        var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default, allowKanji: true);
         var charset = analysis.EciMode;
         var eciBits = charset == EciMode.Default ? 0 : 11;
 
@@ -205,6 +205,11 @@ public class RmQRSegmentationTest
             {
                 // Empty content never plans; the single-mode fit is the answer.
                 cost = 3 + RmQRConstants.GetCountIndicatorLength(version, analysis.EncodingMode);
+            }
+            else if (analysis.EncodingMode == EncodingMode.Kanji)
+            {
+                // Every character has a Kanji cell and none is ASCII: one Kanji run is the optimum.
+                cost = 3 + RmQRConstants.GetKanjiCountIndicatorLength(version) + 13 * content.Length;
             }
             else
             {

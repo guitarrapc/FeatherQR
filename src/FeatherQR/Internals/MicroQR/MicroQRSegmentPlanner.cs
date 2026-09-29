@@ -38,8 +38,10 @@ internal static class MicroQRSegmentPlanner
         var hasSingle = MicroQRCodeGenerator.TrySelectVersionInRange(in analysis, eccLevel, range, out var single);
 
         // All-Numeric content is already at the optimum: splitting a Numeric run
-        // never lowers its payload and every extra run adds a header.
-        if (analysis.EncodingMode == EncodingMode.Numeric)
+        // never lowers its payload and every extra run adds a header. So is Kanji
+        // content: the analyser chooses it only when every character has a Kanji cell,
+        // so none of them fits another mode more cheaply.
+        if (analysis.EncodingMode is EncodingMode.Numeric or EncodingMode.Kanji)
         {
             selected = single;
             return hasSingle;

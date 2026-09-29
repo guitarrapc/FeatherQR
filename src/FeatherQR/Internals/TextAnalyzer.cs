@@ -68,6 +68,41 @@ internal static partial class TextAnalyzer
     }
 
     /// <summary>
+    /// <see cref="Analyze(ReadOnlySpan{char}, EciMode)"/>, then Kanji mode for a text that Kanji mode holds on its own: the charset was left to the library, the library chose UTF-8, and every character has an encoder cell.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every such character costs 13 bits in Kanji mode against 16 or 24 in UTF-8, and the stream carries no ECI header, so the result never needs a larger version than UTF-8 would.
+    /// A text with ASCII in it stays UTF-8 here, because one Kanji segment cannot hold ASCII; mixing the two is a plan's business.
+    /// </para>
+    /// <para>
+    /// The pass runs only once the analysis has resolved UTF-8, and stops at the first character without a cell, so ASCII and Latin-1 text pays one comparison for it.
+    /// <paramref name="allowKanji"/> is false where UTF-8 was asked for in effect (a byte order mark) or where the caller's path does not write Kanji yet.
+    /// </para>
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static TextAnalysisResult Analyze(ReadOnlySpan<char> text, EciMode requestedEciMode, bool allowKanji)
+    {
+        var analysis = Analyze(text, requestedEciMode);
+        return allowKanji && analysis.EciMode == EciMode.Utf8 && requestedEciMode == EciMode.Default
+            ? ResolveKanji(text, in analysis)
+            : analysis;
+    }
+
+    /// <summary>The Kanji analysis of a UTF-8 text when every character has an encoder cell, otherwise the UTF-8 analysis unchanged.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static TextAnalysisResult ResolveKanji(ReadOnlySpan<char> text, in TextAnalysisResult utf8)
+    {
+        foreach (var c in text)
+        {
+            if (ShiftJisKanjiReverseTable.Lookup(c) < 0)
+                return utf8;
+        }
+
+        return new TextAnalysisResult(EncodingMode.Kanji, EciMode.Default, text.Length);
+    }
+
+    /// <summary>
     /// Scalar fallback analysis (process 1 char at once)
     /// </summary>
     /// <param name="text">The text to inspect.</param>

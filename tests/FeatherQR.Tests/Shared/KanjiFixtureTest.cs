@@ -15,8 +15,9 @@ namespace FeatherQR.Tests;
 /// nothing to say. The count assertions below fail instead.
 /// </para>
 /// <para>
-/// This library never emits Kanji mode, so these fixtures are the only symbols that
-/// reach the JIS X 0208 decode path at all. Generators: ZXing.Net (Standard QR,
+/// These fixtures are the Kanji symbols other encoders wrote; this library's own Kanji
+/// output is checked where it is written (the *BinaryEncoderKanjiTest classes and
+/// KanjiEligibilityTest). Generators: ZXing.Net (Standard QR,
 /// mode self-reported by its encoder) and qrtool (Micro QR M3/M4, rMQR). libzint
 /// cannot produce Kanji, it emits Byte mode with ECI 20 for the same input.
 /// </para>

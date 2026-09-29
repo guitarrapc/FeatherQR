@@ -24,7 +24,9 @@ public class MicroQRCodeDecoderRoundTripTest
         yield return ("bytes m4 mode", MicroQREccLevel.M, MicroQRVersion.M4);
         yield return ("bytes!!!!", MicroQREccLevel.Q, MicroQRVersion.M4);
         yield return ("Café au lait", MicroQREccLevel.L, MicroQRVersion.M4);
-        yield return ("こんにちは", MicroQREccLevel.L, MicroQRVersion.M4);
+        yield return ("こんにちは", MicroQREccLevel.L, MicroQRVersion.M3);           // Kanji: 5 of M3-L's 6 characters
+        yield return ("こんにちは世界です", MicroQREccLevel.L, MicroQRVersion.M4);   // Kanji: M4-L's 9 characters, the full count
+        yield return ("こんにち～", MicroQREccLevel.L, MicroQRVersion.M4);           // ～ has no Kanji cell: UTF-8, M4-L's 15 bytes
     }
 
     [Test]

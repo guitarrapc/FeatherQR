@@ -53,7 +53,7 @@ public readonly record struct RmQRCodeGeneratorOptions
 
     /// <summary>
     /// Character encoding declaration.
-    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content.
+    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content, or Kanji mode (no ECI) for text JIS X 0208 holds entirely.
     /// </summary>
     /// <remarks>
     /// Only <see cref="EciMode.Default"/>, <see cref="EciMode.Iso8859_1"/> and <see cref="EciMode.Utf8"/> are accepted.

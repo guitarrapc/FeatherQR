@@ -77,8 +77,9 @@ internal static class RmQRSegmentPlanner
         RmQRVersionSelector.ValidateFitArguments(eccLevel, fitStrategy, height, requestedVersion, charset);
 
         // All-Numeric content is already at the optimum: splitting a Numeric run never lowers its payload and every extra run adds a header.
-        // Numeric-only — an Alphanumeric or Byte payload can still hide a digit run worth splitting off.
-        if (mode == EncodingMode.Numeric)
+        // So is Kanji content: the analyser chooses it only when every character has a Kanji cell, so none of them fits another mode more cheaply, and Byte would need an ECI header.
+        // Not Alphanumeric or Byte — those payloads can still hide a digit run worth splitting off.
+        if (mode is EncodingMode.Numeric or EncodingMode.Kanji)
             return RmQRVersionSelector.TrySelect(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height, out selected);
 
         var eciBits = charset == EciMode.Default ? 0 : EciHeaderBits;

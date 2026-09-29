@@ -137,14 +137,38 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Arguments(QREccLevel.H, 424, 40)]
     public async Task Create_ExactBoundary_ByteUtf8(QREccLevel eccLevel, int maxChars, int expectedVersion)
     {
-        // Arrange
-        var plainText = new string('あ', maxChars); // UTF-8 multi-byte (3 bytes per char)
+        // Arrange: UTF-8 multi-byte (3 bytes per char). Left at the default charset, text
+        // that is all kana goes out in Kanji mode, so UTF-8 is asked for.
+        var plainText = new string('あ', maxChars);
 
         // Act
-        var qrCode = QRCodeGenerator.Create(plainText, eccLevel);
+        var qrCode = QRCodeGenerator.Create(plainText, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
 
         // Assert
         await Assert.That(qrCode.Version).IsEquivalentTo(expectedVersion);
+    }
+
+    public static IEnumerable<(QREccLevel Ecc, int Version)> KanjiBoundaries()
+    {
+        foreach (var version in new[] { 1, 9, 10, 16, 17, 26, 27, 39, 40 })
+            foreach (var ecc in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+                yield return (ecc, version);
+    }
+
+    /// <summary>
+    /// The same boundaries in Kanji mode, where the default charset now writes all-kana text: ISO/IEC 18004 Table 7's Kanji column fills the version, and one more character moves to the next.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(KanjiBoundaries))]
+    public async Task Create_ExactBoundary_Kanji(QREccLevel eccLevel, int version)
+    {
+        var capacity = Internals.StandardQR.QRCodeConstants.CapacityBaseValues[(version - 1) * 16 + (int)eccLevel * 4 + 3];
+
+        await Assert.That(QRCodeGenerator.Create(new string('あ', capacity), eccLevel).Version).IsEqualTo(version);
+        if (version < 40)
+            await Assert.That(QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel).Version).IsEqualTo(version + 1);
+        else
+            await Assert.That(() => QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel)).Throws<InvalidOperationException>();
     }
 
     /// <summary>

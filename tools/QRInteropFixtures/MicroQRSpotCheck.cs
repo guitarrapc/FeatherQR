@@ -25,7 +25,12 @@ public static class MicroQRSpotCheck
         ("HELLO WORLD PLUS 21ST", MicroQREccLevel.L),   // M4-L alphanumeric boundary
         ("bytes m4 mode", MicroQREccLevel.M),           // M4-M byte boundary
         ("bytes!!!!", MicroQREccLevel.Q),               // M4-Q byte boundary
-        ("こんにちは", MicroQREccLevel.L),               // UTF-8 (15 bytes, M4-L, no ECI)
+        ("こんにちは", MicroQREccLevel.L),               // Kanji, M3-L (5 of 6 characters)
+        ("脂至肢漢", MicroQREccLevel.M),                  // Kanji, M3-M boundary (4 characters, 3-bit count)
+        ("こんにちは世界です", MicroQREccLevel.L),        // Kanji, M4-L boundary (9 characters, 4-bit count)
+        ("日本語符号化試験", MicroQREccLevel.M),          // Kanji, M4-M boundary (8 characters)
+        ("漢字試験用", MicroQREccLevel.Q),                // Kanji, M4-Q boundary (5 characters)
+        ("こんにち～", MicroQREccLevel.L),               // ～ has no Kanji cell: UTF-8 (15 bytes, M4-L, no ECI)
     ];
 
     public static int Run()

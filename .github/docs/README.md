@@ -18,7 +18,7 @@ Design records and spec-to-code maps for shipped behavior, organized symbology-f
 |---|---|---|
 | [qrcode-symbologies.md](specs/qrcode-symbologies.md) | Architecture record | Symbology model, shared vs per-symbology components, API and data-model direction, scope decisions |
 | [standardqr-spec-map.md](specs/standardqr-spec-map.md) | Spec-to-code map | Standard QR pipeline vs ISO/IEC 18004 |
-| [standardqr-encoder.md](specs/standardqr-encoder.md) | Design record | Standard QR encoder scope and decisions (single segment per input, no Kanji encoding, ECI policy) |
+| [standardqr-encoder.md](specs/standardqr-encoder.md) | Design record | Standard QR encoder scope and decisions (single segment per input, Kanji for text JIS X 0208 holds, ECI policy) |
 | [standardqr-decoder.md](specs/standardqr-decoder.md) | Design record | Standard QR decoder scope, input tiers, lessons learned |
 | [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md) | Design record | Committed fixture corpus, manifest schema, external-oracle capability matrix, the image decode sweep and real-image corpus measured against other readers |
 | [microqr-spec-map.md](specs/microqr-spec-map.md) | Spec-to-code map | Micro QR encoding and decoding pipelines vs ISO/IEC 18004 |

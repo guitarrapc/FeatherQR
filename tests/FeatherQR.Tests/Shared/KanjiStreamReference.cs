@@ -9,8 +9,17 @@ namespace FeatherQR.Tests;
 /// </summary>
 internal static class KanjiStreamReference
 {
-    /// <summary>One run of a stream: <c>N</c>umeric, <c>A</c>lphanumeric, <c>B</c>yte (ASCII / Latin-1, one byte a character) or <c>K</c>anji.</summary>
-    public readonly record struct Run(char Mode, string Text);
+    /// <summary>
+    /// One run of a stream: <c>N</c>umeric, <c>A</c>lphanumeric, <c>B</c>yte (ASCII / Latin-1, one byte a character), <c>U</c> (Byte mode carrying the text's UTF-8 bytes), <c>K</c>anji, or <c>E</c>, an ECI header whose text is the assignment number (Standard QR and rMQR only).
+    /// </summary>
+    public readonly record struct Run(char Mode, string Text)
+    {
+        /// <summary>The mode its header names: a UTF-8 run is a Byte run.</summary>
+        public char Header => Mode == 'U' ? 'B' : Mode;
+
+        /// <summary>What its count indicator carries: UTF-8 bytes for a UTF-8 run, characters otherwise.</summary>
+        public int Units => Mode == 'U' ? Encoding.UTF8.GetByteCount(Text) : Text.Length;
+    }
 
     private const string AlphanumericAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
 
@@ -93,8 +102,15 @@ internal static class KanjiStreamReference
         var bits = new StringBuilder();
         foreach (var run in runs)
         {
-            Append(bits, StandardQrModeIndicator(run.Mode), 4);
-            Append(bits, run.Text.Length, StandardQrCountBits(run.Mode, version));
+            if (run.Mode == 'E')
+            {
+                // ECI: 0111 and the assignment number, one byte for the assignments below 128.
+                Append(bits, 0b0111, 4);
+                Append(bits, int.Parse(run.Text), 8);
+                continue;
+            }
+            Append(bits, StandardQrModeIndicator(run.Header), 4);
+            Append(bits, run.Units, StandardQrCountBits(run.Header, version));
             AppendPayload(bits, run);
         }
         return bits.ToString();
@@ -102,6 +118,17 @@ internal static class KanjiStreamReference
 
     public static byte[] StandardQrStream(int version, int dataCodewords, IEnumerable<Run> runs)
         => Finish(StandardQrBits(version, runs), terminatorLength: 4, dataCodewords * 8, dataCodewords);
+
+    /// <summary>The smallest version whose data capacity at <paramref name="ecc"/> holds the runs, or 0; widths follow each version's count band.</summary>
+    public static int SmallestStandardQrVersion(Run[] runs, QREccLevel ecc)
+    {
+        for (var version = 1; version <= 40; version++)
+        {
+            if (StandardQrBits(version, runs).Length <= Internals.StandardQR.QRCodeConstants.GetEccInfo(version, ecc).TotalDataCodewords * 8)
+                return version;
+        }
+        return 0;
+    }
 
     // ---- Micro QR (ISO/IEC 18004 Tables 2 and 3) ------------------------------------
 
@@ -128,8 +155,8 @@ internal static class KanjiStreamReference
         foreach (var run in runs)
         {
             if (version > 1)
-                Append(bits, MicroQrModeIndicator(run.Mode), version - 1);
-            Append(bits, run.Text.Length, MicroQrCountBits(run.Mode, version));
+                Append(bits, MicroQrModeIndicator(run.Header), version - 1);
+            Append(bits, run.Units, MicroQrCountBits(run.Header, version));
             AppendPayload(bits, run);
         }
         return bits.ToString();
@@ -178,8 +205,15 @@ internal static class KanjiStreamReference
         var bits = new StringBuilder();
         foreach (var run in runs)
         {
-            Append(bits, RmQrModeIndicator(run.Mode), 3);
-            Append(bits, run.Text.Length, RmQrCountBits(run.Mode, versionIndex));
+            if (run.Mode == 'E')
+            {
+                // ECI: 111 and the assignment number, one byte for the assignments below 128.
+                Append(bits, 0b111, 3);
+                Append(bits, int.Parse(run.Text), 8);
+                continue;
+            }
+            Append(bits, RmQrModeIndicator(run.Header), 3);
+            Append(bits, run.Units, RmQrCountBits(run.Header, versionIndex));
             AppendPayload(bits, run);
         }
         return bits.ToString();
@@ -222,6 +256,10 @@ internal static class KanjiStreamReference
             case 'B':
                 foreach (var c in text)
                     Append(bits, checked((byte)c), 8);
+                break;
+            case 'U':
+                foreach (var b in Encoding.UTF8.GetBytes(text))
+                    Append(bits, b, 8);
                 break;
             case 'K':
                 foreach (var c in text)
