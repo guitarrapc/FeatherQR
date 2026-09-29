@@ -31,7 +31,7 @@ internal static partial class QRMatrixDecoder
     /// <param name="modules">Core module matrix, one byte per module (0 = light, non-zero = dark), row-major, no quiet zone.</param>
     /// <param name="size">Matrix size in modules per side.</param>
     /// <param name="destination">Destination buffer for decoded characters.</param>
-    /// <param name="charsWritten">Number of characters written.</param>
+    /// <param name="charsWritten">Number of characters written; 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
     public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
@@ -85,6 +85,8 @@ internal static partial class QRMatrixDecoder
 
             // 6. Bitstream → text
             var status = QRBinaryDecoder.DecodeBitStream(data, version, destination, out charsWritten, out var structuredAppend);
+            if (status != DecodeStatus.Success)
+                charsWritten = 0; // only a read counts its characters, not the segments written before a failure
             info = new QRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected, status == DecodeStatus.Success ? structuredAppend : default);
             return status;
         }

@@ -33,7 +33,7 @@ internal static class MicroQRMatrixDecoder
     /// <param name="modules">Core module matrix, one byte per module (0 = light, non-zero = dark), row-major, no quiet zone.</param>
     /// <param name="size">Matrix size in modules per side (11/13/15/17).</param>
     /// <param name="destination">Destination buffer for decoded characters.</param>
-    /// <param name="charsWritten">Number of characters written.</param>
+    /// <param name="charsWritten">Number of characters written; 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
     public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
@@ -114,6 +114,8 @@ internal static class MicroQRMatrixDecoder
 
         // 5. Bitstream → text
         var status = MicroQRBinaryDecoder.DecodeBitStream(block.Slice(0, dataCodewords), dataBitCount, version, destination, out charsWritten);
+        if (status != DecodeStatus.Success)
+            charsWritten = 0; // only a read counts its characters, not the segments written before a failure
         info = new MicroQRCodeDecodeInfo(status, version, eccLevel, maskPattern, errorsCorrected);
         return status;
     }

@@ -334,8 +334,9 @@ candidate after a verdict, and a verdict from the strided scan still runs the fu
 find another symbol that reads. When every attempt fails short of the content, the first attempt's
 diagnostics are reported.
 `DataUncorrectable` and `InvalidBitstream` stay out of that rule: noise reaches the first, and
-through a miscorrection the second. A failed image decode reports no characters written, whatever an
-attempt left in the destination.
+through a miscorrection the second. A failed decode, of an image or of a matrix, reports no characters written,
+whatever it left in the destination. The matrix overloads do since 2.0.0: before, one that failed partway through
+the bit stream counted the segments it had written, and only the image overloads reported none.
 
 Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode
 segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1.

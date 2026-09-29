@@ -96,7 +96,7 @@ public static class RmQRCodeDecoder
     /// <param name="width">Width in modules, quiet zone included.</param>
     /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">How many characters were written.</param>
+    /// <param name="charsWritten">How many characters were written; 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
     /// <param name="info">What the attempt found: status, version, level and corrections.</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
