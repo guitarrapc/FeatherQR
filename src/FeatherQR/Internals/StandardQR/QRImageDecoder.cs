@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 #endif
@@ -93,29 +94,88 @@ internal static partial class QRImageDecoder
             return DecodeStatus.NotDetected;
         }
 
-        var corners = new ImageCorners();
-        var status = DecodeTriple(ref corners, luminance, width, height, threshold, grey, patterns, destination, out charsWritten, out info);
-        if (IsSettled(status) || candidateCount <= 3)
-            return status;
-        return DecodeAlternativeTriples(ref corners, luminance, width, height, threshold, grey, candidates.Slice(0, candidateCount), patterns, destination, status, ref charsWritten, ref info);
+        var image = new ImageView(luminance, width, height, threshold, grey);
+        var modules = new ModuleWorkspace();
+        try
+        {
+            var corners = new ImageCorners();
+            var status = DecodeTriple(ref corners, image, patterns, ref modules, destination, out charsWritten, out info);
+            if (IsSettled(status) || candidateCount <= 3)
+                return status;
+            return DecodeAlternativeTriples(ref corners, image, candidates.Slice(0, candidateCount), patterns, ref modules, destination, status, ref charsWritten, ref info);
+        }
+        finally
+        {
+            modules.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The module buffers of one scan: one rented array holding three grids of the largest dimension reserved so far, so a scan has one buffer out at a time.
+    /// </summary>
+    /// <remarks>
+    /// A dimension needs three grids at once: the first sampling, another grid compared against it, and a coverage re-read compared against either.
+    /// The thread's slot of the array pool holds one array a size, and a second of the same size would come from the per-core stacks every thread shares, where a thread decoding beside this one can take it and the rent allocates.
+    /// </remarks>
+    internal struct ModuleWorkspace
+    {
+        private byte[]? _rented;
+
+        /// <summary>Modules each grid has room for.</summary>
+        private int _capacity;
+
+        /// <summary>Makes room for three grids of <paramref name="dimension"/>, renting a larger array when the one held is too small; any grid taken before is no longer valid then.</summary>
+        public void Reserve(int dimension)
+        {
+            var length = dimension * dimension;
+            if (length <= _capacity)
+                return;
+            Dispose();
+            _rented = RentModules(3 * length);
+            _capacity = length;
+        }
+
+        /// <summary>The first sampling of the dimension reserved last.</summary>
+        public readonly Span<byte> First(int dimension) => Grid(0, dimension);
+
+        /// <summary>Another grid of the same dimension, compared against <see cref="First"/>.</summary>
+        public readonly Span<byte> Other(int dimension) => Grid(1, dimension);
+
+        /// <summary>A coverage re-read of the same dimension, compared against <see cref="First"/> or <see cref="Other"/>.</summary>
+        public readonly Span<byte> Coverage(int dimension) => Grid(2, dimension);
+
+        private readonly Span<byte> Grid(int index, int dimension)
+        {
+            Debug.Assert(_rented is not null && dimension * dimension <= _capacity, "reserve the dimension first");
+            return _rented.AsSpan(index * _capacity, dimension * dimension);
+        }
+
+        public void Dispose()
+        {
+            if (_rented is null)
+                return;
+            ReturnModules(_rented);
+            _rented = null;
+            _capacity = 0;
+        }
     }
 
     /// <summary>The two steps a finder triple is tried with from one of its corners: whether that corner's timing patterns read, and the decode from it.</summary>
     internal interface ICornerAttempt
     {
-        bool ReadsTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft);
+        bool ReadsTimingPatterns(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft);
 
-        DecodeStatus Decode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info);
+        DecodeStatus Decode(in ImageView image, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info);
     }
 
     /// <summary>The corner steps on the image: <see cref="TimingPatternsRead"/> and <see cref="DecodeCorners"/>.</summary>
     private readonly struct ImageCorners : ICornerAttempt
     {
-        public bool ReadsTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
-            => TimingPatternsRead(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft);
+        public bool ReadsTimingPatterns(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
+            => TimingPatternsRead(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft);
 
-        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
-            => DecodeCorners(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out charsWritten, out info);
+        public DecodeStatus Decode(in ImageView image, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+            => DecodeCorners(image, topLeft, topRight, bottomLeft, ref modules, destination, out charsWritten, out info);
     }
 
     /// <summary>
@@ -130,7 +190,7 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// After the selected triple failed, the candidate list's other triples, best confirmed first (<see cref="FinderPatternFinder.AlternativeTriples"/>): each decoded only from a corner whose timing patterns read through its own frame (<see cref="TryCornerByTimingPatterns"/>); otherwise <paramref name="status"/> and the selected triple's diagnostics stand.
     /// </summary>
-    internal static DecodeStatus DecodeAlternativeTriples<TAttempt>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
+    internal static DecodeStatus DecodeAlternativeTriples<TAttempt>(ref TAttempt attempt, in ImageView image, Span<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, ref ModuleWorkspace modules, Span<char> destination, DecodeStatus status, ref int charsWritten, ref QRCodeDecodeInfo info)
         where TAttempt : struct, ICornerAttempt
     {
         var result = NewResult();
@@ -140,10 +200,10 @@ internal static partial class QRImageDecoder
         Span<FinderPattern> triple = stackalloc FinderPattern[3];
         for (var verified = 0; verified < MaxAlternativeTriples && alternatives.TryNext(triple); verified++)
         {
-            if (!TryCornerByTimingPatterns(ref attempt, luminance, width, height, threshold, grey, triple, out var topLeft, out var topRight, out var bottomLeft))
+            if (!TryCornerByTimingPatterns(ref attempt, image, triple, out var topLeft, out var topRight, out var bottomLeft))
                 continue;
 
-            var alternativeStatus = attempt.Decode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var alternativeCharsWritten, out var alternativeInfo);
+            var alternativeStatus = attempt.Decode(image, topLeft, topRight, bottomLeft, ref modules, destination, out var alternativeCharsWritten, out var alternativeInfo);
             if (result.Other(alternativeStatus, alternativeCharsWritten, alternativeInfo))
                 break;
         }
@@ -175,17 +235,17 @@ internal static partial class QRImageDecoder
     internal static bool TryCornerByTimingPatterns(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> triple, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
     {
         var corners = new ImageCorners();
-        return TryCornerByTimingPatterns(ref corners, luminance, width, height, threshold, grey, triple, out topLeft, out topRight, out bottomLeft);
+        return TryCornerByTimingPatterns(ref corners, new ImageView(luminance, width, height, threshold, grey), triple, out topLeft, out topRight, out bottomLeft);
     }
 
-    private static bool TryCornerByTimingPatterns<TAttempt>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> triple, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
+    private static bool TryCornerByTimingPatterns<TAttempt>(ref TAttempt attempt, in ImageView image, ReadOnlySpan<FinderPattern> triple, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
         where TAttempt : struct, ICornerAttempt
     {
         var shapeCorner = ShapeCorner(triple);
         for (var i = 0; i < 3; i++)
         {
             OrderAroundCorner(triple, (shapeCorner + i) % 3, out topLeft, out topRight, out bottomLeft);
-            if (attempt.ReadsTimingPatterns(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+            if (attempt.ReadsTimingPatterns(image, topLeft, topRight, bottomLeft))
                 return true;
         }
         topLeft = topRight = bottomLeft = default;
@@ -196,23 +256,23 @@ internal static partial class QRImageDecoder
     /// One finder triple, in any order: from the corner the triangle's shape names, and when that does not settle, from each other corner whose timing patterns read (<see cref="TryCornerByTimingPatterns"/>).
     /// A symbol decodes from its shape's corner at no extra cost; the other corners are paid for only by a triple that failed.
     /// </summary>
-    internal static DecodeStatus DecodeTriple<TAttempt>(ref TAttempt attempt, ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, ReadOnlySpan<FinderPattern> patterns, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    internal static DecodeStatus DecodeTriple<TAttempt>(ref TAttempt attempt, in ImageView image, ReadOnlySpan<FinderPattern> patterns, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
         where TAttempt : struct, ICornerAttempt
     {
         var result = NewResult();
         var shapeCorner = ShapeCorner(patterns);
         OrderAroundCorner(patterns, shapeCorner, out var topLeft, out var topRight, out var bottomLeft);
-        var status = attempt.Decode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var shapeCharsWritten, out var shapeInfo);
+        var status = attempt.Decode(image, topLeft, topRight, bottomLeft, ref modules, destination, out var shapeCharsWritten, out var shapeInfo);
         if (result.Main(status, shapeCharsWritten, shapeInfo))
             return result.Report(out charsWritten, out info);
 
         for (var i = 1; i < 3; i++)
         {
             OrderAroundCorner(patterns, (shapeCorner + i) % 3, out topLeft, out topRight, out bottomLeft);
-            if (!attempt.ReadsTimingPatterns(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft))
+            if (!attempt.ReadsTimingPatterns(image, topLeft, topRight, bottomLeft))
                 continue;
 
-            var cornerStatus = attempt.Decode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, destination, out var cornerCharsWritten, out var cornerInfo);
+            var cornerStatus = attempt.Decode(image, topLeft, topRight, bottomLeft, ref modules, destination, out var cornerCharsWritten, out var cornerInfo);
             if (result.Other(cornerStatus, cornerCharsWritten, cornerInfo))
                 break;
         }
@@ -220,22 +280,22 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>A triple with its corners assigned, through the timing frame and then the grids its centres and sizes give.</summary>
-    private static DecodeStatus DecodeCorners(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeCorners(in ImageView image, FinderPattern topLeft, FinderPattern topRight, FinderPattern bottomLeft, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth of a pixel to spare, which no grid extrapolated from the finder centres keeps. The
         // timing patterns mark every module boundary between the finders. First, because where both grids read, this one's corners are the symbol's own edges and the other's are extrapolated to within a module; two lines that do not read cost a few hundred pixels.
         // Tried ahead of the main path, the grids from the finders, which it does not replace unless it settles
         var result = NewResult();
-        var frameStatus = DecodeThroughTimingFrame(luminance, width, height, threshold, topLeft, topRight, bottomLeft, destination, out var frameCharsWritten, out var frameInfo);
+        var frameStatus = DecodeThroughTimingFrame(image, topLeft, topRight, bottomLeft, ref modules, destination, out var frameCharsWritten, out var frameInfo);
         if (result.Other(frameStatus, frameCharsWritten, frameInfo))
             return result.Report(out charsWritten, out info);
 
-        var moduleSizes = MeasureModuleSizes(luminance, width, height, threshold, default, topLeft, topRight, bottomLeft);
-        RefineFinderCentres(luminance, width, height, grey, moduleSizes, ref topLeft, ref topRight, ref bottomLeft);
+        var moduleSizes = MeasureModuleSizes(image.Luminance, image.Width, image.Height, image.Threshold, default, topLeft, topRight, bottomLeft);
+        RefineFinderCentres(image.Luminance, image.Width, image.Height, image.Grey, moduleSizes, ref topLeft, ref topRight, ref bottomLeft);
         // Measured again where there are grey levels: outward from the centres that moved, and to sub-pixel edges
-        if (grey.IsEnabled)
-            moduleSizes = MeasureModuleSizes(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft);
-        var status = DecodeFromFinders(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, destination, out var findersCharsWritten, out var findersInfo);
+        if (image.Grey.IsEnabled)
+            moduleSizes = MeasureModuleSizes(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft);
+        var status = DecodeFromFinders(image, topLeft, topRight, bottomLeft, moduleSizes, ref modules, destination, out var findersCharsWritten, out var findersInfo);
         result.Main(status, findersCharsWritten, findersInfo);
         return result.Report(out charsWritten, out info);
     }
@@ -273,7 +333,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>The dimension candidates in turn: the estimate, the timing count, the version information, the timing match, the runner-up.</summary>
-    private static DecodeStatus DecodeFromFinders(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeFromFinders(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         var result = NewResult();
         var timingCounted = false;
@@ -286,28 +346,28 @@ internal static partial class QRImageDecoder
             // Snapped finders at versions 39-40 measure a few percent small, which puts the estimate past the largest version; the count does not depend on it.
             if (moduleSize >= 1f)
             {
-                timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
+                timingDimension = CountTimingDimension(image.Luminance, image.Width, image.Height, image.Threshold, topLeft, topRight, bottomLeft, moduleSize);
                 timingCounted = true;
                 // A turned symbol under 3 px/module breaks the counted runs; its timing modules still alternate on the right grid
                 if (timingDimension == 0)
-                    timingDimension = matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
+                    timingDimension = matchedDimension = MatchTimingDimension(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
             }
             if (timingDimension == 0)
                 return result.Report(out charsWritten, out info);
             dimension = timingDimension;
         }
 
-        var status = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, dimension, moduleSize, destination, out var estimateCharsWritten, out var estimateInfo, out var versionDimension);
+        var status = SampleAndDecode(image, topLeft, topRight, bottomLeft, frame, dimension, moduleSize, ref modules, destination, out var estimateCharsWritten, out var estimateInfo, out var versionDimension);
         if (result.Main(status, estimateCharsWritten, estimateInfo))
             return result.Report(out charsWritten, out info);
 
         // The timing patterns count the modules the estimate only measures.
         // Counted only once the estimate has failed, so a successful decode never pays for it.
         if (!timingCounted)
-            timingDimension = CountTimingDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, moduleSize);
+            timingDimension = CountTimingDimension(image.Luminance, image.Width, image.Height, image.Threshold, topLeft, topRight, bottomLeft, moduleSize);
         if (timingDimension != 0 && timingDimension != dimension)
         {
-            var timingStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, timingDimension, moduleSize, destination, out var timingCharsWritten, out var timingInfo, out _);
+            var timingStatus = SampleAndDecode(image, topLeft, topRight, bottomLeft, frame, timingDimension, moduleSize, ref modules, destination, out var timingCharsWritten, out var timingInfo, out _);
             if (result.Other(timingStatus, timingCharsWritten, timingInfo))
                 return result.Report(out charsWritten, out info);
         }
@@ -315,7 +375,7 @@ internal static partial class QRImageDecoder
         // Version 7+ states its own version next to two finders, where a slightly wrong dimension still samples it, so it overrules the estimate.
         if (versionDimension != 0 && versionDimension != dimension && versionDimension != timingDimension && versionDimension != matchedDimension)
         {
-            var versionStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, versionDimension, moduleSize, destination, out var versionCharsWritten, out var versionInfo, out _);
+            var versionStatus = SampleAndDecode(image, topLeft, topRight, bottomLeft, frame, versionDimension, moduleSize, ref modules, destination, out var versionCharsWritten, out var versionInfo, out _);
             if (result.Other(versionStatus, versionCharsWritten, versionInfo))
                 return result.Report(out charsWritten, out info);
         }
@@ -323,10 +383,10 @@ internal static partial class QRImageDecoder
         // A module size measured a few percent off puts the estimate a version or two out, and blur or a turn breaks the counted runs, the timing modules still alternate on the grid of the right dimension
         if (matchedDimension < 0 && moduleSize >= 1f)
         {
-            matchedDimension = MatchTimingDimension(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
+            matchedDimension = MatchTimingDimension(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
             if (matchedDimension != 0 && matchedDimension != dimension && matchedDimension != timingDimension && matchedDimension != versionDimension)
             {
-                var matchedStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, matchedDimension, moduleSize, destination, out var matchedCharsWritten, out var matchedInfo, out _);
+                var matchedStatus = SampleAndDecode(image, topLeft, topRight, bottomLeft, frame, matchedDimension, moduleSize, ref modules, destination, out var matchedCharsWritten, out var matchedInfo, out _);
                 if (result.Other(matchedStatus, matchedCharsWritten, matchedInfo))
                     return result.Report(out charsWritten, out info);
             }
@@ -336,7 +396,7 @@ internal static partial class QRImageDecoder
         // A guess gets no finder fallback: on a wrong size it only doubles the failure's cost.
         if (secondaryDimension != 0 && secondaryDimension != versionDimension && secondaryDimension != timingDimension && secondaryDimension != matchedDimension)
         {
-            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, grey, topLeft, topRight, bottomLeft, frame, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo, out _, finderFallback: false);
+            var secondaryStatus = SampleAndDecode(image, topLeft, topRight, bottomLeft, frame, secondaryDimension, moduleSize, ref modules, destination, out var secondaryCharsWritten, out var secondaryInfo, out _, finderFallback: false);
             if (result.Other(secondaryStatus, secondaryCharsWritten, secondaryInfo))
                 return result.Report(out charsWritten, out info);
         }
@@ -351,40 +411,33 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// Decodes an upright or right-angle symbol drawn crisp at a low density through its module boundaries (<see cref="ModuleBoundaryReader"/>).
     /// </summary>
-    private static DecodeStatus DecodeThroughTimingFrame(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeThroughTimingFrame(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
         info = NotDetectedInfo;
         Span<int> columns = stackalloc int[MaxBoundaries];
         Span<int> rows = stackalloc int[MaxBoundaries];
         if (topLeft.ModuleSize >= ModuleBoundaryReader.MaxModuleSize
-            || !TryReadModuleBoundaries(luminance, width, height, threshold, topLeft, topRight, bottomLeft, columns, rows, out var frame, out var dimension))
+            || !TryReadModuleBoundaries(image.Luminance, image.Width, image.Height, image.Threshold, topLeft, topRight, bottomLeft, columns, rows, out var frame, out var dimension))
         {
             return DecodeStatus.NotDetected;
         }
 
-        var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
-        try
-        {
-            var modules = rented.AsSpan(0, dimension * dimension);
-            ModuleBoundaryReader.Sample(luminance, width, height, threshold, frame, columns, dimension, rows, dimension, modules);
+        modules.Reserve(dimension);
+        var grid = modules.First(dimension);
+        ModuleBoundaryReader.Sample(image.Luminance, image.Width, image.Height, image.Threshold, frame, columns, dimension, rows, dimension, grid);
 
-            var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
-            if (status == DecodeStatus.Success)
-            {
-                frame.ToImage(columns[0], rows[0], out var x0, out var y0);
-                frame.ToImage(columns[dimension], rows[0], out var x1, out var y1);
-                frame.ToImage(columns[dimension], rows[dimension], out var x2, out var y2);
-                frame.ToImage(columns[0], rows[dimension], out var x3, out var y3);
-                var outline = PerspectiveTransform.QuadrilateralToQuadrilateral(0f, 0f, dimension, 0f, dimension, dimension, 0f, dimension, x0, y0, x1, y1, x2, y2, x3, y3);
-                info = info.WithCorners(SymbolGeometry.FromTransform(outline, dimension, dimension, transposed));
-            }
-            return status;
-        }
-        finally
+        var status = DecodeWithMirrorRetry(grid, dimension, destination, out charsWritten, out info, out var transposed);
+        if (status == DecodeStatus.Success)
         {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+            frame.ToImage(columns[0], rows[0], out var x0, out var y0);
+            frame.ToImage(columns[dimension], rows[0], out var x1, out var y1);
+            frame.ToImage(columns[dimension], rows[dimension], out var x2, out var y2);
+            frame.ToImage(columns[0], rows[dimension], out var x3, out var y3);
+            var outline = PerspectiveTransform.QuadrilateralToQuadrilateral(0f, 0f, dimension, 0f, dimension, dimension, 0f, dimension, x0, y0, x1, y1, x2, y2, x3, y3);
+            info = info.WithCorners(SymbolGeometry.FromTransform(outline, dimension, dimension, transposed));
         }
+        return status;
     }
 
     /// <summary>
@@ -441,88 +494,73 @@ internal static partial class QRImageDecoder
     /// On failure, versionDimension is the dimension the sampled version information names when it differs from the one sampled, else 0.
     /// <paramref name="finderFallback"/> allows the resample through the finders alone, their parallelogram when the alignment-anchored grid fails and their frame when nothing anchored the fourth corner; off for a dimension that is only a guess.
     /// </summary>
-    private static DecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderFrame frame, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
+    private static DecodeStatus SampleAndDecode(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderFrame frame, int dimension, float moduleSize, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
     {
         versionDimension = 0;
         var result = NewResult();
-        var transform = BuildGridTransform(luminance, width, height, threshold, grey, frame, dimension, moduleSize, out var alignmentAnchored);
+        var transform = BuildGridTransform(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, frame, dimension, moduleSize, out var alignmentAnchored);
 
-        var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
-        try
+        modules.Reserve(dimension);
+        var first = modules.First(dimension);
+
+        // Nothing anchored the fourth corner, so the transform below is the finders' parallelogram; the rest of the alignment lattice anchors the mesh.
+        // Tried ahead of the main path, the grid through the transform, which it does not replace unless it settles
+        if (!alignmentAnchored)
         {
-            var modules = rented.AsSpan(0, dimension * dimension);
-
-            // Nothing anchored the fourth corner, so the transform below is the finders' parallelogram; the rest of the alignment lattice anchors the mesh.
-            // Tried ahead of the main path, the grid through the transform, which it does not replace unless it settles
-            if (!alignmentAnchored)
-            {
-                var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, frame, dimension, moduleSize, modules, destination, out var meshCharsWritten, out var meshInfo);
-                if (result.Other(meshStatus, meshCharsWritten, meshInfo))
-                    return result.Report(out charsWritten, out info);
-            }
-
-            SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
-
-            // Read before the mirror retry transposes the matrix in place
-            var namedDimension = ReadVersionDimension(modules, dimension);
-            var status = DecodeWithMirrorRetry(modules, dimension, destination, out var gridCharsWritten, out var gridInfo, out var transposed);
-            if (status == DecodeStatus.Success)
-                gridInfo = gridInfo.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
-            else if (namedDimension != dimension)
-                versionDimension = namedDimension;
-            if (result.Main(status, gridCharsWritten, gridInfo))
+            var meshStatus = DecodeThroughMesh(image, frame, dimension, moduleSize, first, destination, out var meshCharsWritten, out var meshInfo);
+            if (result.Other(meshStatus, meshCharsWritten, meshInfo))
                 return result.Report(out charsWritten, out info);
+        }
 
-            if (grey.IsEnabled)
-            {
-                var coverageStatus = DecodeByCoverage(luminance, width, height, grey, transform, dimension, modules, destination, out var coverageCharsWritten, out var coverageInfo);
-                if (result.Other(coverageStatus, coverageCharsWritten, coverageInfo))
-                    return result.Report(out charsWritten, out info);
-            }
+        SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, dimension, first);
 
-            // A plane in perspective is one projective map, which the anchored transform fits and the mesh only interpolates, so here the mesh comes second: for a surface bent off the plane, or a fourth anchor found on another mark.
-            // In its own buffer: the finder grids below compare against the first sampling.
-            if (alignmentAnchored)
-            {
-                var meshRented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
-                try
-                {
-                    var meshStatus = DecodeThroughMesh(luminance, width, height, threshold, grey, frame, dimension, moduleSize, meshRented.AsSpan(0, dimension * dimension), destination, out var meshCharsWritten, out var meshInfo);
-                    if (result.Other(meshStatus, meshCharsWritten, meshInfo))
-                        return result.Report(out charsWritten, out info);
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(meshRented, clearArray: false);
-                }
-            }
-
-            if (!finderFallback || (!alignmentAnchored && frame.IsAffine))
-                return result.Report(out charsWritten, out info);
-
-            // The mirror retry above left the first sampling transposed
-            TransposeInPlace(modules, dimension);
-
-            // Alignment fallback: the alignment centre is pixel-resolved, which at about 2 px/module is a third of a module, and the transform extrapolates that error across the bottom-right block as perspective.
-            // The finders alone are exact for a flat symbol, and read by coverage too: an alignment pattern drawn as dots anchors a fifth of a module off. Failure-path cost only.
-            if (alignmentAnchored)
-                DecodeOtherGrid(luminance, width, height, threshold, grey, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, modules, coverage: grey.IsEnabled, destination, ref result);
-            // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the finders' foreshortening places it under perspective.
-            // Not first, because on a flat symbol under 2 px/module that foreshortening is measurement noise of a percent or two
-            else if (!frame.IsAffine)
-                DecodeOtherGrid(luminance, width, height, threshold, grey, frame.Transform(dimension), dimension, modules, coverage: grey.IsEnabled, destination, ref result);
+        // Read before the mirror retry transposes the matrix in place
+        var namedDimension = ReadVersionDimension(first, dimension);
+        var status = DecodeWithMirrorRetry(first, dimension, destination, out var gridCharsWritten, out var gridInfo, out var transposed);
+        if (status == DecodeStatus.Success)
+            gridInfo = gridInfo.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
+        else if (namedDimension != dimension)
+            versionDimension = namedDimension;
+        if (result.Main(status, gridCharsWritten, gridInfo))
             return result.Report(out charsWritten, out info);
-        }
-        finally
+
+        if (image.Grey.IsEnabled)
         {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+            var coverageStatus = DecodeByCoverage(image, transform, dimension, first, modules.Coverage(dimension), destination, out var coverageCharsWritten, out var coverageInfo);
+            if (result.Other(coverageStatus, coverageCharsWritten, coverageInfo))
+                return result.Report(out charsWritten, out info);
         }
+
+        // A plane in perspective is one projective map, which the anchored transform fits and the mesh only interpolates, so here the mesh comes second: for a surface bent off the plane, or a fourth anchor found on another mark.
+        // In a grid of its own: the finder grids below compare against the first sampling.
+        if (alignmentAnchored)
+        {
+            var meshStatus = DecodeThroughMesh(image, frame, dimension, moduleSize, modules.Other(dimension), destination, out var meshCharsWritten, out var meshInfo);
+            if (result.Other(meshStatus, meshCharsWritten, meshInfo))
+                return result.Report(out charsWritten, out info);
+        }
+
+        if (!finderFallback || (!alignmentAnchored && frame.IsAffine))
+            return result.Report(out charsWritten, out info);
+
+        // The mirror retry above left the first sampling transposed
+        TransposeInPlace(first, dimension);
+
+        // Alignment fallback: the alignment centre is pixel-resolved, which at about 2 px/module is a third of a module, and the transform extrapolates that error across the bottom-right block as perspective.
+        // The finders alone are exact for a flat symbol, and read by coverage too: an alignment pattern drawn as dots anchors a fifth of a module off. Failure-path cost only.
+        if (alignmentAnchored)
+            DecodeOtherGrid(image, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+        // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the finders' foreshortening places it under perspective.
+        // Not first, because on a flat symbol under 2 px/module that foreshortening is measurement noise of a percent or two
+        else if (!frame.IsAffine)
+            DecodeOtherGrid(image, frame.Transform(dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+        return result.Report(out charsWritten, out info);
     }
 
     /// <summary>
     /// The grid sampled through the mesh over the alignment lattice and decoded, or <see cref="DecodeStatus.NotDetected"/> without sampling when no mesh is kept (<see cref="TryBuildSmallSampleMesh"/> for versions 7 to 13, <see cref="TryBuildSampleMesh"/> above).
     /// </summary>
-    private static DecodeStatus DecodeThroughMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderFrame frame, int dimension, float moduleSize, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static DecodeStatus DecodeThroughMesh(in ImageView image, in FinderFrame frame, int dimension, float moduleSize, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
         info = NotDetectedInfo;
@@ -530,12 +568,12 @@ internal static partial class QRImageDecoder
         Span<float> nodeXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
         Span<float> nodeYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
         var built = (dimension - 17) / 4 < 14
-            ? TryBuildSmallSampleMesh(luminance, width, height, threshold, grey, frame, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out var meshSize, out _, out _)
-            : TryBuildSampleMesh(luminance, width, height, threshold, grey, frame.TopLeft, frame.TopRight, frame.BottomLeft, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out meshSize, out _, out _);
+            ? TryBuildSmallSampleMesh(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, frame, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out var meshSize, out _, out _)
+            : TryBuildSampleMesh(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, frame.TopLeft, frame.TopRight, frame.BottomLeft, dimension, moduleSize, gridCoords, nodeXs, nodeYs, out meshSize, out _, out _);
         if (!built)
             return DecodeStatus.NotDetected;
 
-        SampleGridPiecewise(luminance, width, height, threshold, gridCoords.Slice(0, meshSize), nodeXs, nodeYs, meshSize, dimension, modules);
+        SampleGridPiecewise(image.Luminance, image.Width, image.Height, image.Threshold, gridCoords.Slice(0, meshSize), nodeXs, nodeYs, meshSize, dimension, modules);
         var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
         // The corners follow the mesh, because the mesh is what decoded: the four-point transform had no fourth anchor, or did not read
         if (status == DecodeStatus.Success)
@@ -544,59 +582,42 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Another grid for the same symbol, as one more attempt of <paramref name="result"/>: decoded unless it samples what <paramref name="firstSampling"/> holds, then read again by coverage when asked and the grid did not settle.
+    /// Another grid for the same symbol, as one more attempt of <paramref name="result"/>: sampled into <see cref="ModuleWorkspace.Other"/> and decoded unless it samples what <see cref="ModuleWorkspace.First"/> holds, then read again by coverage when asked and the grid did not settle.
     /// </summary>
-    private static void DecodeOtherGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in PerspectiveTransform transform, int dimension, ReadOnlySpan<byte> firstSampling, bool coverage, Span<char> destination, ref SearchResult<QRCodeDecodeInfo> result)
+    private static void DecodeOtherGrid(in ImageView image, in PerspectiveTransform transform, int dimension, ref ModuleWorkspace modules, bool coverage, Span<char> destination, ref SearchResult<QRCodeDecodeInfo> result)
     {
-        var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
-        try
-        {
-            var modules = rented.AsSpan(0, dimension * dimension);
-            SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
+        var other = modules.Other(dimension);
+        SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, dimension, other);
 
-            // The same modules decode the same way: an alignment centre found where the finders put it, or a frame that foreshortens by under a pixel, samples identically, as on any damaged symbol
-            if (modules.SequenceEqual(firstSampling))
-                return;
+        // The same modules decode the same way: an alignment centre found where the finders put it, or a frame that foreshortens by under a pixel, samples identically, as on any damaged symbol
+        if (other.SequenceEqual(modules.First(dimension)))
+            return;
 
-            var otherStatus = DecodeWithMirrorRetry(modules, dimension, destination, out var otherCharsWritten, out var otherInfo, out var transposed);
-            if (otherStatus == DecodeStatus.Success)
-                otherInfo = otherInfo.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
-            if (result.Other(otherStatus, otherCharsWritten, otherInfo) || !coverage)
-                return;
+        var otherStatus = DecodeWithMirrorRetry(other, dimension, destination, out var otherCharsWritten, out var otherInfo, out var transposed);
+        if (otherStatus == DecodeStatus.Success)
+            otherInfo = otherInfo.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
+        if (result.Other(otherStatus, otherCharsWritten, otherInfo) || !coverage)
+            return;
 
-            var coverageStatus = DecodeByCoverage(luminance, width, height, grey, transform, dimension, modules, destination, out var coverageCharsWritten, out var coverageInfo);
-            result.Other(coverageStatus, coverageCharsWritten, coverageInfo);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
+        var coverageStatus = DecodeByCoverage(image, transform, dimension, other, modules.Coverage(dimension), destination, out var coverageCharsWritten, out var coverageInfo);
+        result.Other(coverageStatus, coverageCharsWritten, coverageInfo);
     }
 
-    /// <summary>The grid read again with each module's luminance interpolated at its centre and split halfway between the two levels.</summary>
-    private static DecodeStatus DecodeByCoverage(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, in PerspectiveTransform transform, int dimension, ReadOnlySpan<byte> transposedFailure, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    /// <summary>The grid read again into <paramref name="modules"/> with each module's luminance interpolated at its centre and split halfway between the two levels.</summary>
+    private static DecodeStatus DecodeByCoverage(in ImageView image, in PerspectiveTransform transform, int dimension, ReadOnlySpan<byte> transposedFailure, Span<byte> modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
-        var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
-        try
+        SampleGridByCoverage(image.Luminance, image.Width, image.Height, image.Grey.Midpoint, transform, dimension, modules);
+        // The grid that already failed decodes the same way again; the mirror retry left it transposed
+        if (IsTransposeOf(modules, transposedFailure, dimension))
         {
-            var modules = rented.AsSpan(0, dimension * dimension);
-            SampleGridByCoverage(luminance, width, height, grey.Midpoint, transform, dimension, modules);
-            // The grid that already failed decodes the same way again; the mirror retry left it transposed
-            if (IsTransposeOf(modules, transposedFailure, dimension))
-            {
-                charsWritten = 0;
-                info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, 0, default, -1, 0);
-                return DecodeStatus.DataUncorrectable;
-            }
-            var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
-            if (status == DecodeStatus.Success)
-                info = info.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
-            return status;
+            charsWritten = 0;
+            info = new QRCodeDecodeInfo(DecodeStatus.DataUncorrectable, 0, default, -1, 0);
+            return DecodeStatus.DataUncorrectable;
         }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
+        var status = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info, out var transposed);
+        if (status == DecodeStatus.Success)
+            info = info.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
+        return status;
     }
 
     private static bool IsTransposeOf(ReadOnlySpan<byte> modules, ReadOnlySpan<byte> transposed, int dimension)
@@ -658,6 +679,26 @@ internal static partial class QRImageDecoder
 
     /// <summary>A result for one level of the search, under <see cref="Reporting"/>.</summary>
     private static SearchResult<QRCodeDecodeInfo> NewResult() => new(Reporting, NotDetectedInfo);
+
+    /// <summary>
+    /// The module buffers this thread has out, and the most it has had out at once since a test last cleared <see cref="ModuleBuffersPeak"/>.
+    /// No decode reads them; tests that pin how many a scan holds do. One increment and one decrement a buffer.
+    /// </summary>
+    [ThreadStatic]
+    internal static int ModuleBuffersOut, ModuleBuffersPeak;
+
+    private static byte[] RentModules(int length)
+    {
+        if (++ModuleBuffersOut > ModuleBuffersPeak)
+            ModuleBuffersPeak = ModuleBuffersOut;
+        return ArrayPool<byte>.Shared.Rent(length);
+    }
+
+    private static void ReturnModules(byte[] rented)
+    {
+        ModuleBuffersOut--;
+        ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+    }
 
     /// <summary>BCH(18,6) version information codewords of versions 7-40, indexed by version − 7.</summary>
     private static readonly uint[] VersionCodewords = CreateVersionCodewords();

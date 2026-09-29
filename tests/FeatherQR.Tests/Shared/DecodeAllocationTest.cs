@@ -611,5 +611,39 @@ public class DecodeAllocationTest
     }
 
     #endregion
+
+    #region Standard QR: one module buffer at a time
+
+    /// <summary>The most module buffers the Standard QR decoder had out at once while it decoded the image.</summary>
+    private static int ModuleBuffersPeak(byte[] luminance, int width, int height)
+    {
+        QRImageDecoder.ModuleBuffersPeak = 0;
+        QRCodeDecoder.TryDecodeImage(luminance, width, height, new char[MaxStandardQRChars], out _, out _);
+        return QRImageDecoder.ModuleBuffersPeak;
+    }
+
+    /// <summary>
+    /// Every read holds one module buffer at a time. The thread's slot of the array pool holds one array a size, so a second buffer of that size would come from the per-core stacks every thread shares, where a thread decoding beside this one can take it and the rent allocates.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(StandardQRScenes))]
+    public async Task StandardQR_Image_ReadHoldsOneModuleBufferAtATime(ImageScene scene)
+    {
+        var image = Render(scene);
+
+        await Assert.That(ModuleBuffersPeak(image.Luminance, image.Width, image.Height)).IsEqualTo(1);
+    }
+
+    /// <summary>A rejected image holds at most one: noise samples the grids of false triples, and the other images find no triple at all.</summary>
+    [Test]
+    [MethodDataSource(nameof(RejectedByStandardQR))]
+    public async Task StandardQR_Image_RejectionHoldsOneModuleBufferAtATime(RejectedImage rejected)
+    {
+        var (luminance, width, height) = Render(rejected);
+
+        await Assert.That(ModuleBuffersPeak(luminance, width, height)).IsLessThanOrEqualTo(rejected == RejectedImage.Noise ? 1 : 0);
+    }
+
+    #endregion
 #endif
 }

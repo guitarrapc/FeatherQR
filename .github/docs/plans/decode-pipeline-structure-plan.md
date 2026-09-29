@@ -50,7 +50,7 @@ Measured in Release before phase 1, 1,000 calls after warm-up, every span overlo
 1. **Allocation guards (done 2026-09-29).** One test class over the three decoders: the matrix span overloads with and without a quiet zone; the image span overloads on each path the image level reads through (upright, turned, mirrored, keystone, the next triple, the mesh first and after the anchored grid, the timing frame, low density, the anisotropic grid, the perspective search, light on dark, uneven light), and on failing inputs (noise, another symbology's symbol). Each input is one another test already pins to its path where one exists. Planted allocations, one per stage, show which stages the guard reaches (`tools/mutation_check.cs`).
 2. **Shared outer passes (done 2026-09-29).** One driver for positive, inverted, content verdict, regional and midpoint, over an attempt struct. The midpoint pass is a per-decoder switch, off for Standard QR (D1).
 3. **Shared result rule and mirror retry (done 2026-09-29).** One accumulator decides what settles and which failure is reported, holding each decoder's current rule (D2). One mirror retry, or a stated reason per decoder where the three strategies must stay apart: rMQR samples again because its grid is not square.
-4. **Image context.** A `readonly ref struct` carrying the image, its size, threshold and grey levels (and rMQR's edge level) through the stages, and the module buffer owned by the scan, as Micro QR and rMQR already do.
+4. **Image context (done 2026-09-29).** A `readonly ref struct` carrying the image, its size, threshold and grey levels (and rMQR's edge level) through the stages, and the module buffer owned by the scan, as Micro QR and rMQR already do.
 5. **Matrix level.** The deinterleave and block loop shared by Standard QR and rMQR, as the inverse of the interleaver the encoders share. rMQR's format bit positions stated once. The sampler Micro QR borrows moves to `ImageDecoders/` if both keep it.
 6. **`charsWritten` on failure.** The matrix span overloads report 0 when they return `false`, as the image overloads do, with a test per symbology and a line in the migration notes.
 
@@ -179,3 +179,28 @@ The guards come first because every later phase is judged against them. Phase 6 
   - Their medians moved up to ±36 % in both directions, from load outside the process: the slow runs were slow on one shape and not on the others.
   - Sixteen runs of the Standard QR shapes alone, where the medians had leaned 1 to 2 % slower: the fastest, the first quartile and the median all within ±1.2 %.
   - Version 6 at 4 px/module: 9.94 → 10.00 µs, median.
+
+### Phase 4, image context and one module buffer a scan (2026-09-29)
+
+- `ImageView` ([src/FeatherQR/Internals/ImageDecoders](../../../src/FeatherQR/Internals/ImageDecoders/ImageView.cs)) is a `readonly ref struct`: the pixels, their size, the threshold, the grey levels, and the level an edge is located at.
+  - 35 stage signatures take it where they took five or six arguments: 14 in Standard QR (`ICornerAttempt` and its implementation included), 11 in Micro QR, 10 in rMQR.
+  - The stages that measure keep their pieces, since tests call them and each says what it reads.
+  - Standard QR's `SampleAndDecode` went from 16 parameters to 13; the rest are the grid's own and the results.
+- rMQR's `level` parameter is gone. The view computes the edge level once from its threshold and grey levels. That is the value every pass passed: the midpoint pass passed the midpoint, which is what the edge level is whenever there are grey levels, and that pass runs only then.
+- Standard QR's module buffers:
+  - `ModuleWorkspace` holds one rented array a scan: three grids of the largest dimension reserved so far (first sampling, other grid, coverage re-read). It rents again only for a larger dimension, returning the old array first.
+  - The timing frame, both meshes, the other grid and the coverage re-read take their grids from it.
+  - It is a plain struct, not a `ref struct`; see the lesson in [standardqr-decoder.md](../specs/standardqr-decoder.md), Performance.
+- Test first. `DecodeAllocationTest` counts the module buffers out at once per image (`QRImageDecoder.ModuleBuffersPeak`), 14 cases a target: 10 reads and 4 rejections.
+  - On the old code, with only the counting added, the peak was 2 or 3 on the bowed symbol, the next triple and noise.
+  - After the change it is 1, and 0 where no triple is found.
+- `FinderTripleCornersTest`'s recording stand-in follows `ICornerAttempt`'s new signature.
+- Reads unchanged: the sweep's result files are byte-identical and the corpus is identical in this library's columns. The full suite passes (29,597 tests, both targets).
+- Time, fastest, first quartile and median of twelve alternating runs against a worktree of the commit before, on a quiet machine:
+  - Micro QR and rMQR: all 11 shapes within ±1.2 % on the first quartile and the median. One fastest was 6 % faster (rMQR on a Standard QR symbol), with its median 0.7 % faster.
+  - Standard QR's failing shapes: within ±0.6 %.
+  - Standard QR's four reads: +0.3 to +1.3 %. Version 6 at 4 px/module went 9.75 → 9.88 µs and version 40 at 3 px/module 87.3 → 88.4 µs, fastest.
+- Two experiments on the reads, eight alternations each:
+  - without the thread-static counters;
+  - with the workspace renting one grid instead of three, enough for a read.
+  - Each still measured +0.5 to +1.0 % fastest, so neither is the cause. It was not traced further. It is within what moving code between methods shifts, and recorded here as this change's cost.
