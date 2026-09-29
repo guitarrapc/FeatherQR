@@ -37,20 +37,20 @@ public class SimdTiersTest
         ["ModulePlacerExpandBits"] = ["StandardQR/ModulePlacer.ExpandBits.cs"],
         ["ModulePlacerMaskCode"] = ["StandardQR/ModulePlacer.Masking.cs"],
         ["AlignmentRowMask"] = ["StandardQR/AlignmentPatternFinder.cs", "StandardQR/AlignmentPatternFinder.Simd.cs"],
-        ["QRSampleGrid"] = ["StandardQR/QRImageDecoder.cs"],
+        ["QRSampleGrid"] = ["StandardQR/QRImageDecoder.cs", "ImageDecoders/VectorCast.Simd.cs"],
         ["QRSampleGridPiecewise"] = ["StandardQR/QRImageDecoder.PiecewiseSampling.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.X86.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.Arm64.cs"],
         ["StructuredAppendLanes"] = ["StandardQR/StructuredAppendPlanner.Lanes.cs", "StandardQR/StructuredAppendPlanner.Lanes.Arm64.cs"],
         ["StructuredAppendParity"] = ["StandardQR/StructuredAppendPlanner.Parity.cs"],
         ["StructuredAppendScanner"] = ["StandardQR/StructuredAppendScanner.cs"],
         ["MicroQRByteSegment"] = ["MicroQR/MicroQRBinaryEncoder.cs"],
         ["MicroQRModulePlacer"] = ["MicroQR/MicroQRModulePlacer.PlaceSymbol.cs", "MicroQR/MicroQRModulePlacer.PlaceSymbol.Simd.cs"],
-        ["MicroQRSampleGrid"] = ["MicroQR/MicroQRImageDecoder.cs"],
+        ["MicroQRSampleGrid"] = ["MicroQR/MicroQRImageDecoder.cs", "ImageDecoders/VectorCast.Simd.cs"],
         ["RmQRValueSegments"] = ["RmQR/RmQRBinaryEncoder.cs"],
         ["RmQRLatin1Segment"] = ["RmQR/RmQRBinaryEncoder.cs"],
         ["RmQRModulePlacer"] = ["RmQR/RmQRModulePlacer.cs", "RmQR/RmQRModulePlacer.Arm64.cs"],
         ["RmQRExtractCodewords"] = ["RmQR/RmQRMatrixDecoder.cs", "RmQR/RmQRMatrixDecoder.X86.cs", "RmQR/RmQRMatrixDecoder.Arm64.cs"],
-        ["RmQRSubFinderLattice"] = ["RmQR/RmQRImageDecoder.cs"],
-        ["RmQRSampleGrid"] = ["RmQR/RmQRImageDecoder.cs", "RmQR/RmQRImageDecoder.Vector128.cs"],
+        ["RmQRSubFinderLattice"] = ["RmQR/RmQRImageDecoder.cs", "ImageDecoders/VectorCast.Simd.cs"],
+        ["RmQRSampleGrid"] = ["RmQR/RmQRImageDecoder.cs", "RmQR/RmQRImageDecoder.Vector128.cs", "ImageDecoders/VectorCast.Simd.cs"],
     };
 
     /// <summary>
@@ -69,6 +69,7 @@ public class SimdTiersTest
         [SimdTier.GfniV256] = (["Gfni.V256"], ["Gfni.V256", "Avx2"]),
         [SimdTier.AdvSimd] = (["AdvSimd.Arm64"], ["AdvSimd.Arm64"]),
         [SimdTier.AdvSimdDp] = (["Dp"], ["Dp", "AdvSimd.Arm64"]),
+        [SimdTier.PackedSimd] = (["PackedSimd"], ["PackedSimd"]),
     };
 
     /// <summary>The files that read flags without being a kernel: the table itself, and the CPU facts <c>IsSupported</c> does not express.</summary>

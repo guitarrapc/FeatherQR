@@ -37,9 +37,14 @@ internal static partial class QRImageDecoder
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point (ConvertToInt32Native is the one that follows the platform's rounding); out-of-range lanes differ from scalar saturation but are clamped into bounds either way.
+                // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point.
                 var px = Vector256.ConvertToInt32(x);
                 var py = Vector256.ConvertToInt32(y);
+#if !NET9_0_OR_GREATER
+                // Before .NET 9 the conversion writes int.MinValue past the positive edge too: flip it to int.MaxValue, which clamps to the far side as the scalar tier does
+                px ^= Vector256.GreaterThanOrEqual(x, Vector256.Create(2147483648f)).AsInt32();
+                py ^= Vector256.GreaterThanOrEqual(y, Vector256.Create(2147483648f)).AsInt32();
+#endif
                 px = Vector256.Max(Vector256.Min(px, maxPx), zero);
                 py = Vector256.Max(Vector256.Min(py, maxPy), zero);
 
@@ -63,16 +68,8 @@ internal static partial class QRImageDecoder
                 var x = (transform.a11 * gridXs + rowNX) * reciprocal;
                 var y = (transform.a12 * gridXs + rowNY) * reciprocal;
 
-                var px = (int)x;
-                var py = (int)y;
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                var px = PixelIndex.Clamp(x, width);
+                var py = PixelIndex.Clamp(y, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

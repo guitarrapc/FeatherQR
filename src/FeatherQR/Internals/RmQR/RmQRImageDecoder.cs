@@ -1268,7 +1268,8 @@ internal static partial class RmQRImageDecoder
                     ifLight |= bit;
                     continue;
                 }
-                if (x - marginX <= -1f || x + marginX >= width || y - marginY <= -1f || y + marginY >= height)
+                // Written as "not inside" so a NaN point is skipped too, never cast
+                if (!(x - marginX > -1f && x + marginX < width && y - marginY > -1f && y + marginY < height))
                     continue;
                 var px = (int)(x - marginX);
                 var py = (int)(y - marginY);
@@ -1441,16 +1442,8 @@ internal static partial class RmQRImageDecoder
             {
                 transform.Transform(col + 0.5f, gridY, out var x, out var y);
                 // Pixel edges sit on integers, so the pixel containing a point is its floor
-                var px = (int)x;
-                var py = (int)y;
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                var px = PixelIndex.Clamp(x, width);
+                var py = PixelIndex.Clamp(y, height);
                 modules[rowBase + col] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }
         }

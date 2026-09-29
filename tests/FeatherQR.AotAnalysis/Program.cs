@@ -57,5 +57,8 @@ foreach (var (pattern, charset) in new[]
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
 
-// Which SIMD tier each kernel runs in this native build, held to the table for --simd-class.
-return SimdReport.PrintAndCheck(simdClass);
+// Which SIMD tier each kernel runs in this native build, held to the table for --simd-class; with --parity, the vector tiers
+// held to their scalar forms on the code ILC emitted.
+var tierResult = SimdReport.PrintAndCheck(simdClass);
+var parityResult = SimdParity.Requested(args) ? SimdParity.Run() : 0;
+return tierResult != 0 ? tierResult : parityResult;

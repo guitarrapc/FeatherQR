@@ -1,6 +1,7 @@
 using static FeatherQR.Internals.SimdTier;
 #if NET8_0_OR_GREATER
 using Arm = System.Runtime.Intrinsics.Arm;
+using Wasm = System.Runtime.Intrinsics.Wasm;
 using X86 = System.Runtime.Intrinsics.X86;
 #endif
 
@@ -38,6 +39,8 @@ internal enum SimdTier : byte
     AdvSimd,
     /// <summary>ARM64 AdvSimd with the ARMv8.2 dot product, which Cortex-A53/A72-class cores lack.</summary>
     AdvSimdDp,
+    /// <summary>WebAssembly PackedSimd, where a portable 128-bit tier takes an operation WebAssembly has and the portable form lowers badly.</summary>
+    PackedSimd,
 }
 
 /// <summary>
@@ -141,6 +144,7 @@ internal static class SimdTiers
 #endif
         internal static bool AdvSimd => Arm.AdvSimd.Arm64.IsSupported;
         internal static bool AdvSimdDp => Arm.Dp.IsSupported && Arm.AdvSimd.Arm64.IsSupported;
+        internal static bool PackedSimd => Wasm.PackedSimd.IsSupported;
 #else
         internal static bool Vector128 => false;
         internal static bool Vector256 => false;
@@ -153,6 +157,7 @@ internal static class SimdTiers
         internal static bool GfniV256 => false;
         internal static bool AdvSimd => false;
         internal static bool AdvSimdDp => false;
+        internal static bool PackedSimd => false;
 #endif
     }
 
@@ -170,6 +175,7 @@ internal static class SimdTiers
         (SimdTier.GfniV256, Isa.GfniV256),
         (SimdTier.AdvSimd, Isa.AdvSimd),
         (SimdTier.AdvSimdDp, Isa.AdvSimdDp),
+        (SimdTier.PackedSimd, Isa.PackedSimd),
     ];
 
     /// <summary>
@@ -211,8 +217,8 @@ internal static class SimdTiers
         new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // AlignmentPatternFinder.ScanRowMask: a row's dark bitmask for the alignment search
         new("AlignmentRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // QRImageDecoder.SampleGrid: the four-point sampler; the 128-bit tier also takes grids too small for the 256-bit one
-        new("QRSampleGrid", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
+        // QRImageDecoder.SampleGrid: the four-point sampler; the 128-bit tier also takes grids too small for the 256-bit one, and converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
+        new("QRSampleGrid", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler
         new("QRSampleGridPiecewise", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // StructuredAppendPlanner.TryNarrowWithLanes / WalkLanes: the chunk-budget walks over eight budgets at once
@@ -228,8 +234,8 @@ internal static class SimdTiers
         new("MicroQRByteSegment", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Sse2)),
         // MicroQRModulePlacer.PlaceSymbol: placement, masking and mask selection
         new("MicroQRModulePlacer", (SimdTier.Avx2Pext, Isa.Avx2Pext), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // MicroQRImageDecoder.SampleGrid: the affine module-centre sampler of the grid searches
-        new("MicroQRSampleGrid", (SimdTier.Vector128, Isa.Vector128)),
+        // MicroQRImageDecoder.SampleGrid: the affine module-centre sampler of the grid searches; coordinates converted as QRSampleGrid's
+        new("MicroQRSampleGrid", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
 
         // ---- rMQR ----
 
@@ -241,10 +247,10 @@ internal static class SimdTiers
         new("RmQRModulePlacer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // RmQRMatrixDecoder.ExtractCodewords: codeword extraction, x64 bit planes or ARM64 pair planes
         new("RmQRExtractCodewords", (SimdTier.Avx2Pext, Isa.Avx2Pext), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // RmQRImageDecoder.ClassifySubFinderLattice: the sub-finder lattice classification
-        new("RmQRSubFinderLattice", (SimdTier.Vector128, Isa.Vector128)),
-        // RmQRImageDecoder.SampleGrid: the perspective sampler
-        new("RmQRSampleGrid", (SimdTier.Vector128, Isa.Vector128)),
+        // RmQRImageDecoder.ClassifySubFinderLattice: the sub-finder lattice classification; coordinates converted as QRSampleGrid's
+        new("RmQRSubFinderLattice", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // RmQRImageDecoder.SampleGrid: the perspective sampler; coordinates converted as QRSampleGrid's
+        new("RmQRSampleGrid", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
     ];
 
     /// <summary>
@@ -253,10 +259,10 @@ internal static class SimdTiers
     /// </summary>
     internal static (SimdTier[] Present, SimdTier[] Absent, SimdTier[][] LeftToCpu) Definition(SimdBuildClass buildClass) => buildClass switch
     {
-        SimdBuildClass.X64Sse => ([Vector128, Sse2, Ssse3, Sse41], [Vector256, Avx2, Avx2Pext, GfniV256, AdvSimd, AdvSimdDp], [[Gfni]]),
-        SimdBuildClass.X64Avx2 => ([Vector128, Vector256, Sse2, Ssse3, Sse41, Avx2], [AdvSimd, AdvSimdDp], [[Gfni, GfniV256], [Avx2Pext]]),
-        SimdBuildClass.Arm64 => ([Vector128, AdvSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256], [[AdvSimdDp]]),
-        SimdBuildClass.Wasm => ([Vector128], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256, AdvSimd, AdvSimdDp], []),
+        SimdBuildClass.X64Sse => ([Vector128, Sse2, Ssse3, Sse41], [Vector256, Avx2, Avx2Pext, GfniV256, AdvSimd, AdvSimdDp, PackedSimd], [[Gfni]]),
+        SimdBuildClass.X64Avx2 => ([Vector128, Vector256, Sse2, Ssse3, Sse41, Avx2], [AdvSimd, AdvSimdDp, PackedSimd], [[Gfni, GfniV256], [Avx2Pext]]),
+        SimdBuildClass.Arm64 => ([Vector128, AdvSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256, PackedSimd], [[AdvSimdDp]]),
+        SimdBuildClass.Wasm => ([Vector128, PackedSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256, AdvSimd, AdvSimdDp], []),
         _ => throw new ArgumentOutOfRangeException(nameof(buildClass), buildClass, "Unknown build class."),
     };
 
@@ -284,8 +290,9 @@ internal static class SimdTiers
         // ---- Standard QR ----
         new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
         new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
+        // WebAssembly keeps the 128-bit tier though the interpreter runs it 16-21 % slower than scalar: AOT-compiled it is 1.5x faster, and the search is under 2 % of any shape there
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
-        new("QRSampleGrid",            [Vector128],     [Vector256],          [Vector128],          [Vector128]),
+        new("QRSampleGrid",            [Sse2],          [Vector256],          [Vector128],          [PackedSimd]),
         new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
         new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
         new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
@@ -294,15 +301,15 @@ internal static class SimdTiers
         // ---- Micro QR ----
         new("MicroQRByteSegment",      [Sse2],          [Sse2],               [AdvSimd],            [Scalar]),
         new("MicroQRModulePlacer",     [Ssse3],         [Avx2Pext, Ssse3],    [AdvSimd],            [Scalar]),
-        new("MicroQRSampleGrid",       [Vector128],     [Vector128],          [Vector128],          [Vector128]),
+        new("MicroQRSampleGrid",       [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
 
         // ---- rMQR ----
         new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar],             [Scalar]),
         new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128],          [Vector128]),
         new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
         new("RmQRExtractCodewords",    [Scalar],        [Avx2Pext, Scalar],   [AdvSimd],            [Scalar]),
-        new("RmQRSubFinderLattice",    [Vector128],     [Vector128],          [Vector128],          [Vector128]),
-        new("RmQRSampleGrid",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
+        new("RmQRSubFinderLattice",    [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
+        new("RmQRSampleGrid",          [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
     ];
 
     /// <summary>What in this process disagrees with <see cref="Expected"/> for <paramref name="buildClass"/>; empty when nothing does.</summary>

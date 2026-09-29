@@ -45,13 +45,14 @@ internal static partial class RmQRImageDecoder
 
                 var outside = Vector128.LessThanOrEqual(xHigh, minusOne) | Vector128.GreaterThanOrEqual(xLow, widths)
                     | Vector128.LessThanOrEqual(yHigh, minusOne) | Vector128.GreaterThanOrEqual(yLow, heights);
-                var nearBorder = Vector128.LessThanOrEqual(xLow, minusOne) | Vector128.GreaterThanOrEqual(xHigh, widths)
-                    | Vector128.LessThanOrEqual(yLow, minusOne) | Vector128.GreaterThanOrEqual(yHigh, heights);
-                // Truncating, as the scalar cast does; a lane out of range is near the border and not read
-                var pxLow = Vector128.ConvertToInt32(xLow);
-                var pyLow = Vector128.ConvertToInt32(yLow);
-                var onePixel = Vector128.Equals(pxLow, Vector128.ConvertToInt32(xHigh)) & Vector128.Equals(pyLow, Vector128.ConvertToInt32(yHigh));
-                var certain = Vector128.AndNot(onePixel, nearBorder.AsInt32());
+                // "Not inside", as the scalar tier writes it, so a NaN lane is near the border too
+                var inside = Vector128.GreaterThan(xLow, minusOne) & Vector128.LessThan(xHigh, widths)
+                    & Vector128.GreaterThan(yLow, minusOne) & Vector128.LessThan(yHigh, heights);
+                // Truncating, as the scalar cast does; a lane out of range or NaN is not inside and not read
+                var pxLow = VectorCast.ToInt32(xLow);
+                var pyLow = VectorCast.ToInt32(yLow);
+                var onePixel = Vector128.Equals(pxLow, VectorCast.ToInt32(xHigh)) & Vector128.Equals(pyLow, VectorCast.ToInt32(yHigh));
+                var certain = onePixel & inside.AsInt32();
 
                 var outsideBits = (ulong)outside.ExtractMostSignificantBits() << column;
                 ifDark |= outsideBits;
@@ -141,11 +142,11 @@ internal static partial class RmQRImageDecoder
                 var xHi = (a11 * gridXHi + rowX + a31) / denominatorHi;
                 var yHi = (a12 * gridXHi + rowY + a32) / denominatorHi;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel containing the point, not the nearest one.
-                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
-                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
+                // VectorCast.ToInt32 truncates as the scalar cast does: the pixel containing the point, not the nearest one.
+                var indexLo = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yLo), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(VectorCast.ToInt32(xLo), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yHi), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(VectorCast.ToInt32(xHi), maxPx), zero);
 
                 // Lane extraction beats spilling the index vector to the stack: the reload was measured on the critical path of every gather.
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
@@ -167,8 +168,8 @@ internal static partial class RmQRImageDecoder
                 var x = (a11 * gridX + rowX + a31) / denominator;
                 var y = (a12 * gridX + rowY + a32) / denominator;
 
-                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
+                var index = Vector128.Max(Vector128.Min(VectorCast.ToInt32(y), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(VectorCast.ToInt32(x), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;
@@ -221,11 +222,11 @@ internal static partial class RmQRImageDecoder
                 var xHi = a11 * gridXHi + rowX + a31;
                 var yHi = a12 * gridXHi + rowY + a32;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast: the pixel containing the point, not the nearest one.
-                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
-                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
+                // VectorCast.ToInt32 truncates as the scalar cast does: the pixel containing the point, not the nearest one.
+                var indexLo = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yLo), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(VectorCast.ToInt32(xLo), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yHi), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(VectorCast.ToInt32(xHi), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
@@ -245,8 +246,8 @@ internal static partial class RmQRImageDecoder
                 var x = a11 * gridX + rowX + a31;
                 var y = a12 * gridX + rowY + a32;
 
-                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero) * widthVector
-                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
+                var index = Vector128.Max(Vector128.Min(VectorCast.ToInt32(y), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(VectorCast.ToInt32(x), maxPx), zero);
 
                 ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
                 Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;

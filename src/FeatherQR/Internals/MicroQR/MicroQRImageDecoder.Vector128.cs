@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Internals.MicroQR;
 
@@ -30,8 +31,8 @@ internal static partial class MicroQRImageDecoder
             {
                 // u + lane + 0.5 is exact, as the scalar gridU is
                 var gridU = laneCentres + Vector128.Create((float)u);
-                var px = Vector128.ConvertToInt32(rowXs + gridU * columnX);
-                var py = Vector128.ConvertToInt32(rowYs + gridU * columnY);
+                var px = VectorCast.ToInt32(rowXs + gridU * columnX);
+                var py = VectorCast.ToInt32(rowYs + gridU * columnY);
                 px = Vector128.Max(Vector128.Min(px, maxPx), Vector128<int>.Zero);
                 py = Vector128.Max(Vector128.Min(py, maxPy), Vector128<int>.Zero);
                 (py * stride + px).CopyTo(indices);
@@ -44,8 +45,8 @@ internal static partial class MicroQRImageDecoder
             for (; u < size; u++)
             {
                 var gridU = u + 0.5f;
-                var px = Math.Min(Math.Max((int)(rowX + gridU * uX), 0), width - 1);
-                var py = Math.Min(Math.Max((int)(rowY + gridU * uY), 0), height - 1);
+                var px = PixelIndex.Clamp(rowX + gridU * uX, width);
+                var py = PixelIndex.Clamp(rowY + gridU * uY, height);
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }
         }

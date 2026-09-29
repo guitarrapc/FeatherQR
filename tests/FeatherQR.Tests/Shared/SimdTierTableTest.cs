@@ -139,7 +139,10 @@ public class SimdTierTableTest
         var kernels = SimdTiers.Report().ToDictionary(k => k.Name);
         foreach (var row in SimdTiers.Expected())
         {
-            SimdTier[] expected = kernels[row.Kernel].Tiers.Any(t => t.Tier == SimdTier.Vector128) ? [SimdTier.Vector128] : [SimdTier.Scalar];
+            var tiers = kernels[row.Kernel].Tiers;
+            // A portable tier with a PackedSimd operation in it is named for that; without one, the portable tier itself
+            SimdTier[] expected = tiers.Any(t => t.Tier == SimdTier.PackedSimd) ? [SimdTier.PackedSimd]
+                : tiers.Any(t => t.Tier == SimdTier.Vector128) ? [SimdTier.Vector128] : [SimdTier.Scalar];
 
             await Assert.That(row.For(SimdBuildClass.Wasm)).IsEquivalentTo(expected, CollectionOrdering.Matching).Because(row.Kernel);
         }

@@ -212,3 +212,90 @@ Self time of each kernel's own methods, share of the timed loop in %, kernels at
 | matrix/rmqr-r17x139-byte | EccSyndromes 58.3, RmQRExtractCodewords 27.1, EccDecoder(other) 1.1 |
 | matrix/rmqr-r7x43-num | EccSyndromes 20.6, RmQRExtractCodewords 17.6, EccDecoder(other) 3.1 |
 | matrix/sa-byte-45k-set | EccSyndromes 71.5 |
+
+## Phase 1b: the samplers and the lattice after the fix
+
+The old code (`HEAD` before the change) against the new, three alternations of each on each build, each shape divided by two kernels the change leaves alone (`LocalBinarizer`, `FinderRowMask`), median of the three. This machine switched between two speed states during the runs, which moves whole runs by up to 40 %; the division takes most of that out, not all of it (the interpreter rows most of all).
+
+| Shape | JIT, AVX2 | JIT, no AVX | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|---|
+| image/qr-v40-3px | 1.00 (94.43 → 91.42) | 0.88 (460.28 → 440.76) | 0.69 (709.64 → 478.73) | 0.77 (1106.37 → 873.73) | 1.15 (3363.46 → 4106.70) |
+| image/qr-v6-4px | 1.04 (10.18 → 10.11) | 1.04 (25.77 → 32.24) | 0.72 (40.87 → 28.55) | 0.76 (77.85 → 57.20) | 1.01 (301.90 → 321.07) |
+| image/micro-m4-8px | 1.00 (4.70 → 4.51) | 1.03 (12.10 → 13.77) | 0.88 (12.88 → 11.02) | 0.91 (25.67 → 23.60) | 1.26 (100.32 → 119.89) |
+| image/rmqr-r17x139-8px | 1.01 (19.99 → 19.84) | 1.03 (62.55 → 79.59) | 0.81 (92.22 → 73.74) | 0.89 (157.85 → 140.78) | 1.23 (746.21 → 870.40) |
+| image/rmqr-r17x139-4px-keystone15 | 1.01 (120.05 → 117.46) | 1.05 (180.28 → 183.50) | 0.95 (219.22 → 204.39) | 0.94 (503.53 → 453.50) | 1.07 (3119.73 → 2990.69) |
+| bitmap/rmqr-r17x139-8px | 1.00 (38.13 → 37.00) | 0.97 (241.34 → 224.80) | 0.97 (270.49 → 253.25) | 0.90 (514.77 → 451.70) | 1.28 (1457.79 → 1792.92) |
+| kernel/QRSampleGrid | 1.02 (31.28 → 30.93) | 0.88 (43.16 → 32.50) | 0.15 (237.35 → 34.10) | 0.15 (344.30 → 52.69) | 1.16 (259.25 → 280.28) |
+| kernel/QRSampleGrid-scalar | 0.82 (64.64 → 50.94) | 0.78 (102.46 → 80.75) | 0.80 (68.67 → 53.78) | 1.08 (208.45 → 214.97) | 1.26 (544.13 → 616.90) |
+| kernel/MicroQRSampleGrid | 0.95 (0.24 → 0.22) | 0.95 (0.38 → 0.36) | 0.13 (2.14 → 0.27) | 0.18 (3.73 → 0.65) | 1.25 (2.72 → 3.12) |
+| kernel/MicroQRSampleGrid-scalar | 0.76 (0.51 → 0.37) | 0.68 (0.79 → 0.43) | 0.79 (0.54 → 0.42) | 1.07 (1.52 → 1.64) | 1.61 (3.65 → 4.82) |
+| kernel/RmQRSampleGrid | 1.01 (1.52 → 1.47) | 0.91 (2.31 → 2.06) | 0.11 (18.71 → 1.96) | 0.13 (30.15 → 3.75) | 1.37 (11.71 → 14.68) |
+| kernel/RmQRSampleGrid-scalar | 0.81 (5.54 → 4.30) | 0.77 (8.23 → 7.61) | 0.89 (5.82 → 5.21) | 1.10 (18.33 → 19.08) | 0.70 (269.92 → 196.08) |
+| kernel/RmQRSubFinderLattice | 0.94 (0.25 → 0.23) | 0.88 (0.39 → 0.31) | 0.08 (3.10 → 0.24) | 0.12 (4.94 → 0.55) | 1.38 (1.47 → 1.89) |
+| kernel/RmQRSubFinderLattice-scalar | 1.02 (0.80 → 0.79) | 1.07 (1.05 → 1.04) | 0.98 (0.78 → 0.79) | 1.10 (1.66 → 1.76) | 1.27 (7.27 → 8.59) |
+
+Ratio new over old, with raw µs of the median run. Where the interpreter rows disagree with raw pairs from the same speed state, the raw pairs show the samplers 6 to 26 % slower, the lattice 20 to 55 %, and whole decodes within noise.
+
+The conversion alone, µs per 4,096 vectors:
+
+| Form | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| `Vector128.ConvertToInt32` (the old code) | 52.1 | 52.6 | 105 |
+| `PackedSimd.ConvertToInt32Saturate`, unguarded | - | 6.7 | 105 |
+| the same with `pmax`/`pmin` guards, inline | - | 8.0 | 122 |
+| `VectorCast.ToInt32` | 1.7 | 8.0 | 127 |
+
+`VectorCast.ToInt32` costs what the same operations written inline cost on every build but the interpreter, which inlines it only in part (4 %). `PixelIndex.Clamp` costs what the inline clamp costs everywhere, 1.5 % more interpreted.
+
+Machine code per method, instructions before → after (ILC ARM64 built against the ARM64 runtime pack; the listings of one thread). Methods are told apart by parameter count: 7p Standard QR, 8p rMQR, 12p Micro QR; `SampleGridSimd` is Standard QR's 256-bit tier, which ILC compiles for ARM64 though it never runs there. ARM64's added instructions in the scalar samplers are the two limits converted to float before the loop; the loop bodies are the same length.
+
+```
+== ilc-x64
+ClassifySubFinderLatticeScalar 15p      195 ->  195
+ClassifySubFinderLatticeVector128 15p   443 ->  271
+SampleGridScalar 12p                    111 ->  107
+SampleGridScalar 7p                     113 ->  107
+SampleGridScalar 8p                     108 ->  100
+SampleGridSimd 7p                       524 ->  517
+SampleGridSimd128 7p                    674 ->  404
+SampleGridSimd128 8p                    656 ->  427
+SampleGridVector128 12p                 404 ->  304
+== ilc-v3
+ClassifySubFinderLatticeScalar 15p      184 ->  184
+ClassifySubFinderLatticeVector128 15p   247 ->  236
+SampleGridScalar 12p                    107 ->  105
+SampleGridScalar 7p                     106 ->  102
+SampleGridScalar 8p                     101 ->   95
+SampleGridSimd 7p                       234 ->  233
+SampleGridSimd128 7p                    331 ->  309
+SampleGridSimd128 8p                    347 ->  333
+SampleGridVector128 12p                 296 ->  276
+== ilc-arm64
+ClassifySubFinderLatticeScalar 15p      100 ->  100
+ClassifySubFinderLatticeVector128 15p   165 ->  165
+SampleGridScalar 12p                     62 ->   66
+SampleGridScalar 7p                      80 ->   82
+SampleGridScalar 8p                      80 ->   82
+SampleGridSimd 7p                       210 ->  212
+SampleGridSimd128 7p                    242 ->  244
+SampleGridSimd128 8p                    219 ->  219
+SampleGridVector128 12p                 204 ->  202
+== jit-avx2
+ClassifySubFinderLatticeScalar 15p      170 ->  170
+ClassifySubFinderLatticeVector128 15p   216 ->  209
+SampleGridScalar 12p                     99 ->   91
+SampleGridScalar 7p                     104 ->   94
+SampleGridScalar 8p                     101 ->   95
+SampleGridSimd 7p                       214 ->  203
+SampleGridSimd128 8p                    307 ->  295
+SampleGridVector128 12p                 269 ->  243
+== jit-noavx
+ClassifySubFinderLatticeScalar 15p      195 ->  195
+ClassifySubFinderLatticeVector128 15p   287 ->  262
+SampleGridScalar 12p                    111 ->  107
+SampleGridScalar 7p                     113 ->  107
+SampleGridScalar 8p                     108 ->  100
+SampleGridSimd128 7p                    375 ->  331
+SampleGridSimd128 8p                    390 ->  354
+SampleGridVector128 12p                 313 ->  282
+```

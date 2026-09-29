@@ -237,6 +237,13 @@ internal static class TierTiming
         new("probe/convert-scalar", () => Probe(ConvertScalar)),
         new("probe/convert-saturating", () => Probe(ConvertSaturating)),
         new("probe/convert-native", () => Probe(ConvertNative)),
+        new("probe/convert-native-fixed", () => Probe(ConvertNativeFixed)),
+        new("probe/convert-packedsimd", () => Probe(ConvertPackedSimd), PackedSimd.IsSupported),
+        new("probe/convert-packedsimd-min", () => Probe(ConvertPackedSimdMin), PackedSimd.IsSupported),
+        new("probe/convert-vectorcast", () => Probe(ConvertVectorCast)),
+        new("probe/convert-pseudo-inline", () => Probe(ConvertPseudoInline), PackedSimd.IsSupported),
+        new("probe/clamp-inline", () => Probe(ClampInline)),
+        new("probe/clamp-pixelindex", () => Probe(ClampPixelIndex)),
         new("probe/movemask-portable", () => Probe(MovemaskPortable)),
         new("probe/movemask-packedsimd", () => Probe(MovemaskPackedSimd), PackedSimd.IsSupported),
     ];
@@ -840,6 +847,88 @@ internal static class TierTiming
         var acc = Vector128<int>.Zero;
         for (nuint i = 0; i < ProbeVectors; i++)
             acc += Vector128.ConvertToInt32Native(Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f);
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    /// <summary>The platform's conversion made saturating in portable operations: positive overflow to the maximum, NaN to zero.</summary>
+    private static int ConvertNativeFixed(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        var overflow = Vector128.Create(2147483648f);
+        var max = Vector128.Create(int.MaxValue);
+        for (nuint i = 0; i < ProbeVectors; i++)
+        {
+            var v = Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f;
+            var r = Vector128.ConditionalSelect(Vector128.GreaterThanOrEqual(v, overflow).AsInt32(), max, Vector128.ConvertToInt32Native(v));
+            acc += r & Vector128.Equals(v, v).AsInt32();
+        }
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    private static int ConvertPackedSimd(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        for (nuint i = 0; i < ProbeVectors; i++)
+            acc += PackedSimd.ConvertToInt32Saturate(Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f);
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    /// <summary>The operations VectorCast.ToInt32 takes on WebAssembly, written in the loop, so a call the interpreter does not inline shows against it.</summary>
+    private static int ConvertPackedSimdMin(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        var cap = Vector128.Create(2147483520f);
+        for (nuint i = 0; i < ProbeVectors; i++)
+            acc += PackedSimd.ConvertToInt32Saturate(Vector128.Min(Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f, cap));
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    /// <summary>VectorCast.ToInt32's WebAssembly operations written in the loop: against convert-vectorcast, the cost of the call where it is not inlined.</summary>
+    private static int ConvertPseudoInline(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        var cap = Vector128.Create(2147483520f);
+        for (nuint i = 0; i < ProbeVectors; i++)
+        {
+            var v = Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f;
+            acc += PackedSimd.ConvertToInt32Saturate(PackedSimd.PseudoMin(PackedSimd.PseudoMax(Vector128<float>.Zero, v), cap));
+        }
+        return acc.ToScalar() + acc.GetElement(3);
+    }
+
+    /// <summary>The scalar samplers' clamp written in the loop, against clamp-pixelindex, which calls PixelIndex.Clamp: 16,384 coordinates a call.</summary>
+    private static int ClampInline(byte[] data)
+    {
+        var sum = 0;
+        for (var i = 0; i < data.Length; i += 4)
+        {
+            var x = data[i] * 0.75f - 20f;
+            var p = x >= 160 ? 159 : (int)x;
+            if (p < 0)
+                p = 0;
+            sum += p;
+        }
+        return sum;
+    }
+
+    private static int ClampPixelIndex(byte[] data)
+    {
+        var sum = 0;
+        for (var i = 0; i < data.Length; i += 4)
+            sum += PixelIndex.Clamp(data[i] * 0.75f - 20f, 160);
+        return sum;
+    }
+
+    private static int ConvertVectorCast(byte[] data)
+    {
+        ref var start = ref MemoryMarshal.GetArrayDataReference(data);
+        var acc = Vector128<int>.Zero;
+        for (nuint i = 0; i < ProbeVectors; i++)
+            acc += VectorCast.ToInt32(Vector128.ConvertToSingle(Vector128.LoadUnsafe(ref start, i * 16).AsInt32() & Vector128.Create(0xFFFF)) * 0.75f);
         return acc.ToScalar() + acc.GetElement(3);
     }
 

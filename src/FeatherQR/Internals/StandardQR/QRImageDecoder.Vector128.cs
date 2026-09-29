@@ -44,11 +44,11 @@ internal static partial class QRImageDecoder
                 var xHi = (a11 * gridXHi + rowNumeratorX) * reciprocalHi;
                 var yHi = (a12 * gridXHi + rowNumeratorY) * reciprocalHi;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point (ConvertToInt32Native is the one that follows the platform's rounding); out-of-range lanes differ from scalar saturation but are clamped into bounds either way.
-                var pxLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
-                var pyLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero);
-                var pxHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
-                var pyHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero);
+                // VectorCast.ToInt32 truncates as the scalar tier does, and the clamp sends an out-of-range lane to the edge the scalar tier's does, so both take the pixel containing the point.
+                var pxLo = Vector128.Max(Vector128.Min(VectorCast.ToInt32(xLo), maxPx), zero);
+                var pyLo = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yLo), maxPy), zero);
+                var pxHi = Vector128.Max(Vector128.Min(VectorCast.ToInt32(xHi), maxPx), zero);
+                var pyHi = Vector128.Max(Vector128.Min(VectorCast.ToInt32(yHi), maxPy), zero);
 
                 (pyLo * widthVector + pxLo).CopyTo(indices);
                 (pyHi * widthVector + pxHi).CopyTo(indices.Slice(4));
@@ -67,8 +67,8 @@ internal static partial class QRImageDecoder
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                var px = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
-                var py = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero);
+                var px = Vector128.Max(Vector128.Min(VectorCast.ToInt32(x), maxPx), zero);
+                var py = Vector128.Max(Vector128.Min(VectorCast.ToInt32(y), maxPy), zero);
 
                 (py * widthVector + px).CopyTo(indices);
 
@@ -90,16 +90,8 @@ internal static partial class QRImageDecoder
                 var x = (transform.a11 * gridXs + rowNX) * reciprocal;
                 var y = (transform.a12 * gridXs + rowNY) * reciprocal;
 
-                var px = (int)x;
-                var py = (int)y;
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                var px = PixelIndex.Clamp(x, width);
+                var py = PixelIndex.Clamp(y, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

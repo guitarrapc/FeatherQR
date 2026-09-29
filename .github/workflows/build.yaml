@@ -159,7 +159,8 @@ jobs:
   # the whole library (TrimmerRootAssembly) so ILC analyzes every member, and fails on any trim/AOT
   # warning (TreatWarningsAsErrors in that csproj); that part needs one runner, since IL-level analysis
   # does not depend on the host OS. The binary then holds the SIMD tier each kernel takes in that build
-  # to the table in src/FeatherQR/Internals/SimdTiers.cs (--simd-class), so each leg is one build class:
+  # to the table in src/FeatherQR/Internals/SimdTiers.cs (--simd-class) and its vector tiers to their scalar forms
+  # on the code ILC emitted (--parity), so each leg is one build class:
   # the default x64 publish (no AVX), an x86-64-v3 publish, and the default publish on each ARM64 OS.
   # The JIT steps hold the JIT on the same runner to its class, and show the side of a class the runner's
   # CPU does not: the no-AVX dispatch on an AVX2 machine, and ARM64 without the dot product.
@@ -231,12 +232,12 @@ jobs:
             args+=("-p:IlcInstructionSet=$ILC_INSTRUCTION_SET")
           fi
           dotnet publish tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj "${args[@]}"
-      - name: Run AOT analysis binary and check its SIMD tiers
+      - name: Run AOT analysis binary and check its SIMD tiers and their parity
         shell: bash
         env:
           EXT: ${{ matrix.ext }}
           SIMD_CLASS: ${{ matrix.simd-class }}
-        run: ./publish/aot-analysis/FeatherQR.AotAnalysis"$EXT" --simd-class "$SIMD_CLASS"
+        run: ./publish/aot-analysis/FeatherQR.AotAnalysis"$EXT" --simd-class "$SIMD_CLASS" --parity
       - name: Check SIMD tiers under the JIT
         if: ${{ matrix.jit-simd-class != '' }}
         shell: bash
@@ -251,7 +252,8 @@ jobs:
           env "$JIT_KNOB" dotnet "$dll" --simd-class "$JIT_KNOB_SIMD_CLASS"
 
   # SIMD tier check for WebAssembly: tests/FeatherQR.WasmReport holds a WebAssembly build of the library to
-  # the Wasm column of the table in src/FeatherQR/Internals/SimdTiers.cs, run headless under Node.js, which has
+  # the Wasm column of the table in src/FeatherQR/Internals/SimdTiers.cs and its vector tiers to their scalar forms
+  # (--parity, the one run of the PackedSimd operations), headless under Node.js, which has
   # the WebAssembly SIMD a browser has. Interpreted is what a Blazor WebAssembly app runs by default; AOT-compiled
   # is what the Playground ships.
   wasm-simd:
@@ -283,8 +285,8 @@ jobs:
             aot=true
           fi
           dotnet publish tests/FeatherQR.WasmReport/FeatherQR.WasmReport.csproj -c Release "-p:RunAOTCompilation=$aot" -o publish/wasm-report/
-      - name: Run the WebAssembly report and check its SIMD tiers
-        run: node publish/wasm-report/wwwroot/main.mjs --simd-class Wasm
+      - name: Run the WebAssembly report and check its SIMD tiers and their parity
+        run: node publish/wasm-report/wwwroot/main.mjs --simd-class Wasm --parity
 
   build-complete:
     needs: [build, run, aot-analysis, build-playground, wasm-simd]
