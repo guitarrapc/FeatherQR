@@ -31,7 +31,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `ModuleBitPacker` | Byte-per-module ↔ MSB-first bit-packed conversion of the Micro QR and rMQR data models (`SetCoreData` / `GetCoreData`) is the same operation for both; Standard QR's `QRCodeData` keeps its own (frozen) storage kernel |
 | `ECCInfo` | RS block structure (data codewords, ECC per block, up to two block groups) describes all three symbologies |
 | `BinaryInterleaver` | Block interleaving of data then ECC codewords depends only on the `ECCInfo` block structure; Standard QR and rMQR interleave identically (Micro QR has one block). Lifted from `Internals.StandardQR` to `Internals.BinaryEncoders` when rMQR became the second consumer (rMQR Phase 5.4); the only symbology-specific input, the remainder-bit count, is passed in by the caller |
-| `EccBlockDecoder` | The matrix decoders' Reed-Solomon block stage: the stream deinterleaved into its blocks, the exact inverse of `BinaryInterleaver`, each block corrected up to a capacity the symbology passes, and the data gathered in block order. Standard QR and rMQR run it; Micro QR has one block and a half codeword, and corrects it itself. Until 2026-09-29 Standard QR and rMQR each wrote the stage out, rMQR as its own fused loop; sharing it changed no read and no status |
+| `EccBlockDecoder` | The matrix decoders' Reed-Solomon block stage: the stream deinterleaved into its blocks, the exact inverse of `BinaryInterleaver`, each block corrected up to a capacity the symbology passes, and the data gathered in block order. Standard QR and rMQR run it; Micro QR has one block and a half codeword, and corrects it itself. Until 2026-09-29 Standard QR and rMQR each wrote the stage out, rMQR as its own fused loop; sharing it changed no read and no status, and rMQR's loop put back measured 1.6 to 2.8 % slower than the shared stage on a matrix with errors |
 | `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology |
 | `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count), the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) and the ECI designator reader (lifted from `QRBinaryDecoder` when rMQR became its second consumer, Phase 6) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
 | `LuminanceConverter`, `PixelLayout`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent. The luminance kernels are the seam the first-party image adapter feeds (see the package seam below) |
@@ -111,7 +111,7 @@ Why the passes are ordered this way:
 - The negative needs no second count, because its histogram is the positive's mirrored (`Binarizer` above).
 - The regional pass is an added attempt, not a replacement for the global threshold ([standardqr-decoder.md](standardqr-decoder.md#image-detection-and-sampling)).
 - A verdict ends only what could not change the answer. A rule stated for the symbol has to hold for the image: stopping a Micro QR or rMQR search at a verdict would also stop it for every other symbol in the image, and a strided verdict that skipped the full sweep lost 20 to 24 readable neighbours in about 490 pairs of an unmapped symbol beside a low-density readable one. So a symbol holding an unmapped Kanji cell cost 2 to 19 ms against microseconds for a mappable one (2026-09-23, before the failure-path work made those searches faster), which is the price.
-- The midpoint pass is for a finder the global threshold cannot see. Edge greys pull that threshold toward light, and a blurred finder's light ring can keep too few pixels above it; halfway between the two levels the ring reads its width. It runs last, so a symbol the regional pass reads never pays for it. Since the cross-checks read like edges, most such finders are found at the global threshold; among bilinear upscales of every version at 2 to 3.2 px/module, only Micro QR M1 and rMQR R7x43 and R7x77 still needed it.
+- The midpoint pass is for a finder the global threshold cannot see. Edge greys pull that threshold toward light, and a blurred finder's light ring can keep too few pixels above it; halfway between the two levels the ring reads its width. It runs last, so a symbol the regional pass reads never pays for it. Since the cross-checks read like edges, most such finders are found at the global threshold; among bilinear upscales of every version at 2 to 3.2 px/module, only Micro QR M1 and rMQR R7x43 and R7x77 still needed it. Standard QR has none: its sweep read 4,799 of 4,800 bilinear renders at 2 to 3.5 px/module without one, and the one left was unread before the passes were shared too (2026-09-29). Adding it would be an accuracy change of its own, measured by the sweep, for an input class that needs it.
 - The finder search widens in two different ways because the trigger to widen has to be a question about the symbol. Standard QR's search can ask one itself: did the strided rows give it a triple that is not in doubt? A single-finder scan cannot ask anything like that, so the Micro QR and rMQR decoders ask instead whether the strided scan read the symbol ([rmqr-decoder.md](rmqr-decoder.md#decisions), finder candidate scan).
 
 ### Package architecture
@@ -354,6 +354,30 @@ by version, published with a release store, and bounded (about 100 KB if every r
 were exercised). A benchmark that measures allocation must warm up first, or it attributes
 that one-time build to the call that happened to trigger it.
 
+The promise is held by a test, not by reading the code. `DecodeAllocationTest` decodes through
+every allocation-free overload of the three decoders: the matrix overloads with and without a quiet
+zone, the image overloads on each path the image level reads through (upright, turned, mirrored,
+keystone, the next finder triple, the meshes, the timing frame, low density, the anisotropic grid,
+the perspective search, light on dark, uneven light) and on images that fail (noise, another
+symbology's symbol). It also counts Standard QR's module buffers out at once, which is one. An
+allocation planted at each stage of both levels, 47 of them, was caught by it (2026-09-29).
+What measuring it taught:
+
+- **Release only.** Debug allocates where Release does not: a span initialized from a list of
+  literals (`stackalloc float[] { … }`, `ReadOnlySpan<int> x = [ … ]`) allocated 72 B a call
+  unoptimized. A file-based script (`dotnet run script.cs`) runs Release only with `-c Release` on
+  the command line; a `#:property Configuration=Release` directive alone still gave the 72 B.
+- **Warm up, then take the quietest of a few rounds.** The shared array pool can drop a buffer when
+  a collection runs, so one round can see one rent allocate; a call that allocates every time does
+  so in every round.
+- **Alone.** Such a test runs `[NotInParallel]`. The pool's thread slot holds one array a size, and a
+  second of that size comes from per-core stacks that tests running beside it drain. That is how
+  Standard QR's nested module buffers showed up, as 4,120 B on noise in one run of six, before each
+  scan held one ([standardqr-decoder.md](standardqr-decoder.md), Performance).
+- **A planted allocation has to escape.** `GC.KeepAlive(new byte[1])` is caught where
+  `new byte[1].Length` at the same stage was not (.NET 10): an array that never leaves the method
+  need not be allocated at all.
+
 ### SIMD tier inventory
 
 Which SIMD tier each kernel runs on which build is not listed here: it is declared in one table,
@@ -489,3 +513,6 @@ The queue is closed again behind them, on the same rule.
 - **This machine cannot measure a few instructions a call.** ShortRun and 20-iteration rounds of the image decode and encode benchmarks, before and after alternating, put the same build 9 to 37 % apart from itself on half the rows. Disassembly identical to the previous commit is what a layout change is held to.
 - **ILC produces ARM64 code on an x64 machine without an ARM64 linker.** The publish stops at its linker check before ILC runs, but ILC itself, run on the x64 response file retargeted to ARM64, compiles and writes its disassembly, which is all a codegen comparison needs.
 - **Interpreted and AOT-compiled WebAssembly run the same tiers.** The Mono interpreter reports 128-bit vectors accelerated as the AOT build does, so a Blazor WebAssembly app that never turns AOT on runs the same nine vector tiers the Playground does, and one build class covers both.
+
+- **A change of a few percent needs the fastest of interleaved runs, not a benchmark job.** Judging the decode refactors of 2026-09-29 on this machine, the `ShortRun` job gave error bars as large as the mean on some shapes (Micro QR `M2_512px`, 5,613 ± 15,843 µs), three launches of fifteen iterations moved one tree 23 % between two runs (Standard QR version 40 at 3 px/module, 112.7 and 91.4 µs), and one process of a build could be 2.5 times another on a 4 µs decode. A small harness over both trees, alternating eight to twelve times and keeping each shape's fastest round, first quartile and median, held a percent; the benchmarks stay for absolute numbers.
+- **Even then a shape can lean by which shapes share its process.** rMQR's gradient image measured +0.4 to +1.4 % in six runs of the rMQR shapes alone, two of them with part of the change taken back out, and −1.0 to −1.4 % in both runs of every shape. A lean that survives taking the code it is blamed on back out is not that code's.

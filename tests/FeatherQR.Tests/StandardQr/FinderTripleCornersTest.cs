@@ -138,7 +138,7 @@ public class FinderTripleCornersTest
 
     /// <summary>
     /// The selected triple failed at the format information and an alternative gets to Reed-Solomon: the selected triple's diagnostics stand, the main path's.
-    /// Standard QR's format word does not name a version, so a triple or grid that is not the symbol's own gets past it about half the time and reaches Reed-Solomon with the wrong version (D5, decode-pipeline-structure-plan.md).
+    /// Standard QR's format word does not name a version, so a triple or grid that is not the symbol's own gets past it about half the time and reaches Reed-Solomon with the wrong version (standardqr-decoder.md, Decisions, failure diagnostics).
     /// </summary>
     [Test]
     public async Task Alternative_FailingFurther_LeavesTheSelectedTriplesDiagnostics()

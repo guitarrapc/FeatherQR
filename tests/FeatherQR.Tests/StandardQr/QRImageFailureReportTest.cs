@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// These hold it on whole images; <see cref="FinderTripleCornersTest"/> holds it between the corners and triples of a search.
 /// </summary>
 /// <remarks>
-/// Micro QR and rMQR report the failure that got furthest instead. Standard QR does not (D5, declined 2026-09-30, decode-pipeline-structure-plan.md): its format word names no version, so a grid sampled at a guessed dimension gets past it about half the time and fails at Reed-Solomon with that dimension's version.
+/// Micro QR and rMQR report the failure that got furthest instead. Standard QR does not (standardqr-decoder.md, Decisions, failure diagnostics; tried and declined 2026-09-30): its format word names no version, so a grid sampled at a guessed dimension gets past it about half the time and fails at Reed-Solomon with that dimension's version.
 /// Under the furthest rule every one of these symbols reported <see cref="DecodeStatus.DataUncorrectable"/> one version too small.
 /// </remarks>
 public class QRImageFailureReportTest
