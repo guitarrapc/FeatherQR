@@ -445,6 +445,8 @@ public static class MicroQRCodeGenerator
                     var remainder = dataBits - pairs * 11;
                     return pairs * 2 + (remainder >= 6 ? 1 : 0);
                 }
+            case EncodingMode.Kanji:
+                return dataBits / 13;
             default:
                 return dataBits / 8;
         }
@@ -466,6 +468,7 @@ public static class MicroQRCodeGenerator
             EncodingMode.Numeric => dataLength / 3 * 10L + (dataLength % 3) switch { 2 => 7, 1 => 4, _ => 0 },
             EncodingMode.Alphanumeric => dataLength / 2 * 11L + dataLength % 2 * 6,
             EncodingMode.Byte => dataLength * 8L,
+            EncodingMode.Kanji => dataLength * 13L,
             _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR."),
         };
         return headerBits + dataBits;

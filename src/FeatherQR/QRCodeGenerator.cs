@@ -1122,6 +1122,7 @@ public static class QRCodeGenerator
                 EncodingMode.Numeric => CalculateNumericBits(length),
                 EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
                 EncodingMode.Byte => effectiveLength * 8L,
+                EncodingMode.Kanji => length * 13L,
                 _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
             };
 

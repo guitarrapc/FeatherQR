@@ -75,6 +75,8 @@ internal static partial class RmQRBinaryEncoder
             // after transcoding, so WriteUtf8Segment verifies it there instead.
             if ((mode != EncodingMode.Byte || charset != EciMode.Utf8) && segment.UnitCount != segment.Length)
                 throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
+            if (mode == EncodingMode.Kanji && charset != EciMode.Default)
+                KanjiCells.ThrowKanjiUnderEci(charset);
 
             switch (mode)
             {
@@ -85,6 +87,10 @@ internal static partial class RmQRBinaryEncoder
                 case EncodingMode.Alphanumeric:
                     Append(ref dest, ref acc, ref accBits, ref bytePos, (0b010 << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);
                     WriteAlphanumeric(ref dest, ref acc, ref accBits, ref bytePos, chars, vectorized: true);
+                    break;
+                case EncodingMode.Kanji:
+                    Append(ref dest, ref acc, ref accBits, ref bytePos, (RmQRConstants.KanjiModeIndicatorValue << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);
+                    WriteKanji(ref dest, ref acc, ref accBits, ref bytePos, chars);
                     break;
                 default:
                     Append(ref dest, ref acc, ref accBits, ref bytePos, (0b011 << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);

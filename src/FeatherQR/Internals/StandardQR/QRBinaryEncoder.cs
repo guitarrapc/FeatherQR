@@ -143,6 +143,11 @@ internal ref struct QRBinaryEncoder
             case EncodingMode.Byte:
                 EncodeByte(textSpan, eci, utf8Bom);
                 break;
+            case EncodingMode.Kanji:
+                if (eci != EciMode.Default)
+                    KanjiCells.ThrowKanjiUnderEci(eci);
+                WriteKanjiData(textSpan);
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode");
         }
@@ -193,6 +198,8 @@ internal ref struct QRBinaryEncoder
             // knowable after transcoding, so WriteUtf8Segment verifies it there instead.
             if ((mode != EncodingMode.Byte || eci != EciMode.Utf8) && segment.UnitCount != segment.Length)
                 throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
+            if (mode == EncodingMode.Kanji && eci != EciMode.Default)
+                KanjiCells.ThrowKanjiUnderEci(eci);
 
             _writer.Write((int)mode, 4);
             _writer.Write(segment.UnitCount, countBits);
@@ -203,6 +210,9 @@ internal ref struct QRBinaryEncoder
                     break;
                 case EncodingMode.Alphanumeric:
                     WriteAlphanumericData(chars);
+                    break;
+                case EncodingMode.Kanji:
+                    WriteKanjiData(chars);
                     break;
                 default:
                     if (eci == EciMode.Utf8)
@@ -350,6 +360,35 @@ internal ref struct QRBinaryEncoder
             var value = CharacterSets.GetAlphanumericValue(chars[i]);
             _writer.Write(value, 6);
         }
+    }
+
+    /// <summary>
+    /// Writes Kanji data: 13 bits per character, the compacted Shift_JIS value (ISO/IEC 18004 8.4.5) that <see cref="ShiftJisKanjiReverseTable"/> holds for it.
+    /// </summary>
+    /// <remarks>
+    /// Two characters share one 26-bit write.
+    /// A character without a cell is caught after the loop, from the OR of the lookups (a miss is -1), and refused rather than written as some other character.
+    /// </remarks>
+    private void WriteKanjiData(ReadOnlySpan<char> chars)
+    {
+        var misses = 0;
+        var i = 0;
+        for (; i + 1 < chars.Length; i += 2)
+        {
+            var first = ShiftJisKanjiReverseTable.Lookup(chars[i]);
+            var second = ShiftJisKanjiReverseTable.Lookup(chars[i + 1]);
+            misses |= first | second;
+            _writer.Write((first << 13) | (second & 0x1FFF), 26);
+        }
+        if (i < chars.Length)
+        {
+            var last = ShiftJisKanjiReverseTable.Lookup(chars[i]);
+            misses |= last;
+            _writer.Write(last, 13);
+        }
+
+        if (misses < 0)
+            KanjiCells.ThrowCharacterWithoutCell(chars);
     }
 
     /// <summary>

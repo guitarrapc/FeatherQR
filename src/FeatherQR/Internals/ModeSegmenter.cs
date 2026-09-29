@@ -577,6 +577,7 @@ internal static partial class ModeSegmenter
         EncodingMode.Numeric => unitCount / 3 * 10 + (unitCount % 3) switch { 2 => 7, 1 => 4, _ => 0 },
         EncodingMode.Alphanumeric => unitCount / 2 * 11 + unitCount % 2 * 6,
         EncodingMode.Byte => unitCount * 8,
+        EncodingMode.Kanji => unitCount * 13,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} has no payload cost model."),
     };
 

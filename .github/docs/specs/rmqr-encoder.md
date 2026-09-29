@@ -180,12 +180,18 @@ Version index is height-major (all widths of height 7, then 9, …); it is the 5
 | 30 | R17x99 | 17 x 99 | 23, 49, 75 | 160 | 100 / 3 / 20 | 56 / 4 / 26 | 8 / 8 / 7 |
 | 31 | R17x139 | 17 x 139 | 27, 55, 83, 111 | 232 | 152 / 4 / 20 | 76 / 6 / 26 | 9 / 8 / 8 |
 
-Kanji count-indicator widths are not in this table: the mode is not encoded.
+Kanji count-indicator widths are not in this table, which predates Kanji support.
 `RmQRConstants.GetKanjiCountIndicatorLength` carries them (values 2-7, monotone below the byte
 widths), pinned by the narrowest-field derivation below and, since the decoder shipped, read for
 real by the qrtool Kanji fixtures. That exercise is partial: the four Kanji fixtures cover
-R11x43, R13x59, R15x59 and R17x139, i.e. widths 4, 5 and 7, so widths 2, 3 and 6 still rest on
-the derivation alone.
+R11x43, R13x59, R15x59 and R17x139, i.e. widths 4, 5 and 7. Widths 2, 3 and 6 no longer rest on
+the derivation alone: the transcription of ISO/IEC 23941 Table 3 that the English Wikipedia
+article on rMQR reproduces agrees with all 32 Kanji widths (and all 96 others), and the Kanji
+column of its Table 7 transcription agrees with the capacity those widths give on 63 of 64 cells.
+The 64th, R11x77-M, is a corrupt row in that table, not a disagreement: its Numeric,
+Alphanumeric and Byte cells are R11x59-H's. Both checks live in `RmQRBinaryEncoderKanjiTest`,
+where the Kanji writers are tested. No generator selects Kanji yet; that is the Kanji encoding
+plan's flip.
 
 Data capacity in characters (Numeric / Alphanumeric / Byte), single segment, no ECI header:
 
