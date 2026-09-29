@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 #endif
 using FeatherQR.Internals.ImageDecoders;
+using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 
 namespace FeatherQR.Internals.RmQR;
 
@@ -178,8 +179,7 @@ internal static partial class RmQRImageDecoder
             candidates[j + 1] = current;
         }
 
-        var bestStatus = DecodeStatus.NotDetected;
-        var bestInfo = NotDetected();
+        var best = new SearchResult<RmQRCodeDecodeInfo>(ReportRule.Furthest, NotDetected());
 
         // The module buffer is sized for the largest symbol; rented rather than stack-allocated (2.3 KB) since this sits under the public image entry point.
         var rentedModules = ArrayPool<byte>.Shared.Rent(MaxModules);
@@ -197,12 +197,11 @@ internal static partial class RmQRImageDecoder
                     tried[triedCount++] = candidates[c];
 
                 // The frames see only this candidate's results: a read that did not fit on another one ends none of them
-                var candidateStatus = DecodeStatus.NotDetected;
-                var candidateInfo = NotDetected();
-                var status = DecodeCandidate(luminance, width, height, threshold, grey, level, candidates[c], modules, orientations, destination, out charsWritten, out info, ref candidateStatus, ref candidateInfo);
+                var candidateResult = new SearchResult<RmQRCodeDecodeInfo>(ReportRule.Furthest, NotDetected());
+                var status = DecodeCandidate(luminance, width, height, threshold, grey, level, candidates[c], modules, orientations, destination, out charsWritten, out info, ref candidateResult);
                 if (status == DecodeStatus.Success)
                     return status;
-                TrackBestFailure(candidateStatus, candidateInfo, ref bestStatus, ref bestInfo);
+                best.Other(candidateResult.Status, 0, candidateResult.Info);
             }
         }
         finally
@@ -211,14 +210,19 @@ internal static partial class RmQRImageDecoder
         }
 
         charsWritten = 0;
-        info = bestInfo;
-        return bestStatus;
+        info = best.Info;
+        return best.Status;
     }
 
     /// <summary>
     /// One finder candidate within its budget of decodes: the axis-aligned frames, then those of the finder's outline, then those of each axis pair from the angular sweep.
     /// Ends at a read, or at a read that did not fit, since its symbol was read and no other frame of this finder can change that.
     /// </summary>
+    /// <remarks>
+    /// A read that did not fit went through the format information and every Reed-Solomon block, the evidence a read rests on; the perspective search, this finder's other frames and the inverted pass would only find the same symbol again at hundreds of times the cost.
+    /// Other candidates of the same polarity are still tried, so a second symbol in the image that does fit is found whatever the candidates' order; a fitting symbol of the opposite polarity beside one too long is the trade-off of the inverted pass not running.
+    /// It also ranks above every other failure (<see cref="AttemptStatus.Progress"/>), a verdict on the content included, so it reaches the caller even when an earlier attempt failed at Reed-Solomon or another symbol's content gave a verdict.
+    /// </remarks>
     private static DecodeStatus DecodeCandidate(
         ReadOnlySpan<byte> luminance,
         int width,
@@ -232,8 +236,7 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo)
+        ref SearchResult<RmQRCodeDecodeInfo> best)
     {
         var attemptsRemaining = MaxDecodeAttemptsPerCandidate;
 
@@ -246,7 +249,7 @@ internal static partial class RmQRImageDecoder
                 luminance, width, height, threshold, grey, level, finder,
                 horizontalModuleSize, 0f, 0f, verticalModuleSize,
                 modules, destination, out charsWritten, out info,
-                ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                ref best, ref attemptsRemaining);
             if (IsTerminal(status))
                 return status;
         }
@@ -260,7 +263,7 @@ internal static partial class RmQRImageDecoder
         {
             if (outline.TryRefine(luminance, width, height, level, out var refined))
                 outline = refined;
-            var status = TryOutlineFrames(luminance, width, height, threshold, level, grey, outline, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            var status = TryOutlineFrames(luminance, width, height, threshold, level, grey, outline, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
             if (IsTerminal(status))
                 return status;
         }
@@ -275,14 +278,14 @@ internal static partial class RmQRImageDecoder
                 luminance, width, height, threshold, grey, level, candidate,
                 frame.UX, frame.UY, frame.VX, frame.VY,
                 modules, destination, out charsWritten, out info,
-                ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                ref best, ref attemptsRemaining);
             if (IsTerminal(status))
                 return status;
         }
 
         charsWritten = 0;
-        info = bestInfo;
-        return bestStatus;
+        info = best.Info;
+        return best.Status;
     }
 
     /// <summary>The finder's outline, seeded from each of the sweep's frames until one measures it.</summary>
@@ -313,12 +316,11 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining)
     {
         charsWritten = 0;
-        info = bestInfo;
+        info = best.Info;
         for (var orientation = 0; orientation < 4; orientation++)
         {
             for (var mirror = 0; mirror < 2; mirror++)
@@ -331,28 +333,37 @@ internal static partial class RmQRImageDecoder
                 if (!RmQRFormatInformationDecoder.TryDecodeCopy(raw, subFinderSide: false, out var version, out _, out _))
                     continue;
 
-                var status = TryTracedFrame(luminance, width, height, threshold, level, grey, outline.CenterX, outline.CenterY, uX, uY, vX, vY, version, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                var status = TryTracedFrame(luminance, width, height, threshold, level, grey, outline.CenterX, outline.CenterY, uX, uY, vX, vY, version, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
                 if (IsTerminal(status))
                     return status;
             }
         }
 
         charsWritten = 0;
-        info = bestInfo;
-        return bestStatus;
+        info = best.Info;
+        return best.Status;
     }
 
     /// <summary>One of the eight frames of an outline's axes, in <see cref="TryFrames"/>'s order.</summary>
     private static void OutlineFrame(in FinderOutline outline, int orientation, int mirror, out float uX, out float uY, out float vX, out float vY)
+        => Frame(outline.UX, outline.UY, outline.VX, outline.VY, orientation, mirror, out uX, out uY, out vX, out vY);
+
+    /// <summary>
+    /// One of the eight frames an axis pair makes: a right angle turn (<paramref name="orientation"/> 0 to 3), then for <paramref name="mirror"/> 1 its axes swapped.
+    /// </summary>
+    /// <remarks>
+    /// A mirrored capture keeps the finder and transposes the data. rMQR reads it by sampling again with the frame's axes swapped, where Standard QR transposes its sampled grid in place and Micro QR reads it through a transposed view: a transposed rMQR grid, 43 modules tall and 7 wide, is no rMQR grid.
+    /// </remarks>
+    private static void Frame(float uX, float uY, float vX, float vY, int orientation, int mirror, out float frameUX, out float frameUY, out float frameVX, out float frameVY)
     {
         var (aX, aY, bX, bY) = orientation switch
         {
-            0 => (outline.UX, outline.UY, outline.VX, outline.VY),
-            1 => (outline.VX, outline.VY, -outline.UX, -outline.UY),
-            2 => (-outline.UX, -outline.UY, -outline.VX, -outline.VY),
-            _ => (-outline.VX, -outline.VY, outline.UX, outline.UY),
+            0 => (uX, uY, vX, vY),
+            1 => (vX, vY, -uX, -uY),
+            2 => (-uX, -uY, -vX, -vY),
+            _ => (-vX, -vY, uX, uY),
         };
-        (uX, uY, vX, vY) = mirror == 0 ? (aX, aY, bX, bY) : (bX, bY, aX, aY);
+        (frameUX, frameUY, frameVX, frameVY) = mirror == 0 ? (aX, aY, bX, bY) : (bX, bY, aX, aY);
     }
 
     /// <summary>
@@ -377,18 +388,17 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining)
     {
         charsWritten = 0;
-        info = bestInfo;
+        info = best.Info;
         if (attemptsRemaining <= 0)
             return DecodeStatus.NotDetected;
         if (!TryTracePerimeter(luminance, width, height, level, centerX, centerY, uX, uY, vX, vY, version, out var transform))
             return DecodeStatus.NotDetected;
         var samplingSlack = Math.Max((float)Math.Sqrt(uX * uX + uY * uY), (float)Math.Sqrt(vX * vX + vY * vY));
-        return Attempt(luminance, width, height, threshold, grey, transform, RmQRConstants.GetWidth(version), RmQRConstants.GetHeight(version), samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+        return Attempt(luminance, width, height, threshold, grey, transform, RmQRConstants.GetWidth(version), RmQRConstants.GetHeight(version), samplingSlack, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
     }
 
     /// <summary>
@@ -410,39 +420,30 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining)
     {
         for (var orientation = 0; orientation < 4; orientation++)
         {
-            var (aX, aY, bX, bY) = orientation switch
-            {
-                0 => (uX, uY, vX, vY),
-                1 => (vX, vY, -uX, -uY),
-                2 => (-uX, -uY, -vX, -vY),
-                _ => (-vX, -vY, uX, uY),
-            };
-
             for (var mirror = 0; mirror < 2; mirror++)
             {
                 if (attemptsRemaining <= 0)
                     break;
 
-                var (colX, colY, rowX, rowY) = mirror == 0 ? (aX, aY, bX, bY) : (bX, bY, aX, aY);
+                Frame(uX, uY, vX, vY, orientation, mirror, out var colX, out var colY, out var rowX, out var rowY);
                 var status = TryFrame(
                     luminance, width, height, threshold, grey, level, candidate,
                     colX, colY, rowX, rowY,
                     modules, destination, out charsWritten, out info,
-                    ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                    ref best, ref attemptsRemaining);
                 if (IsTerminal(status))
                     return status;
             }
         }
 
         charsWritten = 0;
-        info = bestInfo;
-        return bestStatus;
+        info = best.Info;
+        return best.Status;
     }
 
     /// <summary>
@@ -464,8 +465,7 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining)
     {
         charsWritten = 0;
@@ -483,7 +483,7 @@ internal static partial class RmQRImageDecoder
         // First, while the attempt budget is whole: the searches below can spend all of it on such a symbol, and two timing lines that do not read cost a few dozen pixels.
         if (moduleLength < ModuleBoundaryReader.MaxModuleSize)
         {
-            var boundaryStatus = TryBoundaryFrame(luminance, width, height, threshold, candidate, uX, uY, vX, vY, moduleLength, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            var boundaryStatus = TryBoundaryFrame(luminance, width, height, threshold, candidate, uX, uY, vX, vY, moduleLength, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
             if (IsTerminal(boundaryStatus))
                 return boundaryStatus;
             formatRead |= boundaryStatus != DecodeStatus.NotDetected;
@@ -505,19 +505,19 @@ internal static partial class RmQRImageDecoder
                 luminance, width, height, threshold, grey, level, candidate,
                 scale * uX, scale * uY, scale * vX, scale * vY, version, distance == 0, affine,
                 modules, destination, out charsWritten, out info,
-                ref bestStatus, ref bestInfo, ref attemptsRemaining, out var anchoredStatus);
+                ref best, ref attemptsRemaining, out var anchoredStatus);
 
             // A copy can read exactly at a scale a few percent off, and a frame built on it fails where the next scale reads; so the search goes on while frames fail.
             // Once frames anchored on the sub-finder read format information, a failure is the data's: on a damaged symbol every later scale only repeated them.
             if (IsTerminal(status))
                 return status;
-            if (IsPlausibleRefinement(anchoredStatus))
+            if (IsPastFormat(anchoredStatus))
                 break;
         }
 
         charsWritten = 0;
-        info = bestInfo;
-        return formatRead ? bestStatus : DecodeStatus.NotDetected;
+        info = best.Info;
+        return formatRead ? best.Status : DecodeStatus.NotDetected;
     }
 
     /// <summary>
@@ -539,12 +539,11 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining)
     {
         charsWritten = 0;
-        info = bestInfo;
+        info = best.Info;
         Span<int> columns = stackalloc int[MaxBoundaryColumns];
         Span<int> rows = stackalloc int[MaxBoundaryRows];
         if (attemptsRemaining <= 0
@@ -568,7 +567,7 @@ internal static partial class RmQRImageDecoder
             return status;
         }
 
-        TrackBestFailure(status, info, ref bestStatus, ref bestInfo);
+        best.Other(status, 0, info);
         return status;
     }
 
@@ -639,8 +638,7 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining,
         out DecodeStatus anchoredStatus)
     {
@@ -678,7 +676,7 @@ internal static partial class RmQRImageDecoder
                 Rotate(uX, uY, cos, sin, out var ruX, out var ruY);
                 Rotate(vX, vY, cos, sin, out var rvX, out var rvY);
                 var isotropic = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * ruX, scale * ruY, scale * rvX, scale * rvY, 0f, 0f);
-                var status = Attempt(luminance, width, height, threshold, grey, isotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                var status = Attempt(luminance, width, height, threshold, grey, isotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
                 if (IsTerminal(status))
                     return status;
                 frameStatus = Deeper(frameStatus, status);
@@ -693,7 +691,7 @@ internal static partial class RmQRImageDecoder
                     if (a > 0.7f && a < 1.4f && b > 0.7f && b < 1.4f)
                     {
                         var anisotropic = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, a * uX, a * uY, b * vX, b * vY, 0f, 0f);
-                        status = Attempt(luminance, width, height, threshold, grey, anisotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                        status = Attempt(luminance, width, height, threshold, grey, anisotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
                         if (IsTerminal(status))
                             return status;
                         frameStatus = Deeper(frameStatus, status);
@@ -708,20 +706,20 @@ internal static partial class RmQRImageDecoder
         // A traced grid that fails leaves the frame's status to the anchored ones: at low density it can get past the format information and would stop the scales before one whose anchored grid reads
         if (exactCopy)
         {
-            var status = TryTracedFrame(luminance, width, height, threshold, level, grey, candidate.X, candidate.Y, uX, uY, vX, vY, version, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            var status = TryTracedFrame(luminance, width, height, threshold, level, grey, candidate.X, candidate.Y, uX, uY, vX, vY, version, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
             if (IsTerminal(status))
                 return status;
         }
 
         // (d) Perspective: only after an attempt got past format decoding (the grid is roughly right, RS still fails) and with the sub-finder observed. Search the two projective coefficients; for each, the sub-finder fixes the Jacobian column scale and the frame rotation exactly, and the sub-finder-side format copy must read back consistently before the full grid is sampled.
-        if (observed && IsPlausibleRefinement(frameStatus))
+        if (observed && IsPastFormat(frameStatus))
         {
             var status = TryPerspectiveVariants(
                 luminance, width, height, threshold, grey, candidate,
                 uX, uY, vX, vY, version, symbolWidth, symbolHeight, samplingSlack,
                 observedX, observedY, dX, dY,
                 modules, destination, out charsWritten, out info,
-                ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                ref best, ref attemptsRemaining);
             if (IsTerminal(status))
                 return status;
         }
@@ -730,16 +728,16 @@ internal static partial class RmQRImageDecoder
 
         // Fallback: the unrefined local frame (small symbols, or a sub-finder hidden by damage).
         // Skipped when a refined affine grid already read the format: the coarser frame cannot do better. Run at every scale, though: each is a different grid, and on a hidden sub-finder it is the frame that reads.
-        if (!IsPlausibleRefinement(frameStatus))
+        if (!IsPastFormat(frameStatus))
         {
-            var status = Attempt(luminance, width, height, threshold, grey, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+            var status = Attempt(luminance, width, height, threshold, grey, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
             if (IsTerminal(status))
                 return status;
         }
 
         charsWritten = 0;
-        info = bestInfo;
-        return bestStatus;
+        info = best.Info;
+        return best.Status;
     }
 
     /// <summary>
@@ -769,8 +767,7 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining)
     {
         // Relative foreshortening at the far edge, per axis. Fine steps along the long axis: a 1% error over 139 modules is already 0.7 module at the far end.
@@ -807,8 +804,8 @@ internal static partial class RmQRImageDecoder
                     if (attemptsRemaining <= 0)
                     {
                         charsWritten = 0;
-                        info = bestInfo;
-                        return bestStatus;
+                        info = best.Info;
+                        return best.Status;
                     }
 
                     var perspectiveX = xStrengths[xIndex] / symbolWidth;
@@ -856,7 +853,7 @@ internal static partial class RmQRImageDecoder
                     if (!TimingRowsAgree(luminance, width, height, threshold, transform, version, symbolWidth, symbolHeight))
                         continue;
 
-                    var status = Attempt(luminance, width, height, threshold, grey, transform, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                    var status = Attempt(luminance, width, height, threshold, grey, transform, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref best, ref attemptsRemaining);
                     if (IsTerminal(status))
                         return status;
                 }
@@ -864,8 +861,8 @@ internal static partial class RmQRImageDecoder
         }
 
         charsWritten = 0;
-        info = bestInfo;
-        return bestStatus;
+        info = best.Info;
+        return best.Status;
     }
 
     /// <summary>
@@ -886,14 +883,13 @@ internal static partial class RmQRImageDecoder
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
-        ref DecodeStatus bestStatus,
-        ref RmQRCodeDecodeInfo bestInfo,
+        ref SearchResult<RmQRCodeDecodeInfo> best,
         ref int attemptsRemaining)
     {
         charsWritten = 0;
         if (attemptsRemaining <= 0 || !SymbolFitsImage(transform, symbolWidth, symbolHeight, width, height, samplingSlack))
         {
-            info = bestInfo;
+            info = best.Info;
             return DecodeStatus.NotDetected;
         }
 
@@ -908,8 +904,8 @@ internal static partial class RmQRImageDecoder
             return status;
         }
 
-        TrackBestFailure(status, info, ref bestStatus, ref bestInfo);
-        if (!grey.IsEnabled || !IsPlausibleRefinement(status) || attemptsRemaining <= 0)
+        best.Other(status, 0, info);
+        if (!grey.IsEnabled || !IsPastFormat(status) || attemptsRemaining <= 0)
             return status;
 
         // Grey edges: the same grid read by coverage, decoded only where it differs from the one that failed
@@ -934,8 +930,8 @@ internal static partial class RmQRImageDecoder
             info = coverageInfo.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
             return coverageStatus;
         }
-        TrackBestFailure(coverageStatus, coverageInfo, ref bestStatus, ref bestInfo);
-        if (Rank(coverageStatus) <= Rank(status))
+        best.Other(coverageStatus, 0, coverageInfo);
+        if (Progress(coverageStatus) <= Progress(status))
             return status;
         info = coverageInfo;
         return coverageStatus;
@@ -1389,48 +1385,7 @@ internal static partial class RmQRImageDecoder
         ry = sin * x + cos * y;
     }
 
+    /// <summary>The status that got further (<see cref="AttemptStatus.Progress"/>), <paramref name="current"/> on a tie.</summary>
     private static DecodeStatus Deeper(DecodeStatus current, DecodeStatus candidate)
-        => Rank(candidate) > Rank(current) ? candidate : current;
-
-    /// <summary>
-    /// Ranks decode failures by how far the attempt progressed; keeps the deepest.
-    /// Wrong-grid samples overwhelmingly die at format decoding, so anything past it almost certainly hit the real grid.
-    /// </summary>
-    private static void TrackBestFailure(DecodeStatus status, in RmQRCodeDecodeInfo attemptInfo, ref DecodeStatus bestStatus, ref RmQRCodeDecodeInfo bestInfo)
-    {
-        if (Rank(status) > Rank(bestStatus))
-        {
-            bestStatus = status;
-            bestInfo = attemptInfo;
-        }
-    }
-
-    private static int Rank(DecodeStatus s) => s switch
-    {
-        DecodeStatus.NotDetected => 0,
-        DecodeStatus.InvalidMatrix => 1,
-        DecodeStatus.FormatInformationInvalid => 1,
-        // The symbol was read (format + RS) and only the caller's buffer is short: above every other failure, a verdict on another symbol included, since a larger destination reads this one and the verdict holds at any size
-        DecodeStatus.DestinationTooSmall => 4,
-        // A verdict on the content comes after error correction too, so a wrong grid's correction failure tried before the right one cannot mask it
-        DecodeStatus.UnmappedCharacter or DecodeStatus.UnsupportedContent => 3,
-        _ => 2, // got past format decoding
-    };
-
-    private static bool IsPlausibleRefinement(DecodeStatus status)
-        => status is not DecodeStatus.NotDetected
-            and not DecodeStatus.InvalidMatrix
-            and not DecodeStatus.FormatInformationInvalid;
-
-    /// <summary>
-    /// Outcomes no further geometry around the SAME finder can change: success, and a caller destination too small for the payload (the symbol was already read through format decode and RS on every block, the same evidence a success rests on; the perspective search, the remaining frames of that finder and the inverted retry would only rediscover the same symbol at hundreds of times the cost).
-    /// Other finder candidates of the same polarity are still tried, so a second symbol in the frame that does fit the destination is found regardless of candidate order; a fitting symbol of the OPPOSITE polarity next to a too-large one is the accepted trade-off of skipping the inverted retry.
-    /// The status also outranks every other failure in <see cref="Rank"/>, a verdict on the content included, so it reaches the caller even when an earlier attempt failed at RS or another symbol's content gave a verdict.
-    /// </summary>
-    private static bool IsTerminal(DecodeStatus status)
-        => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
-
-    /// <summary>A result no other grid or pass for the same symbol improves on: read, too long for the destination, or a verdict on its content.</summary>
-    private static bool IsSettled(DecodeStatus status)
-        => IsTerminal(status) || RegionalRetry.IsContentVerdict(status);
+        => Progress(candidate) > Progress(current) ? candidate : current;
 }

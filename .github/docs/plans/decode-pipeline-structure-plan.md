@@ -49,7 +49,7 @@ Measured in Release before phase 1, 1,000 calls after warm-up, every span overlo
 
 1. **Allocation guards (done 2026-09-29).** One test class over the three decoders: the matrix span overloads with and without a quiet zone; the image span overloads on each path the image level reads through (upright, turned, mirrored, keystone, the next triple, the mesh first and after the anchored grid, the timing frame, low density, the anisotropic grid, the perspective search, light on dark, uneven light), and on failing inputs (noise, another symbology's symbol). Each input is one another test already pins to its path where one exists. Planted allocations, one per stage, show which stages the guard reaches (`tools/mutation_check.cs`).
 2. **Shared outer passes (done 2026-09-29).** One driver for positive, inverted, content verdict, regional and midpoint, over an attempt struct. The midpoint pass is a per-decoder switch, off for Standard QR (D1).
-3. **Shared result rule and mirror retry.** One accumulator decides what settles and which failure is reported, holding each decoder's current rule (D2). One mirror retry, or a stated reason per decoder where the three strategies must stay apart: rMQR samples again because its grid is not square.
+3. **Shared result rule and mirror retry (done 2026-09-29).** One accumulator decides what settles and which failure is reported, holding each decoder's current rule (D2). One mirror retry, or a stated reason per decoder where the three strategies must stay apart: rMQR samples again because its grid is not square.
 4. **Image context.** A `readonly ref struct` carrying the image, its size, threshold and grey levels (and rMQR's edge level) through the stages, and the module buffer owned by the scan, as Micro QR and rMQR already do.
 5. **Matrix level.** The deinterleave and block loop shared by Standard QR and rMQR, as the inverse of the interleaver the encoders share. rMQR's format bit positions stated once. The sampler Micro QR borrows moves to `ImageDecoders/` if both keep it.
 6. **`charsWritten` on failure.** The matrix span overloads report 0 when they return `false`, as the image overloads do, with a test per symbology and a line in the migration notes.
@@ -74,7 +74,7 @@ The guards come first because every later phase is judged against them. Phase 6 
 - **D4, when phase 6 lands.** It changes what a public `out` parameter holds on failure, so before 2.0.0 or not until 3.0.0.
 - **D5, one reporting rule before 2.0.0.**
   - What it would change: Standard QR would report the failure that went furthest, as Micro QR and rMQR do, so `info` on failure means the same thing in all three decoders. Where a first grid fails at the format information and a later one reaches Reed-Solomon, the caller would get `DataUncorrectable` with the version and level, "a symbol is there and damaged", instead of `FormatInformationInvalid`.
-  - Cost: it changes public behavior, so it needs a line in the migration notes, and the tests that pin a Standard QR failure status reviewed.
+  - Cost: it changes public behavior, so it needs a line in the migration notes, and the tests that pin a Standard QR failure status reviewed. Standard QR's coverage re-read reports a skipped re-read as `DataUncorrectable` with no version, which has to become not tried first (see the phase 3 log).
   - When: its own change after phase 3, where the shared accumulator makes it a choice of policy. Worth taking before 2.0.0 fixes the API.
   - Not considered: moving Micro QR and rMQR to the first attempt, which reports less.
 
@@ -144,3 +144,38 @@ The guards come first because every later phase is judged against them. Phase 6 
   - Standard QR noise 740 × 740: 2,891 → 2,938 µs.
   - rMQR noise: 25,243 → 24,887 µs.
 - The repository's benchmarks with three launches of fifteen iterations, run twice each way, showed no direction beyond their spread.
+
+### Phase 3, shared result rule and mirror retry (2026-09-29)
+
+- `AttemptStatus` and `SearchResult<TInfo>` ([src/FeatherQR/Internals/ImageDecoders](../../../src/FeatherQR/Internals/ImageDecoders/SearchResult.cs)):
+  - `AttemptStatus` holds the status classes once: terminal, content verdict, settled, past the format information, and how far an attempt got. Before, they were written out in the three decoders, the shared passes and `RegionalRetry`, with the furthest-failure ranking copied twice.
+  - `SearchResult` holds which result a search reports, under the two rules of D2. `ReportRule.MainPath` is Standard QR's: at each level the main path's attempt, unless another settles. `ReportRule.Furthest` is Micro QR's and rMQR's: the failure that went furthest, the first on a tie.
+  - Where a search stops stays with the decoder, since the decoders stop at different results: Standard QR at a settled one, Micro QR's and rMQR's scans only at a read.
+  - D5 is now a change of one constant (`QRImageDecoder.Reporting`) plus its tests and migration note, and one detail. Standard QR's coverage re-read reports a re-read it skipped, because the grid samples what already failed, as `DataUncorrectable` with no version. A furthest rule would take that as the furthest failure, so D5 has to report the skip as not tried first.
+- Standard QR marks each level's main path as such. The 16 hand-written "if this settles, copy it out and return" blocks became `Main` and `Other` calls on one result per level.
+  - Two levels try an attempt ahead of their main path: the timing frame before the grids from the finders, and the mesh before the grid through the transform when nothing anchored the fourth corner. They pass it as `Other`, so it is reported only when it settles, as before.
+  - `DecodeOtherGrid` now adds its grid and its coverage re-read to the caller's result, rather than taking the caller's status in and handing one back.
+- Micro QR and rMQR pass one `ref SearchResult` where they passed a status and an info.
+  - Micro QR's seven pasted "as sampled, then transposed" blocks became one helper, `DecodeBothWays`, over a grid type that carries its quiet zone and corners: affine, projective, or read off the module boundaries.
+  - rMQR's two copies of the eight frames an axis pair makes became one function, `Frame`.
+- The mirror retry stays three strategies, each for its own reason, now stated in the code and the architecture record:
+  - Standard QR transposes in place, since its matrix level reads modules two at a time along the placement runs.
+  - Micro QR reads through a transposed view, since its matrix level reads every module through one.
+  - rMQR samples again with the axes swapped, since a transposed rMQR grid is no rMQR grid.
+- `QRImageDecoder.DecodeWithMirrorRetry`'s `transposed` flag now means that the transposed grid read. It is used only to place the corners of a read, so the only change is to what the flag says about a verdict, which no caller read.
+- `SearchResultTest` holds the two rules and the status classes, 28 cases a target. The rules:
+  - the main path over any other failure, before or after it;
+  - the first other failure when there is no main path;
+  - a settled result taken, and the first settled one kept;
+  - the furthest of every pair of statuses in both orders.
+- The test failed to compile first. One expectation of mine was wrong: `Furthest` keeps the decoder's own not-detected diagnostics over a not-detected attempt, as Micro QR's and rMQR's rankings did. The test now says so.
+- Reads unchanged:
+  - The sweep's result files for all three symbologies (102,240 images) are byte-identical to the commit before, status included.
+  - The corpus is identical in every column this library writes.
+- The full suite passes (29,569 tests, both targets), allocation guards included.
+- Decoders and shared code: 475 lines out and 276 in, against 137 for `SearchResult`.
+- Time, against a worktree of the commit before, in the fastest of alternating runs:
+  - Twelve runs over the 18 shapes: every shape within ±5 %.
+  - Their medians moved up to ±36 % in both directions, from load outside the process: the slow runs were slow on one shape and not on the others.
+  - Sixteen runs of the Standard QR shapes alone, where the medians had leaned 1 to 2 % slower: the fastest, the first quartile and the median all within ±1.2 %.
+  - Version 6 at 4 px/module: 9.94 → 10.00 µs, median.

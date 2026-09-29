@@ -73,7 +73,7 @@ internal static class ImageDecodePasses
         Span<int> histogram = stackalloc int[Binarizer.HistogramBins];
         Binarizer.FillHistogram(luminance, histogram);
         var status = pass.DecodeGlobal(luminance, histogram, width, height, destination, out charsWritten, out info, out var noFinder, out var positiveThreshold, out var positiveGrey);
-        if (IsTerminal(status))
+        if (AttemptStatus.IsTerminal(status))
             return status;
 
         // Reflectance reversal: the image inverted into a rented buffer, taken only on the failure path, so a read and a
@@ -86,16 +86,16 @@ internal static class ImageDecodePasses
             Binarizer.InvertHistogram(histogram);
 
             var invertedStatus = pass.DecodeGlobal(inverted, histogram, width, height, destination, out charsWritten, out var invertedInfo, out var invertedNoFinder, out var negativeThreshold, out var negativeGrey);
-            if (IsTerminal(invertedStatus))
+            if (AttemptStatus.IsTerminal(invertedStatus))
             {
                 info = invertedInfo;
                 return invertedStatus;
             }
 
             // A verdict skips the regional pass, which looks for a symbol the global threshold did not see
-            if (RegionalRetry.IsContentVerdict(status))
+            if (AttemptStatus.IsContentVerdict(status))
                 return status;
-            if (RegionalRetry.IsContentVerdict(invertedStatus))
+            if (AttemptStatus.IsContentVerdict(invertedStatus))
             {
                 info = invertedInfo;
                 return invertedStatus;
@@ -103,7 +103,7 @@ internal static class ImageDecodePasses
 
             // Uneven lighting: each polarity binarized again against each region's own level
             var regionalStatus = RegionalRetry.Decode<TPass, TInfo>(ref pass, luminance, inverted, histogram, width, height, destination, out charsWritten, out var regionalInfo);
-            if (IsTerminal(regionalStatus) || RegionalRetry.IsContentVerdict(regionalStatus))
+            if (AttemptStatus.IsSettled(regionalStatus))
             {
                 info = regionalInfo;
                 return regionalStatus;
@@ -115,7 +115,7 @@ internal static class ImageDecodePasses
                 if (noFinder && TryMidpoint(positiveThreshold, positiveGrey, out var positiveMidpoint))
                 {
                     var midpointStatus = pass.DecodeAtMidpoint(luminance, width, height, positiveMidpoint, positiveGrey, destination, out charsWritten, out var midpointInfo);
-                    if (IsTerminal(midpointStatus) || RegionalRetry.IsContentVerdict(midpointStatus))
+                    if (AttemptStatus.IsSettled(midpointStatus))
                     {
                         info = midpointInfo;
                         return midpointStatus;
@@ -126,7 +126,7 @@ internal static class ImageDecodePasses
                     // The regional pass wrote its binarization into this buffer
                     LuminanceInverter.Invert(luminance, inverted);
                     var midpointStatus = pass.DecodeAtMidpoint(inverted, width, height, negativeMidpoint, negativeGrey, destination, out charsWritten, out var midpointInfo);
-                    if (IsTerminal(midpointStatus) || RegionalRetry.IsContentVerdict(midpointStatus))
+                    if (AttemptStatus.IsSettled(midpointStatus))
                     {
                         info = midpointInfo;
                         return midpointStatus;
@@ -154,8 +154,4 @@ internal static class ImageDecodePasses
         midpoint = (byte)Math.Round(grey.Midpoint);
         return midpoint != threshold;
     }
-
-    /// <summary>A read, or a read too long for the destination, which only a larger destination changes.</summary>
-    private static bool IsTerminal(DecodeStatus status)
-        => status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall;
 }
