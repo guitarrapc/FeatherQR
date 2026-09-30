@@ -35,6 +35,7 @@
   <ItemGroup>
     <Compile Include="..\FeatherQR.Tests\Shared\NearestNeighbourRenderer.cs" Link="Renderers\NearestNeighbourRenderer.cs" />
     <Compile Include="..\FeatherQR.Tests\Shared\SupersampledRenderer.cs" Link="Renderers\SupersampledRenderer.cs" />
+    <Compile Include="..\FeatherQR.Tests\Shared\BowedRenderer.cs" Link="Renderers\BowedRenderer.cs" />
   </ItemGroup>
 
 </Project>

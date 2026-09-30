@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Internals.StandardQR;
 
@@ -13,8 +14,7 @@ internal static partial class QRImageDecoder
     /// </summary>
     /// <remarks>
     /// The multiply and the add stay separate instructions: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel.
-    /// The float-to-int conversion follows the reference's cast, which changed in .NET 9 from the raw x64 conversion to a saturating one, so the tier has a form for each and the parity test runs on both.
-    /// From .NET 9 the upper clamp is taken in float with the limit as the first operand of the minimum, so a NaN lane passes through, truncates to INT_MIN and is raised to 0 by the integer maximum, which is where the reference's saturating cast puts it; with the operands the other way round NaN becomes the limit and a different pixel.
+    /// The reference takes each pixel through <see cref="ImageDecoders.PixelIndex.Clamp"/>, the same on every runtime. Here the upper clamp is taken in float with the limit as the first operand of the minimum, so a NaN lane passes through, truncates to INT_MIN and is raised to 0 by the integer maximum, which is where the reference puts it; with the operands the other way round NaN becomes the limit and a different pixel.
     /// A gather was measured slower than eight scalar loads and would read past the last pixel.
     /// </remarks>
     internal static void SampleGridPiecewiseAvx2(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
@@ -47,13 +47,8 @@ internal static partial class QRImageDecoder
         }
 
         var zero = Vector256<int>.Zero;
-#if NET9_0_OR_GREATER
         var maxPx = Vector256.Create((float)(width - 1));
         var maxPy = Vector256.Create((float)(height - 1));
-#else
-        var maxPxInt = Vector256.Create(width - 1);
-        var maxPyInt = Vector256.Create(height - 1);
-#endif
         var widthVector = Vector256.Create(width);
         var limitVector = Vector128.Create(threshold);
         var one = Vector128.Create((byte)1);
@@ -97,16 +92,9 @@ internal static partial class QRImageDecoder
                 var x = startX + spanX * s;
                 var y = startY + spanY * s;
 
-#if NET9_0_OR_GREATER
                 // limit first: see remarks
                 var px = Vector256.Max(Avx.ConvertToVector256Int32WithTruncation(Avx.Min(maxPx, x)), zero);
                 var py = Vector256.Max(Avx.ConvertToVector256Int32WithTruncation(Avx.Min(maxPy, y)), zero);
-#else
-                // Before .NET 9 the reference's cast is the raw x64 conversion: INT_MIN for NaN and for anything out of
-                // range on either side, which the clamp takes to 0. The same conversion here, then the same clamp.
-                var px = Vector256.Max(Vector256.Min(Avx.ConvertToVector256Int32WithTruncation(x), maxPxInt), zero);
-                var py = Vector256.Max(Vector256.Min(Avx.ConvertToVector256Int32WithTruncation(y), maxPyInt), zero);
-#endif
                 var index = (py * widthVector + px).AsUInt32();
                 var low = index.GetLower();
                 var high = index.GetUpper();
@@ -128,16 +116,8 @@ internal static partial class QRImageDecoder
             {
                 var c = cellOf[u];
                 var s = fractionOf[u];
-                var px = (int)(cellStartX[c] + cellSpanX[c] * s);
-                var py = (int)(cellStartY[c] + cellSpanY[c] * s);
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                var px = PixelIndex.Clamp(cellStartX[c] + cellSpanX[c] * s, width);
+                var py = PixelIndex.Clamp(cellStartY[c] + cellSpanY[c] * s, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

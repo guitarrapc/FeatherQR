@@ -42,6 +42,14 @@ public class OtsuHistogramParityTest
     }
 
     [Test]
+    public async Task Vector128Tier_MatchesPerPixelCount()
+    {
+        if (!Vector128.IsHardwareAccelerated)
+            Skip.Test("Vector128 not accelerated on this machine");
+        await AssertMatchesPerPixelCount(Binarizer.FillHistogramVector128);
+    }
+
+    [Test]
     public async Task AdvSimdTier_MatchesPerPixelCount()
     {
         if (!AdvSimd.Arm64.IsSupported)

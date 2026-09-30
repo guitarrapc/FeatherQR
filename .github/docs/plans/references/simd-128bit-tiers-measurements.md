@@ -461,3 +461,65 @@ The expand itself, 16 bits to 16 module bytes, 4,096 times, µs:
 | `ModulePlacerExpandBits` | WebAssembly | A version 40 message, 2.85-3.76 µs of a 606-659 µs encode AOT (0.5 %), 4.27-7.19 of 1,354-2,049 interpreted (0.3 %) |
 | `StructuredAppendParity`, `StructuredAppendScanner` | x64, WebAssembly | Phase 1: parity 1.2 % of a 45,000-character set without AVX, 0.7-0.8 % with AVX2 (7.95 of 1,197 µs JIT, 11.7 of 1,511 NativeAOT `x86-64-v3`), 0.8 % on WebAssembly AOT; scanner 0.2 % or less, 0.1 % |
 
+## Phase 3: image decode
+
+Each shape runs in its own process, three runs, the new tier and the build before it alternating (end to end) or the dispatch and the scalar entry alternating (kernels). The range of the three; ratios are of their medians. Why one process a shape: below.
+
+### Kernels alone
+
+µs a call, the scalar entry → the dispatch (the new tier on these builds), ratio:
+
+| Kernel | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| Histogram, v40 at 3 px | 166-168 → 17.3-18.0 (0.11) | 181-183 → 15.9-16.0 (0.09) | 403-423 → 63.1-64.3 (0.16) |
+| Histogram, v40 at 3.4 px | 199-206 → 22.3-23.0 (0.11) | 222-225 → 19.8-20.4 (0.09) | 522-537 → 80.9-82.0 (0.16) |
+| Histogram, v40 at 4 px rotated | 326-330 → 152-161 (0.48) | 388-390 → 117-123 (0.31) | 1,025-1,046 → 505-522 (0.51) |
+| Histogram, v40 at 4 px soft | 172-181 → 171-171 (0.99) | 218-219 → 226-227 (1.04) | 836-845 → 835-842 (0.99) |
+| Histogram, 740 × 740 noise | 154-156 → 157-157 (1.01) | 203-224 → 210-218 (1.07) | 838-849 → 841-1,226 (0.99) |
+| Histogram, 740 × 740 gradient | 267-272 → 246-261 (0.93) | 252-271 → 282-297 (1.11) | 876-1,492 → 876-1,208 (0.99) |
+| Luminance, v40 at 3 px, opaque | 266-284 → 58.4-58.6 (0.21) | 315-341 → 205-213 (0.62) | 1,105-1,855 → 599-1,022 (0.54) |
+| Luminance, R17x139 at 8 px, opaque | 166-173 → 36.3-36.6 (0.22) | 205-224 → 129-133 (0.62) | 681-1,253 → 374-648 (0.58) |
+| Luminance, v40 at 3 px, straight alpha | 313-332 → 129-132 (0.41) | 370-404 → 369-371 (1.00) | 1,196-1,216 → 1,196-1,267 (1.01) |
+| Mesh sampler, v40 at 3 px (against the column table) | 57.3-58.0 → 28.9-29.2 (0.50) | 120-124 → 35.7-36.7 (0.30) | 637-785 → 203-321 (0.41) |
+
+The interpreted luminance and mesh rows spread widely between runs, as the machine's load changed during them.
+
+### End to end
+
+Against the build before phase 3 (HEAD `f3fb2f8`, the same harness), ratio of medians (base range → new range, µs):
+
+| Shape | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| image/qr-v40-3px | 0.57 (349-357 → 199-205) | 0.60 (411-421 → 245-249) | 0.79 (1,714-1,718 → 1,356-1,363) |
+| image/qr-v40-3.4px | 0.54 (398-408 → 215-220) | 0.56 (462-467 → 257-261) | 0.76 (1,890-1,943 → 1,429-1,468) |
+| image/qr-v40-4px-rot17 | 0.76 (516-547 → 387-405) | 0.59 (641-669 → 369-393) | 0.78 (2,393-2,449 → 1,905-1,968) |
+| image/qr-v40-4px-soft | 0.99 (376-390 → 376-383) | 1.02 (471-483 → 478-485) | 1.01 (2,251-2,261 → 2,258-2,278) |
+| image/qr-v25-4px-keystone15 | 0.75 (316-347 → 230-284) | 0.70 (373-394 → 267-272) | 0.90 (1,876-1,934 → 1,684-1,764) |
+| image/qr-v6-4px | 0.66 (23.0-23.3 → 15.3-15.4) | 0.67 (29.0-29.3 → 19.4-19.6) | 0.80 (166-173 → 131-136) |
+| image/qr-v25-4px-bowed | 0.84 (510-529 → 406-443) | 0.72 (559-575 → 399-425) | 0.92 (3,579-3,812 → 3,140-3,543) |
+| image/qr-v40-3.5px-bowed | 0.89 (1,000-1,013 → 899-906) | 0.76 (1,091-1,112 → 822-839) | 0.93 (7,148-7,637 → 6,524-6,672) |
+| image/none-noise | 1.00 (5,393-5,425 → 5,409-5,446) | 0.99 (6,299-6,400 → 6,323-6,363) | 1.00 (41,381-42,913 → 41,046-44,124) |
+| image/none-gradient | 1.01 (831-858 → 812-855) | 1.02 (1,086-1,133 → 1,114-1,170) | 1.00 (4,487-4,518 → 4,496-4,509) |
+| image/micro-m4-8px | 0.63 (9.96-10.2 → 6.04-6.36) | 0.65 (11.8-12.0 → 7.58-7.72) | 0.76 (55.4-56.2 → 42.4-50.4) |
+| image/rmqr-r7x43-8px | 0.64 (11.2-11.4 → 7.16-7.34) | 0.60 (13.4-13.6 → 8.06-8.19) | 0.74 (71.7-72.8 → 53.0-53.7) |
+| image/rmqr-r17x139-8px | 0.56 (59.8-60.4 → 33.6-34.3) | 0.53 (65.1-67.4 → 34.9-35.6) | 0.65 (326-346 → 212-217) |
+| image/rmqr-r17x139-4px-keystone15 | 0.96 (178-194 → 167-177) | 0.78 (254-265 → 206-208) | 0.91 (2,164-2,221 → 1,926-2,089) |
+| bitmap/qr-v40-3px | 0.42 (620-629 → 246-278) | 0.61 (748-754 → 455-459) | 0.70 (2,775-2,790 → 1,880-2,030) |
+| bitmap/rmqr-r17x139-8px | 0.33 (220-229 → 66.6-71.8) | 0.61 (272-279 → 165-166) | 0.56 (1,023-1,065 → 593-600) |
+
+The `image/` shapes hand over luminance, so they move with the histogram and, where the mesh reads (the bowed shapes), with the mesh sampler; the `bitmap/` shapes add the conversion. The two bowed shapes are new: a symbol bent off the plane, read only through the mesh after the anchored transform fails. Before the port the mesh was 9.8 % (version 25) and 11.4 % (version 40) of those decodes on WebAssembly AOT (V8 sampler, self time).
+
+### One process a shape
+
+The first whole-phase run timed all shapes in one process per build, three alternations, divided by two unchanged kernels from the same run. Interpreted, those kernels read about 1.8x slower in every base run than in every new run (`kernel/LocalBinarizer` 2,699-2,729 against 1,488-1,509 µs), and alone in a process both builds gave 1,317-1,338. The base build's image shapes run more scalar code before them, so what a shape costs interpreted depends on what the process ran first; the jiterpreter's trace budget is the likely cause, not confirmed. The same run read `image/qr-v40-3px` base at 2,860-2,894 µs, against 1,714-1,718 alone, and the soft shape 1.34 new/base, against 1.01 alone. Every number above is one shape to a process.
+
+### Measured and refused
+
+| What | Build | Measured |
+|---|---|---|
+| Histogram, the dense blocks' group walk in its own method, called per dense block | WebAssembly AOT, NativeAOT default | Noise 229-265 → 308-345 µs and 157-159 → 194-197 |
+| Histogram, only the untested stretch in its own method | WebAssembly AOT, NativeAOT default | Tier/scalar per process, five alternations: soft 1.02 → 1.11 and 1.02 → 1.11, noise 1.02 → 1.13 on default NativeAOT; the gradient 0.90 → 0.69 there |
+| Luminance, the vector composite for partially transparent blocks | WebAssembly | 1.5x slower than the per-pixel formula, AOT and interpreted; those blocks take the formula there, and a row in the composite mode the scalar loop |
+
+The two histogram variants were measured while another session's test runs loaded the machine (60 % when checked). Timed in one process, every shape ran slower than alone, the scalar gradient 325-852 µs against 252-271, so only the differences that held across the alternations are listed.
+

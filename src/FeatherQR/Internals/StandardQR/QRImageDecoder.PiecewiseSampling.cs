@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using FeatherQR.Internals.ImageDecoders;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
@@ -39,6 +40,11 @@ internal static partial class QRImageDecoder
             SampleGridPiecewiseAdvSimd(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
             return;
         }
+        if (Vector128.IsHardwareAccelerated)
+        {
+            SampleGridPiecewiseVector128(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
+            return;
+        }
 #endif
         SampleGridPiecewiseColumnTable(luminance, width, height, threshold, gridCoords, nodeXs, nodeYs, meshSize, dimension, modules);
     }
@@ -70,6 +76,8 @@ internal static partial class QRImageDecoder
         ref var rowX0 = ref MemoryMarshal.GetReference(rowXs);
         ref var rowY0 = ref MemoryMarshal.GetReference(rowYs);
         int limit = threshold;
+        float farX = width;
+        float farY = height;
 
         var cellJ = 0;
         for (var v = 0; v < dimension; v++)
@@ -86,16 +94,9 @@ internal static partial class QRImageDecoder
                 var x = x0 + (Unsafe.Add(ref rowX0, cellI + 1) - x0) * s;
                 var y = y0 + (Unsafe.Add(ref rowY0, cellI + 1) - y0) * s;
 
-                var px = (int)x;
-                var py = (int)y;
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                // The same pixel on every runtime, whatever its cast makes of NaN and of coordinates past the int range
+                var px = PixelIndex.Clamp(x, farX, width);
+                var py = PixelIndex.Clamp(y, farY, height);
 
                 Unsafe.Add(ref o, u) = Unsafe.Add(ref lum, py * width + px) < limit ? (byte)1 : (byte)0;
             }

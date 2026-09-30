@@ -1408,16 +1408,9 @@ internal static partial class QRImageDecoder
                 var x = rowXs[cellI] + (rowXs[cellI + 1] - rowXs[cellI]) * s;
                 var y = rowYs[cellI] + (rowYs[cellI + 1] - rowYs[cellI]) * s;
 
-                var px = (int)x;
-                var py = (int)y;
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                // The same pixel on every runtime, whatever its cast makes of NaN and of coordinates past the int range
+                var px = PixelIndex.Clamp(x, width);
+                var py = PixelIndex.Clamp(y, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

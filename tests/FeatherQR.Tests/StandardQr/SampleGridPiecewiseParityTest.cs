@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The piecewise mesh sampler's fast tiers (<see cref="QRImageDecoder.SampleGridPiecewiseColumnTable"/>,
-/// the portable one, <c>SampleGridPiecewiseAvx2</c> and <c>SampleGridPiecewiseAdvSimd</c>) and the dispatcher
+/// the portable one, <c>SampleGridPiecewiseAvx2</c>, <c>SampleGridPiecewiseAdvSimd</c> and <c>SampleGridPiecewiseVector128</c>) and the dispatcher
 /// (<see cref="QRImageDecoder.SampleGridPiecewise"/>) against the per-module loop
 /// (<see cref="QRImageDecoder.SampleGridPiecewiseScalar"/>), module for module.
 /// </summary>
@@ -40,6 +40,8 @@ public class SampleGridPiecewiseParityTest
             yield return ("AVX2", QRImageDecoder.SampleGridPiecewiseAvx2);
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             yield return ("AdvSimd", QRImageDecoder.SampleGridPiecewiseAdvSimd);
+        if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+            yield return ("Vector128", QRImageDecoder.SampleGridPiecewiseVector128);
 #endif
     }
 
@@ -169,12 +171,11 @@ public class SampleGridPiecewiseParityTest
     }
 
     /// <summary>
-    /// What the reference's cast makes of these depends on the runtime: from .NET 9 it saturates and
-    /// maps NaN to 0, so +∞ is the far edge of the image; on net8.0 it is the raw x64 conversion,
-    /// INT_MIN for every one of them, which the clamp takes to 0. A raw vector conversion gives the
-    /// net8.0 answer on both, so the vector tier has a form per runtime, and on the saturating side
-    /// which operand of the float minimum holds the limit decides where NaN lands.
-    /// Both target frameworks have to run this: the first port passed on net10.0 and failed on net8.0.
+    /// The reference takes each coordinate through <c>PixelIndex.Clamp</c>, so +∞ and a magnitude past the int
+    /// range are the far edge of the image and NaN is 0 on every runtime, whatever its cast makes of them (the
+    /// raw x64 conversion on net8.0 and the WebAssembly interpreter give INT_MIN for all of them). A raw vector
+    /// conversion gives INT_MIN too, so which operand of the float minimum holds the limit decides where NaN lands.
+    /// Both target frameworks run this: a first port passed on net10.0 and failed on net8.0.
     /// </summary>
     [Test]
     [Arguments(float.NaN)]

@@ -14,7 +14,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// </para>
 /// <para>
 /// Luminance is ITU-R BT.601, (77 R + 150 G + 29 B) / 256. Transparent pixels are composited against white before weighting: QR quiet zones are white by definition, and transparent-background PNGs are a common input.
-/// The kernels run in three tiers (AVX2, NEON, portable scalar) that produce identical bytes.
+/// The kernels run in four tiers (AVX2, NEON, 128-bit, portable scalar) that produce identical bytes.
 /// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
@@ -78,8 +78,8 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Pixel buffer to BT.601 luminance.
-    /// Three tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.X86.cs), a NEON kernel at 16 pixels per iteration (LuminanceConverter.Arm64.cs), and this per-pixel loop everywhere else.
-    /// All three produce identical bytes; see LuminanceConverterParityTest.
+    /// Four tiers: an AVX2 kernel at 32 pixels per iteration (LuminanceConverter.X86.cs), a NEON dot-product kernel at 16 (LuminanceConverter.Arm64.cs), a 128-bit kernel at 16 for every other vector target (LuminanceConverter.Simd.cs), and this per-pixel loop for netstandard and rows under 16 pixels.
+    /// All four produce identical bytes; see LuminanceConverterParityTest.
     /// </summary>
     /// <remarks>
     /// The extents are checked once here, not per row.
@@ -101,10 +101,10 @@ internal static partial class LuminanceConverter
                 return;
             }
 
-            // The NEON kernel covers a whole row from 16-pixel blocks plus one
-            // overlapping final block, so it has no scalar remainder to fall back on;
-            // IsVectorTierTaken is what keeps narrower rows off it.
-            ConvertRgbaAdvSimd(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
+            // The NEON and 128-bit kernels cover a whole row from 16-pixel blocks plus one
+            // overlapping final block, so they have no scalar remainder to fall back on;
+            // IsVectorTierTaken is what keeps narrower rows off them.
+            ConvertRgbaBlocks16(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
             return;
         }
 #endif
@@ -112,6 +112,17 @@ internal static partial class LuminanceConverter
     }
 
 #if NET8_0_OR_GREATER
+    // A method of its own so ConvertRgba keeps the size at which the JIT inlines it into its callers.
+    private static void ConvertRgbaBlocks16(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
+    {
+        if (IsAdvSimdTierAvailable)
+        {
+            ConvertRgbaAdvSimd(pixels, luminance, width, height, rowBytes, bgra, hasAlpha, premultiplied);
+            return;
+        }
+        ConvertRgbaVector128(pixels, luminance, width, height, rowBytes, bgra, hasAlpha, premultiplied);
+    }
+
     /// <summary>BGRA (2,1,0) or RGBA / RGB888x (0,1,2); nothing else reaches a vector tier.</summary>
     private static bool IsVectorLayout(int redOffset, int greenOffset, int blueOffset)
         => greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2);
@@ -162,20 +173,20 @@ internal static partial class LuminanceConverter
     {
         /// <summary>The portable per-layout loop.</summary>
         Scalar,
-        /// <summary>The AVX2 or NEON kernel, whichever this machine runs.</summary>
+        /// <summary>The AVX2, NEON or 128-bit kernel, whichever this machine runs.</summary>
         Vector,
     }
 
     /// <summary>
     /// Whether a vector kernel actually converts a row of this width and layout here.
-    /// A parity test must consult this before pinning <see cref="ConvertTier.Vector"/>: the NEON tier declines rows narrower than one block, so on ARM64 the small widths would otherwise compare the scalar tier against itself and pass without running the kernel they name.
+    /// A parity test must consult this before pinning <see cref="ConvertTier.Vector"/>: the NEON and 128-bit tiers decline rows narrower than one block, so without AVX2 the small widths would otherwise compare the scalar tier against itself and pass without running the kernel they name.
     /// </summary>
     internal static bool IsVectorTierTaken(int width, int redOffset, int greenOffset, int blueOffset)
     {
 #if NET8_0_OR_GREATER
         if (!IsVectorTierTakenForLayout(redOffset, greenOffset, blueOffset))
             return false;
-        return IsAvx2TierSupported || (IsAdvSimdTierAvailable && width >= AdvSimdBlockPixels);
+        return IsAvx2TierSupported || (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated && width >= Vector128BlockPixels);
 #else
         return false;
 #endif
@@ -213,7 +224,7 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// The portable tier: every target without a vector kernel (netstandard, x86 without AVX2, ARM64 without the dot-product extension) and every row too narrow for one, so it is shipped code rather than only a reference.
+    /// The portable tier: every target without a vector kernel (netstandard, or a runtime without SIMD acceleration) and every row too narrow for one, so it is shipped code rather than only a reference.
     /// </summary>
     /// <remarks>
     /// Three things earn their keep here, each measured separately on Apple M2 against the straightforward per-pixel loop this replaces (1.3-1.8x overall):

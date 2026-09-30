@@ -36,6 +36,9 @@ internal static class SimdParity
         failures += Report("RmQRModulePlacer", RmQRPlacerMismatches);
         failures += Report("ModuleBitPacker", BitPackerMismatches);
         failures += Report("TextAnalyzer", TextAnalyzerMismatches);
+        failures += Report("Binarizer histogram", HistogramMismatches);
+        failures += Report("LuminanceConverter", LuminanceMismatches);
+        failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
         return failures == 0 ? 0 : 1;
     }
 
@@ -487,6 +490,184 @@ internal static class SimdParity
             }
         }
         return mismatches;
+    }
+
+    /// <summary>
+    /// The histogram through the dispatch against a per-pixel count: noise, two-valued runs of every length the blocks meet (a rendered
+    /// symbol), runs with a grey pixel in them, a gradient, and lengths around the 32-pixel block and the untested stretch.
+    /// </summary>
+    private static List<string> HistogramMismatches()
+    {
+        var mismatches = new List<string>();
+        var random = new Random(23);
+        var histogram = new int[Binarizer.HistogramBins];
+        foreach (var length in new[] { 0, 1, 31, 32, 33, 63, 64, 65, 1023, 1024, 1056, 4097, 70_000 })
+        {
+            for (var kind = 0; kind < 4; kind++)
+            {
+                var pixels = new byte[length];
+                for (var i = 0; i < length;)
+                {
+                    var run = kind == 0 ? 1 : random.Next(1, 40);
+                    var value = kind switch
+                    {
+                        0 => (byte)random.Next(256),
+                        1 => random.Next(2) == 0 ? (byte)0 : (byte)255,
+                        2 => random.Next(9) == 0 ? (byte)random.Next(256) : random.Next(2) == 0 ? (byte)0 : (byte)255,
+                        _ => (byte)(i * 256 / Math.Max(length, 1)),
+                    };
+                    for (var k = 0; k < run && i < length; k++, i++)
+                        pixels[i] = value;
+                }
+                var expected = new int[Binarizer.HistogramBins];
+                foreach (var value in pixels)
+                    expected[value]++;
+                Binarizer.FillHistogram(pixels, histogram);
+                if (!histogram.AsSpan().SequenceEqual(expected))
+                    mismatches.Add($"length {length}, kind {kind}");
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// Luminance through the dispatch against the scalar tier, each layout straight and premultiplied: every channel value against every
+    /// alpha (a premultiplied channel above its alpha wraps in the scalar byte cast), then random scenes whose rows take the optimistic,
+    /// classified and composite-only modes, across the 16-pixel block and its overlapping tail, packed and padded.
+    /// </summary>
+    private static List<string> LuminanceMismatches()
+    {
+        var mismatches = new List<string>();
+        (int R, int G, int B, int A, PixelLayout Layout)[] layouts = [(2, 1, 0, 3, PixelLayout.Bgra8888), (0, 1, 2, 3, PixelLayout.Rgba8888), (0, 1, 2, -1, PixelLayout.Rgb888x)];
+        void Compare(byte[] pixels, int width, int height, int rowBytes, (int R, int G, int B, int A, PixelLayout Layout) layout, bool premultiplied, string label)
+        {
+            var expected = new byte[width * height];
+            var actual = new byte[width * height];
+            LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, layout.R, layout.G, layout.B, layout.A, premultiplied, LuminanceConverter.ConvertTier.Scalar);
+            LuminanceConverter.Convert(pixels, width, height, rowBytes, layout.Layout, premultiplied, actual);
+            if (!expected.AsSpan().SequenceEqual(actual))
+                mismatches.Add($"{label}, {layout.Layout}, premultiplied {premultiplied}");
+        }
+
+        foreach (var layout in layouts)
+        {
+            var sweep = new byte[256 * 256 * 4];
+            for (var a = 0; a < 256; a++)
+            {
+                for (var c = 0; c < 256; c++)
+                {
+                    var p = (a * 256 + c) * 4;
+                    sweep[p + layout.R] = (byte)c;
+                    sweep[p + layout.G] = (byte)(255 - c);
+                    sweep[p + layout.B] = (byte)(c ^ 0x55);
+                    sweep[p + (layout.A < 0 ? 3 : layout.A)] = (byte)a;
+                }
+            }
+            foreach (var premultiplied in layout.A < 0 ? new[] { false } : [false, true])
+                Compare(sweep, 256, 256, 1024, layout, premultiplied, "sweep");
+        }
+
+        var random = new Random(29);
+        foreach (var layout in layouts)
+        {
+            foreach (var width in new[] { 15, 16, 17, 31, 32, 33, 48, 100, 139 })
+            {
+                foreach (var pad in new[] { 0, 12 })
+                {
+                    const int Height = 9;
+                    var rowBytes = width * 4 + pad;
+                    var pixels = new byte[rowBytes * Height];
+                    random.NextBytes(pixels);
+                    for (var y = 0; y < Height; y++)
+                    {
+                        for (var x = 0; x < width; x++)
+                        {
+                            var alpha = y switch
+                            {
+                                < 2 or 6 => 255,
+                                2 or 3 or 7 => random.Next(4) == 0 ? 0 : 255,
+                                4 or 8 => random.Next(4) == 0 ? random.Next(256) : 255,
+                                _ => random.Next(2) * 255,
+                            };
+                            pixels[y * rowBytes + x * 4 + (layout.A < 0 ? 3 : layout.A)] = (byte)alpha;
+                        }
+                    }
+                    foreach (var premultiplied in layout.A < 0 ? new[] { false } : [false, true])
+                        Compare(pixels, width, Height, rowBytes, layout, premultiplied, $"width {width}, pad {pad}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The mesh sampler through the dispatch against the per-module reference: Annex E lattices upright and bent by rotation and keystone,
+    /// symbols pushed past an image edge, and nodes no detector would produce (NaN, infinities, magnitudes past the int range), where each
+    /// runtime's cast differs and the reference's clamp does not.
+    /// </summary>
+    private static List<string> PiecewiseMismatches()
+    {
+        var mismatches = new List<string>();
+        float[] poisons = [float.NaN, float.PositiveInfinity, float.NegativeInfinity, 1e12f, -1e12f, 2147483648f, -2147483904f];
+        for (var version = 7; version <= 40; version += 3)
+        {
+            foreach (var (bent, shift) in new[] { (false, 0f), (true, 0f), (true, 6f), (true, -6f) })
+            {
+                for (var poison = -1; poison < poisons.Length; poison++)
+                {
+                    var (luminance, width, height, gridCoords, nodeXs, nodeYs) = MeshScene(version, bent, shift, version * 13 + poison);
+                    var meshSize = gridCoords.Length;
+                    if (poison >= 0)
+                        (poison % 2 == 0 ? nodeXs : nodeYs)[(version + poison) % (meshSize * meshSize)] = poisons[poison];
+                    var dimension = 17 + 4 * version;
+                    var expected = new byte[dimension * dimension];
+                    var actual = new byte[dimension * dimension];
+                    QRImageDecoder.SampleGridPiecewiseScalar(luminance, width, height, 128, gridCoords, nodeXs, nodeYs, meshSize, dimension, expected);
+                    QRImageDecoder.SampleGridPiecewise(luminance, width, height, 128, gridCoords, nodeXs, nodeYs, meshSize, dimension, actual);
+                    if (!expected.AsSpan().SequenceEqual(actual))
+                        mismatches.Add($"version {version}, bent {bent}, shift {shift}, poison {(poison < 0 ? "none" : poisons[poison].ToString())}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>A version's alignment lattice as mesh nodes at 3 px a module, rotated 17 degrees with a keystone when bent, over random blocks.</summary>
+    private static (byte[] Luminance, int Width, int Height, float[] GridCoords, float[] NodeXs, float[] NodeYs) MeshScene(int version, bool bent, float shiftModules, int seed)
+    {
+        const float PixelsPerModule = 3f;
+        var dimension = 17 + 4 * version;
+        var gridCoords = new List<float>();
+        foreach (var value in QRCodeConstants.AlignmentPatternBaseValues.Slice((version - 1) * 7, 7))
+        {
+            if (value != 0)
+                gridCoords.Add(value + 0.5f);
+        }
+        var meshSize = gridCoords.Count;
+        var random = new Random(seed);
+        var angle = bent ? 17.0 * Math.PI / 180.0 : 0.0;
+        var (cos, sin) = (Math.Cos(angle), Math.Sin(angle));
+        var keystone = bent ? 0.00035 : 0.0;
+        var side = (int)Math.Ceiling((dimension + 8) * PixelsPerModule * (Math.Abs(cos) + Math.Abs(sin)));
+        var centre = side / 2.0 - shiftModules * PixelsPerModule;
+        var nodeXs = new float[meshSize * meshSize];
+        var nodeYs = new float[meshSize * meshSize];
+        for (var j = 0; j < meshSize; j++)
+        {
+            for (var i = 0; i < meshSize; i++)
+            {
+                var gx = (gridCoords[i] - dimension / 2.0) * PixelsPerModule;
+                var gy = (gridCoords[j] - dimension / 2.0) * PixelsPerModule;
+                var w = 1.0 + keystone * gx + keystone * 0.5 * gy;
+                nodeXs[j * meshSize + i] = (float)(centre + (gx * cos - gy * sin) / w + (random.NextDouble() - 0.5) * 0.6);
+                nodeYs[j * meshSize + i] = (float)(centre + (gx * sin + gy * cos) / w + (random.NextDouble() - 0.5) * 0.6);
+            }
+        }
+        // Not square, so a clamp against the wrong side's limit shows
+        var height = side + 37;
+        var luminance = new byte[side * height];
+        random.NextBytes(luminance);
+        return (luminance, side, height, gridCoords.ToArray(), nodeXs, nodeYs);
     }
 
     /// <summary>A 3 x 3 box blur, edges clamped: grey pixels for the second look.</summary>

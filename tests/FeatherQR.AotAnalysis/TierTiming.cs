@@ -178,6 +178,9 @@ internal static class TierTiming
         new("image/qr-v40-4px-soft", () => QRImage(Large(), image => Soften(Crisp(image, 4f)))),
         new("image/qr-v25-4px-keystone15", () => QRImage(Medium(), image => Supersampled(image, 4f, 23f, 0.15f))),
         new("image/qr-v6-4px", () => QRImage(Small(), image => Crisp(image, 4f))),
+        // Bowed off the plane: read only through the piecewise mesh, after the anchored transform fails
+        new("image/qr-v25-4px-bowed", () => QRImage(MeshSymbol(25), image => Bowed(image, 4f, 20f, 2f))),
+        new("image/qr-v40-3.5px-bowed", () => QRImage(MeshSymbol(40), image => Bowed(image, 3.5f, 200f, 1.5f))),
         new("image/none-noise", () => NoSymbol(740, noise: true)),
         new("image/none-gradient", () => NoSymbol(740, noise: false)),
         new("image/micro-m4-8px", () => MicroImage()),
@@ -194,8 +197,26 @@ internal static class TierTiming
         new("kernel/Binarizer-v40-4px-rot17", () => Histogram(Supersampled(Large(), 4f, 17f, 0f))),
         new("kernel/Binarizer-v40-4px-soft", () => Histogram(Soften(Crisp(Large(), 4f)))),
         new("kernel/Binarizer-noise", () => Histogram(Noise(740))),
+        new("kernel/Binarizer-gradient", () => Histogram(Gradient(740))),
+        // The 128-bit tier and the scalar one entered directly, beside the dispatch above
+        new("kernel/Binarizer-v40-3px-v128", () => Histogram(Crisp(Large(), 3f), Binarizer.FillHistogramVector128)),
+        new("kernel/Binarizer-v40-3px-scalar", () => Histogram(Crisp(Large(), 3f), Binarizer.FillHistogramScalar)),
+        new("kernel/Binarizer-v40-3.4px-v128", () => Histogram(Crisp(Large(), 3.4f), Binarizer.FillHistogramVector128)),
+        new("kernel/Binarizer-v40-3.4px-scalar", () => Histogram(Crisp(Large(), 3.4f), Binarizer.FillHistogramScalar)),
+        new("kernel/Binarizer-v40-4px-rot17-v128", () => Histogram(Supersampled(Large(), 4f, 17f, 0f), Binarizer.FillHistogramVector128)),
+        new("kernel/Binarizer-v40-4px-rot17-scalar", () => Histogram(Supersampled(Large(), 4f, 17f, 0f), Binarizer.FillHistogramScalar)),
+        new("kernel/Binarizer-v40-4px-soft-v128", () => Histogram(Soften(Crisp(Large(), 4f)), Binarizer.FillHistogramVector128)),
+        new("kernel/Binarizer-v40-4px-soft-scalar", () => Histogram(Soften(Crisp(Large(), 4f)), Binarizer.FillHistogramScalar)),
+        new("kernel/Binarizer-noise-v128", () => Histogram(Noise(740), Binarizer.FillHistogramVector128)),
+        new("kernel/Binarizer-noise-scalar", () => Histogram(Noise(740), Binarizer.FillHistogramScalar)),
+        new("kernel/Binarizer-gradient-v128", () => Histogram(Gradient(740), Binarizer.FillHistogramVector128)),
+        new("kernel/Binarizer-gradient-scalar", () => Histogram(Gradient(740), Binarizer.FillHistogramScalar)),
         new("kernel/LuminanceConverter-v40-3px", () => Converter(Crisp(Large(), 3f))),
         new("kernel/LuminanceConverter-rmqr-r17x139-8px", () => Converter(RmQRCrisp(RmQRLarge()))),
+        new("kernel/LuminanceConverter-v40-3px-scalar", () => Converter(Crisp(Large(), 3f), scalar: true)),
+        new("kernel/LuminanceConverter-rmqr-r17x139-8px-scalar", () => Converter(RmQRCrisp(RmQRLarge()), scalar: true)),
+        new("kernel/LuminanceConverter-v40-3px-alpha", () => Converter(Crisp(Large(), 3f), straightAlpha: true)),
+        new("kernel/LuminanceConverter-v40-3px-alpha-scalar", () => Converter(Crisp(Large(), 3f), scalar: true, straightAlpha: true)),
         new("kernel/MaskCode-v1", () => MaskScoring(1, score: true)),
         new("kernel/MaskCode-v1-copy", () => MaskScoring(1, score: false)),
         new("kernel/MaskCode-v6", () => MaskScoring(6, score: true)),
@@ -220,6 +241,8 @@ internal static class TierTiming
         new("kernel/AlignmentRowMask-scalar", () => Alignment(scalar: true)),
         new("kernel/QRSampleGrid", () => QRSample(scalar: false)),
         new("kernel/QRSampleGrid-scalar", () => QRSample(scalar: true)),
+        new("kernel/QRSampleGridPiecewise", () => QRSamplePiecewise(scalar: false)),
+        new("kernel/QRSampleGridPiecewise-scalar", () => QRSamplePiecewise(scalar: true)),
         new("kernel/MicroQRSampleGrid", () => MicroSample(scalar: false)),
         new("kernel/MicroQRSampleGrid-scalar", () => MicroSample(scalar: true)),
         new("kernel/RmQRSampleGrid", () => RmQRSample(scalar: false)),
@@ -441,6 +464,15 @@ internal static class TierTiming
         return new(soft, width, height);
     }
 
+    private static QRCodeData MeshSymbol(int version)
+        => QRCodeGenerator.Create($"FQR MESH ORDER v{version} 0123456789", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
+
+    private static Image Bowed(QRCodeData data, float pixelsPerModule, float degrees, float bowModules)
+    {
+        var (luminance, side) = BowedRenderer.Render(data, pixelsPerModule, degrees, bowModules);
+        return new(luminance, side, side);
+    }
+
     private static Func<int> QRImage(QRCodeData data, Func<QRCodeData, Image> render)
     {
         var image = render(data);
@@ -518,14 +550,30 @@ internal static class TierTiming
 
     // ---- Kernels alone ----
 
-    private static Func<int> Histogram(Image image)
+    private static Func<int> Histogram(Image image) => Histogram(image, Binarizer.FillHistogram);
+
+    private static Func<int> Histogram(Image image, HistogramFill fill)
     {
         var histogram = new int[256];
         return () =>
         {
-            Binarizer.FillHistogram(image.Luminance, histogram);
+            fill(image.Luminance, histogram);
             return histogram[0];
         };
+    }
+
+    private delegate void HistogramFill(ReadOnlySpan<byte> luminance, Span<int> histogram);
+
+    /// <summary>The no-symbol gradient: neighbours share a bin, so a per-pixel count waits on the one before.</summary>
+    private static Image Gradient(int side)
+    {
+        var luminance = new byte[side * side];
+        for (var y = 0; y < side; y++)
+        {
+            for (var x = 0; x < side; x++)
+                luminance[y * side + x] = (byte)((x + y) * 255 / (2 * side - 2));
+        }
+        return new(luminance, side, side);
     }
 
     /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them; the copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone).</summary>
@@ -556,18 +604,31 @@ internal static class TierTiming
 
     private static Func<int> Parity(string text, EciMode charset) => () => StructuredAppendPlanner.Parity(text, charset, utf8Bom: false);
 
-    private static Func<int> Converter(Image image)
+    /// <summary>
+    /// The image as opaque premultiplied RGBA, as a rendered bitmap arrives; with <paramref name="straightAlpha"/>, straight alpha with the light
+    /// pixels of every eighth row half transparent, so the composite runs.
+    /// </summary>
+    private static Func<int> Converter(Image image, bool scalar = false, bool straightAlpha = false)
     {
         var rgba = new byte[image.Luminance.Length * 4];
         for (var i = 0; i < image.Luminance.Length; i++)
         {
             rgba[4 * i] = rgba[4 * i + 1] = rgba[4 * i + 2] = image.Luminance[i];
-            rgba[4 * i + 3] = 255;
+            rgba[4 * i + 3] = straightAlpha && i / image.Width % 8 == 0 && image.Luminance[i] > 128 ? (byte)128 : (byte)255;
         }
         var luminance = new byte[image.Luminance.Length];
+        var (width, height) = (image.Width, image.Height);
+        if (scalar)
+        {
+            return () =>
+            {
+                LuminanceConverter.ConvertRgbaForTest(rgba, luminance, width, height, width * 4, 0, 1, 2, 3, !straightAlpha, LuminanceConverter.ConvertTier.Scalar);
+                return luminance[1];
+            };
+        }
         return () =>
         {
-            LuminanceConverter.Convert(rgba, image.Width, image.Height, image.Width * 4, PixelLayout.Rgba8888, premultipliedAlpha: true, luminance);
+            LuminanceConverter.Convert(rgba, width, height, width * 4, PixelLayout.Rgba8888, premultipliedAlpha: !straightAlpha, luminance);
             return luminance[1];
         };
     }
@@ -650,6 +711,42 @@ internal static class TierTiming
         : () =>
         {
             QRImageDecoder.SampleGrid(image.Luminance, image.Width, image.Height, 128, transform, 177, modules);
+            return modules[200];
+        };
+    }
+
+    /// <summary>The version 40 mesh sampler at 3 px a module: the dispatch, or the column-table path a build without a vector tier takes.</summary>
+    private static Func<int> QRSamplePiecewise(bool scalar)
+    {
+        var image = Crisp(Large(), 3f);
+        var gridCoords = new List<float>();
+        foreach (var value in QRCodeConstants.AlignmentPatternBaseValues.Slice(39 * 7, 7))
+        {
+            if (value != 0)
+                gridCoords.Add(value + 0.5f);
+        }
+        var meshSize = gridCoords.Count;
+        var nodeXs = new float[meshSize * meshSize];
+        var nodeYs = new float[meshSize * meshSize];
+        for (var j = 0; j < meshSize; j++)
+        {
+            for (var i = 0; i < meshSize; i++)
+            {
+                nodeXs[j * meshSize + i] = 3f * gridCoords[i] + 12f;
+                nodeYs[j * meshSize + i] = 3f * gridCoords[j] + 12f;
+            }
+        }
+        var grid = gridCoords.ToArray();
+        var modules = new byte[177 * 177];
+        return scalar
+            ? () =>
+            {
+                QRImageDecoder.SampleGridPiecewiseColumnTable(image.Luminance, image.Width, image.Height, 128, grid, nodeXs, nodeYs, meshSize, 177, modules);
+                return modules[200];
+            }
+        : () =>
+        {
+            QRImageDecoder.SampleGridPiecewise(image.Luminance, image.Width, image.Height, 128, grid, nodeXs, nodeYs, meshSize, 177, modules);
             return modules[200];
         };
     }

@@ -196,12 +196,12 @@ internal static class SimdTiers
         new("EccBinaryEncoder", (SimdTier.GfniV256, Isa.GfniV256 && Isa.Avx2), (SimdTier.Gfni, Isa.Gfni), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // EccBinaryDecoder.ComputeSyndromes: the syndrome pass
         new("EccBinaryDecoder", (SimdTier.GfniV256, Isa.GfniV256), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // LuminanceConverter.ConvertRgba: RGBA / BGRA pixels to 8-bit luminance
-        new("LuminanceConverter", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimdDp, Isa.AdvSimdDp)),
+        // LuminanceConverter.ConvertRgba: RGBA / BGRA pixels to 8-bit luminance; the 128-bit tier's 16-bit dot product and narrowing are SSE2 on x64 and PackedSimd on WebAssembly
+        new("LuminanceConverter", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimdDp, Isa.AdvSimdDp), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // LuminanceInverter: the negative image for the light-on-dark pass
         new("LuminanceInverter", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
         // Binarizer.FillHistogram: the luminance histogram behind the global threshold
-        new("Binarizer", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        new("Binarizer", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // LocalBinarizer: block statistics, block thresholds and the dark count of the regional retry
         new("LocalBinarizer", (SimdTier.Vector128, Isa.Vector128)),
         // FinderPatternFinder.ScanRowMask: a row's dark bitmask for the finder search's mask walk
@@ -219,8 +219,8 @@ internal static class SimdTiers
         new("AlignmentRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // QRImageDecoder.SampleGrid: the four-point sampler; the 128-bit tier also takes grids too small for the 256-bit one, and converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
         new("QRSampleGrid", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler
-        new("QRSampleGridPiecewise", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler; the 128-bit tier converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
+        new("QRSampleGridPiecewise", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // StructuredAppendPlanner.TryNarrowWithLanes / WalkLanes: the chunk-budget walks over eight budgets at once
         new("StructuredAppendLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // StructuredAppendPlanner.Parity: the XOR of the message's encoded bytes
@@ -280,9 +280,10 @@ internal static class SimdTiers
         new("ModeSegmenterLanes",      [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
         new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [Scalar]),
         new("EccBinaryDecoder",        [Scalar],        [GfniV256, Scalar],   [AdvSimd],            [Scalar]),
-        new("LuminanceConverter",      [Scalar],        [Avx2],               [AdvSimdDp, Scalar],  [Scalar]),
+        new("LuminanceConverter",      [Sse2],          [Avx2],               [AdvSimdDp, Vector128], [PackedSimd]),
         new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128],          [Vector128]),
-        new("Binarizer",               [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        // WebAssembly keeps the 128-bit tier though AOT-compiled it counts dense input (soft, noise, a gradient) 4-11 % slower than scalar: at most 2 % of a decode, inside the runs' spread, against 0.09-0.31 on rendered symbols
+        new("Binarizer",               [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
         new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("FinderRowEdges",          [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
@@ -294,7 +295,7 @@ internal static class SimdTiers
         // WebAssembly keeps the 128-bit tier though the interpreter runs it 16-21 % slower than scalar: AOT-compiled it is 1.5x faster, and the search is under 2 % of any shape there
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("QRSampleGrid",            [Sse2],          [Vector256],          [Vector128],          [PackedSimd]),
-        new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
+        new("QRSampleGridPiecewise",   [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),
         new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
         // x64 and WebAssembly stay scalar: the parity pass is 1.2 % of a 45,000-character set on a default NativeAOT publish, 0.7 to 0.8 % with AVX2, 0.8 % on WebAssembly AOT
         new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),

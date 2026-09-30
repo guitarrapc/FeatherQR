@@ -308,3 +308,45 @@ Image decode with the edge list: 0.58 to 0.96 on default NativeAOT, 0.36 to 0.80
 - Take a kernel's share on the entry that runs it. The span API and the data-object API run different code.
 - On the interpreter a probe that wins can still lose inside the kernel. Ship on the kernel and end to end.
 
+### Phase 3, image decode (2026-09-30)
+
+**Done.**
+- **`LuminanceConverter` on every vector target without its AVX2 or dot-product tier** (`LuminanceConverter.Simd.cs`): x64 without AVX2, WebAssembly, ARM64 without `Dp`. A pixel is a 32-bit lane: R and B share one lane's 16-bit halves, G has its own, and a 16-bit multiply-add weights them. The multiply-add and the narrowing are SSE2's `pmaddwd` and packs on x64, `PackedSimd` on WebAssembly, portable elsewhere. Straight alpha takes the ARM64 tier's row modes; on WebAssembly a partially transparent block takes the per-pixel formula, and a row in the composite mode the scalar loop. Cells: `Sse2` on x64 without AVX2, `PackedSimd` on WebAssembly, `Vector128` on ARM64 without the dot product.
+- **`Binarizer`**: the 256-bit tier's 32-pixel blocks on two 128-bit loads (`Binarizer.Vector128.cs`). Cells: `Vector128` on x64 without AVX and on WebAssembly.
+- **`QRSampleGridPiecewise`**: the ARM64 tier's four-lane step on portable vectors, each coordinate to its pixel through `VectorCast.ToPixel` (`QRImageDecoder.PiecewiseSampling.Vector128.cs`). Cells: `Sse2` and `PackedSimd`, the conversion's reads. Measured before the port: 9.8 % and 11.4 % of a bowed version 25 and 40 decode on WebAssembly AOT, where only the mesh reads the symbol.
+- **One clamp for the mesh sampler on every runtime.** The reference's `(int)` cast differed between .NET 8 and 9 on x64, and between interpreted and AOT-compiled WebAssembly. The reference and the tiers' row tails now take `PixelIndex.Clamp`, and the AVX2 tier drops its .NET 8 form. The ARM64 tail keeps the plain cast, which already lands there.
+- **`--parity`** holds the histogram, the luminance (every channel against every alpha, straight and premultiplied; the row modes across widths and padding) and the mesh sampler (Annex E lattices of versions 7 to 40, upright, bent and pushed past an edge; NaN, infinite and out-of-range nodes) to scalar.
+- **Tests:** `LuminanceConverterVector128ParityTest` enters the new tier directly on every 128-bit machine, `OtsuHistogramParityTest` and `SampleGridPiecewiseParityTest` too.
+- **Planted faults**, each caught by the unit tests and by `--parity`: the histogram's high-half mask, the premultiplied white term, the composite's ceiling division, the mesh index's row limit.
+- Harness: `kernel/` shapes beside each scalar entry, two bowed image shapes, a gradient.
+
+**Numbers** (tables in the [measurements](references/simd-128bit-tiers-measurements.md#phase-3-image-decode)), each shape in its own process:
+
+| Kernel against scalar | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| Histogram, rendered v40 at 3 px / rotated / gradient | 0.11 / 0.48 / 0.93 | 0.09 / 0.31 / 1.11 | 0.16 / 0.51 / 0.99 |
+| Histogram, soft / noise | 0.99 / 1.01 | 1.04 / 1.07 | 0.99 / 0.99 |
+| Luminance, opaque / straight alpha | 0.21 / 0.41 | 0.62 / 1.00 | 0.54 / 1.01 |
+| Mesh sampler, v40 at 3 px | 0.50 | 0.30 | 0.41 |
+
+Image decode against the build before phase 3: 0.54 to 0.96 on default NativeAOT, 0.53 to 0.78 on WebAssembly AOT, 0.65 to 0.93 interpreted on every symbol shape; bitmaps 0.33 to 0.42, 0.61, 0.56 to 0.70. The soft render, noise and the gradient read 0.99 to 1.02 on every build, inside their runs' spread.
+
+**Decided.** WebAssembly keeps the histogram tier. AOT-compiled it counts dense input 4 to 11 % slower than scalar, up to 2 % of a decode and inside the runs' spread, against 0.09 to 0.31 on rendered symbols; interpreted it is level on that input. The reason sits beside the table row. Two ways to move the dense walk out of the vector method lost (measurements).
+
+**Machine code.**
+- Cells that stay compile as before, line for line: ILC `x86-64-v3` (`Convert`, `ConvertRgba`, `FillHistogram`, `ComputeOtsuThreshold`, `DecodeThroughMesh`, `SampleGridPiecewise`), the .NET 10 JIT with AVX2 (`Convert`, `FillHistogram`, `DecodeThroughMesh`), ILC ARM64 (`FillHistogram`, `SampleGridPiecewise`, `DecodeThroughMesh`, `SampleGridPiecewiseAdvSimd`). On the .NET 8 JIT the histogram methods and the scalar conversion keep their sizes.
+- The AVX2 mesh tier: 593 → 587 instructions on ILC `x86-64-v3`, 565 → 552 on the .NET 10 JIT, 566 → 580 on .NET 8. Its loop body is the same length there; the rest is the float limits before the loop and the tail's clamp, which is now the reference's.
+- The column table is shorter on x64 (ILC 358 → 352 and 354 → 350, the .NET 10 JIT 350 → 346) and 2 longer on ARM64 and 1 on .NET 8, its limits converted before the loop. The reference gains 0 to 4 (ILC x64 294 → 294, `x86-64-v3` 290 → 292, ARM64 238 → 240, .NET 10 JIT 288 → 290, .NET 8 235 → 239): before the loop on ARM64 and .NET 8, inside it on `x86-64-v3`, where hoisting the limits by hand made the method longer (292 → 298, ILC x64 294 → 299), so it stays. The reference runs as the fallback for a mesh the tiers' tables cannot hold, and its clamp is the definition every tier matches.
+- ILC ARM64 `ConvertRgba`: the dot-product test moved from `IsVectorTierTaken` into the dispatch, and the 128-bit entry is inlined behind it (105 → 156 instructions); a core with the dot product runs the same tests as before.
+
+**Found on the way.**
+- **A branch that folds away can still stop an inline.** With the 128-bit route added, the JIT stopped inlining `ConvertRgba` into `Convert` under AVX2 (`Convert` 318 → 269 instructions plus a call), though the new branch folds away there: the inliner judges the IL before it folds. The choice between NEON and 128-bit now sits one call down, and `Convert` is identical again.
+- **ILC ARM64 left `PixelIndex.Clamp`'s limit conversion inside two loops**, the ARM64 tier's tail and the column table, while the reference's loop hoisted it. The ARM64 tail keeps its plain cast, and the column table converts its limits once, through a `PixelIndex.Clamp` overload that takes the float limit.
+- **The interpreter carries state between shapes.** In one process, an unchanged kernel ran 1.8x slower after the base build's image shapes than after the new build's; alone, both timed the same. A shape to a process since.
+- **WebAssembly runs the luminance tier at a third of x64's gain**: opaque 0.62 on WebAssembly AOT against 0.21 on default NativeAOT, with the same operations.
+- Another Claude session's test runs loaded this machine during the variant measurements (60 % when checked); the variants' refusals rest on differences that held across alternations.
+
+**Lessons.**
+- After adding a tier, read the disassembly of the dispatch's callers, not only of the dispatch.
+- On the interpreter, time a shape alone in its process; what ran before it changes its time.
+

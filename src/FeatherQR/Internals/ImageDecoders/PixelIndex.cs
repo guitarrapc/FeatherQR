@@ -9,16 +9,20 @@ internal static class PixelIndex
 {
     /// <summary>The column (or row) holding <paramref name="coordinate"/> in an image <paramref name="limit"/> pixels across.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static int Clamp(float coordinate, int limit)
+    internal static int Clamp(float coordinate, int limit) => Clamp(coordinate, limit, limit);
+
+    /// <summary><see cref="Clamp(float, int)"/> with the limit converted to float by the caller: ARM64 leaves the conversion inside some loops.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int Clamp(float coordinate, float farEdge, int limit)
     {
         // The far edge is taken before the conversion, so it need not saturate, which not every runtime's cast does;
         // NaN and the near side convert to 0 or below. The native conversion is one instruction on x64, where the cast
         // saturates in several; on WebAssembly the cast is the faster of the two.
 #if NET9_0_OR_GREATER
-        var pixel = coordinate >= limit ? limit - 1
+        var pixel = coordinate >= farEdge ? limit - 1
             : OperatingSystem.IsBrowser() ? (int)coordinate : float.ConvertToIntegerNative<int>(coordinate);
 #else
-        var pixel = coordinate >= limit ? limit - 1 : (int)coordinate;
+        var pixel = coordinate >= farEdge ? limit - 1 : (int)coordinate;
 #endif
         if (pixel < 0)
             pixel = 0;
