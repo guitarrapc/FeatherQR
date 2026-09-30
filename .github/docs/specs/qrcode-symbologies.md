@@ -291,9 +291,11 @@ Why this rule and not a wider one:
 - **The seven divergent cells are never written.** Either reading written at one of them decodes
   to different text in a CP932 reader (ZXing.Net) and in this library, so neither has an encoder
   cell and a text holding one stays UTF-8.
-- **No Kanji beside an ECI header.** Whether readers apply JIS X 0208 to a Kanji segment that
-  follows ECI 26 has not been measured, so a text that would need both (a character without a
-  cell next to ones with) stays UTF-8.
+- **No Kanji beside an ECI header.** A text that would need both (a character without a cell
+  next to ones with) stays UTF-8. Measured 2026-10-01 (`spot-check-kanji`): this library, ZXing.Net
+  and CodeGlyphX read JIS X 0208 in a Kanji segment after ECI 26, but zxing-cpp 0.5.2 decodes that
+  segment's Shift_JIS bytes in the ECI's charset and returns replacement characters, so such a
+  symbol would read differently in the one reader that covers all three symbologies.
 - **The rule is about what can be represented, not about script**: Greek, Cyrillic and box
   drawing in JIS X 0208 go out in Kanji mode like kana do.
 - **`Optimal` never grows a symbol either.** The Kanji plan is taken only below the version the

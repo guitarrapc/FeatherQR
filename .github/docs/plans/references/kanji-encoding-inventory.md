@@ -50,9 +50,9 @@ Each needs a decision, not a blind update. A test about UTF-8 keeps testing UTF-
 
 | Symbology | Writes Kanji | Reads Kanji | Committed Kanji fixtures |
 |---|---|---|---|
-| Standard QR | ZXing.Net (Shift_JIS hint, CP932, so never the seven cells), qrtool, CodeGlyphX (no ECI) | zxing-cpp (JIS X 0208); ZXing.Net (CP932) | 5 from ZXing.Net at v1-v12: the 8- and 10-bit bands only |
+| Standard QR | ZXing.Net (Shift_JIS hint, CP932, so never the seven cells), qrtool, CodeGlyphX (no ECI) | zxing-cpp (JIS X 0208); ZXing.Net (CP932) | 5 from ZXing.Net at v1-v12, the 8- and 10-bit bands; since 6.6 also 27-M and 40-L (12 bits) |
 | Micro QR | qrtool (M3/M4; raw Shift_JIS via `--read-from`) | zxing-cpp only | 5 from qrtool |
-| rMQR | qrtool | zxing-cpp only | 4 from qrtool (R11x43, R13x59, R15x59 with the seven divergent cells, R17x139) |
+| rMQR | qrtool | zxing-cpp only | 4 from qrtool (R11x43, R13x59, R15x59 with the seven divergent cells, R17x139); since 6.6 also R7x43, R7x59, R9x43 and R9x139 (widths 2, 3 and 6) |
 | Structured Append | CodeGlyphX (explicit parts) | zxing-cpp, ZXing.Net, CodeGlyphX | `codeglyphx/byte-utf8-japanese-v5-m-*of4`: Kanji with no ECI, parity 176; `qrcodegenerator/...-*of3`: the same text as UTF-8, parity 6 |
 
 - libzint cannot write Kanji: from `byte[]` it writes Byte mode under ECI 20.

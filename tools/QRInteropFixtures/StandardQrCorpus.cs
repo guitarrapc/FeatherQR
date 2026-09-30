@@ -40,8 +40,8 @@ public static class StandardQrCorpus
         cases.Add(new("byte-utf8-japanese-h", "こんにちは世界、QRコードのテストです。", "H", Utf8: true));
         cases.Add(new("byte-utf8-emoji-m", "Emoji 🎌 test ✅ done", "M", Utf8: true));
 
-        // Kanji mode (ISO/IEC 18004 8.4.5): this library reads it but never emits it,
-        // so these are the only symbols that exercise the JIS X 0208 decode path.
+        // Kanji mode (ISO/IEC 18004 8.4.5): the other encoder's symbols this library's decoder reads
+        // and its encoder is compared with, module for module (KanjiEncoderOracleTest).
         // ZXing.Net encodes through .NET CP932, so payloads stay clear of the seven
         // cells where CP932 and JIS X 0208 disagree; those live in the qrtool-generated
         // rMQR case, where the corpus supplies the Shift_JIS bytes directly.
@@ -51,7 +51,26 @@ public static class StandardQrCorpus
         cases.Add(new("kanji-hiragana-katakana-l", "ひらがなカタカナ漢字混在", "L", Mode: "Kanji"));
         cases.Add(new("kanji-long-q", RepeatKanji(120), "Q", Mode: "Kanji"));
 
+        // The 12-bit Kanji count band (versions 27-40), which the cases above do not reach: one
+        // character past version 26-M's 652, and version 40-L filled (1,817).
+        cases.Add(new("kanji-v27-edge-m", CycleCells(653), "M", Mode: "Kanji"));
+        cases.Add(new("kanji-v40-max-l", CycleCells(1817), "L", Mode: "Kanji"));
+
         return cases;
+    }
+
+    /// <summary>
+    /// Cells from across the table, the edges of both Shift_JIS ranges among them (0x8140, 0x9FFC,
+    /// 0xE040, 0xEAA4), so that a symbol exercises both offsets of the Kanji value.
+    /// </summary>
+    public const string KanjiCellCycle = "　滌漾熙亜弌腕ΩЖ─┼０Ａぁヶ日本語漢字符号化試験用文字列";
+
+    private static string CycleCells(int count)
+    {
+        var sb = new StringBuilder(count);
+        for (var i = 0; i < count; i++)
+            sb.Append(KanjiCellCycle[i % KanjiCellCycle.Length]);
+        return sb.ToString();
     }
 
     /// <summary>A fixed cyclic run of JIS X 0208 characters, for the larger Kanji versions.</summary>

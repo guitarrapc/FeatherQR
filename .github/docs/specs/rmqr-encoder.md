@@ -183,9 +183,12 @@ Version index is height-major (all widths of height 7, then 9, …); it is the 5
 Kanji count-indicator widths are not in this table, which predates Kanji support.
 `RmQRConstants.GetKanjiCountIndicatorLength` carries them (values 2-7, monotone below the byte
 widths), pinned by the narrowest-field derivation below and, since the decoder shipped, read for
-real by the qrtool Kanji fixtures. That exercise is partial: the four Kanji fixtures cover
-R11x43, R13x59, R15x59 and R17x139, i.e. widths 4, 5 and 7. Widths 2, 3 and 6 no longer rest on
-the derivation alone: the transcription of ISO/IEC 23941 Table 3 that the English Wikipedia
+real by the qrtool Kanji fixtures. Since Kanji encoding phase 6.6 those cover every width:
+R11x43, R13x59, R15x59 and R17x139 carry widths 4, 5 and 7, and R7x43-M, R7x59-M, R9x43-H and
+R9x139-M, each filled to its Kanji capacity, carry 2, 3, 3 and 6. `KanjiEncoderOracleTest` holds
+this library's symbol of each fixture's text to qrtool's, module for module (rMQR has one mask),
+and each filled count to the last one this library holds. Before that, widths 2, 3 and 6 rested
+on the derivation and on a second check: the transcription of ISO/IEC 23941 Table 3 that the English Wikipedia
 article on rMQR reproduces agrees with all 32 Kanji widths (and all 96 others), and the Kanji
 column of its Table 7 transcription agrees with the capacity those widths give on 63 of 64 cells.
 The 64th, R11x77-M, is a corrupt row in that table, not a disagreement: its Numeric,
@@ -370,7 +373,7 @@ Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--
 | Data codewords per version × ECC | Reproduce all 192 capacities from data codewords + count widths | 192/192 |
 | Total codewords | Free-module count from an independent function-pattern painter must equal 8 × total + remainder (0..7) | 32/32 after correcting R17x59 (88, not the initially recalled 90; 90 would also require 31 ECC per block at H, above the 30 maximum) |
 | Count indicator widths (N/A/B) | Read the first data codewords of one-character payloads from oracle matrices (inverse zigzag + unmask + deinterleave), width = position of the count's leading 1 | 96/96 (three numeric widths of the initial recall were off by one and corrected) |
-| Count indicator widths (Kanji) | No oracle emitted Kanji when this column was written, so it is pinned by derivation: Table 3 takes the narrowest count field that still expresses the largest count the version's M-level data capacity allows. The rule is validated by reproducing all 96 measured N/A/B widths above, then applied to Kanji | 32/32 after correcting R17x99 (6, not the transcribed 7) |
+| Count indicator widths (Kanji) | No oracle emitted Kanji when this column was written, so it is pinned by derivation: Table 3 takes the narrowest count field that still expresses the largest count the version's M-level data capacity allows. The rule is validated by reproducing all 96 measured N/A/B widths above, then applied to Kanji. Since Kanji encoding phase 6.6 every width (2-7) is read from a qrtool Kanji symbol that this library's symbol of the same text equals module for module | 32/32 after correcting R17x99 (6, not the transcribed 7); widths 2-7 confirmed against qrtool 2026-10-01 |
 | Format information | Both 18-bit copies of all 64 version × ECC symbols equal BCH(18,6) of (ECC bit, version index) XOR the copy's mask | 128/128 |
 | Mask, zigzag start and direction, interleaving | The R7x43-M "1" symbol yields exactly the predicted codewords `22 20 EC 11` and multi-block versions deinterleave to the predicted streams | Confirmed |
 | Alignment column positions, sub-finder and corner patterns | Visual inspection of R7x43 / R9x59 / R11x27 plus the free-module count agreement above | Consistent |
