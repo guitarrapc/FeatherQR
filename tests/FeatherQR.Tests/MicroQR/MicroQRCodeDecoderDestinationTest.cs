@@ -7,7 +7,8 @@ namespace FeatherQR.Tests;
 /// A destination too short for a symbol's text, on the image path: the read that does not fit is terminal for the finder
 /// candidate that made it, as in rMQR (microqr-decoder.md, Decisions). The candidate's other grids and searches are not tried,
 /// so the call costs about what a sized one does and reports the read the sized call returns, not another grid's; the other
-/// candidates are still tried, so another symbol that fits is read.
+/// candidates are still tried, so another symbol that fits is read, but not one inside the symbol that read, which is a
+/// finder-like pattern in its own data.
 /// </summary>
 public class MicroQRCodeDecoderDestinationTest
 {
@@ -79,6 +80,41 @@ public class MicroQRCodeDecoderDestinationTest
             inverted[i] = (byte)(255 - luminance[i]);
         await Assert.That(MicroQRCodeDecoder.TryDecodeImage(inverted, width, height, tiny, out _, out var invertedInfo)).IsFalse();
         await Assert.That((invertedInfo.Status, invertedInfo.Version)).IsEqualTo((DecodeStatus.DestinationTooSmall, MicroQRVersion.M4));
+    }
+
+    /// <summary>
+    /// Renders whose scan ranks a finder-like pattern in the symbol's own data after the real finder: it lay inside the symbol that
+    /// read, at (61,110) and (49,56), and was searched in full after the read that did not fit, about 67 times a sized call
+    /// (2026-10-01). A candidate inside a symbol that read is skipped, so the call costs what a sized one does.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    [Arguments("63028458518747710056101171", MicroQREccLevel.M, 5.1, 93.0)]
+    [Arguments("98411748017212729364", MicroQREccLevel.Q, 3.6, 133.0)]
+    public async Task DecodeImage_DestinationTooSmall_SkipsACandidateInsideTheSymbolThatRead(string content, MicroQREccLevel eccLevel, double pixelsPerModule, double degrees)
+    {
+        var (luminance, side) = RenderTurnedSupersampled(content, eccLevel, pixelsPerModule, degrees);
+        var sized = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
+        var tiny = new char[2];
+        await Assert.That(MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, sized, out var sizedWritten, out _)).IsTrue();
+        await Assert.That(new string(sized, 0, sizedWritten)).IsEqualTo(content);
+        MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, tiny, out _, out _);
+
+        const int iterations = 20;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+            MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, sized, out _, out _);
+        var sizedElapsed = stopwatch.Elapsed;
+
+        stopwatch.Restart();
+        var info = default(MicroQRCodeDecodeInfo);
+        for (var i = 0; i < iterations; i++)
+            MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, tiny, out _, out info);
+        var tinyElapsed = stopwatch.Elapsed;
+
+        await Assert.That((info.Status, info.Version, info.Corners.IsEmpty)).IsEqualTo((DecodeStatus.DestinationTooSmall, MicroQRVersion.M4, true));
+        await Assert.That(tinyElapsed).IsLessThan(TimeSpan.FromTicks(sizedElapsed.Ticks * 5) + TimeSpan.FromMilliseconds(30))
+            .Because($"a candidate inside the symbol that read is skipped: sized {sizedElapsed.TotalMilliseconds:F2} ms against tiny {tinyElapsed.TotalMilliseconds:F2} ms over {iterations} runs");
     }
 
     /// <summary>
@@ -191,6 +227,40 @@ public class MicroQRCodeDecoderDestinationTest
             canvas.Restore();
         }
         return (Luminance(bitmap), width, height);
+    }
+
+    /// <summary>
+    /// An M4 symbol turned about the image centre, each pixel the mean of 2 × 2 point samples of the modules (dark 20, light 235),
+    /// in a square image half as wide again as the symbol and its quiet zone.
+    /// </summary>
+    private static (byte[] Luminance, int Side) RenderTurnedSupersampled(string content, MicroQREccLevel eccLevel, double pixelsPerModule, double degrees)
+    {
+        var data = MicroQRCodeGenerator.Create(content, eccLevel, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4 });
+        var side = (int)(data.Size * pixelsPerModule * 1.5) + 16;
+        var luminance = new byte[side * side];
+        var cos = Math.Cos(-degrees * Math.PI / 180);
+        var sin = Math.Sin(-degrees * Math.PI / 180);
+        var centre = side / 2.0;
+        for (var y = 0; y < side; y++)
+        {
+            for (var x = 0; x < side; x++)
+            {
+                var sum = 0.0;
+                for (var sy = 0; sy < 2; sy++)
+                {
+                    for (var sx = 0; sx < 2; sx++)
+                    {
+                        var px = x + 0.25 + 0.5 * sx - centre;
+                        var py = y + 0.25 + 0.5 * sy - centre;
+                        var column = (int)Math.Floor((px * cos - py * sin) / pixelsPerModule + data.Size / 2.0);
+                        var row = (int)Math.Floor((px * sin + py * cos) / pixelsPerModule + data.Size / 2.0);
+                        sum += column >= 0 && row >= 0 && column < data.Size && row < data.Size && data[row, column] ? 20 : 235;
+                    }
+                }
+                luminance[y * side + x] = (byte)Math.Round(sum / 4);
+            }
+        }
+        return (luminance, side);
     }
 
     private static byte[] Luminance(SKBitmap bitmap)

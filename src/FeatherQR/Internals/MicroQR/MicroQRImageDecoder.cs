@@ -161,11 +161,17 @@ internal static partial class MicroQRImageDecoder
         Span<int> boundaryColumns = stackalloc int[18];
         Span<int> boundaryRows = stackalloc int[18];
 
+        // Where each read that did not fit lies: a later candidate inside one is a finder-like pattern in that symbol's own data, not another symbol
+        Span<SymbolCorners> readSymbols = stackalloc SymbolCorners[MaxCandidatesToTry];
+        var readCount = 0;
+
         var ranked = Math.Min(candidateCount, MaxCandidatesToTry);
         for (var c = 0; c < ranked; c++)
         {
             // Not replaced by the next in rank: the candidates tried stay the first eight
             if (FinderPatternFinder.ContainsCandidate(skip, candidates[c]))
+                continue;
+            if (SymbolGeometry.AnyContains(readSymbols.Slice(0, readCount), candidates[c].X, candidates[c].Y))
                 continue;
             if (!tried.IsEmpty)
                 tried[triedCount++] = candidates[c];
@@ -175,7 +181,11 @@ internal static partial class MicroQRImageDecoder
             var status = DecodeCandidate(image, candidates[c], modules, boundaryColumns, boundaryRows, destination, out charsWritten, out info, ref candidateBest);
             if (status == DecodeStatus.Success)
                 return status;
-            best.Other(candidateBest.Status, 0, candidateBest.Info);
+            var candidateInfo = candidateBest.Info;
+            if (candidateBest.Status == DecodeStatus.DestinationTooSmall && !candidateInfo.Corners.IsEmpty)
+                readSymbols[readCount++] = candidateInfo.Corners;
+            // Corners are reported with a read only
+            best.Other(candidateBest.Status, 0, candidateInfo.WithCorners(default));
         }
 
         return best.Report(out charsWritten, out info);
@@ -577,27 +587,23 @@ internal static partial class MicroQRImageDecoder
     private static DecodeStatus DecodeBothWays<TGrid>(ReadOnlySpan<byte> modules, in TGrid grid, int size, in ImageView image, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best, out DecodeStatus straight, out DecodeStatus mirrored)
         where TGrid : struct, ISampledGrid
     {
+        // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it; the scan reports it without them
         straight = grid.Decode(modules, new MatrixModules(size), size, image, destination, out charsWritten, out info);
-        if (straight == DecodeStatus.Success)
+        if (IsTerminal(straight))
         {
             info = info.WithCorners(grid.Corners(size, transposed: false));
             mirrored = DecodeStatus.NotDetected;
+            if (straight != DecodeStatus.Success)
+                best.Other(straight, 0, info);
             return straight;
         }
         best.Other(straight, 0, info);
-        if (IsTerminal(straight))
-        {
-            mirrored = DecodeStatus.NotDetected;
-            return straight;
-        }
 
         mirrored = grid.Decode(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, image, destination, out charsWritten, out info);
-        if (mirrored == DecodeStatus.Success)
-        {
+        if (IsTerminal(mirrored))
             info = info.WithCorners(grid.Corners(size, transposed: true));
-            return mirrored;
-        }
-        best.Other(mirrored, 0, info);
+        if (mirrored != DecodeStatus.Success)
+            best.Other(mirrored, 0, info);
         return mirrored;
     }
 

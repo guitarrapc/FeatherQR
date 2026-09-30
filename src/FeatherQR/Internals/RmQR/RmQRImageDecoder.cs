@@ -187,11 +187,16 @@ internal static partial class RmQRImageDecoder
         {
             var modules = rentedModules.AsSpan(0, MaxModules);
             Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
+            // Where each read that did not fit lies: a later candidate inside one is a finder-like pattern in that symbol's own data, not another symbol
+            Span<SymbolCorners> readSymbols = stackalloc SymbolCorners[MaxCandidatesToTry];
+            var readCount = 0;
             var ranked = Math.Min(candidateCount, MaxCandidatesToTry);
             for (var c = 0; c < ranked; c++)
             {
                 // Not replaced by the next in rank: the candidates tried stay the first eight
                 if (FinderPatternFinder.ContainsCandidate(skip, candidates[c]))
+                    continue;
+                if (SymbolGeometry.AnyContains(readSymbols.Slice(0, readCount), candidates[c].X, candidates[c].Y))
                     continue;
                 if (!tried.IsEmpty)
                     tried[triedCount++] = candidates[c];
@@ -201,7 +206,11 @@ internal static partial class RmQRImageDecoder
                 var status = DecodeCandidate(image, candidates[c], modules, orientations, destination, out charsWritten, out info, ref candidateResult);
                 if (status == DecodeStatus.Success)
                     return status;
-                best.Other(candidateResult.Status, 0, candidateResult.Info);
+                var candidateInfo = candidateResult.Info;
+                if (candidateResult.Status == DecodeStatus.DestinationTooSmall && !candidateInfo.Corners.IsEmpty)
+                    readSymbols[readCount++] = candidateInfo.Corners;
+                // Corners are reported with a read only
+                best.Other(candidateResult.Status, 0, candidateInfo.WithCorners(default));
             }
         }
         finally
@@ -528,15 +537,17 @@ internal static partial class RmQRImageDecoder
         var grid = modules.Slice(0, symbolWidth * symbolHeight);
         ModuleBoundaryReader.Sample(image.Luminance, image.Width, image.Height, image.Threshold, frame, columns, symbolWidth, rows, symbolHeight, grid);
         var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
-        if (status == DecodeStatus.Success)
+        if (IsTerminal(status))
         {
+            // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it; the scan reports it without them
             frame.ToImage(columns[0], rows[0], out var x0, out var y0);
             frame.ToImage(columns[symbolWidth], rows[0], out var x1, out var y1);
             frame.ToImage(columns[symbolWidth], rows[symbolHeight], out var x2, out var y2);
             frame.ToImage(columns[0], rows[symbolHeight], out var x3, out var y3);
             var outline = PerspectiveTransform.QuadrilateralToQuadrilateral(0f, 0f, symbolWidth, 0f, symbolWidth, symbolHeight, 0f, symbolHeight, x0, y0, x1, y1, x2, y2, x3, y3);
             info = info.WithCorners(SymbolGeometry.FromTransform(outline, symbolWidth, symbolHeight, transposed: false));
-            return status;
+            if (status == DecodeStatus.Success)
+                return status;
         }
 
         best.Other(status, 0, info);
@@ -856,11 +867,13 @@ internal static partial class RmQRImageDecoder
         var grid = modules.Slice(0, symbolWidth * symbolHeight);
         SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, symbolWidth, symbolHeight, grid);
         var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
-        if (status == DecodeStatus.Success)
+        if (IsTerminal(status))
         {
             // The frames already carry a mirrored capture in their axes, so the transform is in symbol order and never transposed.
+            // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it
             info = info.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
-            return status;
+            if (status == DecodeStatus.Success)
+                return status;
         }
 
         best.Other(status, 0, info);
@@ -884,10 +897,14 @@ internal static partial class RmQRImageDecoder
         if (!changed)
             return status;
         var coverageStatus = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out var coverageInfo);
-        if (coverageStatus == DecodeStatus.Success)
+        if (IsTerminal(coverageStatus))
         {
-            info = coverageInfo.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
-            return coverageStatus;
+            coverageInfo = coverageInfo.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
+            if (coverageStatus == DecodeStatus.Success)
+            {
+                info = coverageInfo;
+                return coverageStatus;
+            }
         }
         best.Other(coverageStatus, 0, coverageInfo);
         if (Progress(coverageStatus) <= Progress(status))
