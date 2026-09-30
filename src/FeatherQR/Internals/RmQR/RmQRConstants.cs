@@ -320,7 +320,7 @@ internal static class RmQRConstants
     /// The finder-side copy sits right of the finder's separator (rows 1-5 of columns 8-10, then rows 1-3 of column 11); the sub-finder-side copy left of and above the sub-finder (rows h−6 to h−2 of columns w−8 to w−6, then columns w−5 to w−3 of row h−6).
     /// </summary>
     /// <remarks>
-    /// These positions are stated once, in <see cref="GetFormatBlock"/> and <see cref="GetFormatTail"/>, which this composes: the placer writes the copies there, the matrix decoder reads them there, and the image decoder samples them there. <see cref="IsFormatModule"/> is the same set of modules as regions.
+    /// These positions are stated once, in <see cref="GetFormatBlock"/> and <see cref="GetFormatTail"/>, which this composes, and so does <see cref="IsFormatModule"/>: the placer writes the copies there, the function-module predicate marks them there, the matrix decoder reads them there, and the image decoder samples them there.
     /// </remarks>
     public static void GetFormatModule(int bit, bool subFinderSide, int height, int width, out int row, out int col)
     {
@@ -353,12 +353,24 @@ internal static class RmQRConstants
         col = subFinderSide ? width - 5 + k : 11;
     }
 
-    /// <summary>Whether (<paramref name="row"/>, <paramref name="col"/>) carries a bit of either format information copy: the modules of <see cref="GetFormatModule"/>, as regions.</summary>
+    /// <summary>Whether (<paramref name="row"/>, <paramref name="col"/>) carries a bit of either format information copy: each copy's block from <see cref="GetFormatBlock"/> and its three modules from <see cref="GetFormatTail"/>.</summary>
+    /// <remarks>Only the per-version tables, built once a version, and the reference placer ask it, so it composes the two statements rather than restating their coordinates.</remarks>
     public static bool IsFormatModule(int row, int col, int height, int width)
-        => (row >= 1 && row <= 5 && col >= 8 && col <= 10)
-            || (row >= 1 && row <= 3 && col == 11)
-            || (row >= height - 6 && row <= height - 2 && col >= width - 8 && col <= width - 6)
-            || (row == height - 6 && col >= width - 5 && col <= width - 3);
+        => IsInCopy(row, col, height, width, subFinderSide: false) || IsInCopy(row, col, height, width, subFinderSide: true);
+
+    private static bool IsInCopy(int row, int col, int height, int width, bool subFinderSide)
+    {
+        GetFormatBlock(subFinderSide, height, width, out var blockRow, out var blockCol);
+        if (row >= blockRow && row < blockRow + 5 && col >= blockCol && col < blockCol + 3)
+            return true;
+        for (var k = 0; k < 3; k++)
+        {
+            GetFormatTail(k, subFinderSide, height, width, out var tailRow, out var tailCol);
+            if (row == tailRow && col == tailCol)
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Computes the 18 format information bits of one copy: 6 data bits (ECC level bit above the 5-bit version index) protected by BCH(18,6) with generator polynomial 0x1F25, XOR-masked with the copy's constant (finder side 0x1FAB2, sub-finder side 0x20A7B).

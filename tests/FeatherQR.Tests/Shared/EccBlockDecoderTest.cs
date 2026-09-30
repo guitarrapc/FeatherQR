@@ -101,39 +101,64 @@ public class EccBlockDecoderTest
         await Assert.That(stream.AsSpan(0, data.Length).ToArray()).IsEquivalentTo(data, CollectionOrdering.Matching);
     }
 
+    /// <summary>
+    /// The stage stops at the first block that does not read and counts the blocks before it, not the ones after: every
+    /// other block carries an error it could correct, so a stage that went on would count them too.
+    /// </summary>
     [Test]
-    [Arguments("QR", 5, QREccLevel.Q)]
-    [Arguments("QR", 40, QREccLevel.H)]
-    [Arguments("rMQR", (int)RmQRVersion.R17x139, QREccLevel.H)]
-    public async Task TryCorrect_UncorrectableBlock_CountsTheBlocksBeforeIt(string symbology, int version, QREccLevel level)
+    [Arguments("QR", 5, QREccLevel.Q, "first")]   // 2 + 2 blocks
+    [Arguments("QR", 5, QREccLevel.Q, "middle")]
+    [Arguments("QR", 5, QREccLevel.Q, "last")]
+    [Arguments("QR", 40, QREccLevel.H, "first")]  // 20 + 61 blocks
+    [Arguments("QR", 40, QREccLevel.H, "middle")]
+    [Arguments("rMQR", (int)RmQRVersion.R17x139, QREccLevel.H, "first")]
+    [Arguments("rMQR", (int)RmQRVersion.R17x139, QREccLevel.H, "middle")]
+    [Arguments("rMQR", (int)RmQRVersion.R17x139, QREccLevel.H, "last")]
+    public async Task TryCorrect_UncorrectableBlock_StopsThere_CountingTheBlocksBeforeIt(string symbology, int version, QREccLevel level, string where)
     {
         // Every codeword of the failing block is changed, far past what its ECC codewords can locate.
         var eccInfo = EccInfo(symbology, version, level);
         var (stream, _) = Encode(eccInfo, seed: 3);
-        var failing = BlockCount(eccInfo) - 1;
+        var blocks = BlockCount(eccInfo);
+        var failing = where switch { "first" => 0, "middle" => blocks / 2, _ => blocks - 1 };
         var before = 0;
-        for (var b = 0; b < failing; b++)
-            before += Damage(stream, eccInfo, b, errors: 1);
-        Damage(stream, eccInfo, failing, errors: BlockLength(eccInfo, failing));
+        for (var b = 0; b < blocks; b++)
+        {
+            if (b == failing)
+                Damage(stream, eccInfo, b, errors: BlockLength(eccInfo, b));
+            else if (b < failing)
+                before += Damage(stream, eccInfo, b, errors: 1);
+            else
+                Damage(stream, eccInfo, b, errors: 1);
+        }
 
         var read = EccBlockDecoder.TryCorrect(stream, new byte[stream.Length], eccInfo, eccInfo.ECCPerBlock / 2, out var errorsCorrected);
 
         await Assert.That(read).IsFalse();
-        await Assert.That(errorsCorrected).IsEqualTo(before);
+        await Assert.That(errorsCorrected).IsEqualTo(before).Because($"{blocks} blocks, block {failing} uncorrectable");
     }
 
+    /// <summary>
+    /// A block Reed-Solomon corrects but with more errors than the capacity allows is refused, and its errors are
+    /// reported with the ones before it, the rule the capacity cap has in rMQR's and Micro QR's decoders; the blocks after
+    /// it, each with an error it could correct, are not reached.
+    /// </summary>
     [Test]
-    [Arguments("QR", 5, QREccLevel.Q)]
-    [Arguments("rMQR", (int)RmQRVersion.R17x139, QREccLevel.H)]
-    public async Task TryCorrect_BlockOverTheCapacity_CountsItsErrorsToo(string symbology, int version, QREccLevel level)
+    [Arguments("QR", 5, QREccLevel.Q, 0)]
+    [Arguments("QR", 5, QREccLevel.Q, 1)]
+    [Arguments("rMQR", (int)RmQRVersion.R17x139, QREccLevel.H, 0)]
+    [Arguments("rMQR", (int)RmQRVersion.R17x139, QREccLevel.H, 1)]
+    public async Task TryCorrect_BlockOverTheCapacity_CountsItsErrorsToo(string symbology, int version, QREccLevel level, int refusedBlock)
     {
-        // A block Reed-Solomon corrects but with more errors than the capacity allows is refused, and its errors are
-        // reported with the ones before it: the rule the capacity cap has in rMQR's and Micro QR's decoders.
         var eccInfo = EccInfo(symbology, version, level);
         var (stream, _) = Encode(eccInfo, seed: 4);
         const int capacity = 2;
-        var before = Damage(stream, eccInfo, 0, errors: capacity);
-        var refused = Damage(stream, eccInfo, 1, errors: capacity + 1);
+        var before = 0;
+        for (var b = 0; b < refusedBlock; b++)
+            before += Damage(stream, eccInfo, b, errors: capacity);
+        var refused = Damage(stream, eccInfo, refusedBlock, errors: capacity + 1);
+        for (var b = refusedBlock + 1; b < BlockCount(eccInfo); b++)
+            Damage(stream, eccInfo, b, errors: 1);
 
         var read = EccBlockDecoder.TryCorrect(stream, new byte[stream.Length], eccInfo, capacity, out var errorsCorrected);
 

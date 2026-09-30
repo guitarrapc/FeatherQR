@@ -20,7 +20,8 @@ internal static class AttemptStatus
         => IsTerminal(status) || IsContentVerdict(status);
 
     /// <summary>
-    /// Whether the attempt got past the format information. A grid sampled in the wrong place overwhelmingly fails before it, so one that got past it almost certainly lies on the symbol, and is worth refining.
+    /// Whether the attempt got past the format information, which a grid on the symbol does and a grid off it does less often, so one that got past it is worth refining.
+    /// How much less differs: about 1.5 % of random grids read rMQR's two copies, while Micro QR's single copy lets 7 to 21 % through by version (14 to 38 % in either orientation), so there it thins the grids refined rather than ruling texture out.
     /// </summary>
     public static bool IsPastFormat(DecodeStatus status)
         => status is not DecodeStatus.NotDetected
@@ -49,7 +50,8 @@ internal static class AttemptStatus
 internal enum ReportRule
 {
     /// <summary>
-    /// The main path's result, unless another attempt settles: Standard QR, whose main path at each level is the attempt it would make alone (the corner the triangle's shape names, the estimated dimension, the first grid, the grid as sampled).
+    /// The main path's result, unless another attempt settles: Standard QR, whose main path at each level is the attempt it would make alone (the selected triple, the corner the triangle's shape names, the grids from the finders, the estimated dimension, the grid through the transform, the grid as sampled).
+    /// Not always the first tried: the timing frame is tried ahead of the grids from the finders, and the mesh ahead of the grid through the transform when nothing anchored the fourth corner.
     /// </summary>
     MainPath,
 

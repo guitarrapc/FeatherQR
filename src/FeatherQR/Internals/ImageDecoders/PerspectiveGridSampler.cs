@@ -6,7 +6,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
 /// A square module grid read through one projective transform: each module centre's pixel against the threshold.
-/// Standard QR samples its four-point and parallelogram grids with it and Micro QR its perspective search.
+/// Standard QR samples its four-point, parallelogram and finders' frame grids with it, and Micro QR its perspective search.
 /// </summary>
 /// <remarks>
 /// It was <c>QRImageDecoder.SampleGrid</c> until 2026-09-29, and Micro QR called it there, against the rule that symbology namespaces never reference each other.

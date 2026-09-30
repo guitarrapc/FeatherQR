@@ -9,6 +9,13 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class PerspectiveGridSamplerParityTest
 {
+    /// <summary>
+    /// Micro QR's four sizes and Standard QR sizes: Micro QR samples its perspective search through the same tiers, and its
+    /// sizes leave the scalar tails Standard QR's do not (after 8-wide steps, 3 at 11 and 7 at 15; after the 128-bit tier's
+    /// steps, 3 at 11 and 15, where every Standard QR size leaves 1).
+    /// </summary>
+    private static readonly int[] Dimensions = [11, 13, 15, 17, 21, 33, 77, 177];
+
     private const byte Threshold = 128;
 
     [Test]
@@ -23,11 +30,12 @@ public class PerspectiveGridSamplerParityTest
 
         foreach (var seed in new[] { 1, 42, 1234 })
         {
-            foreach (var dimension in new[] { 21, 33, 77, 177 })
+            foreach (var dimension in Dimensions)
             {
                 foreach (var projective in new[] { true, false })
                 {
                     var (luminance, width, transform) = BuildScene(dimension, projective, seed);
+                    await Assert.That(CentresInside(transform, dimension, width)).IsEqualTo(dimension * dimension).Because($"every module centre lands in the image (seed={seed}, dim={dimension}, projective={projective})");
 
                     var scalar = new byte[dimension * dimension];
                     PerspectiveGridSampler.SampleScalar(luminance, width, width, Threshold, transform, dimension, scalar);
@@ -54,11 +62,12 @@ public class PerspectiveGridSamplerParityTest
 
         foreach (var seed in new[] { 1, 42, 1234 })
         {
-            foreach (var dimension in new[] { 21, 33, 77, 177 })
+            foreach (var dimension in Dimensions)
             {
                 foreach (var projective in new[] { true, false })
                 {
                     var (luminance, width, transform) = BuildScene(dimension, projective, seed);
+                    await Assert.That(CentresInside(transform, dimension, width)).IsEqualTo(dimension * dimension).Because($"every module centre lands in the image (seed={seed}, dim={dimension}, projective={projective})");
 
                     var scalar = new byte[dimension * dimension];
                     PerspectiveGridSampler.SampleScalar(luminance, width, width, Threshold, transform, dimension, scalar);
@@ -71,6 +80,22 @@ public class PerspectiveGridSamplerParityTest
             }
         }
 #endif
+    }
+
+    /// <summary>The module centres the transform maps inside the image: on a grid that lands outside, both tiers compare the clamp alone.</summary>
+    private static int CentresInside(in PerspectiveTransform transform, int dimension, int width)
+    {
+        var inside = 0;
+        for (var v = 0; v < dimension; v++)
+        {
+            for (var u = 0; u < dimension; u++)
+            {
+                transform.Transform(u + 0.5f, v + 0.5f, out var x, out var y);
+                if (x >= 0 && x < width && y >= 0 && y < width)
+                    inside++;
+            }
+        }
+        return inside;
     }
 
     private static (byte[] Luminance, int Width, PerspectiveTransform Transform) BuildScene(int dimension, bool projective, int seed)
@@ -105,7 +130,9 @@ public class PerspectiveGridSamplerParityTest
         var blX = margin + 3.5f * Ppm;
         var blY = margin + (dimension - 3.5f) * Ppm;
 
-        float fourthGrid = projective ? dimension - 6.5f : dimension - 3.5f;
+        // Projective: the fourth corner pulled in from the parallelogram's by 3 modules, by less on a small grid, since it must stay
+        // beyond the line through the top-right and bottom-left corners (x + y = dimension), which a pull of 3 reaches at 13
+        var fourthGrid = projective ? dimension - 3.5f - Math.Min(3f, (dimension - 7) / 4f) : dimension - 3.5f;
         var fourthX = projective ? margin + fourthGrid * Ppm : trX + blX - tlX;
         var fourthY = projective ? margin + fourthGrid * Ppm : trY + blY - tlY;
 

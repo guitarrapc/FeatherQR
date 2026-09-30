@@ -1,4 +1,7 @@
+using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals.MicroQR;
+using FeatherQR.Internals.RmQR;
 using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
@@ -9,7 +12,9 @@ namespace FeatherQR.Tests;
 /// segments were written; until 2.0.0 the overloads counted those.
 /// </summary>
 /// <remarks>
-/// A module matrix with a quiet zone is decoded from a copy of its core, one without it in place, so each case runs both.
+/// A module matrix with a quiet zone is decoded from a copy of its core, one without it in place, and the
+/// <c>FailingAfterTheFirstSegment</c> cases run both. The Kanji cases decode a matrix without one: both paths reach the count
+/// through the same matrix decode, which is where a failure resets it.
 /// </remarks>
 public class MatrixDecodeCharsWrittenTest
 {
@@ -98,6 +103,99 @@ public class MatrixDecodeCharsWrittenTest
         var ok = QRCodeDecoder.TryDecode(modules, 21, new char[64], out var charsWritten, out var info);
 
         await Assert.That((ok, info.Status, charsWritten)).IsEqualTo((true, DecodeStatus.Success, 3));
+    }
+
+    /// <summary>
+    /// Micro QR M4-L and rMQR R11x43-M, each holding the digits "12" and then one Kanji cell: with a cell CP932 adds to JIS X
+    /// 0208 the decode fails after the digits were written and writes no characters; with a mappable cell it reads, so the
+    /// failure is the cell's.
+    /// </summary>
+    [Test]
+    [Arguments("MicroQR", 0x8740, false)]
+    [Arguments("MicroQR", 0x889F, true)]
+    [Arguments("rMQR", 0x8740, false)]
+    [Arguments("rMQR", 0x889F, true)]
+    public async Task DigitsThenKanji_WritesCharactersOnlyWhenItReads(string symbology, int sjis, bool reads)
+    {
+        bool ok;
+        int charsWritten;
+        DecodeStatus status;
+        if (symbology == "MicroQR")
+        {
+            var modules = BuildMicroQRDigitsThenKanji(sjis);
+            ok = MicroQRCodeDecoder.TryDecode(modules, 17, new char[64], out charsWritten, out var info);
+            status = info.Status;
+        }
+        else
+        {
+            var modules = BuildRmQRDigitsThenKanji(sjis);
+            ok = RmQRCodeDecoder.TryDecode(modules, 43, 11, new char[64], out charsWritten, out var info);
+            status = info.Status;
+        }
+
+        await Assert.That((ok, status, charsWritten)).IsEqualTo(reads ? (true, DecodeStatus.Success, 3) : (false, DecodeStatus.UnmappedCharacter, 0));
+    }
+
+    private static int Kanji(int sjis)
+    {
+        var shifted = sjis >= 0xE040 ? sjis - 0xC140 : sjis - 0x8140;
+        return (shifted >> 8) * 0xC0 + (shifted & 0xFF);
+    }
+
+    /// <summary>An M4-L symbol: a Numeric segment "12", then one Kanji cell.</summary>
+    private static byte[] BuildMicroQRDigitsThenKanji(int sjis)
+    {
+        const MicroQRVersion version = MicroQRVersion.M4;
+        const MicroQREccLevel eccLevel = MicroQREccLevel.L;
+        var dataCount = MicroQRConstants.GetDataCodewordCount(version, eccLevel);
+        var eccCount = MicroQRConstants.GetEccCodewordCount(version, eccLevel);
+        var data = new byte[dataCount];
+        var writer = new BitWriter(data);
+        writer.Write(MicroQRConstants.GetModeIndicatorValue(EncodingMode.Numeric), MicroQRConstants.GetModeIndicatorLength(version));
+        writer.Write(2, MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric));
+        writer.Write(12, 7);                                                                            // two digits
+        writer.Write(0b011, MicroQRConstants.GetModeIndicatorLength(version));                          // Kanji
+        writer.Write(1, MicroQRConstants.GetKanjiCountIndicatorLength(version));
+        writer.Write(Kanji(sjis), 13);
+        writer.Write(0, MicroQRConstants.GetTerminatorLength(version));
+        writer.Flush();
+        for (var i = writer.GetData().Length; i < dataCount; i++)
+            data[i] = (i & 1) == 0 ? (byte)0xEC : (byte)0x11;
+        var ecc = new byte[eccCount];
+        EccBinaryEncoder.CalculateECC(data, ecc, eccCount);
+
+        var size = MicroQRConstants.SizeFromVersion(version);
+        var modules = new byte[size * size];
+        MicroQRModulePlacer.PlaceSymbol(modules, size, data, ecc, MicroQRConstants.GetDataBitCapacity(version, eccLevel), version, eccLevel);
+        return modules;
+    }
+
+    /// <summary>An R11x43-M symbol: a Numeric segment "12", then one Kanji cell.</summary>
+    private static byte[] BuildRmQRDigitsThenKanji(int sjis)
+    {
+        const RmQRVersion version = RmQRVersion.R11x43;
+        const RmQREccLevel eccLevel = RmQREccLevel.M;
+        var dataCount = RmQRConstants.GetDataCodewordCount(version, eccLevel);
+        var data = new byte[dataCount];
+        var writer = new BitWriter(data);
+        writer.Write(RmQRConstants.GetModeIndicatorValue(EncodingMode.Numeric), 3);
+        writer.Write(2, RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric));
+        writer.Write(12, 7);                                                                            // two digits
+        writer.Write(RmQRConstants.KanjiModeIndicatorValue, 3);
+        writer.Write(1, RmQRConstants.GetKanjiCountIndicatorLength(version));
+        writer.Write(Kanji(sjis), 13);
+        writer.Write(0, 3);                                                                             // terminator
+        writer.Flush();
+        for (var i = writer.GetData().Length; i < dataCount; i++)
+            data[i] = (i & 1) == 0 ? (byte)0xEC : (byte)0x11;
+        var message = new byte[RmQRCodewordEncoder.GetFinalMessageSize(version)];
+        RmQRCodewordEncoder.AssembleFinalMessage(data, version, eccLevel, message);
+
+        var width = RmQRConstants.GetWidth(version);
+        var height = RmQRConstants.GetHeight(version);
+        var modules = new byte[width * height];
+        RmQRModulePlacer.PlaceSymbol(modules, version, eccLevel, message);
+        return modules;
     }
 
     private static byte[] Modules(int width, int height, Func<int, int, bool> dark)

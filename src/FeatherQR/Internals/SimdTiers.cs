@@ -202,7 +202,7 @@ internal static class SimdTiers
         new("FinderRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // FinderPatternFinder.ScanRowEdges: the finder search's edge-list row kernel, sixteen windows a step on 256-bit vectors and eight on ARM64
         new("FinderRowEdges", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // PerspectiveGridSampler.Sample: a square grid through one projective transform (Standard QR's four-point grids, Micro QR's perspective search); the 128-bit tier also takes grids too small for the 256-bit one
+        // PerspectiveGridSampler.Sample: a square grid through one projective transform (Standard QR's four-point, parallelogram and frame grids, Micro QR's perspective search); the 128-bit tier also takes grids too small for the 256-bit one
         new("PerspectiveGridSampler", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
 
         // ---- Standard QR ----

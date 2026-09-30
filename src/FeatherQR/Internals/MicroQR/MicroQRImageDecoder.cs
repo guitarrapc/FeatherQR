@@ -332,8 +332,9 @@ internal static partial class MicroQRImageDecoder
 
                     // Scale and perspective searches multiply this affine attempt
                     // by hundreds. Enter them only after either polarity decoded
-                    // valid format information; wrong grids overwhelmingly fail
-                    // before that point.
+                    // valid format information, which a random grid does 14 to 38 %
+                    // of the time by version: the gate thins the grids searched
+                    // rather than ruling texture out.
                     if (!IsPastFormat(status) && !IsPastFormat(mirroredStatus))
                         continue;
 

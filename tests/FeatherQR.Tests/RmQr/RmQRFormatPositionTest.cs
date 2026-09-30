@@ -6,9 +6,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The rMQR format information's module positions are stated once, in <see cref="RmQRConstants.GetFormatBlock"/> and
-/// <see cref="RmQRConstants.GetFormatTail"/>, which <see cref="RmQRConstants.GetFormatModule"/> composes; <see cref="RmQRConstants.IsFormatModule"/>
-/// is the same modules as regions. These tests hold them to the naive reference, written from the standard apart from the
-/// library, and hold the reader at the image level, which walks the block itself, to them bit by bit.
+/// <see cref="RmQRConstants.GetFormatTail"/>, which <see cref="RmQRConstants.GetFormatModule"/> composes for one bit and
+/// <see cref="RmQRConstants.IsFormatModule"/> for a module. These tests hold them to the naive reference, written from the standard apart from the
+/// library, and hold both readers, the matrix decoder's and the image decoder's, which walk the block themselves, to them bit by bit.
 /// </summary>
 public class RmQRFormatPositionTest
 {
@@ -89,6 +89,31 @@ public class RmQRFormatPositionTest
                 var raw = RmQRImageDecoder.ReadFormatCopy(luminance, width * scale, height * scale, 128, transform, subFinderSide, width, height);
 
                 await Assert.That(raw).IsEqualTo(1 << bit).Because($"{version}, bit {bit}, sub-finder side {subFinderSide}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The matrix decoder's reader, bit by bit. A decode test does not show a module read in the wrong place: either copy
+    /// reads the symbol, and the word's error correction absorbs a bit or two in the other.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllVersions))]
+    public async Task ReadFormatCopies_ReadsEachBitAtItsModule(RmQRVersion version)
+    {
+        var height = RmQRConstants.GetHeight(version);
+        var width = RmQRConstants.GetWidth(version);
+        foreach (var subFinderSide in new[] { false, true })
+        {
+            for (var bit = 0; bit < 18; bit++)
+            {
+                RmQRConstants.GetFormatModule(bit, subFinderSide, height, width, out var row, out var col);
+                var modules = new byte[width * height];
+                modules[row * width + col] = 1;
+
+                RmQRMatrixDecoder.ReadFormatCopies(modules, width, height, out var finderSideRaw, out var subFinderSideRaw);
+
+                await Assert.That((finderSideRaw, subFinderSideRaw)).IsEqualTo(subFinderSide ? (0, 1 << bit) : (1 << bit, 0)).Because($"{version}, bit {bit}, sub-finder side {subFinderSide}");
             }
         }
     }

@@ -73,7 +73,7 @@ internal static partial class RmQRMatrixDecoder
     /// Reads both 18-bit copies where <see cref="RmQRModulePlacer.PlaceFormat"/> writes them: each copy's block from <see cref="RmQRConstants.GetFormatBlock"/>, column by column, then the three modules <see cref="RmQRConstants.GetFormatTail"/> gives.
     /// Walked as loops, as the image decoder's reader is, since this runs for every grid the image decoder tries (see <see cref="RmQRConstants.GetFormatBlock"/>).
     /// </summary>
-    private static void ReadFormatCopies(ReadOnlySpan<byte> modules, int width, int height, out int finderSide, out int subFinderSide)
+    internal static void ReadFormatCopies(ReadOnlySpan<byte> modules, int width, int height, out int finderSide, out int subFinderSide)
     {
         finderSide = 0;
         subFinderSide = 0;

@@ -20,7 +20,7 @@ internal readonly ref struct ImageView
 
     public readonly GreyLevels Grey;
 
-    /// <summary>The luminance an edge is located at (<see cref="GreyLevels.EdgeLevel"/>): the midpoint of the grey levels, or the threshold where they say nothing.</summary>
+    /// <summary>The luminance an edge is located at (<see cref="GreyLevels.EdgeLevel"/>): halfway between the image's two levels, on an image with no grey pixel too; the threshold only on an image of one level, or with no levels measured.</summary>
     public readonly float EdgeLevel;
 
     public ImageView(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, GreyLevels grey)

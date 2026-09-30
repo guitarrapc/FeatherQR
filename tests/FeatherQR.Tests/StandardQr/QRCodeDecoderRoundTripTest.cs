@@ -308,8 +308,13 @@ public class QRCodeDecoderRoundTripTest
     /// <summary>
     /// Every block carrying as many codeword errors as its ECC codewords correct, ⌊ecc/2⌋, reads: the matrix decoder
     /// corrects to the code's full strength and reserves no misdecode protection (ISO/IEC 18004 Table 9's p).
+    /// 1-L, 1-M and 2-L are the rows where p would lower the count below ⌊ecc/2⌋; elsewhere p is 0, or the ECC count is odd
+    /// and p takes nothing ⌊ecc/2⌋ does not already leave.
     /// </summary>
     [Test]
+    [Arguments(1, QREccLevel.L)]   // 1 block, 7 ECC codewords: 3 errors, where p = 3 would allow 2
+    [Arguments(1, QREccLevel.M)]   // 1 block, 10 ECC codewords: 5 errors, where p = 2 would allow 4
+    [Arguments(2, QREccLevel.L)]   // 1 block, 10 ECC codewords: 5 errors, where p = 2 would allow 4
     [Arguments(5, QREccLevel.Q)]   // 2 + 2 blocks, 9 errors each
     [Arguments(10, QREccLevel.H)]  // 6 + 2 blocks, 14 errors each
     public async Task Decode_FullStrengthErrorsInEveryBlock_AreCorrected(int version, QREccLevel level)
