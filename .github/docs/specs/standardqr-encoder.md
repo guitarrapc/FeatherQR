@@ -262,6 +262,7 @@ The public dispatch selects the fastest available kernel while preserving byte-i
 
 - GFNI / SSSE3 on supported x86/x64 targets;
 - AdvSimd on ARM64;
+- the AdvSimd kernel on WebAssembly, its swizzle standing in for the table lookup, for blocks of 90 data bytes × ECC codewords or more (2026-10-01): 0.11 to 0.13 of the scalar kernel on a version 40-L block, 0.54 to 0.64 on Micro QR M4-L. Under that product the interpreter's setup, 0.35 µs before the first step, costs more than the scalar division;
 - cached log-domain scalar implementation elsewhere.
 
 Every optimized kernel is parity-tested against a deliberately naive polynomial-division reference.

@@ -252,6 +252,26 @@ internal static class TierTiming
         new("probe/set-plan-v4-scalar", () => SetPlanAt(4, lanes: false)),
         new("probe/set-plan-v6-lanes", () => SetPlanAt(6, lanes: true)),
         new("probe/set-plan-v6-scalar", () => SetPlanAt(6, lanes: false)),
+        new("kernel/EccSyndromes-148-30", () => Syndromes(148, 30, scalar: false)),
+        new("kernel/EccSyndromes-148-30-scalar", () => Syndromes(148, 30, scalar: true)),
+        new("kernel/EccSyndromes-45-30", () => Syndromes(45, 30, scalar: false)),
+        new("kernel/EccSyndromes-45-30-scalar", () => Syndromes(45, 30, scalar: true)),
+        new("kernel/EccSyndromes-24-8", () => Syndromes(24, 8, scalar: false)),
+        new("kernel/EccSyndromes-24-8-scalar", () => Syndromes(24, 8, scalar: true)),
+        new("kernel/EccEncode-118-30", () => EccEncode(118, 30, scalar: false)),
+        new("kernel/EccEncode-118-30-scalar", () => EccEncode(118, 30, scalar: true)),
+        new("kernel/EccEncode-15-30", () => EccEncode(15, 30, scalar: false)),
+        new("kernel/EccEncode-15-30-scalar", () => EccEncode(15, 30, scalar: true)),
+        new("kernel/EccEncode-16-8", () => EccEncode(16, 8, scalar: false)),
+        new("kernel/EccEncode-16-8-scalar", () => EccEncode(16, 8, scalar: true)),
+        new("kernel/RmQRExtract-R17x139", () => RmQRExtract(RmQRVersion.R17x139, scalar: false)),
+        new("kernel/RmQRExtract-R17x139-scalar", () => RmQRExtract(RmQRVersion.R17x139, scalar: true)),
+        new("kernel/RmQRExtract-R13x77", () => RmQRExtract(RmQRVersion.R13x77, scalar: false)),
+        new("kernel/RmQRExtract-R13x77-scalar", () => RmQRExtract(RmQRVersion.R13x77, scalar: true)),
+        new("kernel/RmQRExtract-R7x43", () => RmQRExtract(RmQRVersion.R7x43, scalar: false)),
+        new("kernel/RmQRExtract-R7x43-scalar", () => RmQRExtract(RmQRVersion.R7x43, scalar: true)),
+        new("kernel/RmQRExtract-R11x27", () => RmQRExtract(RmQRVersion.R11x27, scalar: false)),
+        new("kernel/RmQRExtract-R11x27-scalar", () => RmQRExtract(RmQRVersion.R11x27, scalar: true)),
         new("kernel/StructuredAppendParity-utf8-15k", () => Parity(Repeat("ご注文番号 20260915-0000123456 の商品を 42 個、本日発送いたしました。", 15_000), EciMode.Utf8)),
 
         // The kernels that already take a 128-bit tier on WebAssembly: each through its dispatch, and its scalar form
@@ -327,6 +347,8 @@ internal static class TierTiming
         new("probe/expand-multiply", () => Probe(ExpandMultiply)),
         new("probe/movemask-portable", () => Probe(MovemaskPortable)),
         new("probe/movemask-packedsimd", () => Probe(MovemaskPackedSimd), PackedSimd.IsSupported),
+        .. new[] { 3, 5, 6, 9, 13, 16 }.SelectMany(d => new[] { 2, 5, 7, 10, 17 }.SelectMany(e => new Shape[] { new($"probe/ecc-encode-{d}-{e}", () => EccEncodePackedSimd(d, e), PackedSimd.IsSupported), new($"probe/ecc-encode-{d}-{e}-scalar", () => EccEncode(d, e, scalar: true)) })),
+        .. Enum.GetValues<RmQRVersion>().SelectMany(v => new Shape[] { new($"probe/rmqr-extract-{v}", () => RmQRExtract(v, scalar: false)), new($"probe/rmqr-extract-{v}-scalar", () => RmQRExtract(v, scalar: true)) }),
     ];
 
     private static QRCodeData Large() => QRCodeGenerator.Create(DeterministicText(2900), QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(40) });
@@ -661,6 +683,57 @@ internal static class TierTiming
         StructuredAppendPlanner.TryPlan(content, eccLevel, analysis.EciMode, analysis.EncodingMode, utf8Bom: false, QRSegmentation.Optimal, version, version, ends, out var chunks, out _, out _, allowLanes: false);
         Console.Error.WriteLine($"# version {version}-{eccLevel}: {content.Length} chars in {chunks} chunks");
         return () => StructuredAppendPlanner.TryPlan(content, eccLevel, analysis.EciMode, analysis.EncodingMode, utf8Bom: false, QRSegmentation.Optimal, version, version, ends, out var count, out _, out _, allowLanes: lanes) ? count : -1;
+    }
+
+    /// <summary>
+    /// One block's syndrome pass, shaped as a version 40-L block (148 bytes, 30 ECC), a 40-H block (45, 30) or Micro QR M4-L (24, 8):
+    /// the 128-bit tier through its entry, which the dispatch takes on x64 without AVX2 GFNI and on WebAssembly, or the scalar one.
+    /// </summary>
+    private static Func<int> Syndromes(int length, int eccCount, bool scalar)
+    {
+        var codeword = new byte[length];
+        new Random(length * 31 + eccCount).NextBytes(codeword);
+        var syndromes = new byte[FeatherQR.Internals.BinaryDecoders.EccBinaryDecoder.SyndromeLanes];
+        return scalar
+            ? () => FeatherQR.Internals.BinaryDecoders.EccBinaryDecoder.ComputeSyndromesScalar(codeword, eccCount, syndromes) ? syndromes[0] : 0
+            : () => FeatherQR.Internals.BinaryDecoders.EccBinaryDecoder.ComputeSyndromesVector128(codeword, eccCount, syndromes) ? syndromes[0] : 0;
+    }
+
+    /// <summary>
+    /// One block's Reed-Solomon remainder, shaped as a version 40-L block (118 data bytes, 30 ECC), a 40-H block (15, 30) or Micro QR
+    /// M4-L (16, 8): the dispatch, or the scalar kernel.
+    /// </summary>
+    private static Func<int> EccEncode(int length, int eccCount, bool scalar)
+    {
+        var data = new byte[length];
+        new Random(length * 31 + eccCount).NextBytes(data);
+        var ecc = new byte[eccCount];
+        if (scalar)
+            return () => { FeatherQR.Internals.BinaryEncoders.EccBinaryEncoder.CalculateEccScalar(data, ecc, eccCount); return ecc[0]; };
+        return () => { FeatherQR.Internals.BinaryEncoders.EccBinaryEncoder.CalculateECC(data, ecc, eccCount); return ecc[0]; };
+    }
+
+    /// <summary>The WebAssembly Reed-Solomon kernel past its entry's size gate: where that gate sits.</summary>
+    private static Func<int> EccEncodePackedSimd(int length, int eccCount)
+    {
+        var data = new byte[length];
+        new Random(length * 31 + eccCount).NextBytes(data);
+        var ecc = new byte[eccCount];
+        return () => { FeatherQR.Internals.BinaryEncoders.EccBinaryEncoder.PackedSimdKernel(data, ecc, eccCount); return ecc[0]; };
+    }
+
+    /// <summary>The codeword extraction of one rMQR symbol over a random grid: the portable pair planes through their pinned entry, or the scalar walk.</summary>
+    private static Func<int> RmQRExtract(RmQRVersion version, bool scalar)
+    {
+        var width = RmQRConstants.GetWidth(version);
+        var height = RmQRConstants.GetHeight(version);
+        var modules = new byte[width * height];
+        new Random((int)version * 17).NextBytes(modules);
+        for (var i = 0; i < modules.Length; i++)
+            modules[i] &= 1;
+        var stream = new byte[RmQRConstants.GetTotalCodewordCount(version)];
+        var kernel = scalar ? RmQRMatrixDecoder.ExtractKernel.Scalar : RmQRMatrixDecoder.ExtractKernel.PairPlanesVector128;
+        return () => { RmQRMatrixDecoder.ExtractCodewords(modules, width, height, version, stream, kernel); return stream[0]; };
     }
 
     private static Func<int> Parity(string text, EciMode charset) => () => StructuredAppendPlanner.Parity(text, charset, utf8Bom: false);

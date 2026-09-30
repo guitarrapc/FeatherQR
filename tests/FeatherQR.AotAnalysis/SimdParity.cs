@@ -42,6 +42,9 @@ internal static class SimdParity
         failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
         failures += Report("ModeSegmenter.ComputeCostsLanes", SegmenterLaneMismatches);
         failures += Report("StructuredAppendPlanner.WalkLanes", WalkLaneMismatches);
+        failures += Report("EccBinaryDecoder.ComputeSyndromesVector128", SyndromeMismatches);
+        failures += Report("EccBinaryEncoder.PackedSimdKernel", EccEncoderMismatches);
+        failures += Report("RmQRMatrixDecoder pair planes, 128-bit", ExtractMismatches);
         return failures == 0 ? 0 : 1;
     }
 
@@ -793,6 +796,122 @@ internal static class SimdParity
                                 mismatches.Add($"seed {seed}, {analysis.EciMode}, v{version}, {used} budgets, lane {lane}: {(walked ? counts[lane] : -1)} chunks, expected {count}");
                         }
                     }
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The 128-bit syndrome pass against the scalar one: random blocks, then every ECC count over lengths across the eight-byte step, its
+    /// four-byte remainder and its tail, with degenerate fills. The has-error flag too: a lane past eccCount is non-zero on a clean block.
+    /// </summary>
+    private static List<string> SyndromeMismatches()
+    {
+        var mismatches = new List<string>();
+        if (!Vector128.IsHardwareAccelerated)
+            return mismatches;
+        var random = new Random(20261001);
+        var cases = new List<byte[]>();
+        for (var round = 0; round < 200; round++)
+        {
+            var codeword = new byte[random.Next(8, 256)];
+            if (round % 10 != 0)
+                random.NextBytes(codeword);
+            cases.Add(codeword);
+        }
+        for (var length = 2; length <= 40; length++)
+        {
+            foreach (var fill in new byte[] { 0x00, 0xFF, 0x80 })
+                cases.Add(Enumerable.Repeat(fill, length).ToArray());
+        }
+        var expected = new byte[FeatherQR.Internals.BinaryDecoders.EccBinaryDecoder.SyndromeLanes];
+        var actual = new byte[FeatherQR.Internals.BinaryDecoders.EccBinaryDecoder.SyndromeLanes];
+        foreach (var codeword in cases)
+        {
+            for (var eccCount = 1; eccCount <= Math.Min(30, codeword.Length - 1); eccCount++)
+            {
+                var expectedError = FeatherQR.Internals.BinaryDecoders.EccBinaryDecoder.ComputeSyndromesScalar(codeword, eccCount, expected);
+                var actualError = FeatherQR.Internals.BinaryDecoders.EccBinaryDecoder.ComputeSyndromesVector128(codeword, eccCount, actual);
+                if (expectedError != actualError || !expected.AsSpan(0, eccCount).SequenceEqual(actual.AsSpan(0, eccCount)))
+                    mismatches.Add($"length {codeword.Length}, eccCount {eccCount}");
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The WebAssembly Reed-Solomon kernel, and its entry with the size gate, against the scalar one: every ECC count to 32 (one
+    /// register and two) over lengths across the four-byte step and its tail, random data and degenerate fills.
+    /// </summary>
+    private static List<string> EccEncoderMismatches()
+    {
+        var mismatches = new List<string>();
+        if (!System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported)
+            return mismatches;
+        var random = new Random(20261001);
+        var expected = new byte[32];
+        var actual = new byte[32];
+        for (var length = 0; length <= 160; length += length < 24 ? 1 : 17)
+        {
+            for (var kind = 0; kind < 4; kind++)
+            {
+                var data = new byte[length];
+                if (kind == 0)
+                    random.NextBytes(data);
+                else
+                    Array.Fill(data, kind == 1 ? (byte)0xFF : kind == 2 ? (byte)0x80 : (byte)0x00);
+                for (var eccCount = 1; eccCount <= 32; eccCount++)
+                {
+                    FeatherQR.Internals.BinaryEncoders.EccBinaryEncoder.CalculateEccScalar(data, expected, eccCount);
+                    FeatherQR.Internals.BinaryEncoders.EccBinaryEncoder.PackedSimdKernel(data, actual, eccCount);
+                    if (!expected.AsSpan(0, eccCount).SequenceEqual(actual.AsSpan(0, eccCount)))
+                        mismatches.Add($"length {length}, eccCount {eccCount}, {(kind == 0 ? "random" : "fill " + data.FirstOrDefault())}");
+                    FeatherQR.Internals.BinaryEncoders.EccBinaryEncoder.CalculateEccPackedSimd(data, actual, eccCount);
+                    if (!expected.AsSpan(0, eccCount).SequenceEqual(actual.AsSpan(0, eccCount)))
+                        mismatches.Add($"entry, length {length}, eccCount {eccCount}, {(kind == 0 ? "random" : "fill " + data.FirstOrDefault())}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The portable pair planes (pinned, so every version runs them) and the dispatch against the scalar walk, every version, over
+    /// random grids with dark modules 1 or 2, all light and all dark.
+    /// </summary>
+    private static List<string> ExtractMismatches()
+    {
+        var mismatches = new List<string>();
+        if (!RmQRMatrixDecoder.IsPairPlaneVector128TierSupported)
+            return mismatches;
+        foreach (var version in Enum.GetValues<RmQRVersion>())
+        {
+            var width = RmQRConstants.GetWidth(version);
+            var height = RmQRConstants.GetHeight(version);
+            var total = RmQRConstants.GetTotalCodewordCount(version);
+            for (var kind = 0; kind < 4; kind++)
+            {
+                var modules = new byte[width * height];
+                if (kind < 2)
+                {
+                    var random = new Random((int)version * 13 + kind);
+                    for (var i = 0; i < modules.Length; i++)
+                        modules[i] = (byte)(random.Next(2) == 0 ? 0 : kind + 1);
+                }
+                else if (kind == 3)
+                {
+                    Array.Fill(modules, (byte)0xFF);
+                }
+                var expected = new byte[total];
+                RmQRMatrixDecoder.ExtractCodewords(modules, width, height, version, expected, RmQRMatrixDecoder.ExtractKernel.Scalar);
+                foreach (var kernel in new[] { RmQRMatrixDecoder.ExtractKernel.PairPlanesVector128, RmQRMatrixDecoder.ExtractKernel.Auto })
+                {
+                    var actual = new byte[total];
+                    Array.Fill(actual, (byte)0xA5);
+                    RmQRMatrixDecoder.ExtractCodewords(modules, width, height, version, actual, kernel);
+                    if (!expected.AsSpan().SequenceEqual(actual))
+                        mismatches.Add($"{version}, {kernel}, grid {kind}");
                 }
             }
         }

@@ -596,3 +596,126 @@ Against the build before phase 4 (HEAD `3ef15fc`, the same harness), ratio of me
 
 Micro QR M4 and rMQR R17x139 encodes, whose code did not change, read 0.99 to 1.01 (one default NativeAOT row 0.90 at 1.2 µs). The segmenter's lanes alone, before the walk joined them, moved the two Optimal sets 0.97 and 0.99 on default NativeAOT, 1.00 on WebAssembly AOT and 0.97 interpreted.
 
+## Phase 5: GF(256) and bit planes
+
+Kernel shapes each alone in its own process, three runs, the two sides alternating: the range of the three, ratios of their medians. The per-version and per-block probes: three runs of one process on the AOT-compiled builds, each shape in its own process interpreted, medians.
+
+### Syndrome pass
+
+µs a block, the scalar pass → the 128-bit tier:
+
+| Block (bytes, ECC) | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| 148, 30 (version 40-L) | 3.06-3.10 → 0.18 (0.06) | 4.28-4.33 → 0.24-0.25 (0.06) | 12.28-12.36 → 1.76-1.78 (0.14) |
+| 45, 30 (version 40-H) | 0.89 → 0.06-0.07 (0.07) | 1.29-1.31 → 0.10 (0.08) | 3.79-3.81 → 0.62-0.63 (0.16) |
+| 24, 8 (Micro QR M4-L) | 0.12 → 0.02 (0.18) | 0.18-0.19 → 0.04 (0.23) | 0.58 → 0.21 (0.36) |
+
+### Reed-Solomon encoder on WebAssembly
+
+µs a block, the scalar kernel → the dispatch (the WebAssembly kernel for these blocks):
+
+| Block (data bytes, ECC) | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|
+| 118, 30 (version 40-L) | 1.93-1.95 → 0.24 (0.12) | 12.49-12.61 → 1.37-1.43 (0.11) |
+| 15, 30 (version 40-H) | 0.28-0.29 → 0.07 (0.23) | 1.66-1.89 → 0.55-0.57 (0.34) |
+| 16, 8 (Micro QR M4-L) | 0.11-0.15 → 0.06-0.07 (0.54) | 0.61-0.62 → 0.38-0.48 (0.64) |
+
+The kernel past the size gate against the scalar kernel on small blocks (`probe/ecc-encode-*`), ratio of medians, WebAssembly AOT | interpreted:
+
+| Data bytes | ECC 2 | 5 | 7 | 10 | 17 |
+|---|---|---|---|---|---|
+| 3 | 1.05 \| 2.39 | 0.98 \| 2.05 | 0.89 \| 1.80 | 0.84 \| 1.54 | 0.71 \| 1.48 |
+| 5 | 0.98 \| 2.13 | 0.86 \| 1.72 | 0.82 \| 1.35 | 0.70 \| 1.13 | 0.61 \| 1.05 |
+| 6 | 1.00 \| 2.18 | 0.85 \| 1.55 | 0.77 \| 1.30 | 0.68 \| 1.03 | 0.57 \| 0.98 |
+| 9 | 0.89 \| 2.03 | 0.80 \| 1.39 | 0.71 \| 1.04 | 0.58 \| 0.83 | 0.47 \| 0.73 |
+| 13 | 0.81 \| 1.78 | 0.71 \| 1.09 | 0.60 \| 0.83 | 0.49 \| 0.73 | 0.39 \| 0.56 |
+| 16 | 0.73 \| 1.57 | 0.65 \| 0.94 | 0.56 \| 0.81 | 0.45 \| 0.57 | 0.36 \| 0.49 |
+
+The kernel costs about 0.04 µs AOT-compiled and 0.35 µs interpreted before its first step, where the scalar kernel takes 0.15 µs on 3 × 2. From 90 data bytes × ECC codewords every block wins or ties interpreted (6 × 17 at 0.98 the closest), and under it every block loses but 16 × 5 (0.94). Loading the swizzle indices from constant data instead of `Vector128.Create` was slower interpreted: 0.38-0.52 µs against 0.37-0.46 on four of these blocks.
+
+### rMQR codeword extraction
+
+µs a symbol, the scalar walk → the 128-bit pair planes, pinned:
+
+| Symbol | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| R17x139 | 1.06-1.07 → 0.21 (0.20) | 1.69-1.72 → 0.71 (0.41) | 3.95-4.00 → 2.16-2.20 (0.55) |
+| R13x77 | 0.39-0.40 → 0.11 (0.27) | 0.64-0.65 → 0.36 (0.56) | 1.55-1.57 → 1.12-1.14 (0.72) |
+| R7x43 | 0.07 → 0.05 (0.72) | 0.12 → 0.17 (1.45) | 0.37-0.38 → 0.55 (1.49) |
+| R11x27 | 0.08 → 0.05 (0.60) | 0.13 → 0.14-0.15 (1.09) | 0.40-0.41 → 0.49-0.50 (1.22) |
+
+Every version, pinned pair planes over the walk, with the stream bits per 8-column block (`probe/rmqr-extract-*`):
+
+| Symbol | Bits per block | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|
+| R7x43 | 17 | 0.71 | 1.45 | 1.47 |
+| R7x59 | 21 | 0.61 | 1.18 | 1.31 |
+| R7x77 | 26 | 0.51 | 1.03 | 1.20 |
+| R7x99 | 27 | 0.49 | 0.99 | 1.16 |
+| R7x139 | 30 | 0.43 | 0.87 | 1.05 |
+| R9x43 | 28 | 0.57 | 1.13 | 1.29 |
+| R9x59 | 33 | 0.50 | 0.91 | 1.11 |
+| R9x77 | 39 | 0.40 | 0.80 | 0.98 |
+| R9x99 | 41 | 0.39 | 0.77 | 0.96 |
+| R9x139 | 44 | 0.34 | 0.68 | 0.85 |
+| R11x27 | 30 | 0.61 | 1.08 | 1.22 |
+| R11x43 | 41 | 0.46 | 0.88 | 1.07 |
+| R11x59 | 47 | 0.40 | 0.73 | 0.93 |
+| R11x77 | 54 | 0.34 | 0.66 | 0.84 |
+| R11x99 | 55 | 0.33 | 0.65 | 0.81 |
+| R11x139 | 59 | 0.29 | 0.56 | 0.71 |
+| R13x27 | 42 | 0.47 | 0.89 | 1.03 |
+| R13x43 | 55 | 0.37 | 0.74 | 0.92 |
+| R13x59 | 60 | 0.33 | 0.62 | 0.82 |
+| R13x77 | 68 | 0.28 | 0.56 | 0.72 |
+| R13x99 | 70 | 0.28 | 0.56 | 0.72 |
+| R13x139 | 74 | 0.25 | 0.50 | 0.64 |
+| R15x43 | 68 | 0.33 | 0.65 | 0.84 |
+| R15x59 | 74 | 0.28 | 0.55 | 0.72 |
+| R15x77 | 82 | 0.25 | 0.50 | 0.65 |
+| R15x99 | 84 | 0.25 | 0.50 | 0.64 |
+| R15x139 | 88 | 0.22 | 0.45 | 0.58 |
+| R17x43 | 81 | 0.29 | 0.58 | 0.76 |
+| R17x59 | 88 | 0.27 | 0.50 | 0.67 |
+| R17x77 | 98 | 0.23 | 0.46 | 0.63 |
+| R17x99 | 98 | 0.23 | 0.46 | 0.60 |
+| R17x139 | 103 | 0.21 | 0.41 | 0.53 |
+
+WebAssembly takes the pair planes from 44 bits per block: every version from there wins interpreted (R11x59 at 0.93 the closest), and every version under it loses or ties there (R9x77 0.98, R9x99 0.96). AOT-compiled, versions from 33 bits a block win (R9x59 0.91), and the break-even falls between 27 and 33 (R7x99 0.99, R7x139 0.87, R11x27 1.08). A fit of the AOT-compiled times, 30 ns + 17 ns a block + 1.3 ns a block-row, puts most of a small symbol's cost in the per-block work: the four pairs' reversal and store, and their runs.
+
+A `NoInlining` helper for the dispatch's new branch, measured against the branch inline on the interpreter: R17x139 2.30-2.35 against 2.17-2.23 µs, R13x77 1.27-1.30 against 1.13-1.16, the R17x139 matrix decode level (11.1 µs medians both).
+
+### End to end
+
+Against the build before phase 5 (HEAD `2820b5d`, the same harness), ratio of medians (base range → new range, µs):
+
+| Shape | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| matrix/qr-v1-num-L | 0.68 (0.5-0.5 → 0.3-0.3) | 0.78 (0.9-1.0 → 0.7-0.8) | 0.87 (3.7-3.9 → 3.3-3.4) |
+| matrix/qr-v6-url-M | 0.35 (2.8-5.4 → 1.1-1.1) | 0.54 (5.4-5.7 → 2.9-4.2) | 0.58 (16.4-27.7 → 9.7-9.7) |
+| matrix/qr-v40-byte-L | 0.21 (93.4-116.2 → 19.0-19.3) | 0.25 (134.0-137.1 → 33.9-34.1) | 0.33 (389.4-395.2 → 128.5-129.5) |
+| matrix/qr-v40-byte-H | 0.22 (88.1-88.5 → 19.5-19.7) | 0.32 (130.7-174.8 → 45.8-66.1) | 0.34 (378.8-388.0 → 129.4-132.1) |
+| matrix/micro-m2-num | 0.92 (0.2-0.2 → 0.2-0.2) | 0.89 (0.3-0.5 → 0.3-0.3) | 0.96 (1.5-2.5 → 1.5-1.5) |
+| matrix/micro-m4-byte | 0.65 (0.5-0.5 → 0.3-0.3) | 0.67 (0.7-0.7 → 0.5-0.5) | 0.82 (3.1-3.1 → 2.5-2.5) |
+| matrix/rmqr-r7x43-num | 0.74 (0.3-0.3 → 0.2-0.2) | 0.77 (0.4-0.4 → 0.3-0.3) | 0.93 (2.2-4.4 → 2.0-3.7) |
+| matrix/rmqr-r17x139-byte | 0.24 (4.3-4.3 → 1.0-1.1) | 0.28 (6.2-6.3 → 1.8-1.8) | 0.49 (21.8-35.0 → 10.8-11.4) |
+| matrix/rmqr-r17x139-byte-corrected | 0.34 (7.9-8.0 → 2.7-2.7) | 0.41 (11.8-12.0 → 4.7-4.8) | 0.52 (38.0-44.4 → 19.3-40.5) |
+| matrix/sa-byte-45k-set | 0.21 (1,558-1,594 → 328.9-330.9) | 0.31 (2,313-2,315 → 703.7-727.3) | 0.35 (6,544-6,867 → 2,220-2,305) |
+| encode/qr-v1-num-L | unchanged | 0.97 (2.6-2.6 → 2.5-2.6) | 0.99 (13.6-13.7 → 13.5-13.6) |
+| encode/qr-v1-alnum-M | unchanged | 0.97 (2.9-3.0 → 2.8-2.9) | 0.97 (14.4-14.8 → 14.2-14.2) |
+| encode/qr-v6-url-M | unchanged | 0.86 (11.1-17.1 → 10.3-10.7) | 1.00 (40.2-48.3 → 38.5-95.7) |
+| encode/qr-v20-byte-M | unchanged | 0.93 (107.1-110.5 → 99.2-101.0) | 0.92 (472.2-518.4 → 424.3-460.6) |
+| encode/qr-v40-byte-L | unchanged | 0.89 (363.2-368.2 → 324.2-335.0) | 0.77 (1,291-1,347 → 978.5-1,028) |
+| encode/qr-v40-byte-H | unchanged | 0.95 (330.7-343.0 → 316.4-326.4) | 0.91 (1,050-1,087 → 954.6-966.3) |
+| encode/micro-m2-num | unchanged | 1.03 (0.4-0.4 → 0.4-0.4) | 1.00 (2.3-2.4 → 2.3-2.4) |
+| encode/micro-m3-alnum | unchanged | 1.05 (0.5-0.8 → 0.5-1.0) | 0.99 (2.9-2.9 → 2.9-3.0) |
+| encode/micro-m4-byte | unchanged | 0.83 (0.6-0.6 → 0.5-0.5) | 0.95 (3.4-5.3 → 3.3-4.7) |
+| encode/rmqr-r7x43-num | unchanged | 1.00 (0.4-0.4 → 0.4-0.4) | 0.99 (2.4-2.4 → 2.4-2.4) |
+| encode/rmqr-r11x59-alnum | unchanged | 0.72 (0.8-0.8 → 0.6-0.6) | 0.72 (4.7-4.9 → 3.4-3.4) |
+| encode/rmqr-r17x139-byte | unchanged | 0.58 (3.1-3.2 → 1.8-1.9) | 0.53 (17.9-18.0 → 9.5-9.7) |
+| encode/sa-byte-45k-single | unchanged | 0.77 (2,838-2,875 → 2,188-2,217) | 0.87 (20,223-21,500 → 16,578-17,910) |
+| image/qr-v40-3px | 0.64 (205.9-210.7 → 134.6-146.6) | 0.60 (251.3-428.2 → 149.6-629.6) | 0.80 (1,345-1,360 → 1,077-1,105) |
+| image/micro-m4-8px | 0.98 (6.3-6.4 → 6.2-6.4) | 0.95 (7.6-8.0 → 7.5-7.6) | 1.00 (43.3-43.5 → 41.6-47.7) |
+| image/rmqr-r17x139-8px | 0.90 (34.3-34.6 → 30.9-31.0) | 0.85 (35.2-38.1 → 30.8-31.2) | 0.95 (212.1-224.5 → 204.5-210.1) |
+
+Default NativeAOT is the run before the WebAssembly gates moved, which left its code as it was; its encodes, whose code did not change, read 0.97 to 1.05 there. The Micro QR M2 and M3 encodes, under the encoder's gate, read 1.03 and 1.05 on WebAssembly AOT in this run and 1.00 and 1.01 over seven alternations.

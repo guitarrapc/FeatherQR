@@ -9,7 +9,8 @@ namespace FeatherQR.Tests;
 /// <remarks>
 /// <para>
 /// <c>{stem}.X86.cs</c> holds x86 intrinsics (with the portable vectors they work on), <c>{stem}.Arm64.cs</c>
-/// ARM intrinsics (with 128-bit vectors), <c>{stem}.Vector256.cs</c> and <c>{stem}.Vector128.cs</c> portable
+/// ARM intrinsics (with 128-bit vectors), <c>{stem}.Wasm.cs</c> WebAssembly's <c>PackedSimd</c> (with 128-bit vectors),
+/// <c>{stem}.Vector256.cs</c> and <c>{stem}.Vector128.cs</c> portable
 /// vectors of that width or narrower, where <c>{stem}</c> is the type, or the type and a feature
 /// (<c>ModulePlacer.Masking</c>). <c>{stem}.Simd.cs</c> holds a vector tier that picks its instructions per
 /// instruction set inside one method (WebAssembly's <c>PackedSimd</c> among them), so no single family's file can take it; a file whose code one family's
@@ -122,6 +123,7 @@ public class SimdLayoutTest
     [
         ("X86", ["X86", "Vector256", "Vector128"], "X86"),
         ("Arm64", ["Arm", "Vector128"], "Arm"),
+        ("Wasm", ["Wasm", "Vector128"], "Wasm"),
         ("Vector256", ["Vector256", "Vector128"], "Vector256"),
         ("Vector128", ["Vector128"], "Vector128"),
     ];

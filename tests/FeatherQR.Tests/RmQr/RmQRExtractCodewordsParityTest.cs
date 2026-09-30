@@ -4,9 +4,9 @@ using FeatherQR.Internals.RmQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// All three <see cref="RmQRMatrixDecoder.ExtractCodewords(ReadOnlySpan{byte}, int, int, RmQRVersion, Span{byte}, RmQRMatrixDecoder.ExtractKernel)"/>
-/// tiers (the x64 bit-plane kernel, the ARM64 pair-plane kernel and the portable
-/// table walk) against
+/// All four <see cref="RmQRMatrixDecoder.ExtractCodewords(ReadOnlySpan{byte}, int, int, RmQRVersion, Span{byte}, RmQRMatrixDecoder.ExtractKernel)"/>
+/// tiers (the x64 bit-plane kernel, the ARM64 pair-plane kernel, the pair planes on
+/// portable vectors and the portable table walk) against
 /// <see cref="RmQRNaiveReference.ExtractInterleavedStream"/>, byte for byte, for
 /// every version over module grids that pin the contract corners: all light, all
 /// dark written as 1 / 0xFF / 2 (the API is "0 = light, non-zero = dark", so a
@@ -127,6 +127,15 @@ public class RmQRExtractCodewordsParityTest
                 await Assert.That(pairPlanes).IsEquivalentTo(expected, CollectionOrdering.Matching)
                     .Because($"pair-plane tier, version {version} ({width}x{height}), grid shape {shape}");
             }
+
+            if (RmQRMatrixDecoder.IsPairPlaneVector128TierSupported)
+            {
+                var pairPlanes = new byte[totalCodewords];
+                pairPlanes.AsSpan().Fill(0xA5);
+                RmQRMatrixDecoder.ExtractCodewords(modules, width, height, version, pairPlanes, RmQRMatrixDecoder.ExtractKernel.PairPlanesVector128);
+                await Assert.That(pairPlanes).IsEquivalentTo(expected, CollectionOrdering.Matching)
+                    .Because($"128-bit pair-plane tier, version {version} ({width}x{height}), grid shape {shape}");
+            }
         }
     }
 
@@ -140,7 +149,7 @@ public class RmQRExtractCodewordsParityTest
     [MethodDataSource(nameof(AllVersions))]
     public async Task VectorTiers_StayInsideTheModuleSpan(RmQRVersion version)
     {
-        if (!RmQRMatrixDecoder.IsBitPlaneTierSupported && !RmQRMatrixDecoder.IsPairPlaneTierSupported)
+        if (!RmQRMatrixDecoder.IsBitPlaneTierSupported && !RmQRMatrixDecoder.IsPairPlaneTierSupported && !RmQRMatrixDecoder.IsPairPlaneVector128TierSupported)
         {
             Skip.Test("no vector extraction tier on this machine");
             return;
@@ -177,6 +186,14 @@ public class RmQRExtractCodewordsParityTest
             RmQRMatrixDecoder.ExtractCodewords(padded.AsSpan(0, length), width, height, version, actual, RmQRMatrixDecoder.ExtractKernel.PairPlanes);
             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
                 .Because($"pair-plane tier, version {version} ({width}x{height}) must not depend on bytes past width*height");
+        }
+
+        if (RmQRMatrixDecoder.IsPairPlaneVector128TierSupported)
+        {
+            var actual = new byte[totalCodewords];
+            RmQRMatrixDecoder.ExtractCodewords(padded.AsSpan(0, length), width, height, version, actual, RmQRMatrixDecoder.ExtractKernel.PairPlanesVector128);
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
+                .Because($"128-bit pair-plane tier, version {version} ({width}x{height}) must not depend on bytes past width*height");
         }
     }
 }
