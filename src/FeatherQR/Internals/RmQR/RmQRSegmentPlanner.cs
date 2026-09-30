@@ -45,17 +45,21 @@ internal static class RmQRSegmentPlanner
     /// <summary>Narrowest count indicator of any mode at any version; the minimum of the three widths pinned by RmQRSegmentPlannerUnitTest.</summary>
     private const int MinCountBitsAny = 3;
 
+    // Kanji's narrowest count indicator (R7x43 and R11x27), for the Kanji plan's floor and screen; pinned by RmQRSegmentPlannerUnitTest.
+    private const int MinCountBitsKanji = 2;
+
     /// <summary>rMQR ECI prefix: 3-bit mode indicator 111 plus a one-byte assignment designator.</summary>
     private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
 
     /// <summary>
     /// Version fit for mixed-mode segmentation.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="RmQRSegmentation.Single"/>.
+    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan"/> and written with no ECI header.
     /// Throws exactly what <see cref="RmQRVersionSelector"/> throws.
     /// </summary>
-    public static RmQRVersion SelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out bool useSegments)
+    public static RmQRVersion SelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out bool useSegments, out bool kanjiPlan)
     {
-        if (TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var version, out useSegments))
+        if (TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var version, out useSegments, out kanjiPlan))
             return version;
 
         // Neither one mode nor a mixed plan fits: the single-mode selector owns the message.
@@ -66,9 +70,10 @@ internal static class RmQRSegmentPlanner
     /// <summary>
     /// <see cref="SelectVersion"/> without the capacity throw; argument errors still throw, in the same order and with the same messages.
     /// </summary>
-    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion selected, out bool useSegments)
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)
     {
         useSegments = false;
+        kanjiPlan = false;
         var charset = analysis.EciMode;
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
@@ -92,7 +97,10 @@ internal static class RmQRSegmentPlanner
                 return true;
 
             // One candidate, so pricing it here would decide what building the plan decides anyway; TryBuildPlan rejects a plan the version cannot hold and the caller falls back to the single-mode selector, which owns the error.
+            // A Kanji-eligible text has two plans, and which one to build is this call's to say, so its Kanji plan is priced here; where it does not fit, the UTF-8 plan is left to TryBuildPlan like any other.
             useSegments = true;
+            if (analysis.KanjiPlannable && text.Length is > 0 and <= MaxPlannableChars)
+                kanjiPlan = KanjiPlanCost(text, requested, default, out _) <= 8 * RmQRConstants.GetDataCodewordCount(requested, eccLevel);
             return true;
         }
 
@@ -106,6 +114,9 @@ internal static class RmQRSegmentPlanner
             selected = single;
             return hasSingle;
         }
+
+        if (analysis.KanjiPlannable)
+            return TrySelectVersionKanji(text, eccLevel, fitStrategy, height, single, hasSingle, out selected, out useSegments, out kanjiPlan);
 
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
@@ -159,6 +170,127 @@ internal static class RmQRSegmentPlanner
 
         selected = single;
         return hasSingle;
+    }
+
+    /// <summary>
+    /// The version scan for a Kanji-eligible text with ASCII in it (<see cref="TextAnalysisResult.KanjiPlannable"/>), where two plans compete ahead of the single-mode (UTF-8) fit.
+    /// At each candidate, in the strategy's order, the Kanji plan (Kanji runs beside runs of the ASCII, no ECI header) is taken where it fits, otherwise the UTF-8 plan the seven-state program gives the same text.
+    /// </summary>
+    /// <remarks>
+    /// The UTF-8 plan is weighed so that Optimal never needs a larger symbol than it did before Kanji plans: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
+    /// Each program has its own three filters, the ones <see cref="TrySelectVersion"/> describes. The Kanji plan's are re-derived for its eighth state: the screen prices a character with a cell at 13 bits, and the floor runs at Kanji's narrowest count indicator, 2 bits, so that a plan filling R7x43 exactly is not skipped; the upper bound re-prices the floor plan's Kanji runs too; and the memo key carries Kanji's width, which tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
+    /// </remarks>
+    private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRVersion single, bool hasSingle, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)
+    {
+        useSegments = false;
+        kanjiPlan = false;
+        var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
+        var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
+
+        // One pass for both screens: the UTF-8 one is TrivialLowerBoundBits under UTF-8 plus the ECI header.
+        var kanjiSixths = ModeSegmenter.CheapestSixthsKanji(text, out var utf8Sixths, out var cellRuns, out var asciiRuns);
+        var kanjiTrivialBits = KanjiScreenBits(kanjiSixths, cellRuns, asciiRuns);
+        var utf8TrivialBits = (utf8Sixths + 5) / 6 + RmQRConstants.ModeIndicatorLength + MinCountBitsAny + EciHeaderBits;
+
+        var kanjiFloor = -1;
+        int kanjiRunsNumeric = 0, kanjiRunsAlnum = 0, kanjiRunsByte = 0, kanjiRunsKanji = 0;
+        var utf8Floor = -1;
+        int utf8RunsNumeric = 0, utf8RunsAlnum = 0, utf8RunsByte = 0;
+
+        // One store for both programs: a Kanji key carries Kanji's width (at least 2) in its top byte, a UTF-8 key none.
+        Span<int> memoKeys = stackalloc int[MemoCapacity];
+        Span<int> memoCosts = stackalloc int[MemoCapacity];
+        var memoCount = 0;
+
+        for (var rank = 0; rank < order.Length; rank++)
+        {
+            var candidate = (RmQRVersion)order[rank];
+            if (hasSingle && candidate == single)
+                break; // every later rank is no better than the single-mode fit
+            if ((heightMask & (1u << rank)) == 0)
+                continue;
+
+            var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(candidate, eccLevel);
+
+            if (capacityBits >= kanjiTrivialBits)
+            {
+                if (kanjiFloor < 0)
+                    kanjiFloor = ComputeFloorKanji(text, out kanjiRunsNumeric, out kanjiRunsAlnum, out kanjiRunsByte, out kanjiRunsKanji);
+
+                if (capacityBits >= kanjiFloor
+                    && (capacityBits >= UpperBoundKanji(kanjiFloor, kanjiRunsNumeric, kanjiRunsAlnum, kanjiRunsByte, kanjiRunsKanji, candidate)
+                        || KanjiPlanFits(text, candidate, capacityBits, memoKeys, memoCosts, ref memoCount)))
+                {
+                    useSegments = true;
+                    kanjiPlan = true;
+                    selected = candidate;
+                    return true;
+                }
+            }
+
+            if (capacityBits >= utf8TrivialBits)
+            {
+                if (utf8Floor < 0)
+                    utf8Floor = ComputeFloor(text, EciMode.Utf8, out utf8RunsNumeric, out utf8RunsAlnum, out utf8RunsByte);
+
+                if (capacityBits >= utf8Floor + EciHeaderBits
+                    && (capacityBits >= UpperBound(utf8Floor, utf8RunsNumeric, utf8RunsAlnum, utf8RunsByte, candidate) + EciHeaderBits
+                        || PlanFits(text, EciMode.Utf8, candidate, eccLevel, EciHeaderBits, memoKeys, memoCosts, ref memoCount)))
+                {
+                    useSegments = true;
+                    selected = candidate;
+                    return true;
+                }
+            }
+        }
+
+        selected = single;
+        return hasSingle;
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildPlan"/> for the Kanji plan <see cref="TrySelectVersion"/> chose: Kanji runs beside runs of the ASCII, which the caller writes with no ECI header.
+    /// </summary>
+    public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, RmQRVersion version, RmQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars)
+            return false;
+
+        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
+        byte[]? rented = null;
+        Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
+            ? stackalloc byte[ModeSegmenter.MaxStackParents]
+            : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
+        int plannedBits;
+        try
+        {
+            var window = parents.Slice(0, parentLength);
+            plannedBits = KanjiPlanCost(text, version, window, out var finalState);
+            if (!ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount))
+            {
+                segmentCount = 0;
+                return false;
+            }
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+
+        ModeSegmenter.FillUnitCounts(text, EciMode.Default, segments.Slice(0, segmentCount));
+
+        var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
+        Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
+
+        if (measuredBits != plannedBits || measuredBits > 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -231,13 +363,20 @@ internal static class RmQRSegmentPlanner
         => Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
 
     /// <summary>Exact bit cost of a plan: per run, mode indicator + count indicator + payload.</summary>
+    /// <remarks>
+    /// The four headers are looked up once for the version rather than per run: a Kanji plan of interleaved text has a run every few characters, and the plan is measured twice (when built and before it is written).
+    /// </remarks>
     public static int MeasurePlan(RmQRVersion version, ReadOnlySpan<ModeSegment> segments)
     {
+        var numericHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
+        var alnumHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
+        var byteHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        var kanjiHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetKanjiCountIndicatorLength(version);
         var total = 0;
         foreach (var segment in segments)
         {
-            var mode = segment.Mode;
-            total += RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode) + PayloadBits(mode, segment.UnitCount);
+            var header = segment.ModeIndex switch { 0 => numericHeader, 1 => alnumHeader, 2 => byteHeader, _ => kanjiHeader };
+            total += header + ModeSegmenter.PayloadBitsOfIndex(segment.ModeIndex, segment.UnitCount);
         }
         return total;
     }
@@ -263,6 +402,21 @@ internal static class RmQRSegmentPlanner
     {
         var floor = ComputeFloor(text, charset, out var runsNumeric, out var runsAlnum, out var runsByte);
         return UpperBound(floor, runsNumeric, runsAlnum, runsByte, version);
+    }
+
+    /// <summary>Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the Kanji plan's minimal payload bits at explicit count indicator widths.</summary>
+    public static int MinimumPayloadBitsKanji(ReadOnlySpan<char> text, int cciNumeric, int cciAlnum, int cciByte, int cciKanji)
+        => ModeSegmenter.ComputeCostsKanji(text, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, cciKanji, default, out _);
+
+    /// <summary>Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the Kanji plan's floor, the minimal payload bits at the narrowest widths of all four modes.</summary>
+    public static int FloorKanji(ReadOnlySpan<char> text)
+        => ComputeFloorKanji(text, out _, out _, out _, out _);
+
+    /// <summary>Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the Kanji plan's floor plan re-priced at <paramref name="version"/>.</summary>
+    public static int FloorPlanUpperBoundKanji(ReadOnlySpan<char> text, RmQRVersion version)
+    {
+        var floor = ComputeFloorKanji(text, out var runsNumeric, out var runsAlnum, out var runsByte, out var runsKanji);
+        return UpperBoundKanji(floor, runsNumeric, runsAlnum, runsByte, runsKanji, version);
     }
 
     // ---------------------------------------------------------------
@@ -302,6 +456,48 @@ internal static class RmQRSegmentPlanner
 
         return cost + eciBits <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
     }
+
+    /// <summary><see cref="PlanFits"/> for the Kanji plan, memoised under a key that carries Kanji's width as well.</summary>
+    private static bool KanjiPlanFits(ReadOnlySpan<char> text, RmQRVersion version, int capacityBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount)
+    {
+        var key = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric)
+            | (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric) << 8)
+            | (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte) << 16)
+            | (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji) << 24);
+
+        var cost = -1;
+        for (var i = 0; i < memoCount; i++)
+        {
+            if (memoKeys[i] == key)
+            {
+                cost = memoCosts[i];
+                break;
+            }
+        }
+
+        if (cost < 0)
+        {
+            cost = KanjiPlanCost(text, version, default, out _);
+            if (memoCount < memoKeys.Length)
+            {
+                memoKeys[memoCount] = key;
+                memoCosts[memoCount] = cost;
+                memoCount++;
+            }
+        }
+
+        return cost <= capacityBits;
+    }
+
+    /// <summary>The Kanji plan's program at <paramref name="version"/>'s widths.</summary>
+    private static int KanjiPlanCost(ReadOnlySpan<char> text, RmQRVersion version, Span<byte> parents, out int finalState)
+        => ModeSegmenter.ComputeCostsKanji(
+            text, RmQRConstants.ModeIndicatorLength,
+            RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
+            RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
+            RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte),
+            RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji),
+            parents, out finalState);
 
     // ---------------------------------------------------------------
     // Scan bounds
@@ -351,6 +547,47 @@ internal static class RmQRSegmentPlanner
             + runsNumeric * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric) - MinCountBitsNumeric)
             + runsAlnum * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric) - MinCountBitsAlnum)
             + runsByte * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte) - MinCountBitsByte);
+
+    /// <summary>
+    /// <see cref="TrivialLowerBoundBits"/> for the Kanji plan: a character with a cell at 13 bits, a header for every stretch of either kind (<see cref="KanjiScreenBits"/>), and no ECI header.
+    /// </summary>
+    public static int TrivialLowerBoundBitsKanji(ReadOnlySpan<char> text)
+        => KanjiScreenBits(ModeSegmenter.CheapestSixthsKanji(text, out _, out var cellRuns, out var asciiRuns), cellRuns, asciiRuns);
+
+    /// <summary>Each stretch of characters with a cell opens a Kanji run (3 + 2 bits at the narrowest), and each stretch of ASCII a run of another mode (3 + 3), since no run crosses between them.</summary>
+    private static int KanjiScreenBits(int sixths, int cellRuns, int asciiRuns)
+        => (sixths + 5) / 6
+            + cellRuns * (RmQRConstants.ModeIndicatorLength + MinCountBitsKanji)
+            + asciiRuns * (RmQRConstants.ModeIndicatorLength + Math.Min(MinCountBitsNumeric, Math.Min(MinCountBitsAlnum, MinCountBitsByte)));
+
+    /// <summary>
+    /// <see cref="ComputeFloor"/> for the Kanji plan: its program at the narrowest widths of all four modes, Kanji's 2 bits included, and the runs of each mode on the plan achieving it.
+    /// </summary>
+    private static int ComputeFloorKanji(ReadOnlySpan<char> text, out int runsNumeric, out int runsAlnum, out int runsByte, out int runsKanji)
+    {
+        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
+        byte[]? rented = null;
+        Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
+            ? stackalloc byte[ModeSegmenter.MaxStackParents]
+            : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
+        try
+        {
+            var window = parents.Slice(0, parentLength);
+            var cost = ModeSegmenter.ComputeCostsKanji(text, RmQRConstants.ModeIndicatorLength, MinCountBitsNumeric, MinCountBitsAlnum, MinCountBitsByte, MinCountBitsKanji, window, out var finalState);
+            ModeSegmenter.CountRuns(window, finalState, text.Length, out runsNumeric, out runsAlnum, out runsByte, out runsKanji);
+            return cost;
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary><see cref="UpperBound"/> for the Kanji plan's floor plan: its Kanji runs' count indicators grow too.</summary>
+    private static int UpperBoundKanji(int floorPayload, int runsNumeric, int runsAlnum, int runsByte, int runsKanji, RmQRVersion version)
+        => UpperBound(floorPayload, runsNumeric, runsAlnum, runsByte, version)
+            + runsKanji * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji) - MinCountBitsKanji);
 
     // ---------------------------------------------------------------
     // Selector adapters (the two Select overloads stay apart, as the selector keeps them)

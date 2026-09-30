@@ -44,7 +44,7 @@ public enum EciMode
     /// </summary>
     /// <remarks>
     /// Pure ASCII is sent with no ECI header at all, which is both smallest and most widely readable.
-    /// Anything ISO-8859-1 can represent becomes <see cref="Iso8859_1"/>, and the rest becomes <see cref="Utf8"/>, except text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds): that is written in Kanji mode, with no ECI header, at 13 bits a character.
+    /// Anything ISO-8859-1 can represent becomes <see cref="Iso8859_1"/>, and the rest becomes <see cref="Utf8"/>, except text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds): that is written in Kanji mode, with no ECI header, at 13 bits a character. Under Optimal segmentation, text JIS X 0208 holds apart from its ASCII characters can be written as Kanji runs beside runs of that ASCII, again with no ECI header, where that is the smaller symbol.
     /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜 and the minus sign −, keep a text in UTF-8, since a reader using that code page would show other characters.
     /// The header is the whole cost, 12 bits in Standard QR and 11 in rMQR, and it is what can push the content into a larger version.
     /// Two characters in Byte mode at version 1-9, where the count indicator is 8 bits wide:

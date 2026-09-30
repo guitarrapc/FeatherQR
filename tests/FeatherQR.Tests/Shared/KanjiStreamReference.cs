@@ -124,11 +124,15 @@ internal static class KanjiStreamReference
     {
         for (var version = 1; version <= 40; version++)
         {
-            if (StandardQrBits(version, runs).Length <= Internals.StandardQR.QRCodeConstants.GetEccInfo(version, ecc).TotalDataCodewords * 8)
+            if (StandardQrBitCount(version, runs) <= Internals.StandardQR.QRCodeConstants.GetEccInfo(version, ecc).TotalDataCodewords * 8)
                 return version;
         }
         return 0;
     }
+
+    /// <summary>The runs' length in bits at <paramref name="version"/>, or <see cref="int.MaxValue"/> where a run's count does not fit its count indicator, so the version cannot carry them.</summary>
+    public static int StandardQrBitCount(int version, Run[] runs)
+        => runs.All(r => r.Mode == 'E' || r.Units < 1 << StandardQrCountBits(r.Header, version)) ? StandardQrBits(version, runs).Length : int.MaxValue;
 
     // ---- Micro QR (ISO/IEC 18004 Tables 2 and 3) ------------------------------------
 
@@ -161,6 +165,10 @@ internal static class KanjiStreamReference
         }
         return bits.ToString();
     }
+
+    /// <summary>The runs' length in bits at <paramref name="version"/>, or <see cref="int.MaxValue"/> where a run's count does not fit its count indicator.</summary>
+    public static int MicroQrBitCount(int version, Run[] runs)
+        => runs.All(r => r.Units < 1 << MicroQrCountBits(r.Header, version)) ? MicroQrBits(version, runs).Length : int.MaxValue;
 
     /// <summary>M1 and M3 end on a 4-bit codeword, stored in the high nibble of the last byte.</summary>
     public static byte[] MicroQrStream(int version, int capacityBits, int dataCodewords, IEnumerable<Run> runs)
@@ -218,6 +226,10 @@ internal static class KanjiStreamReference
         }
         return bits.ToString();
     }
+
+    /// <summary>The runs' length in bits at the version, or <see cref="int.MaxValue"/> where a run's count does not fit its count indicator.</summary>
+    public static int RmQrBitCount(int versionIndex, Run[] runs)
+        => runs.All(r => r.Mode == 'E' || r.Units < 1 << RmQrCountBits(r.Header, versionIndex)) ? RmQrBits(versionIndex, runs).Length : int.MaxValue;
 
     public static byte[] RmQrStream(int versionIndex, int dataCodewords, IEnumerable<Run> runs)
         => Finish(RmQrBits(versionIndex, runs), terminatorLength: 3, dataCodewords * 8, dataCodewords);

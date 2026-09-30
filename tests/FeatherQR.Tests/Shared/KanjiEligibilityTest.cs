@@ -12,7 +12,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// A text is eligible when the library chose the charset and chose UTF-8, and every character is ASCII or has an encoder cell.
-/// A single mode writes Kanji only when every character has a cell; an eligible text with ASCII in it stays UTF-8 until <see cref="QRSegmentation.Optimal"/> learns Kanji runs.
+/// A single mode writes Kanji only when every character has a cell. An eligible text with ASCII in it stays UTF-8 under <see cref="QRSegmentation.Single"/>, and under <see cref="QRSegmentation.Optimal"/> takes a Kanji plan where that plan needs a smaller version; <c>KanjiOptimalTest</c> holds that rule whole.
 /// </remarks>
 public class KanjiEligibilityTest
 {
@@ -97,13 +97,24 @@ public class KanjiEligibilityTest
         await Assert.That(StandardCore(text, QREccLevel.M)).IsEquivalentTo(ExpectedStandard([new Run('E', "26"), new Run('U', text)], QREccLevel.M), CollectionOrdering.Matching);
     }
 
-    /// <summary>Until Optimal learns Kanji runs, its plan for such a text is today's UTF-8 plan, which is what the explicit charset writes.</summary>
+    /// <summary>
+    /// Under Optimal such a text gets its Kanji plan (Kanji runs beside runs of the ASCII, no ECI header) where that plan needs a smaller version than the UTF-8 stream, and otherwise today's UTF-8 stream, which is what the explicit charset writes.
+    /// Of these texts only 「東京タワー333m」 moves: 19 UTF-8 bytes need version 2-M, and its Kanji plan fits 1-M. The others fit 1-M as UTF-8 already.
+    /// </summary>
     [Test]
     [MethodDataSource(nameof(EligibleWithAscii))]
-    public async Task StandardQr_EligibleWithAscii_OptimalWritesTodaysUtf8Plan(string text)
+    public async Task StandardQr_EligibleWithAscii_OptimalTakesTheKanjiPlanOnlyWhereItIsSmaller(string text)
     {
         var optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
-        await Assert.That(StandardCore(text, QREccLevel.M, optimal)).IsEquivalentTo(StandardCore(text, QREccLevel.M, optimal with { EciMode = EciMode.Utf8 }), CollectionOrdering.Matching);
+        var utf8Version = SmallestStandardQrVersion([new Run('E', "26"), new Run('U', text)], QREccLevel.M);
+        var kanjiRuns = KanjiPlanReference.Runs(text, KanjiPlanReference.StandardQr(1));
+        var kanjiIsSmaller = utf8Version > 1 && StandardQrBitCount(1, kanjiRuns) <= QRCodeConstants.GetEccInfo(1, QREccLevel.M).TotalDataCodewords * 8;
+        await Assert.That(kanjiIsSmaller).IsEqualTo(text == "東京タワー333m");
+
+        var expected = kanjiIsSmaller
+            ? ExpectedStandard(kanjiRuns, QREccLevel.M, 1)
+            : StandardCore(text, QREccLevel.M, optimal with { EciMode = EciMode.Utf8 });
+        await Assert.That(StandardCore(text, QREccLevel.M, optimal)).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]

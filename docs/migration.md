@@ -330,10 +330,16 @@ QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M,
 ```
 
 - **The symbol changes, and is usually smaller.** Sizing reports the version the new symbol needs, which is never larger than before, so a buffer sized with `TryGetRequiredBufferSize` stays correct. A text that did not fit a constrained version range can fit now; nothing that fit stops fitting. A refusal for such text counts characters in Kanji mode rather than bytes in Byte mode.
-- **What stays UTF-8, bit for bit.** Text with any ASCII character in it (「QRコード」, a URL, an order number), because one Kanji segment cannot hold ASCII; text with any character outside JIS X 0208, such as ～ (U+FF5E), ①, halfwidth katakana, é or emoji; and seven JIS X 0208 characters that Windows code page 932 reads differently (the wave dash 〜, ‖, the minus sign −, ¢, £, ¬ and the backslash), which are never written in Kanji mode because a code page 932 reader would show other characters. ASCII and ISO-8859-1 text is untouched.
+- **Text with ASCII in it** (「QRコード」, a URL, an order number) stays UTF-8 under the default `Single` segmentation, because one Kanji segment cannot hold ASCII. Under `Optimal` it can be written as Kanji runs beside Numeric, Alphanumeric and Byte runs of its ASCII, with no ECI header, wherever that needs a smaller symbol than the UTF-8 stream. `Optimal` never picks a larger symbol than it did in 1.x: where interleaved kanji and digits make the Kanji runs cost more, it keeps its 1.x UTF-8 plan.
+
+  ```csharp
+  var optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal };
+  QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, optimal).Version;     // 1.x: 2, now 1
+  ```
+- **What stays UTF-8, bit for bit.** Text with any character outside JIS X 0208, such as ～ (U+FF5E), ①, halfwidth katakana, é or emoji; and seven JIS X 0208 characters that Windows code page 932 reads differently (the wave dash 〜, ‖, the minus sign −, ¢, £, ¬ and the backslash), which are never written in Kanji mode because a code page 932 reader would show other characters. ASCII and ISO-8859-1 text is untouched.
 - **To keep the 1.x symbol**, ask for the charset: `EciMode = EciMode.Utf8` (Standard QR and rMQR), or `Utf8Bom = true` on Standard QR, which asks for UTF-8 by asking for its mark. Micro QR has no charset option; its Kanji mode is the standard's own way to carry Japanese, whereas its UTF-8 output was bare bytes a reader had to guess the charset of.
 - **Readers.** Kanji mode is part of ISO/IEC 18004 and ISO/IEC 23941. This library's decoders, ZXing.Net (Standard QR) and zxing-cpp (all three symbologies) read the new symbols, every JIS X 0208 character this library writes included.
-- **Not yet in this preview**: `QRSegmentation.Optimal` still writes such text in UTF-8 when it has ASCII in it, and a Structured Append set of more than one symbol is still UTF-8; a set that fits one symbol is `Create`'s symbol and follows it.
+- **Not yet in this preview**: a Structured Append set of more than one symbol is still UTF-8; a set that fits one symbol is `Create`'s symbol and follows it.
 
 ### Structured Append symbols decode
 

@@ -53,6 +53,13 @@ internal static partial class RmQRBinaryEncoder
         Span<byte> utf8 = stackalloc byte[StackByteBudget];
         var expectedStart = 0;
 
+        // The count widths once for the version, not a mode lookup per run: a Kanji plan of
+        // interleaved text has a run every few characters.
+        var numericCountBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
+        var alnumCountBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
+        var byteCountBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        var kanjiCountBits = RmQRConstants.GetKanjiCountIndicatorLength(version);
+
         foreach (var segment in segments)
         {
             if (segment.Start != expectedStart || segment.Length == 0 || segment.Start + segment.Length > text.Length)
@@ -60,8 +67,8 @@ internal static partial class RmQRBinaryEncoder
             expectedStart = segment.Start + segment.Length;
 
             var chars = text.Slice(segment.Start, segment.Length);
-            var mode = segment.Mode;
-            var countBits = RmQRConstants.GetCountIndicatorLength(version, mode);
+            var modeIndex = segment.ModeIndex;
+            var countBits = modeIndex switch { 0 => numericCountBits, 1 => alnumCountBits, 2 => byteCountBits, _ => kanjiCountBits };
 
             // The count indicator width always covers the largest unit count a version
             // can hold, and a run holds no more than that, so this cannot bind; assert
@@ -73,22 +80,22 @@ internal static partial class RmQRBinaryEncoder
             // the budget and then overrun, so this is a runtime check, not an assert.
             // Byte mode under UTF-8 is the exception: its unit count is only knowable
             // after transcoding, so WriteUtf8Segment verifies it there instead.
-            if ((mode != EncodingMode.Byte || charset != EciMode.Utf8) && segment.UnitCount != segment.Length)
+            if ((modeIndex != 2 || charset != EciMode.Utf8) && segment.UnitCount != segment.Length)
                 throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
-            if (mode == EncodingMode.Kanji && charset != EciMode.Default)
+            if (modeIndex == 3 && charset != EciMode.Default)
                 KanjiCells.ThrowKanjiUnderEci(charset);
 
-            switch (mode)
+            switch (modeIndex)
             {
-                case EncodingMode.Numeric:
+                case 0:
                     Append(ref dest, ref acc, ref accBits, ref bytePos, (0b001 << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);
                     WriteNumeric(ref dest, ref acc, ref accBits, ref bytePos, chars, vectorized: true);
                     break;
-                case EncodingMode.Alphanumeric:
+                case 1:
                     Append(ref dest, ref acc, ref accBits, ref bytePos, (0b010 << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);
                     WriteAlphanumeric(ref dest, ref acc, ref accBits, ref bytePos, chars, vectorized: true);
                     break;
-                case EncodingMode.Kanji:
+                case 3:
                     Append(ref dest, ref acc, ref accBits, ref bytePos, (RmQRConstants.KanjiModeIndicatorValue << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);
                     WriteKanji(ref dest, ref acc, ref accBits, ref bytePos, chars);
                     break;

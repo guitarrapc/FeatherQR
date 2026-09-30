@@ -15,6 +15,7 @@ namespace FeatherQR;
 /// Use <see cref="RmQRFitStrategy.MinimizeHeight"/> or a fixed <see cref="RmQRHeight"/> when you want the flattest code instead.
 /// Writes Numeric, Alphanumeric and Byte mode, the last with ECI assignment 3 for ISO-8859-1 or 26 for UTF-8, and Kanji mode.
 /// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header; it is chosen when <see cref="RmQRCodeGeneratorOptions.EciMode"/> is left at <see cref="EciMode.Default"/>.
+/// Under <see cref="RmQRSegmentation.Optimal"/> such text with ASCII in it can be written as Kanji runs beside Numeric, Alphanumeric and Byte runs of the ASCII, where that is the smaller symbol.
 /// The quiet zone defaults to the 2 modules ISO/IEC 23941 asks for.
 /// </remarks>
 public static class RmQRCodeGenerator
@@ -218,15 +219,15 @@ public static class RmQRCodeGenerator
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: true);
-        if (!RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out version, out var useSegments))
+        var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: true, planKanji: true);
+        if (!RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out version, out var useSegments, out var kanjiPlan))
             return false;
 
         if (!useSegments)
             return true;
 
         Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
-        if (RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out _))
+        if (TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, plan, out _))
             return true;
 
         return RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, out version);
@@ -329,7 +330,7 @@ public static class RmQRCodeGenerator
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
         Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
-        var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, plan, out var segmentCount);
+        var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, plan, out var segmentCount, out var planCharset);
         var segments = plan.Slice(0, segmentCount);
 
         var result = new RmQRCodeData(config.Version, quietZoneSize);
@@ -339,7 +340,7 @@ public static class RmQRCodeGenerator
         try
         {
             var core = rented.AsSpan(0, coreLength);
-            WriteCoreModulesPlanned(textSpan, in config, segments, core, coreWidth);
+            WriteCoreModulesPlanned(textSpan, in config, planCharset, segments, core, coreWidth);
             result.SetCoreData(core);
             return result;
         }
@@ -354,7 +355,7 @@ public static class RmQRCodeGenerator
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
         Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
-        var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, plan, out var segmentCount);
+        var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, plan, out var segmentCount, out var planCharset);
         var segments = plan.Slice(0, segmentCount);
 
         var coreWidth = RmQRConstants.GetWidth(config.Version);
@@ -368,7 +369,7 @@ public static class RmQRCodeGenerator
         var target = destination.Slice(0, requiredSize);
         if (quietZoneSize == 0)
         {
-            WriteCoreModulesPlanned(textSpan, in config, segments, target, coreWidth);
+            WriteCoreModulesPlanned(textSpan, in config, planCharset, segments, target, coreWidth);
             return requiredSize;
         }
 
@@ -377,21 +378,23 @@ public static class RmQRCodeGenerator
         for (var row = 1; row < coreHeight; row++)
             target.Slice(margin + row * totalWidth - quietZoneSize, 2 * quietZoneSize).Clear();
         target.Slice(margin + coreHeight * totalWidth - quietZoneSize).Clear();
-        WriteCoreModulesPlanned(textSpan, in config, segments, target.Slice(margin + quietZoneSize), totalWidth);
+        WriteCoreModulesPlanned(textSpan, in config, planCharset, segments, target.Slice(margin + quietZoneSize), totalWidth);
         return requiredSize;
     }
 
     /// <summary>
     /// Analyzes the content, fits a version under mixed-mode segmentation, and writes the plan.
     /// A zero <paramref name="segmentCount"/> means the single-mode stream is what gets emitted, which is the case whenever mixing would not shrink the rMQR code.
+    /// <paramref name="planCharset"/> is the charset the plan is written under: none for a Kanji-eligible text's Kanji plan, whose Byte runs hold only ASCII.
     /// </summary>
-    private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<ModeSegment> plan, out int segmentCount)
+    private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<ModeSegment> plan, out int segmentCount, out EciMode planCharset)
     {
-        var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: true);
-        var version = RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var useSegments);
+        var analysis = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: true, planKanji: true);
+        var version = RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var useSegments, out var kanjiPlan);
         segmentCount = 0;
+        planCharset = kanjiPlan ? EciMode.Default : analysis.EciMode;
 
-        if (useSegments && !RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
+        if (useSegments && !TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, plan, out segmentCount))
         {
             // The plan for this version could not be built: it needed more runs
             // than the buffer holds, the decoder would misread it, the exact
@@ -408,7 +411,13 @@ public static class RmQRCodeGenerator
         return new RmQRConfiguration(version, eccLevel, analysis);
     }
 
-    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, ReadOnlySpan<ModeSegment> segments, Span<byte> core, int stride)
+    /// <summary>Builds the plan the version scan chose: a Kanji-eligible text's Kanji plan, or the plan in the analysis's charset.</summary>
+    private static bool TryBuildPlan(ReadOnlySpan<char> textSpan, in TextAnalysisResult analysis, bool kanjiPlan, RmQRVersion version, RmQREccLevel eccLevel, Span<ModeSegment> plan, out int segmentCount)
+        => kanjiPlan
+            ? RmQRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, plan, out segmentCount)
+            : RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount);
+
+    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, EciMode planCharset, ReadOnlySpan<ModeSegment> segments, Span<byte> core, int stride)
     {
         if (segments.Length == 0)
         {
@@ -417,7 +426,7 @@ public static class RmQRCodeGenerator
         }
 
         Span<byte> dataCodewords = stackalloc byte[MaxDataCodewords];
-        var dataCount = RmQRBinaryEncoder.EncodeDataCodewordsSegmented(textSpan, config.Version, config.EccLevel, config.Analysis.EciMode, segments, dataCodewords);
+        var dataCount = RmQRBinaryEncoder.EncodeDataCodewordsSegmented(textSpan, config.Version, config.EccLevel, planCharset, segments, dataCodewords);
 
         Span<byte> finalMessage = stackalloc byte[MaxFinalMessageBytes];
         finalMessage = finalMessage.Slice(0, RmQRCodewordEncoder.GetFinalMessageSize(config.Version));

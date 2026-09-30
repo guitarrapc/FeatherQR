@@ -4,7 +4,7 @@ using FeatherQR.Internals.BinaryDecoders;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Mixed-mode segmentation for <see cref="MicroQRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a given version, and the version fit that follows from it.
+/// Mixed-mode segmentation for <see cref="MicroQRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs (and Kanji runs, for a Kanji-eligible text) whose total bit cost is minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
 /// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Standard QR and rMQR planners; what lives here is Micro QR's version scan: at most three candidates below the single-mode fit, each screened by the trivial per-character lower bound before a cost run (a Micro QR encode is so cheap that even one wasted dynamic-program pass doubles it).
@@ -26,12 +26,14 @@ internal static class MicroQRSegmentPlanner
     /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="range"/>.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="MicroQRSegmentation.Single"/>.
+    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan"/> and written under <see cref="EciMode.Default"/>.
     /// <c>false</c> means the content fits neither one mode nor a mixed plan in the range; the caller owns the error.
     /// Throws exactly what the single-mode selector throws for argument errors.
     /// </summary>
-    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected, out bool useSegments)
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan)
     {
         useSegments = false;
+        kanjiPlan = false;
 
         // Ceiling, and the argument validation: the single-mode selector throws the
         // same ECC / range-contradiction errors Single throws, before any planning.
@@ -63,6 +65,9 @@ internal static class MicroQRSegmentPlanner
             return hasSingle;
         }
 
+        if (analysis.KanjiPlannable)
+            return TrySelectVersionKanji(text, in analysis, eccLevel, range.Min, top, single, hasSingle, out selected, out useSegments, out kanjiPlan);
+
         // One O(n) pass pricing each character at the cheapest rate any mode could
         // give it: a lower bound on any plan at any version, so it may only reject.
         // It is what keeps Optimal roughly free on content no split can shrink.
@@ -93,6 +98,82 @@ internal static class MicroQRSegmentPlanner
 
         selected = single;
         return hasSingle;
+    }
+
+    /// <summary>
+    /// The version scan for a Kanji-eligible text with ASCII in it (<see cref="TextAnalysisResult.KanjiPlannable"/>), from <paramref name="min"/> to <paramref name="top"/>, below the single-mode (UTF-8) fit.
+    /// At each candidate the Kanji plan (Kanji runs beside runs of the ASCII) is taken where it fits, otherwise the UTF-8 plan the seven-state program gives the same text; neither carries an ECI header, since Micro QR has none.
+    /// </summary>
+    /// <remarks>
+    /// The UTF-8 plan is weighed so that Optimal never needs a larger version than it did before Kanji plans. Both need Byte or Kanji mode, so M1 and M2 are skipped as the mode pre-filter skips them for UTF-8 text.
+    /// The Kanji screen prices a character with a cell at 13 bits, and a header for every stretch of characters with a cell and every stretch of ASCII (<see cref="KanjiScreenBits(int, int, int, MicroQRVersion)"/>).
+    /// At the UTF-8 rate of 24 bits a kana, the screen would reject M3 for 「日本語12345」, whose Kanji plan fits M3-L.
+    /// </remarks>
+    private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion min, MicroQRVersion top, MicroQRVersion single, bool hasSingle, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan)
+    {
+        useSegments = false;
+        kanjiPlan = false;
+        Debug.Assert(analysis.EncodingMode == EncodingMode.Byte && analysis.EciMode == EciMode.Utf8, "a plannable text's analysis is the UTF-8 one");
+
+        // One pass for both screens.
+        var kanjiSixths = ModeSegmenter.CheapestSixthsKanji(text, out var utf8Sixths, out var cellRuns, out var asciiRuns);
+
+        for (var candidate = min; candidate <= top; candidate++)
+        {
+            if (!MicroQRConstants.IsValidCombination(candidate, eccLevel) || !MicroQRConstants.IsModeSupported(candidate, EncodingMode.Kanji))
+                continue;
+
+            var capacityBits = MicroQRConstants.GetDataBitCapacity(candidate, eccLevel);
+            if (KanjiScreenBits(kanjiSixths, cellRuns, asciiRuns, candidate) <= capacityBits && KanjiPlanCost(text, candidate, default, out _) <= capacityBits)
+            {
+                useSegments = true;
+                kanjiPlan = true;
+                selected = candidate;
+                return true;
+            }
+
+            if ((utf8Sixths + 5) / 6 + 2 * (int)candidate <= capacityBits && PlanCost(text, EciMode.Utf8, candidate, default, out _) <= capacityBits)
+            {
+                useSegments = true;
+                selected = candidate;
+                return true;
+            }
+        }
+
+        selected = single;
+        return hasSingle;
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildPlan"/> for the Kanji plan <see cref="TrySelectVersion"/> chose: Kanji runs beside runs of the ASCII, which the caller writes under <see cref="EciMode.Default"/>.
+    /// </summary>
+    public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars || !MicroQRConstants.IsModeSupported(version, EncodingMode.Kanji))
+            return false;
+
+        Span<byte> parents = stackalloc byte[MaxPlannableChars * ModeSegmenter.ParentBytesPerChar];
+        var window = parents.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
+        var plannedBits = KanjiPlanCost(text, version, window, out var finalState);
+        if (!ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        ModeSegmenter.FillUnitCounts(text, EciMode.Default, segments.Slice(0, segmentCount));
+
+        var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
+        Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
+
+        if (measuredBits != plannedBits || measuredBits > MicroQRConstants.GetDataBitCapacity(version, eccLevel))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -204,4 +285,27 @@ internal static class MicroQRSegmentPlanner
             parents, out finalState,
             allowAlnum: MicroQRConstants.IsModeSupported(version, EncodingMode.Alphanumeric),
             allowByte: MicroQRConstants.IsModeSupported(version, EncodingMode.Byte));
+
+    /// <summary>
+    /// Named entry point for <c>KanjiPlanBoundsTest</c>: the Kanji plan's screen at <paramref name="version"/> (M3 or M4), in bits.
+    /// </summary>
+    public static int KanjiScreenBits(ReadOnlySpan<char> text, MicroQRVersion version)
+        => KanjiScreenBits(ModeSegmenter.CheapestSixthsKanji(text, out _, out var cellRuns, out var asciiRuns), cellRuns, asciiRuns, version);
+
+    /// <summary>
+    /// Each character at its cheapest rate, a character with a cell at 13 bits, and a header for every stretch of either kind, since no run crosses between them: (version - 1) + version bits for a stretch of characters with a cell, (version - 1) + (version + 1) for a stretch of ASCII.
+    /// </summary>
+    private static int KanjiScreenBits(int sixths, int cellRuns, int asciiRuns, MicroQRVersion version)
+        => (sixths + 5) / 6 + cellRuns * (2 * (int)version - 1) + asciiRuns * (2 * (int)version);
+
+    /// <summary>The Kanji plan's program at this version's widths; M3 and M4 only, where every mode exists.</summary>
+    private static int KanjiPlanCost(ReadOnlySpan<char> text, MicroQRVersion version, Span<byte> parents, out int finalState)
+        => ModeSegmenter.ComputeCostsKanji(
+            text,
+            MicroQRConstants.GetModeIndicatorLength(version),
+            MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
+            MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
+            MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte),
+            MicroQRConstants.GetKanjiCountIndicatorLength(version),
+            parents, out finalState);
 }

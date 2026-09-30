@@ -4,7 +4,7 @@ using System.Diagnostics;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// Mixed-mode segmentation for <see cref="QRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a given version, and the version fit that follows from it.
+/// Mixed-mode segmentation for <see cref="QRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs (and Kanji runs, for a Kanji-eligible text) whose total bit cost is minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
 /// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Micro QR and rMQR planners; what lives here is Standard QR's version scan.
@@ -35,7 +35,7 @@ internal static class QRSegmentPlanner
     /// <summary>Standard QR ECI prefix: 4-bit mode indicator 0111 plus a one-byte assignment designator.</summary>
     private const int EciHeaderBits = ModeIndicatorBits + 8;
 
-    /// <summary>Narrowest count indicator of any mode at any version (Byte at versions 1-9); pinned by QRSegmentPlannerUnitTest.</summary>
+    /// <summary>Narrowest count indicator of any mode at any version (Byte and Kanji at versions 1-9); pinned by QRSegmentPlannerUnitTest.</summary>
     private const int MinCountBitsAny = 8;
 
     /// <summary>
@@ -87,13 +87,18 @@ internal static class QRSegmentPlanner
     /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="minVersion"/> through <paramref name="maxVersion"/>.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
+    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan"/> and written with no ECI header.
     /// <c>false</c> means the content fits neither one mode nor a mixed plan in the window; the caller owns the error.
     /// </summary>
     /// <remarks>
     /// The scan needs no floor/ceiling machinery: count indicator widths are constant within the three version bands, so the optimal cost is computed at most once per band (three O(n) runs in the worst case, no reconstruction table), and capacity grows monotonically inside a band, so the first version that holds the band cost is the smallest.
     /// </remarks>
-    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments)
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments, out bool kanjiPlan)
     {
+        kanjiPlan = false;
+        if (analysis.KanjiPlannable)
+            return TrySelectVersionKanji(text, in analysis, eccLevel, minVersion, maxVersion, out selected, out useSegments, out kanjiPlan);
+
         useSegments = false;
         var charset = analysis.EciMode;
 
@@ -161,6 +166,112 @@ internal static class QRSegmentPlanner
     }
 
     /// <summary>
+    /// <see cref="TrySelectVersion"/> for a Kanji-eligible text with ASCII in it (<see cref="TextAnalysisResult.KanjiPlannable"/>), where two plans compete below the single-mode (UTF-8) fit.
+    /// From the smallest version up, the first that holds a plan is taken: the Kanji plan (Kanji runs beside runs of the ASCII, no ECI header) where it fits, otherwise the UTF-8 plan the seven-state program gives the same text.
+    /// </summary>
+    /// <remarks>
+    /// Below the single-mode fit is the rule every plan follows. The UTF-8 plan is weighed too so that Optimal never needs a larger version than it did before Kanji plans: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
+    /// At a version both fit the Kanji plan is taken, which is what Optimal writes for such a text (kanji-encoding-plan.md, "When a text is written in Kanji mode").
+    /// Each program is priced at most once per band behind its own screen. A Kanji plan is usually far cheaper, so the UTF-8 screen rejects nearly every version the Kanji plan does not fit, and its cost run seldom runs.
+    /// </remarks>
+    private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments, out bool kanjiPlan)
+    {
+        useSegments = false;
+        kanjiPlan = false;
+        Debug.Assert(analysis.EncodingMode == EncodingMode.Byte && analysis.EciMode == EciMode.Utf8, "a plannable text's analysis is the UTF-8 one");
+
+        var hasSingle = QRCodeGenerator.TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, utf8BOM: false, minVersion, maxVersion, out var single);
+        if (text.Length is 0 or > MaxPlannableChars)
+        {
+            selected = single;
+            return hasSingle;
+        }
+
+        var top = hasSingle ? Math.Min(single - 1, maxVersion) : maxVersion;
+        if (top < minVersion)
+        {
+            selected = single;
+            return hasSingle;
+        }
+
+        // One pass for both screens: the UTF-8 one is TrivialLowerBoundBits under UTF-8 plus the ECI header.
+        var kanjiSixths = ModeSegmenter.CheapestSixthsKanji(text, out var utf8Sixths, out var cellRuns, out var asciiRuns);
+        var kanjiTrivialBits = KanjiScreenBits(kanjiSixths, cellRuns, asciiRuns);
+        var utf8TrivialBits = (utf8Sixths + 5) / 6 + ModeIndicatorBits + MinCountBitsAny + EciHeaderBits;
+
+        var kanjiBand = -1;
+        var kanjiCost = 0;
+        var utf8Band = -1;
+        var utf8Cost = 0;
+        for (var version = minVersion; version <= top; version++)
+        {
+            var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
+            var candidateBand = version < 10 ? 0 : version < 27 ? 1 : 2;
+
+            if (capacityBits >= kanjiTrivialBits)
+            {
+                if (candidateBand != kanjiBand)
+                {
+                    kanjiBand = candidateBand;
+                    kanjiCost = KanjiPlanCost(text, version, default, out _);
+                }
+
+                if (kanjiCost <= capacityBits)
+                {
+                    useSegments = true;
+                    kanjiPlan = true;
+                    selected = version;
+                    return true;
+                }
+            }
+
+            if (capacityBits >= utf8TrivialBits)
+            {
+                if (candidateBand != utf8Band)
+                {
+                    utf8Band = candidateBand;
+                    utf8Cost = ModeSegmenter.ComputeCosts(
+                        text, EciMode.Utf8, ModeIndicatorBits,
+                        EncodingMode.Numeric.GetCountIndicatorLength(version),
+                        EncodingMode.Alphanumeric.GetCountIndicatorLength(version),
+                        EncodingMode.Byte.GetCountIndicatorLength(version),
+                        default, out _);
+                }
+
+                if (utf8Cost + EciHeaderBits <= capacityBits)
+                {
+                    useSegments = true;
+                    selected = version;
+                    return true;
+                }
+            }
+        }
+
+        selected = single;
+        return hasSingle;
+    }
+
+    /// <summary>
+    /// <see cref="TrivialLowerBoundBits"/> for a Kanji plan: a character with a cell at 13 bits, no ECI header, and a header for every stretch of characters with a cell and every stretch of ASCII, since no run crosses between them.
+    /// <see cref="MinCountBitsAny"/> is the narrowest count indicator of either kind, since Kanji's (versions 1-9) is 8 bits as Byte's is.
+    /// </summary>
+    public static int TrivialLowerBoundBitsKanji(ReadOnlySpan<char> text)
+        => KanjiScreenBits(ModeSegmenter.CheapestSixthsKanji(text, out _, out var cellRuns, out var asciiRuns), cellRuns, asciiRuns);
+
+    private static int KanjiScreenBits(int sixths, int cellRuns, int asciiRuns)
+        => (sixths + 5) / 6 + (cellRuns + asciiRuns) * (ModeIndicatorBits + MinCountBitsAny);
+
+    /// <summary>The Kanji plan's program at <paramref name="version"/>'s widths.</summary>
+    private static int KanjiPlanCost(ReadOnlySpan<char> text, int version, Span<byte> parents, out int finalState)
+        => ModeSegmenter.ComputeCostsKanji(
+            text, ModeIndicatorBits,
+            EncodingMode.Numeric.GetCountIndicatorLength(version),
+            EncodingMode.Alphanumeric.GetCountIndicatorLength(version),
+            EncodingMode.Byte.GetCountIndicatorLength(version),
+            EncodingMode.Kanji.GetCountIndicatorLength(version),
+            parents, out finalState);
+
+    /// <summary>
     /// A lower bound on any plan at any version, in payload bits, computed in one O(n) pass with no dynamic programming table: each character priced at the cheapest rate any mode could give it, plus the cheapest possible single segment header.
     /// </summary>
     /// <remarks>
@@ -213,6 +324,40 @@ internal static class QRSegmentPlanner
         }
 
         return TryAcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits);
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int)"/> for the Kanji plan <see cref="TrySelectVersion"/> chose: Kanji runs beside runs of the ASCII, written with no ECI header, so the caller writes it under <see cref="EciMode.Default"/>.
+    /// </summary>
+    public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars)
+            return false;
+
+        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
+        byte[]? rented = null;
+        Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
+            ? stackalloc byte[ModeSegmenter.MaxStackParents]
+            : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
+        int plannedBits;
+        try
+        {
+            var window = parents.Slice(0, parentLength);
+            plannedBits = KanjiPlanCost(text, version, window, out var finalState);
+            if (!ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount))
+            {
+                segmentCount = 0;
+                return false;
+            }
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+
+        return TryAcceptPlan(text, EciMode.Default, version, eccLevel, plannedBits, segments, ref segmentCount, out _);
     }
 
 #if NET8_0_OR_GREATER
@@ -269,6 +414,7 @@ internal static class QRSegmentPlanner
         var numericHeader = ModeIndicatorBits + EncodingMode.Numeric.GetCountIndicatorLength(version);
         var alnumHeader = ModeIndicatorBits + EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
         var byteHeader = ModeIndicatorBits + EncodingMode.Byte.GetCountIndicatorLength(version);
+        var kanjiHeader = ModeIndicatorBits + EncodingMode.Kanji.GetCountIndicatorLength(version);
         var total = 0;
         for (var i = 0; i < segments.Length; i++)
         {
@@ -281,6 +427,9 @@ internal static class QRSegmentPlanner
                     break;
                 case 1:
                     total += alnumHeader + ModeSegmenter.PayloadBits(EncodingMode.Alphanumeric, units);
+                    break;
+                case 3:
+                    total += kanjiHeader + units * 13;
                     break;
                 default:
                     if (charset == EciMode.Utf8 && segment.Start > 0 && text[segment.Start] == ModeSegmenter.ByteOrderMark)
@@ -297,14 +446,18 @@ internal static class QRSegmentPlanner
         return total;
     }
 
-    /// <summary>Exact bit cost of a plan (excluding any ECI prefix): per run, mode indicator + count indicator + payload.</summary>
+    /// <summary>Exact bit cost of a plan (excluding any ECI prefix): per run, mode indicator + count indicator + payload; the four headers looked up once for the version.</summary>
     public static int MeasurePlan(int version, ReadOnlySpan<ModeSegment> segments)
     {
+        var numericHeader = ModeIndicatorBits + EncodingMode.Numeric.GetCountIndicatorLength(version);
+        var alnumHeader = ModeIndicatorBits + EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
+        var byteHeader = ModeIndicatorBits + EncodingMode.Byte.GetCountIndicatorLength(version);
+        var kanjiHeader = ModeIndicatorBits + EncodingMode.Kanji.GetCountIndicatorLength(version);
         var total = 0;
         foreach (var segment in segments)
         {
-            var mode = segment.Mode;
-            total += ModeIndicatorBits + mode.GetCountIndicatorLength(version) + ModeSegmenter.PayloadBits(mode, segment.UnitCount);
+            var header = segment.ModeIndex switch { 0 => numericHeader, 1 => alnumHeader, 2 => byteHeader, _ => kanjiHeader };
+            total += header + ModeSegmenter.PayloadBitsOfIndex(segment.ModeIndex, segment.UnitCount);
         }
         return total;
     }

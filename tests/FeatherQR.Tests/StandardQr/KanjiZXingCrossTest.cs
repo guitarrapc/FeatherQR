@@ -49,6 +49,32 @@ public class KanjiZXingCrossTest
         await Assert.That(result!.Text).IsEqualTo(text);
     }
 
+    /// <summary>
+    /// Kanji plans (kanji-encoding-plan.md, phase 6.4): Kanji runs beside Numeric, Alphanumeric and Byte runs of ASCII, with no ECI header, in each count band.
+    /// Each text is one whose Kanji plan is smaller than its UTF-8 stream, so the symbol read is a Kanji plan.
+    /// </summary>
+    [Test]
+    [Arguments("東京タワー333m")]
+    [Arguments("こんにちは世界、QRコードの分割テストです。こんにちは世界、QRコードの分割テストです。こんにちは世界、QRコードの分割テストです。")]
+    [Arguments(10)]
+    [Arguments(150)]
+    [Arguments(300)] // 1,800 characters: version 39-L as a Kanji plan (22,200 bits), which no UTF-8 stream fits
+    public async Task KanjiPlan_IsReadByZXing(object textOrRepeats)
+    {
+        var text = textOrRepeats as string ?? string.Concat(Enumerable.Repeat("日本7777", (int)textOrRepeats));
+        var optimal = new QRCodeGeneratorOptions { QuietZoneSize = 0, Segmentation = QRSegmentation.Optimal };
+        var ecc = text.Length > 1000 ? QREccLevel.L : QREccLevel.M;
+        var symbol = QRCodeGenerator.Create(text, ecc, optimal);
+        if (text.Length > 1000)
+            await Assert.That(symbol.Version).IsEqualTo(39);
+        if (QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var utf8, optimal with { EciMode = EciMode.Utf8 }))
+            await Assert.That(symbol.Version).IsLessThan(utf8.Version).Because("the Kanji plan is the smaller symbol");
+
+        var result = new Decoder().decode(ToBitMatrix(symbol), null);
+        await Assert.That(result).IsNotNull().Because($"version {symbol.Version}");
+        await Assert.That(result!.Text).IsEqualTo(text);
+    }
+
     private static BitMatrix ToBitMatrix(QRCodeData symbol)
     {
         var matrix = new BitMatrix(symbol.Size);

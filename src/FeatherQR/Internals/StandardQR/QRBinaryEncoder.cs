@@ -175,6 +175,13 @@ internal ref struct QRBinaryEncoder
             _writer.Write((int)eci, 8);
         }
 
+        // The count widths once for the version, not a mode lookup per run: a Kanji plan of
+        // interleaved text has a run every few characters.
+        var numericCountBits = EncodingMode.Numeric.GetCountIndicatorLength(version);
+        var alnumCountBits = EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
+        var byteCountBits = EncodingMode.Byte.GetCountIndicatorLength(version);
+        var kanjiCountBits = EncodingMode.Kanji.GetCountIndicatorLength(version);
+
         var expectedStart = 0;
         foreach (var segment in segments)
         {
@@ -184,7 +191,7 @@ internal ref struct QRBinaryEncoder
 
             var chars = text.Slice(segment.Start, segment.Length);
             var mode = segment.Mode;
-            var countBits = mode.GetCountIndicatorLength(version);
+            var countBits = segment.ModeIndex switch { 0 => numericCountBits, 1 => alnumCountBits, 2 => byteCountBits, _ => kanjiCountBits };
 
             // The count indicator width always covers the largest unit count a version
             // can hold, and a run holds no more than that, so this cannot bind; assert

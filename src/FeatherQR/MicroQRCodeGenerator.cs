@@ -17,6 +17,7 @@ namespace FeatherQR;
 /// <item>M4: adds level Q.</item>
 /// </list>
 /// Micro QR has no ECI. Text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) goes out in Kanji mode at 13 bits a character, which is the standard's own way to carry it; other text outside ISO-8859-1 goes out as raw UTF-8 in Byte mode, which a reader has to recognise as UTF-8.
+/// Under <see cref="MicroQRSegmentation.Optimal"/>, such text with ASCII in it can be written as Kanji runs beside runs of the ASCII, where that is the smaller symbol.
 /// </remarks>
 public static class MicroQRCodeGenerator
 {
@@ -490,14 +491,14 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true);
-        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments))
+        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true, planKanji: true);
+        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments, out var kanjiPlan))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
             return CreateCore(textSpan, eccLevel, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-        if (!MicroQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out var segmentCount))
+        if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, plan, out var segmentCount))
         {
             // The plan that justified this version could not be rebuilt; fall back to
             // the single-mode fit, which owns the error when there is none.
@@ -510,7 +511,7 @@ public static class MicroQRCodeGenerator
         Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
         core = core.Slice(0, size * size);
         core.Clear();
-        WriteCoreModulesPlanned(textSpan, version, eccLevel, analysis.EciMode, plan.Slice(0, segmentCount), core, size, options.MaskPattern ?? AutomaticMask);
+        WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, plan.Slice(0, segmentCount), core, size, options.MaskPattern ?? AutomaticMask);
 
         var result = new MicroQRCodeData(version, options.QuietZoneSize);
         result.SetCoreData(core);
@@ -523,14 +524,14 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true);
-        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments))
+        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: true, planKanji: true);
+        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments, out var kanjiPlan))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
             return CreateCore(textSpan, eccLevel, destination, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-        if (!MicroQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out var segmentCount))
+        if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, plan, out var segmentCount))
         {
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
                 throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
@@ -551,14 +552,14 @@ public static class MicroQRCodeGenerator
         var maskPattern = options.MaskPattern ?? AutomaticMask;
         if (quietZoneSize == 0)
         {
-            WriteCoreModulesPlanned(textSpan, version, eccLevel, analysis.EciMode, segments, target, size, maskPattern);
+            WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, segments, target, size, maskPattern);
         }
         else
         {
             Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
             core = core.Slice(0, size * size);
             core.Clear();
-            WriteCoreModulesPlanned(textSpan, version, eccLevel, analysis.EciMode, segments, core, size, maskPattern);
+            WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, segments, core, size, maskPattern);
 
             for (var row = 0; row < size; row++)
             {
@@ -569,6 +570,14 @@ public static class MicroQRCodeGenerator
 
         return requiredSize;
     }
+
+    /// <summary>
+    /// Builds the plan the version scan chose: a Kanji-eligible text's Kanji plan, written under <see cref="EciMode.Default"/>, or the plan in the analysis's charset.
+    /// </summary>
+    private static bool TryBuildPlan(ReadOnlySpan<char> text, in TextAnalysisResult analysis, bool kanjiPlan, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> plan, out int segmentCount)
+        => kanjiPlan
+            ? MicroQRSegmentPlanner.TryBuildKanjiPlan(text, version, eccLevel, plan, out segmentCount)
+            : MicroQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, eccLevel, plan, out segmentCount);
 
     /// <summary>
     /// Everything the mixed-mode entry points must reject, gathered off the default path so <see cref="MicroQRSegmentation.Single"/> pays only one compare.
@@ -591,14 +600,14 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true);
-        if (!MicroQRSegmentPlanner.TrySelectVersion(text, in analysis, eccLevel, options.Version, out var version, out var useSegments))
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true, planKanji: true);
+        if (!MicroQRSegmentPlanner.TrySelectVersion(text, in analysis, eccLevel, options.Version, out var version, out var useSegments, out var kanjiPlan))
             return false;
 
         if (useSegments)
         {
             Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-            if (!MicroQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, eccLevel, plan, out _)
+            if (!TryBuildPlan(text, in analysis, kanjiPlan, version, eccLevel, plan, out _)
                 && !TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
             {
                 return false;

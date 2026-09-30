@@ -193,13 +193,27 @@ public class RmQRSegmentationTest
     /// </summary>
     private static RmQRVersion ExhaustiveBestVersion(string content, RmQREccLevel ecc, RmQRFitStrategy strategy)
     {
-        var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default, allowKanji: true);
+        var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default, allowKanji: true, planKanji: true);
         var charset = analysis.EciMode;
         var eciBits = charset == EciMode.Default ? 0 : 11;
 
         RmQRVersion? best = null;
         foreach (var version in Enum.GetValues<RmQRVersion>())
         {
+            // A Kanji-eligible text with ASCII in it also has a Kanji plan (Kanji runs beside runs of the ASCII, no ECI header).
+            if (analysis.KanjiPlannable
+                && RmQRSegmentPlanner.MinimumPayloadBitsKanji(
+                    content.AsSpan(),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Kanji)) <= 8 * RmQRConstants.GetDataCodewordCount(version, ecc))
+            {
+                if (best is null || RmQRVersionSelector.IsBetter(version, best.Value, strategy))
+                    best = version;
+                continue;
+            }
+
             int cost;
             if (content.Length == 0)
             {
@@ -319,7 +333,7 @@ public class RmQRSegmentationTest
     [Arguments("ABC-1234567890123456", RmQRVersion.R11x43, RmQRVersion.R13x27)]
     [Arguments("x1234567890123456789012345678901234567890", RmQRVersion.R11x77, RmQRVersion.R9x59)]
     [Arguments("1234567890123456789012345678901234567890x", RmQRVersion.R11x77, RmQRVersion.R9x59)]
-    [Arguments("日本語1234567890", RmQRVersion.R13x43, RmQRVersion.R11x43)]
+    [Arguments("日本語1234567890", RmQRVersion.R13x43, RmQRVersion.R13x27)] // a Kanji plan, Kanji(日本語) + Numeric: 87 bits; the UTF-8 plan behind its ECI header needed R11x43
     [Arguments("éèê1234567890", RmQRVersion.R11x43, RmQRVersion.R13x27)]
     public async Task Optimal_MixedContent_ShrinksTheSymbol(string content, RmQRVersion expectedSingle, RmQRVersion expectedOptimal)
     {

@@ -15,22 +15,26 @@ public static class MicroQRSpotCheck
     private const int QuietZoneModules = 2; // Micro QR specification quiet zone
     private const int PixelsPerModule = 8;
 
-    private static readonly (string Text, MicroQREccLevel Ecc)[] cases =
+    private static readonly (string Text, MicroQREccLevel Ecc, MicroQRSegmentation Segmentation)[] cases =
     [
-        ("12345", MicroQREccLevel.ErrorDetectionOnly),  // M1
-        ("0123456789", MicroQREccLevel.L),              // M2-L boundary
-        ("12345678", MicroQREccLevel.M),                // M2-M boundary
-        ("HELLO WORLD 14", MicroQREccLevel.L),          // M3-L alphanumeric boundary
-        ("byte hi", MicroQREccLevel.M),                 // M3-M byte
-        ("HELLO WORLD PLUS 21ST", MicroQREccLevel.L),   // M4-L alphanumeric boundary
-        ("bytes m4 mode", MicroQREccLevel.M),           // M4-M byte boundary
-        ("bytes!!!!", MicroQREccLevel.Q),               // M4-Q byte boundary
-        ("こんにちは", MicroQREccLevel.L),               // Kanji, M3-L (5 of 6 characters)
-        ("脂至肢漢", MicroQREccLevel.M),                  // Kanji, M3-M boundary (4 characters, 3-bit count)
-        ("こんにちは世界です", MicroQREccLevel.L),        // Kanji, M4-L boundary (9 characters, 4-bit count)
-        ("日本語符号化試験", MicroQREccLevel.M),          // Kanji, M4-M boundary (8 characters)
-        ("漢字試験用", MicroQREccLevel.Q),                // Kanji, M4-Q boundary (5 characters)
-        ("こんにち～", MicroQREccLevel.L),               // ～ has no Kanji cell: UTF-8 (15 bytes, M4-L, no ECI)
+        ("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRSegmentation.Single),  // M1
+        ("0123456789", MicroQREccLevel.L, MicroQRSegmentation.Single),              // M2-L boundary
+        ("12345678", MicroQREccLevel.M, MicroQRSegmentation.Single),                // M2-M boundary
+        ("HELLO WORLD 14", MicroQREccLevel.L, MicroQRSegmentation.Single),          // M3-L alphanumeric boundary
+        ("byte hi", MicroQREccLevel.M, MicroQRSegmentation.Single),                 // M3-M byte
+        ("HELLO WORLD PLUS 21ST", MicroQREccLevel.L, MicroQRSegmentation.Single),   // M4-L alphanumeric boundary
+        ("bytes m4 mode", MicroQREccLevel.M, MicroQRSegmentation.Single),           // M4-M byte boundary
+        ("bytes!!!!", MicroQREccLevel.Q, MicroQRSegmentation.Single),               // M4-Q byte boundary
+        ("こんにちは", MicroQREccLevel.L, MicroQRSegmentation.Single),               // Kanji, M3-L (5 of 6 characters)
+        ("脂至肢漢", MicroQREccLevel.M, MicroQRSegmentation.Single),                  // Kanji, M3-M boundary (4 characters, 3-bit count)
+        ("こんにちは世界です", MicroQREccLevel.L, MicroQRSegmentation.Single),        // Kanji, M4-L boundary (9 characters, 4-bit count)
+        ("日本語符号化試験", MicroQREccLevel.M, MicroQRSegmentation.Single),          // Kanji, M4-M boundary (8 characters)
+        ("漢字試験用", MicroQREccLevel.Q, MicroQRSegmentation.Single),                // Kanji, M4-Q boundary (5 characters)
+        ("こんにち～", MicroQREccLevel.L, MicroQRSegmentation.Single),               // ～ has no Kanji cell: UTF-8 (15 bytes, M4-L, no ECI)
+        ("日本語12345", MicroQREccLevel.L, MicroQRSegmentation.Optimal),           // Kanji plan: Kanji + Numeric at M3-L (UTF-8 needs M4)
+        ("東京12", MicroQREccLevel.M, MicroQRSegmentation.Optimal),                // Kanji plan at M3-M (UTF-8 needs M4)
+        ("日本語123456789", MicroQREccLevel.L, MicroQRSegmentation.Optimal),       // Kanji plan at M3-L; no Micro QR symbol holds it as UTF-8
+        ("東京タワー333m", MicroQREccLevel.L, MicroQRSegmentation.Optimal),        // Kanji plan with a Byte run of ASCII, M4-L (19 UTF-8 bytes fit nowhere)
     ];
 
     public static int Run()
@@ -42,11 +46,12 @@ public static class MicroQRSpotCheck
         };
 
         var failures = 0;
-        foreach (var (text, ecc) in cases)
+        foreach (var (text, ecc, segmentation) in cases)
         {
-            var calculated = Sizing.Required(text.AsSpan(), ecc, QuietZoneModules);
+            var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = QuietZoneModules, Segmentation = segmentation };
+            var calculated = Sizing.Required(text.AsSpan(), ecc, options);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = QuietZoneModules });
+            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, options);
 
             var luminance = RenderLuminance(modules, calculated.Size, PixelsPerModule);
             var widthPixels = calculated.Size * PixelsPerModule;
