@@ -21,6 +21,31 @@ internal static partial class StructuredAppendPlanner
         return ParityScalar(text, charset, utf8Bom);
     }
 
+    /// <summary>
+    /// The parity of a Kanji set: the XOR of the whole text's Shift_JIS bytes, an ASCII character as its byte and a character with a cell as its pair (kanji-encoding-plan.md, K6).
+    /// Those bytes are the text's whatever the plan, so the value is fixed before the text is split, as every parity here is.
+    /// </summary>
+    public static byte ParityKanji(ReadOnlySpan<char> text)
+    {
+        var parity = 0;
+        foreach (var c in text)
+        {
+            if (c < 0x80)
+            {
+                parity ^= c;
+                continue;
+            }
+
+            // ISO/IEC 18004 8.4.5 backwards: the 13-bit value is the high byte times 0xC0 plus the low byte of the pair less 0x8140 (0x8140-0x9FFC) or 0xC140 (0xE040-0xEBBF).
+            var value = ShiftJisKanjiReverseTable.Lookup(c);
+            System.Diagnostics.Debug.Assert(value >= 0, "a Kanji set's characters are ASCII or have a cell");
+            var shifted = ((value / 0xC0) << 8) | (value % 0xC0);
+            var pair = shifted + (shifted <= 0x9FFC - 0x8140 ? 0x8140 : 0xC140);
+            parity ^= (pair >> 8) ^ (pair & 0xFF);
+        }
+        return (byte)parity;
+    }
+
     /// <summary>The portable parity kernel; UTF-8 is folded per code point without a temporary byte buffer.</summary>
     internal static byte ParityScalar(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom)
     {

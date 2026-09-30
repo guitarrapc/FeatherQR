@@ -109,7 +109,7 @@ Each phase follows the test-first workflow, updates the affected specs and `docs
 
 - **Parent decisions.** K2 answers D5 and K4 answers the first half of D6. D7 stands, because Kanji is a mode, not a charset, and the encoder still writes no ECI 20. **Decided 2026-09-29: this plan ships in 2.0.0, and 2.1.0 is not an option.** It changes default output, which D5 accepts in a major only, so a slip delays Phase 8 rather than moving the plan. That makes the P0 and P1 phases (6.1-6.6 and 6.9) release blockers. Only 6.7 and 6.8 can be dropped: 6.7 then waits for the next major, since it moves output too, and 6.8 is needed only if its bar is missed, which 6.4 found it is (rMQR and Micro QR Kanji plans on interleaved text).
 - **128-bit tiers (parent Phase 6b).** `ModeSegmenterLanes`, `TextAnalyzer`, `StructuredAppendScanner`, `StructuredAppendParity` and `StructuredAppendLanes` wait for 6.4 and 6.5: this plan changes their state set, their analysis and their parity bytes. The other kernels of 6b are unaffected and can proceed in parallel. 6b's encode-side ranking is taken after 6.5 lands, since the share of each kernel moves.
-- **Benchmarks whose output moves.** The `Optimal` arms of `QRCodeSegmentationEncode` `utf8-60`, `RmQRSegmentationEncode` `utf8-60` and `QRCodeStructuredAppendEncode` `utf8-15k-*`. Their `Single` arms carry ASCII, so they do not move and serve as controls. New shapes: a text in which every character has a cell, per symbology, under `Single`.
+- **Benchmarks whose output moves.** The `Optimal` arms of `QRCodeSegmentationEncode` `utf8-60`, `RmQRSegmentationEncode` `utf8-60` and `QRCodeStructuredAppendEncode` `utf8-15k-*`. Their `Single` arms carry ASCII, so they do not move and serve as controls. In 6.5 the `utf8-15k-*` shapes ask for UTF-8, so they keep measuring the UTF-8 set. Their texts with the charset left to the library are `kanji-15k-*`, and `cells-15k-any` / `cells-15k-utf8` are an every-cell text and its UTF-8 twin. New shapes: a text in which every character has a cell, per symbology, under `Single`.
 
 ## Verification notes
 
@@ -245,3 +245,79 @@ Three changes followed, all within this phase:
 By Stopwatch, Standard QR then came out level (2,534 ns against 2,519) and rMQR at +22 % (1,562 against 1,282).
 
 A narrowed probe confirmed it: 24 arms, three launches of fifteen iterations, base and head interleaved twice. The same base arm was 25-50 % apart between that probe's two runs, so each verdict pairs arms of the same run. Standard QR's Kanji plan was within noise of its UTF-8 twin (+5 %), the sentence faster, rMQR +20 %, and Micro QR +30 % against base. What remains on rMQR is a second table lookup per character (the analysis and the writer each look every character up) and a second cost run (the scan's runs keep no predecessors, so the build runs the program again with them). Decided with the user on 2026-09-30: that work goes to 6.8, which therefore lands before the release; the row above says so.
+
+### 6.5 Structured Append (2026-09-30)
+
+**Done.** `CreateStructuredAppend` analyses the text as `Create` does (`allowKanji` unless a byte order mark is asked for, `planKanji` under `Optimal`), and an eligible text can be a Kanji set: no ECI header in any symbol, and the parity `StructuredAppendPlanner.ParityKanji`, the XOR of the whole text's Shift_JIS bytes computed from the reverse table's 13-bit values (ISO/IEC 18004 8.4.5 run backwards). The rules are the plan's:
+- under `Single` a set is a Kanji set only when every character has a cell, each chunk one Kanji segment;
+- under `Optimal` a text with ASCII in it is a Kanji set, each chunk its Kanji plan with no UTF-8 fallback, only when that needs fewer symbols than today's UTF-8 set or as many at a lower version (ties keep today's set);
+- a text of every-cell characters is a Kanji set under both segmentations without the comparison, a decision made here: the plan's `Optimal` row reads as if it applied to every eligible text, but for this class the Kanji set is never larger (13 bits a character against 16 or 24 and no ECI header, so any split of the UTF-8 set is a split of the Kanji set), and comparing would only let a tie make `Optimal` write UTF-8 where `Single` writes Kanji.
+
+The planner gained a Kanji cost model under its unchanged three searches (`TryPlan(..., kanji: true)`, `TryPlanKanji`):
+- `ChunkBitsKanji` is the definition: 20 bits and one Kanji segment, or 20 bits and the Kanji plan;
+- `LongestChunkEndKanji` is the walk's step: a closed form under `Single`, and under `Optimal` one forward pass of a new eighth-state prefix walk, `ModeSegmenter.LongestPrefixWithinBudgetKanji`;
+- `CheapestPayloadBitsKanji` is the rate bound, a cell at 13 bits, and the whole-text floor is the Kanji program's;
+- the single-mode shortcuts (a mode that changes at most twice, a non-alphanumeric character extending only a Byte run) and `CanPlanHelp` are not taken for a Kanji set, whose chunks can hold both kinds of character; the inventory's `PlanCouldBeatSingleMode` / `PlanIsOneByteRun` / `oneRunPlans` belong to those shortcuts and so are not consulted.
+
+K9: a Kanji set's walks and plans run scalar (`allowLanes: false` in the planner, no lane passes in `CreateKanjiSet`); the UTF-8 set it is compared with runs the seven-state program, lanes included. Which of the two sets is planned first, and whether the other is planned at all, is decided by their floors (`StructuredAppendPlanner.CanHoldKanji`, `FewestSymbols`); this was added after the benchmark, below. The one-symbol question is asked with `Create`'s analysis, which closes the seam 6.3 and 6.4 recorded: a text one symbol holds as Kanji or as a Kanji plan, and not as UTF-8, is now `Create`'s symbol rather than a UTF-8 set. The refusal's advice re-analyses the text when it tries another segmentation, so a text only a Kanji set holds is told to use `Optimal`. XML docs, `docs/migration.md` ("Structured Append sets follow the same rule", the parity bullet), the encoder record ("A Kanji-eligible text can be a Kanji set"), the architecture's rule and scope row, and the fixture matrix are updated; `PublicAPI.approved.txt` is unchanged.
+
+**Verified.**
+- `StructuredAppendKanjiTest`, 103 tests through the public API and the planner:
+  - The parity equals the XOR of CP932's bytes, on the 6.4 corpus and cell by cell over every encoder cell (both Shift_JIS ranges), and is 176 for the CodeGlyphX text.
+  - `ChunkBitsKanji` and `LongestChunkEndKanji` equal a reference that prices each chunk from `KanjiPlanReference` or from the standard's definition.
+  - `TryPlanKanji` returns the reference walk's three answers: the fewest symbols at the largest version, the smallest version holding that many, and the smallest budget (the balanced bound).
+  - Every-cell texts are Kanji sets under both segmentations, written out symbol by symbol from `KanjiStreamReference` with the mask pinned, and never larger than their UTF-8 set.
+  - Texts with ASCII in them are Kanji sets under `Optimal` exactly where the reference says the set is smaller; otherwise, and under `Single`, the set equals the one with UTF-8 asked for, module for module. Both outcomes occur in the table.
+  - A one-symbol result equals `Create`, also at the last bit (seven cells in 103 of version 1-Q's 104 bits).
+  - The boost prices the Kanji streams, also where the fullest chunk fills 123 of the next level's 128 bits.
+  - K9: `TryPlanKanji` runs no lane batch and the writer no lane pass, where the same text asked for as UTF-8 does on a machine with lanes.
+  - The refusal counts Kanji characters, and under `Single` advises `Optimal` where only a Kanji set holds the text.
+  - For the CodeGlyphX text at M with versions up to 3: `Optimal` writes 176 and `Single` writes 6.
+  - `CanHoldKanji` never refuses a count the reference walk reaches, at five versions over the planner corpus, and its stretch term decides to the bit: 「a日b本c」 × 12 at 1-L needs 9 symbols, where the characters alone would admit 5.
+  - Which sets are planned, counted (`KanjiSetPlans`, `Utf8SetPlans`): 「a日b本c」 × 200 plans no Kanji set, and the CodeGlyphX sentence × 45 no UTF-8 set. Over 800 seeded texts of short units where kanji, digits and letters take turns, and five fixed ones, the set is the one planning both would choose, each set is planned at most once, a text `Create` holds in one symbol is that symbol, and all eight ways the planning can go occur (which set first; the other skipped by its count, by its version, or planned and taken or not).
+- `ModeSegmenterKanjiParityTest`: `LongestPrefixWithinBudgetKanji` stops where `KanjiPlanReference`'s prefix costs do. It runs on the corpus texts of up to 120 characters, at every width shape, with budgets at each prefix's cost and one bit either side.
+- `StructuredAppendZXingCrossTest` gained three Kanji sets (Japanese with ASCII under `Optimal`, every-cell text under `Single` and under `Optimal` with the boost). ZXing.Net reassembles all 12 rows and reports the Shift_JIS parity.
+- One existing test moved as intended: `Set_WhoseFirstChunkIsItsShortest_IsWritten`'s text is every-cell, so with the charset left to the library it is now a Kanji set of 11 symbols instead of a UTF-8 set of 13. It now runs both ways, with UTF-8 asked for as the old row.
+- `spot-check-structured-append`: 189 symbols read by the three readers, 18 parity comparisons, 0 mismatches. The Japanese case under `Optimal` is now a Kanji set of 2 symbols at 4-M. It carries 176, the value CodeGlyphX's Kanji set carries and not the UTF-8 oracle's 6, so the tool now accepts the Shift_JIS parity for such a set. The other 17 comparable parities equal the oracle's.
+- Byte-identical: the 6.4 harness against `807d8f4` and this change, 52,716 cases over 754 texts. ASCII, Latin-1, empty and no-cell text: 0 differences. The differences are all Structured Append size lines and refusal messages:
+  - Every-cell text: 44 in all. `Optimal` has 18 sets with fewer symbols and 3 refusal messages; `Single` has 19 with fewer symbols, 2 that fit where they did not, and 2 refusal messages.
+  - Eligible text with ASCII under `Optimal`: 46 sets with fewer symbols, 3 that fit where they did not, 3 with as many symbols at a lower version, and 3 refusal messages.
+  - Eligible text with ASCII under `Single`: 4 refusal messages only, whose advice now names `Optimal`.
+
+  No set grew, none stopped fitting, and no tie changed. The same harness against the tree after the planning order below gives the same 52,716 results, file for file.
+- `tools/mutation_check.cs` planted 23 faults:
+  - the parity: the second range's offset, the byte split, the 0xC0 radix;
+  - the cost model: the rate bound, Kanji's count width in the chunk price and in the walk, the 13-bit step, the walk's budget, the whole-text floor, `Single`'s one-symbol bound, the lanes, the segmentation the searches run;
+  - the prefix walk: its budget comparison, and a Byte run of ASCII extending over a cell;
+  - the generator: the tie rule, every-cell text skipping the comparison, the skip of the UTF-8 set, the one-symbol word taken from the UTF-8 set, the analysis's two flags, the boost, the refusal's re-analysis, and the writer's plan check.
+
+  19 were caught on the first pass. The four survivors:
+  - The parity's second range (0xE040 and up) at the first range's offset: the corpus checked against CP932 had no such cell. The cell-by-cell parity test catches it.
+  - `Single`'s one-symbol bound at 14 bits a character: the one-symbol test had room to spare. The last-bit test catches it.
+  - The boost priced 8 bits high: no case sat within a byte of the next level. The 123-of-128 case catches it.
+  - Lanes for a Kanji set: equivalent, since the only caller passes `allowLanes: false`. The redundant condition is gone, a `Debug.Assert` states the rule, and a fault that passes `allowLanes: true` from `TryPlanKanji` is caught by 3 tests.
+
+  The re-run catches all four.
+- The planning order, added after the benchmark, was checked on its own with 17 faults: the order, each skip's count clause and version clause, the version below and the range's minimum, the one-symbol bound on the skip, the Kanji floor's stretch term and its width, and `FewestSymbols`'s limit. 12 were caught on the first pass. The range's minimum and the one-symbol bound (three faults) needed texts the random corpus did not produce; a search found 「123a本a123」 at 1-Q, whose UTF-8 set sits at the lowest version the range allows, and 「日123本aa999」 at 2-H, one symbol as a Kanji plan (126 of 128 bits) but not as UTF-8 (136), whose Kanji set is skipped. As fixed cases they catch all three. The other two are equivalent: `FewestSymbols` stopping at 16 instead of reporting 17 changes a floor only where 16 symbols of the largest version cannot hold the text, and the version clause then skips the same set.
+
+**Trimmed size.** Against `807d8f4`, `PublishTrimmed` with `TrimMode=full`, win-x64: a consumer that calls `CreateStructuredAppend` 161,792 → 165,888 bytes (+4.0 KB), QR encode only 137,216 unchanged, all three symbologies encoding 204,288 → 204,800 (+0.5 KB), QR decode only 73,216 unchanged. Recorded in [qrcode-symbologies.md](../specs/qrcode-symbologies.md).
+
+**Benchmark delta.** Base `807d8f4` against this change, both trees exported with the head's benchmark sources, narrowed to what the change reaches: `KanjiEncode` (its `Create` arms are the noise reference) and eight `QRCodeStructuredAppendEncode` shapes, with `byte-4k-max10` and `mixed-40k-any` as ASCII controls. ShortRun, three rounds alternating, median of three, 42 arms, 33 minutes; the first attempt, three launches of fifteen iterations over every shape, would have taken three hours and was stopped. `utf8-15k-*` now ask for UTF-8, which leaves their output as it was. The same texts with the charset left to the library are the new `kanji-15k-*`, and `cells-15k-any` / `cells-15k-utf8` are an every-cell text and its UTF-8 twin. Allocation is identical wherever the output did not change.
+
+The Structured Append arms against forced UTF-8, each against its twin in the same run of head (the label-sized ones from three launches of fifteen iterations, twice):
+- 1,000 cells at versions up to 10-L, `Single`: the Kanji set (7 symbols) 29.5 µs against 44.2 for the UTF-8 set (12), −33 %, with 3.3 KB allocated against 5.7.
+- 1,000 characters of the CodeGlyphX sentence, `Optimal`: 36.1 µs (7 symbols) against 40.7 (11), −11 %.
+- 15,000 every-cell characters at any version: 582 µs under `Single` and 600 under `Optimal` (9 symbols of version 39) against 1,004 and 1,031 (16 of 40), −42 %.
+- `kanji-15k-any` under `Optimal`: 682-735 µs (9 symbols) against 934-969 for `utf8-15k-any` (15), about −25 %. `kanji-15k-mixed`: 613 µs (7 of version 39) against 771-994 (10 of 40), −20 % or more.
+- Where the Kanji set loses, 「a日b本c」 × 200 at versions up to 10-L under `Optimal`, whose set is the UTF-8 set: 28.6 µs against 27.0 for the same set asked for as UTF-8, +6 %, which is the analysis reading past ASCII and the floors' one pass. Before the floors it was 39.5 against 27.1, +46 % (see Lessons).
+
+The gain is the symbol count. A Kanji set's planning runs scalar (K9) and is still the smaller share: 2 % over its symbols for the every-cell text under `Single`, where the UTF-8 set's planning with lanes is 8 %. So for sets the scalar path meets 6.8's "no slower than forced UTF-8" bar, except the losing case's +6 %, which is the analysis and not the lanes.
+
+Base against head on the arms whose output did not change: `KanjiEncode`'s `Create` arms −10.2 % to +3.5 %, the forced-UTF-8 set arms −6.8 % to +1.8 %, the ASCII controls −4.6 % to −0.8 %. Two arms were outliers, and neither path changed. `RmQR_Utf8Plan_Mixed_Encode` was +49 % in ShortRun, but level with base in three launches of fifteen iterations (base 1,261 and 1,144 ns, head 1,242 and 1,147). The `Symbols` arm of `mixed-40k-any` was +39 %: one launch in three ran at 2.3 times the others, a bimodality the same arm's base showed in 6.4.
+
+**Lessons.**
+- Telling a Kanji set from a UTF-8 set by its parity failed first: a text repeated an even number of times XORs to 0 in both charsets. The tests compare modules with the set asked for as UTF-8, and the corpus repeats odd counts.
+- A reference that checks a table-driven computation has to reach every range of the table. The 6.4 corpus was written for costs, and none of its cells sat in Shift_JIS's second range, so the parity's second offset went untested until the mutation check.
+- K9's zero meant nothing at first: the UTF-8 set a Kanji set is compared with runs lanes, so a lane counter over `CreateStructuredAppend` was not 0. The test measures the Kanji planner and the Kanji writer on their own.
+- The plan's `Optimal` rule compares every eligible text with its UTF-8 set. For every-cell text that comparison can only lose a tie, so it is not made.
+- A comparison has to be benchmarked where it loses too. The first twin arms were all texts whose Kanji set wins, and they read as a clean gain. An arm where it loses (interleaved text, whose set stays UTF-8) showed +46 % over forced UTF-8, because the Kanji set was planned in full before it lost. The floors now decide which set is planned first and skip the one that cannot win. The random-corpus test holds that the skips never change the set, and the counters that they happen.

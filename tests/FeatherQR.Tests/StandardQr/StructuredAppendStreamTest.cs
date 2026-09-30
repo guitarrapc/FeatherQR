@@ -223,14 +223,16 @@ public class StructuredAppendStreamTest
     }
 
     [Test]
-    public async Task Set_WhoseFirstChunkIsItsShortest_IsWritten()
+    [Arguments(EciMode.Utf8, 13)]
+    [Arguments(EciMode.Default, 11)] // a Kanji set (kanji-encoding-plan.md, 6.5): the Japanese at 13 bits a character
+    public async Task Set_WhoseFirstChunkIsItsShortest_IsWritten(EciMode eciMode, int expectedCount)
     {
-        // Japanese ahead of order lines: the first chunks are a third the length of the later ones, and the buffers the writer
-        // sizes by the longest chunk are sized by the longest, not the first.
+        // Japanese ahead of order lines: the first chunks are a third (as UTF-8) or a half (as Kanji) the length of the later ones,
+        // and the buffers the writer sizes by the longest chunk are sized by the longest, not the first.
         var text = Repeat("日本語のテキスト、", 200) + Repeat(OrderLine, 2_000);
-        var symbols = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal });
+        var symbols = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal, EciMode = eciMode });
 
-        await Assert.That(symbols.Length).IsEqualTo(13);
+        await Assert.That(symbols.Length).IsEqualTo(expectedCount);
         var parts = new StringBuilder();
         foreach (var symbol in symbols)
         {

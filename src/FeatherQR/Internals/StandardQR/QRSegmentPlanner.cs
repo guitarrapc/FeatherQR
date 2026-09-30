@@ -87,7 +87,7 @@ internal static class QRSegmentPlanner
     /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="minVersion"/> through <paramref name="maxVersion"/>.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="QRSegmentation.Single"/>.
-    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan"/> and written with no ECI header.
+    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, Span{ModeSegment}, out int)"/> and written with no ECI header.
     /// <c>false</c> means the content fits neither one mode nor a mixed plan in the window; the caller owns the error.
     /// </summary>
     /// <remarks>
@@ -330,8 +330,13 @@ internal static class QRSegmentPlanner
     /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int)"/> for the Kanji plan <see cref="TrySelectVersion"/> chose: Kanji runs beside runs of the ASCII, written with no ECI header, so the caller writes it under <see cref="EciMode.Default"/>.
     /// </summary>
     public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
+        => TryBuildKanjiPlan(text, version, eccLevel, segments, out segmentCount, out _);
+
+    /// <summary>The same, handing over what the plan measures, for a caller with a header of its own to add to it (a Structured Append symbol).</summary>
+    public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount, out int planBits)
     {
         segmentCount = 0;
+        planBits = 0;
         if (text.Length is 0 or > MaxPlannableChars)
             return false;
 
@@ -357,8 +362,12 @@ internal static class QRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
-        return TryAcceptPlan(text, EciMode.Default, version, eccLevel, plannedBits, segments, ref segmentCount, out _);
+        return TryAcceptPlan(text, EciMode.Default, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits);
     }
+
+    /// <summary>The minimal payload bits of a Kanji plan at <paramref name="version"/>'s widths (no ECI prefix); what a chunk of a Kanji Structured Append set costs under Optimal before its header.</summary>
+    public static int MinimumPayloadBitsKanji(ReadOnlySpan<char> text, int version)
+        => KanjiPlanCost(text, version, default, out _);
 
 #if NET8_0_OR_GREATER
     /// <summary>Fewest symbols of a set worth planning together; below it each plans alone.</summary>

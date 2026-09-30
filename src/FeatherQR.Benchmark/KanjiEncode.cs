@@ -2,6 +2,8 @@
 /// Text whose every character has a Kanji cell, which the generators write in Kanji mode when the charset is left to them, next to the same text with UTF-8 asked for, which is the path such text took before Kanji mode was written.
 /// Then text with ASCII in it under <c>Optimal</c>, which takes a Kanji plan (Kanji runs beside runs of the ASCII) where that is smaller, next to the same text with UTF-8 asked for, which plans it as before.
 /// Micro QR has no charset option, so its twins are the same arms run against a build that predates Kanji mode (or Kanji plans).
+/// Last, label-sized Structured Append sets (version 10 at most): a Kanji set of cells under <c>Single</c>, and of text with ASCII in it under <c>Optimal</c>, next to the UTF-8 set asked for; and a text whose Kanji set is planned and loses to its UTF-8 set.
+/// The large sets are <c>QRCodeStructuredAppendEncode</c>'s kanji and cells shapes.
 /// </summary>
 [MemoryDiagnoser]
 public class KanjiEncode
@@ -20,6 +22,28 @@ public class KanjiEncode
     private static readonly string Sentence = string.Concat(Enumerable.Repeat("こんにちは世界、QRコードの分割テストです。", 3));
 
     private const string MicroMixed = "日本語12345";                                 // M3-L as a Kanji plan; 14 UTF-8 bytes, M4-L
+
+    /// <summary>1,000 cells: a Kanji set of 7 symbols at version 10-L, 12 as UTF-8.</summary>
+    private static readonly string SetCells = Repeat("吾輩は猫である。名前はまだ無い。", 1_000);
+
+    /// <summary>1,000 characters of the CodeGlyphX sentence, two ASCII in every 21: under Optimal a Kanji set of 7 symbols at version 10-L, 11 as UTF-8.</summary>
+    private static readonly string SetSentence = Repeat("こんにちは世界、QRコードの分割テストです。", 1_000);
+
+    /// <summary>1,000 characters of ASCII and kanji taking turns: the Kanji set pays a header a character and is larger, so under Optimal the set is the UTF-8 one, after both were planned.</summary>
+    private static readonly string SetInterleaved = Repeat("a日b本c", 1_000);
+
+    private static readonly QRCodeGeneratorOptions SetSingle = new() { Version = QRVersionRange.AtMost(10) };
+    private static readonly QRCodeGeneratorOptions SetSingleUtf8 = new() { Version = QRVersionRange.AtMost(10), EciMode = EciMode.Utf8 };
+    private static readonly QRCodeGeneratorOptions SetOptimal = new() { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal };
+    private static readonly QRCodeGeneratorOptions SetOptimalUtf8 = new() { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal, EciMode = EciMode.Utf8 };
+
+    private static string Repeat(string text, int length)
+    {
+        var chars = new char[length];
+        for (var i = 0; i < length; i++)
+            chars[i] = text[i % text.Length];
+        return new string(chars);
+    }
 
     private static readonly QRCodeGeneratorOptions Utf8 = new() { EciMode = EciMode.Utf8 };
     private static readonly RmQRCodeGeneratorOptions RmQrUtf8 = new() { EciMode = EciMode.Utf8 };
@@ -80,4 +104,23 @@ public class KanjiEncode
 
     [Benchmark]
     public int RmQR_Utf8Plan_Mixed_Encode() => RmQRCodeGenerator.Create(Mixed.AsSpan(), RmQREccLevel.M, _destination, RmQrOptimalUtf8);
+
+    [Benchmark]
+    public QRCodeData[] QR_KanjiSet_Cells_Encode() => QRCodeGenerator.CreateStructuredAppend(SetCells.AsSpan(), QREccLevel.L, SetSingle);
+
+    [Benchmark]
+    public QRCodeData[] QR_Utf8Set_Cells_Encode() => QRCodeGenerator.CreateStructuredAppend(SetCells.AsSpan(), QREccLevel.L, SetSingleUtf8);
+
+    [Benchmark]
+    public QRCodeData[] QR_KanjiSet_Sentence_Encode() => QRCodeGenerator.CreateStructuredAppend(SetSentence.AsSpan(), QREccLevel.L, SetOptimal);
+
+    [Benchmark]
+    public QRCodeData[] QR_Utf8Set_Sentence_Encode() => QRCodeGenerator.CreateStructuredAppend(SetSentence.AsSpan(), QREccLevel.L, SetOptimalUtf8);
+
+    /// <summary>The same set as its twin below, with the Kanji set planned first and set aside: the price of the comparison where it loses.</summary>
+    [Benchmark]
+    public QRCodeData[] QR_KanjiSetLoses_Interleaved_Encode() => QRCodeGenerator.CreateStructuredAppend(SetInterleaved.AsSpan(), QREccLevel.L, SetOptimal);
+
+    [Benchmark]
+    public QRCodeData[] QR_Utf8Set_Interleaved_Encode() => QRCodeGenerator.CreateStructuredAppend(SetInterleaved.AsSpan(), QREccLevel.L, SetOptimalUtf8);
 }

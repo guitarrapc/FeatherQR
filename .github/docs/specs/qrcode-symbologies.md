@@ -302,9 +302,15 @@ Why this rule and not a wider one:
   runs, and there one UTF-8 Byte run can be the smaller plan. At a version both fit, the Kanji
   plan is written.
 
-Not yet: a Structured Append set of more than one symbol stays UTF-8 (a set that fits one symbol
-is `Create`'s symbol); [kanji-encoding-plan.md](../plans/kanji-encoding-plan.md) carries that
-phase.
+A Structured Append set follows the same rule for the whole text. An eligible set carries no ECI
+header in any symbol, and its parity is the XOR of the whole text's Shift_JIS bytes (an ASCII
+character as its byte), which do not depend on the plan, so the parity is still fixed before the
+text is split. Under `Single` the set is a Kanji set only when every character has a cell, every
+chunk one Kanji segment; under `Optimal` a text with ASCII in it becomes a Kanji set, every chunk
+its Kanji plan, only when that set needs fewer symbols than the UTF-8 set, or as many at a lower
+version, so `Optimal` never gives a larger set than before. A text of every-cell characters is a
+Kanji set under both, since its Kanji set is never the larger. A text that fits one symbol is
+`Create`'s symbol, the question asked the way `Create` asks it.
 
 `Decode(Encode(x)) == x` holds for Kanji output as for any other, and ZXing.Net and zxing-cpp read
 it. `Encode(Decode(y))` reproduces a Kanji symbol `y` only when `y` is what this library writes
@@ -364,7 +370,9 @@ consumer keeps the reverse table whether or not its text ever reaches Kanji mode
 writers' mode switches reference it. Kanji plans under `Optimal` (the eighth segmentation state,
 each planner's Kanji scan) added 4.5 KB more to QR encode only (137,216 bytes) and 7.0 KB to all
 three (204,288), measured 2026-09-30; a consumer that never sets `Optimal` keeps them too, since
-the segmentation is a run-time option.
+the segmentation is a run-time option. Kanji sets in Structured Append cost a consumer that calls
+`CreateStructuredAppend` 4.0 KB (161,792 → 165,888 bytes) and the others at most 0.5 KB (QR encode
+only 137,216 unchanged, all three 204,288 → 204,800), measured the same day.
 
 Two failure causes are kept apart on the error path: a structurally impossible byte pair is
 `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing
@@ -486,7 +494,7 @@ The queue is closed again behind them, on the same rule.
 | The announced removals (`GetRequiredBufferSize`, `Compression`, parameter-list generator overloads) | Done in 2.0.0-preview.3. Every generator now takes only `in {Sym}CodeGeneratorOptions`, defaulted | Never; a throwing sizing method is asserted absent |
 | 2.0.0 type renames (the `QR` casing rule, `QREccLevel` to `QREccLevel` and friends) and the `string` convenience overloads | Out of the split and out of the removals; their own plan, same major, before `2.0.0` final | That plan |
 | Pages fallback stub on the user site | Kept for as long as 1.x packages are listed on nuget.org, since their READMEs link the old Playground URL | Never while a 1.x listing exists |
-| Kanji mode (all symbologies) | Read with the JIS X 0208 mapping. Written when the charset is the library's choice ([When Kanji mode is written](#when-kanji-mode-is-written)): one Kanji segment for text whose every character has an encoder cell, and under `Optimal` Kanji runs beside ASCII runs where that plan is smaller; in Structured Append sets of more than one symbol, not yet | The remaining phases of [kanji-encoding-plan.md](../plans/kanji-encoding-plan.md); Kanji beside an ECI header only if readers are measured to apply JIS X 0208 there |
+| Kanji mode (all symbologies) | Read with the JIS X 0208 mapping. Written when the charset is the library's choice ([When Kanji mode is written](#when-kanji-mode-is-written)): one Kanji segment for text whose every character has an encoder cell, and under `Optimal` Kanji runs beside ASCII runs where that plan is smaller; Structured Append sets by the same rule, with the Shift_JIS parity | The remaining phases of [kanji-encoding-plan.md](../plans/kanji-encoding-plan.md); Kanji beside an ECI header only if readers are measured to apply JIS X 0208 there |
 | ECI 20 (Shift_JIS) byte segments | Unsupported; reported as `UnsupportedContent` (structural, unlike the per-character `UnmappedCharacter`) | Demand for symbols that pair ECI 20 with Byte mode; needs the full CP932 range, roughly twice the Kanji table |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |

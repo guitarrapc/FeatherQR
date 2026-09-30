@@ -25,6 +25,9 @@ public class StructuredAppendZXingCrossTest
     [Arguments("ascii", 470, 2, QREccLevel.L, QRSegmentation.Single, true, false)]
     [Arguments("latin1", 329, 3, QREccLevel.M, QRSegmentation.Optimal, true, false)]
     [Arguments("japanese", 67, 5, QREccLevel.M, QRSegmentation.Single, false, true)]
+    [Arguments("japanese", 67, 5, QREccLevel.M, QRSegmentation.Optimal, false, false)] // a Kanji set: Kanji runs beside the ASCII, no ECI, the Shift_JIS parity
+    [Arguments("japaneseCells", 61, 3, QREccLevel.M, QRSegmentation.Single, false, false)] // a Kanji set: one Kanji segment a symbol
+    [Arguments("japaneseCells", 61, 3, QREccLevel.M, QRSegmentation.Optimal, true, false)]
     public async Task Set_IsReadByZXingWithTheSameHeaderAndText(string kind, int length, int maxVersion, QREccLevel ecc, QRSegmentation segmentation, bool boost, bool bom)
     {
         var text = Text(kind, length);
@@ -89,6 +92,7 @@ public class StructuredAppendZXingCrossTest
             "digits" => "0123456789",
             "latin1" => "Crème brûlée à la carte, jalapeño, naïve café. ",
             "japanese" => "こんにちは世界、QRコードの分割テストです。",
+            "japaneseCells" => "こんにちは世界、日本語の分割テストです。",
             "emoji" => "🎉🎊🎈",
             "mixed" => "order 20260915 item 0000123456 qty 42 ",
             _ => Sentence,

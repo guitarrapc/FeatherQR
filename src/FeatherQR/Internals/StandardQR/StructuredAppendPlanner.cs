@@ -59,13 +59,20 @@ internal static partial class StructuredAppendPlanner
     /// <summary>
     /// The same, handing the writer what the pass over the text's dense runs also settles: <paramref name="oneRunPlans"/> says the minimal plan of every chunk that has a character outside the alphanumeric alphabet is one Byte run, which is its single-mode stream, so such a chunk needs no plan of its own. <paramref name="mayBeOneSymbol"/> says whether a symbol of the largest version could hold the text without the set header, by the measure the search ran on (the whole text's plan, or its single-mode stream): false rules the one symbol out, true leaves it to the caller to ask as <c>Create</c> does.
     /// </summary>
-    internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool oneRunPlans, out bool mayBeOneSymbol, bool allowLanes)
+    /// <remarks>
+    /// With <paramref name="kanji"/> the set is a Kanji set of a Kanji-eligible text (kanji-encoding-plan.md, K6): no ECI header (<paramref name="charset"/> is <see cref="EciMode.Default"/>), and a chunk costs one Kanji segment under <see cref="QRSegmentation.Single"/> (every character has a cell) or its Kanji plan under <see cref="QRSegmentation.Optimal"/> (<see cref="ChunkBitsKanji"/>).
+    /// The three searches are the same; the cost model under them is the eighth-state program's, and, as K9 has it, the walks stay scalar.
+    /// </remarks>
+    internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool oneRunPlans, out bool mayBeOneSymbol, bool allowLanes, bool kanji = false)
     {
         chunkCount = 0;
         version = 0;
         budgetBits = 0;
         oneRunPlans = false;
         mayBeOneSymbol = false;
+        Debug.Assert(!kanji || (charset == EciMode.Default && !utf8Bom), "a Kanji set carries no charset and no byte order mark");
+        // The lanes price a budget with the seven-state program, which has no Kanji mode (K9).
+        Debug.Assert(!kanji || !allowLanes, "a Kanji set's walks stay scalar");
 
         // Nothing to split: the single-symbol path encodes an empty Byte segment.
         if (text.IsEmpty)
@@ -76,12 +83,15 @@ internal static partial class StructuredAppendPlanner
         }
 
         // What no split can cost less than, priced once; every search below is gated on it.
-        var cheapest = CheapestPayloadBits(text, charset);
+        var cheapest = kanji ? CheapestPayloadBitsKanji(text) : CheapestPayloadBits(text, charset);
 
         // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the two are the same number for content holding no run dense enough to repay a mode header. Deciding that once, in one pass, is what keeps the searches below off the segmentation program, whose every probe is a pass of its own, the split it would find is the split the closed-form cost finds, so the searches run as Single and the symbols are still written exactly as the caller asked.
-        var searched = segmentation == QRSegmentation.Optimal && CanPlanHelp(text, singleMode, out oneRunPlans)
-            ? QRSegmentation.Optimal
-            : QRSegmentation.Single;
+        // A Kanji set is searched as asked: under Optimal its chunks are Kanji plans, which a chunk holding both kinds of character needs.
+        var searched = kanji
+            ? segmentation
+            : segmentation == QRSegmentation.Optimal && CanPlanHelp(text, singleMode, out oneRunPlans)
+                ? QRSegmentation.Optimal
+                : QRSegmentation.Single;
 
         var largest = Capacity(maxVersion, eccLevel);
         if (!CanHold(largest, MaxSymbols, cheapest, charset))
@@ -110,7 +120,7 @@ internal static partial class StructuredAppendPlanner
         {
             // One single-mode stream that fits is the walk's own closed form; the program is never asked.
             var bom = utf8Bom && charset == EciMode.Utf8;
-            if (text.Length <= QRSegmentPlanner.MaxPlannableChars
+            if (!kanji && text.Length <= QRSegmentPlanner.MaxPlannableChars
                 && SingleModeLength(text, charset, maxVersion, bom, largest - setHeaders - ModeIndicatorBits, out _, out _) == text.Length)
             {
                 chunkEnds[0] = text.Length;
@@ -120,7 +130,7 @@ internal static partial class StructuredAppendPlanner
             }
 
             // The chunks' plans cost at least the whole text's plan between them, so the count is at least fewest; a walk near the plan's floor that holds fewest chunks therefore settles it, and measured balanced budgets sit within FloorMarginBits of that floor.
-            var whole = WholeTextPlanBits(text, charset, maxVersion, wholeTextPlans);
+            var whole = WholeTextPlanBits(text, charset, maxVersion, wholeTextPlans, kanji);
             // No stream of the text costs less than its plan, so a plan the largest symbol does not hold without the set header rules the one symbol out.
             mayBeOneSymbol = whole + charset.GetStandardQrHeaderBits() <= largest;
             var perSymbol = largest - setHeaders;
@@ -157,7 +167,7 @@ internal static partial class StructuredAppendPlanner
                         }
                         else
                         {
-                            var probed = CountChunks(text, charset, utf8Bom, searched, maxVersion, target, fewest, chunkEnds);
+                            var probed = CountChunks(text, charset, utf8Bom, searched, maxVersion, target, fewest, chunkEnds, kanji);
                             if (probed <= fewest)
                             {
                                 count = probed;
@@ -185,11 +195,13 @@ internal static partial class StructuredAppendPlanner
 
         // Searched as single-mode streams, the one symbol is its stream's closed form, which reads the text: not one too long for a symbol at the best a mode does, ten bits on three characters.
         if (searched == QRSegmentation.Single)
-            mayBeOneSymbol = text.Length * 10L <= largest * 3L
-                && SingleModeLength(text, charset, maxVersion, utf8Bom && charset == EciMode.Utf8, largest - charset.GetStandardQrHeaderBits() - ModeIndicatorBits, out _, out _) == text.Length;
+            mayBeOneSymbol = kanji
+                ? ModeIndicatorBits + EncodingMode.Kanji.GetCountIndicatorLength(maxVersion) + 13L * text.Length <= largest
+                : text.Length * 10L <= largest * 3L
+                    && SingleModeLength(text, charset, maxVersion, utf8Bom && charset == EciMode.Utf8, largest - charset.GetStandardQrHeaderBits() - ModeIndicatorBits, out _, out _) == text.Length;
 
         if (count < 0)
-            count = CountChunks(text, charset, utf8Bom, searched, maxVersion, largest, MaxSymbols, chunkEnds);
+            count = CountChunks(text, charset, utf8Bom, searched, maxVersion, largest, MaxSymbols, chunkEnds, kanji);
         if (count > MaxSymbols)
             return false;
         if (count == 1)
@@ -209,7 +221,7 @@ internal static partial class StructuredAppendPlanner
                 continue;
             if (searched == QRSegmentation.Optimal)
             {
-                if (!CanHoldPlanned(capacity, count, WholeTextPlanBits(text, charset, candidate, wholeTextPlans), charset))
+                if (!CanHoldPlanned(capacity, count, WholeTextPlanBits(text, charset, candidate, wholeTextPlans, kanji), charset))
                     continue;
                 if (settledBudget >= 0 && settledBand == Band(candidate) && settledBudget <= capacity)
                 {
@@ -217,7 +229,7 @@ internal static partial class StructuredAppendPlanner
                     break;
                 }
             }
-            if (CountChunks(text, charset, utf8Bom, searched, candidate, capacity, count, chunkEnds) <= count)
+            if (CountChunks(text, charset, utf8Bom, searched, candidate, capacity, count, chunkEnds, kanji) <= count)
             {
                 version = candidate;
                 break;
@@ -232,7 +244,7 @@ internal static partial class StructuredAppendPlanner
         {
             // Under Optimal a probe is a pass, so the bracket is the exact cost model's: below, a split costs at least the whole text's plan, so its fullest chunk is at least the average of that plus the headers every symbol pays; above, the settled walk's budget.
             var answerBand = Band(version);
-            var wholeText = WholeTextPlanBits(text, charset, version, wholeTextPlans);
+            var wholeText = WholeTextPlanBits(text, charset, version, wholeTextPlans, kanji);
             if (wholeText < ModeSegmenter.Unreachable)
                 low = Math.Max(low, setHeaders + (wholeText + count - 1) / count);
 
@@ -260,7 +272,7 @@ internal static partial class StructuredAppendPlanner
                 while (settledBudget < 0 && low + margin < high)
                 {
                     var target = low + margin;
-                    var probed = CountChunks(text, charset, utf8Bom, searched, version, target, count, chunkEnds);
+                    var probed = CountChunks(text, charset, utf8Bom, searched, version, target, count, chunkEnds, kanji);
                     if (probed <= count)
                     {
                         high = target;
@@ -309,7 +321,7 @@ internal static partial class StructuredAppendPlanner
                 start = settledEnds[shared - 1];
             }
 
-            var probed = CountChunks(text, charset, utf8Bom, searched, version, middle, count, chunkEnds, shared, start);
+            var probed = CountChunks(text, charset, utf8Bom, searched, version, middle, count, chunkEnds, shared, start, kanji);
             if (probed <= count)
             {
                 high = middle;
@@ -337,9 +349,19 @@ internal static partial class StructuredAppendPlanner
         }
 
         // No probe settled it: the answer is the ceiling the bracket started from.
-        chunkCount = CountChunks(text, charset, utf8Bom, searched, version, low, count, chunkEnds);
+        chunkCount = CountChunks(text, charset, utf8Bom, searched, version, low, count, chunkEnds, kanji);
         return true;
     }
+
+    /// <summary>
+    /// Plans a Kanji set: a Kanji-eligible text split into symbols that carry no ECI header, each chunk one Kanji segment (<see cref="QRSegmentation.Single"/>, every character with a cell) or its Kanji plan (<see cref="QRSegmentation.Optimal"/>).
+    /// </summary>
+    internal static bool TryPlanKanji(ReadOnlySpan<char> text, QREccLevel eccLevel, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits)
+        => TryPlanKanji(text, eccLevel, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, out _);
+
+    /// <summary>The same, with the planner's word on whether the largest symbol could hold the text without the set header (its Kanji stream or plan).</summary>
+    internal static bool TryPlanKanji(ReadOnlySpan<char> text, QREccLevel eccLevel, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool mayBeOneSymbol)
+        => TryPlan(text, eccLevel, EciMode.Default, EncodingMode.Kanji, false, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, out _, out mayBeOneSymbol, allowLanes: false, kanji: true);
 
     /// <summary>Data capacity of a symbol at this version and level, in bits.</summary>
     public static int Capacity(int version, QREccLevel eccLevel) => QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
@@ -351,11 +373,42 @@ internal static partial class StructuredAppendPlanner
     public static int CheapestPayloadBits(ReadOnlySpan<char> text, EciMode charset) => (ModeSegmenter.CheapestSixths(text, charset) + 5) / 6;
 
     /// <summary>
+    /// <see cref="CheapestPayloadBits"/> for a Kanji set: a character with a cell at 13 bits, the only mode that carries it without an ECI header.
+    /// Priced at its UTF-8 bytes, a kana would count 24 bits, and the bound would refuse counts and versions the walk reaches.
+    /// </summary>
+    public static int CheapestPayloadBitsKanji(ReadOnlySpan<char> text) => (ModeSegmenter.CheapestSixthsKanji(text) + 5) / 6;
+
+    /// <summary>
     /// Whether <paramref name="count"/> symbols of <paramref name="capacityBits"/> could hold the text at all: each pays the Structured Append header, the set's ECI header, a mode indicator and the narrowest count indicator, and the payloads sum to at least <paramref name="cheapestPayloadBits"/>.
     /// A lower bound, so it only rejects; the walk decides the rest.
     /// </summary>
     public static bool CanHold(int capacityBits, int count, int cheapestPayloadBits, EciMode charset)
         => (long)count * (capacityBits - ChunkFloorBits(charset)) >= cheapestPayloadBits;
+
+    /// <summary>
+    /// <see cref="CanHold"/> for a Kanji set, with the runs its text cannot do without: no run crosses between a character with a cell and ASCII, so the set has a run for each of the text's <paramref name="stretches"/> of either kind, and more where a split cuts one.
+    /// A symbol's first run is in <see cref="CanHold"/>'s floor already, so only the stretches past the count add a mode indicator and the narrowest count indicator each.
+    /// </summary>
+    public static bool CanHoldKanji(int capacityBits, int count, int cheapestPayloadBits, int stretches)
+        => CanHold(capacityBits, count, cheapestPayloadBits + Math.Max(0, stretches - count) * (ModeIndicatorBits + MinCountIndicatorBits), EciMode.Default);
+
+    /// <summary>The fewest symbols of <paramref name="capacityBits"/> <see cref="CanHold"/> admits, or one more than <see cref="MaxSymbols"/>: a floor under the count the walk settles.</summary>
+    public static int FewestSymbols(int capacityBits, int cheapestPayloadBits, EciMode charset)
+    {
+        var count = 1;
+        while (count <= MaxSymbols && !CanHold(capacityBits, count, cheapestPayloadBits, charset))
+            count++;
+        return count;
+    }
+
+    /// <summary><see cref="FewestSymbols"/> by <see cref="CanHoldKanji"/>.</summary>
+    public static int FewestSymbolsKanji(int capacityBits, int cheapestPayloadBits, int stretches)
+    {
+        var count = 1;
+        while (count <= MaxSymbols && !CanHoldKanji(capacityBits, count, cheapestPayloadBits, stretches))
+            count++;
+        return count;
+    }
 
     /// <summary>The smallest per-symbol budget <see cref="CanHold"/> admits for the count: the floor plus the average share of the cheapest payload.</summary>
     private static int MinimumBudget(int count, int cheapestPayloadBits, EciMode charset)
@@ -374,14 +427,16 @@ internal static partial class StructuredAppendPlanner
 
     /// <summary>The minimal plan for the whole text at this version's count indicator widths, computed once per band into <paramref name="cache"/>.</summary>
     /// <remarks>The widths are constant within the three ISO/IEC 18004 bands (1-9, 10-26, 27-40), so a band's cost holds for every version in it.</remarks>
-    private static int WholeTextPlanBits(ReadOnlySpan<char> text, EciMode charset, int version, Span<int> cache)
+    private static int WholeTextPlanBits(ReadOnlySpan<char> text, EciMode charset, int version, Span<int> cache, bool kanji)
     {
         var band = Band(version);
         if (cache[band] < 0)
         {
-            cache[band] = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits,
-                EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
-                default, out _);
+            cache[band] = kanji
+                ? QRSegmentPlanner.MinimumPayloadBitsKanji(text, version)
+                : ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits,
+                    EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
+                    default, out _);
         }
         return cache[band];
     }
@@ -461,6 +516,15 @@ internal static partial class StructuredAppendPlanner
     }
 
     /// <summary>
+    /// Bits one chunk needs as a symbol of a Kanji set: the Structured Append header, no ECI header, and one Kanji segment (<see cref="QRSegmentation.Single"/>, where every character has a cell) or the chunk's Kanji plan.
+    /// The definition <see cref="LongestChunkEnd"/> agrees with for a Kanji set.
+    /// </summary>
+    public static int ChunkBitsKanji(ReadOnlySpan<char> chunk, int version, QRSegmentation segmentation)
+        => HeaderBits + (segmentation == QRSegmentation.Optimal
+            ? QRSegmentPlanner.MinimumPayloadBitsKanji(chunk, version)
+            : ModeIndicatorBits + EncodingMode.Kanji.GetCountIndicatorLength(version) + ModeSegmenter.PayloadBits(EncodingMode.Kanji, chunk.Length));
+
+    /// <summary>
     /// What <see cref="ChunkBits"/> charges the chunk's single-mode stream, from an analysis the caller already has.
     /// </summary>
     public static int SingleModeChunkBits(in TextAnalysisResult analysis, EciMode charset, int version, bool bomApplies)
@@ -474,18 +538,20 @@ internal static partial class StructuredAppendPlanner
     /// Stops as soon as the text needs more than <paramref name="limit"/> chunks and returns a value greater than the limit; a walk that cannot answer "at most this many" with yes has nothing left to learn.
     /// <see cref="Impossible"/> when some single character does not fit the budget.
     /// </summary>
-    internal static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds)
-        => CountChunks(text, charset, utf8Bom, segmentation, version, budgetBits, limit, chunkEnds, 0, 0);
+    internal static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds, bool kanji = false)
+        => CountChunks(text, charset, utf8Bom, segmentation, version, budgetBits, limit, chunkEnds, 0, 0, kanji);
 
     /// <summary>The walk resumed: <paramref name="count"/> chunks are already in <paramref name="chunkEnds"/> and the next starts at <paramref name="start"/>.</summary>
-    private static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds, int count, int start)
+    private static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds, int count, int start, bool kanji)
     {
         ScalarWalks++;
         while (start < text.Length)
         {
             if (count == limit)
                 return count + 1;
-            var end = LongestChunkEnd(text, start, charset, version, segmentation, utf8Bom && start == 0, budgetBits);
+            var end = kanji
+                ? LongestChunkEndKanji(text, start, version, segmentation, budgetBits)
+                : LongestChunkEnd(text, start, charset, version, segmentation, utf8Bom && start == 0, budgetBits);
             if (end >= 0)
                 end = BeforeMark(text, charset, start, end);
             if (end < 0)
@@ -620,6 +686,30 @@ internal static partial class StructuredAppendPlanner
             EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version), payloadBudget + ModeIndicatorBits);
         Debug.Assert(planned >= single, "the plan holds the single-mode stream among its candidates, so it never fits less");
         return planned == 0 ? -1 : start + planned;
+    }
+
+    /// <summary>
+    /// <see cref="LongestChunkEnd"/> for a Kanji set, the definition being <see cref="ChunkBitsKanji"/>: one Kanji segment's closed form under <see cref="QRSegmentation.Single"/> (every character has a cell, at 13 bits), else one forward pass of the eighth-state program.
+    /// No cut is kept off anything: the text has no U+FEFF and no surrogate.
+    /// </summary>
+    internal static int LongestChunkEndKanji(ReadOnlySpan<char> text, int start, int version, QRSegmentation segmentation, int budgetBits)
+    {
+        var length = Math.Min(text.Length - start, QRSegmentPlanner.MaxPlannableChars);
+        var payloadBudget = budgetBits - HeaderBits - ModeIndicatorBits;
+        int fitted;
+        if (segmentation == QRSegmentation.Optimal)
+        {
+            // The program prices each run's mode indicator itself, so its budget keeps those bits.
+            fitted = ModeSegmenter.LongestPrefixWithinBudgetKanji(text.Slice(start, length), ModeIndicatorBits,
+                EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version),
+                EncodingMode.Byte.GetCountIndicatorLength(version), EncodingMode.Kanji.GetCountIndicatorLength(version), payloadBudget + ModeIndicatorBits);
+        }
+        else
+        {
+            var room = payloadBudget - EncodingMode.Kanji.GetCountIndicatorLength(version);
+            fitted = room < 13 ? 0 : Math.Min(length, room / 13);
+        }
+        return fitted == 0 ? -1 : start + fitted;
     }
 
     /// <summary>

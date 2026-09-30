@@ -123,6 +123,39 @@ public class ModeSegmenterKanjiParityTest
     }
 
     /// <summary>
+    /// The Structured Append walk's step for a Kanji set: the longest prefix whose minimal plan fits a budget, at every budget the answer can turn on (each prefix's own cost and its neighbours).
+    /// The optimum of a prefix never falls as it grows, so the answer is the last prefix within budget.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
+    public async Task LongestPrefixWithinBudgetKanji_StopsWhereTheReferenceStops(string name, string text)
+    {
+        if (text.Length > 120)
+            return; // the reference prices every prefix from scratch
+
+        foreach (var widths in AllWidths())
+        {
+            var prefixCosts = PrefixCosts(text, widths);
+            var budgets = new SortedSet<int> { 0, 1 };
+            for (var length = 1; length <= text.Length; length++)
+            {
+                budgets.Add(prefixCosts[length] - 1);
+                budgets.Add(prefixCosts[length]);
+                budgets.Add(prefixCosts[length] + 1);
+            }
+
+            foreach (var budget in budgets)
+            {
+                var expected = 0;
+                for (var length = 1; length <= text.Length && prefixCosts[length] <= budget; length++)
+                    expected = length;
+                var actual = ModeSegmenter.LongestPrefixWithinBudgetKanji(text, widths.ModeIndicator, widths.Numeric, widths.Alnum, widths.Byte, widths.Kanji, budget);
+                await Assert.That(actual).IsEqualTo(expected).Because($"{name} at {widths}, budget {budget}");
+            }
+        }
+    }
+
+    /// <summary>
     /// The reconstructed plan is priced by the same model it came from: the sum of its headers and payloads is the program's cost.
     /// This is what the planners' re-measurement asserts, so a Kanji run priced at another width would fail there too.
     /// </summary>

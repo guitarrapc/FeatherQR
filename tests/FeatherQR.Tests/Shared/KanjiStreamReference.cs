@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 internal static class KanjiStreamReference
 {
     /// <summary>
-    /// One run of a stream: <c>N</c>umeric, <c>A</c>lphanumeric, <c>B</c>yte (ASCII / Latin-1, one byte a character), <c>U</c> (Byte mode carrying the text's UTF-8 bytes), <c>K</c>anji, or <c>E</c>, an ECI header whose text is the assignment number (Standard QR and rMQR only).
+    /// One run of a stream: <c>N</c>umeric, <c>A</c>lphanumeric, <c>B</c>yte (ASCII / Latin-1, one byte a character), <c>U</c> (Byte mode carrying the text's UTF-8 bytes), <c>K</c>anji, <c>E</c>, an ECI header whose text is the assignment number (Standard QR and rMQR only), or <c>S</c>, a Structured Append header whose text is "index,count,parity" (Standard QR only).
     /// </summary>
     public readonly record struct Run(char Mode, string Text)
     {
@@ -28,6 +28,11 @@ internal static class KanjiStreamReference
     /// </summary>
     private static readonly Encoding Cp932 = CodePagesEncodingProvider.Instance.GetEncoding(932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback)
         ?? throw new InvalidOperationException("CP932 is not available from CodePagesEncodingProvider.");
+
+    /// <summary>
+    /// The text's Shift_JIS bytes as CP932 writes them: an ASCII character as its byte, a character with an encoder cell as its pair (the two agree on every encoder cell).
+    /// </summary>
+    public static byte[] ShiftJisBytes(string text) => Cp932.GetBytes(text);
 
     /// <summary>
     /// ISO/IEC 18004 8.4.5: subtract 0x8140 (0x8140-0x9FFC) or 0xC140 (0xE040-0xEBBF) from the Shift_JIS pair, multiply the high byte by 0xC0 and add the low byte.
@@ -109,6 +114,16 @@ internal static class KanjiStreamReference
                 Append(bits, int.Parse(run.Text), 8);
                 continue;
             }
+            if (run.Mode == 'S')
+            {
+                // Structured Append: 0011, the 4-bit position, the 4-bit count less one, the 8-bit parity.
+                var fields = run.Text.Split(',').Select(int.Parse).ToArray();
+                Append(bits, 0b0011, 4);
+                Append(bits, fields[0], 4);
+                Append(bits, fields[1] - 1, 4);
+                Append(bits, fields[2], 8);
+                continue;
+            }
             Append(bits, StandardQrModeIndicator(run.Header), 4);
             Append(bits, run.Units, StandardQrCountBits(run.Header, version));
             AppendPayload(bits, run);
@@ -132,7 +147,7 @@ internal static class KanjiStreamReference
 
     /// <summary>The runs' length in bits at <paramref name="version"/>, or <see cref="int.MaxValue"/> where a run's count does not fit its count indicator, so the version cannot carry them.</summary>
     public static int StandardQrBitCount(int version, Run[] runs)
-        => runs.All(r => r.Mode == 'E' || r.Units < 1 << StandardQrCountBits(r.Header, version)) ? StandardQrBits(version, runs).Length : int.MaxValue;
+        => runs.All(r => r.Mode is 'E' or 'S' || r.Units < 1 << StandardQrCountBits(r.Header, version)) ? StandardQrBits(version, runs).Length : int.MaxValue;
 
     // ---- Micro QR (ISO/IEC 18004 Tables 2 and 3) ------------------------------------
 

@@ -490,6 +490,83 @@ internal static partial class ModeSegmenter
         return FromKey(TrackedKanji(text, openNumeric << 3, openAlnum << 3, openByte << 3, openKanji << 3, parents), out finalState);
     }
 
+    /// <summary>
+    /// <see cref="LongestPrefixWithinBudget"/> for a Kanji-eligible text, on the program of <see cref="ComputeCostsKanji"/>: the longest prefix whose minimal plan costs at most <paramref name="budgetBits"/>, in characters.
+    /// The walk of a Kanji Structured Append set. An eligible text has no surrogate, so every character is a candidate end.
+    /// </summary>
+    public static int LongestPrefixWithinBudgetKanji(ReadOnlySpan<char> text, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, int cciKanji, int budgetBits)
+    {
+        var openNumeric = modeIndicatorBits + cciNumeric + 4;
+        var openAlnum = modeIndicatorBits + cciAlnum + 6;
+        var openByte = modeIndicatorBits + cciByte + 8;
+        var openKanji = modeIndicatorBits + cciKanji + 13;
+
+        int n0 = Unreachable, n1 = Unreachable, n2 = Unreachable, a0 = Unreachable, a1 = Unreachable, b = Unreachable;
+        var cheapest = 0;
+        var length = text.Length;
+        for (var i = 0; i < length; i++)
+        {
+            var c = text[i];
+            if (c >= 0x80)
+            {
+                // A run of characters with a cell is one Kanji run, opened from whatever the ASCII before it ended in.
+                var k = cheapest + openKanji;
+                n0 = n1 = n2 = a0 = a1 = b = Unreachable;
+                while (true)
+                {
+                    if (k > budgetBits)
+                        return i;
+                    if (i + 1 >= length || text[i + 1] < 0x80)
+                        break;
+                    i++;
+                    k += 13;
+                }
+                cheapest = k;
+                continue;
+            }
+
+            var cls = ClassOf(c);
+            if (cls == ClassOther)
+            {
+                b = Math.Min(b + 8, cheapest + openByte);
+                n0 = n1 = n2 = a0 = a1 = Unreachable;
+                while (true)
+                {
+                    if (b > budgetBits)
+                        return i;
+                    if (i + 1 >= length || text[i + 1] >= 0x80 || ClassOf(text[i + 1]) != ClassOther)
+                        break;
+                    i++;
+                    b += 8;
+                }
+                cheapest = b;
+                continue;
+            }
+
+            if (cls == ClassDigit)
+            {
+                var wrapped = n2 + 3;
+                n2 = n1 + 3;
+                n1 = Math.Min(n0 + 4, cheapest + openNumeric);
+                n0 = wrapped;
+            }
+            else
+            {
+                n0 = n1 = n2 = Unreachable;
+            }
+            var paired = a1 + 5;
+            a1 = Math.Min(a0 + 6, cheapest + openAlnum);
+            a0 = paired;
+            b = Math.Min(b + 8, cheapest + openByte);
+            cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
+
+            if (cheapest > budgetBits)
+                return i;
+        }
+
+        return length;
+    }
+
     /// <summary>Costs only, for a Kanji-eligible text: the version scans and the rMQR floor.</summary>
     private static int CostsKanji(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, int openKanji, out int finalState)
     {

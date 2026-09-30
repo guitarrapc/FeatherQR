@@ -103,6 +103,15 @@ internal static class KanjiPlanReference
         return best;
     }
 
+    /// <summary>The optimum of every prefix, indexed by its length (entry 0 is the empty prefix, 0 bits): the prefix's own minimal plan, taken from the same relaxation.</summary>
+    public static int[] PrefixCosts(string text, Widths widths)
+    {
+        var costs = new int[text.Length + 1];
+        for (var length = 1; length <= text.Length; length++)
+            costs[length] = Cost(text.Substring(0, length), widths, null, out _);
+        return costs;
+    }
+
     private static void Relax(int[] cur, byte[]? parents, int i, int target, int cost, int from)
     {
         if (cost >= cur[target])

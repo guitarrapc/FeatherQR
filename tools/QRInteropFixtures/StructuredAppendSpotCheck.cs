@@ -129,9 +129,22 @@ public static class StructuredAppendSpotCheck
                     if (oracleSet.Count >= 2 && GlyphDecoder.TryDecode(ToGlyphMatrix(oracleSet[0]), out var oracle) && oracle.StructuredAppend is { } oracleHeader)
                     {
                         parityChecks++;
-                        parityNote = oracleHeader.Parity == parity ? $"{parity} = oracle" : $"{parity} != oracle {oracleHeader.Parity}";
-                        if (oracleHeader.Parity != parity)
+                        // A Kanji set (kanji-encoding-plan K6) carries the XOR of the text's Shift_JIS bytes, which this
+                        // oracle, writing UTF-8, never does; CodeGlyphX's Kanji set of the Japanese case carries it too (176).
+                        var shiftJis = ShiftJisParity(caseDefinition.PayloadText);
+                        if (oracleHeader.Parity == parity)
+                        {
+                            parityNote = $"{parity} = oracle";
+                        }
+                        else if (shiftJis == parity)
+                        {
+                            parityNote = $"{parity} = Shift_JIS (a Kanji set; the UTF-8 oracle writes {oracleHeader.Parity})";
+                        }
+                        else
+                        {
+                            parityNote = $"{parity} != oracle {oracleHeader.Parity}";
                             mismatches++;
+                        }
                     }
                 }
 
@@ -143,6 +156,19 @@ public static class StructuredAppendSpotCheck
 
         Console.WriteLine($"{symbols} symbols read by three readers, {parityChecks} parity comparisons, {mismatches} mismatches");
         return mismatches == 0 ? 0 : 1;
+    }
+
+    /// <summary>The XOR of the text's Shift_JIS bytes as CP932 writes them, or null for a text CP932 cannot write.</summary>
+    private static byte? ShiftJisParity(string text)
+    {
+        try
+        {
+            return (byte)KanjiPayload.ToShiftJisBytes(text, null).Aggregate(0, (p, b) => p ^ b);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static (byte[] Luminance, int Width) RenderLuminance(QRCodeData data)
