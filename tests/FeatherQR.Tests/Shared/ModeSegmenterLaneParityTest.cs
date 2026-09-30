@@ -4,9 +4,21 @@ using FeatherQR.Internals;
 
 namespace FeatherQR.Tests;
 
-/// <summary>Lane plans against an independent all-states relaxation with a full predecessor table.</summary>
+/// <summary>
+/// Lane plans against an independent all-states relaxation with a full predecessor table, through the dispatch and through the 128-bit
+/// tier's own entry (the dispatch takes that tier only without 256-bit vectors).
+/// </summary>
 public class ModeSegmenterLaneParityTest
 {
+    private delegate void LaneRunner(ReadOnlySpan<char> text, ReadOnlySpan<int> starts, ReadOnlySpan<int> lengths, EciMode charset, int mode, int numeric, int alnum, int bytes, Span<byte> table, Span<int> costs, Span<int> states);
+
+    private static IEnumerable<(string Name, LaneRunner Run)> Runners()
+    {
+        yield return ("dispatch", ModeSegmenter.ComputeCostsLanes);
+        if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+            yield return ("Vector128", ModeSegmenter.ComputeCostsLanesVector128);
+    }
+
     [Test]
     [Arguments(7)]
     [Arguments(42)]
@@ -79,18 +91,23 @@ public class ModeSegmenterLaneParityTest
         var lengths = chunks.Select(chunk => chunk.Length).ToArray();
         for (var lane = 1; lane < chunks.Length; lane++)
             starts[lane] = starts[lane - 1] + lengths[lane - 1];
+        foreach (var (name, runner) in Runners())
+            await Check(chunks, text, starts, lengths, charset, mode, numeric, alnum, bytes, name, runner);
+    }
+
+    private static async Task Check(string[] chunks, string text, int[] starts, int[] lengths, EciMode charset, int mode, int numeric, int alnum, int bytes, string runnerName, LaneRunner runner)
+    {
         var tableLength = lengths.Max() * ModeSegmenter.LaneTableBytesPerChar;
         var table = Enumerable.Repeat((byte)0xA5, tableLength + 32).ToArray();
         var costs = new int[chunks.Length];
         var states = new int[chunks.Length];
-        ModeSegmenter.ComputeCostsLanes(text, starts, lengths, charset, mode, numeric, alnum, bytes,
-            table.AsSpan(16, tableLength), costs, states);
+        runner(text, starts, lengths, charset, mode, numeric, alnum, bytes, table.AsSpan(16, tableLength), costs, states);
         await Assert.That(table.AsSpan(0, 16).ToArray().All(x => x == 0xA5)).IsTrue();
         await Assert.That(table.AsSpan(16 + tableLength).ToArray().All(x => x == 0xA5)).IsTrue();
         for (var lane = 0; lane < chunks.Length; lane++)
         {
             var expected = Reference(chunks[lane], charset, mode, numeric, alnum, bytes);
-            var because = $"lane {lane}, lengths {string.Join(',', lengths)}, charset {charset}, headers {mode}/{numeric}/{alnum}/{bytes}";
+            var because = $"{runnerName}, lane {lane}, lengths {string.Join(',', lengths)}, charset {charset}, headers {mode}/{numeric}/{alnum}/{bytes}";
             await Assert.That(costs[lane]).IsEqualTo(expected.Cost).Because(because);
             await Assert.That(states[lane]).IsEqualTo(expected.State).Because(because);
             var plan = new ModeSegment[lengths[lane]];

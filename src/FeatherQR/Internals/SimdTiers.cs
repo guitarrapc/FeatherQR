@@ -190,8 +190,8 @@ internal static class SimdTiers
         new("TextAnalyzer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Sse2, Isa.Sse2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // ModuleBitPacker.Pack / Unpack: byte-per-module to MSB-first bits and back; the SSSE3 / AdvSimd step also finishes what the AVX2 step leaves
         new("ModuleBitPacker", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
-        // ModeSegmenter.ComputeCostsLanes: the mixed-mode cost walk over eight pieces at once
-        new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // ModeSegmenter.ComputeCostsLanes: the mixed-mode cost walk over eight pieces at once; the 128-bit tier's four-lane groups narrow their parent entries with SSE2 on x64 and PackedSimd on WebAssembly
+        new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // EccBinaryEncoder.CalculateEcc: Reed-Solomon remainder; GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2
         new("EccBinaryEncoder", (SimdTier.GfniV256, Isa.GfniV256 && Isa.Avx2), (SimdTier.Gfni, Isa.Gfni), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // EccBinaryDecoder.ComputeSyndromes: the syndrome pass
@@ -213,16 +213,16 @@ internal static class SimdTiers
 
         // ModulePlacer.ExpandBits: message bits to module bytes; the SSSE3 step also finishes what the AVX2 step leaves
         new("ModulePlacerExpandBits", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3)),
-        // ModulePlacer.MaskCode: mask scoring and selection
-        new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // ModulePlacer.MaskCode: mask scoring and selection; the 128-bit tier scores versions 1-11, its popcount SSSE3 on x64 and PackedSimd on WebAssembly
+        new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Ssse3, Isa.Vector128 && Isa.Ssse3), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // AlignmentPatternFinder.ScanRowMask: a row's dark bitmask for the alignment search
         new("AlignmentRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // QRImageDecoder.SampleGrid: the four-point sampler; the 128-bit tier also takes grids too small for the 256-bit one, and converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
         new("QRSampleGrid", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler; the 128-bit tier converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
         new("QRSampleGridPiecewise", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // StructuredAppendPlanner.TryNarrowWithLanes / WalkLanes: the chunk-budget walks over eight budgets at once
-        new("StructuredAppendLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // StructuredAppendPlanner.TryNarrowWithLanes / WalkLanes: the chunk-budget walks over eight budgets at once; the 128-bit tier's saturating add is SSE2 on x64 and PackedSimd on WebAssembly
+        new("StructuredAppendLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // StructuredAppendPlanner.Parity: the XOR of the message's encoded bytes
         new("StructuredAppendParity", (SimdTier.AdvSimd, Isa.AdvSimd)),
         // StructuredAppendScanner.ModeBoundaries / Utf8PrefixLength: the character boundaries of the single-mode cost model
@@ -277,7 +277,7 @@ internal static class SimdTiers
         // ---- Shared across symbologies ----
         new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),
         new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
-        new("ModeSegmenterLanes",      [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("ModeSegmenterLanes",      [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
         new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [Scalar]),
         new("EccBinaryDecoder",        [Scalar],        [GfniV256, Scalar],   [AdvSimd],            [Scalar]),
         new("LuminanceConverter",      [Sse2],          [Avx2],               [AdvSimdDp, Vector128], [PackedSimd]),
@@ -291,12 +291,12 @@ internal static class SimdTiers
         // ---- Standard QR ----
         // WebAssembly stays scalar: the expand is 0.5 % of a version 40 encode AOT-compiled and 0.3 % interpreted
         new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
-        new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
+        new("ModulePlacerMaskCode",    [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
         // WebAssembly keeps the 128-bit tier though the interpreter runs it 16-21 % slower than scalar: AOT-compiled it is 1.5x faster, and the search is under 2 % of any shape there
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("QRSampleGrid",            [Sse2],          [Vector256],          [Vector128],          [PackedSimd]),
         new("QRSampleGridPiecewise",   [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),
-        new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("StructuredAppendLanes",   [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
         // x64 and WebAssembly stay scalar: the parity pass is 1.2 % of a 45,000-character set on a default NativeAOT publish, 0.7 to 0.8 % with AVX2, 0.8 % on WebAssembly AOT
         new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
         // x64 and WebAssembly stay scalar: the scanner is 0.2 % or less of a Structured Append encode on a default NativeAOT publish (0.3 % with AVX2, the same scalar time over a shorter encode), 0.1 % on WebAssembly AOT

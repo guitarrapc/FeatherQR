@@ -13,7 +13,7 @@ namespace FeatherQR.Internals;
 /// The program is a serial recurrence, so one piece cannot be vectorised; eight pieces can, each lane at its own character. The keyed form of <see cref="ModeSegmenter"/> is what makes that cheap: the minimum of keys is one instruction a lane and the predecessor falls out of it, with no compare-and-blend chain for the tie-break.
 /// The table is the single piece's, <see cref="ParentBytesPerChar"/> bytes a character, interleaved by lane so that a step is one store; <see cref="ReconstructLane"/> walks one lane of it back by stride.
 /// Lanes end at different characters: the loop runs to the nearest end, the result of every lane that ends there is taken, and the lane goes on reading the longest piece so that it keeps reading text that exists; what it writes past its own end is never read.
-/// Accelerated <c>Vector256</c> handles eight pieces; ARM64 NEON handles groups of four 32-bit keys. Without either capability the caller plans piece by piece.
+/// Accelerated <c>Vector256</c> handles eight pieces; ARM64 NEON handles groups of four 32-bit keys, and every other 128-bit target the same groups on portable vectors. Without accelerated vectors the caller plans piece by piece.
 /// </remarks>
 internal static partial class ModeSegmenter
 {
@@ -24,7 +24,7 @@ internal static partial class ModeSegmenter
     internal const int LaneTableBytesPerChar = Lanes * ParentBytesPerChar;
 
     /// <summary>Whether the lanes are worth taking on this machine.</summary>
-    internal static bool LanesAccelerated => Vector256.IsHardwareAccelerated || AdvSimd.Arm64.IsSupported;
+    internal static bool LanesAccelerated => Vector128.IsHardwareAccelerated;
 
     private interface ILaneBytes
     {
@@ -52,15 +52,26 @@ internal static partial class ModeSegmenter
         var openByte = (modeIndicatorBits + cciByte) << 3;
         // A lane is running until its state is taken.
         finalStates.Slice(0, starts.Length).Fill(-1);
-        if (AdvSimd.Arm64.IsSupported)
+        // The four-lane groups, NEON's or the portable ones: one block and one call, so the dispatch keeps the size at which it is inlined.
+        if (AdvSimd.Arm64.IsSupported || !Vector256.IsHardwareAccelerated)
         {
-            ComputeCostsLanesAdvSimd(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
+            ComputeCostsGroups(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
             return;
         }
         if (charset == EciMode.Utf8)
             RunLanes<Utf8Lanes>(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
         else
             RunLanes<OneByteLanes>(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
+    }
+
+    private static void ComputeCostsGroups(ReadOnlySpan<char> text, ReadOnlySpan<int> starts, ReadOnlySpan<int> lengths, EciMode charset, int openNumeric, int openAlnum, int openByte, Span<byte> table, Span<int> costs, Span<int> finalStates)
+    {
+        if (AdvSimd.Arm64.IsSupported)
+        {
+            ComputeCostsLanesAdvSimd(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
+            return;
+        }
+        ComputeCostsGroupsVector128(text, starts, lengths, charset, openNumeric, openAlnum, openByte, table, costs, finalStates);
     }
 
     /// <summary><see cref="Reconstruct"/> for one lane of the table <see cref="ComputeCostsLanes"/> filled.</summary>

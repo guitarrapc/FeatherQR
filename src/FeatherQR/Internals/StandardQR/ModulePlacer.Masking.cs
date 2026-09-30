@@ -43,6 +43,11 @@ internal static partial class ModulePlacer
         {
             return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);
         }
+        // x64 without AVX2 and WebAssembly, see ModulePlacer.Masking.Simd.cs
+        if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            return MaskCodeVector128(buffer, size, version, blockedMask, eccLevel);
+        }
 #endif
         // Versions 1-11 (size <= 61) fit a whole row in one ulong.
         return size <= 64

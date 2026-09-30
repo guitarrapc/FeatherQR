@@ -1,8 +1,8 @@
 #if NET8_0_OR_GREATER
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.Wasm;
 #endif
 
 namespace FeatherQR.Internals.StandardQR;
@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// A lane whose chunk closes re-reads the character that did not fit as the first of its next chunk, so it falls behind the others: by one step, by two when it closed on the second half of a pair, by more when the cut is kept off a U+FEFF. While the lanes are apart they are stepped with the class and the byte cost taken per lane in scalar code, and the lanes ahead wait, keeping their states, until the one furthest behind is level with them; left apart, lanes whose closes cost them differently never share a character again. Closing a chunk is itself scalar code, a dozen times per lane in a walk of thousands of steps.
 /// A lane that has failed keeps closing chunks at its own budget, unrecorded: one that stopped would run ahead for good and the lanes would never share a character again.
 /// The walk prices exactly what <see cref="CountChunks(ReadOnlySpan{char}, EciMode, bool, QRSegmentation, int, int, int, Span{int})"/> prices (the single-mode shortcuts of <see cref="LongestChunkEnd"/> are the program's own answers on the content they apply to), which <c>StructuredAppendLaneWalkTest</c> holds lane by lane. The byte order mark <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for is not handled here, since its chunk is priced by another rule; the caller keeps those walks scalar.
-/// The eight 32-bit lanes use accelerated <c>Vector256</c>; ARM64 uses eight saturating 16-bit NEON lanes. Without either capability, or when a chunk averages under the backend's minimum length (the lanes then spend too many steps apart), nothing here runs and the caller's scalar probes do.
+/// The eight 32-bit lanes use accelerated <c>Vector256</c>; ARM64 uses eight saturating 16-bit NEON lanes, and every other 128-bit target the same lanes on portable vectors. Without accelerated vectors, or when a chunk averages under the backend's minimum length (the lanes then spend too many steps apart), nothing here runs and the caller's scalar probes do.
 /// </remarks>
 internal static partial class StructuredAppendPlanner
 {
@@ -25,6 +25,24 @@ internal static partial class StructuredAppendPlanner
     // NEON's compact cost state pays on much shorter chunks. Twenty characters is a
     // conservative cutoff: setup and frequent divergent steps can outweigh batching below it.
     private const int MinNeonLaneChunkChars = 20;
+
+    // The portable 16-bit lanes on x64 without AVX; below this they lost to the scalar probes.
+    private const int MinVector128LaneChunkChars = 40;
+
+    // On WebAssembly the interpreter needs longer chunks than AOT-compiled code, and one flag gates both.
+    private const int MinPackedSimdLaneChunkChars = 80;
+
+#if NET8_0_OR_GREATER
+    /// <summary>The shortest average chunk the lanes of this machine are used for.</summary>
+    private static int LaneChunkChars
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => AdvSimd.Arm64.IsSupported ? MinNeonLaneChunkChars
+            : Vector256.IsHardwareAccelerated ? MinLaneChunkChars
+            : PackedSimd.IsSupported ? MinPackedSimdLaneChunkChars
+            : MinVector128LaneChunkChars;
+    }
+#endif
 
 #if NET8_0_OR_GREATER
     private const int Lanes = 8;
@@ -59,8 +77,7 @@ internal static partial class StructuredAppendPlanner
     internal static bool TryNarrowWithLanes(ReadOnlySpan<char> text, EciMode charset, int version, int floor, int ceiling, int limit, ref int low, ref int high, Span<int> settledEnds, ref int settledBudget, ref int settledCount, Span<int> failedEnds, ref int failedBudget, bool fromFloor = false, bool ceilingHolds = false)
     {
 #if NET8_0_OR_GREATER
-        if ((!Vector256.IsHardwareAccelerated && !AdvSimd.Arm64.IsSupported)
-            || text.Length < limit * (AdvSimd.Arm64.IsSupported ? MinNeonLaneChunkChars : MinLaneChunkChars))
+        if (!Vector128.IsHardwareAccelerated || text.Length < limit * LaneChunkChars)
             return false;
 
         Span<int> budgets = stackalloc int[Lanes];
@@ -147,18 +164,25 @@ internal static partial class StructuredAppendPlanner
         LaneBatches++;
         // The search supplies QR capacities. Keep the 32-bit reference for direct walks
         // outside the 16-bit cost domain, including budgets smaller than the set headers.
-        if (AdvSimd.Arm64.IsSupported && NeonBudgetsFit(budgets, charset))
+        if (AdvSimd.Arm64.IsSupported && BudgetsFit16(budgets, charset))
         {
             return charset == EciMode.Utf8
                 ? WalkLanesNeon<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
                 : WalkLanesNeon<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
         }
+        // Without 256-bit vectors the 32-bit walk hands budgets that fit 16 bits to the portable 16-bit lanes; this dispatch keeps its size, at which it is inlined.
         return charset == EciMode.Utf8
             ? WalkLanes<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
             : WalkLanes<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
     }
 
-    private static bool NeonBudgetsFit(ReadOnlySpan<int> budgets, EciMode charset)
+    /// <summary><see cref="WalkLanes"/> in the portable 16-bit lanes, entered directly by its parity test: the dispatch takes it only without 256-bit vectors and NEON.</summary>
+    internal static bool WalkLanesVector128(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps)
+        => charset == EciMode.Utf8
+            ? WalkLanesVector128<Utf8Chars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps)
+            : WalkLanesVector128<OneByteChars>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
+
+    private static bool BudgetsFit16(ReadOnlySpan<int> budgets, EciMode charset)
     {
         var headers = HeaderBits + charset.GetStandardQrHeaderBits();
         foreach (var budget in budgets)

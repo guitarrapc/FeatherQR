@@ -523,3 +523,76 @@ The first whole-phase run timed all shapes in one process per build, three alter
 
 The two histogram variants were measured while another session's test runs loaded the machine (60 % when checked). Timed in one process, every shape ran slower than alone, the scalar gradient 325-852 µs against 252-271, so only the differences that held across the alternations are listed.
 
+## Phase 4: encode lanes and mask scoring
+
+Each shape alone in its own process, three runs, the two sides alternating: the range of the three, ratios of their medians.
+
+### Mask selection
+
+µs a call, the scalar bit-packed paths → the dispatch (the 128-bit tier on these builds):
+
+| Version | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| 1 | 2.14-2.17 → 1.28-1.29 (0.59) | 2.68-2.75 → 1.32-1.33 (0.49) | 12.7-13.6 → 8.89-9.03 (0.70) |
+| 6 | 4.10-4.17 → 2.51-2.61 (0.63) | 5.02-5.13 → 2.44-2.47 (0.49) | 23.7-24.1 → 17.0-58.2 (0.71) |
+| 10 | 6.21-6.29 → 3.69-3.73 (0.59) | 7.41-7.54 → 3.49-3.62 (0.46) | 36.1-36.7 → 24.9-25.6 (0.69) |
+
+The AVX2 tier's two- and three-word SoA scorers on two rows a vector, versions 12-40, measured and removed:
+
+| Version | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| 12 | 26.0-26.2 → 27.6-28.0 (1.06) | 23.3-23.6 → 36.1-36.7 (1.55) | 234-257 → 523-535 (2.23) |
+| 20 | 39.9-40.6 → 38.0-47.9 (0.94) | 37.2-37.4 → 52.3-53.2 (1.41) | 321-360 → 772-787 (2.44) |
+| 27 | 52.5-54.1 → 52.9-69.2 (1.08) | 49.9-51.1 → 69.0-70.8 (1.40) | 443-499 → 1,017-1,031 (2.19) |
+| 28 | 54.1-54.2 → 90.9-93.6 (1.68) | 52.1-137 → 111-136 (2.22) | 438-488 → 2,484-2,656 (5.80) |
+| 40 | 76.8-78.2 → 127-128 (1.64) | 73.8-74.5 → 156-157 (2.11) | 624-639 → 3,368-3,511 (5.41) |
+
+The popcount on default NativeAOT, the SSSE3 nibble table against the SWAR count of each 16-bit lane (a build with the SSSE3 branch compiled out), versions 1, 6 and 10: 1.27-1.29, 2.51-2.54 and 3.69-3.71 µs against 1.53-1.54, 3.02-3.06 and 4.43-4.52. The `DOTNET_EnableSSSE3=0` knob reaches neither NativeAOT nor the .NET 10 JIT (both still report GFNI, which needs SSSE3); the .NET 8 JIT honours it, and the tests ran the SWAR branch there.
+
+WebAssembly AOT with the portable 64-bit lane shifts: versions 1, 6 and 10 at 21.5-22.1, 39.8-40.5 and 55.8-59.4 µs against scalar's 2.66-2.67, 4.97-5.30 and 7.44-25.9. V8's sampler put 56 % of the time in corlib's `Vector128.ShiftRightLogical` for 64-bit lanes and 5 % in `ShiftLeft`, calls into the software fallback; the interpreted build ran the same code at 8.8 µs. With `PackedSimd`'s shifts: the first table.
+
+### Structured Append walks
+
+The planner alone (`kernel/StructuredAppendPlan-*`, the generator's `TryPlan` for the set) was 655.6-663.4 of a 2,161-2,180 µs Optimal set on default NativeAOT (30 % of the medians), 753-760 of 3,281-3,322 on WebAssembly AOT (23 %), and 3,430-3,483 of 20,366-21,466 interpreted (17 %); on the UTF-8 set 32 %, 24 % and 49 %.
+
+Where the walk starts to pay. A set held at one version and level, sixteen symbols of mixed content, so its chunks average what a symbol holds: 510 characters in 16 chunks at 2-L (32 a chunk), 660 in 15 at 3-M (44), 825 in 15 at 3-L (55), 960 in 15 at 4-M (64), 1,200 in 15 at 4-L (80). The planner with its walks against its scalar probes only, µs, the walk taken from 20 characters on every build:
+
+| Average chunk | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| 32 | 9.0-9.3 → 10.1-10.2 (1.10) | 9.2-9.2 → 8.7-8.8 (0.95) | 64.7-66.9 → 79.9-80.7 (1.21) |
+| 44 | 11.4-11.7 → 10.3-10.6 (0.91) | 11.6-11.8 → 9.7-9.9 (0.85) | 75.4-76.1 → 82.7-85.7 (1.11) |
+| 55 | 15.9-16.0 → 13.7-13.8 (0.86) | 15.7-21.0 → 12.3-12.8 (0.78) | 98.0-99.0 → 103.9-110.1 (1.06) |
+| 64 | 18.6-19.0 → 15.6-15.9 (0.83) | 17.7-17.9 → 14.4-15.1 (0.81) | 111.0-114.1 → 113.2-119.6 (1.06) |
+| 80 | 26.6-27.0 → 18.3-18.4 (0.69) | 24.1-24.4 → 16.4-16.8 (0.68) | 145.0-148.2 → 130.7-133.3 (0.90) |
+
+With the gate at 40 characters on x64 and 80 on WebAssembly:
+
+| Average chunk | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| 32 | 9.00-9.13 → 9.23-9.37 (1.02) | 9.25-9.81 → 9.16-9.78 (0.98) | 65.0-67.0 → 65.4-66.8 (1.01) |
+| 44 | 11.4-11.6 → 10.4-10.5 (0.91) | 11.7-11.8 → 11.9-12.7 (1.01) | 75.9-77.6 → 76.2-77.4 (0.99) |
+| 55 | 15.8-16.2 → 13.8-13.9 (0.86) | 15.5-18.7 → 15.7-22.5 (1.00) | 98.9-101 → 99.1-102 (1.02) |
+| 64 | 19.1-19.7 → 15.5-15.7 (0.81) | 18.0-18.0 → 18.1-19.3 (1.01) | 110-123 → 110-121 (0.95) |
+| 80 | 26.2-26.5 → 18.2-18.3 (0.69) | 24.0-24.5 → 16.7-16.8 (0.69) | 145-146 → 129-497 (0.91) |
+
+### End to end
+
+Against the build before phase 4 (HEAD `3ef15fc`, the same harness), ratio of medians (base range → new range, µs):
+
+| Shape | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| encode/qr-v1-num-L | 0.68 (2.2-2.2 → 1.5-1.5) | 0.69 (3.7-3.7 → 2.5-2.6) | 0.80 (16.6-17.2 → 13.2-14.1) |
+| encode/qr-v1-alnum-M | 0.61 (2.5-2.6 → 1.6-1.6) | 0.67 (4.4-4.5 → 2.9-3.0) | 0.76 (18.7-19.0 → 14.4-14.5) |
+| encode/qr-v6-url-M | 0.69 (4.8-4.8 → 3.3-3.4) | 0.83 (13.5-14.1 → 11.1-11.6) | 0.94 (45.6-45.7 → 40.3-45.2) |
+| encode/qr-v20-byte-M | 0.99 (43.4-44.4 → 43.3-43.4) | 1.01 (105.8-107.7 → 105.8-193.6) | 1.02 (466.9-517.5 → 473.1-511.8) |
+| encode/qr-v40-byte-L | 0.99 (94.6-96.5 → 93.9-94.7) | 0.99 (364.3-374.3 → 362.9-370.3) | 0.97 (1,327.8-1,355.2 → 1,283.6-1,390.6) |
+| encode/qr-v40-byte-H | 0.99 (91.5-92.1 → 90.9-91.8) | 1.01 (330.3-331.7 → 330.4-337.6) | 1.00 (1,048.9-1,125.8 → 1,044.9-1,198.1) |
+| encode/sa-byte-45k-single | 0.99 (1,611-1,615 → 1,604-1,621) | 0.99 (2,838-2,895 → 2,833-2,867) | 1.01 (20,116-20,297 → 20,197-20,421) |
+| encode/sa-mixed-40k-single | 1.00 (1,392-1,427 → 1,386-1,394) | 1.01 (2,511-2,555 → 2,514-2,569) | 1.00 (17,032-17,669 → 16,809-19,095) |
+| encode/sa-mixed-40k-optimal | 0.83 (2,161-2,180 → 1,795-1,805) | 0.92 (3,281-3,322 → 3,023-3,122) | 0.95 (20,366-21,466 → 18,881-20,643) |
+| encode/sa-utf8-15k-mixed-optimal | 0.76 (1,534-1,593 → 1,173-1,189) | 0.91 (2,373-2,512 → 2,157-2,404) | 0.70 (25,707-38,711 → 16,749-18,497) |
+| the planner, mixed 40k | 0.53 (655.6-663.4 → 343.4-349.6) | 0.69 (753.1-759.8 → 522.0-532.9) | 0.75 (3,430-3,483 → 2,555-2,569) |
+| the planner, UTF-8 15k | 0.31 (485.7-511.4 → 152.3-155.9) | 0.61 (569.7-612.0 → 353.7-356.7) | 0.26 (12,733-19,380 → 3,267-3,503) |
+
+Micro QR M4 and rMQR R17x139 encodes, whose code did not change, read 0.99 to 1.01 (one default NativeAOT row 0.90 at 1.2 µs). The segmenter's lanes alone, before the walk joined them, moved the two Optimal sets 0.97 and 0.99 on default NativeAOT, 1.00 on WebAssembly AOT and 0.97 interpreted.
+

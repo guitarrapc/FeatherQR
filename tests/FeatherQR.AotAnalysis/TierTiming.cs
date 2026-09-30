@@ -19,7 +19,9 @@ using FeatherQR.Tests;
 /// <remarks>
 /// Images are drawn by the test suite's renderers, since the WebAssembly report has no SkiaSharp: the image shapes follow the
 /// benchmark's in kind, not in pixels. Rounds run the shapes interleaved, so drift during a run spreads over all of them.
-/// <c>--loop</c> runs one shape for a fixed time instead, for a sampling profiler.
+/// <c>--loop</c> runs one shape for a fixed time instead, for a sampling profiler. A <c>--shape</c> filter matches names containing it, or
+/// with a trailing <c>$</c> the one name: interpreted WebAssembly times a shape by what ran before it in the process, so a comparison
+/// there runs each shape alone.
 /// </remarks>
 internal static class TierTiming
 {
@@ -70,7 +72,7 @@ internal static class TierTiming
             return true;
         }
 
-        var selected = shapes.Where(s => s.Available && (filters.Length == 0 || filters.Any(f => s.Name.Contains(f, StringComparison.Ordinal)))).ToArray();
+        var selected = shapes.Where(s => s.Available && (filters.Length == 0 || filters.Any(f => f.EndsWith('$') ? s.Name == f[..^1] : s.Name.Contains(f, StringComparison.Ordinal)))).ToArray();
         var runs = new Func<int>[selected.Length];
         for (var i = 0; i < selected.Length; i++)
             runs[i] = selected[i].Build();
@@ -223,7 +225,33 @@ internal static class TierTiming
         new("kernel/MaskCode-v20", () => MaskScoring(20, score: true)),
         new("kernel/MaskCode-v40", () => MaskScoring(40, score: true)),
         new("kernel/MaskCode-v40-copy", () => MaskScoring(40, score: false)),
+        new("kernel/MaskCode-v10", () => MaskScoring(10, score: true)),
+        new("kernel/MaskCode-v1-scalar", () => MaskScoring(1, score: true, scalar: true)),
+        new("kernel/MaskCode-v6-scalar", () => MaskScoring(6, score: true, scalar: true)),
+        new("kernel/MaskCode-v10-scalar", () => MaskScoring(10, score: true, scalar: true)),
+        new("kernel/MaskCode-v20-scalar", () => MaskScoring(20, score: true, scalar: true)),
+        new("kernel/MaskCode-v40-scalar", () => MaskScoring(40, score: true, scalar: true)),
+        new("kernel/MaskCode-v12", () => MaskScoring(12, score: true)),
+        new("kernel/MaskCode-v12-scalar", () => MaskScoring(12, score: true, scalar: true)),
+        new("kernel/MaskCode-v27", () => MaskScoring(27, score: true)),
+        new("kernel/MaskCode-v27-scalar", () => MaskScoring(27, score: true, scalar: true)),
+        new("kernel/MaskCode-v28", () => MaskScoring(28, score: true)),
+        new("kernel/MaskCode-v28-scalar", () => MaskScoring(28, score: true, scalar: true)),
         new("kernel/StructuredAppendParity-byte-45k", () => Parity(Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), EciMode.Iso8859_1)),
+        new("kernel/StructuredAppendPlan-mixed-40k-optimal", () => SetPlan(Repeat("order 20260915 item 0000123456 qty 42 ", 40_000))),
+        new("kernel/StructuredAppendPlan-utf8-15k-optimal", () => SetPlan(Repeat("ご注文番号 20260915-0000123456 の商品を 42 個、本日発送いたしました。", 15_000))),
+        new("probe/set-plan-v3M-lanes", () => SetPlanAt(3, lanes: true, QREccLevel.M)),
+        new("probe/set-plan-v3M-scalar", () => SetPlanAt(3, lanes: false, QREccLevel.M)),
+        new("probe/set-plan-v3-lanes", () => SetPlanAt(3, lanes: true)),
+        new("probe/set-plan-v3-scalar", () => SetPlanAt(3, lanes: false)),
+        new("probe/set-plan-v4M-lanes", () => SetPlanAt(4, lanes: true, QREccLevel.M)),
+        new("probe/set-plan-v4M-scalar", () => SetPlanAt(4, lanes: false, QREccLevel.M)),
+        new("probe/set-plan-v2-lanes", () => SetPlanAt(2, lanes: true)),
+        new("probe/set-plan-v2-scalar", () => SetPlanAt(2, lanes: false)),
+        new("probe/set-plan-v4-lanes", () => SetPlanAt(4, lanes: true)),
+        new("probe/set-plan-v4-scalar", () => SetPlanAt(4, lanes: false)),
+        new("probe/set-plan-v6-lanes", () => SetPlanAt(6, lanes: true)),
+        new("probe/set-plan-v6-scalar", () => SetPlanAt(6, lanes: false)),
         new("kernel/StructuredAppendParity-utf8-15k", () => Parity(Repeat("ご注文番号 20260915-0000123456 の商品を 42 個、本日発送いたしました。", 15_000), EciMode.Utf8)),
 
         // The kernels that already take a 128-bit tier on WebAssembly: each through its dispatch, and its scalar form
@@ -577,7 +605,7 @@ internal static class TierTiming
     }
 
     /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them; the copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone).</summary>
-    private static Func<int> MaskScoring(int version, bool score)
+    private static Func<int> MaskScoring(int version, bool score, bool scalar = false)
     {
         var layout = ModulePlacer.GetLayout(version);
         var size = layout.Size;
@@ -595,11 +623,44 @@ internal static class TierTiming
                 return work[size + 1];
             };
         }
+        if (scalar)
+        {
+            return () =>
+            {
+                pristine.AsSpan().CopyTo(work);
+                return size <= 64
+                    ? ModulePlacer.MaskCode64(work, size, version, layout.BlockedMask, QREccLevel.L)
+                    : ModulePlacer.MaskCode192(work, size, version, layout.BlockedMask, QREccLevel.L);
+            };
+        }
         return () =>
         {
             pristine.AsSpan().CopyTo(work);
             return ModulePlacer.MaskCode(work, size, version, layout.BlockedMask, QREccLevel.L);
         };
+    }
+
+    /// <summary>The set's split alone, as the generator asks for it: the budget search, its walks, the version.</summary>
+    private static Func<int> SetPlan(string content)
+    {
+        var analysis = TextAnalyzer.Analyze(content, EciMode.Default);
+        var ends = new int[16];
+        return () => StructuredAppendPlanner.TryPlan(content, QREccLevel.L, analysis.EciMode, analysis.EncodingMode, utf8Bom: false, QRSegmentation.Optimal, 1, 40, ends, out var count, out _, out _, allowLanes: true) ? count : -1;
+    }
+
+    /// <summary>
+    /// A set held at one version, sixteen symbols of mixed content, so its chunks average what one symbol of that version holds: the planner
+    /// with its lane walks, or with its scalar probes only.
+    /// </summary>
+    private static Func<int> SetPlanAt(int version, bool lanes, QREccLevel eccLevel = QREccLevel.L)
+    {
+        var perSymbol = StructuredAppendPlanner.Capacity(version, eccLevel) / 8;
+        var content = Repeat("order 20260915 item 0000123456 qty 42 ", 15 * perSymbol);
+        var analysis = TextAnalyzer.Analyze(content, EciMode.Default);
+        var ends = new int[16];
+        StructuredAppendPlanner.TryPlan(content, eccLevel, analysis.EciMode, analysis.EncodingMode, utf8Bom: false, QRSegmentation.Optimal, version, version, ends, out var chunks, out _, out _, allowLanes: false);
+        Console.Error.WriteLine($"# version {version}-{eccLevel}: {content.Length} chars in {chunks} chunks");
+        return () => StructuredAppendPlanner.TryPlan(content, eccLevel, analysis.EciMode, analysis.EncodingMode, utf8Bom: false, QRSegmentation.Optimal, version, version, ends, out var count, out _, out _, allowLanes: lanes) ? count : -1;
     }
 
     private static Func<int> Parity(string text, EciMode charset) => () => StructuredAppendPlanner.Parity(text, charset, utf8Bom: false);

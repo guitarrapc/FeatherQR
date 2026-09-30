@@ -350,3 +350,39 @@ Image decode against the build before phase 3: 0.54 to 0.96 on default NativeAOT
 - After adding a tier, read the disassembly of the dispatch's callers, not only of the dispatch.
 - On the interpreter, time a shape alone in its process; what ran before it changes its time.
 
+### Phase 4, encode lanes and mask scoring (2026-09-30)
+
+**Done.**
+- **`ModulePlacerMaskCode`, versions 1-11** (`ModulePlacer.Masking.Simd.cs`): the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call, its checkpoint included (column rule 3 skipped when both candidates are already past the best total). Popcounts go to 16-bit accumulators, reduced once a group: WebAssembly's byte popcount and pairwise widening add, the SSSE3 nibble table and psadbw on x64, a SWAR count of each 16-bit lane elsewhere. The 64-bit lane shifts are `PackedSimd`'s on WebAssembly. The per-version rows are built by one function the AVX2 tier now shares. Cells: `Ssse3` on x64 without AVX2, `PackedSimd` on WebAssembly.
+- **Versions 12-40 stay scalar.** The AVX2 tier's two- and three-word SoA scorers were ported to two rows a vector and lost on both targets: 0.94 to 1.68 of scalar on default NativeAOT, 1.40 to 5.80 on WebAssembly.
+- **`ModeSegmenterLanes`** (`ModeSegmenter.Lanes.Simd.cs`): the ARM64 tier's four-lane groups on portable vectors, the class looked up per lane in scalar code, the parent entries narrowed by SSE2's packssdw or WebAssembly's i16x8.narrow_i32x4_s into one 8-byte store. `LanesAccelerated` is now `Vector128.IsHardwareAccelerated`, so the generator plans a set's symbols together on these builds too. Cells: `Sse2`, `PackedSimd`.
+- **`StructuredAppendLanes`** (`StructuredAppendPlanner.Lanes.Simd.cs`): the NEON walk's eight saturating 16-bit lanes on portable vectors, the saturating add SSE2's paddusw or WebAssembly's i16x8.add_sat_u. It takes chunks averaging 40 characters or more on x64 without AVX and 80 on WebAssembly, measured per build (below). The NEON walk's two vector-building helpers moved to the new file under neutral names. Cells: `Sse2`, `PackedSimd`.
+- **`--parity`** holds the mask selection (every one-word version and two larger, every ECC level, random, all-light and all-dark data), the segmenter's lanes (cost, final state and walk-back of each lane against the per-piece program) and the walks (chunk counts and ends against the scalar walk) to scalar.
+- **Tests:** `ModulePlacerMaskVector128ParityTest` and `StructuredAppendVector128ParityTest` enter the new tiers directly; `ModeSegmenterLaneParityTest` runs every case through the 128-bit entry too.
+- **Planted faults**, each caught: the WebAssembly popcount (`--parity`, 52 mismatches), the checkpoint's both-candidates condition (tests, 11 failures), the SWAR popcount (.NET 8 with SSSE3 off, 8), an alphanumeric step cost in the segmenter groups (tests), the walk's saturating add (tests, 9 of 14).
+- Harness: scalar mask shapes, the planner alone, chunk-length probes, and an exact-name `--shape` filter (`name$`).
+
+**Numbers** (tables in the [measurements](references/simd-128bit-tiers-measurements.md#phase-4-encode-lanes-and-mask-scoring)), each shape in its own process:
+
+| Against scalar | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| Mask selection, versions 1 / 6 / 10 | 0.59 / 0.63 / 0.59 | 0.49 / 0.49 / 0.46 | 0.70 / 0.71 / 0.69 |
+| The planner, mixed 40k / UTF-8 15k | 0.53 / 0.31 | 0.69 / 0.61 | 0.75 / 0.26 |
+
+Encode against the build before phase 4: version 1 0.61 to 0.68 on default NativeAOT, 0.67 to 0.69 on WebAssembly AOT, 0.76 to 0.80 interpreted; version 6 0.69, 0.83, 0.94; versions 20 and 40 0.97 to 1.02. Optimal sets 0.76 to 0.83, 0.91 to 0.92, 0.70 to 0.95. Single sets and the Micro QR and rMQR encodes, whose code did not change, 0.99 to 1.01, but for one default NativeAOT rMQR row at 0.90 on 1.2 µs.
+
+**Machine code.** Cells that stay compile as before: the .NET 8 and .NET 10 JIT with AVX2 line for line (the mask kernels, `WriteQRMatrix`, `CreateStructuredAppend`, `TryNarrowWithLanes`, `ComputeCostsLanes` inlined where it was), ILC `x86-64-v3` and ARM64 instruction for instruction, apart from displacements: static vector fields moved when `ModulePlacer` gained statics, and the 32-bit walk's shared generic body, which never runs (its two instantiations are structs), reads a dictionary slot at a new offset. ILC ARM64's `CreateStructuredAppend` is 12 instructions shorter: `LanesAccelerated` read `Vector256.IsHardwareAccelerated`, which ILC ARM64 left as a call, and `Vector128.IsHardwareAccelerated` folds.
+
+**Found on the way.**
+- **Phase 1's share of the walks was wrong.** Sampled, the walks were 2.4 % of an Optimal set on WebAssembly AOT and the segmenter 13-18 %; timed alone, the planner is 30 % of that set on default NativeAOT, 23 % on WebAssembly AOT and 17 to 49 % interpreted, and the per-symbol plans the segmenter's lanes serve moved the set 1 to 3 %. The scalar walks run in the segmenter's `LongestPrefixWithinBudget` and `ComputeCosts`, so a per-function sample counted them under the segmenter.
+- **Mono's WebAssembly AOT compiles `Vector128.ShiftRightLogical` and `ShiftLeft` on 64-bit lanes as calls into corlib's software fallback.** The mask tier ran 8x slower than scalar there, slower than the interpreter, until its shifts went through `PackedSimd`.
+- **SoA lane-per-row loses at 128 bits**, on x64 without AVX and on WebAssembly alike; at `x86-64-v3` the AVX2 SoA tier already did not beat scalar at version 40 (phase 1).
+- **The interpreter needs longer chunks than AOT-compiled code before the walk pays** (80 characters against 32), and one flag gates both WebAssembly builds, so WebAssembly takes the interpreter's threshold.
+- **Adding a branch to a dispatch changed its callers' code on builds whose cell did not change, five times.** The JIT with AVX2 stopped inlining `ComputeCostsLanes` and `WalkLanes` into their callers when each gained a block. ILC `x86-64-v3` called a property that read `Vector256.IsHardwareAccelerated` until it was `AggressiveInlining`, and stopped inlining `WalkLanes` into `TryNarrowWithLanes` with the condition written inline too, so the 128-bit branch moved into the 32-bit walk the dispatch falls back to. A three-flag `LanesAccelerated` changed register allocation in `CreateStructuredAppend` until it was one flag.
+- **`DOTNET_EnableSSSE3=0` reaches only the .NET 8 JIT.** The first no-SSSE3 test run passed without running the SWAR branch; a planted fault showed which runs reached it.
+
+**Lessons.**
+- Rank a stage by timing it alone; a sampled share attributes a callee's time to the callee, not to the stage it serves.
+- For every new WebAssembly kernel, read the AOT profile for corlib calls: a portable operation can be a software fallback at one lane width only.
+- Check a dispatch change by its callers' disassembly on every unchanged build: the JIT and ILC inline differently, and a fix for one can leave the other changed.
+

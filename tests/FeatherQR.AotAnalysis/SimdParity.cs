@@ -39,6 +39,9 @@ internal static class SimdParity
         failures += Report("Binarizer histogram", HistogramMismatches);
         failures += Report("LuminanceConverter", LuminanceMismatches);
         failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
+        failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
+        failures += Report("ModeSegmenter.ComputeCostsLanes", SegmenterLaneMismatches);
+        failures += Report("StructuredAppendPlanner.WalkLanes", WalkLaneMismatches);
         return failures == 0 ? 0 : 1;
     }
 
@@ -668,6 +671,132 @@ internal static class SimdParity
         var luminance = new byte[side * height];
         random.NextBytes(luminance);
         return (luminance, side, height, gridCoords.ToArray(), nodeXs, nodeYs);
+    }
+
+    /// <summary>
+    /// Mask selection through the dispatch against the scalar bit-packed kernels: every single-word version and two larger ones, each ECC
+    /// level, random data and all-dark and all-light data (long runs, uniform blocks, an extreme balance). Same pattern, same matrix.
+    /// </summary>
+    private static List<string> MaskCodeMismatches()
+    {
+        var mismatches = new List<string>();
+        foreach (var version in new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 40 })
+        {
+            var layout = ModulePlacer.GetLayout(version);
+            var size = layout.Size;
+            for (var fill = -1; fill < 6; fill++)
+            {
+                var buffer = new byte[size * size];
+                layout.Template.AsSpan().CopyTo(buffer);
+                var codewords = new byte[layout.FreeModules / 8];
+                if (fill >= 4)
+                    codewords.AsSpan().Fill(fill == 4 ? (byte)0 : (byte)0xFF);
+                else
+                    new Random(version * 7 + fill).NextBytes(codewords);
+                ModulePlacer.PlaceDataWords(buffer, layout, codewords);
+                foreach (var eccLevel in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+                {
+                    var expected = (byte[])buffer.Clone();
+                    var expectedBest = size <= 64
+                        ? ModulePlacer.MaskCode64(expected, size, version, layout.BlockedMask, eccLevel)
+                        : ModulePlacer.MaskCode192(expected, size, version, layout.BlockedMask, eccLevel);
+                    var actual = (byte[])buffer.Clone();
+                    var actualBest = ModulePlacer.MaskCode(actual, size, version, layout.BlockedMask, eccLevel);
+                    if (actualBest != expectedBest || !expected.AsSpan().SequenceEqual(actual))
+                        mismatches.Add($"version {version}, data {(fill < 4 ? "random" : fill == 4 ? "light" : "dark")}, {eccLevel}: pattern {actualBest}, expected {expectedBest}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The mixed-mode program on several pieces at once through the dispatch against the per-piece program: the cost, the final state and
+    /// the walk back of every lane, on digits, alphanumerics, Latin-1, wider characters, byte order marks and lone surrogates, in groups the
+    /// four-lane form runs and in groups uneven enough to go to the scalar loops.
+    /// </summary>
+    private static List<string> SegmenterLaneMismatches()
+    {
+        var mismatches = new List<string>();
+        if (!ModeSegmenter.LanesAccelerated)
+            return mismatches;
+        var random = new Random(20260930);
+        const string alphabet = "0123456789AZ $xéλあ﻿𐀀";
+        int[][] shapes = [[40, 41, 39, 44], [120, 5, 7, 9], [64, 64, 64, 64, 64, 64, 64, 64], [300, 250, 200, 150, 100, 50, 25], [1, 1, 1], [900, 880, 870, 860, 3]];
+        foreach (var lengths in shapes)
+        {
+            foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+            {
+                var chunks = lengths.Select(length => new string(Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray())).ToArray();
+                var text = string.Concat(chunks);
+                var starts = new int[chunks.Length];
+                for (var lane = 1; lane < chunks.Length; lane++)
+                    starts[lane] = starts[lane - 1] + lengths[lane - 1];
+                var table = new byte[lengths.Max() * ModeSegmenter.LaneTableBytesPerChar];
+                var costs = new int[chunks.Length];
+                var states = new int[chunks.Length];
+                ModeSegmenter.ComputeCostsLanes(text, starts, lengths, charset, 4, 14, 13, 16, table, costs, states);
+                for (var lane = 0; lane < chunks.Length; lane++)
+                {
+                    var parents = new byte[lengths[lane] * ModeSegmenter.ParentBytesPerChar];
+                    var cost = ModeSegmenter.ComputeCosts(chunks[lane], charset, 4, 14, 13, 16, parents, out var state);
+                    var expected = new ModeSegment[lengths[lane]];
+                    var actual = new ModeSegment[lengths[lane]];
+                    var built = ModeSegmenter.Reconstruct(chunks[lane], parents, state, expected, out var expectedCount);
+                    var laneBuilt = ModeSegmenter.ReconstructLane(lengths[lane], table, lane, states[lane], actual, out var actualCount);
+                    var same = cost == costs[lane] && state == states[lane] && built == laneBuilt && expectedCount == actualCount;
+                    for (var k = 0; same && k < expectedCount; k++)
+                        same = expected[k].Start == actual[k].Start && expected[k].Length == actual[k].Length && expected[k].ModeIndex == actual[k].ModeIndex;
+                    if (!same)
+                        mismatches.Add($"lengths {string.Join(',', lengths)}, {charset}, lane {lane}: cost {costs[lane]}, expected {cost}");
+                }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The planner's walk at up to eight budgets through the dispatch against the scalar walk at each: chunk counts and ends, on runs of
+    /// digits, alphanumerics, words, wider characters, pairs, lone surrogates and byte order marks, one-byte and UTF-8.
+    /// </summary>
+    private static List<string> WalkLaneMismatches()
+    {
+        var mismatches = new List<string>();
+        var runs = new[] { "0123456789", "ABC $%*+-./:", "order", "é", "🎉", "�", "�", "x﻿﻿" };
+        var expected = new int[StructuredAppendPlanner.MaxSymbols];
+        var actual = new int[8 * StructuredAppendPlanner.MaxSymbols];
+        var counts = new int[8];
+        foreach (var seed in new[] { 7, 20260919 })
+        {
+            var random = new Random(seed);
+            var builder = new System.Text.StringBuilder();
+            for (var i = 0; i < 700; i++)
+                builder.Append(runs[random.Next(runs.Length)]);
+            var text = builder.ToString();
+            foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+            {
+                var analysis = TextAnalyzer.Analyze(text, charset);
+                foreach (var version in new[] { 1, 10, 27, 40 })
+                {
+                    foreach (var used in new[] { 1, 3, 8 })
+                    {
+                        var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
+                        var budgets = Enumerable.Range(0, used).Select(i => capacity - 3 * i).ToArray();
+                        var walked = StructuredAppendPlanner.WalkLanes(text, analysis.EciMode, version, budgets, StructuredAppendPlanner.MaxSymbols, 0, 0, counts, actual, out _);
+                        for (var lane = 0; lane < used; lane++)
+                        {
+                            var count = StructuredAppendPlanner.CountChunks(text, analysis.EciMode, false, QRSegmentation.Optimal, version, budgets[lane], StructuredAppendPlanner.MaxSymbols, expected);
+                            var same = walked ? counts[lane] == count : count == int.MaxValue;
+                            for (var k = 0; same && walked && k < Math.Min(count, StructuredAppendPlanner.MaxSymbols); k++)
+                                same = actual[lane * StructuredAppendPlanner.MaxSymbols + k] == expected[k];
+                            if (!same)
+                                mismatches.Add($"seed {seed}, {analysis.EciMode}, v{version}, {used} budgets, lane {lane}: {(walked ? counts[lane] : -1)} chunks, expected {count}");
+                        }
+                    }
+                }
+            }
+        }
+        return mismatches;
     }
 
     /// <summary>A 3 x 3 box blur, edges clamped: grey pixels for the second look.</summary>
