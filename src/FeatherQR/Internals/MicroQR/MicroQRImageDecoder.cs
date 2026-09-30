@@ -169,103 +169,110 @@ internal static partial class MicroQRImageDecoder
                 continue;
             if (!tried.IsEmpty)
                 tried[triedCount++] = candidates[c];
-            var candidate = candidates[c];
-            FinderAxisEstimator.RefineModuleSize(image.Luminance, image.Width, image.Height, image.Threshold, candidate, out var horizontalModuleSize, out var verticalModuleSize);
-            if (horizontalModuleSize < 1f || verticalModuleSize < 1f)
-                continue; // below one pixel per module nothing can be sampled reliably
-            ConcentricCentroid.TryRefine(image.Luminance, image.Width, image.Height, image.Grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
-            var samplingSlack = Math.Max(horizontalModuleSize, verticalModuleSize);
 
-            // Right-angle orientations as grid axis pairs (u = grid column axis,
-            // v = grid row axis, in pixels per module).
-            for (var orientation = 0; orientation < 4; orientation++)
-            {
-                var (uX, uY, vX, vY) = orientation switch
-                {
-                    0 => (horizontalModuleSize, 0f, 0f, verticalModuleSize),   // finder at symbol top-left
-                    1 => (0f, verticalModuleSize, -horizontalModuleSize, 0f),  // rotated 90° clockwise
-                    2 => (-horizontalModuleSize, 0f, 0f, -verticalModuleSize), // rotated 180°
-                    _ => (0f, -verticalModuleSize, horizontalModuleSize, 0f),  // rotated 270°
-                };
-
-                // Grid origin: the finder center sits at grid (3.5, 3.5)
-                var originX = candidate.X - 3.5f * (uX + vX);
-                var originY = candidate.Y - 3.5f * (uY + vY);
-
-                // Larger sizes first: a real M4 sampled as M2 reads a garbled
-                // sub-grid, while trying real sizes first exits at the first success.
-                for (var size = 17; size >= 11; size -= 2)
-                {
-                    if (!SymbolFitsImage(originX, originY, uX, uY, vX, vY, size, image.Width, image.Height, samplingSlack))
-                        continue;
-
-                    SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, originX, originY, uX, uY, vX, vY, size, modules);
-                    var grid = new AffineGrid(originX, originY, uX, uY, vX, vY);
-                    if (DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus) == DecodeStatus.Success)
-                        return DecodeStatus.Success;
-
-                    if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
-                    {
-                        var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                        if (coverageStatus == DecodeStatus.Success)
-                        {
-                            info = coverageInfo;
-                            return coverageStatus;
-                        }
-                    }
-                }
-
-                // Timing frame: the finder's module size is extrapolated across the whole
-                // symbol, and a render that snaps modules to whole pixels can give the
-                // finder a size a few percent off. The timing patterns reach the far edge,
-                // so they measure the symbol itself. Failure-path cost only.
-                if (TryTimingFrame(image.Luminance, image.Width, image.Height, image.Threshold, candidate, uX, uY, vX, vY, out var timingOriginX, out var timingOriginY, out var tuX, out var tuY, out var tvX, out var tvY, out var timingSize)
-                    && SymbolFitsImage(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, image.Width, image.Height, samplingSlack))
-                {
-                    SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, modules);
-                    var grid = new AffineGrid(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY);
-                    if (DecodeBothWays(modules, grid, timingSize, image, destination, out charsWritten, out info, ref best, out _, out _) == DecodeStatus.Success)
-                        return DecodeStatus.Success;
-                }
-
-                // Module boundaries: under about 1.5 px/module a crisp module is 1 or 2 px wide
-                // and a sample has an eighth of a pixel to spare, which neither fitted frame keeps.
-                if (samplingSlack < ModuleBoundaryReader.MaxModuleSize
-                    && TryReadModuleBoundaries(image.Luminance, image.Width, image.Height, image.Threshold, candidate, Math.Sign(uX), Math.Sign(uY), Math.Sign(vX), Math.Sign(vY), samplingSlack, boundaryColumns, boundaryRows, out var frame, out var boundarySize))
-                {
-                    ModuleBoundaryReader.Sample(image.Luminance, image.Width, image.Height, image.Threshold, frame, boundaryColumns, boundarySize, boundaryRows, boundarySize, modules);
-                    var quietZoneDark = ModuleBoundaryReader.CountQuietZoneDark(image.Luminance, image.Width, image.Height, image.Threshold, frame, boundaryColumns, boundarySize, boundaryRows, boundarySize);
-                    frame.ToImage(boundaryColumns[0], boundaryRows[0], out var boundaryOriginX, out var boundaryOriginY);
-                    var pitchU = (boundaryColumns[boundarySize] - boundaryColumns[0]) / (float)boundarySize;
-                    var pitchV = (boundaryRows[boundarySize] - boundaryRows[0]) / (float)boundarySize;
-
-                    var grid = new BoundaryGrid(quietZoneDark, boundaryOriginX, boundaryOriginY, pitchU * frame.UX, pitchU * frame.UY, pitchV * frame.VX, pitchV * frame.VY);
-                    if (DecodeBothWays(modules, grid, boundarySize, image, destination, out charsWritten, out info, ref best, out _, out _) == DecodeStatus.Success)
-                        return DecodeStatus.Success;
-                }
-            }
-
-            // The fast path above covers the overwhelmingly common axis-aligned
-            // case. On failure, recover the finder square's local axes by sweeping
-            // directions through 90 degrees, then sample along those rotated axes.
-            // A square finder repeats every 90 degrees; the four sign/axis
-            // assignments below recover the symbol orientation.
-            var rotatedStatus = TryDecodeArbitraryOrientation(
-                image,
-                candidate,
-                modules,
-                destination,
-                out charsWritten,
-                out var rotatedInfo,
-                ref best);
-            if (rotatedStatus == DecodeStatus.Success)
-            {
-                info = rotatedInfo;
-                return rotatedStatus;
-            }
+            // The candidate's attempts see only its own results: a read that did not fit on another candidate ends none of them
+            var candidateBest = new SearchResult<MicroQRCodeDecodeInfo>(ReportRule.Furthest, new MicroQRCodeDecodeInfo(DecodeStatus.NotDetected, 0, default, -1, 0));
+            var status = DecodeCandidate(image, candidates[c], modules, boundaryColumns, boundaryRows, destination, out charsWritten, out info, ref candidateBest);
+            if (status == DecodeStatus.Success)
+                return status;
+            best.Other(candidateBest.Status, 0, candidateBest.Info);
         }
 
         return best.Report(out charsWritten, out info);
+    }
+
+    /// <summary>
+    /// One finder candidate: the frames along the image axes at each right angle, then the arbitrary-orientation path.
+    /// A terminal result ends the candidate, a read that does not fit the destination as well as one that does: its grids are
+    /// tried in the same order whatever the destination, so the read that does not fit is the one a sized call returns, and a
+    /// later grid could only read something else.
+    /// </summary>
+    private static DecodeStatus DecodeCandidate(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<int> boundaryColumns, Span<int> boundaryRows, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best)
+    {
+        FinderAxisEstimator.RefineModuleSize(image.Luminance, image.Width, image.Height, image.Threshold, candidate, out var horizontalModuleSize, out var verticalModuleSize);
+        if (horizontalModuleSize < 1f || verticalModuleSize < 1f)
+            return best.Report(out charsWritten, out info); // below one pixel per module nothing can be sampled reliably
+        ConcentricCentroid.TryRefine(image.Luminance, image.Width, image.Height, image.Grey, horizontalModuleSize, 0f, 0f, verticalModuleSize, 2f, 9f, 0.75f, ref candidate.X, ref candidate.Y, out _);
+        var samplingSlack = Math.Max(horizontalModuleSize, verticalModuleSize);
+
+        // Right-angle orientations as grid axis pairs (u = grid column axis,
+        // v = grid row axis, in pixels per module).
+        for (var orientation = 0; orientation < 4; orientation++)
+        {
+            var (uX, uY, vX, vY) = orientation switch
+            {
+                0 => (horizontalModuleSize, 0f, 0f, verticalModuleSize),   // finder at symbol top-left
+                1 => (0f, verticalModuleSize, -horizontalModuleSize, 0f),  // rotated 90° clockwise
+                2 => (-horizontalModuleSize, 0f, 0f, -verticalModuleSize), // rotated 180°
+                _ => (0f, -verticalModuleSize, horizontalModuleSize, 0f),  // rotated 270°
+            };
+
+            // Grid origin: the finder center sits at grid (3.5, 3.5)
+            var originX = candidate.X - 3.5f * (uX + vX);
+            var originY = candidate.Y - 3.5f * (uY + vY);
+
+            // Larger sizes first: a real M4 sampled as M2 reads a garbled
+            // sub-grid, while trying real sizes first exits at the first success.
+            for (var size = 17; size >= 11; size -= 2)
+            {
+                if (!SymbolFitsImage(originX, originY, uX, uY, vX, vY, size, image.Width, image.Height, samplingSlack))
+                    continue;
+
+                SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, originX, originY, uX, uY, vX, vY, size, modules);
+                var grid = new AffineGrid(originX, originY, uX, uY, vX, vY);
+                var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
+                if (IsTerminal(gridStatus))
+                    return gridStatus;
+
+                if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
+                {
+                    var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
+                    if (IsTerminal(coverageStatus))
+                    {
+                        info = coverageInfo;
+                        return coverageStatus;
+                    }
+                }
+            }
+
+            // Timing frame: the finder's module size is extrapolated across the whole
+            // symbol, and a render that snaps modules to whole pixels can give the
+            // finder a size a few percent off. The timing patterns reach the far edge,
+            // so they measure the symbol itself. Failure-path cost only.
+            if (TryTimingFrame(image.Luminance, image.Width, image.Height, image.Threshold, candidate, uX, uY, vX, vY, out var timingOriginX, out var timingOriginY, out var tuX, out var tuY, out var tvX, out var tvY, out var timingSize)
+                && SymbolFitsImage(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, image.Width, image.Height, samplingSlack))
+            {
+                SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, timingOriginX, timingOriginY, tuX, tuY, tvX, tvY, timingSize, modules);
+                var grid = new AffineGrid(timingOriginX, timingOriginY, tuX, tuY, tvX, tvY);
+                var timingStatus = DecodeBothWays(modules, grid, timingSize, image, destination, out charsWritten, out info, ref best, out _, out _);
+                if (IsTerminal(timingStatus))
+                    return timingStatus;
+            }
+
+            // Module boundaries: under about 1.5 px/module a crisp module is 1 or 2 px wide
+            // and a sample has an eighth of a pixel to spare, which neither fitted frame keeps.
+            if (samplingSlack < ModuleBoundaryReader.MaxModuleSize
+                && TryReadModuleBoundaries(image.Luminance, image.Width, image.Height, image.Threshold, candidate, Math.Sign(uX), Math.Sign(uY), Math.Sign(vX), Math.Sign(vY), samplingSlack, boundaryColumns, boundaryRows, out var frame, out var boundarySize))
+            {
+                ModuleBoundaryReader.Sample(image.Luminance, image.Width, image.Height, image.Threshold, frame, boundaryColumns, boundarySize, boundaryRows, boundarySize, modules);
+                var quietZoneDark = ModuleBoundaryReader.CountQuietZoneDark(image.Luminance, image.Width, image.Height, image.Threshold, frame, boundaryColumns, boundarySize, boundaryRows, boundarySize);
+                frame.ToImage(boundaryColumns[0], boundaryRows[0], out var boundaryOriginX, out var boundaryOriginY);
+                var pitchU = (boundaryColumns[boundarySize] - boundaryColumns[0]) / (float)boundarySize;
+                var pitchV = (boundaryRows[boundarySize] - boundaryRows[0]) / (float)boundarySize;
+
+                var grid = new BoundaryGrid(quietZoneDark, boundaryOriginX, boundaryOriginY, pitchU * frame.UX, pitchU * frame.UY, pitchV * frame.VX, pitchV * frame.VY);
+                var boundaryStatus = DecodeBothWays(modules, grid, boundarySize, image, destination, out charsWritten, out info, ref best, out _, out _);
+                if (IsTerminal(boundaryStatus))
+                    return boundaryStatus;
+            }
+        }
+
+        // The fast path above covers the overwhelmingly common axis-aligned
+        // case. On failure, recover the finder square's local axes by sweeping
+        // directions through 90 degrees, then sample along those rotated axes.
+        // A square finder repeats every 90 degrees; the four sign/axis
+        // assignments below recover the symbol orientation.
+        return TryDecodeArbitraryOrientation(image, candidate, modules, destination, out charsWritten, out info, ref best);
     }
 
     /// <summary>
@@ -317,13 +324,14 @@ internal static partial class MicroQRImageDecoder
                     SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, originX, originY, uX, uY, vX, vY, size, modules);
                     var grid = new AffineGrid(originX, originY, uX, uY, vX, vY);
                     attemptsRemaining -= 2;
-                    if (DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus) == DecodeStatus.Success)
-                        return DecodeStatus.Success;
+                    var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
+                    if (IsTerminal(gridStatus))
+                        return gridStatus;
 
                     if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
                     {
                         var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                        if (coverageStatus == DecodeStatus.Success)
+                        if (IsTerminal(coverageStatus))
                         {
                             info = coverageInfo;
                             return coverageStatus;
@@ -343,7 +351,7 @@ internal static partial class MicroQRImageDecoder
                         uX, uY, vX, vY, size, modules, destination,
                         out charsWritten, out var scaledInfo,
                         ref best, ref attemptsRemaining);
-                    if (scaledStatus == DecodeStatus.Success)
+                    if (IsTerminal(scaledStatus))
                     {
                         info = scaledInfo;
                         return scaledStatus;
@@ -364,7 +372,7 @@ internal static partial class MicroQRImageDecoder
                         out var projectiveInfo,
                         ref best,
                         ref attemptsRemaining);
-                    if (projectiveStatus == DecodeStatus.Success)
+                    if (IsTerminal(projectiveStatus))
                     {
                         info = projectiveInfo;
                         return projectiveStatus;
@@ -427,13 +435,14 @@ internal static partial class MicroQRImageDecoder
                         SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
                         var grid = new AffineGrid(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY);
                         attemptsRemaining -= 2;
-                        if (DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus) == DecodeStatus.Success)
-                            return DecodeStatus.Success;
+                        var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
+                        if (IsTerminal(gridStatus))
+                            return gridStatus;
 
                         if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
                         {
                             var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                            if (coverageStatus == DecodeStatus.Success)
+                            if (IsTerminal(coverageStatus))
                             {
                                 info = coverageInfo;
                                 return coverageStatus;
@@ -497,13 +506,14 @@ internal static partial class MicroQRImageDecoder
                 PerspectiveGridSampler.Sample(image.Luminance, image.Width, image.Height, image.Threshold, transform, size, modules);
                 var grid = new ProjectiveGrid(transform);
                 attemptsRemaining -= 2;
-                if (DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus) == DecodeStatus.Success)
-                    return DecodeStatus.Success;
+                var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
+                if (IsTerminal(gridStatus))
+                    return gridStatus;
 
                 if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
                 {
                     var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                    if (coverageStatus == DecodeStatus.Success)
+                    if (IsTerminal(coverageStatus))
                     {
                         info = coverageInfo;
                         return coverageStatus;
@@ -561,8 +571,8 @@ internal static partial class MicroQRImageDecoder
     /// The other decoders mirror differently, each for a reason of its own: Standard QR transposes its grid in place, because its matrix level reads the modules two at a time along the placement runs, which a view would not keep contiguous; rMQR samples its grid again with the frame's axes swapped, because a transposed rMQR grid is no rMQR grid.
     /// </remarks>
     /// <returns>
-    /// <see cref="DecodeStatus.Success"/> with the corners of the read that made it; otherwise the transposed grid's status, both failures kept in <paramref name="best"/>.
-    /// <paramref name="straight"/> and <paramref name="mirrored"/> are each grid's own status, the transposed one <see cref="DecodeStatus.NotDetected"/> when the grid as sampled read.
+    /// <see cref="DecodeStatus.Success"/> with the corners of the read that made it; the grid as sampled's <see cref="DecodeStatus.DestinationTooSmall"/>, which a sized call would have stopped at as a read; otherwise the transposed grid's status, both failures kept in <paramref name="best"/>.
+    /// <paramref name="straight"/> and <paramref name="mirrored"/> are each grid's own status, the transposed one <see cref="DecodeStatus.NotDetected"/> when the grid as sampled was terminal.
     /// </returns>
     private static DecodeStatus DecodeBothWays<TGrid>(ReadOnlySpan<byte> modules, in TGrid grid, int size, in ImageView image, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best, out DecodeStatus straight, out DecodeStatus mirrored)
         where TGrid : struct, ISampledGrid
@@ -575,6 +585,11 @@ internal static partial class MicroQRImageDecoder
             return straight;
         }
         best.Other(straight, 0, info);
+        if (IsTerminal(straight))
+        {
+            mirrored = DecodeStatus.NotDetected;
+            return straight;
+        }
 
         mirrored = grid.Decode(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size, image, destination, out charsWritten, out info);
         if (mirrored == DecodeStatus.Success)
