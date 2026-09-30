@@ -1,4 +1,5 @@
 using SkiaSharp;
+using FeatherQR.Internals.MicroQR;
 using FeatherQR.SkiaSharp;
 
 namespace FeatherQR.Tests;
@@ -41,10 +42,56 @@ public class MicroQRCodeDecoderDestinationTest
     }
 
     /// <summary>
+    /// A grid whose text does not fit the destination is not read again by coverage. On a real image that re-read reads the same
+    /// text; on this crafted one (<see cref="TwoTextRenderer"/>) it reads another, and a call too short for the text a sized call
+    /// returns reported the other as a success. Upright, the symbol reads in the axis-aligned path, and turned, in the
+    /// arbitrary-orientation one, each of which stops at the read that does not fit.
+    /// </summary>
+    [Test]
+    [Arguments(0.0)]
+    [Arguments(20.0)]
+    public async Task DecodeImage_DestinationTooSmall_IsNotReadAgainByCoverage(double degrees)
+    {
+        const string text = "1234567890";
+        const string coverageText = "12";
+        const int quietZone = 2;
+        var options = new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4, QuietZoneSize = quietZone, MaskPattern = 0 };
+        var first = MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, options);
+        var second = MicroQRCodeGenerator.Create(coverageText, MicroQREccLevel.L, options);
+        var renderer = new TwoTextRenderer(first.Size, first.Size, pixelsPerModule: 6, offset: 0.25f, degrees);
+        var luminance = renderer.Render((row, column) => first[row, column], (row, column) => second[row, column]);
+        var (width, height) = (renderer.Width, renderer.Height);
+        var (thresholded, readByCoverage) = renderer.SampleGrids(luminance, quietZone);
+        var size = first.Size - 2 * quietZone;
+        await Assert.That((DecodeGrid(thresholded, size), DecodeGrid(readByCoverage, size))).IsEqualTo((text, coverageText))
+            .Because("premise: the thresholded grid reads one text and the coverage grid the other");
+
+        var sized = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
+        await Assert.That(MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, sized, out var sizedWritten, out _)).IsTrue();
+        await Assert.That(new string(sized, 0, sizedWritten)).IsEqualTo(text)
+            .Because("premise: the sized call reads the thresholded grid's text");
+
+        var tiny = new char[coverageText.Length];
+        var ok = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, tiny, out var written, out var info);
+
+        await Assert.That((ok, written, info.Status, info.Version)).IsEqualTo((false, 0, DecodeStatus.DestinationTooSmall, MicroQRVersion.M4))
+            .Because($"the call too short for the sized call's text reports that read, not {new string(tiny, 0, written)}");
+    }
+
+    private static string DecodeGrid(byte[] grid, int size)
+    {
+        var destination = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
+        var status = MicroQRMatrixDecoder.DecodeMatrix(grid, size, destination, out var written, out _);
+        return status == DecodeStatus.Success ? new string(destination, 0, written) : status.ToString();
+    }
+
+    /// <summary>
     /// The cost: while the read went on through the candidate's other grids, the arbitrary-orientation frames and their scale
-    /// and perspective searches, a destination of 2 characters cost about 270 times a sized call here (2026-09-30), and a grid
-    /// that reads its transpose after a read that does not fit lets one scale search run, about 40 times. Stopped at the read,
-    /// the call costs what a sized one does. The test runs alone, and its slack of 30 ms is for a scheduling stall.
+    /// and perspective searches, a destination of 2 characters cost about 200 to 270 times a sized call here on a process's first
+    /// calls and about 1,100 times once warm (2026-10-01), and a grid that reads its transpose after a read that does not fit lets
+    /// one scale search run, about 40 times on the first calls and 70 warm. Stopped at the read, the call costs what a sized one
+    /// does. The test runs alone; its bound is 5 times a sized call and 30 ms for a scheduling stall, which the 2,000 runs keep
+    /// near 10 times a sized call once warm, below either regression.
     /// </summary>
     [Test]
     [NotInParallel]
@@ -56,7 +103,7 @@ public class MicroQRCodeDecoderDestinationTest
         MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, sized, out _, out _);
         MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, tiny, out _, out _);
 
-        const int iterations = 200;
+        const int iterations = 2_000;
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         for (var i = 0; i < iterations; i++)
             MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, sized, out _, out _);
@@ -84,23 +131,32 @@ public class MicroQRCodeDecoderDestinationTest
 
     /// <summary>
     /// Renders whose scan ranks a finder-like pattern in the symbol's own data after the real finder: it lay inside the symbol that
-    /// read, at (61,110) and (49,56), and was searched in full after the read that did not fit, about 67 times a sized call
-    /// (2026-10-01). A candidate inside a symbol that read is skipped, so the call costs what a sized one does.
+    /// read, at (61,110) and (49,56), and was searched in full after the read that did not fit, about 40 to 47 times a sized call
+    /// once the code was warm and 12 to 38 on a process's first calls (2026-10-01). A candidate inside a symbol that read is skipped, so the
+    /// call costs what a sized one does. Transposed, the same renders are a mirrored capture, read by the transposed grid, whose
+    /// read that does not fit has to keep its corners as the straight one's does. The 100 runs keep the regression several times
+    /// the slack of 30 ms, which is for a scheduling stall.
     /// </summary>
     [Test]
     [NotInParallel]
-    [Arguments("63028458518747710056101171", MicroQREccLevel.M, 5.1, 93.0)]
-    [Arguments("98411748017212729364", MicroQREccLevel.Q, 3.6, 133.0)]
-    public async Task DecodeImage_DestinationTooSmall_SkipsACandidateInsideTheSymbolThatRead(string content, MicroQREccLevel eccLevel, double pixelsPerModule, double degrees)
+    [Arguments("63028458518747710056101171", MicroQREccLevel.M, 5.1, 93.0, false)]
+    [Arguments("98411748017212729364", MicroQREccLevel.Q, 3.6, 133.0, false)]
+    [Arguments("63028458518747710056101171", MicroQREccLevel.M, 5.1, 93.0, true)]
+    [Arguments("98411748017212729364", MicroQREccLevel.Q, 3.6, 133.0, true)]
+    public async Task DecodeImage_DestinationTooSmall_SkipsACandidateInsideTheSymbolThatRead(string content, MicroQREccLevel eccLevel, double pixelsPerModule, double degrees, bool mirrored)
     {
         var (luminance, side) = RenderTurnedSupersampled(content, eccLevel, pixelsPerModule, degrees);
+        if (mirrored)
+            luminance = Transpose(luminance, side);
         var sized = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
         var tiny = new char[2];
-        await Assert.That(MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, sized, out var sizedWritten, out _)).IsTrue();
+        await Assert.That(MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, sized, out var sizedWritten, out var sizedInfo)).IsTrue();
         await Assert.That(new string(sized, 0, sizedWritten)).IsEqualTo(content);
+        await Assert.That(SkipPremise.RanksAnotherCandidateInsideAfterTheFinder(luminance, side, side, sizedInfo.Corners)).IsTrue()
+            .Because("premise: the scan ranks a finder-like pattern inside the symbol after its finder");
         MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, tiny, out _, out _);
 
-        const int iterations = 20;
+        const int iterations = 100;
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         for (var i = 0; i < iterations; i++)
             MicroQRCodeDecoder.TryDecodeImage(luminance, side, side, sized, out _, out _);
@@ -115,6 +171,47 @@ public class MicroQRCodeDecoderDestinationTest
         await Assert.That((info.Status, info.Version, info.Corners.IsEmpty)).IsEqualTo((DecodeStatus.DestinationTooSmall, MicroQRVersion.M4, true));
         await Assert.That(tinyElapsed).IsLessThan(TimeSpan.FromTicks(sizedElapsed.Ticks * 5) + TimeSpan.FromMilliseconds(30))
             .Because($"a candidate inside the symbol that read is skipped: sized {sizedElapsed.TotalMilliseconds:F2} ms against tiny {tinyElapsed.TotalMilliseconds:F2} ms over {iterations} runs");
+    }
+
+    /// <summary>
+    /// The first render above a copy of itself: neither symbol fits the destination, and each has a finder-like pattern ranked
+    /// after its own finder. Every read that does not fit keeps its corners, not only the first, so the pattern inside the second
+    /// symbol is skipped as the first one's is; searched in full, it cost about 10 to 25 times a sized call on a process's first
+    /// calls and about 40 once warm (2026-10-01).
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    public async Task DecodeImage_DestinationTooSmallForTwoSymbols_SkipsACandidateInsideEach()
+    {
+        const string content = "63028458518747710056101171";
+        var (single, side) = RenderTurnedSupersampled(content, MicroQREccLevel.M, 5.1, 93.0);
+        var (luminance, width, height) = SkipPremise.StackTwice(single, side, side);
+        var sized = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
+        var tiny = new char[2];
+        await Assert.That(MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, sized, out var sizedWritten, out var sizedInfo)).IsTrue();
+        await Assert.That(new string(sized, 0, sizedWritten)).IsEqualTo(content);
+        foreach (var corners in SkipPremise.BothCopies(sizedInfo.Corners, side))
+        {
+            await Assert.That(SkipPremise.RanksAnotherCandidateInsideAfterTheFinder(luminance, width, height, corners)).IsTrue()
+                .Because($"premise: the scan ranks a finder-like pattern inside the symbol at {corners.TopLeft} after its finder");
+        }
+        MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, tiny, out _, out _);
+
+        const int iterations = 100;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+            MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, sized, out _, out _);
+        var sizedElapsed = stopwatch.Elapsed;
+
+        stopwatch.Restart();
+        var info = default(MicroQRCodeDecodeInfo);
+        for (var i = 0; i < iterations; i++)
+            MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, tiny, out _, out info);
+        var tinyElapsed = stopwatch.Elapsed;
+
+        await Assert.That((info.Status, info.Version, info.Corners.IsEmpty)).IsEqualTo((DecodeStatus.DestinationTooSmall, MicroQRVersion.M4, true));
+        await Assert.That(tinyElapsed).IsLessThan(TimeSpan.FromTicks(sizedElapsed.Ticks * 5) + TimeSpan.FromMilliseconds(30))
+            .Because($"a candidate inside either symbol that read is skipped: sized {sizedElapsed.TotalMilliseconds:F2} ms against tiny {tinyElapsed.TotalMilliseconds:F2} ms over {iterations} runs");
     }
 
     /// <summary>
@@ -261,6 +358,18 @@ public class MicroQRCodeDecoderDestinationTest
             }
         }
         return (luminance, side);
+    }
+
+    /// <summary>A square image with its rows and columns swapped: a mirrored capture, as a front camera takes one.</summary>
+    private static byte[] Transpose(byte[] luminance, int side)
+    {
+        var transposed = new byte[luminance.Length];
+        for (var y = 0; y < side; y++)
+        {
+            for (var x = 0; x < side; x++)
+                transposed[x * side + y] = luminance[y * side + x];
+        }
+        return transposed;
     }
 
     private static byte[] Luminance(SKBitmap bitmap)

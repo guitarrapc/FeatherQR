@@ -11,8 +11,8 @@ namespace FeatherQR.Internals.MicroQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
-/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first; only a successful decode ends it early, and otherwise it reports the result that went furthest.
-/// Each grid is decoded through the matrix level as soon as it is sampled, keeping only the corrections its structure earns (<see cref="MicroQRGridEvidence"/>), then transposed unless it decoded successfully.
+/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data); a successful decode ends the scan and a read that did not fit ends the candidate, whose attempts see only its own results; otherwise the scan reports the result that went furthest.
+/// Each grid is decoded through the matrix level as soon as it is sampled, keeping only the corrections its structure earns (<see cref="MicroQRGridEvidence"/>), then transposed unless it read, a read that did not fit included.
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
 /// 1. Module sizes and centre of the candidate (dropped under one pixel per module)
@@ -138,20 +138,7 @@ internal static partial class MicroQRImageDecoder
             return DecodeStatus.NotDetected;
         }
 
-        // Most-confirmed candidates first: repeated row hits separate real finder
-        // patterns from data-area false positives.
-        // Insertion sort: netstandard2.0 has no Span.Sort, and the list is tiny (≤ 32).
-        for (var i = 1; i < candidateCount; i++)
-        {
-            var current = candidates[i];
-            var j = i - 1;
-            while (j >= 0 && candidates[j].Count < current.Count)
-            {
-                candidates[j + 1] = candidates[j];
-                j--;
-            }
-            candidates[j + 1] = current;
-        }
+        FinderPatternFinder.RankByConfirmation(candidates.Slice(0, candidateCount));
 
         // The furthest-progressing failure is the most useful diagnostic: an attempt
         // that passed format decoding but failed RS says more than "not detected".

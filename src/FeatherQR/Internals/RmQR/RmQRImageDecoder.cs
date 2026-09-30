@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.RmQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
-/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, each within a budget of decodes; a successful decode ends the scan and a read that did not fit ends the candidate, whose frames see only its own results; otherwise the scan reports the result that went furthest.
+/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data), each within a budget of decodes; a successful decode ends the scan and a read that did not fit ends the candidate, whose frames see only its own results; otherwise the scan reports the result that went furthest.
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
 /// 1. Frames: four right angles, each also with its axes swapped (mirror); first from the axis-aligned module sizes
@@ -30,7 +30,8 @@ namespace FeatherQR.Internals.RmQR;
 ///    e. Once an anchored grid gets past its format information, the perspective search, each candidate gated by
 ///       the sub-finder-side format copy and the edge timing rows
 ///    f. The unrefined frame when no anchored grid got past its format information; the scales stop once one did
-/// 3. Each grid: the matrix level, then, on an image with grey levels, a coverage re-read of a grid past its format information
+/// 3. Each grid: the matrix level, then, on an image with grey levels, a coverage re-read of a grid past its format
+///    information that neither read nor read too long for the destination
 /// </code>
 /// </remarks>
 internal static partial class RmQRImageDecoder
@@ -166,18 +167,7 @@ internal static partial class RmQRImageDecoder
             return DecodeStatus.NotDetected;
         }
 
-        // Most-confirmed candidates first (insertion sort: tiny list, netstandard2.0 has no Span.Sort).
-        for (var i = 1; i < candidateCount; i++)
-        {
-            var current = candidates[i];
-            var j = i - 1;
-            while (j >= 0 && candidates[j].Count < current.Count)
-            {
-                candidates[j + 1] = candidates[j];
-                j--;
-            }
-            candidates[j + 1] = current;
-        }
+        FinderPatternFinder.RankByConfirmation(candidates.Slice(0, candidateCount));
 
         var best = new SearchResult<RmQRCodeDecodeInfo>(ReportRule.Furthest, NotDetected());
 
@@ -840,7 +830,7 @@ internal static partial class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Samples the full grid through the transform and runs the matrix decoder, unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information is read again by coverage while the budget lasts.
+    /// Samples the full grid through the transform and runs the matrix decoder, unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information that neither read nor read too long for the destination is read again by coverage while the budget lasts.
     /// Each decode spends one of the budget, the re-read whether or not it changes a module.
     /// </summary>
     private static DecodeStatus Attempt(
@@ -877,7 +867,9 @@ internal static partial class RmQRImageDecoder
         }
 
         best.Other(status, 0, info);
-        if (!image.Grey.IsEnabled || !IsPastFormat(status) || attemptsRemaining <= 0)
+        // A read that did not fit is reported as it is: read by coverage, the same grid reads the same text on a real image, and on
+        // a crafted one another, which the call would have returned though a sized call never does
+        if (IsTerminal(status) || !image.Grey.IsEnabled || !IsPastFormat(status) || attemptsRemaining <= 0)
             return status;
 
         // Grey edges: the same grid read by coverage, decoded only where it differs from the one that failed

@@ -181,6 +181,26 @@ internal static partial class FinderPatternFinder
     internal const int MaxFinderCandidates = MaxCandidates;
 
     /// <summary>
+    /// The order the Micro QR and rMQR scans decode their candidates in: most confirmed first, since repeated row hits separate
+    /// real finder patterns from data-area false positives, and a tie in the order the scan found them.
+    /// </summary>
+    internal static void RankByConfirmation(Span<FinderPattern> candidates)
+    {
+        // Insertion sort: netstandard2.0 has no Span.Sort, and the list is tiny (≤ 32)
+        for (var i = 1; i < candidates.Length; i++)
+        {
+            var current = candidates[i];
+            var j = i - 1;
+            while (j >= 0 && candidates[j].Count < current.Count)
+            {
+                candidates[j + 1] = candidates[j];
+                j--;
+            }
+            candidates[j + 1] = current;
+        }
+    }
+
+    /// <summary>
     /// Whether a candidate at the same position with the same module size is in the list: a decoder reads those three and nothing else of a candidate (the count only ranks it).
     /// </summary>
     internal static bool ContainsCandidate(ReadOnlySpan<FinderPattern> candidates, in FinderPattern candidate)

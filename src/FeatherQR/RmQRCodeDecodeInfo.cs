@@ -19,7 +19,11 @@ public readonly record struct RmQRCodeDecodeInfo
         Corners = corners;
     }
 
-    /// <summary>The same result with the symbol's image position attached; the image decoder calls this on success.</summary>
+    /// <summary>
+    /// The same result with the symbol's image position attached. The image decoder attaches it to a read, one that did not fit the
+    /// destination too, whose corners its scan keeps to skip the candidates inside, and strips it (<c>default</c>) from every
+    /// result but a successful one before reporting.
+    /// </summary>
     internal RmQRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, ErrorsCorrected, corners);
 
     /// <summary>Decode outcome; <see cref="DecodeStatus.Success"/> when text was produced.</summary>
