@@ -28,7 +28,7 @@ internal static class SimdParity
 
         var failures = 0;
         failures += Report("VectorCast", CastMismatches);
-        failures += Report("QRImageDecoder.SampleGridSimd128", QRSamplerMismatches);
+        failures += Report("PerspectiveGridSampler.SampleVector128", QRSamplerMismatches);
         failures += Report("MicroQRImageDecoder.SampleGridVector128", MicroSamplerMismatches);
         failures += Report("RmQRImageDecoder.SampleGridSimd128", RmQRSamplerMismatches);
         failures += Report("RmQRImageDecoder.ClassifySubFinderLatticeVector128", LatticeMismatches);
@@ -156,8 +156,8 @@ internal static class SimdParity
                 var threshold = (byte)random.Next(256);
                 var scalar = new byte[dimension * dimension];
                 var vector = new byte[dimension * dimension];
-                QRImageDecoder.SampleGridScalar(luminance, width, height, threshold, transform, dimension, scalar);
-                QRImageDecoder.SampleGridSimd128(luminance, width, height, threshold, transform, dimension, vector);
+                PerspectiveGridSampler.SampleScalar(luminance, width, height, threshold, transform, dimension, scalar);
+                PerspectiveGridSampler.SampleVector128(luminance, width, height, threshold, transform, dimension, vector);
                 if (!scalar.AsSpan().SequenceEqual(vector))
                     mismatches.Add($"dimension {dimension}, trial {trial}");
             }

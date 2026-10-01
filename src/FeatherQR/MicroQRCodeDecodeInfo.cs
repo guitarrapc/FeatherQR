@@ -23,7 +23,11 @@ public readonly record struct MicroQRCodeDecodeInfo
         Corners = corners;
     }
 
-    /// <summary>The same result with the symbol's image position attached; the image decoder calls this on success.</summary>
+    /// <summary>
+    /// The same result with the symbol's image position attached. The image decoder attaches it to a read, one that did not fit the
+    /// destination too, whose corners its scan keeps to skip the candidates inside, and strips it (<c>default</c>) from every
+    /// result but a successful one before reporting.
+    /// </summary>
     internal MicroQRCodeDecodeInfo WithCorners(SymbolCorners corners) => new(Status, Version, EccLevel, MaskPattern, ErrorsCorrected, corners);
 
     /// <summary>Decode result status. <see cref="DecodeStatus.Success"/> when decoding succeeded.</summary>

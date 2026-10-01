@@ -297,8 +297,8 @@ internal static class TierTiming
         new("kernel/FinderRowEdges-noise", () => FinderRows(Noise(740), FinderRowKernel.EdgeList)),
         new("kernel/AlignmentRowMask", () => Alignment(scalar: false)),
         new("kernel/AlignmentRowMask-scalar", () => Alignment(scalar: true)),
-        new("kernel/QRSampleGrid", () => QRSample(scalar: false)),
-        new("kernel/QRSampleGrid-scalar", () => QRSample(scalar: true)),
+        new("kernel/PerspectiveGridSampler", () => QRSample(scalar: false)),
+        new("kernel/PerspectiveGridSampler-scalar", () => QRSample(scalar: true)),
         new("kernel/QRSampleGridPiecewise", () => QRSamplePiecewise(scalar: false)),
         new("kernel/QRSampleGridPiecewise-scalar", () => QRSamplePiecewise(scalar: true)),
         new("kernel/MicroQRSampleGrid", () => MicroSample(scalar: false)),
@@ -874,12 +874,12 @@ internal static class TierTiming
         return scalar
             ? () =>
             {
-                QRImageDecoder.SampleGridScalar(image.Luminance, image.Width, image.Height, 128, transform, 177, modules);
+                PerspectiveGridSampler.SampleScalar(image.Luminance, image.Width, image.Height, 128, transform, 177, modules);
                 return modules[200];
             }
         : () =>
         {
-            QRImageDecoder.SampleGrid(image.Luminance, image.Width, image.Height, 128, transform, 177, modules);
+            PerspectiveGridSampler.Sample(image.Luminance, image.Width, image.Height, 128, transform, 177, modules);
             return modules[200];
         };
     }

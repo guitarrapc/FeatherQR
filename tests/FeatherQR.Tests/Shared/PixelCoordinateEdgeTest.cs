@@ -1,7 +1,6 @@
 using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.MicroQR;
 using FeatherQR.Internals.RmQR;
-using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
@@ -55,19 +54,19 @@ public class PixelCoordinateEdgeTest
         const int Dimension = 21;
 
         var scalar = new byte[Dimension * Dimension];
-        QRImageDecoder.SampleGridScalar(luminance, Width, Height, 128, transform, Dimension, scalar);
+        PerspectiveGridSampler.SampleScalar(luminance, Width, Height, 128, transform, Dimension, scalar);
         await Assert.That(scalar.All(m => m == 1)).IsTrue().Because($"scalar, x = {x:R}");
 #if NET8_0_OR_GREATER
         if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
         {
             var vector = new byte[Dimension * Dimension];
-            QRImageDecoder.SampleGridSimd128(luminance, Width, Height, 128, transform, Dimension, vector);
+            PerspectiveGridSampler.SampleVector128(luminance, Width, Height, 128, transform, Dimension, vector);
             await Assert.That(vector.All(m => m == 1)).IsTrue().Because($"128-bit, x = {x:R}");
         }
         if (System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated)
         {
             var vector = new byte[Dimension * Dimension];
-            QRImageDecoder.SampleGridSimd(luminance, Width, Height, 128, transform, Dimension, vector);
+            PerspectiveGridSampler.SampleVector256(luminance, Width, Height, 128, transform, Dimension, vector);
             await Assert.That(vector.All(m => m == 1)).IsTrue().Because($"256-bit, x = {x:R}");
         }
 #endif

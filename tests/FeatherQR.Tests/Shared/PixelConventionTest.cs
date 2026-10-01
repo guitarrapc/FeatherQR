@@ -144,8 +144,8 @@ public class PixelConventionTest
 
         var scalar = new byte[expected.Length];
         var vector = new byte[expected.Length];
-        QRImageDecoder.SampleGridScalar(luminance, side, side, 128, transform, dimension, scalar);
-        QRImageDecoder.SampleGrid(luminance, side, side, 128, transform, dimension, vector);
+        PerspectiveGridSampler.SampleScalar(luminance, side, side, 128, transform, dimension, scalar);
+        PerspectiveGridSampler.Sample(luminance, side, side, 128, transform, dimension, vector);
 
         await Assert.That(Mismatches(scalar, expected)).IsEqualTo(0).Because("scalar kernel, modules read wrong");
         await Assert.That(Mismatches(vector, expected)).IsEqualTo(0).Because("vector kernel, modules read wrong");

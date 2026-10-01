@@ -83,7 +83,7 @@ public class LargeVersionGridOrderTest
         var (x3, y3) = BowedRenderer.ToPixel(d, pixelsPerModule, degrees, bowModules, side, 3.5f, d - 3.5f);
         var fourPoint = PerspectiveTransform.QuadrilateralToQuadrilateral(3.5f, 3.5f, d - 3.5f, 3.5f, d - 6.5f, d - 6.5f, 3.5f, d - 3.5f, x0, y0, x1, y1, x2, y2, x3, y3);
         var modules = new byte[d * d];
-        QRImageDecoder.SampleGridScalar(luminance, side, side, threshold, fourPoint, d, modules);
+        PerspectiveGridSampler.SampleScalar(luminance, side, side, threshold, fourPoint, d, modules);
         await Assert.That(QRMatrixDecoder.DecodeMatrix(modules, d, new char[QRCodeDecoder.GetMaxDecodedLength(40)], out _, out _)).IsNotEqualTo(DecodeStatus.Success);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out var text, out var info);
@@ -115,7 +115,7 @@ public class LargeVersionGridOrderTest
     }
 
     /// <summary>The symbol with its bottom-right alignment pattern painted over light.</summary>
-    private static Func<int, int, bool> WithoutBottomRightAlignment(QRCodeData qr)
+    internal static Func<int, int, bool> WithoutBottomRightAlignment(QRCodeData qr)
     {
         var centre = qr.Size - 7;
         return (row, column) => (Math.Abs(row - centre) > 2 || Math.Abs(column - centre) > 2) && qr[row, column];
