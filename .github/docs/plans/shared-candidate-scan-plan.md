@@ -51,6 +51,8 @@ As of 2026-10-01 (3e1f29d).
 | The coverage re-read | `DecodeByCoverage`: resample at the module centres, then decode both ways only when a module changed | Inline in `Attempt`: the same, in one orientation | The orientations |
 | The budget | 10,000 decodes on the arbitrary-orientation path, two per grid. The re-read is not counted | 256 decodes per candidate. The re-read is counted whether or not it decodes | The units |
 
+Since phase 2 the first two rows are `CandidateScan` (`Decode`, `Scan`, `DecodeRanked`) in `Internals.ImageDecoders`, and each decoder's part is a `CandidateDecoder` struct: its candidate decode, its not-detected info, its corner access and its module buffer length.
+
 Tests: since phase 1, `DestinationContractTest` runs each rule on both decoders (the Progress log has what it replaced), beside `SymbolGeometryContainsTest` and `SearchResultTest`. No known input reaches the terminal return in Micro QR's scale and perspective searches, and rMQR's frame and scale loops have a bounded cost (Progress log, phase 1).
 
 ## What has to stay true
@@ -101,8 +103,8 @@ Phase 2 can stop early: if the generic scan costs more than noise on the benchma
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Who owns the scratch buffers | The shared scan holds one module buffer per scan, sized by a constant the decoder supplies: stack-allocated for Micro QR's 289 B, rented for rMQR's 2,363 B, as each is today. The small tables (Micro QR's boundary tables, rMQR's orientation candidates) are stack-allocated inside each decoder's candidate decode. A struct cannot hold a span without being a `ref struct`, and netstandard2.0 cannot pass one as a generic argument. Decided by phase 2's benchmarks |
-| D2 | How the shared scan reads and strips a result's corners | The decoder's struct supplies both. An internal interface on the public info records would also work, but it changes public types to serve internals |
+| D1 | Who owns the scratch buffers | **Decided 2026-10-01 (phase 2).** The shared scan holds one module buffer per scan, sized by a constant the decoder supplies: stack-allocated for Micro QR's 289 B, rented for rMQR's 2,363 B, as each is today. The small tables (Micro QR's boundary tables, rMQR's orientation candidates) are stack-allocated inside each decoder's candidate decode. A struct cannot hold a span without being a `ref struct`, and netstandard2.0 cannot pass one as a generic argument. The image decode benchmarks held within their error bars (Progress log, phase 2) |
+| D2 | How the shared scan reads and strips a result's corners | **Decided 2026-10-01 (phase 2).** The decoder's struct supplies both. An internal interface on the public info records would also work, but it changes public types to serve internals |
 | D3 | Whether the coverage gate becomes one condition | The shared core is grey levels, past the format information and not terminal. Micro QR adds its exact-word predicate, whose reason is measured: texture reads a word within 3 bits about half the time, and an exact one about 1 in 1,000. rMQR adds none |
 | D4 | Whether the budgets are unified | **No.** They are tuned in different units to measured envelopes: Micro QR's to fit one complete frame, rMQR's per candidate across all frames. The shared routines report what they spent, so each decoder charges as it does now. Revisit only with a measured reason |
 | D5 | How the contract test reaches each decoder | **Decided 2026-10-01 (phase 1).** Through the public `TryDecodeImage`, since every rule is observable there, with an adapter that renders and decodes per symbology. Internals are used only for premises, such as the ranking and the crafted grids. Timing rules keep their bounds of 3 or 5 times a sized call plus 30 ms, with the margins measured in phase 1. A deterministic observable is used wherever one exists |
@@ -161,3 +163,50 @@ Ranges are the spread of two runs of one tree. The "2 characters" columns leave 
 - **The tool's sets are the records' sets.** It draws the same 577 and 585 symbols the decoder records' figures were measured on.
   - Their worst one-character-short ratio moves between runs of one tree, by as much as 1.05 against 1.25.
   - What has to stay true therefore holds the median and the 95th percentile, and holds the worst only to that spread.
+
+### Phase 2: shared scan (2026-10-01)
+
+**Done**
+- `CandidateScan` in `Internals.ImageDecoders` has three parts: the strided scan and then the sweep (`Decode`), one scan (`Scan`), and the decode of the ranked candidates (`DecodeRanked`).
+  - It replaces both decoders' `DecodeLuminanceScan` and the body of their `DecodeLuminanceCore`.
+  - `DecodeLuminanceCore` stays as a one-line entry, for the regional pass and the tests.
+- Each decoder's `CandidateDecoder` struct (`ICandidateDecoder<TInfo>`) supplies four things: its candidate decode, its not-detected info, its corner access, and its module buffer length (D1, D2).
+- The scratch buffers:
+  - The scan holds one module buffer, as before: 289 B from the stack for Micro QR, 2,363 B rented for rMQR.
+  - Micro QR's boundary tables and rMQR's orientation candidates moved into the candidate decode, so they are now taken per candidate instead of per scan.
+- `CandidateScanTest`: the scan's rules over ranked candidates and a scripted decoder, 15 cases. It was red before `CandidateScan` existed.
+- The mutants file now has 25 faults:
+  - The five scan faults that each decoder had are now one each, in `CandidateScan`.
+  - Two faults are new: trying more than the first eight, and trying a candidate again.
+  - The run adds `CandidateScanTest` to its filter.
+- The spec maps link `CandidateScan` and `CandidateScanTest`, and `qrcode-symbologies.md` lists `CandidateScan` among the shared components.
+
+**What has to stay true**
+- **Reads.** The image decode sweeps wrote byte-identical result files: 18,400 Micro QR images and 29,440 rMQR images. In the real-image corpus, only zxing-cpp's column differs, and it moves between runs.
+- **Short destinations.** No status, version or text moved over 581 Micro QR and 588 rMQR renders. One character short:
+  - the median was 0.99 times a sized call for Micro QR and 1.00 for rMQR, before and after;
+  - the worst was 1.19 and 1.25, within the spread.
+- **Planted faults.** 21 of 25 were caught, including all seven in the scan. The four recorded in phase 1 are unchanged, and the baseline run caught nothing.
+- **Benchmarks** (net10.0, three rounds each with alternating order, allocations unchanged):
+
+  | Benchmark | Before (µs) | After (µs) | Change |
+  |---|---|---|---|
+  | rMQR R7x43 | 5.43 | 5.48 | +0.9 % |
+  | rMQR R17x139 | 21.76 | 21.92 | +0.7 % |
+  | Micro QR M4 | 4.91 | 4.72 | −3.9 % |
+  | Micro QR M1 under shadow | 12.48 | 12.91 | +3.4 % |
+  | Micro QR, turned M1 failing | 2,799 | 2,773 | −0.9 % |
+  | Micro QR on a Standard QR image | 14,165 | 13,813 | −2.5 % |
+
+  Every change is within the error bars of 0.1 to 1.3 µs and 2 to 4 %.
+- **Builds and tests.** The library builds for all four targets with no warning. The full suite passes on both, `DecodeAllocationTest` and `SymbologyDependencyTest` included.
+- **The stop conditions did not apply.** Each decoder supplies its candidate decode, its not-detected info and its corner access, plus the buffer length D1 called for.
+
+**Lessons**
+- **The order of an A/B run can manufacture a regression.**
+  - Two rounds that ran the base first each time put rMQR's decode 15 to 21 % behind. Even Micro QR's failing paths moved 16 to 25 %.
+  - Three rounds with error bars, the order alternated, put every benchmark within them.
+  - A machine that drifts during a run favours whichever tree runs first.
+- **The mutation tool refuses a file with changes of its own,** since `git checkout` would not restore it.
+  - A phase's own change is checked with `--allow-dirty`, after copying the files aside.
+  - Checksums after the run confirm the copies match.
