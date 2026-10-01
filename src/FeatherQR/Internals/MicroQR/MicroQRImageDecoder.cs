@@ -135,20 +135,10 @@ internal static partial class MicroQRImageDecoder
                     continue;
 
                 SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, originX, originY, uX, uY, vX, vY, size, modules);
-                var grid = new AffineGrid(originX, originY, uX, uY, vX, vY);
-                var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
-                if (IsTerminal(gridStatus))
-                    return gridStatus;
-
-                if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
-                {
-                    var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                    if (IsTerminal(coverageStatus))
-                    {
-                        info = coverageInfo;
-                        return coverageStatus;
-                    }
-                }
+                var grid = new BothWays<AffineGrid>(new AffineGrid(originX, originY, uX, uY, vX, vY), size);
+                var status = GridRead.Decode<BothWays<AffineGrid>, MicroQRCodeDecodeInfo>(ref grid, image, modules, destination, out charsWritten, out info, ref best, out _, out _);
+                if (IsTerminal(status))
+                    return status;
             }
 
             // Timing frame: the finder's module size is extrapolated across the whole
@@ -238,28 +228,18 @@ internal static partial class MicroQRImageDecoder
                         continue;
 
                     SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, originX, originY, uX, uY, vX, vY, size, modules);
-                    var grid = new AffineGrid(originX, originY, uX, uY, vX, vY);
+                    var grid = new BothWays<AffineGrid>(new AffineGrid(originX, originY, uX, uY, vX, vY), size);
                     attemptsRemaining -= 2;
-                    var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
-                    if (IsTerminal(gridStatus))
-                        return gridStatus;
-
-                    if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
-                    {
-                        var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                        if (IsTerminal(coverageStatus))
-                        {
-                            info = coverageInfo;
-                            return coverageStatus;
-                        }
-                    }
+                    var status = GridRead.Decode<BothWays<AffineGrid>, MicroQRCodeDecodeInfo>(ref grid, image, modules, destination, out charsWritten, out info, ref best, out var pastFormat, out _);
+                    if (IsTerminal(status))
+                        return status;
 
                     // Scale and perspective searches multiply this affine attempt
                     // by hundreds. Enter them only after either polarity decoded
                     // valid format information, which a random grid does 14 to 38 %
                     // of the time by version: the gate thins the grids searched
                     // rather than ruling texture out.
-                    if (!IsPastFormat(status) && !IsPastFormat(mirroredStatus))
+                    if (!pastFormat)
                         continue;
 
                     var scaledStatus = TryDecodeScaleVariants(
@@ -349,21 +329,11 @@ internal static partial class MicroQRImageDecoder
                             continue;
 
                         SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
-                        var grid = new AffineGrid(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY);
+                        var grid = new BothWays<AffineGrid>(new AffineGrid(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY), size);
                         attemptsRemaining -= 2;
-                        var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
-                        if (IsTerminal(gridStatus))
-                            return gridStatus;
-
-                        if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
-                        {
-                            var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                            if (IsTerminal(coverageStatus))
-                            {
-                                info = coverageInfo;
-                                return coverageStatus;
-                            }
-                        }
+                        var status = GridRead.Decode<BothWays<AffineGrid>, MicroQRCodeDecodeInfo>(ref grid, image, modules, destination, out charsWritten, out info, ref best, out _, out _);
+                        if (IsTerminal(status))
+                            return status;
                     }
                 }
             }
@@ -420,21 +390,11 @@ internal static partial class MicroQRImageDecoder
                     continue;
 
                 PerspectiveGridSampler.Sample(image.Luminance, image.Width, image.Height, image.Threshold, transform, size, modules);
-                var grid = new ProjectiveGrid(transform);
+                var grid = new BothWays<ProjectiveGrid>(new ProjectiveGrid(transform), size);
                 attemptsRemaining -= 2;
-                var gridStatus = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out var status, out var mirroredStatus);
-                if (IsTerminal(gridStatus))
-                    return gridStatus;
-
-                if (ShouldReadByCoverage(image.Grey, status, mirroredStatus, modules, size))
-                {
-                    var coverageStatus = DecodeByCoverage(image, grid, size, modules, destination, out charsWritten, out var coverageInfo, ref best);
-                    if (IsTerminal(coverageStatus))
-                    {
-                        info = coverageInfo;
-                        return coverageStatus;
-                    }
-                }
+                var status = GridRead.Decode<BothWays<ProjectiveGrid>, MicroQRCodeDecodeInfo>(ref grid, image, modules, destination, out charsWritten, out info, ref best, out _, out _);
+                if (IsTerminal(status))
+                    return status;
             }
         }
 
@@ -442,41 +402,34 @@ internal static partial class MicroQRImageDecoder
     }
 
     /// <summary>
-    /// A grid is read again by coverage only when the image has grey levels and an orientation that got past its format information read that word exactly.
-    /// A real symbol's format modules sit next to the finder, where the frame is best; texture reads a word within 3 bits about half the time and an exact one about 1 in 1,000.
+    /// A size × size grid read as sampled and transposed (<see cref="DecodeBothWays"/>), for the shared grid read and its re-read by
+    /// coverage (<see cref="GridRead"/>).
     /// </summary>
-    private static bool ShouldReadByCoverage(in GreyLevels grey, DecodeStatus status, DecodeStatus mirroredStatus, ReadOnlySpan<byte> modules, int size)
-        => grey.IsEnabled
-            && ((IsPastFormat(status) && MicroQRMatrixDecoder.HasExactFormat(modules, new MatrixModules(size), size))
-                || (IsPastFormat(mirroredStatus) && MicroQRMatrixDecoder.HasExactFormat(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size)));
-
-    /// <summary>
-    /// A grid read again with each module's luminance interpolated at its centre and split halfway between the two grey levels, in both orientations.
-    /// </summary>
-    private static DecodeStatus DecodeByCoverage<TGrid>(in ImageView image, in TGrid grid, int size, Span<byte> modules, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best)
+    /// <remarks>
+    /// It is read again by coverage only when an orientation that got past its format information read that word exactly. A real
+    /// symbol's format modules sit next to the finder, where the frame is best; texture reads a word within 3 bits about half the
+    /// time and an exact one about 1 in 1,000.
+    /// </remarks>
+    private struct BothWays<TGrid>(TGrid grid, int size) : IGridRead<MicroQRCodeDecodeInfo>
         where TGrid : struct, ICoverageGrid
     {
-        var midpoint = image.Grey.Midpoint;
-        var changed = false;
-        for (var v = 0; v < size; v++)
-        {
-            for (var u = 0; u < size; u++)
-            {
-                grid.Map(u + 0.5f, v + 0.5f, out var x, out var y);
-                var dark = LuminanceSampler.Bilinear(image.Luminance, image.Width, image.Height, x, y) < midpoint ? (byte)1 : (byte)0;
-                changed |= modules[v * size + u] != dark;
-                modules[v * size + u] = dark;
-            }
-        }
+        private DecodeStatus _straight;
+        private DecodeStatus _mirrored;
 
-        // The grid that already failed decodes the same way again
-        if (!changed)
-            return best.Report(out charsWritten, out info);
+        public readonly int Columns => size;
 
-        var status = DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref best, out _, out _);
-        if (status != DecodeStatus.Success)
-            info = best.Info;
-        return status;
+        public readonly int Rows => size;
+
+        public readonly void Map(float u, float v, out float x, out float y) => grid.Map(u, v, out x, out y);
+
+        public DecodeStatus Decode(ReadOnlySpan<byte> modules, in ImageView image, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> result)
+            => DecodeBothWays(modules, grid, size, image, destination, out charsWritten, out info, ref result, out _straight, out _mirrored);
+
+        public readonly bool PastFormat => IsPastFormat(_straight) || IsPastFormat(_mirrored);
+
+        public readonly bool MayReadByCoverage(ReadOnlySpan<byte> modules)
+            => (IsPastFormat(_straight) && MicroQRMatrixDecoder.HasExactFormat(modules, new MatrixModules(size), size))
+                || (IsPastFormat(_mirrored) && MicroQRMatrixDecoder.HasExactFormat(modules, new TransposedModules<MatrixModules>(new MatrixModules(size)), size));
     }
 
     /// <summary>

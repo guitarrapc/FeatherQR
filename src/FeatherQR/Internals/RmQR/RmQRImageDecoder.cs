@@ -746,7 +746,7 @@ internal static partial class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Samples the full grid through the transform and runs the matrix decoder, unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information that neither read nor read too long for the destination is read again by coverage while the budget lasts.
+    /// Samples the full grid through the transform and decodes it (<see cref="GridRead"/>), unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information that neither read nor read too long for the destination is read again by coverage while the budget lasts.
     /// Each decode spends one of the budget, the re-read whether or not it changes a module.
     /// </summary>
     private static DecodeStatus Attempt(
@@ -770,55 +770,47 @@ internal static partial class RmQRImageDecoder
         }
 
         attemptsRemaining--;
-        var grid = modules.Slice(0, symbolWidth * symbolHeight);
-        SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, symbolWidth, symbolHeight, grid);
-        var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
-        if (IsTerminal(status))
+        var gridModules = modules.Slice(0, symbolWidth * symbolHeight);
+        SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, symbolWidth, symbolHeight, gridModules);
+        var grid = new TransformGrid(transform, symbolWidth, symbolHeight, budgetLeft: attemptsRemaining > 0);
+        var status = GridRead.Decode<TransformGrid, RmQRCodeDecodeInfo>(ref grid, image, gridModules, destination, out charsWritten, out info, ref best, out _, out var readByCoverage);
+        if (readByCoverage)
+            attemptsRemaining--;
+        return status;
+    }
+
+    /// <summary>
+    /// A grid sampled through a transform, decoded once: the frames carry a mirrored capture in their axes, so the transform is in
+    /// symbol order and never transposed. Read again by coverage while the budget lasts (<see cref="GridRead"/>).
+    /// </summary>
+    private struct TransformGrid(in PerspectiveTransform transform, int width, int height, bool budgetLeft) : IGridRead<RmQRCodeDecodeInfo>
+    {
+        private readonly PerspectiveTransform _transform = transform;
+        private DecodeStatus _status;
+
+        public readonly int Columns => width;
+
+        public readonly int Rows => height;
+
+        public readonly void Map(float u, float v, out float x, out float y) => _transform.Transform(u, v, out x, out y);
+
+        public DecodeStatus Decode(ReadOnlySpan<byte> modules, in ImageView image, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, ref SearchResult<RmQRCodeDecodeInfo> result)
         {
-            // The frames already carry a mirrored capture in their axes, so the transform is in symbol order and never transposed.
-            // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it
-            info = info.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
-            if (status == DecodeStatus.Success)
-                return status;
+            _status = RmQRMatrixDecoder.DecodeMatrix(modules, width, height, destination, out charsWritten, out info);
+            if (IsTerminal(_status))
+            {
+                // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it
+                info = info.WithCorners(SymbolGeometry.FromTransform(_transform, width, height, transposed: false));
+                if (_status == DecodeStatus.Success)
+                    return _status;
+            }
+            result.Other(_status, 0, info);
+            return _status;
         }
 
-        best.Other(status, 0, info);
-        // A read that did not fit is reported as it is: read by coverage, the same grid reads the same text on a real image, and on
-        // a crafted one another, which the call would have returned though a sized call never does
-        if (IsTerminal(status) || !image.Grey.IsEnabled || !IsPastFormat(status) || attemptsRemaining <= 0)
-            return status;
+        public readonly bool PastFormat => IsPastFormat(_status);
 
-        // Grey edges: the same grid read by coverage, decoded only where it differs from the one that failed
-        attemptsRemaining--;
-        var midpoint = image.Grey.Midpoint;
-        var changed = false;
-        for (var row = 0; row < symbolHeight; row++)
-        {
-            for (var column = 0; column < symbolWidth; column++)
-            {
-                transform.Transform(column + 0.5f, row + 0.5f, out var x, out var y);
-                var dark = LuminanceSampler.Bilinear(image.Luminance, image.Width, image.Height, x, y) < midpoint ? (byte)1 : (byte)0;
-                changed |= grid[row * symbolWidth + column] != dark;
-                grid[row * symbolWidth + column] = dark;
-            }
-        }
-        if (!changed)
-            return status;
-        var coverageStatus = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out var coverageInfo);
-        if (IsTerminal(coverageStatus))
-        {
-            coverageInfo = coverageInfo.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
-            if (coverageStatus == DecodeStatus.Success)
-            {
-                info = coverageInfo;
-                return coverageStatus;
-            }
-        }
-        best.Other(coverageStatus, 0, coverageInfo);
-        if (Progress(coverageStatus) <= Progress(status))
-            return status;
-        info = coverageInfo;
-        return coverageStatus;
+        public readonly bool MayReadByCoverage(ReadOnlySpan<byte> modules) => budgetLeft;
     }
 
     /// <summary>

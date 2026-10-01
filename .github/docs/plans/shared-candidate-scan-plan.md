@@ -51,7 +51,7 @@ As of 2026-10-01 (3e1f29d).
 | The coverage re-read | `DecodeByCoverage`: resample at the module centres, then decode both ways only when a module changed | Inline in `Attempt`: the same, in one orientation | The orientations |
 | The budget | 10,000 decodes on the arbitrary-orientation path, two per grid. The re-read is not counted | 256 decodes per candidate. The re-read is counted whether or not it decodes | The units |
 
-Since phase 2 the first two rows are `CandidateScan` (`Decode`, `Scan`, `DecodeRanked`) in `Internals.ImageDecoders`, and each decoder's part is a `CandidateDecoder` struct: its candidate decode, its not-detected info, its corner access and its module buffer length.
+Since phase 2 the first two rows are `CandidateScan` (`Decode`, `Scan`, `DecodeRanked`) in `Internals.ImageDecoders`, and each decoder's part is a `CandidateDecoder` struct: its candidate decode, its not-detected info, its corner access and its module buffer length. Since phase 3 the gate and the re-read (rows five and six) are `GridRead`, and each decoder's grid is a struct (`BothWays` in Micro QR, `TransformGrid` in rMQR): its decode, whether that got past the format information, its own condition, and where its module centres lie.
 
 Tests: since phase 1, `DestinationContractTest` runs each rule on both decoders (the Progress log has what it replaced), beside `SymbolGeometryContainsTest` and `SearchResultTest`. No known input reaches the terminal return in Micro QR's scale and perspective searches, and rMQR's frame and scale loops have a bounded cost (Progress log, phase 1).
 
@@ -60,7 +60,7 @@ Tests: since phase 1, `DestinationContractTest` runs each rule on both decoders 
 - **No read, status, version or corners change.**
   - Check the image decode sweep (`micro`, `rmqr`) and the real-image corpus with `compare`, image for image.
   - Check the short-destination render sets (Measuring) the same way: status and version for a sized destination, one character short, and two characters.
-- **No short-destination cost regresses.** Over each render set, the median and the 95th percentile stay within noise of phase 1's figures, and the worst within the spread two runs of one tree show (1.05 to 1.25 times a sized call for Micro QR, 1.15 to 1.60 for rMQR, one character short).
+- **No short-destination cost regresses.** Over each render set, the median and the 95th percentile stay within noise of phase 1's figures, and the worst within the spread that runs of one tree show (so far 1.05 to 1.50 times a sized call for Micro QR and 1.05 to 1.60 for rMQR, one character short, over the phases 1 to 3 runs).
 - **Calls stay direct and nothing allocates.**
   - What a decoder supplies is a struct behind a generic constraint, as in `ImageDecodePasses`. There are no delegates, and nothing is boxed.
   - `DecodeAllocationTest` stays green in Release.
@@ -105,7 +105,7 @@ Phase 2 can stop early: if the generic scan costs more than noise on the benchma
 |---|---|---|
 | D1 | Who owns the scratch buffers | **Decided 2026-10-01 (phase 2).** The shared scan holds one module buffer per scan, sized by a constant the decoder supplies: stack-allocated for Micro QR's 289 B, rented for rMQR's 2,363 B, as each is today. The small tables (Micro QR's boundary tables, rMQR's orientation candidates) are stack-allocated inside each decoder's candidate decode. A struct cannot hold a span without being a `ref struct`, and netstandard2.0 cannot pass one as a generic argument. The image decode benchmarks held within their error bars (Progress log, phase 2) |
 | D2 | How the shared scan reads and strips a result's corners | **Decided 2026-10-01 (phase 2).** The decoder's struct supplies both. An internal interface on the public info records would also work, but it changes public types to serve internals |
-| D3 | Whether the coverage gate becomes one condition | The shared core is grey levels, past the format information and not terminal. Micro QR adds its exact-word predicate, whose reason is measured: texture reads a word within 3 bits about half the time, and an exact one about 1 in 1,000. rMQR adds none |
+| D3 | Whether the coverage gate becomes one condition | **Decided 2026-10-01 (phase 3).** The shared core is grey levels, past the format information and not terminal. Micro QR adds its exact-word predicate, whose reason is measured: texture reads a word within 3 bits about half the time, and an exact one about 1 in 1,000. rMQR adds none |
 | D4 | Whether the budgets are unified | **No.** They are tuned in different units to measured envelopes: Micro QR's to fit one complete frame, rMQR's per candidate across all frames. The shared routines report what they spent, so each decoder charges as it does now. Revisit only with a measured reason |
 | D5 | How the contract test reaches each decoder | **Decided 2026-10-01 (phase 1).** Through the public `TryDecodeImage`, since every rule is observable there, with an adapter that renders and decodes per symbology. Internals are used only for premises, such as the ranking and the crafted grids. Timing rules keep their bounds of 3 or 5 times a sized call plus 30 ms, with the margins measured in phase 1. A deterministic observable is used wherever one exists |
 | D6 | Standard QR | **Out of scope.** Its coverage re-read sits behind its own triple and mesh paths and its main-path rule. Revisit only if phase 3's routine fits it with no change to that rule |
@@ -210,3 +210,51 @@ Ranges are the spread of two runs of one tree. The "2 characters" columns leave 
 - **The mutation tool refuses a file with changes of its own,** since `git checkout` would not restore it.
   - A phase's own change is checked with `--allow-dirty`, after copying the files aside.
   - Checksums after the run confirm the copies match.
+
+### Phase 3: shared grid read (2026-10-01)
+
+**Done**
+- `GridRead` in `Internals.ImageDecoders` decodes a sampled grid and applies the shared gate: grey levels, past the format information, neither read nor read too long, and the decoder's own condition.
+  - It re-reads by coverage with one loop over the module centres, and decodes again only when that changes a module.
+  - It returns the further of the two decodes.
+  - It reports whether it got past the format information, which Micro QR's searches gate on, and whether it re-read, which rMQR charges to its budget (D3, D4).
+- Each decoder's grid is now a struct (`IGridRead<TInfo>`):
+  - Micro QR's `BothWays` reads as sampled and transposed (`DecodeBothWays`), and asks that an orientation past its format information read the word exactly.
+  - rMQR's `TransformGrid` reads once, attaching the corners of a read in one place for the grid and its re-read, and asks for budget left.
+- Gone: Micro QR's `ShouldReadByCoverage` and `DecodeByCoverage`, and the coverage loop and gate inside rMQR's `Attempt`. Micro QR's four coverage sites and `Attempt` call `GridRead`.
+- `GridReadTest`: the gate, the re-read, and which decode is returned, over a scripted grid, 13 cases. It was red before `GridRead` existed.
+- The mutants file now has 29 faults:
+  - Micro QR's coverage fault and rMQR's re-read fault became shared ones in `GridRead`.
+  - rMQR's two corner faults (the grid and its re-read) became one.
+  - Six new faults cover the gate's terms, the decode after an unchanged re-read, and which decode is returned.
+  - The run adds `GridReadTest` to its filter.
+- The spec maps link `GridRead`, `BothWays`, `TransformGrid` and `GridReadTest`. `qrcode-symbologies.md` lists `GridRead` among the shared components.
+
+**What has to stay true**
+- **Reads.** The image decode sweeps wrote byte-identical result files. This library's columns of the real-image corpus are identical.
+- **Short destinations.** No status, version or text moved over 581 and 588 renders, and the median and the 95th percentile are unchanged.
+  - The first comparison put Micro QR's worst one-character-short ratio at 1.49, against 1.27 before.
+  - Two more runs of each tree gave 1.43 and 1.50 after and 1.48 and 1.10 before. A different render was worst in each run, so the spread recorded above was widened to what the runs show.
+- **Planted faults.** 25 of 29 were caught, including every one in `GridRead` and `CandidateScan`. The same four as in phase 1 were not, and the baseline caught nothing.
+- **Benchmarks** (three rounds each with alternating order, a quiet machine; allocations unchanged):
+
+  | Benchmark | Before (µs) | After (µs) | Change |
+  |---|---|---|---|
+  | Micro QR M4 | 4.30 | 4.31 | +0.3 % |
+  | Micro QR M1 under shadow | 11.17 | 11.30 | +1.2 % |
+  | Micro QR, turned M1 failing | 2,444 | 2,453 | +0.4 % |
+  | Micro QR on a Standard QR image | 13,000 | 12,765 | −1.8 % |
+  | rMQR R7x43 | 4.91 | 4.95 | +0.9 % |
+  | rMQR R17x139 | 19.59 | 19.46 | −0.6 % |
+  | rMQR bitmap, R7x43 | 7.09 | 7.12 | +0.4 % |
+  | rMQR bitmap, R17x139 | 31.17 | 31.03 | −0.5 % |
+
+- **Builds and tests.** The library builds for all four targets with no warning, and the full suite passes on both.
+
+**Lessons**
+- **Moving a rule into shared code moves its planted fault too.**
+  - Micro QR's per-size and turned site faults had been caught through the coverage re-read the site let run. The gate that refuses a re-read after a read that does not fit is now in `GridRead`, and caught there for both decoders.
+  - The site faults are still caught, through what the candidate's later grids read.
+- **A decoder's grid carries what it decoded, so the gate can ask after the decode.**
+  - Micro QR's condition needs each orientation's result. `BothWays` keeps them from its decode, which is why `GridRead` takes the grid by `ref`.
+  - The exact-word check still runs only once the shared terms hold, as before.
