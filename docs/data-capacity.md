@@ -15,7 +15,7 @@ The actual capacity depends on the QR code type, encoding mode, ECC level, and v
 
 > UTF-8 multi-byte: Japanese hiragana 'あ' (3 bytes/char). For ASCII text (1 byte/char), the capacity is approximately 3× the values shown.
 >
-> Kanji: the same 'あ' in Kanji mode, which the generators write only with `AllowKanji` (13 bits a character and no ECI header, about 1.85× the UTF-8 column). It applies to text whose every character has a Kanji-mode cell (JIS X 0208, kana and kanji included); see [Kanji mode on request](migration.md#kanji-mode-on-request-allowkanji).
+> Kanji: the same 'あ' in Kanji mode, which the generators write only with `AllowKanji` (13 bits a character and no ECI header, about 1.85× the UTF-8 column). It applies to text whose every character has a Kanji-mode cell (JIS X 0208, kana and kanji included); see [Kanji mode on request](migration.md#kanji-mode-on-request).
 
 **Full capacity tables** for all Standard QR Code versions (1-40) and ECC levels are available in the [Data Capacity Tables](#data-capacity-tables) section below.
 

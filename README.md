@@ -657,7 +657,7 @@ Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and
 
 ### Are ISO-8859-2 and other encodings supported?
 
-Encoding: FeatherQR writes ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208) when you ask for it with `AllowKanji` (see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text-allowkanji)). Other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
+Encoding: FeatherQR writes ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208) when you ask for it with `AllowKanji` (see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text)). Other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
 
 Decoding reads Kanji mode segments from any encoder. ECI 20 (Shift_JIS) Byte segments are still not read.
 
@@ -748,7 +748,7 @@ QR codes support four levels of error correction, which allow the code to remain
 QR codes support different encoding modes optimized for specific character types. FeatherQR automatically selects the most efficient mode for your content.
 
 > [!NOTE]
-> Kanji mode is written only when you ask for it (`AllowKanji`, see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text-allowkanji)); by default the generators write Japanese text in Byte mode as UTF-8. The decoders read Kanji segments from any encoder.
+> Kanji mode is written only when you ask for it (`AllowKanji`, see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text)); by default the generators write Japanese text in Byte mode as UTF-8. The decoders read Kanji segments from any encoder.
 >
 > The mapping is JIS X 0208, not Microsoft CP932. They disagree on seven cells (wave dash, minus sign, the cent / pound / not signs, reverse solidus and the double vertical line), and, within the Kanji-mode range, CP932 additionally defines 83 characters the standard does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A symbol whose Kanji segment contains one of those 83 fails to decode with `UnmappedCharacter` rather than being silently rewritten. That status is distinct from `UnsupportedContent`, so you can tell "a CP932 reader would read this" from "this uses a feature the library does not implement".
 

@@ -140,7 +140,7 @@ public class RmQRStrongKeystoneDecodeTest
     /// <summary>
     /// A render drawn from <paramref name="seed"/>: a module size in <paramref name="minPixelsPerModule"/> to <paramref name="maxPixelsPerModule"/>, a turn and a keystone of 6 to 20 % drawn from the same generator, which then adds the noise or the blur.
     /// </summary>
-    private static (byte[] Luminance, int Side) Degraded(RmQRCodeData qr, int seed, float minPixelsPerModule, float maxPixelsPerModule, float tilt, Degradation degradation)
+    internal static (byte[] Luminance, int Side) Degraded(RmQRCodeData qr, int seed, float minPixelsPerModule, float maxPixelsPerModule, float tilt, Degradation degradation)
     {
         var random = new Random(seed);
         var pixelsPerModule = minPixelsPerModule + (float)random.NextDouble() * (maxPixelsPerModule - minPixelsPerModule);

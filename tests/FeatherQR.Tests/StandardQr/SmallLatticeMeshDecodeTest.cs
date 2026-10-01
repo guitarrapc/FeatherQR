@@ -38,7 +38,7 @@ public class SmallLatticeMeshDecodeTest
         var fourPoint = PerspectiveTransform.QuadrilateralToQuadrilateral(3.5f, 3.5f, d - 3.5f, 3.5f, d - 6.5f, d - 6.5f, 3.5f, d - 3.5f, x0, y0, x1, y1, x2, y2, x3, y3);
         var threshold = Binarizer.ComputeOtsuThreshold(luminance);
         var modules = new byte[d * d];
-        QRImageDecoder.SampleGridScalar(luminance, side, side, threshold, fourPoint, d, modules);
+        PerspectiveGridSampler.SampleScalar(luminance, side, side, threshold, fourPoint, d, modules);
         await Assert.That(QRMatrixDecoder.DecodeMatrix(modules, d, new char[QRCodeDecoder.GetMaxDecodedLength(13)], out _, out _)).IsNotEqualTo(DecodeStatus.Success);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, side, side, out var text, out var info);

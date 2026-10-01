@@ -43,7 +43,7 @@ public class UnevenLightingDecodeTest
     }
 
     /// <summary>Whether either global polarity reads the image, sweep included: the attempts made before the regional pass.</summary>
-    private static bool GlobalAttemptsRead(Symbology symbology, byte[] luminance, int width, int height)
+    internal static bool GlobalAttemptsRead(Symbology symbology, byte[] luminance, int width, int height)
     {
         var histogram = new int[Binarizer.HistogramBins];
         Binarizer.FillHistogram(luminance, histogram);
