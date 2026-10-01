@@ -132,6 +132,10 @@ dotnet run -c Release --project tools/QRImageDecodeSweep -- corpus [outDir]
 # Two result files of the same run from two trees, image for image: gained, lost, and every lost image by name
 dotnet run -c Release --project tools/QRImageDecodeSweep -- compare <before.csv> <after.csv>
 
+# What a destination too short costs Micro QR and rMQR, render for render; and two such files from two trees
+dotnet run -c Release --project tools/QRImageDecodeSweep -- destination [micro|rmqr|all] [count] [outDir]
+dotnet run -c Release --project tools/QRImageDecodeSweep -- compare-destination <before.csv> <after.csv>
+
 # Third-party images, never regenerated: re-import from a zxing-cpp checkout, recording its commit
 dotnet run -c Release --project tools/QRImageDecodeSweep -- import-corpus <zxing-cpp-root> <commit>
 ```
@@ -141,6 +145,7 @@ dotnet run -c Release --project tools/QRImageDecodeSweep -- import-corpus <zxing
 - **Readers**: this library, zxing-cpp and ZXing.Net, each given the same grayscale buffer and told the symbology.
 - **Pairing**: render parameters are seeded by arithmetic on the case and kind indices (never `GetHashCode`, which is randomized per process), so two runs write byte-identical result files, and two trees can be compared render for render. The key of a row is how its image was made; beside it the row carries a digest of the pixels, and `compare` keeps a pair whose digests differ out of gained and lost, in a column of its own: if an encoder picks another mask or a renderer changes between the two trees, the pair is two images, and a read that moved says nothing about the decoder. The default case counts (400 / 400 / 640: ten per Standard QR version, a hundred per Micro QR version, twenty per rMQR version) are the ones every recorded table uses.
 - **Content is not gap**: an image this library decodes into another text, or whose bit stream it refuses (`InvalidBitstream`, `UnsupportedContent`, `UnmappedCharacter`), was located, sampled and error-corrected. It is counted in its own column. In the real-image sets that column is Byte-mode Shift_JIS without an ECI header (eleven images, which zxing-cpp reads by guessing the character set), one GS1 symbol, and one symbol whose bit stream is refused and which neither other reader reads.
+- **A destination too short** (`destination`): each Micro QR and rMQR render is decoded into a sized destination, one a character short and one of 2 characters, each timed as the fastest of a few calls. The renders are 600 a symbology from a fixed seed (a random version, level and text, turned, 2 × 2 supersampled, uniform noise: the sets behind the cost figures in the decoder records), and the renders the destination contract test draws with a finder-like pattern inside the symbol. `compare-destination` lists every status, version or text that moved between two trees, and the cost before and after. The times are the machine's, so only their ratio to the sized call compares between runs.
 
 It is a measurement, run by hand: it needs the native oracles, and its result is a table to compare, not a condition to assert. A default `sweep all` takes about 40 s on 32 hardware threads, nearly all of it Standard QR (Micro QR and rMQR take a few seconds each), and `corpus` about a second (2026-09-27, without qrtool).
 

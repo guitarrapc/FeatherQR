@@ -19,7 +19,9 @@ using System.Xml.Linq;
 //   dotnet run tools/mutation_check.cs -- helper <path-in-the-test-project>
 //
 // A mutants file is tab-separated, one edit a line: id, path from the repository root, the text to
-// find and the text to put in its place, both literal. The text must occur exactly once in the file.
+// find and the text to put in its place, both literal. The text must occur exactly once in the file;
+// a '␤' in either stands for a line break, written as the file writes its own, so a line repeated
+// elsewhere in the file is found with the line beside it that is not.
 // Lines sharing an id are one fault, applied together; '#' starts a comment. A fault is small and of
 // the kind the test exists to catch: a bound one step too tight, `<` for `<=`, a constant off by one.
 //
@@ -526,6 +528,7 @@ static class TextFile
 
     public static int Occurrences(string text, string find)
     {
+        find = WithLineBreaks(find, text);
         var count = 0;
         for (var at = text.IndexOf(find, StringComparison.Ordinal); at >= 0; at = text.IndexOf(find, at + find.Length, StringComparison.Ordinal))
             count++;
@@ -534,7 +537,12 @@ static class TextFile
 
     public static string Replace(string text, string find, string replace)
     {
+        find = WithLineBreaks(find, text);
         var at = text.IndexOf(find, StringComparison.Ordinal);
-        return string.Concat(text.AsSpan(0, at), replace, text.AsSpan(at + find.Length));
+        return string.Concat(text.AsSpan(0, at), WithLineBreaks(replace, text), text.AsSpan(at + find.Length));
     }
+
+    // A '␤' is a line break in the file's own line ending
+    private static string WithLineBreaks(string value, string text)
+        => value.Contains('␤') ? value.Replace("␤", text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n", StringComparison.Ordinal) : value;
 }

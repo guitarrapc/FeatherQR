@@ -8,6 +8,8 @@ using QRImageDecodeSweep;
 //   sweep [qr|micro|rmqr|all] [cases] [outDir]   synthetic renders of every encoder's symbols
 //   corpus [outDir]                              the committed real-image sets
 //   compare <before.csv> <after.csv>             two result files of the same run, image for image
+//   destination [micro|rmqr|all] [count] [outDir]  what a destination too short costs, render for render
+//   compare-destination <before.csv> <after.csv>  two destination files of the same set, render for render
 //   import-corpus <zxing-cpp-root> <commit>      copies the sample sets in, with provenance
 
 if (Libzint.IsWorker(args))
@@ -81,10 +83,36 @@ switch (command)
         }
     case "compare" when args.Length == 3:
         return Compare.Run(args[1], args[2]);
+    case "destination":
+        {
+            var which = args.Length > 1 ? args[1] : "all";
+            var outDir = args.Length > 3 ? args[3] : defaultOut;
+            var count = Destination.DefaultCount;
+            if ((which != "all" && which != Symbologies.MicroQr && which != Symbologies.RmQr) || (args.Length > 2 && (!int.TryParse(args[2], out count) || count < 1)))
+            {
+                Console.Error.WriteLine($"destination takes one of all, {Symbologies.MicroQr}, {Symbologies.RmQr}, then a positive render count; got '{string.Join(' ', args.Skip(1).Take(2))}'");
+                return 1;
+            }
+
+            var markdown = new StringBuilder();
+            foreach (var symbology in new[] { Symbologies.MicroQr, Symbologies.RmQr })
+            {
+                if (which != "all" && which != symbology)
+                    continue;
+                var rows = Destination.Run(symbology, count);
+                var csv = Path.Combine(outDir, $"destination-{symbology}.csv");
+                Destination.Write(csv, rows);
+                Console.WriteLine($"wrote {csv}");
+                markdown.Append(Destination.Summary(symbology, rows));
+            }
+            return Finish(Path.Combine(outDir, $"destination-{which}.md"), markdown.ToString());
+        }
+    case "compare-destination" when args.Length == 3:
+        return Destination.Compare(args[1], args[2]);
     case "import-corpus" when args.Length == 3:
         return CorpusImporter.Run(repoRoot, args[1], args[2]);
     default:
-        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] | corpus [outDir] | compare <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
+        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] | corpus [outDir] | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
         return 1;
 }
 
