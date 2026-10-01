@@ -116,7 +116,7 @@ internal sealed class SimdKernel
 /// A probe put the flag behind a property, an aggressively inlined property and a <see langword="static"/> <see langword="readonly"/> field: the JIT inlined the dispatch into its caller only when the dispatch read <c>IsSupported</c> itself. (ILC compiled all of them alike.)
 /// </para>
 /// <para>
-/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>) or takes inputs too small for it (<c>QRImageDecoder.SampleGrid</c>), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
+/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>) or takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
 /// </para>
 /// </remarks>
 internal static class SimdTiers
@@ -202,6 +202,8 @@ internal static class SimdTiers
         new("FinderRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // FinderPatternFinder.ScanRowEdges: the finder search's edge-list row kernel, sixteen windows a step on 256-bit vectors and eight on ARM64
         new("FinderRowEdges", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // PerspectiveGridSampler.Sample: a square grid through one projective transform (Standard QR's four-point, parallelogram and frame grids, Micro QR's perspective search); the 128-bit tier also takes grids too small for the 256-bit one
+        new("PerspectiveGridSampler", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
 
         // ---- Standard QR ----
 
@@ -211,8 +213,6 @@ internal static class SimdTiers
         new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // AlignmentPatternFinder.ScanRowMask: a row's dark bitmask for the alignment search
         new("AlignmentRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // QRImageDecoder.SampleGrid: the four-point sampler; the 128-bit tier also takes grids too small for the 256-bit one
-        new("QRSampleGrid", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
         // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler
         new("QRSampleGridPiecewise", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
         // StructuredAppendPlanner.TryNarrowWithLanes / WalkLanes: the chunk-budget walks over eight budgets at once
@@ -280,12 +280,12 @@ internal static class SimdTiers
         new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
         new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("FinderRowEdges",          [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("PerspectiveGridSampler",  [Vector128],     [Vector256],          [Vector128],          [Vector128]),
 
         // ---- Standard QR ----
         new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
         new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
-        new("QRSampleGrid",            [Vector128],     [Vector256],          [Vector128],          [Vector128]),
         new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
         new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
         new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),

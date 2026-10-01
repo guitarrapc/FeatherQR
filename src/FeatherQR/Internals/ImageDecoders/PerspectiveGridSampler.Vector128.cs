@@ -2,13 +2,12 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using FeatherQR.Internals.ImageDecoders;
 
-namespace FeatherQR.Internals.StandardQR;
+namespace FeatherQR.Internals.ImageDecoders;
 
-internal static partial class QRImageDecoder
+internal static partial class PerspectiveGridSampler
 {
-    internal static void SampleGridSimd128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int dimension, Span<byte> modules)
+    internal static void SampleVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int dimension, Span<byte> modules)
     {
         var laneOffsetsLo = Vector128.Create(0.5f, 1.5f, 2.5f, 3.5f);
         var laneOffsetsHi = Vector128.Create(4.5f, 5.5f, 6.5f, 7.5f);
@@ -79,7 +78,7 @@ internal static partial class QRImageDecoder
                 u += 4;
             }
 
-            // Scalar tail, same op sequence as SampleGridScalar
+            // Scalar tail, same op sequence as SampleScalar
             var rowNX = transform.a21 * gridY + transform.a31;
             var rowNY = transform.a22 * gridY + transform.a32;
             var rowD = transform.a23 * gridY + transform.a33;

@@ -96,7 +96,7 @@ public static class MicroQRCodeDecoder
     /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
     /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">How many characters were written.</param>
+    /// <param name="charsWritten">How many characters were written; 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
     /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>

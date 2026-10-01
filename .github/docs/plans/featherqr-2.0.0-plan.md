@@ -163,6 +163,7 @@ Planned in [simd-128bit-tiers-plan.md](simd-128bit-tiers-plan.md): the inventory
 | D5 | Does `Segmentation.Single` choose Kanji mode automatically? | Yes, with a migration note; explicit `Utf8Bom` / `EciMode` settings keep Byte mode |
 | D6 | Kanji segments mixed with ECI-tagged Byte segments | Let the oracle sweep decide; suppress Kanji under ECI if any oracle disagrees |
 | D7 | `EciMode` enum → a value type with `FromValue` / `Value` | **No.** An encoder can only emit a charset it can convert text into (Latin-1 and UTF-8), and the decoder reports every other ECI as `UnsupportedContent` without needing to carry the number. A value type would also need a sentinel for "no ECI", which collides with the real ECI 0, in exchange for expressing values nothing can produce or consume. Recorded as a scope decision with this reason rather than left open |
+| D8 | Decoder options: an `in XxxDecoderOptions` parameter on the decode overloads before the Phase 7 freeze | Open. Raised by the decode pipeline review (2026-09-28, since folded into [qrcode-symbologies.md](../specs/qrcode-symbologies.md)): the generators take `in XxxGeneratorOptions` and the decoders take none. A parameter placed before the freeze would let a caller trade passes for speed later (the shared image decode passes are one driver, so a switch per pass is one place) without new overloads; placed after, it is new overloads. Against it: no caller has asked, and the public API growth rule is no API on anticipation |
 
 ## Follow-ups, each its own PR
 

@@ -52,7 +52,7 @@ internal static class RegionalRetry
         {
             var status = DecodePolarity(ref attempt, luminance, negative: false, positiveThreshold, binarized, rentedScratch, histogram, width, height, destination, out charsWritten, out info);
             // A verdict is final like a read: the negative of one symbol can only read another
-            if (status is DecodeStatus.Success or DecodeStatus.DestinationTooSmall || IsContentVerdict(status))
+            if (AttemptStatus.IsSettled(status))
                 return status;
             return DecodePolarity(ref attempt, luminance, negative: true, negativeThreshold, binarized, rentedScratch, histogram, width, height, destination, out charsWritten, out info);
         }
@@ -77,12 +77,6 @@ internal static class RegionalRetry
         histogram[LocalBinarizer.Light] = binarized.Length - darkCount;
         return attempt.Decode(binarized, histogram, width, height, destination, out charsWritten, out info);
     }
-
-    /// <summary>
-    /// Whether a failed decode read the symbol and failed on its content: a verdict the caller can act on. <see cref="DecodeStatus.DataUncorrectable"/> and <see cref="DecodeStatus.InvalidBitstream"/> are not, since noise reaches them.
-    /// </summary>
-    internal static bool IsContentVerdict(DecodeStatus status)
-        => status is DecodeStatus.UnmappedCharacter or DecodeStatus.UnsupportedContent;
 
     /// <summary>Whether every pixel is 0 or 255; symmetric, so it holds for a histogram in either polarity.</summary>
     private static bool HoldsOnlyExtremes(ReadOnlySpan<int> histogram)
