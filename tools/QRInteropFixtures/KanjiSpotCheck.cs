@@ -14,7 +14,7 @@ using NetReader = ZXing.QrCode.QRCodeReader;
 namespace QRInteropFixtures;
 
 /// <summary>
-/// Interop spot check for this library's Kanji output (kanji-encoding-plan.md, phase 6.6), in three parts.
+/// Interop spot check for this library's Kanji output, in three parts.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,7 +30,7 @@ namespace QRInteropFixtures;
 /// Shift_JIS bytes), then read by every reader.
 /// </para>
 /// <para>
-/// <b>A Kanji segment after ECI 26</b>, evidence for phase 6.7. This library does not write one, so the symbols come from QrCodeGenerator, whose
+/// <b>A Kanji segment after ECI 26</b>, the evidence for never writing one (qrcode-symbologies.md, "No Kanji beside an ECI header"). This library does not write one, so the symbols come from QrCodeGenerator, whose
 /// segments are explicit and whose Kanji table is its own; each is read by the four Standard QR readers. Micro QR has no ECI, and rMQR's only other
 /// reader is zxing-cpp, whose Kanji decoding is shared across the three symbologies.
 /// </para>

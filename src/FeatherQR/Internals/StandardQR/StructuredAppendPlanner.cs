@@ -60,8 +60,8 @@ internal static partial class StructuredAppendPlanner
     /// The same, handing the writer what the pass over the text's dense runs also settles: <paramref name="oneRunPlans"/> says the minimal plan of every chunk that has a character outside the alphanumeric alphabet is one Byte run, which is its single-mode stream, so such a chunk needs no plan of its own. <paramref name="mayBeOneSymbol"/> says whether a symbol of the largest version could hold the text without the set header, by the measure the search ran on (the whole text's plan, or its single-mode stream): false rules the one symbol out, true leaves it to the caller to ask as <c>Create</c> does.
     /// </summary>
     /// <remarks>
-    /// With <paramref name="kanji"/> the set is a Kanji set of a Kanji-eligible text (kanji-encoding-plan.md, K6): no ECI header (<paramref name="charset"/> is <see cref="EciMode.Default"/>), and a chunk costs one Kanji segment under <see cref="QRSegmentation.Single"/> (every character has a cell) or its Kanji plan under <see cref="QRSegmentation.Optimal"/> (<see cref="ChunkBitsKanji"/>).
-    /// The three searches are the same; the cost model under them is the eighth-state program's, and, as K9 has it, the walks stay scalar.
+    /// With <paramref name="kanji"/> the set is a Kanji set of a Kanji-eligible text (standardqr-encoder.md, "A Kanji-eligible text can be a Kanji set"): no ECI header (<paramref name="charset"/> is <see cref="EciMode.Default"/>), and a chunk costs one Kanji segment under <see cref="QRSegmentation.Single"/> (every character has a cell) or its Kanji plan under <see cref="QRSegmentation.Optimal"/> (<see cref="ChunkBitsKanji"/>).
+    /// The three searches are the same; the cost model under them is the eighth-state program's, and the walks stay scalar (standardqr-encoder.md, "The lanes").
     /// </remarks>
     internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool oneRunPlans, out bool mayBeOneSymbol, bool allowLanes, bool kanji = false)
     {
@@ -71,7 +71,7 @@ internal static partial class StructuredAppendPlanner
         oneRunPlans = false;
         mayBeOneSymbol = false;
         Debug.Assert(!kanji || (charset == EciMode.Default && !utf8Bom), "a Kanji set carries no charset and no byte order mark");
-        // The lanes price a budget with the seven-state program, which has no Kanji mode (K9).
+        // The lanes price a budget with the seven-state program, which has no Kanji mode.
         Debug.Assert(!kanji || !allowLanes, "a Kanji set's walks stay scalar");
 
         // Nothing to split: the single-symbol path encodes an empty Byte segment.

@@ -7,7 +7,7 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Micro QR Kanji mode, written but not yet reachable from the public API (kanji-encoding-plan.md, phase 6.2): M3 and M4 only, 13 bits a character behind a 3-bit (M3) or 4-bit (M4) count.
+/// Micro QR Kanji mode's writers, below the public API: M3 and M4 only, 13 bits a character behind a 3-bit (M3) or 4-bit (M4) count.
 /// The writers are checked against a stream written from ISO/IEC 18004 (<see cref="KanjiStreamReference"/>), the capacity against the standard's Table 7, and the symbols through the matrix decoder.
 /// </summary>
 public class MicroQRBinaryEncoderKanjiTest

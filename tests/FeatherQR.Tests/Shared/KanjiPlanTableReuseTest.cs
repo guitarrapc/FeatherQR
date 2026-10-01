@@ -6,7 +6,7 @@ using TUnit.Assertions.Enums;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The Kanji plan built from the table the version scan left behind (kanji-encoding-plan.md, phase 6.8): Standard QR and Micro QR price a Kanji plan with its program at the selected version's widths before they accept it, so the build reads that run's table instead of running the program again.
+/// The Kanji plan built from the table the version scan left behind (standardqr-encoder.md, "Speed"): Standard QR and Micro QR price a Kanji plan with its program at the selected version's widths before they accept it, so the build reads that run's table instead of running the program again.
 /// </summary>
 /// <remarks>
 /// The plan must be the one the build makes on its own, run for run, and the scan must choose what it chose without a table.

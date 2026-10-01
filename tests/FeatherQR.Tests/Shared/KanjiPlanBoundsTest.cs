@@ -6,7 +6,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The bounds the three planners screen a Kanji plan's candidates with, re-derived for the eighth state (kanji-encoding-plan.md, phase 6.4): each lower bound must never exceed the Kanji plan's optimum at any version, and each upper bound must never fall below it.
+/// The bounds the three planners screen a Kanji plan's candidates with, re-derived for the eighth state: each lower bound must never exceed the Kanji plan's optimum at any version, and each upper bound must never fall below it.
 /// A lower bound that did would skip a version the plan fits; an upper bound that did would accept one it does not.
 /// </summary>
 /// <remarks>

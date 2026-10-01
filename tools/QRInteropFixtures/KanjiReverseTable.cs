@@ -11,7 +11,7 @@ namespace QRInteropFixtures;
 /// It maps a UTF-16 code unit to the 13-bit value of its JIS X 0208 cell, over the forward table's
 /// assigned cells minus the seven that CP932 reads differently: a symbol written at one of those
 /// cells would decode to different text in a CP932 reader and in this library, whichever reading
-/// was written. The layout was chosen by measurement (kanji-encoding-plan.md, phase 6.1): a page
+/// was written. The layout was chosen by measurement (qrcode-symbologies.md, the reverse table's layout): a page
 /// directory over the high byte, a record per 64 code units holding a membership word and the
 /// count of members before it, and the values in code-unit order packed at 13 bits.
 /// </summary>

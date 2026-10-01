@@ -5,7 +5,7 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// ZXing.Net reads the Kanji symbols <see cref="QRCodeGenerator"/> writes with <c>AllowKanji</c>, every encoder cell included (kanji-encoding-plan.md, phase 6.3).
+/// ZXing.Net reads the Kanji symbols <see cref="QRCodeGenerator"/> writes with <c>AllowKanji</c>, every encoder cell included.
 /// ZXing.Net applies CP932 to a Kanji segment; the two agree on every encoder cell, because the seven cells where they differ have none, so any disagreement here is a symbol one reader or the other gets wrong.
 /// The symbols are read from their module matrix, not from an image: what is under test is the bit stream.
 /// </summary>
@@ -50,7 +50,7 @@ public class KanjiZXingCrossTest
     }
 
     /// <summary>
-    /// Kanji plans (kanji-encoding-plan.md, phase 6.4): Kanji runs beside Numeric, Alphanumeric and Byte runs of ASCII, with no ECI header, in each count band.
+    /// Kanji plans: Kanji runs beside Numeric, Alphanumeric and Byte runs of ASCII, with no ECI header, in each count band.
     /// Each text is one whose Kanji plan is smaller than its UTF-8 stream, so the symbol read is a Kanji plan.
     /// </summary>
     [Test]

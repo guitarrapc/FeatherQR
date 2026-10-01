@@ -6,7 +6,7 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// rMQR Kanji mode, written but not yet reachable from the public API (kanji-encoding-plan.md, phase 6.2): indicator 100, a count of 2 to 7 bits, 13 bits a character.
+/// rMQR Kanji mode's writers, below the public API: indicator 100, a count of 2 to 7 bits, 13 bits a character.
 /// The writers are checked against a stream written from ISO/IEC 23941 (<see cref="KanjiStreamReference"/>), the capacity and the fit tables against the standard's Kanji column, and the symbols through the matrix decoder.
 /// </summary>
 public class RmQRBinaryEncoderKanjiTest

@@ -281,8 +281,8 @@ before, bit for bit.
 
 Why this rule and not a wider one:
 
-- **Only on request.** Until the Kanji plan's phase 6.6a the generators wrote Kanji mode unasked.
-  Scanned from a screen on 2026-10-01, an Android 17 phone's own QR scanner and Google Lens on it
+- **Only on request.** For a while during 2.0.0's development, though in no release, the generators
+  wrote Kanji mode unasked. Scanned from a screen on 2026-10-01, an Android 17 phone's own QR scanner and Google Lens on it
   read nothing from a Kanji-mode Standard QR symbol, with or without ECI 20, and read the same text
   as UTF-8 behind ECI 26; the iPhone camera, Google Lens on iPhone, ZXing, zxing-cpp, CodeGlyphX and
   Denso Wave's reader read both. A default that half the phones misread is not one, so UTF-8 is the
@@ -309,8 +309,8 @@ Why this rule and not a wider one:
   it. zxing-cpp and ZBar follow the standard, while ZXing and its ports read JIS X 0208 there by
   their maintainer's choice. Measured 2026-10-01 (`spot-check-kanji`): zxing-cpp 0.5.2 returns
   replacement characters for such a segment, and ISO-8859-1 for a Kanji segment placed ahead of
-  the ECI, so no order of segments avoids it. Decided with the user the same day, which is why
-  the Kanji plan's phase 6.7 was not taken.
+  the ECI, so no order of segments avoids it. Decided with the user the same day: a Kanji segment
+  is never written beside an ECI header.
 - **Kanji segments carry no ECI.** Every reader that decodes text reads a Kanji segment with no
   ECI as Shift_JIS, on both sides of that split. Strictly, the default interpretation has been
   ISO-8859-1 since the 2006 edition, and zint warns on Kanji without ECI 20. ECI 20 would settle
@@ -397,8 +397,8 @@ the segmentation is a run-time option. Kanji sets in Structured Append cost a co
 only 137,216 unchanged, all three 204,288 → 204,800), measured the same day. Making Kanji mode
 opt-in (`AllowKanji`, 2026-10-01) removed none of it, since the option is read at run time: all three
 205,312 bytes and `CreateStructuredAppend` 166,400 (+0.5 KB each), QR encode only and decode only
-unchanged. The Kanji plan's speed work (a membership test for the analysis, the scan's table kept
-for the build, 2026-10-01) added 1.0 KB to QR encode only (138,240) and to `CreateStructuredAppend`
+unchanged. Speeding up Kanji plans (a membership test for the analysis, the scan's table kept for
+the build, 2026-10-01) added 1.0 KB to QR encode only (138,240) and to `CreateStructuredAppend`
 (167,424), and 1.5 KB to all three (206,848); decode only unchanged.
 
 Two failure causes are kept apart on the error path: a structurally impossible byte pair is
@@ -521,7 +521,7 @@ The queue is closed again behind them, on the same rule.
 | The announced removals (`GetRequiredBufferSize`, `Compression`, parameter-list generator overloads) | Done in 2.0.0-preview.3. Every generator now takes only `in {Sym}CodeGeneratorOptions`, defaulted | Never; a throwing sizing method is asserted absent |
 | 2.0.0 type renames (the `QR` casing rule, `QREccLevel` to `QREccLevel` and friends) and the `string` convenience overloads | Out of the split and out of the removals; their own plan, same major, before `2.0.0` final | That plan |
 | Pages fallback stub on the user site | Kept for as long as 1.x packages are listed on nuget.org, since their READMEs link the old Playground URL | Never while a 1.x listing exists |
-| Kanji mode (all symbologies) | Read with the JIS X 0208 mapping. Written on request (`AllowKanji`) when the charset is the library's choice ([When Kanji mode is written](#when-kanji-mode-is-written)): one Kanji segment for text whose every character has an encoder cell, and under `Optimal` Kanji runs beside ASCII runs where that plan is smaller; Structured Append sets by the same rule, with the Shift_JIS parity | The remaining phases of [kanji-encoding-plan.md](../plans/kanji-encoding-plan.md); Kanji beside an ECI header only if readers are measured to apply JIS X 0208 there |
+| Kanji mode (all symbologies) | Read with the JIS X 0208 mapping. Written on request (`AllowKanji`) when the charset is the library's choice ([When Kanji mode is written](#when-kanji-mode-is-written)): one Kanji segment for text whose every character has an encoder cell, and under `Optimal` Kanji runs beside ASCII runs where that plan is smaller; Structured Append sets by the same rule, with the Shift_JIS parity | Kanji beside an ECI header, if the readers that follow the standard there (zxing-cpp, ZBar) are measured to apply JIS X 0208 to it; Kanji mode by default, if an Android phone's own scanners are measured to read it |
 | ECI 20 (Shift_JIS) byte segments | Unsupported; reported as `UnsupportedContent` (structural, unlike the per-character `UnmappedCharacter`) | Demand for symbols that pair ECI 20 with Byte mode; needs the full CP932 range, roughly twice the Kanji table |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
@@ -573,3 +573,8 @@ The queue is closed again behind them, on the same rule.
 - **This machine cannot measure a few instructions a call.** ShortRun and 20-iteration rounds of the image decode and encode benchmarks, before and after alternating, put the same build 9 to 37 % apart from itself on half the rows. Disassembly identical to the previous commit is what a layout change is held to.
 - **ILC produces ARM64 code on an x64 machine without an ARM64 linker.** The publish stops at its linker check before ILC runs, but ILC itself, run on the x64 response file retargeted to ARM64, compiles and writes its disassembly, which is all a codegen comparison needs.
 - **Interpreted and AOT-compiled WebAssembly run the same tiers.** The Mono interpreter reports 128-bit vectors accelerated as the AOT build does, so a Blazor WebAssembly app that never turns AOT on runs the same nine vector tiers the Playground does, and one build class covers both.
+
+- **An output default is judged by the readers people carry.** Every library reader agreed with the Kanji output, and the standard was on Kanji mode's side for a segment with no ECI, yet an Android phone's own scanners read none of it; the default went back to UTF-8 and Kanji mode became an option. The phone scan came after the default had been changed, when it belonged before.
+- **An option has to reach every path that analyses the text, and the paths the tests take by default are not all of them.** When `AllowKanji` was threaded through the three generators, a mutation pass that turned each call site's argument to `true` and to `false` found three paths no test took with the option set: the refusal's advice, version resolution under a range or the boost, and Micro QR's ranged sizing.
+- **A byte-for-byte comparison through the public API catches what the tests do not.** Run against the previous commit on every entry point, sizing call and refusal, it found a Micro QR refusal wording changed for every text, not only Kanji text, with a space dropped in the edit; no test pinned the other texts' wording.
+- **A hand edit to a generated file has to go into the generator.** The committed forward Kanji table's comments had been reflowed by hand while the template had not, so regenerating it rewrote 31 lines with no data change. The template was brought in line, and regeneration now reproduces the committed file byte for byte.

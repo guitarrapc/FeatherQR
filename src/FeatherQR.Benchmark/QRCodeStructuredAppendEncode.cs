@@ -25,8 +25,8 @@ using System.Text;
 ///   utf8-15k-mixed  : Japanese sentences carrying order numbers, behind a UTF-8 ECI (asked for); three-byte characters
 ///                     with digit runs worth a Numeric segment, so the searches run the program under UTF-8
 ///   kanji-15k-any   : the utf8-15k-any text with AllowKanji: Single is its UTF-8 set, and
-///                     Optimal a Kanji set of 9 symbols (kanji-encoding-plan 6.5), planned after the UTF-8 set it
-///                     is weighed against; the Kanji set's walks are scalar (K9). Its Optimal Ratio is against
+///                     Optimal a Kanji set of 9 symbols, planned after the UTF-8 set it
+///                     is weighed against; the Kanji set's walks are scalar. Its Optimal Ratio is against
 ///                     the Single set's 15 UTF-8 symbols, not its own 9; utf8-15k-any's Optimal row is its twin
 ///   kanji-15k-mixed : the utf8-15k-mixed text the same way; Optimal is a Kanji set of 7 symbols at version 39
 ///   cells-15k-any   : Japanese prose whose every character has a Kanji cell, with AllowKanji: 9 symbols at version 39 as a Kanji

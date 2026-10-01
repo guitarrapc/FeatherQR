@@ -318,7 +318,7 @@ Three things the contract fixes:
 
 [samples/Dotfiles/DecodeCorners.cs](../samples/Dotfiles/DecodeCorners.cs) runs all of this over a flat, a rotated, a mirrored and a keystoned capture, and writes each one with the reported outline drawn on it.
 
-### Kanji mode on request: `AllowKanji`
+### Kanji mode on request
 
 Additive. `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` gain `AllowKanji`, off by default, with a constructor parameter of the same name. With it, and with the charset left to the library (`EciMode.Default`, the only choice Micro QR has) and no byte order mark asked for, the generators write text whose every character is in JIS X 0208 in ISO/IEC 18004 Kanji mode. That is 13 bits a character and no ECI header, where UTF-8 takes 16 or 24 bits a character behind an ECI header of 12 bits (11 on rMQR, none on Micro QR). It covers kana and kanji, and also the Greek, Cyrillic, box-drawing and symbol characters the table holds. Without the option every generator writes what 1.x wrote.
 

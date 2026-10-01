@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class ShiftJisKanjiReverseTableUnitTest
 {
-    /// <summary>The seven cells CP932 reads differently. Neither reading has an encoder cell (K3).</summary>
+    /// <summary>The seven cells CP932 reads differently. Neither reading has an encoder cell.</summary>
     private static readonly int[] DivergentCells = [0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA];
 
     /// <summary>ISO/IEC 18004 8.4.5 compaction, computed independently of the production helpers.</summary>

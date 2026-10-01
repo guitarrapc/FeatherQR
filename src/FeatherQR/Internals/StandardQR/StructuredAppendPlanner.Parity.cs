@@ -22,7 +22,7 @@ internal static partial class StructuredAppendPlanner
     }
 
     /// <summary>
-    /// The parity of a Kanji set: the XOR of the whole text's Shift_JIS bytes, an ASCII character as its byte and a character with a cell as its pair (kanji-encoding-plan.md, K6).
+    /// The parity of a Kanji set: the XOR of the whole text's Shift_JIS bytes, an ASCII character as its byte and a character with a cell as its pair (standardqr-encoder.md, "A Kanji-eligible text can be a Kanji set").
     /// Those bytes are the text's whatever the plan, so the value is fixed before the text is split, as every parity here is.
     /// </summary>
     public static byte ParityKanji(ReadOnlySpan<char> text)

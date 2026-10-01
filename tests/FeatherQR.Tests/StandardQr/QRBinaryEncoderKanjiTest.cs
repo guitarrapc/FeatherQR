@@ -7,7 +7,7 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Standard QR Kanji mode, written but not yet reachable from the public API (kanji-encoding-plan.md, phase 6.2): the single-segment and segmented writers against a stream written from ISO/IEC 18004 (<see cref="KanjiStreamReference"/>), the capacity against the standard's Kanji column, and a round trip through the matrix decoder.
+/// Standard QR Kanji mode's writers, below the public API: the single-segment and segmented writers against a stream written from ISO/IEC 18004 (<see cref="KanjiStreamReference"/>), the capacity against the standard's Kanji column, and a round trip through the matrix decoder.
 /// </summary>
 public class QRBinaryEncoderKanjiTest
 {

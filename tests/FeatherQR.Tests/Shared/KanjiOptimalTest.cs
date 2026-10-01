@@ -8,7 +8,7 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// <see cref="QRSegmentation.Optimal"/> and its Micro QR and rMQR twins on an eligible text with ASCII in it (kanji-encoding-plan.md, phase 6.4), through the public API.
+/// <see cref="QRSegmentation.Optimal"/> and its Micro QR and rMQR twins on an eligible text with ASCII in it, through the public API.
 /// </summary>
 /// <remarks>
 /// <para>

@@ -353,7 +353,7 @@ public static class QRCodeGenerator
         // The charset is decided once, from the whole text: "the bytes of the whole input" has to
         // name one byte sequence, and every symbol then declares it. The analysis is Create's, so a
         // Kanji-eligible text can be a Kanji set: no ECI header in any symbol, and the parity of the
-        // text's Shift_JIS bytes (kanji-encoding-plan.md, K6).
+        // text's Shift_JIS bytes (standardqr-encoder.md, "A Kanji-eligible text can be a Kanji set").
         var wholeText = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: options.Segmentation != QRSegmentation.Single);
 
         Span<int> chunkEnds = stackalloc int[StructuredAppendPlanner.MaxSymbols];
@@ -597,7 +597,7 @@ public static class QRCodeGenerator
     /// Writes the Kanji set the planner split: every symbol at the shared version, behind the header and with no ECI header, carrying the parity of the whole text's Shift_JIS bytes.
     /// A chunk is one Kanji segment under <see cref="QRSegmentation.Single"/> (every character has a cell) and its Kanji plan under <see cref="QRSegmentation.Optimal"/>, with no UTF-8 fallback, since the set carries one charset.
     /// </summary>
-    /// <remarks>The chunks' plans run one by one: as K9 of the Kanji encoding plan has it, Kanji sets take the scalar program, not the lanes.</remarks>
+    /// <remarks>The chunks' plans run one by one: Kanji sets take the scalar program, not the lanes (standardqr-encoder.md, "The lanes").</remarks>
     private static QRCodeData[] CreateKanjiSet(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options, ReadOnlySpan<int> chunkEnds, int version)
     {
         var count = chunkEnds.Length;

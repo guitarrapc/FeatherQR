@@ -6,7 +6,7 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Structured Append sets of Kanji-eligible text (kanji-encoding-plan.md, phase 6.5).
+/// Structured Append sets of Kanji-eligible text (standardqr-encoder.md, "A Kanji-eligible text can be a Kanji set").
 /// </summary>
 /// <remarks>
 /// <para>
@@ -620,7 +620,7 @@ public class StructuredAppendKanjiTest
     }
 
     /// <summary>
-    /// A Kanji set takes the scalar program (K9), whose eighth state the lanes do not have: neither the Kanji set's budget search nor its writer runs lanes.
+    /// A Kanji set takes the scalar program (standardqr-encoder.md, "The lanes"), whose eighth state the lanes do not have: neither the Kanji set's budget search nor its writer runs lanes.
     /// The UTF-8 set it is compared with is the seven-state program's and may; so may the same text asked for as UTF-8, which it does where the machine accelerates lanes, and that is what makes the zeros mean something.
     /// </summary>
     [Test]

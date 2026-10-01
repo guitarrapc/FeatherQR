@@ -133,7 +133,7 @@ public static class StructuredAppendSpotCheck
                     if (oracleSet.Count >= 2 && GlyphDecoder.TryDecode(ToGlyphMatrix(oracleSet[0]), out var oracle) && oracle.StructuredAppend is { } oracleHeader)
                     {
                         parityChecks++;
-                        // A Kanji set (kanji-encoding-plan K6) carries the XOR of the text's Shift_JIS bytes, which this
+                        // A Kanji set carries the XOR of the text's Shift_JIS bytes, which this
                         // oracle, writing UTF-8, never does; CodeGlyphX's Kanji set of the Japanese case carries it too (176).
                         var shiftJis = ShiftJisParity(caseDefinition.PayloadText);
                         if (oracleHeader.Parity == parity)

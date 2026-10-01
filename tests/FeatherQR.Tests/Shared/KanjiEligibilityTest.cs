@@ -7,17 +7,17 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// When a generator writes Kanji mode (kanji-encoding-plan.md, "When a text is written in Kanji mode"), through the public API, one test per class of the truth table: <c>AllowKanji</c> × charset option × byte order mark × text class × symbology × version range.
+/// When a generator writes Kanji mode (qrcode-symbologies.md, "When Kanji mode is written"), through the public API, one test per class of the truth table: <c>AllowKanji</c> × charset option × byte order mark × text class × symbology × version range.
 /// Every expectation is a whole symbol built from a stream <see cref="KanjiStreamReference"/> writes from the standards, with the mask pinned, so "UTF-8" is checked as exactly as "Kanji".
 /// </summary>
 /// <remarks>
-/// Kanji mode is written only when the caller sets <c>AllowKanji</c> (phase 6.6a): Android's own scanners read none of it, so by default every generator writes what it wrote before Kanji mode existed, UTF-8 behind an ECI header (none on Micro QR, which has no ECI).
+/// Kanji mode is written only when the caller sets <c>AllowKanji</c>: Android's own scanners read none of it, so by default every generator writes what it wrote before Kanji mode existed, UTF-8 behind an ECI header (none on Micro QR, which has no ECI).
 /// With the option a text is eligible when the library chose the charset and chose UTF-8, and every character is ASCII or has an encoder cell.
 /// A single mode writes Kanji only when every character has a cell. An eligible text with ASCII in it stays UTF-8 under <see cref="QRSegmentation.Single"/>, and under <see cref="QRSegmentation.Optimal"/> takes a Kanji plan where that plan needs a smaller version; <c>KanjiOptimalTest</c> holds that rule whole.
 /// </remarks>
 public class KanjiEligibilityTest
 {
-    /// <summary>Every character has an encoder cell: kana and kanji, and the non-Japanese scripts and symbols JIS X 0208 holds (K7).</summary>
+    /// <summary>Every character has an encoder cell: kana and kanji, and the non-Japanese scripts and symbols JIS X 0208 holds, since the rule is about what can be represented, not about script.</summary>
     public static IEnumerable<string> AllCells() =>
     [
         "日本語",
@@ -89,7 +89,7 @@ public class KanjiEligibilityTest
         }
     }
 
-    /// <summary>A byte order mark asks for UTF-8, so the text stays UTF-8 with the mark, <c>AllowKanji</c> or not (K1).</summary>
+    /// <summary>A byte order mark asks for UTF-8, so the text stays UTF-8 with the mark, <c>AllowKanji</c> or not.</summary>
     [Test]
     [MethodDataSource(nameof(AllCells))]
     public async Task StandardQr_AllCellsWithUtf8Bom_StaysUtf8(string text)
@@ -103,7 +103,7 @@ public class KanjiEligibilityTest
         }
     }
 
-    /// <summary>A charset the caller chose is honoured: explicit UTF-8 stays UTF-8, <c>AllowKanji</c> or not (K1).</summary>
+    /// <summary>A charset the caller chose is honoured: explicit UTF-8 stays UTF-8, <c>AllowKanji</c> or not.</summary>
     [Test]
     [MethodDataSource(nameof(AllCells))]
     public async Task StandardQr_AllCellsWithExplicitUtf8_StaysUtf8(string text)

@@ -176,12 +176,12 @@ internal static class QRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="TrySelectVersion"/> for a Kanji-eligible text with ASCII in it (<see cref="TextAnalysisResult.KanjiPlannable"/>), where two plans compete below the single-mode (UTF-8) fit.
+    /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/> for a Kanji-eligible text with ASCII in it (<see cref="TextAnalysisResult.KanjiPlannable"/>), where two plans compete below the single-mode (UTF-8) fit.
     /// From the smallest version up, the first that holds a plan is taken: the Kanji plan (Kanji runs beside runs of the ASCII, no ECI header) where it fits, otherwise the UTF-8 plan the seven-state program gives the same text.
     /// </summary>
     /// <remarks>
     /// Below the single-mode fit is the rule every plan follows. The UTF-8 plan is weighed too so that Optimal never needs a larger version than it did before Kanji plans: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
-    /// At a version both fit the Kanji plan is taken, which is what Optimal writes for such a text (kanji-encoding-plan.md, "When a text is written in Kanji mode").
+    /// At a version both fit the Kanji plan is taken, which is what Optimal writes for such a text (qrcode-symbologies.md, "When Kanji mode is written").
     /// Each program is priced at most once per band behind its own screen. A Kanji plan is usually far cheaper, so the UTF-8 screen rejects nearly every version the Kanji plan does not fit, and its cost run seldom runs.
     /// With a <paramref name="kanjiTable"/>, each band's Kanji run keeps its predecessors there; the widths are the band's, so the run that accepts is the plan's table at whichever version of the band is taken.
     /// </remarks>
@@ -344,7 +344,7 @@ internal static class QRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int)"/> for the Kanji plan <see cref="TrySelectVersion"/> chose: Kanji runs beside runs of the ASCII, written with no ECI header, so the caller writes it under <see cref="EciMode.Default"/>.
+    /// <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int)"/> for the Kanji plan <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/> chose: Kanji runs beside runs of the ASCII, written with no ECI header, so the caller writes it under <see cref="EciMode.Default"/>.
     /// </summary>
     public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
         => TryBuildKanjiPlan(text, version, eccLevel, segments, out segmentCount, out _);

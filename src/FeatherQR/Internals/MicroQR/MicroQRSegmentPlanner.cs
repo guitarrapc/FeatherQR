@@ -26,7 +26,7 @@ internal static class MicroQRSegmentPlanner
     /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="range"/>.
     /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="MicroQRSegmentation.Single"/>.
-    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan"/> and written under <see cref="EciMode.Default"/>.
+    /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, MicroQRVersion, MicroQREccLevel, Span{ModeSegment}, out int)"/> and written under <see cref="EciMode.Default"/>.
     /// <c>false</c> means the content fits neither one mode nor a mixed plan in the range; the caller owns the error.
     /// Throws exactly what the single-mode selector throws for argument errors.
     /// </summary>
@@ -165,7 +165,7 @@ internal static class MicroQRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="TryBuildPlan"/> for the Kanji plan <see cref="TrySelectVersion"/> chose: Kanji runs beside runs of the ASCII, which the caller writes under <see cref="EciMode.Default"/>.
+    /// <see cref="TryBuildPlan"/> for the Kanji plan <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, MicroQREccLevel, MicroQRVersionRange, out MicroQRVersion, out bool, out bool)"/> chose: Kanji runs beside runs of the ASCII, which the caller writes under <see cref="EciMode.Default"/>.
     /// </summary>
     public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {

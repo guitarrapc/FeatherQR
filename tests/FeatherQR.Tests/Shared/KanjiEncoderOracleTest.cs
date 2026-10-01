@@ -5,7 +5,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// This library's Kanji output against the Kanji symbols other encoders wrote (kanji-encoding-plan.md, phase 6.6).
+/// This library's Kanji output against the Kanji symbols other encoders wrote.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,7 +19,7 @@ namespace FeatherQR.Tests;
 /// </remarks>
 public class KanjiEncoderOracleTest
 {
-    /// <summary>The Kanji fixture whose text this library does not write in Kanji mode: the seven divergent cells (K3).</summary>
+    /// <summary>The Kanji fixture whose text this library does not write in Kanji mode: the seven divergent cells.</summary>
     private const string DivergentCells = "qrtool/r15x59-m-kanji-jisx0208-divergent";
 
     private static bool HasEncoderCells(string text)
@@ -113,7 +113,7 @@ public class KanjiEncoderOracleTest
             {
                 var below = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.Exactly(manifest.Version - 1) };
                 await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText, ecc, out _, below)).IsFalse().Because(id);
-                await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText[..^1], ecc, out _, below)).IsTrue().Because(id);
+                await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText.AsSpan()[..^1], ecc, out _, below)).IsTrue().Because(id);
             }
             else
             {

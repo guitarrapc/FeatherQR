@@ -225,7 +225,7 @@ public class StructuredAppendStreamTest
     [Test]
     [Arguments(EciMode.Utf8, false, 13)]
     [Arguments(EciMode.Default, false, 13)]
-    [Arguments(EciMode.Default, true, 11)] // a Kanji set (kanji-encoding-plan.md, 6.5): the Japanese at 13 bits a character
+    [Arguments(EciMode.Default, true, 11)] // a Kanji set: the Japanese at 13 bits a character
     public async Task Set_WhoseFirstChunkIsItsShortest_IsWritten(EciMode eciMode, bool allowKanji, int expectedCount)
     {
         // Japanese ahead of order lines: the first chunks are a third (as UTF-8) or a half (as Kanji) the length of the later ones,
