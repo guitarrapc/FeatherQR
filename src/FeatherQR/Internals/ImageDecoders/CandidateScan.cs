@@ -36,7 +36,7 @@ internal interface ICandidateDecoder<TInfo>
 /// results; otherwise the scan reports the result that went furthest.
 /// </summary>
 /// <remarks>
-/// The rules and why they are so are in the architecture record (qrcode-symbologies.md); what each decoder does with one
+/// The rules and why they are so are in the architecture record (qrcode-symbologies.md, single-finder candidate scan); what each decoder does with one
 /// candidate is its own.
 /// </remarks>
 internal static class CandidateScan

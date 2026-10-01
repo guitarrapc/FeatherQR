@@ -2,7 +2,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The rules the decoders that read around a single finder, Micro QR and rMQR, follow for a destination too short for a
-/// symbol's text, each held for both by one test (shared-candidate-scan-plan.md).
+/// symbol's text, each held for both by one test (qrcode-symbologies.md, single-finder candidate scan).
 /// </summary>
 /// <remarks>
 /// <para>

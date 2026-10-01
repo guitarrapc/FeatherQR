@@ -55,15 +55,15 @@ Two detection primitives were lifted from `Internals.StandardQR` to the shared `
 - `LocalBinarizer`, a regional binarization (8 × 8 blocks, each pixel against the mean black point of the 5 × 5 blocks around its own), the regional pass of every image decoder ([Image decode passes](#image-decode-passes); `RegionalRetry` runs its two polarities, each binarized from its own pixels, so the three decoders share the order and the skips); it reads symbols under a lighting gradient, and why it is an added attempt rather than a replacement is in [standardqr-decoder.md](standardqr-decoder.md#image-detection-and-sampling)
 - `ImageDecodePasses`, the image decode passes themselves ([Image decode passes](#image-decode-passes)): one sequence and one set of rules for the three image decoders, each of which gives its symbol pass as a struct (`ISymbolPass`), so the calls stay direct. The midpoint pass is a switch of that struct, off for Standard QR. Until 2026-09-29 each decoder ran its own copy of the sequence, Micro QR's and rMQR's line for line; moving them changed no read and no status over the image decode sweep and the real-image corpus
 - `ImageView`, one reading of an image as a pass reads it (pixels, size, threshold, grey levels and the level an edge is located at), which the image decoders' stages hand down as one argument where they took five or six. The stages that measure (finder sizes, grids, samplers) still take the pieces they read, so each says what it reads and a test can call it alone. It came in on 2026-09-29, when up to 16 parameters a stage carried the image through Standard QR's search.
-- `CandidateScan`, the scan of the decoders that read around a single finder, Micro QR and rMQR: the strided scan and the sweep, the first eight candidates, a result per candidate, the skip inside a read that did not fit the destination, and the corners stripped from every result but a read. Each decoder gives its decode of one candidate as a struct (`ICandidateDecoder`), so the calls stay direct. Until 2026-10-01 each decoder had its own copy, line for line; moving them changed no read and no status over the image decode sweep, the real-image corpus and the short-destination sets
-- `GridRead`, a sampled grid's decode and its re-read by coverage in the decoders that read around a single finder: read again only on an image with grey levels, when the grid got past its format information and neither read nor read too long for the destination, and the decoder's own condition holds; decoded again only when that changes a module, and the further of the two returned. Each decoder gives its grid as a struct (`IGridRead`): Micro QR reads it as sampled and transposed and asks that an orientation past its format information read that word exactly, and rMQR reads it once and asks for budget left, charging the re-read. Until 2026-10-01 each decoder wrote its own gate and re-read, and rMQR's alone read a grid again after a read that did not fit
-- `SymbolGeometry`, where a symbol that read lies in the image: the corners of the mapping that decoded it (`SymbolCorners`), which every image decoder reports with a successful read, and whether a point lies inside them (`Contains`, `AnyContains`), which the Micro QR and rMQR scans ask of a later candidate after a read that does not fit the destination (below)
+- `CandidateScan`, the scan of the decoders that read around a single finder, Micro QR and rMQR: which candidates it decodes, what ends a candidate and the scan, and what it reports ([single-finder candidate scan](#single-finder-candidate-scan)). Each decoder gives its decode of one candidate as a struct (`ICandidateDecoder`), so the calls stay direct. It came in on 2026-10-01, when each decoder had its own copy, line for line
+- `GridRead`, a sampled grid's decode and its re-read by coverage in Micro QR and rMQR, with the gate they share and each decoder's own condition ([single-finder candidate scan](#single-finder-candidate-scan)). Each decoder gives its grid as a struct (`IGridRead`). It came in on 2026-10-01, when each decoder wrote its own gate and re-read
+- `SymbolGeometry`, where a symbol that read lies in the image: the corners of the mapping that decoded it (`SymbolCorners`), which every image decoder reports with a successful read, and whether a point lies inside them (`Contains`, `AnyContains`), which the Micro QR and rMQR scans ask of a later candidate after a read that does not fit the destination ([single-finder candidate scan](#single-finder-candidate-scan))
 - `AttemptStatus` and `SearchResult`, how the image decoders read a decode attempt's status and which result a search of many attempts reports.
   - The status classes are written once: a read or a read too long for the destination is terminal, a verdict on the content settles the symbol, and a grid past its format information is worth refining. So is how far an attempt got.
   - A search reports its failure by one of two rules. Standard QR reports the main path's attempt at each level of its search, the attempt it would make alone, unless another settles. Micro QR and rMQR report the failure that went furthest, since they try many grids of one finder and none of them is first.
   - Standard QR stays on its own rule because its format word names no version. A grid sampled at a guessed dimension reads near-random bits there, and about half of all 15-bit words lie within three bits of a valid word, so the grid gets past the format information by chance and fails at Reed-Solomon with its own dimension's version. Moved to the furthest failure on 2026-09-30 to try it, 51 of 80 symbols with their format information destroyed reported `DataUncorrectable` one version too small, where they had reported `FormatInformationInvalid` with their own version; no read changed. Micro QR's format word names the symbol and rMQR's the version, so there a grid of a size other than the one the word names is refused at the format information.
   - Where a search stops stays the decoder's. A terminal result ends the passes in all three. Inside a pass, Standard QR stops at a settled result, and Micro QR's and rMQR's scans only at a read, since another symbol in the image may read.
-  - Micro QR and rMQR both stop a finder candidate at a terminal result, a read that does not fit the destination included ([microqr-decoder.md](microqr-decoder.md#decisions), [rmqr-decoder.md](rmqr-decoder.md#decisions)), and go on to the other candidates, skipping one inside the symbol that read: symbols do not overlap, so it is a finder-like pattern in that symbol's own data. Searched in full after the read, such a candidate cost about 4 to 105 times a sized call on the rMQR renders found with one and about 5 to 70 times on the Micro QR ones, the low ends on turned and noisy renders; skipped, a destination too short cost at worst 1.5 times a sized call on 577 Micro QR and 585 such renders of rMQR (2026-10-01).
+  - Micro QR's and rMQR's rules for a finder candidate, a read that does not fit the destination included, are in [single-finder candidate scan](#single-finder-candidate-scan).
   - Until 2026-09-29 each decoder wrote these out itself, the furthest-failure ranking twice.
 - Not shared, on purpose: the mirror retry. The three decoders read a mirrored capture, whose finders are the same and whose data is transposed, three ways, each for a reason:
   - Standard QR transposes its sampled grid in place, since its matrix level reads the modules two at a time along the placement runs, which a transposed view would not keep contiguous.
@@ -117,6 +117,81 @@ Why the passes are ordered this way:
 - A verdict ends only what could not change the answer. A rule stated for the symbol has to hold for the image: stopping a Micro QR or rMQR search at a verdict would also stop it for every other symbol in the image, and a strided verdict that skipped the full sweep lost 20 to 24 readable neighbours in about 490 pairs of an unmapped symbol beside a low-density readable one. So a symbol holding an unmapped Kanji cell cost 2 to 19 ms against microseconds for a mappable one (2026-09-23, before the failure-path work made those searches faster), which is the price.
 - The midpoint pass is for a finder the global threshold cannot see. Edge greys pull that threshold toward light, and a blurred finder's light ring can keep too few pixels above it; halfway between the two levels the ring reads its width. It runs last, so a symbol the regional pass reads never pays for it. Since the cross-checks read like edges, most such finders are found at the global threshold; among bilinear upscales of every version at 2 to 3.2 px/module, only Micro QR M1 and rMQR R7x43 and R7x77 still needed it. Standard QR has none: its sweep read 4,799 of 4,800 bilinear renders at 2 to 3.5 px/module without one, and the one left was unread before the passes were shared too (2026-09-29). Adding it would be an accuracy change of its own, measured by the sweep, for an input class that needs it.
 - The finder search widens in two different ways because the trigger to widen has to be a question about the symbol. Standard QR's search can ask one itself: did the strided rows give it a triple that is not in doubt? A single-finder scan cannot ask anything like that, so the Micro QR and rMQR decoders ask instead whether the strided scan read the symbol ([rmqr-decoder.md](rmqr-decoder.md#decisions), finder candidate scan).
+
+### Single-finder candidate scan
+
+Micro QR and rMQR read around a single finder, and they share how its candidates are scanned (`CandidateScan`) and how each sampled grid is read (`GridRead`). Each decoder gives only what is its own, on a struct: its decode of one candidate (`ICandidateDecoder`) and its grids (`IGridRead`). One test per rule holds both decoders (`DestinationContractTest`, through the public `TryDecodeImage`), and `CandidateScanTest` and `GridReadTest` hold the shared code over scripted decoders and grids.
+
+```
+Symbol pass (Micro QR, rMQR)
+├─ Strided finder scan ──> ranked candidates, most confirmed first ──> the first eight
+│  └─ Each, unless a read that did not fit lies around it
+│     └─ A result of its own ──> the decoder's grids, each read through GridRead ──> ends at a terminal result
+└─ Nothing read: full finder sweep, the same way, less the candidates the strided scan tried without settling
+
+GridRead: the grid's decode ──> on an image with grey levels, a grid past its format information that neither
+          read nor read too long for the destination, and that the decoder's own condition allows,
+          read again by coverage ──> decoded again only when a module changed; the further of the two returned
+A read ends the scan; a read too long for the destination ends its candidate and keeps its corners for the skip;
+otherwise the result that went furthest is reported, its corners stripped
+```
+
+**The scan**
+- **The first eight candidates, most confirmed first.** A false hit ranks behind, since repeated row hits separate a finder from texture. A candidate skipped is not replaced by the next in rank.
+- **A read ends the scan; nothing else does.** Another symbol in the image may read, so a failure, a verdict on the content and a read too long for the destination all leave the other candidates to run.
+- **A read too long for the destination ends its candidate.** The candidate's grids are tried in the same order whatever the destination, so that read is the one a sized call returns. A later grid of the candidate could only read something else, at up to hundreds of times the cost:
+  - before this rule, sizing probes cost rMQR 250 to 500 times a sized call (73 ms against 0.2 ms at R13x99);
+  - until 2026-09-30, on 577 Micro QR renders a destination one character short cost 105 times a sized call at the median and up to 1,095 times. Once the candidate stopped there, it cost 1.00 times at the median and at most 5.8.
+- **Each candidate keeps a result of its own.** While the candidates shared the scan's, a read that did not fit on one ended each later candidate at its first frame that read a format copy, and a second symbol that fits was missed unless that frame read it.
+- **A later candidate inside a symbol that read but did not fit is skipped.**
+  - Symbols do not overlap, so such a candidate is a finder-like pattern in that symbol's own data.
+  - Searched in full after the read, it cost rMQR about 55 to 105 times a sized call through a frame's grid, about 38 through the module boundaries and about 9 through the coverage re-read; on Micro QR about 12 to 70 times, depending on how warm the code was.
+  - On the 585 rMQR and 577 Micro QR renders the worst was 3.9 and 5.8 times, each on a render with such a candidate. Skipped, the worst of either set was 1.5 (2026-10-01).
+  - The skip keeps the corners of every read that did not fit, not only the first.
+- **The corners go with a read only.** A read that did not fit carries them until the scan has used them. Every result but a read is reported without them, so the public `Corners` is empty on a failure.
+- **The report is the result that went furthest, the first on a tie** (`SearchResult`). A read too long for the destination ranks above a verdict on the content, since a larger destination reads that symbol while a verdict holds at any size.
+- **This rests on the segment decoders' order.** They check the declared character count against the remaining bits before they check the caller's buffer, so a malformed count cannot pass for a short buffer.
+
+**The grid read**
+- A grid is read again by coverage when all of these hold:
+  - the image has grey levels;
+  - the grid got past its format information;
+  - it neither read nor read too long for the destination;
+  - the decoder's own condition holds.
+- A re-read is decoded only when it changes a module, and the further of the two decodes is returned.
+- Never after a read, or a read too long for the destination. Read again, the same grid reads the same text on a real image. On an image crafted to read another text by coverage, a call too short for the first text got the other back as a success, a text a sized call never returns.
+  - rMQR alone still made that re-read until 2026-10-01.
+  - On upright renders upscaled bilinearly it cost up to 2.8 times a sized call (R13x99 and R17x139 at 2 to 2.5 px/module). Over the 585 renders, the mean went from 1.05 to 1.00 times.
+- The decoders' own conditions:
+  - **Micro QR:** an orientation that got past its format information read that word exactly. Its single format copy lets 7 to 21 % of random grids past by version, where texture reads a word within 3 bits about half the time and exactly about 1 in 1,000.
+  - **rMQR:** budget left. Its two copies let about 1.5 % of random grids past.
+
+**What stays each decoder's**
+- Its grid search: Micro QR's sizes, timing frame, module boundaries, arbitrary orientation and scale and perspective searches; rMQR's frames, outline, format copies, sub-finder, perimeter trace and perspective search.
+- Which grids are read again: Micro QR's per-size and search grids, but not its timing frame or module-boundary table; every grid rMQR samples through a transform.
+- Its mirror retry, three ways ([internal organization](#internal-organization)).
+- Its budget, tuned to measured envelopes in different units, so not unified:
+  - Micro QR: 10,000 decodes on the arbitrary-orientation path, two a grid, with the re-read not counted, which leaves room for one complete frame.
+  - rMQR: 256 decodes a candidate across all its frames, a re-read counted whether or not it decodes. `GridRead` reports a re-read, so each decoder charges as it always did.
+- Standard QR stays out: its triple and mesh paths and its main-path report rule (`SearchResult`, above) are its own.
+
+**How the code is shaped**
+- **The scratch.** The scan holds one module buffer for its candidates, from the stack for Micro QR's 289 B and rented for rMQR's 2,363 B, since a scan holds one buffer at a time ([allocation contract](#allocation-contract)). The small tables are taken inside each candidate's decode.
+  - A struct cannot hold a span without being a `ref struct`, and netstandard2.0 can pass neither one as a generic argument nor static abstract members. So the decoder's part is instance members on a struct, as in `ImageDecodePasses`.
+- **The corners.** The scan reads and strips them through the decoder's struct, not through an interface on the public diagnostic records, which would change public types to serve internals.
+- **The grid's results.** A decoder's grid carries what its last decode found, which is why `GridRead` takes it by `ref`. Micro QR's condition needs each orientation's result, and it is still asked only once the shared terms hold.
+- **Behaviour unchanged.** Moving the scan and the grid read changed no read and no status over the image decode sweeps (byte-identical result files), this library's columns of the real-image corpus and the short-destination sets. The image decode benchmarks stayed within their error bars (2026-10-01).
+
+**How it is held**
+- Planted faults (29 of them, `tools/mutation_check.cs`, 2026-10-01): one per rule in each decoder, in the scan and in the grid read. 25 are caught. The list is in the history, `.github/docs/plans/references/shared-candidate-scan-mutants.tsv` at 521913f, to run again when these rules change. The four that are not:
+  - **Micro QR's scale and perspective searches, letting a read that did not fit go on: no input found that reaches them.** They open only after an affine grid got past its format information without reading. None of these showed a cost above the unchanged decoder's spread: 5,760 turned and noisy renders, 4,320 renders with a keystone of 3 to 15 %, and the two short-destination sets.
+  - **rMQR's frame loop and a frame's scale loop, letting it go on: bounded.** It costs at most 3.4 and 2.7 times a sized call, since the other frames, or the frame's other scales, read no format copy and the next return ends the candidate at the same read. A timing bound that tight flakes.
+- The timing rules carry bounds of 3 or 5 times a sized call plus 30 ms, each measured against the regression it guards. Elsewhere the test uses a deterministic observable: a crafted two-text image, or the skip's premise asserted per case.
+
+**Residuals**
+- A false finder candidate outside the symbol that read is still searched in full after a read that did not fit. Revisit if a caller probing its buffer size meets one.
+- A symbol of the opposite polarity, beside one too long for the destination, is not read, since the inverted pass does not run after a terminal result.
+- rMQR measured noise frames that report a read too long for the destination with nothing in the image; the residual and when to revisit it are in its record ([rmqr-decoder.md](rmqr-decoder.md#decisions)).
 
 ### Package architecture
 
@@ -520,3 +595,4 @@ The queue is closed again behind them, on the same rule.
 
 - **A change of a few percent needs the fastest of interleaved runs, not a benchmark job.** Judging the decode refactors of 2026-09-29 on this machine, the `ShortRun` job gave error bars as large as the mean on some shapes (Micro QR `M2_512px`, 5,613 ± 15,843 µs), three launches of fifteen iterations moved one tree 23 % between two runs (Standard QR version 40 at 3 px/module, 112.7 and 91.4 µs), and one process of a build could be 2.5 times another on a 4 µs decode. A small harness over both trees, alternating eight to twelve times and keeping each shape's fastest round, first quartile and median, held a percent; the benchmarks stay for absolute numbers.
 - **Even then a shape can lean by which shapes share its process.** rMQR's gradient image measured +0.4 to +1.4 % in six runs of the rMQR shapes alone, two of them with part of the change taken back out, and −1.0 to −1.4 % in both runs of every shape. A lean that survives taking the code it is blamed on back out is not that code's.
+- **The order of an A/B run can manufacture a regression.** Two rounds that ran the base first each time put rMQR's image decode 15 to 21 % behind after the candidate scan was shared, and Micro QR's failing paths moved 16 to 25 %. Three rounds with error bars, the order alternated, put every shape within 1 to 4 % and inside its error bars (2026-10-01). A machine that drifts during a run favours whichever tree runs first.

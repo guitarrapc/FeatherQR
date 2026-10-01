@@ -39,6 +39,7 @@ internal interface IGridRead<TInfo>
 /// the decoder's own condition holds. A read, or a read too long, is the symbol's: read again, the same grid reads the same text on
 /// a real image and, on an image crafted to read another, that other, which the call would return though a sized call never does.
 /// The grid's result is returned unless the re-read went further.
+/// Why, and what each decoder adds, is in the architecture record (qrcode-symbologies.md, single-finder candidate scan).
 /// </remarks>
 internal static class GridRead
 {
