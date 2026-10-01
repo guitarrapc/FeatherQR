@@ -538,9 +538,25 @@ The rMQR value writers are 3.8 to 11 % of an rMQR encode on every ARM64 build, a
 
 **Done.**
 - **`DecodeWithMirrorRetry` is `NoInlining`.** Once the merge follow-up changed it, the JIT inlined it into `DecodeOtherGrid` alone of its five callers, a path that runs only after the grid through the transform fails, where it only added code. ILC does not inline it.
-- Tests on .NET 10 and .NET 8; formatting checked on an LF copy.
+- Tests on .NET 10 and .NET 8, on x64 and on ARM64 (Apple M2); formatting checked on an LF copy.
 
-**Numbers.** `DecodeOtherGrid` on the x64 JIT, instructions (merge commit / before / after): .NET 10 224 / 312 / 224, without AVX 219 / 332 / 219; .NET 8 245 / 331 / 245, without AVX 236 / 342 / 236. The after listing is the merge commit's, line for line, and every other method of the three image decoders, the passes and the regional retry keeps its instruction count. ILC x64, `x86-64-v3` and ARM64 compile `DecodeOtherGrid`, `DecodeWithMirrorRetry` and its other four callers as before. The ARM64 JIT (Apple M2, `DOTNET_TieredCompilation=0`) reads the same: .NET 10 221 / 358 / 221, .NET 8 234 / 373 / 234, the after listing the merge commit's line for line, and of every FeatherQR method the end-to-end shapes compile (477 and 494) `DecodeOtherGrid` alone changes instructions. ILC ARM64 compiles all 210 `QRImageDecoder` methods as before. The test suite passes there on .NET 10 and .NET 8. Not timed: the code is the merge commit's again.
+**Numbers.** `DecodeOtherGrid`, instructions (the JIT with `DOTNET_TieredCompilation=0`):
+
+| Build | merge commit | before | after | before → after |
+|---|---|---|---|---|
+| x64 JIT .NET 10 | 224 | 312 | 224 | −88 |
+| x64 JIT .NET 10, without AVX | 219 | 332 | 219 | −113 |
+| x64 JIT .NET 8 | 245 | 331 | 245 | −86 |
+| x64 JIT .NET 8, without AVX | 236 | 342 | 236 | −106 |
+| ARM64 JIT .NET 10 | 221 | 358 | 221 | −137 |
+| ARM64 JIT .NET 8 | 234 | 373 | 234 | −139 |
+| ILC x64 | 168 | 168 | 168 | 0 |
+| ILC ARM64 | 143 | 143 | 143 | 0 |
+
+- **Every JIT.** The after listing is the merge commit's, line for line: the inlined `DecodeWithMirrorRetry` was the whole difference. The ARM64 JIT had grown most, 137 to 139 instructions against 86 to 113 on x64.
+- **The rest unchanged.** On the x64 JIT every other method of the three image decoders, the passes and the regional retry keeps its instruction count. On the ARM64 JIT, of every FeatherQR method the end-to-end shapes compile (477 on .NET 10, 494 on .NET 8), `DecodeOtherGrid` alone changes instructions; the others are identical or differ in addresses only.
+- **ILC never inlined it.** x64, `x86-64-v3` and ARM64 compile `DecodeOtherGrid`, `DecodeWithMirrorRetry` and its other four callers as before, and on ARM64 all 210 `QRImageDecoder` methods.
+- Not timed: the code is the merge commit's again.
 
 **Found on the way.**
 - **Inlining the `AttemptStatus` checks instead made it worse.** With `IsTerminal`, `IsContentVerdict` and `IsSettled` `AggressiveInlining`, `SampleAndDecode` and `DecodeOtherGrid` read 7 to 17 instructions longer on the x64 JIT.
