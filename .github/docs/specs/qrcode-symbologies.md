@@ -291,11 +291,20 @@ Why this rule and not a wider one:
 - **The seven divergent cells are never written.** Either reading written at one of them decodes
   to different text in a CP932 reader (ZXing.Net) and in this library, so neither has an encoder
   cell and a text holding one stays UTF-8.
-- **No Kanji beside an ECI header.** A text that would need both (a character without a cell
-  next to ones with) stays UTF-8. Measured 2026-10-01 (`spot-check-kanji`): this library, ZXing.Net
-  and CodeGlyphX read JIS X 0208 in a Kanji segment after ECI 26, but zxing-cpp 0.5.2 decodes that
-  segment's Shift_JIS bytes in the ECI's charset and returns replacement characters, so such a
-  symbol would read differently in the one reader that covers all three symbologies.
+- **No Kanji beside an ECI header.** A text that would need both (a character without a
+  cell next to ones with) stays UTF-8. ISO/IEC 18004:2015 reads an ECI as governing the bytes of
+  every mode, Kanji mode being a compaction of Shift_JIS-range byte pairs (7.4.2.1, 7.3.6, Annex H),
+  so a Kanji segment after ECI 26 means UTF-8 bytes, not JIS X 0208 characters. Readers split on
+  it. zxing-cpp and ZBar follow the standard, while ZXing and its ports read JIS X 0208 there by
+  their maintainer's choice. Measured 2026-10-01 (`spot-check-kanji`): zxing-cpp 0.5.2 returns
+  replacement characters for such a segment, and ISO-8859-1 for a Kanji segment placed ahead of
+  the ECI, so no order of segments avoids it. Decided with the user the same day, which is why
+  the Kanji plan's phase 6.7 was not taken.
+- **Kanji segments carry no ECI.** Every reader that decodes text reads a Kanji segment with no
+  ECI as Shift_JIS, on both sides of that split. Strictly, the default interpretation has been
+  ISO-8859-1 since the 2006 edition, and zint warns on Kanji without ECI 20. ECI 20 would settle
+  that at 12 bits a symbol, and Google ML Kit documents that it does not recognize QR codes
+  "generated in the ECI mode", so the symbol stays without one.
 - **The rule is about what can be represented, not about script**: Greek, Cyrillic and box
   drawing in JIS X 0208 go out in Kanji mode like kana do.
 - **`Optimal` never grows a symbol either.** The Kanji plan is taken only below the version the

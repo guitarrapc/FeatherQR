@@ -334,6 +334,7 @@ public static class KanjiSpotCheck
         [
             ("Kanji, then Byte ASCII (no ECI; what this library writes)", "日本語abc", [Kanji("日本語"), Bytes("abc"u8.ToArray())]),
             ("ECI 26, Kanji", "日本語", [Eci26(), Kanji("日本語")]),
+            ("Kanji, then ECI 26, Byte UTF-8", "日本語～", [Kanji("日本語"), Eci26(), Bytes(Encoding.UTF8.GetBytes("～"))]),
             ("ECI 26, Byte UTF-8, Kanji", "～日本語", [Eci26(), Bytes(Encoding.UTF8.GetBytes("～")), Kanji("日本語")]),
             ("ECI 26, Kanji, Byte UTF-8", "日本語é", [Eci26(), Kanji("日本語"), Bytes(Encoding.UTF8.GetBytes("é"))]),
             ("ECI 26, Byte UTF-8, Kanji, Byte UTF-8", "①日本語①", [Eci26(), Bytes(Encoding.UTF8.GetBytes("①")), Kanji("日本語"), Bytes(Encoding.UTF8.GetBytes("①"))]),
