@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using FeatherQR.Internals.ImageDecoders;
 using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 
@@ -677,7 +678,9 @@ internal static partial class QRImageDecoder
     /// <remarks>
     /// The grid is transposed in place because the matrix level reads the modules two at a time along the placement runs, which a transposed view would not keep contiguous.
     /// Micro QR reads its transpose through a view, since its matrix level reads every module through one, and rMQR samples again with the frame's axes swapped, since a transposed rMQR grid is no rMQR grid.
+    /// Out of line: the JIT would inline it into <see cref="DecodeOtherGrid"/> alone, a failure path, where it only adds code.
     /// </remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out bool transposed)
     {
         transposed = false;

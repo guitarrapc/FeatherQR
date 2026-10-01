@@ -455,7 +455,7 @@ Matrix decode against the build before phase 5: version 40 0.21-0.22 on default 
 
 **Done.**
 - **rMQR matrix decode's fixed cost, two parts.** ILC left `RmQRConstants.GetFormatBlock` and `GetFormatTail` as calls inside the matrix decoder's format reader, where the JIT inlines them; both are `AggressiveInlining` now, like the file's other accessors (`ReadFormatCopies` 127 → 105 instructions on x64 ILC, 125 → 103 on ARM64, the JIT's 102 unchanged). And the shared block stage, `EccBlockDecoder`, deinterleaved a single block and copied its data back, though one block is its own interleaving; it now corrects that block in place, and the deinterleave writes by reference after one length check (215 → 189 instructions on x64 ILC). Its exception message is a constant: interpolated, it added 26. Each part alone took R7x43 to 0.88 and 0.93 on default NativeAOT, both to 0.83.
-- **Standard QR small images.** Every level of the search after the finder search (the triple, the corner, the dimension, the grid, the mirror retry) took a `SearchResult` before its first attempt: about 30 interpreted calls a read. A level now takes it at its first attempt that does not settle and returns a settled attempt as it is, which either rule reports. Compiled, the five methods range from 14 instructions shorter to 69 longer (each early return copies the 64-byte diagnostics), and the JIT now inlines `DecodeWithMirrorRetry` into `DecodeOtherGrid`, a failure path, which reads 86 to 139 longer where ILC keeps the call; the reads are level.
+- **Standard QR small images.** Every level of the search after the finder search (the triple, the corner, the dimension, the grid, the mirror retry) took a `SearchResult` before its first attempt: about 30 interpreted calls a read. A level now takes it at its first attempt that does not settle and returns a settled attempt as it is, which either rule reports. Compiled, the five methods range from 14 instructions shorter to 69 longer (each early return copies the 64-byte diagnostics); the reads are level. The JIT then inlined `DecodeWithMirrorRetry` into `DecodeOtherGrid`, a failure path, 86 to 139 instructions longer; it is `NoInlining` since ([DecodeOtherGrid follow-up](#decodeothergrid-follow-up-2026-10-01)).
 - **Two `PixelIndex.Clamp` crefs name their overload.** Both had been ambiguous (CS0419) since the second overload came in with phase 3.
 - **Checked.** The test suite on .NET 10 and .NET 8; `--simd-class` and `--parity` on default, x86-64-v2 and x86-64-v3 NativeAOT, the JIT with and without AVX, and both WebAssembly modes.
 
@@ -524,7 +524,7 @@ The rMQR value writers are 3.8 to 11 % of an rMQR encode on every ARM64 build, a
 **Numbers** (tables in the [measurements](references/simd-128bit-tiers-measurements.md#arm64-jit-machine-code)). `ExtractCodewords`, main → branch → outlined, instructions: the ARM64 JIT on .NET 8 515 → 557 → 107 and on .NET 10 491 → 530 → 102, ILC ARM64 349 → 378 → 79, ILC osx-x64 default 147 → 348 → 96 and `x86-64-v3` 319 → 370 → 132, win-x64 142 → 351 → 96 and 309 → 370 → 122 (the calling conventions differ), the x64 JIT on .NET 8 361 → 432 → 155 (without AVX 152 → 387 → 109) and on .NET 10 329 → 390 → 131 (141 → 353 → 96). Its callers compile as before. rMQR decodes on NativeAOT read level; the method runs once a decode.
 
 **Found on the way.**
-- **The merge follow-up's search levels are longer on every JIT than its record said.** `DecodeOtherGrid`, whose source did not change, is 137 to 139 instructions longer on the ARM64 JIT and 86 to 113 on the x64 JIT: the JIT inlines `DecodeWithMirrorRetry` into it since that method changed, and on x64 the inlined body keeps its three `IsSettled` checks as calls. ILC keeps the call (168 instructions in every tree on x64). It runs only after the grid through the transform fails, and the image decodes read level or faster than main, so it stays; the record gives the full range now.
+- **The merge follow-up's search levels are longer on every JIT than its record said.** `DecodeOtherGrid`, whose source did not change, is 137 to 139 instructions longer on the ARM64 JIT and 86 to 113 on the x64 JIT: the JIT inlines `DecodeWithMirrorRetry` into it since that method changed, and on x64 the inlined body keeps its three `IsSettled` checks as calls. ILC keeps the call (168 instructions in every tree on x64). `DecodeWithMirrorRetry` is `NoInlining` since ([DecodeOtherGrid follow-up](#decodeothergrid-follow-up-2026-10-01)).
 - **A JIT disassembly comparison needs `DOTNET_TieredCompilation=0`.** Tier-1 code follows the run's profile: with it, rMQR's `DecodeMatrix` read 838 → 865 instructions on .NET 8; without it, the same in both trees.
 - **Added constant data moves the JIT's table addressing.** Methods whose source did not change gain or lose two or three instructions where the JIT had reached nearby tables from one base register.
 - **The JIT does not treat a `NoInlining` throw method as one that does not return**: the call site falls through to the next check. That costs nothing on the path that runs.
@@ -533,3 +533,17 @@ The rMQR value writers are 3.8 to 11 % of an rMQR encode on every ARM64 build, a
 **Lessons.**
 - `--parity` through the dispatch checks only the tier the CI machine picks. Each tier needs its own entry there, as in the unit tests.
 - An interpolated exception message is built into the method that throws it, on every build. Outline it where that method runs per operation.
+
+### DecodeOtherGrid follow-up (2026-10-01)
+
+**Done.**
+- **`DecodeWithMirrorRetry` is `NoInlining`.** Once the merge follow-up changed it, the JIT inlined it into `DecodeOtherGrid` alone of its five callers, a path that runs only after the grid through the transform fails, where it only added code. ILC does not inline it.
+- Tests on .NET 10 and .NET 8; formatting checked on an LF copy.
+
+**Numbers.** `DecodeOtherGrid` on the x64 JIT, instructions (merge commit / before / after): .NET 10 224 / 312 / 224, without AVX 219 / 332 / 219; .NET 8 245 / 331 / 245, without AVX 236 / 342 / 236. The after listing is the merge commit's, line for line, and every other method of the three image decoders, the passes and the regional retry keeps its instruction count. ILC x64, `x86-64-v3` and ARM64 compile `DecodeOtherGrid`, `DecodeWithMirrorRetry` and its other four callers as before. Not timed: the code is the merge commit's again. The ARM64 JIT, 137 to 139 longer before, is not checked.
+
+**Found on the way.**
+- **Inlining the `AttemptStatus` checks instead made it worse.** With `IsTerminal`, `IsContentVerdict` and `IsSettled` `AggressiveInlining`, `SampleAndDecode` and `DecodeOtherGrid` read 7 to 17 instructions longer on the x64 JIT.
+
+**Lessons.**
+- A changed method can flip the JIT's inlining at one of its call sites: compare its callers' listings too, not only its own.

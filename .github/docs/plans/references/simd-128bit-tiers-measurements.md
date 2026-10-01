@@ -889,7 +889,7 @@ The other instructions, by cause (instructions, main → branch):
 |---|---|---|---|
 | The 128-bit samplers: Standard QR, Micro QR, rMQR and its affine form | −6 to −10 | −3 to −5 | Phase 1b and its follow-up |
 | `EccBlockDecoder.TryCorrect`, `Deinterleave` | +38, −7 | +29, +1 | Merge follow-up: one block corrected in place, the copies by reference |
-| Standard QR's search levels: `DecodeCorners`, `DecodeFromFinders`, `DecodeOtherGrid`, `SampleAndDecode`, `DecodeTriple`, `DecodeWithMirrorRetry` | +20, +47, +139, +37, −14, −5 | +35, +51, +137, +52, +2, +7 | Merge follow-up: a level returns a settled attempt as it is. `DecodeOtherGrid`'s source did not change: the JIT inlines the changed `DecodeWithMirrorRetry` into it (x64 JIT +86 to +113; ILC keeps the call) |
+| Standard QR's search levels: `DecodeCorners`, `DecodeFromFinders`, `DecodeOtherGrid`, `SampleAndDecode`, `DecodeTriple`, `DecodeWithMirrorRetry` | +20, +47, +139, +37, −14, −5 | +35, +51, +137, +52, +2, +7 | Merge follow-up: a level returns a settled attempt as it is. `DecodeOtherGrid`'s source did not change: the JIT inlined the changed `DecodeWithMirrorRetry` into it (x64 JIT +86 to +113; ILC keeps the call), `NoInlining` since |
 | `RmQRMatrixDecoder.ExtractCodewords` | +42 | +39 | Phase 5's third tier name in the pinned-kernel message; outlined below |
 | `RmQRBinaryEncoder.EncodeDataCodewordsWithoutEci`, `RmQRVersionSelector.GetMaxDataLength`, `BuildFitCapacities` | +2, ±0 | −3 | No source change: the JIT had reached nearby constant tables from one base register, and added tables moved them apart |
 | Static constructors, `RmQRModulePlacer.BuildLayout`, `SimdTiers.Report`, `LuminanceConverter.ConvertRgbaForTest` | | | Run once, or report and test entries |
