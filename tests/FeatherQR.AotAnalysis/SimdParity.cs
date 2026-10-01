@@ -468,8 +468,9 @@ internal static class SimdParity
     }
 
     /// <summary>
-    /// The text analysis through the dispatch against the scalar pass: each boundary char, U+0130 among them (a narrowing that
-    /// dropped the high byte would read it as '0'), at every position of every length from 1 to 40, among digits and alphanumerics.
+    /// The text analysis through the dispatch and through the 128-bit tier's own entry against the scalar pass: each boundary char,
+    /// U+0130 among them (a narrowing that dropped the high byte would read it as '0'), at every position of every length from 1 to 40,
+    /// among digits and alphanumerics. The dispatch takes the tier on WebAssembly from 32 chars only, and the tier from 8.
     /// </summary>
     private static List<string> TextAnalyzerMismatches()
     {
@@ -490,8 +491,11 @@ internal static class SimdParity
                     var text = new string(chars);
                     foreach (var eci in new[] { EciMode.Default, EciMode.Utf8 })
                     {
-                        if (TextAnalyzer.Analyze(text, eci) != TextAnalyzer.AnalyzeScalar(text, eci))
+                        var expected = TextAnalyzer.AnalyzeScalar(text, eci);
+                        if (TextAnalyzer.Analyze(text, eci) != expected)
                             mismatches.Add($"U+{(int)c:X4} at {position} of {length}, {eci}");
+                        if (length >= 8 && TextAnalyzer.AnalyzeVector128(text, eci) != expected)
+                            mismatches.Add($"128-bit tier, U+{(int)c:X4} at {position} of {length}, {eci}");
                     }
                 }
             }

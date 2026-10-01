@@ -402,14 +402,12 @@ rather than reimplements.
 
 A cell of the table is one tier or, where the class leaves an instruction set to the CPU, the tiers the
 CPU decides between; on each machine it pins exactly one. When the table was drawn (2026-09-28), 11 of
-28 kernels ran scalar on x64 without AVX (nine whose only x64 tiers are AVX2 or 256-bit, and the
-Structured Append parity and scanner, which have no x64 tier), 2 with AVX2, 1 on ARM64 (the rMQR value
-writers, SSE4.1 only) and 19 on WebAssembly, where only the portable 128-bit tiers run; the
-netstandard builds have no intrinsics and run scalar everywhere. Which instruction set a NativeAOT
-publish should target, and how much of the AVX2 territory 128-bit tiers should cover, are decisions
-that read this table; it makes neither. Where a kernel records a portable 128-bit tier as measured and
-left out (`Binarizer`), that measurement ran on x64 under the JIT, where the 256-bit tier always runs
-instead, and held it against the scalar walk on gradients only; no build that would run it was measured.
+28 kernels ran scalar on x64 without AVX, 2 with AVX2, 1 on ARM64 and 19 on WebAssembly, and more on
+CPUs without GFNI, fast PEXT or the ARM64 dot product. Since the 128-bit round below (2026-10-01), the
+Structured Append parity and scanner run scalar on x64, the rMQR value writers on ARM64 and six kernels
+on WebAssembly, each with its measured reason beside its row, and no cell falls to scalar for want of a
+CPU feature. The netstandard builds have no intrinsics and run scalar everywhere. Which instruction set
+a NativeAOT publish should target is a decision that reads this table; it makes none.
 
 What keeps the table true:
 
@@ -418,6 +416,50 @@ What keeps the table true:
 - **CI runs every build class.** The `aot-analysis` job publishes the NativeAOT gate as the default linux-x64 build, an `x86-64-v3` build and the default build on linux-arm64, win-arm64 and osx-arm64, runs each with `--simd-class`, and runs the JIT on the same runners, under `DOTNET_EnableAVX=0` on x64 and `DOTNET_EnableArm64Dp=0` on ARM64 for the side of a class the runner's CPU does not show. The linux-x64 runner had no GFNI when the job was first run (2026-09-28), so the GFNI side of the x64 cells has run only on a developer machine. The `wasm-simd` job runs the WebAssembly report interpreted and AOT-compiled; a report of its own, run headless, rather than one read out of the Playground, which would need a browser and would put the library's internals into an app that ships. Both jobs also pass `--parity`, which holds vector tiers to their scalar forms on random scenes, NaN and out-of-range coordinates included, in the code that build emitted: the only run of a `PackedSimd` operation, and of ILC's code, that checks output. The JIT run under the knob passes it too, since the test suite runs only the side of a class the runner's CPU picks.
 - **A file's name says which instruction families it may use.** `{stem}.X86.cs` holds x86 intrinsics with the vectors they work on, `{stem}.Arm64.cs` ARM intrinsics with 128-bit vectors, `{stem}.Vector256.cs` and `{stem}.Vector128.cs` portable vectors of that width or narrower, and `{stem}.Simd.cs` a tier that picks its instructions per instruction set inside one method (WebAssembly's `PackedSimd` among them); the stem file holds the entry, the dispatch and the scalar tier and uses no vector instruction. Tiers move between files only as whole methods (Lessons learned). Six stem files keep a tier inline, where an entry the scalar build also runs holds the vector steps beside the scalar tail they hand over to; `SimdLayoutTest.InlineTiers` lists them with where, and fails when one of them stops or another file starts.
 - **A new kernel or tier** needs its row in the table and its files in `SimdTiersTest`; the tests fail until both are there.
+
+#### The 128-bit round
+
+From 2026-09-29 to 2026-10-01 each scalar cell on x64 without AVX (a default NativeAOT publish) and on
+WebAssembly got a portable `Vector128` tier where one beat what that build ran, and kept its reason
+where none did. A tier shipped under these rules, which still hold for a new one:
+
+- **It beats what the build runs, measured on that build, and loses nowhere beyond noise.** A kernel under about 3 % of every benchmark shape on a build stays as it is there, its measured reason beside its row. Interpreted and AOT-compiled WebAssembly take the same tier, so it has to hold on both; most Blazor apps run interpreted.
+- **It is portable `Vector128`, and an operation slow on one build may take that platform's instruction behind its check** (x86 on a default NativeAOT publish, `PackedSimd` on WebAssembly), kept only where it wins there. No 128-bit GFNI tier: it would fill the x64 cell on GFNI CPUs only and do nothing for WebAssembly.
+- **A step only WebAssembly needs is gated on `PackedSimd.IsSupported`**, a constant false elsewhere. Behind `Vector128.IsHardwareAccelerated` it would be compiled into a default NativeAOT publish, whose SSSE3 check runs at run time.
+- **Its output is the scalar tier's.** A parity test enters the tier directly, since the dispatch hides a lower tier behind a higher one; planted faults fail it; and `--parity` checks the code each CI build emitted, with its own entry for the tier, NaN and out-of-range input included.
+- **Its machine code is read, not only timed.** Cells that stay compile as before, and moving code between methods or files costs no instruction, on the JIT (.NET 8 and 10, x64 with and without AVX, ARM64) and ILC (default x64, `x86-64-v3`, ARM64).
+- **Both .NET targets compile it.** An operation .NET 8 lacks (`ShuffleNative`, `AddSaturate`, `NarrowWithSaturation`, `MinNative`) gets a .NET 8 form, or .NET 8 keeps its tier. No public API and no allocation.
+
+Each build was measured on itself: `--time` in both report projects times the benchmark shapes end to
+end and each kernel alone, through its dispatch and its scalar entry. x64 without AVX is a default
+NativeAOT publish, since `DOTNET_EnableAVX=0` lowers portable vectors as `x86-64-v2` does; ARM64
+without the dot product is NativeAOT built with `IlcInstructionSet=armv8-a,-dotprod`. Each shape runs
+in its own process, the builds alternating, and a kernel's share is its time alone over the shape's.
+
+End to end against main at the merge base (3e1f29d), the branch's time over main's (2026-10-01), each
+shape in its own process, five alternations, and eleven for every shape that once read past 1.00:
+
+| Shapes | win-x64 NativeAOT | linux-x64 NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|
+| Matrix decode (10) | 0.29 to 0.96 | 0.20 to 0.86 | 0.24 to 0.89 | 0.33 to 0.95 |
+| Image decode (14) | 0.26 to 0.87 | 0.21 to 0.96 | 0.17 to 0.54 | 0.29 to 0.90 |
+| Bitmap decode (2) | 0.20 to 0.23 | 0.22 to 0.30 | 0.31 to 0.42 | 0.39 to 0.47 |
+| Data-object API (4) | 0.25 to 1.01 | 0.30 to 1.01 | 0.30 to 0.83 | 0.46 to 0.89 |
+| Encode (18) | 0.62 to 1.01 | 0.60 to 1.03 | 0.50 to 1.02 | 0.50 to 1.01 |
+
+The cells past 1.00 are encodes inside their runs' spread. On ARM64 (Apple M2), where the round changed
+one cell, the end-to-end shapes read 0.87 to 1.02 with the dot product, on NativeAOT and the JIT, and
+the bitmap decodes 0.57 to 0.69 without it.
+
+Each kernel's result is in its symbology's record: the edge list, the histogram, the samplers, the
+syndromes and the search levels in [standardqr-decoder.md](standardqr-decoder.md); mask selection, the
+Structured Append walks and the Reed-Solomon encoder in [standardqr-encoder.md](standardqr-encoder.md);
+the extraction and the luminance in [rmqr-decoder.md](rmqr-decoder.md); the placer and the value writers
+in [rmqr-encoder.md](rmqr-encoder.md). The shared kernels with no record of their own:
+
+- `TextAnalyzer` on WebAssembly, 16 chars a step: a block with a char above U+00FF settles every flag, so where the tier narrows to bytes the narrowing is exact. 2.7 to 12x faster than scalar on 2,900 chars. It takes texts of 32 chars and more: interpreted, the tier takes about 0.2 µs on any text up to 24 chars, 1.6x the scalar pass at 8 and level or better from 32, which the smallest encodes showed (1.03 to 1.09 interpreted) until the threshold moved there from 8 at the end of the round.
+- `ModuleBitPacker` on WebAssembly, the swizzle for the byte reversal: 2.2 to 4.1x. Only the data-object API packs and unpacks, so the span API's shapes never showed it.
+- `ModeSegmenter`'s lanes on x64 without AVX and WebAssembly, the ARM64 four-lane groups on portable vectors, so those builds plan a set's symbols together too: 1 to 3 % of a set.
 
 Architecture-neutral work already benefits every target: cached per-version layouts, pair
 stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
@@ -446,9 +488,9 @@ a no-symbol image, bound by its branches as on x64) and then the sampler's colum
 eight windows a step; the sampler on four lanes, two steps a body). What the x64 round found
 there transferred as structure and not as instructions, and each tier was searched again on the
 M2 against its own reference (see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)). WASM runs the scalar fill and the column table and
-the 128-bit mask walk (the table's WebAssembly column); how fast is unmeasured, since the 128-bit forms
-measured on x64 say nothing about it.
+[standardqr-decoder.md](standardqr-decoder.md)). WebAssembly and x64 without AVX ran the scalar fill,
+the column table and the 128-bit mask walk until the 128-bit round gave them the fill's, the mesh
+sampler's and the edge list's 128-bit tiers, each measured on those builds.
 The queue is closed again behind them, on the same rule.
 
 ## Scope decisions
@@ -473,7 +515,7 @@ The queue is closed again behind them, on the same rule.
 | Physical scanner acceptance | Not automated, and deliberately never a conformance gate: a phone scanner disagreeing proves an interoperability problem, never a specification violation. Run ad hoc against a representative print/screen set before a symbology's first release | A field report that the committed corpus and the image-degradation tests both pass but real scanners fail |
 | SIMD tier table | One table in `Internals/SimdTiers.cs`, per kernel and build class, checked by source and table tests and by every build class in CI; the dispatch keeps its own flag reads; tiers move between files only as whole methods, six kept inline and listed | A JIT that inlines a dispatch through a property, which would let the dispatch read the table; a kept-inline tier rewritten as a method of its own for another reason |
 | NativeAOT instruction-set target | Not decided: the tier table is what the decision reads, and no public API or README text says anything about `IlcInstructionSet` | A plan for it |
-| 128-bit tiers where x64 without AVX or WebAssembly runs scalar | Planned for 2.0.0: a kernel gets one where it beats scalar on that build, measured on that build; a kernel too small to matter stays scalar, with its reason beside its table row | They ship |
+| 128-bit tiers where x64 without AVX or WebAssembly runs scalar | Done for 2.0.0 (2026-10-01, the 128-bit round under the SIMD tier inventory): a kernel has one where it beats what the build ran, measured on that build; the Structured Append parity and scanner on x64, six kernels on WebAssembly and the rMQR value writers on ARM64 stay scalar, each with its reason beside its row | A new kernel or build class, or a profile that puts a scalar cell's kernel over the bar |
 
 ## Lessons learned
 
@@ -519,3 +561,16 @@ The queue is closed again behind them, on the same rule.
 
 - **A change of a few percent needs the fastest of interleaved runs, not a benchmark job.** Judging the decode refactors of 2026-09-29 on this machine, the `ShortRun` job gave error bars as large as the mean on some shapes (Micro QR `M2_512px`, 5,613 ± 15,843 µs), three launches of fifteen iterations moved one tree 23 % between two runs (Standard QR version 40 at 3 px/module, 112.7 and 91.4 µs), and one process of a build could be 2.5 times another on a 4 µs decode. A small harness over both trees, alternating eight to twelve times and keeping each shape's fastest round, first quartile and median, held a percent; the benchmarks stay for absolute numbers.
 - **Even then a shape can lean by which shapes share its process.** rMQR's gradient image measured +0.4 to +1.4 % in six runs of the rMQR shapes alone, two of them with part of the change taken back out, and −1.0 to −1.4 % in both runs of every shape. A lean that survives taking the code it is blamed on back out is not that code's.
+
+- **A default NativeAOT publish lowers portable vectors for SSE2.** SSSE3 to SSE4.2 are run-time checks there, which explicit intrinsics behind `IsSupported` use and portable operations cannot: per 4,096 vectors a saturating `Vector128.ConvertToInt32` took 52 µs against 3 under `x86-64-v2`, a variable `Vector128.Shuffle` 43 against 3. A tier's flags do not say how its operations are lowered; only a timing on the build does.
+- **WebAssembly's runtimes disagree on a cast.** The interpreter writes `int.MinValue` for NaN and past 2^31, AOT-compiled code saturates, and an AOT build interprets some methods, so a scalar sampler's output past the image depended on how it ran. Every tier clamps before it converts and hands the conversion only values it converts exactly.
+- **Mono's WebAssembly AOT compiles some portable operations as calls into corlib's software fallback.** 64-bit lane shifts did, and the mask tier ran 8x slower than scalar until they went through `PackedSimd`. A new WebAssembly kernel's AOT profile is read for corlib calls.
+- **The interpreter charges by the operation and the call, and hoists nothing.** A constant a helper builds is rebuilt on every call, a vector step costs about three scalar modules, and a call ends a jiterpreter trace, so a step that wins a probe can lose inside its kernel. Its break-even sits higher than AOT-compiled code's (the Structured Append walks at chunks of 80 chars against 32, rMQR's pair planes at 44 stream bits per eight columns against 27 to 33), and the one flag both WebAssembly builds read takes the interpreter's. Each shape is timed in a process of its own: an unchanged kernel ran 1.8x slower after another build's shapes in the same process.
+- **On the interpreter a fixed cost per decode hides as a share.** With jiterpreter traces off a decode runs 4 to 8 times longer and pays the same µs, so compare µs. Stopwatch probes move what they time there (2.7 µs into one tree's read, none into the other's): they rank causes, and an A/B of unprobed builds decides. Splitting the image decode into shared steps (2026-09-29) costs a Micro QR M4 read 2 to 4 µs interpreted, the same methods run as often plus five wrappers, and inlining every wrapper that could go without undoing the split took none of it back.
+- **A dispatch change reaches callers on builds whose cell did not change.** A branch that folds away still stopped the JIT inlining its method, which it judges by the IL before folding; an operand that takes an argument's address (a span's `Length`) made the .NET 10 JIT copy the span under a flag that is constant false; ILC kept a flag property as a call until it was `AggressiveInlining`; and a changed method was inlined into one of its five callers alone, 86 to 139 instructions longer there (`DecodeWithMirrorRetry`, `NoInlining` since). Compare the callers' listings too, with `DOTNET_TieredCompilation=0`, since tier-1 code follows the run's profile.
+- **ILC inlines less than the JIT.** It kept two small helpers with `out` parameters as calls inside rMQR's format reader, which the JIT inlined.
+- **An interpolated exception message is compiled into the method that throws it, on every build.** The rMQR extraction dispatch's two messages made it several times the size of its working path; outlined, it went from 530 to 102 instructions on the ARM64 JIT.
+- **`--parity` through a dispatch checks only the tier the CI machine picks.** Every ARM64 runner has the dot product, so ILC's ARM64 code for the 128-bit luminance tier never ran there until `--parity` entered the tier directly.
+- **A share comes from timing a stage alone.** A per-function sample put the Structured Append walks at 2.4 % of a set and the segmenter at 13 to 18 %; timed alone the planner was 17 to 49 %, because the scalar walks run inside the segmenter's functions. Nor do the span API's shapes run the bit packer, which only the data-object API calls.
+- **Bound a step's gain by its share times its saving before building forms of it.** For the rMQR writers on WebAssembly that was 2.5 %, under the bar from the first kernel timing.
+- **The JIT needs its warmup.** Under the timing mode's default 300 ms the JIT can still be tiering on a shape of a few µs (Micro QR and rMQR images at 16 to 26 µs against 5 to 6 after 3 s on the ARM64 .NET 8 JIT); a median far above the minimum is tiering, not the code.

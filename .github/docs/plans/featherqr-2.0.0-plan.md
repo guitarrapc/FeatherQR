@@ -150,7 +150,7 @@ Two decisions inside the phase. **D5:** whether single-mode selection picks Kanj
 
 ## 128-bit tiers for builds without AVX2
 
-Planned in [simd-128bit-tiers-plan.md](simd-128bit-tiers-plan.md): the inventory of scalar cells, the rules a tier ships under, how each build is measured, and the phases. This plan keeps only the timing: the tiers are internal, must land before Phase 8 to be in 2.0.0, and move to 2.1.0 if they slip.
+Done (2026-10-01), in 2.0.0: every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` raised, or kept with its measured reason; public API unchanged. Its own plan is folded into [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round) (the rules a tier ships under, how each build is measured, the end-to-end result, the lessons) and the per-symbology records, and deleted.
 
 ## Open decisions
 
@@ -208,7 +208,7 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 4 | Symbol geometry | D3, the geometry members on all three `*DecodeInfo`, all three image decode paths | Matrix-level decode behaviour documented and tested |
 | 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over the whole input's bytes as the set writes them | Round-trip plus oracle cross-check |
 | 6 | Kanji encoding | D5, D6, reverse table, segmenter state, `EncodingMode`, capacity docs; sub-phases 6.1-6.9 in [kanji-encoding-plan.md](kanji-encoding-plan.md) | Oracle sweep green. Tag `2.0.0-preview.4` |
-| 6b | 128-bit tiers | [simd-128bit-tiers-plan.md](simd-128bit-tiers-plan.md) | That plan's exit: every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` raised or carrying its measured reason; public API unchanged |
+| 6b | 128-bit tiers | Done 2026-10-01: [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round) | That plan's exit: every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` raised or carrying its measured reason; public API unchanged |
 | 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script; README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry, 128-bit tiers); fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot simply be folded in as history; F1's renderer half landed and is already recorded in the specs) | Approved API listing frozen |
 | 8 | Release | Below | `2.0.0` on nuget.org |
 
@@ -819,3 +819,11 @@ Tests: `FractionalLowDensityDecodeTest`, 172 cases per framework, every builder 
 **Lessons.** Kept in the specs: a corpus that cannot fail is not a gate (odd repetitions, an odd number of accented characters), and the gate caught an oracle writing parity 0; a rule held by one conditional needs a test that fails without it; a fast path needs its definition beside it; count when timing stops resolving; a check after a search that did not know the rule is a second search; a fix of a review finding is new code. One for this plan: the version cap the caller already had was the count parameter, and that kept the whole feature one method.
 
 **Benchmark delta.** The single-symbol encode gained one predictable branch per data writer; `SimpleEncode` stayed within the machine's spread and allocations were identical. The decode path gained one `switch` case taken only on mode `0011`. The per-round numbers are in the encoder record.
+
+### Phase 6b, 128-bit tiers (2026-09-28 to 2026-10-01)
+
+**Done.** Every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` raised, or kept with its measured reason beside its row: the Structured Append parity and scanner stay scalar on x64, the rMQR value writers on ARM64, and six kernels on WebAssembly. 22 cells gained a portable 128-bit tier (9 of 11 on x64 without AVX, 13 of 19 on WebAssembly), and so did the CPU-decided side of three more (the syndromes without GFNI, the rMQR extraction without fast PEXT, the luminance on ARM64 without the dot product), with `PackedSimd` steps where WebAssembly's own instruction won; the four existing tiers that lost to scalar on a default NativeAOT publish and on WebAssembly AOT were fixed first. `--time` and `--parity` in both report projects; a parity test entering each tier directly. The confirming run found the WebAssembly text analysis slower than scalar interpreted below 32 chars, moved its threshold there from 8, and gave `--parity` the tier's own entry. Public API unchanged, no allocation added. Its plan is folded into [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round) and the per-symbology records, and deleted.
+
+**Lessons.** Kept in the specs: a default NativeAOT publish lowers portable vectors for SSE2, and WebAssembly's runtimes disagree on a cast; Mono's WebAssembly AOT turns some portable operations into calls into corlib; the interpreter charges by the operation and the call, its break-even sits higher than AOT's, and a fixed cost per decode hides there as a share; a dispatch change reaches callers whose cell did not change; `--parity` through a dispatch checks only the tier the CI machine picks; a share comes from timing a stage alone.
+
+**Benchmark delta.** End to end against main at the merge base, the branch's time over main's, on default NativeAOT for win-x64 and linux-x64 and on WebAssembly AOT and interpreted: matrix decode 0.20 to 0.96, image decode 0.17 to 0.96, bitmap decode 0.20 to 0.47, the data-object API 0.25 to 1.01, encode 0.50 to 1.03, the cells past 1.00 inside their runs' spread; per build in [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round). ARM64 (Apple M2) 0.87 to 1.02 with the dot product, the bitmap decodes 0.57 to 0.69 without it.
