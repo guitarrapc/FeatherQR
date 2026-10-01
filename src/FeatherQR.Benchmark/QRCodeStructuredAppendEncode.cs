@@ -24,12 +24,12 @@ using System.Text;
 ///   utf8-15k-any    : Japanese prose behind a UTF-8 ECI (asked for), 15 symbols; multi-byte cost model
 ///   utf8-15k-mixed  : Japanese sentences carrying order numbers, behind a UTF-8 ECI (asked for); three-byte characters
 ///                     with digit runs worth a Numeric segment, so the searches run the program under UTF-8
-///   kanji-15k-any   : the utf8-15k-any text with the charset left to the library: Single is its UTF-8 set, and
+///   kanji-15k-any   : the utf8-15k-any text with AllowKanji: Single is its UTF-8 set, and
 ///                     Optimal a Kanji set of 9 symbols (kanji-encoding-plan 6.5), planned after the UTF-8 set it
 ///                     is weighed against; the Kanji set's walks are scalar (K9). Its Optimal Ratio is against
 ///                     the Single set's 15 UTF-8 symbols, not its own 9; utf8-15k-any's Optimal row is its twin
 ///   kanji-15k-mixed : the utf8-15k-mixed text the same way; Optimal is a Kanji set of 7 symbols at version 39
-///   cells-15k-any   : Japanese prose whose every character has a Kanji cell, 9 symbols at version 39 as a Kanji
+///   cells-15k-any   : Japanese prose whose every character has a Kanji cell, with AllowKanji: 9 symbols at version 39 as a Kanji
 ///                     set under both segmentations
 ///   cells-15k-utf8  : the same text with UTF-8 asked for, 16 symbols at version 40; cells-15k-any's twin
 ///   marked-40k-any  : the order lines as concatenated files leave them, a U+FEFF after every line feed; no symbol
@@ -86,9 +86,10 @@ public class QRCodeStructuredAppendEncode
             _ => throw new ArgumentOutOfRangeException(nameof(Shape), Shape, "unknown shape"),
         };
         var charset = Shape is "utf8-15k-any" or "utf8-15k-mixed" or "cells-15k-utf8" ? EciMode.Utf8 : EciMode.Default;
+        var allowKanji = Shape is "kanji-15k-any" or "kanji-15k-mixed" or "cells-15k-any";
 
-        _single = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset };
-        _optimal = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, Segmentation = QRSegmentation.Optimal };
+        _single = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, AllowKanji = allowKanji };
+        _optimal = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, Segmentation = QRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // The chunks of the Single set, read back through the decoder, with the version and
         // level every symbol of the set shares; the baseline encodes exactly those symbols,
@@ -101,7 +102,7 @@ public class QRCodeStructuredAppendEncode
                 throw new InvalidOperationException($"symbol {i} of shape {Shape} did not decode: {info.Status}");
             _chunkLevel = info.EccLevel;
         }
-        _chunkOptions = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(set[0].Version), EciMode = charset };
+        _chunkOptions = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(set[0].Version), EciMode = charset, AllowKanji = allowKanji };
     }
 
     [Benchmark(Baseline = true, Description = "Symbols")]

@@ -156,9 +156,12 @@ public class RmQRSegmentationTest
         {
             foreach (var strategy in Strategies())
             {
-                var actual = RmQRCodeGenerator.Create(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal }).Version;
-                var expected = ExhaustiveBestVersion(content, ecc, strategy);
-                await Assert.That(actual).IsEqualTo(expected);
+                foreach (var allowKanji in new[] { false, true })
+                {
+                    var actual = RmQRCodeGenerator.Create(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal, AllowKanji = allowKanji }).Version;
+                    var expected = ExhaustiveBestVersion(content, ecc, strategy, allowKanji);
+                    await Assert.That(actual).IsEqualTo(expected).Because($"{ecc} {strategy} AllowKanji {allowKanji}");
+                }
             }
         }
     }
@@ -176,7 +179,9 @@ public class RmQRSegmentationTest
         foreach (var strategy in Strategies())
         {
             var actual = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal });
-            await Assert.That(actual.Version).IsEqualTo(ExhaustiveBestVersion(content, RmQREccLevel.M, strategy));
+            await Assert.That(actual.Version).IsEqualTo(ExhaustiveBestVersion(content, RmQREccLevel.M, strategy, allowKanji: false));
+            var kanji = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Segmentation = RmQRSegmentation.Optimal, AllowKanji = true });
+            await Assert.That(kanji.Version).IsEqualTo(ExhaustiveBestVersion(content, RmQREccLevel.M, strategy, allowKanji: true));
 
             await Assert.That(RmQRCodeDecoder.TryDecode(actual, out var decoded)).IsTrue();
             await Assert.That(decoded).IsEqualTo(content);
@@ -191,9 +196,9 @@ public class RmQRSegmentationTest
     /// the content, and take the best by the strategy comparator. Deliberately does no
     /// pruning, no memoisation and no single-mode ceiling.
     /// </summary>
-    private static RmQRVersion ExhaustiveBestVersion(string content, RmQREccLevel ecc, RmQRFitStrategy strategy)
+    private static RmQRVersion ExhaustiveBestVersion(string content, RmQREccLevel ecc, RmQRFitStrategy strategy, bool allowKanji)
     {
-        var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default, allowKanji: true, planKanji: true);
+        var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default, allowKanji: allowKanji, planKanji: allowKanji);
         var charset = analysis.EciMode;
         var eciBits = charset == EciMode.Default ? 0 : 11;
 
@@ -329,16 +334,17 @@ public class RmQRSegmentationTest
 
     /// <summary>Contents verified to cross a version boundary once the modes are mixed.</summary>
     [Test]
-    [Arguments("Order 12345 item 6789", RmQRVersion.R13x43, RmQRVersion.R9x59)]
-    [Arguments("ABC-1234567890123456", RmQRVersion.R11x43, RmQRVersion.R13x27)]
-    [Arguments("x1234567890123456789012345678901234567890", RmQRVersion.R11x77, RmQRVersion.R9x59)]
-    [Arguments("1234567890123456789012345678901234567890x", RmQRVersion.R11x77, RmQRVersion.R9x59)]
-    [Arguments("日本語1234567890", RmQRVersion.R13x43, RmQRVersion.R13x27)] // a Kanji plan, Kanji(日本語) + Numeric: 87 bits; the UTF-8 plan behind its ECI header needed R11x43
-    [Arguments("éèê1234567890", RmQRVersion.R11x43, RmQRVersion.R13x27)]
-    public async Task Optimal_MixedContent_ShrinksTheSymbol(string content, RmQRVersion expectedSingle, RmQRVersion expectedOptimal)
+    [Arguments("Order 12345 item 6789", RmQRVersion.R13x43, RmQRVersion.R9x59, false)]
+    [Arguments("ABC-1234567890123456", RmQRVersion.R11x43, RmQRVersion.R13x27, false)]
+    [Arguments("x1234567890123456789012345678901234567890", RmQRVersion.R11x77, RmQRVersion.R9x59, false)]
+    [Arguments("1234567890123456789012345678901234567890x", RmQRVersion.R11x77, RmQRVersion.R9x59, false)]
+    [Arguments("日本語1234567890", RmQRVersion.R13x43, RmQRVersion.R11x43, false)] // the UTF-8 plan behind its ECI header
+    [Arguments("日本語1234567890", RmQRVersion.R13x43, RmQRVersion.R13x27, true)]  // with AllowKanji a Kanji plan, Kanji(日本語) + Numeric: 87 bits
+    [Arguments("éèê1234567890", RmQRVersion.R11x43, RmQRVersion.R13x27, false)]
+    public async Task Optimal_MixedContent_ShrinksTheSymbol(string content, RmQRVersion expectedSingle, RmQRVersion expectedOptimal, bool allowKanji)
     {
-        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
-        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = allowKanji });
+        var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, AllowKanji = allowKanji });
 
         await Assert.That(single.Version).IsEqualTo(expectedSingle);
         await Assert.That(optimal.Version).IsEqualTo(expectedOptimal);

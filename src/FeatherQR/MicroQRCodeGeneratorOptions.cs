@@ -19,24 +19,27 @@ public readonly record struct MicroQRCodeGeneratorOptions
     /// </summary>
     /// <remarks>
     /// Prefer the object initializer (<c>new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order. Pass constructor arguments by name: <paramref name="quietZoneSize"/> and <paramref name="maskPattern"/> are adjacent integers, so a positional call can transpose them and still compile.
-    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation)"/>.
+    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation, bool)"/>.
     /// </remarks>
     /// <param name="version">See <see cref="Version"/>.</param>
     /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
     /// <param name="maskPattern">See <see cref="MaskPattern"/>.</param>
     /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
+    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-3 or <c>null</c>.</exception>
     public MicroQRCodeGeneratorOptions(
         MicroQRVersionRange version = default,
         int quietZoneSize = MicroQRCodeGenerator.DefaultQuietZone,
         int? maskPattern = null,
-        MicroQRSegmentation segmentation = MicroQRSegmentation.Single)
+        MicroQRSegmentation segmentation = MicroQRSegmentation.Single,
+        bool allowKanji = false)
         : this()
     {
         Version = version;
         QuietZoneSize = quietZoneSize;
         MaskPattern = maskPattern;
         Segmentation = segmentation;
+        AllowKanji = allowKanji;
     }
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
@@ -87,4 +90,22 @@ public readonly record struct MicroQRCodeGeneratorOptions
     /// Size a destination buffer with the same value you encode with.
     /// </summary>
     public MicroQRSegmentation Segmentation { get; init; }
+
+    /// <summary>
+    /// Write text in Kanji mode where it can be: 13 bits a character, where UTF-8 takes 24 bits a kana or kanji.
+    /// Off by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) is one Kanji segment, and under <see cref="MicroQRSegmentation.Optimal"/> text that is so apart from its ASCII can be Kanji runs beside runs of that ASCII, where that is the smaller symbol.
+    /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜, keep a text in UTF-8, as does any character outside the table.
+    /// Kanji mode exists from M3, and nearly doubles what Japanese text fits: M4-L holds 9 characters in Kanji mode and 5 in UTF-8.
+    /// Micro QR has no ECI, so its UTF-8 bytes read as UTF-8 only in a reader that recognises them, where Kanji mode declares itself.
+    /// </para>
+    /// <para>
+    /// Off by default, as on the other two symbologies, because not every reader reads Kanji mode: in Standard QR an Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it.
+    /// Neither phone's own scanner reads Micro QR at all; Denso Wave's reader and zxing-cpp read it in Kanji mode and in UTF-8 alike.
+    /// </para>
+    /// </remarks>
+    public bool AllowKanji { get; init; }
 }

@@ -12,6 +12,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
+/// Every option here sets <c>AllowKanji</c>; without it the text keeps the UTF-8 plan, which <c>KanjiEligibilityTest</c> holds.
 /// The rule the expectations are written from: below the version the single-mode (UTF-8) stream needs, take the first version a plan fits, the Kanji plan (Kanji runs beside Numeric, Alphanumeric and Byte runs of ASCII, no ECI) where it fits and today's UTF-8 plan otherwise.
 /// So the output is never larger than <c>Single</c>, and never larger than the UTF-8 plan the same text got before Kanji plans existed.
 /// </para>
@@ -89,7 +90,8 @@ public class KanjiOptimalTest
         return buffer;
     }
 
-    private static readonly QRCodeGeneratorOptions StandardOptimal = new() { Segmentation = QRSegmentation.Optimal };
+    private static readonly QRCodeGeneratorOptions StandardOptimal = new() { Segmentation = QRSegmentation.Optimal, AllowKanji = true };
+    private static readonly QRCodeGeneratorOptions StandardSingle = new() { AllowKanji = true };
 
     private static int StandardCapacity(int version, QREccLevel ecc) => QRCodeConstants.GetEccInfo(version, ecc).TotalDataCodewords * 8;
 
@@ -164,7 +166,7 @@ public class KanjiOptimalTest
         {
             if (!QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var optimal, StandardOptimal))
                 continue;
-            if (QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var single))
+            if (QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var single, StandardSingle))
                 await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version).Because($"{text} at {ecc}");
             if (QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var utf8, StandardOptimal with { EciMode = EciMode.Utf8 }))
                 await Assert.That(optimal.Version).IsLessThanOrEqualTo(utf8.Version).Because($"{text} at {ecc}");
@@ -228,7 +230,7 @@ public class KanjiOptimalTest
         var (version, runs) = ReferenceStandard(text, QREccLevel.M);
         await Assert.That(runs).IsNull();
         await Assert.That(FirstKanjiPlanVersion(text, QREccLevel.M)).IsGreaterThan(version).Because("the Kanji plan alone would need a larger version");
-        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var single)).IsTrue();
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text, QREccLevel.M, out var single, StandardSingle)).IsTrue();
         await Assert.That(version).IsLessThan(single.Version).Because("and the UTF-8 plan beats the single stream");
         await AssertStandardOptimalIsTheReference(text, QREccLevel.M);
     }
@@ -308,7 +310,8 @@ public class KanjiOptimalTest
         "xЯxЯxЯ12345678",
     ];
 
-    private static readonly MicroQRCodeGeneratorOptions MicroOptimal = new() { Segmentation = MicroQRSegmentation.Optimal };
+    private static readonly MicroQRCodeGeneratorOptions MicroOptimal = new() { Segmentation = MicroQRSegmentation.Optimal, AllowKanji = true };
+    private static readonly MicroQRCodeGeneratorOptions MicroSingle = new() { AllowKanji = true };
 
     private static int MicroCapacity(MicroQRVersion version, MicroQREccLevel ecc) => MicroQRConstants.GetDataBitCapacity(version, ecc);
 
@@ -366,7 +369,7 @@ public class KanjiOptimalTest
             }
             await Assert.That(KanjiSymbolBuilder.DecodeMicroQr(actual, version.Value)).IsEqualTo(text).Because($"{text} at {ecc}");
 
-            if (MicroQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var single))
+            if (MicroQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var single, MicroSingle))
                 await Assert.That((int)size.Version).IsLessThanOrEqualTo((int)single.Version).Because($"{text} at {ecc}");
         }
     }
@@ -385,7 +388,7 @@ public class KanjiOptimalTest
         var utf8Screen = (ModeSegmenter.CheapestSixths(text, EciMode.Utf8) + 5) / 6 + 2 * (int)MicroQRVersion.M3;
         await Assert.That(utf8Screen).IsGreaterThan(MicroCapacity(MicroQRVersion.M3, MicroQREccLevel.L));
         await Assert.That(MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, MicroOptimal).Version).IsEqualTo(MicroQRVersion.M3);
-        await Assert.That(MicroQRCodeGenerator.Create(text, MicroQREccLevel.L).Version).IsEqualTo(MicroQRVersion.M4);
+        await Assert.That(MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, MicroSingle).Version).IsEqualTo(MicroQRVersion.M4);
     }
 
     /// <summary>
@@ -396,7 +399,7 @@ public class KanjiOptimalTest
     public async Task MicroQr_TextNoSymbolHeldAsUtf8_NowFitsAsAKanjiPlan()
     {
         const string text = "日本語123456789";
-        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text, MicroQREccLevel.L, out _)).IsFalse();
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text, MicroQREccLevel.L, out _, MicroSingle)).IsFalse();
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text, MicroQREccLevel.L, out var size, MicroOptimal)).IsTrue();
         await Assert.That(size.Version).IsEqualTo(MicroQRVersion.M3);
         await Assert.That(ReferenceMicro(text, MicroQREccLevel.L).Version).IsEqualTo(MicroQRVersion.M3);
@@ -413,7 +416,7 @@ public class KanjiOptimalTest
         var kanjiRuns = KanjiPlanReference.Runs(text, KanjiPlanReference.MicroQr(4));
         await Assert.That(MicroQrBitCount(4, kanjiRuns)).IsGreaterThan(MicroCapacity(MicroQRVersion.M4, MicroQREccLevel.L));
         await Assert.That(MicroQRSegmentPlanner.MinimumPayloadBits(text, EciMode.Utf8, MicroQRVersion.M4)).IsLessThanOrEqualTo(MicroCapacity(MicroQRVersion.M4, MicroQREccLevel.L));
-        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text, MicroQREccLevel.L, out _)).IsFalse();
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text, MicroQREccLevel.L, out _, MicroSingle)).IsFalse();
 
         await Assert.That(ReferenceMicro(text, MicroQREccLevel.L)).IsEqualTo((MicroQRVersion.M4, (Run[]?)null));
         var options = MicroOptimal with { MaskPattern = 0, QuietZoneSize = 0 };
@@ -491,7 +494,7 @@ public class KanjiOptimalTest
             foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
             {
                 var (reference, runs) = ReferenceRmQr(text, ecc, strategy);
-                var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, FitStrategy = strategy };
+                var options = new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal, FitStrategy = strategy };
                 var because = $"{text} at {ecc}, {strategy}";
                 if (reference is not { } version)
                 {
@@ -517,7 +520,7 @@ public class KanjiOptimalTest
                 await Assert.That(RmQRCodeDecoder.TryDecode(actual, out var decoded)).IsTrue().Because(because);
                 await Assert.That(decoded).IsEqualTo(text).Because(because);
 
-                if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var single, new RmQRCodeGeneratorOptions { FitStrategy = strategy }))
+                if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var single, new RmQRCodeGeneratorOptions { AllowKanji = true, FitStrategy = strategy }))
                     await Assert.That(version == single.Version || RmQRVersionSelector.IsBetter(version, single.Version, strategy)).IsTrue().Because($"{because}: never larger than Single");
                 if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var utf8Optimal, options with { EciMode = EciMode.Utf8 }))
                     await Assert.That(version == utf8Optimal.Version || RmQRVersionSelector.IsBetter(version, utf8Optimal.Version, strategy)).IsTrue().Because($"{because}: never larger than the UTF-8 plan");
@@ -552,12 +555,12 @@ public class KanjiOptimalTest
         foreach (var strategy in Strategies())
         {
             var (version, _) = ReferenceRmQr(text, RmQREccLevel.M, strategy);
-            var actual = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, FitStrategy = strategy });
+            var actual = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal, FitStrategy = strategy });
             await Assert.That(actual.Version).IsEqualTo(version!.Value).Because($"{strategy}");
         }
 
         // R7x43 is the first rank by height; by area R11x27 (297 modules against 301, Kanji width 2 as well) comes first.
-        var lowest = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, FitStrategy = RmQRFitStrategy.MinimizeHeight });
+        var lowest = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal, FitStrategy = RmQRFitStrategy.MinimizeHeight });
         await Assert.That(lowest.Version).IsEqualTo(RmQRVersion.R7x43);
     }
 
@@ -577,7 +580,7 @@ public class KanjiOptimalTest
         await Assert.That(KanjiBits(text, RmQRVersion.R13x77)).IsGreaterThan(RmQrCapacity(RmQRVersion.R13x77, RmQREccLevel.M));
         await Assert.That(RmQrUtf8PlanFits(text, RmQRVersion.R13x77, RmQREccLevel.M)).IsTrue();
 
-        var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
+        var options = new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal };
         var actual = RmQRCodeGenerator.Create(text, RmQREccLevel.M, options);
         await Assert.That(actual.Version).IsEqualTo(RmQRVersion.R13x77);
         await Assert.That(Core(actual)).IsEquivalentTo(Core(RmQRCodeGenerator.Create(text, RmQREccLevel.M, options with { EciMode = EciMode.Utf8 })), CollectionOrdering.Matching);
@@ -588,7 +591,7 @@ public class KanjiOptimalTest
     public async Task RmQr_RequestedVersionOnlyAKanjiPlanFits_NowFits()
     {
         const string text = "あい123";
-        var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, Version = RmQRVersion.R7x43 };
+        var options = new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal, Version = RmQRVersion.R7x43 };
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out _, options with { EciMode = EciMode.Utf8 })).IsFalse();
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(text, RmQREccLevel.M, out var size, options)).IsTrue();
         await Assert.That(size.Version).IsEqualTo(RmQRVersion.R7x43);

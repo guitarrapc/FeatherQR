@@ -98,7 +98,7 @@ public class KanjiEncoderOracleTest
             var manifest = FixtureLoader.Load("RmQr", id).Manifest;
             RmQRConstants.TryGetVersion(manifest.Height, manifest.Width, out var version);
             var ecc = Enum.Parse<RmQREccLevel>(manifest.ErrorCorrectionLevel);
-            var options = new RmQRCodeGeneratorOptions { Version = version };
+            var options = new RmQRCodeGeneratorOptions { AllowKanji = true, Version = version };
             await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText, ecc, out _, options)).IsTrue().Because(id);
             await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText + Next, ecc, out _, options)).IsFalse().Because(id);
             filled++;
@@ -107,11 +107,11 @@ public class KanjiEncoderOracleTest
         {
             var manifest = FixtureLoader.Load("StandardQr", id).Manifest;
             var ecc = Enum.Parse<QREccLevel>(manifest.ErrorCorrectionLevel);
-            var options = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(manifest.Version) };
+            var options = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.Exactly(manifest.Version) };
             await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText, ecc, out _, options)).IsTrue().Because(id);
             if (id.Contains("-edge-", StringComparison.Ordinal))
             {
-                var below = new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(manifest.Version - 1) };
+                var below = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.Exactly(manifest.Version - 1) };
                 await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText, ecc, out _, below)).IsFalse().Because(id);
                 await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(manifest.PayloadText[..^1], ecc, out _, below)).IsTrue().Because(id);
             }
@@ -135,7 +135,7 @@ public class KanjiEncoderOracleTest
         var (oracle, size) = FixtureLoader.ReadMatrix(fixture.MatrixPath);
         var ecc = Enum.Parse<QREccLevel>(manifest.ErrorCorrectionLevel);
 
-        var data = QRCodeGenerator.Create(manifest.PayloadText, ecc, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(manifest.Version), MaskPattern = manifest.MaskPattern, QuietZoneSize = 0 });
+        var data = QRCodeGenerator.Create(manifest.PayloadText, ecc, new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.Exactly(manifest.Version), MaskPattern = manifest.MaskPattern, QuietZoneSize = 0 });
 
         await Assert.That(data.Size).IsEqualTo(size).Because(fixtureId);
         await Assert.That(Differences(size, size, (row, col) => data[row, col], oracle, skip: null)).IsEmpty().Because($"{fixtureId}: {manifest.Generator} {manifest.Version}-{manifest.ErrorCorrectionLevel} mask {manifest.MaskPattern}");
@@ -150,7 +150,7 @@ public class KanjiEncoderOracleTest
         var (oracle, size) = FixtureLoader.ReadMatrix(fixture.MatrixPath);
         var ecc = Enum.Parse<MicroQREccLevel>(manifest.ErrorCorrectionLevel);
 
-        var data = MicroQRCodeGenerator.Create(manifest.PayloadText, ecc, new MicroQRCodeGeneratorOptions { Version = (MicroQRVersion)manifest.Version, MaskPattern = manifest.MaskPattern, QuietZoneSize = 0 });
+        var data = MicroQRCodeGenerator.Create(manifest.PayloadText, ecc, new MicroQRCodeGeneratorOptions { AllowKanji = true, Version = (MicroQRVersion)manifest.Version, MaskPattern = manifest.MaskPattern, QuietZoneSize = 0 });
 
         await Assert.That(data.Size).IsEqualTo(size).Because(fixtureId);
         await Assert.That(Differences(size, size, (row, col) => data[row, col], oracle, skip: null)).IsEmpty().Because($"{fixtureId}: {manifest.Generator} M{manifest.Version}-{manifest.ErrorCorrectionLevel} mask {manifest.MaskPattern}");
@@ -166,7 +166,7 @@ public class KanjiEncoderOracleTest
         RmQRConstants.TryGetVersion(height, width, out var version);
         var ecc = Enum.Parse<RmQREccLevel>(manifest.ErrorCorrectionLevel);
 
-        var data = RmQRCodeGenerator.Create(manifest.PayloadText, ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var data = RmQRCodeGenerator.Create(manifest.PayloadText, ecc, new RmQRCodeGeneratorOptions { AllowKanji = true, Version = version, QuietZoneSize = 0 });
 
         // qrtool's tail defect: the last h - 10 modules of the walk, column 1, rows 8 to h - 3.
         Func<int, int, bool>? skip = manifest.Generator == "qrtool" && height >= 11 ? (row, col) => col == 1 && row >= 8 && row <= height - 3 : null;

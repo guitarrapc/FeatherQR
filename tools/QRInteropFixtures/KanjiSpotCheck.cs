@@ -152,7 +152,7 @@ public static class KanjiSpotCheck
         {
             var version = shapes[slot].Version;
             var variant = $"{version}-L";
-            var data = QRCodeGenerator.Create(text, QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version) });
+            var data = QRCodeGenerator.Create(text, QREccLevel.L, new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.Exactly(version) });
             tally.Symbol(text, variant);
 
             tally.Read("this", text, QRCodeDecoder.TryDecode(data, out var ours, out _) ? ours : null, variant);
@@ -176,7 +176,7 @@ public static class KanjiSpotCheck
         {
             var version = shapes[slot].Version;
             var variant = $"{version}-L";
-            var data = MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version });
+            var data = MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { AllowKanji = true, Version = version });
             tally.Symbol(text, variant);
 
             tally.Read("this", text, MicroQRCodeDecoder.TryDecode(data, out var ours, out _) ? ours : null, variant);
@@ -198,7 +198,7 @@ public static class KanjiSpotCheck
         {
             var version = versions[slot];
             var variant = $"{version}-M";
-            var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+            var data = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Version = version });
             tally.Symbol(text, variant);
 
             tally.Read("this", text, RmQRCodeDecoder.TryDecode(data, out var ours, out _) ? ours : null, variant);
@@ -212,7 +212,7 @@ public static class KanjiSpotCheck
     private static int LargestKanjiCount(RmQRVersion version, string[] cells)
     {
         var count = 0;
-        while (RmQRCodeGenerator.TryGetRequiredBufferSize(string.Concat(cells.AsSpan(0, count + 1).ToArray()), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = version }))
+        while (RmQRCodeGenerator.TryGetRequiredBufferSize(string.Concat(cells.AsSpan(0, count + 1).ToArray()), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { AllowKanji = true, Version = version }))
             count++;
         return count;
     }
@@ -255,7 +255,7 @@ public static class KanjiSpotCheck
         {
             var shiftJis = KanjiPayload.ToShiftJisBytes(text, null);
 
-            var qr = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
+            var qr = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true, Segmentation = QRSegmentation.Optimal });
             var (qrLuminance, qrWidth) = RenderSquare(qr.Size, (r, c) => qr[r, c]);
             var qrCpp = cppQr.From(new CppImageView(qrLuminance, qrWidth, qrWidth, CppImageFormat.Lum));
             var qrNet = NetRead(net, qrLuminance, qrWidth, qrWidth);
@@ -265,9 +265,9 @@ public static class KanjiSpotCheck
                 ("ZXing.Net", qrNet?.Text),
                 ("CodeGlyphX", GlyphDecoder.TryDecode(ToGlyphMatrix(qr), out var glyph) ? glyph.Text : null));
 
-            if (MicroQRCodeGenerator.TryGetRequiredBufferSize(text, MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }))
+            if (MicroQRCodeGenerator.TryGetRequiredBufferSize(text, MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { AllowKanji = true, Segmentation = MicroQRSegmentation.Optimal }))
             {
-                var micro = MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+                var micro = MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { AllowKanji = true, Segmentation = MicroQRSegmentation.Optimal });
                 var (microLuminance, microWidth) = RenderSquare(micro.Size, (r, c) => micro[r, c]);
                 var microCpp = cppMicro.From(new CppImageView(microLuminance, microWidth, microWidth, CppImageFormat.Lum));
                 failures += Line($"Micro QR {micro.Version}", text, shiftJis, microCpp,
@@ -275,7 +275,7 @@ public static class KanjiSpotCheck
                     ("zxing-cpp", microCpp.Length == 1 ? microCpp[0].Text : null));
             }
 
-            var rmqr = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+            var rmqr = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal });
             var (rmqrLuminance, rmqrWidth, rmqrHeight) = RenderRect(rmqr.Width, rmqr.Height, (r, c) => rmqr[r, c]);
             var rmqrCpp = cppRmQr.From(new CppImageView(rmqrLuminance, rmqrWidth, rmqrHeight, CppImageFormat.Lum));
             failures += Line($"rMQR {rmqr.Version}", text, shiftJis, rmqrCpp,

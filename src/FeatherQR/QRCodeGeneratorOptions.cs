@@ -30,7 +30,7 @@ public readonly record struct QRCodeGeneratorOptions
     /// <strong>Pass arguments by name.</strong> Three consecutive parameters accept a bare <c>int</c> (<paramref name="version"/> converts from one, and <paramref name="quietZoneSize"/> and <paramref name="maskPattern"/> are integers), so a positional call can transpose two of them and still compile.
     /// Every parameter is optional, and each default is the value <c>default</c> carries for that property, so omitting one leaves it exactly as the default configuration has it.
     /// Values are assigned through the same <c>init</c> accessors, so validation is identical either way.
-    /// The three option structs list their shared settings in the same relative order (version, quiet zone, mask pattern, segmentation) so that a caller moving between symbologies does not meet a different one. <see cref="MaskPattern"/> is validated on assignment either way; the other members carry no constructor-time check, exactly as the object initializer does not.
+    /// The three option structs list their shared settings in the same relative order (version, quiet zone, mask pattern, segmentation, Kanji) so that a caller moving between symbologies does not meet a different one. <see cref="MaskPattern"/> is validated on assignment either way; the other members carry no constructor-time check, exactly as the object initializer does not.
     /// </remarks>
     /// <param name="eciMode">See <see cref="EciMode"/>.</param>
     /// <param name="utf8Bom">See <see cref="Utf8Bom"/>.</param>
@@ -39,6 +39,7 @@ public readonly record struct QRCodeGeneratorOptions
     /// <param name="maskPattern">See <see cref="MaskPattern"/>.</param>
     /// <param name="boostEccLevel">See <see cref="BoostEccLevel"/>.</param>
     /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
+    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-7 or <c>null</c>.</exception>
     public QRCodeGeneratorOptions(
         EciMode eciMode = EciMode.Default,
@@ -47,7 +48,8 @@ public readonly record struct QRCodeGeneratorOptions
         int quietZoneSize = DefaultQuietZone,
         int? maskPattern = null,
         bool boostEccLevel = false,
-        QRSegmentation segmentation = QRSegmentation.Single)
+        QRSegmentation segmentation = QRSegmentation.Single,
+        bool allowKanji = false)
         : this()
     {
         EciMode = eciMode;
@@ -57,6 +59,7 @@ public readonly record struct QRCodeGeneratorOptions
         MaskPattern = maskPattern;
         BoostEccLevel = boostEccLevel;
         Segmentation = segmentation;
+        AllowKanji = allowKanji;
     }
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
@@ -64,13 +67,13 @@ public readonly record struct QRCodeGeneratorOptions
 
     /// <summary>
     /// Character encoding declaration.
-    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content, or Kanji mode (no ECI) for text JIS X 0208 holds entirely.
+    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content, and with <see cref="AllowKanji"/> Kanji mode (no ECI) for text JIS X 0208 holds.
     /// </summary>
     public EciMode EciMode { get; init; }
 
     /// <summary>
     /// Include a UTF-8 byte order mark.
-    /// Ignored unless the content is written as UTF-8 in Byte mode; asking for one keeps text that would go out in Kanji mode in UTF-8.
+    /// Ignored unless the content is written as UTF-8 in Byte mode; asking for one keeps text that <see cref="AllowKanji"/> would write in Kanji mode in UTF-8.
     /// When a BOM would be written, <see cref="QRSegmentation.Optimal"/> emits the single-mode stream instead of a split (the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text).
     /// </summary>
     public bool Utf8Bom { get; init; }
@@ -130,4 +133,23 @@ public readonly record struct QRCodeGeneratorOptions
     /// Size a destination buffer with the same value you encode with.
     /// </summary>
     public QRSegmentation Segmentation { get; init; }
+
+    /// <summary>
+    /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind a 12-bit ECI header.
+    /// Off by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>) and no byte order mark is asked for (<see cref="Utf8Bom"/>); a charset the caller names is written as named.
+    /// Then text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) is one Kanji segment, and under <see cref="QRSegmentation.Optimal"/> text that is so apart from its ASCII can be Kanji runs beside runs of that ASCII, where that is the smaller symbol.
+    /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜, keep a text in UTF-8, as does any character outside the table.
+    /// A Structured Append set made with this option can be a Kanji set: no symbol carries an ECI header, and the parity is the XOR of the whole text's Shift_JIS bytes.
+    /// </para>
+    /// <para>
+    /// Off by default because not every reader reads Kanji mode. An Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it, where they read UTF-8 behind ECI 26.
+    /// The iPhone camera, Google Lens on iPhone, ZXing and its ports, zxing-cpp and Denso Wave's reader read it.
+    /// Turn it on where the readers are known to read it, an industrial scanner for example, or where the symbol has to be smaller.
+    /// </para>
+    /// </remarks>
+    public bool AllowKanji { get; init; }
 }

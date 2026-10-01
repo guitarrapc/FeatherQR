@@ -1,7 +1,7 @@
 /// <summary>
-/// Text whose every character has a Kanji cell, which the generators write in Kanji mode when the charset is left to them, next to the same text with UTF-8 asked for, which is the path such text took before Kanji mode was written.
-/// Then text with ASCII in it under <c>Optimal</c>, which takes a Kanji plan (Kanji runs beside runs of the ASCII) where that is smaller, next to the same text with UTF-8 asked for, which plans it as before.
-/// Micro QR has no charset option, so its twins are the same arms run against a build that predates Kanji mode (or Kanji plans).
+/// Text whose every character has a Kanji cell, which the generators write in Kanji mode when asked (<c>AllowKanji</c>), next to the same text in UTF-8, which is what they write by default.
+/// Then text with ASCII in it under <c>Optimal</c>, which with the option takes a Kanji plan (Kanji runs beside runs of the ASCII) where that is smaller, next to the same text planned in UTF-8.
+/// The UTF-8 twins ask for UTF-8 where the symbology has a charset option; Micro QR has none, and its twins are the same text without <c>AllowKanji</c>.
 /// Last, label-sized Structured Append sets (version 10 at most): a Kanji set of cells under <c>Single</c>, and of text with ASCII in it under <c>Optimal</c>, next to the UTF-8 set asked for; and a text whose Kanji set is planned and loses to its UTF-8 set.
 /// The large sets are <c>QRCodeStructuredAppendEncode</c>'s kanji and cells shapes.
 /// </summary>
@@ -32,9 +32,9 @@ public class KanjiEncode
     /// <summary>1,000 characters of ASCII and kanji taking turns: the Kanji set pays a header a character and is larger, so under Optimal the set is the UTF-8 one, after both were planned.</summary>
     private static readonly string SetInterleaved = Repeat("a日b本c", 1_000);
 
-    private static readonly QRCodeGeneratorOptions SetSingle = new() { Version = QRVersionRange.AtMost(10) };
+    private static readonly QRCodeGeneratorOptions SetSingle = new() { Version = QRVersionRange.AtMost(10), AllowKanji = true };
     private static readonly QRCodeGeneratorOptions SetSingleUtf8 = new() { Version = QRVersionRange.AtMost(10), EciMode = EciMode.Utf8 };
-    private static readonly QRCodeGeneratorOptions SetOptimal = new() { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal };
+    private static readonly QRCodeGeneratorOptions SetOptimal = new() { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal, AllowKanji = true };
     private static readonly QRCodeGeneratorOptions SetOptimalUtf8 = new() { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal, EciMode = EciMode.Utf8 };
 
     private static string Repeat(string text, int length)
@@ -45,12 +45,16 @@ public class KanjiEncode
         return new string(chars);
     }
 
+    private static readonly QRCodeGeneratorOptions Kanji = new() { AllowKanji = true };
+    private static readonly MicroQRCodeGeneratorOptions MicroKanji = new() { AllowKanji = true };
+    private static readonly RmQRCodeGeneratorOptions RmQrKanji = new() { AllowKanji = true };
+    private static readonly MicroQRCodeGeneratorOptions MicroOptimalUtf8 = new() { Segmentation = MicroQRSegmentation.Optimal };
     private static readonly QRCodeGeneratorOptions Utf8 = new() { EciMode = EciMode.Utf8 };
     private static readonly RmQRCodeGeneratorOptions RmQrUtf8 = new() { EciMode = EciMode.Utf8 };
-    private static readonly QRCodeGeneratorOptions Optimal = new() { Segmentation = QRSegmentation.Optimal };
+    private static readonly QRCodeGeneratorOptions Optimal = new() { Segmentation = QRSegmentation.Optimal, AllowKanji = true };
     private static readonly QRCodeGeneratorOptions OptimalUtf8 = new() { Segmentation = QRSegmentation.Optimal, EciMode = EciMode.Utf8 };
-    private static readonly MicroQRCodeGeneratorOptions MicroOptimal = new() { Segmentation = MicroQRSegmentation.Optimal };
-    private static readonly RmQRCodeGeneratorOptions RmQrOptimal = new() { Segmentation = RmQRSegmentation.Optimal };
+    private static readonly MicroQRCodeGeneratorOptions MicroOptimal = new() { Segmentation = MicroQRSegmentation.Optimal, AllowKanji = true };
+    private static readonly RmQRCodeGeneratorOptions RmQrOptimal = new() { Segmentation = RmQRSegmentation.Optimal, AllowKanji = true };
     private static readonly RmQRCodeGeneratorOptions RmQrOptimalUtf8 = new() { Segmentation = RmQRSegmentation.Optimal, EciMode = EciMode.Utf8 };
 
     private byte[] _destination = default!;
@@ -64,22 +68,25 @@ public class KanjiEncode
     }
 
     [Benchmark]
-    public int QR_Kanji_Short_Encode() => QRCodeGenerator.Create(Short.AsSpan(), QREccLevel.M, _destination);
+    public int QR_Kanji_Short_Encode() => QRCodeGenerator.Create(Short.AsSpan(), QREccLevel.M, _destination, Kanji);
 
     [Benchmark]
     public int QR_Utf8_Short_Encode() => QRCodeGenerator.Create(Short.AsSpan(), QREccLevel.M, _destination, Utf8);
 
     [Benchmark]
-    public int QR_Kanji_Long_Encode() => QRCodeGenerator.Create(Long.AsSpan(), QREccLevel.L, _destination);
+    public int QR_Kanji_Long_Encode() => QRCodeGenerator.Create(Long.AsSpan(), QREccLevel.L, _destination, Kanji);
 
     [Benchmark]
     public int QR_Utf8_Long_Encode() => QRCodeGenerator.Create(Long.AsSpan(), QREccLevel.L, _destination, Utf8);
 
     [Benchmark]
-    public int MicroQR_Kanji_Encode() => MicroQRCodeGenerator.Create(Micro.AsSpan(), MicroQREccLevel.L, _destination);
+    public int MicroQR_Kanji_Encode() => MicroQRCodeGenerator.Create(Micro.AsSpan(), MicroQREccLevel.L, _destination, MicroKanji);
 
     [Benchmark]
-    public int RmQR_Kanji_Encode() => RmQRCodeGenerator.Create(RmQr.AsSpan(), RmQREccLevel.M, _destination);
+    public int MicroQR_Utf8_Encode() => MicroQRCodeGenerator.Create(Micro.AsSpan(), MicroQREccLevel.L, _destination);
+
+    [Benchmark]
+    public int RmQR_Kanji_Encode() => RmQRCodeGenerator.Create(RmQr.AsSpan(), RmQREccLevel.M, _destination, RmQrKanji);
 
     [Benchmark]
     public int RmQR_Utf8_Encode() => RmQRCodeGenerator.Create(RmQr.AsSpan(), RmQREccLevel.M, _destination, RmQrUtf8);
@@ -98,6 +105,9 @@ public class KanjiEncode
 
     [Benchmark]
     public int MicroQR_KanjiPlan_Encode() => MicroQRCodeGenerator.Create(MicroMixed.AsSpan(), MicroQREccLevel.L, _destination, MicroOptimal);
+
+    [Benchmark]
+    public int MicroQR_Utf8Plan_Encode() => MicroQRCodeGenerator.Create(MicroMixed.AsSpan(), MicroQREccLevel.L, _destination, MicroOptimalUtf8);
 
     [Benchmark]
     public int RmQR_KanjiPlan_Mixed_Encode() => RmQRCodeGenerator.Create(Mixed.AsSpan(), RmQREccLevel.M, _destination, RmQrOptimal);

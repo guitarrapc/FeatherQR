@@ -217,9 +217,9 @@ Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last
 
 - `tools/QRInteropFixtures` manual spot-checks, each against the result it last gave (a different one is a finding to explain before the release; the fixture spec's oracle matrix has the detail):
   - `spot-check-kanji`: "every reader agrees with the input". Every encoder cell, in Standard QR (18 symbols, read by this library, zxing-cpp, ZXing.Net and CodeGlyphX), Micro QR (917) and rMQR (200, both read by this library and zxing-cpp); ASCII `\` and `~` in Kanji plans read as themselves in all three. Its ECI 26 table is not asserted: zxing-cpp 0.5.2 misreads a Kanji segment after ECI 26 (2026-10-01), which this library does not write.
-  - `spot-check-structured-append`: 189 symbols read by three readers, 18 parity comparisons, 0 mismatches; the Japanese case under `Optimal` is a Kanji set with parity 176.
+  - `spot-check-structured-append`: 275 symbols read by three readers, 30 parity comparisons, 0 mismatches; the Japanese case is the UTF-8 set (parity 6) by default and a Kanji set with parity 176 under `kanji-opt` (`AllowKanji`, `Optimal`).
   - `spot-check-rmqr`: 444 of 444. `spot-check-microqr`: 18 of 18.
-- Physical scanner acceptance pass, weighted toward Kanji-mode and Structured Append symbols, which are the two outputs no committed fixture can prove a phone accepts. The Kanji symbols, each written by this library:
+- Physical scanner acceptance pass, weighted toward Kanji-mode and Structured Append symbols, which are the two outputs no committed fixture can prove a phone accepts. The Kanji symbols, each written by this library with `AllowKanji`:
   - Standard QR: 「こんにちは世界」 (one Kanji segment, 1-M); 700 characters of Japanese at M (version 27 or above, a 12-bit count); 「価格は\100~200円です、日本語のテキスト」 under `Optimal` (a Kanji plan, `\` and `~` in Byte runs).
   - Micro QR: 「日本語」 (M3) and 「日本語日本\」 under `Optimal` (a Kanji plan at M3).
   - rMQR: 「日本語のテキストです、ようこそ」 and 「~/設定/日本語のテキスト」 under `Optimal`.

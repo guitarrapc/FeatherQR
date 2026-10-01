@@ -10,6 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
+/// Every option here sets <c>AllowKanji</c> unless a test says otherwise; without it every set is the UTF-8 set it was before Kanji mode existed.
 /// The rules the expectations are written from: a set is eligible when the whole text is, and an eligible set carries no ECI header and the XOR of the whole text's Shift_JIS bytes as its parity.
 /// Text whose every character has a cell is a Kanji set under both segmentations, every chunk under <c>Single</c> one Kanji segment; it is never larger than its UTF-8 set, character for character 13 bits against 16 or 24 and no ECI header.
 /// Text with ASCII in it is a Kanji set only under <c>Optimal</c>, every chunk its Kanji plan, and only when that set needs fewer symbols than today's UTF-8 set, or as many at a lower version; otherwise it is today's set.
@@ -251,7 +252,7 @@ public class StructuredAppendKanjiTest
 
     // ---- Through the public API -----------------------------------------------------
 
-    private static readonly QRCodeGeneratorOptions Pinned = new() { MaskPattern = 0, QuietZoneSize = 0 };
+    private static readonly QRCodeGeneratorOptions Pinned = new() { MaskPattern = 0, QuietZoneSize = 0, AllowKanji = true };
 
     private static byte[] Modules(QRCodeData data)
     {
@@ -518,7 +519,7 @@ public class StructuredAppendKanjiTest
     public async Task WithAscii_PlansASecondSetOnlyWhereItCouldWin(string name, string unit, int repeat, int kanjiPlans, int utf8Plans, bool kanjiSet)
     {
         var text = Repeat(unit, repeat);
-        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal };
+        var options = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(10), Segmentation = QRSegmentation.Optimal };
         int kanji = QRCodeGenerator.KanjiSetPlans, utf8 = QRCodeGenerator.Utf8SetPlans;
         var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options);
         kanji = QRCodeGenerator.KanjiSetPlans - kanji;
@@ -574,7 +575,7 @@ public class StructuredAppendKanjiTest
             var count = kanjiWins ? kanjiCount : utf8Count;
             var version = kanjiWins ? kanjiVersion : utf8Version;
 
-            var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(maxVersion), Segmentation = QRSegmentation.Optimal };
+            var options = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(maxVersion), Segmentation = QRSegmentation.Optimal };
             int kanjiPlans = QRCodeGenerator.KanjiSetPlans, utf8Plans = QRCodeGenerator.Utf8SetPlans;
             var set = QRCodeGenerator.CreateStructuredAppend(text, ecc, options);
             kanjiPlans = QRCodeGenerator.KanjiSetPlans - kanjiPlans;
@@ -626,7 +627,7 @@ public class StructuredAppendKanjiTest
     public async Task KanjiSet_TakesTheScalarProgram()
     {
         var text = Repeat("日本語のテキスト、", 60) + Repeat("order 20260915 item 0000123456 qty 42 ", 150);
-        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(20), Segmentation = QRSegmentation.Optimal };
+        var options = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(20), Segmentation = QRSegmentation.Optimal };
 
         StructuredAppendPlanner.LaneBatches = 0;
         var ends = new int[StructuredAppendPlanner.MaxSymbols];
@@ -654,7 +655,7 @@ public class StructuredAppendKanjiTest
     public async Task Refusal_OfAnAllCellsText_CountsKanjiCharacters()
     {
         var text = Cells(0, 200);
-        var ex = await Assert.That(() => QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.H, new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(1) })).Throws<ArgumentException>();
+        var ex = await Assert.That(() => QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.H, new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(1) })).Throws<ArgumentException>();
         await Assert.That(ex!.Message).Contains("mode: Kanji");
         await Assert.That(ex.Message).Contains("200 data units");
     }
@@ -665,11 +666,22 @@ public class StructuredAppendKanjiTest
     {
         // A version 2-L symbol holds about 19 characters of this text as a Kanji plan and 9 as UTF-8: 162 characters are about ten Kanji symbols and eighteen UTF-8 ones.
         var text = Repeat("日本語のテキスト7", 18);
-        var single = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(2) };
+        var single = new QRCodeGeneratorOptions { AllowKanji = true, Version = QRVersionRange.AtMost(2) };
         var ex = await Assert.That(() => QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, single)).Throws<ArgumentException>();
         await Assert.That(ex!.Message).Contains("use QRSegmentation.Optimal");
 
         var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, single with { Segmentation = QRSegmentation.Optimal, MaskPattern = 0, QuietZoneSize = 0 });
         await AssertIsTheKanjiSet(set, text, QREccLevel.L, QRSegmentation.Optimal, "the advised set");
+    }
+
+    /// <summary>Without <c>AllowKanji</c> the advice plans the other segmentation without Kanji too: the same text, which only a Kanji set holds, is not told to use Optimal, where its UTF-8 set does not fit either.</summary>
+    [Test]
+    public async Task Refusal_WithoutAllowKanji_DoesNotAdviseAKanjiSet()
+    {
+        var text = Repeat("日本語のテキスト7", 18);
+        var single = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(2) };
+        var ex = await Assert.That(() => QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, single)).Throws<ArgumentException>();
+        await Assert.That(ex!.Message).DoesNotContain("use QRSegmentation.Optimal");
+        await Assert.That(() => QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, single with { Segmentation = QRSegmentation.Optimal })).Throws<ArgumentException>();
     }
 }

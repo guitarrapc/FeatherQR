@@ -85,7 +85,7 @@ internal static partial class TextAnalyzer
     /// </para>
     /// <para>
     /// The pass runs only once the analysis has resolved UTF-8, and stops at the first character without a cell, so ASCII and Latin-1 text pays one comparison for it.
-    /// <paramref name="allowKanji"/> is false where UTF-8 was asked for in effect (a byte order mark) or where the caller's path does not write Kanji yet.
+    /// <paramref name="allowKanji"/> is the caller's <c>AllowKanji</c> option, and false also where UTF-8 was asked for in effect (a byte order mark).
     /// </para>
     /// <para>
     /// <paramref name="planKanji"/> is for a mixed-mode path: the pass then reads past ASCII too, and a text whose characters are all ASCII or have a cell comes back as its UTF-8 analysis marked <see cref="TextAnalysisResult.KanjiPlannable"/>.

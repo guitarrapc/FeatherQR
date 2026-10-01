@@ -5,7 +5,7 @@ using static FeatherQR.Tests.KanjiStreamReference;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// ZXing.Net reads the Kanji symbols <see cref="QRCodeGenerator"/> writes, every encoder cell included (kanji-encoding-plan.md, phase 6.3).
+/// ZXing.Net reads the Kanji symbols <see cref="QRCodeGenerator"/> writes with <c>AllowKanji</c>, every encoder cell included (kanji-encoding-plan.md, phase 6.3).
 /// ZXing.Net applies CP932 to a Kanji segment; the two agree on every encoder cell, because the seven cells where they differ have none, so any disagreement here is a symbol one reader or the other gets wrong.
 /// The symbols are read from their module matrix, not from an image: what is under test is the bit stream.
 /// </summary>
@@ -23,7 +23,7 @@ public class KanjiZXingCrossTest
         for (var k = 0; start < EncoderCells.Length; k++)
         {
             var text = Cells(start, Math.Min(ChunkLengths[k % ChunkLengths.Length], EncoderCells.Length - start));
-            var symbol = QRCodeGenerator.Create(text, QREccLevel.L, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+            var symbol = QRCodeGenerator.Create(text, QREccLevel.L, new QRCodeGeneratorOptions { AllowKanji = true, QuietZoneSize = 0 });
             bands.Add(symbol.Version < 10 ? 0 : symbol.Version < 27 ? 1 : 2);
 
             var result = decoder.decode(ToBitMatrix(symbol), null);
@@ -43,7 +43,7 @@ public class KanjiZXingCrossTest
     [Arguments("日本～")]
     public async Task EligibleAndIneligibleText_IsReadByZXing(string text)
     {
-        var symbol = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var symbol = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true, QuietZoneSize = 0 });
         var result = new Decoder().decode(ToBitMatrix(symbol), null);
         await Assert.That(result).IsNotNull();
         await Assert.That(result!.Text).IsEqualTo(text);
@@ -62,7 +62,7 @@ public class KanjiZXingCrossTest
     public async Task KanjiPlan_IsReadByZXing(object textOrRepeats)
     {
         var text = textOrRepeats as string ?? string.Concat(Enumerable.Repeat("日本7777", (int)textOrRepeats));
-        var optimal = new QRCodeGeneratorOptions { QuietZoneSize = 0, Segmentation = QRSegmentation.Optimal };
+        var optimal = new QRCodeGeneratorOptions { AllowKanji = true, QuietZoneSize = 0, Segmentation = QRSegmentation.Optimal };
         var ecc = text.Length > 1000 ? QREccLevel.L : QREccLevel.M;
         var symbol = QRCodeGenerator.Create(text, ecc, optimal);
         if (text.Length > 1000)

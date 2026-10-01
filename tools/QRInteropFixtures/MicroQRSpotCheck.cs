@@ -48,7 +48,7 @@ public static class MicroQRSpotCheck
         var failures = 0;
         foreach (var (text, ecc, segmentation) in cases)
         {
-            var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = QuietZoneModules, Segmentation = segmentation };
+            var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = QuietZoneModules, Segmentation = segmentation, AllowKanji = true };
             var calculated = Sizing.Required(text.AsSpan(), ecc, options);
             var modules = new byte[calculated.BufferSize];
             MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, options);

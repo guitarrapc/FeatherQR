@@ -156,19 +156,20 @@ public class QRCodeGeneratorVersionBoundaryTest
     }
 
     /// <summary>
-    /// The same boundaries in Kanji mode, where the default charset now writes all-kana text: ISO/IEC 18004 Table 7's Kanji column fills the version, and one more character moves to the next.
+    /// The same boundaries in Kanji mode, which <c>AllowKanji</c> writes all-kana text in: ISO/IEC 18004 Table 7's Kanji column fills the version, and one more character moves to the next.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(KanjiBoundaries))]
     public async Task Create_ExactBoundary_Kanji(QREccLevel eccLevel, int version)
     {
         var capacity = Internals.StandardQR.QRCodeConstants.CapacityBaseValues[(version - 1) * 16 + (int)eccLevel * 4 + 3];
+        var kanji = new QRCodeGeneratorOptions { AllowKanji = true };
 
-        await Assert.That(QRCodeGenerator.Create(new string('あ', capacity), eccLevel).Version).IsEqualTo(version);
+        await Assert.That(QRCodeGenerator.Create(new string('あ', capacity), eccLevel, kanji).Version).IsEqualTo(version);
         if (version < 40)
-            await Assert.That(QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel).Version).IsEqualTo(version + 1);
+            await Assert.That(QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel, kanji).Version).IsEqualTo(version + 1);
         else
-            await Assert.That(() => QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel)).Throws<InvalidOperationException>();
+            await Assert.That(() => QRCodeGenerator.Create(new string('あ', capacity + 1), eccLevel, kanji)).Throws<InvalidOperationException>();
     }
 
     /// <summary>

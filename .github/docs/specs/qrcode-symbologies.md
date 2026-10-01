@@ -269,16 +269,27 @@ Sibling namespaces bound the blast radius instead: a Micro QR change cannot touc
 
 All three decoders read Kanji mode. Reading it is an interoperability obligation: Japanese-market
 encoders emit it, and a decoder that rejects those symbols leaves callers no way through. Since
-2.0.0 all three generators also write it, for one class of text: the library chose the charset
-and chose UTF-8 (`EciMode.Default`, and on Standard QR no byte order mark), and every character
+2.0.0 all three generators also write it, on request (`AllowKanji` on each generator's options,
+off by default), for one class of text: the library chose the charset and chose UTF-8 (`EciMode.Default`, and on Standard QR no byte order mark), and every character
 is ASCII or has an encoder cell, which is JIS X 0208 without the seven cells CP932 reads
 differently. When every character has a cell, the text goes out as one Kanji segment with no ECI
 header, under both segmentations. When some are ASCII, `Single` writes UTF-8 as before, because
 one segment cannot hold both, and `Optimal` weighs a Kanji plan: Kanji runs beside Numeric,
 Alphanumeric and Byte runs of the ASCII, with no ECI header, taken where it needs a smaller
-version than the UTF-8 stream. Every other text is written as before, bit for bit.
+version than the UTF-8 stream. Every other text, and every text without the option, is written as
+before, bit for bit.
 
 Why this rule and not a wider one:
+
+- **Only on request.** Until the Kanji plan's phase 6.6a the generators wrote Kanji mode unasked.
+  Scanned from a screen on 2026-10-01, an Android 17 phone's own QR scanner and Google Lens on it
+  read nothing from a Kanji-mode Standard QR symbol, with or without ECI 20, and read the same text
+  as UTF-8 behind ECI 26; the iPhone camera, Google Lens on iPhone, ZXing, zxing-cpp, CodeGlyphX and
+  Denso Wave's reader read both. A default that half the phones misread is not one, so UTF-8 is the
+  default on all three symbologies and Kanji mode is for callers who know their readers or need the
+  capacity. Micro QR and rMQR are read by neither phone's own scanner, and Denso Wave's reader and
+  zxing-cpp read them in Kanji mode and in UTF-8 alike, so nothing measured set them apart; one rule
+  for all three is the simpler contract.
 
 - **It reaches exactly the texts UTF-8 served worst, and never grows a symbol.** A character with
   a cell costs 13 bits in Kanji mode against 16 or 24 in UTF-8, and the stream drops the 12-bit
@@ -286,8 +297,8 @@ Why this rule and not a wider one:
   ECI, Kanji mode is also the standard's own way to carry the text, where its UTF-8 was bare bytes
   a reader had to recognise.
 - **A charset the caller chose is honoured.** Explicit UTF-8, or a byte order mark (a request for
-  UTF-8 in effect), keeps UTF-8; that is also how a caller reproduces the 1.x symbol. Micro QR has
-  no charset option and gets no switch until one is asked for.
+  UTF-8 in effect), keeps UTF-8 with or without the option. Micro QR has no charset option;
+  `AllowKanji` is its one switch.
 - **The seven divergent cells are never written.** Either reading written at one of them decodes
   to different text in a CP932 reader (ZXing.Net) and in this library, so neither has an encoder
   cell and a text holding one stays UTF-8.
@@ -303,8 +314,8 @@ Why this rule and not a wider one:
 - **Kanji segments carry no ECI.** Every reader that decodes text reads a Kanji segment with no
   ECI as Shift_JIS, on both sides of that split. Strictly, the default interpretation has been
   ISO-8859-1 since the 2006 edition, and zint warns on Kanji without ECI 20. ECI 20 would settle
-  that at 12 bits a symbol, and Google ML Kit documents that it does not recognize QR codes
-  "generated in the ECI mode", so the symbol stays without one.
+  that at 12 bits a symbol, and the phone that reads no Kanji mode (Android 17) read no ECI 20
+  Kanji either, so the symbol stays without one.
 - **The rule is about what can be represented, not about script**: Greek, Cyrillic and box
   drawing in JIS X 0208 go out in Kanji mode like kana do.
 - **`Optimal` never grows a symbol either.** The Kanji plan is taken only below the version the
@@ -383,7 +394,10 @@ each planner's Kanji scan) added 4.5 KB more to QR encode only (137,216 bytes) a
 three (204,288), measured 2026-09-30; a consumer that never sets `Optimal` keeps them too, since
 the segmentation is a run-time option. Kanji sets in Structured Append cost a consumer that calls
 `CreateStructuredAppend` 4.0 KB (161,792 → 165,888 bytes) and the others at most 0.5 KB (QR encode
-only 137,216 unchanged, all three 204,288 → 204,800), measured the same day.
+only 137,216 unchanged, all three 204,288 → 204,800), measured the same day. Making Kanji mode
+opt-in (`AllowKanji`, 2026-10-01) removed none of it, since the option is read at run time: all three
+205,312 bytes and `CreateStructuredAppend` 166,400 (+0.5 KB each), QR encode only and decode only
+unchanged.
 
 Two failure causes are kept apart on the error path: a structurally impossible byte pair is
 `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing
@@ -505,7 +519,7 @@ The queue is closed again behind them, on the same rule.
 | The announced removals (`GetRequiredBufferSize`, `Compression`, parameter-list generator overloads) | Done in 2.0.0-preview.3. Every generator now takes only `in {Sym}CodeGeneratorOptions`, defaulted | Never; a throwing sizing method is asserted absent |
 | 2.0.0 type renames (the `QR` casing rule, `QREccLevel` to `QREccLevel` and friends) and the `string` convenience overloads | Out of the split and out of the removals; their own plan, same major, before `2.0.0` final | That plan |
 | Pages fallback stub on the user site | Kept for as long as 1.x packages are listed on nuget.org, since their READMEs link the old Playground URL | Never while a 1.x listing exists |
-| Kanji mode (all symbologies) | Read with the JIS X 0208 mapping. Written when the charset is the library's choice ([When Kanji mode is written](#when-kanji-mode-is-written)): one Kanji segment for text whose every character has an encoder cell, and under `Optimal` Kanji runs beside ASCII runs where that plan is smaller; Structured Append sets by the same rule, with the Shift_JIS parity | The remaining phases of [kanji-encoding-plan.md](../plans/kanji-encoding-plan.md); Kanji beside an ECI header only if readers are measured to apply JIS X 0208 there |
+| Kanji mode (all symbologies) | Read with the JIS X 0208 mapping. Written on request (`AllowKanji`) when the charset is the library's choice ([When Kanji mode is written](#when-kanji-mode-is-written)): one Kanji segment for text whose every character has an encoder cell, and under `Optimal` Kanji runs beside ASCII runs where that plan is smaller; Structured Append sets by the same rule, with the Shift_JIS parity | The remaining phases of [kanji-encoding-plan.md](../plans/kanji-encoding-plan.md); Kanji beside an ECI header only if readers are measured to apply JIS X 0208 there |
 | ECI 20 (Shift_JIS) byte segments | Unsupported; reported as `UnsupportedContent` (structural, unlike the per-character `UnmappedCharacter`) | Demand for symbols that pair ECI 20 with Byte mode; needs the full CP932 range, roughly twice the Kanji table |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |

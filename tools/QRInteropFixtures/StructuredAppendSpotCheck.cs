@@ -23,7 +23,7 @@ public static class StructuredAppendSpotCheck
 {
     private const int PixelsPerModule = 8;
 
-    private sealed record Variant(string Name, QRSegmentation Segmentation, bool Boost, bool Bom, EciMode Eci);
+    private sealed record Variant(string Name, QRSegmentation Segmentation, bool Boost, bool Bom, EciMode Eci, bool AllowKanji = false);
 
     public static int Run()
     {
@@ -34,6 +34,9 @@ public static class StructuredAppendSpotCheck
             new Variant("boost", QRSegmentation.Single, true, false, EciMode.Default),
             new Variant("utf8-eci", QRSegmentation.Single, false, false, EciMode.Utf8),
             new Variant("utf8-bom", QRSegmentation.Single, false, true, EciMode.Utf8),
+            // Kanji sets, which the generator writes only when asked (AllowKanji).
+            new Variant("kanji", QRSegmentation.Single, false, false, EciMode.Default, AllowKanji: true),
+            new Variant("kanji-opt", QRSegmentation.Optimal, false, false, EciMode.Default, AllowKanji: true),
         };
         var cpp = new CppReader { Formats = CppFormat.QRCode, TryHarder = true };
         var net = new NetReader();
@@ -54,6 +57,7 @@ public static class StructuredAppendSpotCheck
                     BoostEccLevel = variant.Boost,
                     Utf8Bom = variant.Bom,
                     EciMode = variant.Eci,
+                    AllowKanji = variant.AllowKanji,
                 };
 
                 QRCodeData[] set;

@@ -39,11 +39,11 @@ public static class RmQRSpotCheck
                     if (mode == "kanji-plan") kanjiPlanTotal++;
                     var segmentation = mode == "kanji-plan" ? RmQRSegmentation.Optimal : RmQRSegmentation.Single;
                     var calculated = eciMode == EciMode.Default
-                        ? Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules, Segmentation = segmentation })
+                        ? Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules, Segmentation = segmentation, AllowKanji = true })
                         : Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
                     var modules = new byte[calculated.BufferSize];
                     if (eciMode == EciMode.Default)
-                        RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules, Segmentation = segmentation });
+                        RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules, Segmentation = segmentation, AllowKanji = true });
                     else
                         RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
 
@@ -125,7 +125,7 @@ public static class RmQRSpotCheck
         for (var count = 200; count > 2; count--) // three characters at least, so the text holds ASCII
         {
             var text = Cyclic(KanjiPlanAlphabet, count);
-            if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal }))
+            if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal, AllowKanji = true }))
                 return RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { Version = version, Segmentation = RmQRSegmentation.Optimal, EciMode = EciMode.Utf8 })
                     ? null // the UTF-8 stream fits too, so the symbol need not be a Kanji plan
                     : text;
@@ -141,7 +141,7 @@ public static class RmQRSpotCheck
         for (var count = 92; count > 0; count--)
         {
             var text = Cyclic(KanjiAlphabet, count);
-            if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { Version = version }))
+            if (RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { Version = version, AllowKanji = true }))
                 return text;
         }
 
