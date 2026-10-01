@@ -180,12 +180,7 @@ Version index is height-major (all widths of height 7, then 9, …); it is the 5
 | 30 | R17x99 | 17 x 99 | 23, 49, 75 | 160 | 100 / 3 / 20 | 56 / 4 / 26 | 8 / 8 / 7 |
 | 31 | R17x139 | 17 x 139 | 27, 55, 83, 111 | 232 | 152 / 4 / 20 | 76 / 6 / 26 | 9 / 8 / 8 |
 
-Kanji count-indicator widths are not in this table: the mode is not encoded.
-`RmQRConstants.GetKanjiCountIndicatorLength` carries them (values 2-7, monotone below the byte
-widths), pinned by the narrowest-field derivation below and, since the decoder shipped, read for
-real by the qrtool Kanji fixtures. That exercise is partial: the four Kanji fixtures cover
-R11x43, R13x59, R15x59 and R17x139, i.e. widths 4, 5 and 7, so widths 2, 3 and 6 still rest on
-the derivation alone.
+Kanji count-indicator widths are not in this table: the mode is not encoded. `RmQRConstants.GetKanjiCountIndicatorLength` carries them (values 2-7, monotone below the byte widths), pinned by the narrowest-field derivation below and, since the decoder shipped, read for real by the qrtool Kanji fixtures. That exercise is partial: the four Kanji fixtures cover R11x43, R13x59, R15x59 and R17x139, i.e. widths 4, 5 and 7, so widths 2, 3 and 6 still rest on the derivation alone.
 
 Data capacity in characters (Numeric / Alphanumeric / Byte), single segment, no ECI header:
 
@@ -358,11 +353,7 @@ Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--
 | Mask, zigzag start and direction, interleaving | The R7x43-M "1" symbol yields exactly the predicted codewords `22 20 EC 11` and multi-block versions deinterleave to the predicted streams | Confirmed |
 | Alignment column positions, sub-finder and corner patterns | Visual inspection of R7x43 / R9x59 / R11x27 plus the free-module count agreement above | Consistent |
 
-Not verified here: the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond
-the correction capacity). The decoder resolves it indirectly — the block structure verified
-above leaves at most one unused ECC codeword per block, and zxing-cpp corrects rMQR at full
-Reed-Solomon strength — but the Table 8 capacity column itself is still unread; see the Correction
-cap decision in [rMQR Decoder](rmqr-decoder.md).
+Not verified here: the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond the correction capacity). The decoder resolves it indirectly — the block structure verified above leaves at most one unused ECC codeword per block, and zxing-cpp corrects rMQR at full Reed-Solomon strength — but the Table 8 capacity column itself is still unread; see the Correction cap decision in [rMQR Decoder](rmqr-decoder.md).
 
 ## Lessons Learned
 

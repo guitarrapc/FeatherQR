@@ -286,85 +286,25 @@ Sibling namespaces bound the blast radius instead: a Micro QR change cannot touc
 
 Kanji is asymmetric on purpose: all three decoders read it, no generator emits it.
 
-Reading it is an interoperability obligation. Japanese-market encoders do emit Kanji mode, and a
-decoder that rejects those symbols cannot read them at all, which is a hole no caller can work
-around. Writing it is a different decision: UTF-8 Byte mode already carries Japanese text, and
-emitting Kanji would change the default output of shipped generators. Decoding changes no output,
-so it ships on its own.
+Reading it is an interoperability obligation. Japanese-market encoders do emit Kanji mode, and a decoder that rejects those symbols cannot read them at all, which is a hole no caller can work around. Writing it is a different decision: UTF-8 Byte mode already carries Japanese text, and emitting Kanji would change the default output of shipped generators. Decoding changes no output, so it ships on its own.
 
-The consequence is a deliberate round-trip asymmetry: `Decode(Encode(x)) == x` holds, but
-`Encode(Decode(y))` does not reproduce a Kanji symbol `y`. The capacity tables therefore keep the
-Kanji column for the decoder's count-indicator widths, not as a commitment to encode.
+The consequence is a deliberate round-trip asymmetry: `Decode(Encode(x)) == x` holds, but `Encode(Decode(y))` does not reproduce a Kanji symbol `y`. The capacity tables therefore keep the Kanji column for the decoder's count-indicator widths, not as a commitment to encode.
 
-**The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F,
-0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line,
-minus sign, and the cent / pound / not signs), and, within the Kanji-mode range, CP932
-additionally assigns 83 characters the standard does not, all of them NEC row 13 (0x8740-0x879C:
-circled digits, roman numerals, unit ligatures). Choosing CP932 would have
-mangled exactly the characters Japanese payloads use in URLs and price strings. The shared
-`ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it
-are reported as `DecodeStatus.UnmappedCharacter` rather than replaced, so a corrupt symbol never
-becomes a plausible wrong answer and a caller can tell "a CP932 reader would read this" from the
-structural `UnsupportedContent` cases (FNC1, unmapped ECI). The
-table costs 16 KB of RVA data, shared by all three symbologies, with no allocation and no static
-constructor.
+**The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line, minus sign, and the cent / pound / not signs), and, within the Kanji-mode range, CP932 additionally assigns 83 characters the standard does not, all of them NEC row 13 (0x8740-0x879C: circled digits, roman numerals, unit ligatures). Choosing CP932 would have mangled exactly the characters Japanese payloads use in URLs and price strings. The shared `ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it are reported as `DecodeStatus.UnmappedCharacter` rather than replaced, so a corrupt symbol never becomes a plausible wrong answer and a caller can tell "a CP932 reader would read this" from the structural `UnsupportedContent` cases (FNC1, unmapped ECI). The table costs 16 KB of RVA data, shared by all three symbologies, with no allocation and no static constructor.
 
-**The table is derived from a measurement and gated by arithmetic, not transcribed.** Its values
-come from a sweep of every structurally valid Kanji-mode cell (8,023 of them, encoded by qrtool as
-raw Shift_JIS and read back by zxing-cpp), and the generator refuses to emit unless that swept data
-reproduces JIS X 0208's published repertoire size and its delta against CP932 is exactly the
-documented divergence set. Reproducing **6,879** assigned cells independently (524 non-kanji +
-6,355 kanji) is what makes "this really is JIS X 0208" a measurement rather than an assumption.
-Because every other table test constrains only *which* cells are assigned and would pass a table
-whose readings were permuted, a golden digest over all 8,192 entries pins the values themselves;
-regenerating the table is expected to change it, in the same reviewed commit.
+**The table is derived from a measurement and gated by arithmetic, not transcribed.** Its values come from a sweep of every structurally valid Kanji-mode cell (8,023 of them, encoded by qrtool as raw Shift_JIS and read back by zxing-cpp), and the generator refuses to emit unless that swept data reproduces JIS X 0208's published repertoire size and its delta against CP932 is exactly the documented divergence set. Reproducing **6,879** assigned cells independently (524 non-kanji + 6,355 kanji) is what makes "this really is JIS X 0208" a measurement rather than an assumption. Because every other table test constrains only *which* cells are assigned and would pass a table whose readings were permuted, a golden digest over all 8,192 entries pins the values themselves; regenerating the table is expected to change it, in the same reviewed commit.
 
-Two failure causes are kept apart on the error path: a structurally impossible byte pair is
-`InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing
-arithmetic sits on the error path only, so the happy path stays a single indexed load.
+Two failure causes are kept apart on the error path: a structurally impossible byte pair is `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing arithmetic sits on the error path only, so the happy path stays a single indexed load.
 
-On the image path `UnmappedCharacter` and `UnsupportedContent` are verdicts on the symbol's content,
-reached only after its error correction, and one is reported when no attempt reads a symbol. The
-first attempt and the inverted retry run as they always have, so a readable symbol elsewhere in the
-image (a light-on-dark one beside it, say) is still read. A verdict from either skips the regional
-pass, which looks for a symbol the global threshold cannot see, so a second, unevenly lit symbol
-beside a symbol that gave a verdict is not looked for. In the regional
-pass a verdict on the positive ends it before the negative. Inside an attempt a verdict counts like a read
-wherever Standard QR chooses between grids for one symbol (the timing frame or the finder grid, other
-dimensions, the mesh or the global grid, the finder-only grid, the mirrored grid), whichever grid
-reached it; Micro QR and rMQR rank a verdict above a correction failure on another grid for the same
-symbol and report a verdict their full finder sweep reaches. Their scans still try every remaining
-candidate after a verdict, and a verdict from the strided scan still runs the full sweep, which can
-find another symbol that reads. When every attempt fails short of the content, the first attempt's
-diagnostics are reported.
-`DataUncorrectable` and `InvalidBitstream` stay out of that rule: noise reaches the first, and
-through a miscorrection the second. A failed decode, of an image or of a matrix, reports no characters written,
-whatever it left in the destination. The matrix overloads do since 2.0.0: before, one that failed partway through
-the bit stream counted the segments it had written, and only the image overloads reported none.
+On the image path `UnmappedCharacter` and `UnsupportedContent` are verdicts on the symbol's content, reached only after its error correction, and one is reported when no attempt reads a symbol. The first attempt and the inverted retry run as they always have, so a readable symbol elsewhere in the image (a light-on-dark one beside it, say) is still read. A verdict from either skips the regional pass, which looks for a symbol the global threshold cannot see, so a second, unevenly lit symbol beside a symbol that gave a verdict is not looked for. In the regional pass a verdict on the positive ends it before the negative. Inside an attempt a verdict counts like a read wherever Standard QR chooses between grids for one symbol (the timing frame or the finder grid, other dimensions, the mesh or the global grid, the finder-only grid, the mirrored grid), whichever grid reached it; Micro QR and rMQR rank a verdict above a correction failure on another grid for the same symbol and report a verdict their full finder sweep reaches. Their scans still try every remaining candidate after a verdict, and a verdict from the strided scan still runs the full sweep, which can find another symbol that reads. When every attempt fails short of the content, the first attempt's diagnostics are reported. `DataUncorrectable` and `InvalidBitstream` stay out of that rule: noise reaches the first, and through a miscorrection the second. A failed decode, of an image or of a matrix, reports no characters written, whatever it left in the destination. The matrix overloads do since 2.0.0: before, one that failed partway through the bit stream counted the segments it had written, and only the image overloads reported none.
 
-Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode
-segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1.
-Structured Append is read and written since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md) and [standardqr-encoder.md](standardqr-encoder.md)).
+Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1. Structured Append is read and written since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md) and [standardqr-encoder.md](standardqr-encoder.md)).
 
 ### Allocation contract
 
-The span-destination overloads are documented as allocating nothing **per call**, not as
-never touching the heap. Every symbology lazily builds immutable lookup tables on first use
-and caches them for the process: per-version placement and extraction layouts, and — on
-ARM64, where the syndrome kernel reads its data terms out of a table rather than computing
-them — a 24 KB alpha-step table shared by all three symbologies. They are built once, keyed
-by version, published with a release store, and bounded (about 100 KB if every rMQR version
-were exercised). A benchmark that measures allocation must warm up first, or it attributes
-that one-time build to the call that happened to trigger it.
+The span-destination overloads are documented as allocating nothing **per call**, not as never touching the heap. Every symbology lazily builds immutable lookup tables on first use and caches them for the process: per-version placement and extraction layouts, and — on ARM64, where the syndrome kernel reads its data terms out of a table rather than computing them — a 24 KB alpha-step table shared by all three symbologies. They are built once, keyed by version, published with a release store, and bounded (about 100 KB if every rMQR version were exercised). A benchmark that measures allocation must warm up first, or it attributes that one-time build to the call that happened to trigger it.
 
-The promise is held by a test, not by reading the code. `DecodeAllocationTest` decodes through
-every allocation-free overload of the three decoders: the matrix overloads with and without a quiet
-zone, the image overloads on each path the image level reads through (upright, turned, mirrored,
-keystone, the next finder triple, the meshes, the timing frame, low density, the anisotropic grid,
-the perspective search, light on dark, uneven light) and on images that fail (noise, another
-symbology's symbol). It also counts Standard QR's module buffers out at once, which is one. An
-allocation planted at each stage of both levels, 47 of them, was caught by it (2026-09-29).
-What measuring it taught:
+The promise is held by a test, not by reading the code. `DecodeAllocationTest` decodes through every allocation-free overload of the three decoders: the matrix overloads with and without a quiet zone, the image overloads on each path the image level reads through (upright, turned, mirrored, keystone, the next finder triple, the meshes, the timing frame, low density, the anisotropic grid, the perspective search, light on dark, uneven light) and on images that fail (noise, another symbology's symbol). It also counts Standard QR's module buffers out at once, which is one. An allocation planted at each stage of both levels, 47 of them, was caught by it (2026-09-29). What measuring it taught:
 
 - **Release only.** Debug allocates where Release does not: a span initialized from a list of
   literals (`stackalloc float[] { … }`, `ReadOnlySpan<int> x = [ … ]`) allocated 72 B a call
@@ -383,31 +323,9 @@ What measuring it taught:
 
 ### SIMD tier inventory
 
-Which SIMD tier each kernel runs on which build is not listed here: it is declared in one table,
-[SimdTiers.cs](../../../src/FeatherQR/Internals/SimdTiers.cs), and checked against real builds. The
-table holds every kernel with its tiers in the order its dispatch prefers them, each tier's condition,
-and per build class the tier the kernel takes there. A build prints its own answer:
-`tests/FeatherQR.AotAnalysis` for native builds and `tests/FeatherQR.WasmReport` for WebAssembly (run
-under Node.js, which has a browser's WebAssembly SIMD) print the instruction sets the build and the CPU
-give and every kernel's tiers with the one it takes, and given `--simd-class` fail when the build
-disagrees with the table. The shared kernels there are the controls a new symbology or kernel reuses
-rather than reimplements.
+Which SIMD tier each kernel runs on which build is declared in one table, [SimdTiers.cs](../../../src/FeatherQR/Internals/SimdTiers.cs), and checked against real builds; [qrcode-simd-tiers.md](qrcode-simd-tiers.md) shows it rendered, with the builds in each of the four build classes and a key to the tiers. The table holds every kernel with its tiers in the order its dispatch prefers them, each tier's condition, and per build class the tier the kernel takes there. A build prints its own answer: `tests/FeatherQR.AotAnalysis` for native builds and `tests/FeatherQR.WasmReport` for WebAssembly (run under Node.js, which has a browser's WebAssembly SIMD) print the instruction sets the build and the CPU give and every kernel's tiers with the one it takes, and given `--simd-class` fail when the build disagrees with the table. The shared kernels there are the controls a new symbology or kernel reuses rather than reimplements.
 
-| Build class | Builds | Left to the CPU |
-|---|---|---|
-| x64 without AVX | A default NativeAOT publish; the JIT under `DOTNET_EnableAVX=0`, which reads the same flags | GFNI |
-| x64 with AVX2 | The JIT on an AVX2 CPU; NativeAOT for `x86-64-v3` | GFNI with its 256-bit form; fast PEXT (not on AMD before Zen 3) |
-| ARM64 | The JIT; a default NativeAOT publish | The ARMv8.2 dot product |
-| WebAssembly | With its SIMD proposal (the default), interpreted or AOT-compiled | Nothing |
-
-A cell of the table is one tier or, where the class leaves an instruction set to the CPU, the tiers the
-CPU decides between; on each machine it pins exactly one. When the table was drawn (2026-09-28), 11 of
-28 kernels ran scalar on x64 without AVX, 2 with AVX2, 1 on ARM64 and 19 on WebAssembly, and more on
-CPUs without GFNI, fast PEXT or the ARM64 dot product. Since the 128-bit round below (2026-10-01), the
-Structured Append parity and scanner run scalar on x64, the rMQR value writers on ARM64 and six kernels
-on WebAssembly, each with its measured reason beside its row, and no cell falls to scalar for want of a
-CPU feature. The netstandard builds have no intrinsics and run scalar everywhere. Which instruction set
-a NativeAOT publish should target is a decision that reads this table; it makes none.
+A cell of the table is one tier or, where the class leaves an instruction set to the CPU, the tiers the CPU decides between; on each machine it pins exactly one. When the table was drawn (2026-09-28), 11 of 28 kernels ran scalar on x64 without AVX, 2 with AVX2, 1 on ARM64 and 19 on WebAssembly, and more on CPUs without GFNI, fast PEXT or the ARM64 dot product. Since the 128-bit round below (2026-10-01), the Structured Append parity and scanner run scalar on x64, the rMQR value writers on ARM64 and six kernels on WebAssembly, each with its measured reason beside its row, and no cell falls to scalar for want of a CPU feature. The netstandard builds have no intrinsics and run scalar everywhere. Which instruction set a NativeAOT publish should target is a decision that reads this table; it makes none.
 
 What keeps the table true:
 
@@ -415,13 +333,12 @@ What keeps the table true:
 - **The table states the tier, not a floor.** A floor passes a table that understates (a kernel gains a tier, or loses its GFNI tier on a runner that has GFNI); a plain snapshot flaps, because hosted runners change CPU between jobs. `SimdTierTableTest` checks the table in every CPU state each class allows, ARM64 and WebAssembly included on any machine, and that removing the tier a kernel takes fails the check in every state where it was taken, the change the source test lets through when the code and the declaration lose it together. It also holds the test process to its own class, so every test leg checks its JIT.
 - **CI runs every build class.** The `aot-analysis` job publishes the NativeAOT gate as the default linux-x64 build, an `x86-64-v3` build and the default build on linux-arm64, win-arm64 and osx-arm64, runs each with `--simd-class`, and runs the JIT on the same runners, under `DOTNET_EnableAVX=0` on x64 and `DOTNET_EnableArm64Dp=0` on ARM64 for the side of a class the runner's CPU does not show. The linux-x64 runner had no GFNI when the job was first run (2026-09-28), so the GFNI side of the x64 cells has run only on a developer machine. The `wasm-simd` job runs the WebAssembly report interpreted and AOT-compiled; a report of its own, run headless, rather than one read out of the Playground, which would need a browser and would put the library's internals into an app that ships. Both jobs also pass `--parity`, which holds vector tiers to their scalar forms on random scenes, NaN and out-of-range coordinates included, in the code that build emitted: the only run of a `PackedSimd` operation, and of ILC's code, that checks output. The JIT run under the knob passes it too, since the test suite runs only the side of a class the runner's CPU picks.
 - **A file's name says which instruction families it may use.** `{stem}.X86.cs` holds x86 intrinsics with the vectors they work on, `{stem}.Arm64.cs` ARM intrinsics with 128-bit vectors, `{stem}.Vector256.cs` and `{stem}.Vector128.cs` portable vectors of that width or narrower, and `{stem}.Simd.cs` a tier that picks its instructions per instruction set inside one method (WebAssembly's `PackedSimd` among them); the stem file holds the entry, the dispatch and the scalar tier and uses no vector instruction. Tiers move between files only as whole methods (Lessons learned). Six stem files keep a tier inline, where an entry the scalar build also runs holds the vector steps beside the scalar tail they hand over to; `SimdLayoutTest.InlineTiers` lists them with where, and fails when one of them stops or another file starts.
-- **A new kernel or tier** needs its row in the table and its files in `SimdTiersTest`; the tests fail until both are there.
+- **The rendered tables follow the code.** `SimdTiersDocTest` renders the tables of [qrcode-simd-tiers.md](qrcode-simd-tiers.md) from it and fails when the file differs; run outside CI it rewrites them, so a change to the table reaches the document as a diff to commit. It also checks that the document's key names every tier.
+- **A new kernel or tier** needs its row in the table and its files in `SimdTiersTest`, a new tier its key row in qrcode-simd-tiers.md, and a new build class its name in `SimdTiersDocTest`; the tests fail until all are there.
 
 #### The 128-bit round
 
-From 2026-09-29 to 2026-10-01 each scalar cell on x64 without AVX (a default NativeAOT publish) and on
-WebAssembly got a portable `Vector128` tier where one beat what that build ran, and kept its reason
-where none did. A tier shipped under these rules, which still hold for a new one:
+From 2026-09-29 to 2026-10-01 each scalar cell on x64 without AVX (a default NativeAOT publish) and on WebAssembly got a portable `Vector128` tier where one beat what that build ran, and kept its reason where none did. A tier shipped under these rules, which still hold for a new one:
 
 - **It beats what the build runs, measured on that build, and loses nowhere beyond noise.** A kernel under about 3 % of every benchmark shape on a build stays as it is there, its measured reason beside its row. Interpreted and AOT-compiled WebAssembly take the same tier, so it has to hold on both; most Blazor apps run interpreted.
 - **It is portable `Vector128`, and an operation slow on one build may take that platform's instruction behind its check** (x86 on a default NativeAOT publish, `PackedSimd` on WebAssembly), kept only where it wins there. No 128-bit GFNI tier: it would fill the x64 cell on GFNI CPUs only and do nothing for WebAssembly.
@@ -430,14 +347,9 @@ where none did. A tier shipped under these rules, which still hold for a new one
 - **Its machine code is read, not only timed.** Cells that stay compile as before, and moving code between methods or files costs no instruction, on the JIT (.NET 8 and 10, x64 with and without AVX, ARM64) and ILC (default x64, `x86-64-v3`, ARM64).
 - **Both .NET targets compile it.** An operation .NET 8 lacks (`ShuffleNative`, `AddSaturate`, `NarrowWithSaturation`, `MinNative`) gets a .NET 8 form, or .NET 8 keeps its tier. No public API and no allocation.
 
-Each build was measured on itself: `--time` in both report projects times the benchmark shapes end to
-end and each kernel alone, through its dispatch and its scalar entry. x64 without AVX is a default
-NativeAOT publish, since `DOTNET_EnableAVX=0` lowers portable vectors as `x86-64-v2` does; ARM64
-without the dot product is NativeAOT built with `IlcInstructionSet=armv8-a,-dotprod`. Each shape runs
-in its own process, the builds alternating, and a kernel's share is its time alone over the shape's.
+Each build was measured on itself: `--time` in both report projects times the benchmark shapes end to end and each kernel alone, through its dispatch and its scalar entry. x64 without AVX is a default NativeAOT publish, since `DOTNET_EnableAVX=0` lowers portable vectors as `x86-64-v2` does; ARM64 without the dot product is NativeAOT built with `IlcInstructionSet=armv8-a,-dotprod`. Each shape runs in its own process, the builds alternating, and a kernel's share is its time alone over the shape's.
 
-End to end against main at the merge base (3e1f29d), the branch's time over main's (2026-10-01), each
-shape in its own process, five alternations, and eleven for every shape that once read past 1.00:
+End to end against main at the merge base (3e1f29d), the branch's time over main's (2026-10-01), each shape in its own process, five alternations, and eleven for every shape that once read past 1.00:
 
 | Shapes | win-x64 NativeAOT | linux-x64 NativeAOT | WebAssembly AOT | WebAssembly interpreted |
 |---|---|---|---|---|
@@ -447,51 +359,17 @@ shape in its own process, five alternations, and eleven for every shape that onc
 | Data-object API (4) | 0.25 to 1.01 | 0.30 to 1.01 | 0.30 to 0.83 | 0.46 to 0.89 |
 | Encode (18) | 0.62 to 1.01 | 0.60 to 1.03 | 0.50 to 1.02 | 0.50 to 1.01 |
 
-The cells past 1.00 are encodes inside their runs' spread. On ARM64 (Apple M2), where the round changed
-one cell, the end-to-end shapes read 0.87 to 1.02 with the dot product, on NativeAOT and the JIT, and
-the bitmap decodes 0.57 to 0.69 without it.
+The cells past 1.00 are encodes inside their runs' spread. On ARM64 (Apple M2), where the round changed one cell, the end-to-end shapes read 0.87 to 1.02 with the dot product, on NativeAOT and the JIT, and the bitmap decodes 0.57 to 0.69 without it.
 
-Each kernel's result is in its symbology's record: the edge list, the histogram, the samplers, the
-syndromes and the search levels in [standardqr-decoder.md](standardqr-decoder.md); mask selection, the
-Structured Append walks and the Reed-Solomon encoder in [standardqr-encoder.md](standardqr-encoder.md);
-the extraction and the luminance in [rmqr-decoder.md](rmqr-decoder.md); the placer and the value writers
-in [rmqr-encoder.md](rmqr-encoder.md). The shared kernels with no record of their own:
+Each kernel's result is in its symbology's record: the edge list, the histogram, the samplers, the syndromes and the search levels in [standardqr-decoder.md](standardqr-decoder.md); mask selection, the Structured Append walks and the Reed-Solomon encoder in [standardqr-encoder.md](standardqr-encoder.md); the extraction and the luminance in [rmqr-decoder.md](rmqr-decoder.md); the placer and the value writers in [rmqr-encoder.md](rmqr-encoder.md). The shared kernels with no record of their own:
 
 - `TextAnalyzer` on WebAssembly, 16 chars a step: a block with a char above U+00FF settles every flag, so where the tier narrows to bytes the narrowing is exact. 2.7 to 12x faster than scalar on 2,900 chars. It takes texts of 32 chars and more: interpreted, the tier takes about 0.2 µs on any text up to 24 chars, 1.6x the scalar pass at 8 and level or better from 32, which the smallest encodes showed (1.03 to 1.09 interpreted) until the threshold moved there from 8 at the end of the round.
 - `ModuleBitPacker` on WebAssembly, the swizzle for the byte reversal: 2.2 to 4.1x. Only the data-object API packs and unpacks, so the span API's shapes never showed it.
 - `ModeSegmenter`'s lanes on x64 without AVX and WebAssembly, the ARM64 four-lane groups on portable vectors, so those builds plan a set's symbols together too: 1 to 3 % of a set.
 
-Architecture-neutral work already benefits every target: cached per-version layouts, pair
-stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
-finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
+Architecture-neutral work already benefits every target: cached per-version layouts, pair stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
 
-The ARM64 optimization queue is closed. Four components were measured and deliberately left
-below it, with reasons: Otsu histogramming (serial histogram updates, already near its
-measured per-pixel floor), sub-finder and perspective search (branchy, data-dependent and
-failure-path dominated), rendering and PNG encode (Skia/native-code dominated), and the
-1.3-8.3 ns version selector. Reopen ARM work only with a new profile naming a different
-mechanism. That happened once (2026-09-21): a stage profile of the Standard QR matrix decode
-on Apple M2 named the syndrome pass's carried dependency chain, and the shared AdvSimd kernel
-was re-associated to eight bytes a step (see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)); the queue is closed again behind it.
-The Otsu entry above was reopened the same way (2026-09-22): an image-decode stage profile on
-Apple M2 put the histogram fill at 30-87 % of a version 40 decode, because the same-bin
-increment chain costs this core twice what it costs x64. The fill now has an ARM64 tier
-(block extremes counted without a movemask, dense blocks over four sub-histograms, which this
-core's L1 holds and x64's did not; see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)), and its "near the per-pixel floor" reason no
-longer stands. The queue is closed again behind it.
-The finder search and the mesh sampler followed on 2026-09-22 by the same route: after the
-fill's tier the profile named the finder's mask walk (10 to 50 % of a version 40 decode, 46 % of
-a no-symbol image, bound by its branches as on x64) and then the sampler's column-table tier
-(45 of a 138 µs decode), and both have ARM64 tiers now (the row kernel's word from the NEON fold,
-eight windows a step; the sampler on four lanes, two steps a body). What the x64 round found
-there transferred as structure and not as instructions, and each tier was searched again on the
-M2 against its own reference (see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)). WebAssembly and x64 without AVX ran the scalar fill,
-the column table and the 128-bit mask walk until the 128-bit round gave them the fill's, the mesh
-sampler's and the edge list's 128-bit tiers, each measured on those builds.
-The queue is closed again behind them, on the same rule.
+The ARM64 optimization queue is closed. Four components were measured and deliberately left below it, with reasons: Otsu histogramming (serial histogram updates, already near its measured per-pixel floor), sub-finder and perspective search (branchy, data-dependent and failure-path dominated), rendering and PNG encode (Skia/native-code dominated), and the 1.3-8.3 ns version selector. Reopen ARM work only with a new profile naming a different mechanism. That happened once (2026-09-21): a stage profile of the Standard QR matrix decode on Apple M2 named the syndrome pass's carried dependency chain, and the shared AdvSimd kernel was re-associated to eight bytes a step (see the Performance lessons in [standardqr-decoder.md](standardqr-decoder.md)); the queue is closed again behind it. The Otsu entry above was reopened the same way (2026-09-22): an image-decode stage profile on Apple M2 put the histogram fill at 30-87 % of a version 40 decode, because the same-bin increment chain costs this core twice what it costs x64. The fill now has an ARM64 tier (block extremes counted without a movemask, dense blocks over four sub-histograms, which this core's L1 holds and x64's did not; see the Performance lessons in [standardqr-decoder.md](standardqr-decoder.md)), and its "near the per-pixel floor" reason no longer stands. The queue is closed again behind it. The finder search and the mesh sampler followed on 2026-09-22 by the same route: after the fill's tier the profile named the finder's mask walk (10 to 50 % of a version 40 decode, 46 % of a no-symbol image, bound by its branches as on x64) and then the sampler's column-table tier (45 of a 138 µs decode), and both have ARM64 tiers now (the row kernel's word from the NEON fold, eight windows a step; the sampler on four lanes, two steps a body). What the x64 round found there transferred as structure and not as instructions, and each tier was searched again on the M2 against its own reference (see the Performance lessons in [standardqr-decoder.md](standardqr-decoder.md)). WebAssembly and x64 without AVX ran the scalar fill, the column table and the 128-bit mask walk until the 128-bit round gave them the fill's, the mesh sampler's and the edge list's 128-bit tiers, each measured on those builds. The queue is closed again behind them, on the same rule.
 
 ## Scope decisions
 

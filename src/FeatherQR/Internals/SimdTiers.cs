@@ -267,7 +267,7 @@ internal static class SimdTiers
     };
 
     /// <summary>
-    /// Which tier each kernel takes per build class: the answer to "which kernel runs which tier on which build", and CI holds every build to it (<c>--simd-class</c> of tests/FeatherQR.AotAnalysis and tests/FeatherQR.WasmReport); .github/docs/specs/qrcode-symbologies.md says what keeps it true.
+    /// Which tier each kernel takes per build class: the answer to "which kernel runs which tier on which build", and CI holds every build to it (<c>--simd-class</c> of tests/FeatherQR.AotAnalysis and tests/FeatherQR.WasmReport); .github/docs/specs/qrcode-symbologies.md says what keeps it true, and SimdTiersDocTest renders it into .github/docs/specs/qrcode-simd-tiers.md.
     /// A cell with one tier is that tier. A cell with more lists what the CPU decides between, most preferred first: the first whose instruction set the process has is expected, and the last when it has none of them.
     /// </summary>
     internal static SimdExpectation[] Expected() =>
