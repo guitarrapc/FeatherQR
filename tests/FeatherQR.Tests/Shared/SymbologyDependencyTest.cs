@@ -74,8 +74,8 @@ public class SymbologyDependencyTest
     }
 
     /// <summary>
-    /// The compiled check reads each kind of reference: each probe names one target, in one place of the metadata
-    /// (SymbologyDependencyProbes.cs), so a kind the reader stops reading fails its case; a pinned local and a call through a function pointer have no probe.
+    /// The compiled check reads each kind of reference: each probe names its targets in one place of the metadata
+    /// (SymbologyDependencyProbes.cs), each target with a case of its own, so a kind the reader stops reading fails its case; a pinned local and a call through a function pointer have no probe.
     /// </summary>
     [Test]
     [Arguments("BaseProbe", "BaseTarget")]
@@ -117,8 +117,10 @@ public class SymbologyDependencyTest
     [Arguments("AttributeGenericArgumentProbe", "AttributeGenericArgumentTarget")]
     [Arguments("AttributeNestedProbe", "AttributeNestedOwnerTarget")]
     [Arguments("AttributePointerProbe", "AttributePointerTarget")]
+    [Arguments("AttributeGenericArgumentsProbe", "AttributeFirstArgumentTarget")]
     [Arguments("AttributeGenericArgumentsProbe", "AttributeSecondArgumentTarget")]
     [Arguments("AttributeOwnGenericProbe", "AttributeGenericOwnerTarget`1")]
+    [Arguments("AttributeOwnGenericProbe", "AttributeOwnArgumentTarget")]
     [Arguments("AttributeLongNameProbe", "AttributeLongNameTargetWhoseFullNameRunsPastOneHundredAndTwentySevenBytesSoItsLengthTakesTwoBytes")]
     [Arguments("TypeConstraintProbe`1", "ITypeConstraintTarget")]
     [Arguments("MethodConstraintProbe", "IMethodConstraintTarget")]
