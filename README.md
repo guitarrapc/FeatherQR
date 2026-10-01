@@ -491,7 +491,7 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
@@ -500,7 +500,7 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -526,21 +526,21 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 #### Windows
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
