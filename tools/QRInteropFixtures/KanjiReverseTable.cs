@@ -218,6 +218,17 @@ internal sealed class ReverseTable
                     return (int)(BinaryPrimitives.ReadUInt32LittleEndian(Values.Slice(at >> 3)) >> (at & 7)) & 0x1FFF;
                 }
 
+                /// <summary>
+                /// Whether a UTF-16 code unit has an encoder cell: <see cref="Lookup"/> without the rank and the value, for a pass that asks only which characters Kanji mode can hold and leaves the values to the writer.
+                /// </summary>
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                public static bool HasCell(char c)
+                {
+                    int page = Pages[c >> 8];
+                    return page != NoPage
+                        && (BinaryPrimitives.ReadUInt64LittleEndian(Blocks.Slice((page * {{BlocksPerPage}} + ((c >> 6) & 3)) * RecordSize)) & (1UL << (c & 63))) != 0;
+                }
+
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 private static int PopCount(ulong value)
                 {

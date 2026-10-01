@@ -111,13 +111,14 @@ internal static partial class TextAnalyzer
         foreach (var c in text)
         {
             // No ASCII character has a cell (U+005C's is one of the seven never written), so ASCII skips the lookup.
+            // The rest ask membership only; the writer looks the value up, once per character.
             if (c < 0x80)
             {
                 if (!planKanji)
                     return utf8;
                 ascii = true;
             }
-            else if (ShiftJisKanjiReverseTable.Lookup(c) < 0)
+            else if (!ShiftJisKanjiReverseTable.HasCell(c))
             {
                 return utf8;
             }

@@ -279,9 +279,7 @@ internal static class RmQRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
-        ModeSegmenter.FillUnitCounts(text, EciMode.Default, segments.Slice(0, segmentCount));
-
-        var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
+        var measuredBits = PriceKanjiPlan(version, segments.Slice(0, segmentCount));
         Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         if (measuredBits != plannedBits || measuredBits > 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel))
@@ -291,6 +289,27 @@ internal static class RmQRSegmentPlanner
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Fills each run of a Kanji plan with the value its count indicator carries and returns what the plan measures, in one pass over the runs: <see cref="ModeSegmenter.FillUnitCounts"/> and <see cref="MeasurePlan"/> together.
+    /// Every run's value is its length, since a Kanji plan's Byte runs hold only ASCII, one byte a character.
+    /// </summary>
+    private static int PriceKanjiPlan(RmQRVersion version, Span<ModeSegment> segments)
+    {
+        var numericHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
+        var alnumHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
+        var byteHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        var kanjiHeader = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetKanjiCountIndicatorLength(version);
+        var total = 0;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            var header = segment.ModeIndex switch { 0 => numericHeader, 1 => alnumHeader, 2 => byteHeader, _ => kanjiHeader };
+            total += header + ModeSegmenter.PayloadBitsOfIndex(segment.ModeIndex, segment.Length);
+            segments[i] = new ModeSegment(segment.ModeIndex, segment.Start, segment.Length, segment.Length);
+        }
+        return total;
     }
 
     /// <summary>

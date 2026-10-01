@@ -397,7 +397,9 @@ the segmentation is a run-time option. Kanji sets in Structured Append cost a co
 only 137,216 unchanged, all three 204,288 → 204,800), measured the same day. Making Kanji mode
 opt-in (`AllowKanji`, 2026-10-01) removed none of it, since the option is read at run time: all three
 205,312 bytes and `CreateStructuredAppend` 166,400 (+0.5 KB each), QR encode only and decode only
-unchanged.
+unchanged. The Kanji plan's speed work (a membership test for the analysis, the scan's table kept
+for the build, 2026-10-01) added 1.0 KB to QR encode only (138,240) and to `CreateStructuredAppend`
+(167,424), and 1.5 KB to all three (206,848); decode only unchanged.
 
 Two failure causes are kept apart on the error path: a structurally impossible byte pair is
 `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing

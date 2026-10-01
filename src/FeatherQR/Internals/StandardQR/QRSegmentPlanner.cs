@@ -94,10 +94,20 @@ internal static class QRSegmentPlanner
     /// The scan needs no floor/ceiling machinery: count indicator widths are constant within the three version bands, so the optimal cost is computed at most once per band (three O(n) runs in the worst case, no reconstruction table), and capacity grows monotonically inside a band, so the first version that holds the band cost is the smallest.
     /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments, out bool kanjiPlan)
+        => TrySelectVersion(text, in analysis, eccLevel, minVersion, maxVersion, default, out selected, out useSegments, out kanjiPlan, out _, out _);
+
+    /// <summary>
+    /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/>, keeping the run that priced the Kanji plan it chose.
+    /// When <paramref name="kanjiPlan"/> is true, <paramref name="kanjiTable"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="kanjiFinalState"/> at <paramref name="kanjiPlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
+    /// An empty <paramref name="kanjiTable"/> keeps nothing; otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
+    /// </summary>
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> kanjiTable, out int selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
         kanjiPlan = false;
+        kanjiFinalState = 0;
+        kanjiPlannedBits = 0;
         if (analysis.KanjiPlannable)
-            return TrySelectVersionKanji(text, in analysis, eccLevel, minVersion, maxVersion, out selected, out useSegments, out kanjiPlan);
+            return TrySelectVersionKanji(text, in analysis, eccLevel, minVersion, maxVersion, kanjiTable, out selected, out useSegments, out kanjiPlan, out kanjiFinalState, out kanjiPlannedBits);
 
         useSegments = false;
         var charset = analysis.EciMode;
@@ -173,11 +183,14 @@ internal static class QRSegmentPlanner
     /// Below the single-mode fit is the rule every plan follows. The UTF-8 plan is weighed too so that Optimal never needs a larger version than it did before Kanji plans: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
     /// At a version both fit the Kanji plan is taken, which is what Optimal writes for such a text (kanji-encoding-plan.md, "When a text is written in Kanji mode").
     /// Each program is priced at most once per band behind its own screen. A Kanji plan is usually far cheaper, so the UTF-8 screen rejects nearly every version the Kanji plan does not fit, and its cost run seldom runs.
+    /// With a <paramref name="kanjiTable"/>, each band's Kanji run keeps its predecessors there; the widths are the band's, so the run that accepts is the plan's table at whichever version of the band is taken.
     /// </remarks>
-    private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments, out bool kanjiPlan)
+    private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> kanjiTable, out int selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
         useSegments = false;
         kanjiPlan = false;
+        kanjiFinalState = 0;
+        kanjiPlannedBits = 0;
         Debug.Assert(analysis.EncodingMode == EncodingMode.Byte && analysis.EciMode == EciMode.Utf8, "a plannable text's analysis is the UTF-8 one");
 
         var hasSingle = QRCodeGenerator.TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, utf8BOM: false, minVersion, maxVersion, out var single);
@@ -199,8 +212,10 @@ internal static class QRSegmentPlanner
         var kanjiTrivialBits = KanjiScreenBits(kanjiSixths, cellRuns, asciiRuns);
         var utf8TrivialBits = (utf8Sixths + 5) / 6 + ModeIndicatorBits + MinCountBitsAny + EciHeaderBits;
 
+        var window = kanjiTable.IsEmpty ? default : kanjiTable.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
         var kanjiBand = -1;
         var kanjiCost = 0;
+        var kanjiState = 0;
         var utf8Band = -1;
         var utf8Cost = 0;
         for (var version = minVersion; version <= top; version++)
@@ -213,13 +228,15 @@ internal static class QRSegmentPlanner
                 if (candidateBand != kanjiBand)
                 {
                     kanjiBand = candidateBand;
-                    kanjiCost = KanjiPlanCost(text, version, default, out _);
+                    kanjiCost = KanjiPlanCost(text, version, window, out kanjiState);
                 }
 
                 if (kanjiCost <= capacityBits)
                 {
                     useSegments = true;
                     kanjiPlan = true;
+                    kanjiFinalState = kanjiState;
+                    kanjiPlannedBits = kanjiCost;
                     selected = version;
                     return true;
                 }
@@ -363,6 +380,24 @@ internal static class QRSegmentPlanner
         }
 
         return TryAcceptPlan(text, EciMode.Default, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits);
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, Span{ModeSegment}, out int)"/> from the table the version scan kept for the plan it chose (<see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, Span{byte}, out int, out bool, out bool, out int, out int)"/>), without running the program again.
+    /// </summary>
+    public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, int version, QREccLevel eccLevel, ReadOnlySpan<byte> table, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars)
+            return false;
+
+        if (!ModeSegmenter.Reconstruct(text, table.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar), finalState, segments, out segmentCount))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        return TryAcceptPlan(text, EciMode.Default, version, eccLevel, plannedBits, segments, ref segmentCount, out _);
     }
 
     /// <summary>The minimal payload bits of a Kanji plan at <paramref name="version"/>'s widths (no ECI prefix); what a chunk of a Kanji Structured Append set costs under Optimal before its header.</summary>

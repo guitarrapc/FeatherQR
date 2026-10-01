@@ -298,6 +298,8 @@ Each plan has its own three filters, and the Kanji plan's are re-derived for its
 
 A requested version the single stream does not fit has its Kanji plan priced there, since the scan must say which plan to build. Where that plan does not fit, the UTF-8 plan is left to plan building, as for any other text.
 
+The plan is built with a run of its own at the version taken, where Standard QR and Micro QR walk back the run that accepted it ([Standard QR Encoder](standardqr-encoder.md#mixed-mode-segmentation)). Here the version is usually accepted on the floor plan's upper bound, which runs nothing at that version: 「日本7777」×10 is skipped by the screen up to R13x77, priced and turned down at R15x77 and R13x99, and taken at R17x77 on the upper bound. A table kept from a priced candidate would seldom be the one taken, and the memo hands a candidate a cost without a table.
+
 ### 3. Fit the version
 
 Required bits = optional 11-bit ECI prefix (`111` + 8-bit assignment) + 3 (data mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, including zero bits. Automatic fit is a table scan (versions pre-ordered best-first per strategy with their capacity per mode × ECC × ECI-presence, height as a bitmask); it selects exactly what the definitional "best fitting version" scan selects, and a test pins the two for every input.

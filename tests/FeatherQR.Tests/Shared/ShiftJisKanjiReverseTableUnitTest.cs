@@ -59,6 +59,25 @@ public class ShiftJisKanjiReverseTableUnitTest
     }
 
     /// <summary>
+    /// The membership test the analysis runs answers yes exactly where a lookup finds a cell, for every UTF-16 code unit: it is the lookup without the rank and the value, so the two must never disagree about which characters a Kanji plan can hold.
+    /// </summary>
+    [Test]
+    public async Task HasCell_AgreesWithLookup_EveryCodeUnit()
+    {
+        var cells = 0;
+        for (var c = 0; c < 65536; c++)
+        {
+            var expected = ShiftJisKanjiReverseTable.Lookup((char)c) >= 0;
+            var actual = ShiftJisKanjiReverseTable.HasCell((char)c);
+            if (actual != expected)
+                await Assert.That(actual).IsEqualTo(expected).Because($"U+{c:X4}");
+            if (actual) cells++;
+        }
+
+        await Assert.That(cells).IsEqualTo(ShiftJisKanjiReverseTable.EncoderCellCount);
+    }
+
+    /// <summary>
     /// Both readings of each divergent cell miss: the JIS X 0208 reading, which the forward table returns, and the CP932 reading, which a CP932 reader returns.
     /// Writing either would make a symbol two readers decode differently.
     /// </summary>

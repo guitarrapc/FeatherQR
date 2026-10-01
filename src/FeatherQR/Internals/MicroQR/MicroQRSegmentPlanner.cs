@@ -31,9 +31,19 @@ internal static class MicroQRSegmentPlanner
     /// Throws exactly what the single-mode selector throws for argument errors.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan)
+        => TrySelectVersion(text, in analysis, eccLevel, range, default, out selected, out useSegments, out kanjiPlan, out _, out _);
+
+    /// <summary>
+    /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, MicroQREccLevel, MicroQRVersionRange, out MicroQRVersion, out bool, out bool)"/>, keeping the run that priced the Kanji plan it chose.
+    /// When <paramref name="kanjiPlan"/> is true, <paramref name="kanjiTable"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="kanjiFinalState"/> at <paramref name="kanjiPlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, MicroQRVersion, MicroQREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
+    /// An empty <paramref name="kanjiTable"/> keeps nothing; otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
+    /// </summary>
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, Span<byte> kanjiTable, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
         useSegments = false;
         kanjiPlan = false;
+        kanjiFinalState = 0;
+        kanjiPlannedBits = 0;
 
         // Ceiling, and the argument validation: the single-mode selector throws the
         // same ECC / range-contradiction errors Single throws, before any planning.
@@ -66,7 +76,7 @@ internal static class MicroQRSegmentPlanner
         }
 
         if (analysis.KanjiPlannable)
-            return TrySelectVersionKanji(text, in analysis, eccLevel, range.Min, top, single, hasSingle, out selected, out useSegments, out kanjiPlan);
+            return TrySelectVersionKanji(text, in analysis, eccLevel, range.Min, top, single, hasSingle, kanjiTable, out selected, out useSegments, out kanjiPlan, out kanjiFinalState, out kanjiPlannedBits);
 
         // One O(n) pass pricing each character at the cheapest rate any mode could
         // give it: a lower bound on any plan at any version, so it may only reject.
@@ -108,15 +118,19 @@ internal static class MicroQRSegmentPlanner
     /// The UTF-8 plan is weighed so that Optimal never needs a larger version than it did before Kanji plans. Both need Byte or Kanji mode, so M1 and M2 are skipped as the mode pre-filter skips them for UTF-8 text.
     /// The Kanji screen prices a character with a cell at 13 bits, and a header for every stretch of characters with a cell and every stretch of ASCII (<see cref="KanjiScreenBits(int, int, int, MicroQRVersion)"/>).
     /// At the UTF-8 rate of 24 bits a kana, the screen would reject M3 for 「日本語12345」, whose Kanji plan fits M3-L.
+    /// With a <paramref name="kanjiTable"/>, each Kanji cost run keeps its predecessors there, so the one that accepts is the plan's table: the build would run the same program at the same widths.
     /// </remarks>
-    private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion min, MicroQRVersion top, MicroQRVersion single, bool hasSingle, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan)
+    private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion min, MicroQRVersion top, MicroQRVersion single, bool hasSingle, Span<byte> kanjiTable, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
         useSegments = false;
         kanjiPlan = false;
+        kanjiFinalState = 0;
+        kanjiPlannedBits = 0;
         Debug.Assert(analysis.EncodingMode == EncodingMode.Byte && analysis.EciMode == EciMode.Utf8, "a plannable text's analysis is the UTF-8 one");
 
         // One pass for both screens.
         var kanjiSixths = ModeSegmenter.CheapestSixthsKanji(text, out var utf8Sixths, out var cellRuns, out var asciiRuns);
+        var window = kanjiTable.IsEmpty ? default : kanjiTable.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
 
         for (var candidate = min; candidate <= top; candidate++)
         {
@@ -124,12 +138,18 @@ internal static class MicroQRSegmentPlanner
                 continue;
 
             var capacityBits = MicroQRConstants.GetDataBitCapacity(candidate, eccLevel);
-            if (KanjiScreenBits(kanjiSixths, cellRuns, asciiRuns, candidate) <= capacityBits && KanjiPlanCost(text, candidate, default, out _) <= capacityBits)
+            if (KanjiScreenBits(kanjiSixths, cellRuns, asciiRuns, candidate) <= capacityBits)
             {
-                useSegments = true;
-                kanjiPlan = true;
-                selected = candidate;
-                return true;
+                var cost = KanjiPlanCost(text, candidate, window, out var finalState);
+                if (cost <= capacityBits)
+                {
+                    useSegments = true;
+                    kanjiPlan = true;
+                    kanjiFinalState = finalState;
+                    kanjiPlannedBits = cost;
+                    selected = candidate;
+                    return true;
+                }
             }
 
             if ((utf8Sixths + 5) / 6 + 2 * (int)candidate <= capacityBits && PlanCost(text, EciMode.Utf8, candidate, default, out _) <= capacityBits)
@@ -156,15 +176,31 @@ internal static class MicroQRSegmentPlanner
         Span<byte> parents = stackalloc byte[MaxPlannableChars * ModeSegmenter.ParentBytesPerChar];
         var window = parents.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar);
         var plannedBits = KanjiPlanCost(text, version, window, out var finalState);
-        if (!ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount))
+        return TryAcceptKanjiPlan(text, version, eccLevel, window, finalState, plannedBits, segments, out segmentCount);
+    }
+
+    /// <summary>
+    /// <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, MicroQRVersion, MicroQREccLevel, Span{ModeSegment}, out int)"/> from the table the version scan kept for the plan it chose (<see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, MicroQREccLevel, MicroQRVersionRange, Span{byte}, out MicroQRVersion, out bool, out bool, out int, out int)"/>), without running the program again.
+    /// </summary>
+    public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, ReadOnlySpan<byte> table, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount)
+    {
+        segmentCount = 0;
+        if (text.Length is 0 or > MaxPlannableChars || !MicroQRConstants.IsModeSupported(version, EncodingMode.Kanji))
+            return false;
+
+        return TryAcceptKanjiPlan(text, version, eccLevel, table.Slice(0, text.Length * ModeSegmenter.ParentBytesPerChar), finalState, plannedBits, segments, out segmentCount);
+    }
+
+    /// <summary>The Kanji plan the program's table holds, walked back, priced, and held to what the program computed and to the version's capacity.</summary>
+    private static bool TryAcceptKanjiPlan(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, ReadOnlySpan<byte> table, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount)
+    {
+        if (!ModeSegmenter.Reconstruct(text, table, finalState, segments, out segmentCount))
         {
             segmentCount = 0;
             return false;
         }
 
-        ModeSegmenter.FillUnitCounts(text, EciMode.Default, segments.Slice(0, segmentCount));
-
-        var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
+        var measuredBits = PriceKanjiPlan(version, segments.Slice(0, segmentCount));
         Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         if (measuredBits != plannedBits || measuredBits > MicroQRConstants.GetDataBitCapacity(version, eccLevel))
@@ -174,6 +210,28 @@ internal static class MicroQRSegmentPlanner
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Fills each run of a Kanji plan with the value its count indicator carries and returns what the plan measures, in one pass over the runs: <see cref="ModeSegmenter.FillUnitCounts"/> and <see cref="MeasurePlan"/> together.
+    /// Every run's value is its length, since a Kanji plan's Byte runs hold only ASCII, one byte a character. M3 and M4 only, where Kanji mode exists.
+    /// </summary>
+    private static int PriceKanjiPlan(MicroQRVersion version, Span<ModeSegment> segments)
+    {
+        var modeIndicator = MicroQRConstants.GetModeIndicatorLength(version);
+        var numericHeader = modeIndicator + MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
+        var alnumHeader = modeIndicator + MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
+        var byteHeader = modeIndicator + MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        var kanjiHeader = modeIndicator + MicroQRConstants.GetKanjiCountIndicatorLength(version);
+        var total = 0;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            var header = segment.ModeIndex switch { 0 => numericHeader, 1 => alnumHeader, 2 => byteHeader, _ => kanjiHeader };
+            total += header + ModeSegmenter.PayloadBitsOfIndex(segment.ModeIndex, segment.Length);
+            segments[i] = new ModeSegment(segment.ModeIndex, segment.Start, segment.Length, segment.Length);
+        }
+        return total;
     }
 
     /// <summary>
@@ -231,13 +289,22 @@ internal static class MicroQRSegmentPlanner
     }
 
     /// <summary>Exact bit cost of a plan: per run, mode indicator + count indicator + payload.</summary>
+    /// <remarks>
+    /// The headers are looked up once for the version rather than per run, as rMQR's are: the plan is measured twice (when built and before it is written).
+    /// Kanji's is taken only from M3, the first version that has the mode; below it a plan holds no Kanji run.
+    /// </remarks>
     public static int MeasurePlan(MicroQRVersion version, ReadOnlySpan<ModeSegment> segments)
     {
+        var modeIndicator = MicroQRConstants.GetModeIndicatorLength(version);
+        var numericHeader = modeIndicator + MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
+        var alnumHeader = modeIndicator + MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
+        var byteHeader = modeIndicator + MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        var kanjiHeader = version >= MicroQRVersion.M3 ? modeIndicator + MicroQRConstants.GetKanjiCountIndicatorLength(version) : 0;
         var total = 0;
         foreach (var segment in segments)
         {
-            var mode = segment.Mode;
-            total += MicroQRConstants.GetModeIndicatorLength(version) + MicroQRConstants.GetCountIndicatorLength(version, mode) + ModeSegmenter.PayloadBits(mode, segment.UnitCount);
+            var header = segment.ModeIndex switch { 0 => numericHeader, 1 => alnumHeader, 2 => byteHeader, _ => kanjiHeader };
+            total += header + ModeSegmenter.PayloadBitsOfIndex(segment.ModeIndex, segment.UnitCount);
         }
         return total;
     }

@@ -492,13 +492,15 @@ public static class MicroQRCodeGenerator
         ValidateOptimalEntry(options.Segmentation);
 
         var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: options.AllowKanji, planKanji: true);
-        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments, out var kanjiPlan))
+        // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
+        Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
+        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
             return CreateCore(textSpan, eccLevel, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-        if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, plan, out var segmentCount))
+        if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out var segmentCount))
         {
             // The plan that justified this version could not be rebuilt; fall back to
             // the single-mode fit, which owns the error when there is none.
@@ -525,13 +527,15 @@ public static class MicroQRCodeGenerator
         ValidateOptimalEntry(options.Segmentation);
 
         var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: options.AllowKanji, planKanji: true);
-        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, out var version, out var useSegments, out var kanjiPlan))
+        // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
+        Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
+        if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
             return CreateCore(textSpan, eccLevel, destination, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-        if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, version, eccLevel, plan, out var segmentCount))
+        if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out var segmentCount))
         {
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
                 throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
@@ -572,11 +576,11 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// Builds the plan the version scan chose: a Kanji-eligible text's Kanji plan, written under <see cref="EciMode.Default"/>, or the plan in the analysis's charset.
+    /// Builds the plan the version scan chose: a Kanji-eligible text's Kanji plan, written under <see cref="EciMode.Default"/> from the table the scan kept, or the plan in the analysis's charset.
     /// </summary>
-    private static bool TryBuildPlan(ReadOnlySpan<char> text, in TextAnalysisResult analysis, bool kanjiPlan, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> plan, out int segmentCount)
+    private static bool TryBuildPlan(ReadOnlySpan<char> text, in TextAnalysisResult analysis, bool kanjiPlan, ReadOnlySpan<byte> kanjiTable, int kanjiFinalState, int kanjiPlannedBits, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> plan, out int segmentCount)
         => kanjiPlan
-            ? MicroQRSegmentPlanner.TryBuildKanjiPlan(text, version, eccLevel, plan, out segmentCount)
+            ? MicroQRSegmentPlanner.TryBuildKanjiPlan(text, version, eccLevel, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, out segmentCount)
             : MicroQRSegmentPlanner.TryBuildPlan(text, analysis.EciMode, version, eccLevel, plan, out segmentCount);
 
     /// <summary>
@@ -601,13 +605,15 @@ public static class MicroQRCodeGenerator
         ValidateOptimalEntry(options.Segmentation);
 
         var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: options.AllowKanji, planKanji: true);
-        if (!MicroQRSegmentPlanner.TrySelectVersion(text, in analysis, eccLevel, options.Version, out var version, out var useSegments, out var kanjiPlan))
+        // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
+        Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
+        if (!MicroQRSegmentPlanner.TrySelectVersion(text, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             return false;
 
         if (useSegments)
         {
             Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
-            if (!TryBuildPlan(text, in analysis, kanjiPlan, version, eccLevel, plan, out _)
+            if (!TryBuildPlan(text, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out _)
                 && !TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
             {
                 return false;

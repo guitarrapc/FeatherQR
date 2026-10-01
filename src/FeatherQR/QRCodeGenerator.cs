@@ -1395,7 +1395,28 @@ public static class QRCodeGenerator
             return CreateCore(textSpan, bomEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
-        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, out var useSegments, out var kanjiPlan);
+        byte[]? rentedKanjiTable = null;
+        var kanjiTableLength = KanjiTableLength(textSpan, in analysis);
+        Span<byte> kanjiTable = kanjiTableLength == 0
+            ? default
+            : kanjiTableLength <= ModeSegmenter.MaxStackParents
+                ? stackalloc byte[ModeSegmenter.MaxStackParents]
+                : (rentedKanjiTable = ArrayPool<byte>.Shared.Rent(kanjiTableLength));
+        try
+        {
+            return CreateOptimalPlanned(textSpan, eccLevel, in analysis, in options, kanjiTable);
+        }
+        finally
+        {
+            if (rentedKanjiTable is not null)
+                ArrayPool<byte>.Shared.Return(rentedKanjiTable, clearArray: false);
+        }
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimal"/>, with the Kanji plan's table held (empty for a text with no Kanji plan).</summary>
+    private static QRCodeData CreateOptimalPlanned(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> kanjiTable)
+    {
+        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
             return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -1407,7 +1428,7 @@ public static class QRCodeGenerator
             : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, plan, ref version, out var segmentCount);
+            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
                 return CreateCore(textSpan, resolvedEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -1451,7 +1472,28 @@ public static class QRCodeGenerator
             return CreateCore(textSpan, bomEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
-        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, out var useSegments, out var kanjiPlan);
+        byte[]? rentedKanjiTable = null;
+        var kanjiTableLength = KanjiTableLength(textSpan, in analysis);
+        Span<byte> kanjiTable = kanjiTableLength == 0
+            ? default
+            : kanjiTableLength <= ModeSegmenter.MaxStackParents
+                ? stackalloc byte[ModeSegmenter.MaxStackParents]
+                : (rentedKanjiTable = ArrayPool<byte>.Shared.Rent(kanjiTableLength));
+        try
+        {
+            return CreateOptimalToPlanned(textSpan, eccLevel, destination, in analysis, in options, kanjiTable);
+        }
+        finally
+        {
+            if (rentedKanjiTable is not null)
+                ArrayPool<byte>.Shared.Return(rentedKanjiTable, clearArray: false);
+        }
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimalTo"/>, with the Kanji plan's table held (empty for a text with no Kanji plan).</summary>
+    private static int CreateOptimalToPlanned(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> kanjiTable)
+    {
+        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
             return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -1461,7 +1503,7 @@ public static class QRCodeGenerator
             : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, plan, ref version, out var segmentCount);
+            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
                 return CreateCore(textSpan, resolvedEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -1529,12 +1571,19 @@ public static class QRCodeGenerator
     /// Throws the canonical "does not fit" errors when nothing fits.
     /// When <paramref name="useSegments"/> is false the caller emits the single-mode stream without ever acquiring a plan buffer; when <paramref name="kanjiPlan"/> is true the plan is a Kanji-eligible text's Kanji plan, written under <see cref="PlanCharset"/>.
     /// </summary>
-    private static int SelectOptimalVersion(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, out bool useSegments, out bool kanjiPlan)
+    /// <remarks><paramref name="kanjiTable"/> receives the Kanji plan's table, which <see cref="BuildPlanOrFallback"/> builds from (<see cref="QRSegmentPlanner.TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, Span{byte}, out int, out bool, out bool, out int, out int)"/>).</remarks>
+    private static int SelectOptimalVersion(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> kanjiTable, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
-        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, out var version, out useSegments, out kanjiPlan))
+        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, kanjiTable, out var version, out useSegments, out kanjiPlan, out kanjiFinalState, out kanjiPlannedBits))
             ThrowDoesNotFit(in analysis, eccLevel, in options);
         return version;
     }
+
+    /// <summary>
+    /// Bytes of the table the version scan keeps for the Kanji plan's build: the program's predecessors, two bytes a character, for a text whose Kanji plan the planner prices; none otherwise.
+    /// </summary>
+    private static int KanjiTableLength(ReadOnlySpan<char> text, in TextAnalysisResult analysis)
+        => analysis.KanjiPlannable && text.Length <= QRSegmentPlanner.MaxPlannableChars ? text.Length * ModeSegmenter.ParentBytesPerChar : 0;
 
     /// <summary>The charset a plan is written under: none for a Kanji plan, whose Byte runs hold only ASCII; the analysis's otherwise.</summary>
     private static EciMode PlanCharset(in TextAnalysisResult analysis, bool kanjiPlan) => kanjiPlan ? EciMode.Default : analysis.EciMode;
@@ -1554,10 +1603,11 @@ public static class QRCodeGenerator
     /// A zero segment count means the single-mode stream is what gets emitted.
     /// Throws the canonical "does not fit" errors when the fallback does not fit either.
     /// </summary>
-    private static QREccLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, bool kanjiPlan, Span<ModeSegment> plan, ref int version, out int segmentCount)
+    private static QREccLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, bool kanjiPlan, ReadOnlySpan<byte> kanjiTable, int kanjiFinalState, int kanjiPlannedBits, Span<ModeSegment> plan, ref int version, out int segmentCount)
     {
+        // A Kanji plan is built from the table the scan kept, without running the program again.
         var built = kanjiPlan
-            ? QRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, plan, out segmentCount)
+            ? QRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, out segmentCount)
             : QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount);
         if (!built)
         {
