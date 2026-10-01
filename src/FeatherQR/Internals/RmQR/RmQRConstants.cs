@@ -340,6 +340,7 @@ internal static class RmQRConstants
     /// <remarks>
     /// The image decoder's and the matrix decoder's readers walk the block from here with two loops rather than asking <see cref="GetFormatModule"/> for each bit, since they run for every frame and every grid an image decode tries: a bit at a time measured about 1 % slower on an rMQR image that does not read, and on a clean R17x139 matrix (2026-09-29).
     /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void GetFormatBlock(bool subFinderSide, int height, int width, out int row, out int col)
     {
         row = subFinderSide ? height - 6 : 1;
@@ -347,6 +348,7 @@ internal static class RmQRConstants
     }
 
     /// <summary>The module of bit 15 + <paramref name="k"/> (k 0-2) of one copy, beyond its block: down column 11 on the finder side, along row h−6 on the sub-finder side.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void GetFormatTail(int k, bool subFinderSide, int height, int width, out int row, out int col)
     {
         row = subFinderSide ? height - 6 : k + 1;

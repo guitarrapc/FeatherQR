@@ -11,7 +11,7 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// 128-bit tier: <see cref="SampleGridPiecewiseAdvSimd"/>'s steps on portable vectors, for the targets with neither the AVX2 nor the ARM64
     /// tier. The same float operations in the reference's order, and each coordinate to its pixel through <see cref="VectorCast.ToPixel"/>,
-    /// which lands where the reference's <see cref="PixelIndex.Clamp"/> does for every float.
+    /// which lands where the reference's <see cref="PixelIndex.Clamp(float, int)"/> does for every float.
     /// </summary>
     internal static void SampleGridPiecewiseVector128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
     {

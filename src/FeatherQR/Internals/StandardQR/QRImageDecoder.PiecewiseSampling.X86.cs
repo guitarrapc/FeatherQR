@@ -14,7 +14,7 @@ internal static partial class QRImageDecoder
     /// </summary>
     /// <remarks>
     /// The multiply and the add stay separate instructions: fused, a coordinate can differ from the reference's by an ulp and truncate into the next pixel.
-    /// The reference takes each pixel through <see cref="ImageDecoders.PixelIndex.Clamp"/>, the same on every runtime. Here the upper clamp is taken in float with the limit as the first operand of the minimum, so a NaN lane passes through, truncates to INT_MIN and is raised to 0 by the integer maximum, which is where the reference puts it; with the operands the other way round NaN becomes the limit and a different pixel.
+    /// The reference takes each pixel through <see cref="ImageDecoders.PixelIndex.Clamp(float, int)"/>, the same on every runtime. Here the upper clamp is taken in float with the limit as the first operand of the minimum, so a NaN lane passes through, truncates to INT_MIN and is raised to 0 by the integer maximum, which is where the reference puts it; with the operands the other way round NaN becomes the limit and a different pixel.
     /// A gather was measured slower than eight scalar loads and would read past the last pixel.
     /// </remarks>
     internal static void SampleGridPiecewiseAvx2(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
