@@ -172,10 +172,10 @@ internal static partial class RmQRMatrixDecoder
         {
             var supported = kernel == ExtractKernel.BitPlanes ? IsBitPlaneTierSupported : kernel == ExtractKernel.PairPlanes ? IsPairPlaneTierSupported : IsPairPlaneVector128TierSupported;
             if (!supported)
-                throw new PlatformNotSupportedException($"{nameof(ExtractKernel)}.{kernel} was pinned, but that tier does not run on this machine. Guard the call with {nameof(IsBitPlaneTierSupported)} / {nameof(IsPairPlaneTierSupported)} / {nameof(IsPairPlaneVector128TierSupported)}.");
+                ThrowPinnedTierAbsent(kernel);
             var expected = RmQRConstants.GetTotalCodewordCount(version);
             if (stream.Length != expected)
-                throw new ArgumentException($"{nameof(ExtractKernel)}.{kernel} emits whole words off a per-version table, so the stream must be exactly {expected} bytes for {version}; got {stream.Length}.", nameof(stream));
+                ThrowPinnedStreamLength(kernel, version, expected, stream.Length, nameof(stream));
         }
 
         var layout = GetExtractLayout(version);
@@ -207,6 +207,16 @@ internal static partial class RmQRMatrixDecoder
         // The portable tier reads the geometry out of the walk-order table instead.
         ExtractCodewordsScalar(modules, layout.Order, stream);
     }
+
+    // Outlined so the dispatch every matrix decode runs does not carry the messages' formatting: inline, it was most of
+    // the method (530 → 102 instructions on the ARM64 JIT, 348 → 96 on a default x64 NativeAOT publish).
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowPinnedTierAbsent(ExtractKernel kernel)
+        => throw new PlatformNotSupportedException($"{nameof(ExtractKernel)}.{kernel} was pinned, but that tier does not run on this machine. Guard the call with {nameof(IsBitPlaneTierSupported)} / {nameof(IsPairPlaneTierSupported)} / {nameof(IsPairPlaneVector128TierSupported)}.");
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowPinnedStreamLength(ExtractKernel kernel, RmQRVersion version, int expected, int actual, string paramName)
+        => throw new ArgumentException($"{nameof(ExtractKernel)}.{kernel} emits whole words off a per-version table, so the stream must be exactly {expected} bytes for {version}; got {actual}.", paramName);
 
     /// <summary>
     /// Portable tier: one gather per stream bit through the walk-order table, the output byte accumulated in a register so each is stored once.

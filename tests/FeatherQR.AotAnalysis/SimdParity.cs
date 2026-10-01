@@ -538,9 +538,10 @@ internal static class SimdParity
     }
 
     /// <summary>
-    /// Luminance through the dispatch against the scalar tier, each layout straight and premultiplied: every channel value against every
-    /// alpha (a premultiplied channel above its alpha wraps in the scalar byte cast), then random scenes whose rows take the optimistic,
-    /// classified and composite-only modes, across the 16-pixel block and its overlapping tail, packed and padded.
+    /// Luminance through the dispatch and through the 128-bit tier's own entry against the scalar tier, each layout straight and premultiplied:
+    /// every channel value against every alpha (a premultiplied channel above its alpha wraps in the scalar byte cast), then random scenes whose
+    /// rows take the optimistic, classified and composite-only modes, across the 16-pixel block and its overlapping tail, packed and padded.
+    /// The dispatch hides the 128-bit tier behind the AVX2 and dot-product tiers, and every ARM64 runner has the dot product.
     /// </summary>
     private static List<string> LuminanceMismatches()
     {
@@ -554,6 +555,13 @@ internal static class SimdParity
             LuminanceConverter.Convert(pixels, width, height, rowBytes, layout.Layout, premultiplied, actual);
             if (!expected.AsSpan().SequenceEqual(actual))
                 mismatches.Add($"{label}, {layout.Layout}, premultiplied {premultiplied}");
+            // The tier takes rows of one block or more; its dispatch keeps narrower ones scalar
+            if (width < 16)
+                return;
+            Array.Clear(actual);
+            LuminanceConverter.ConvertRgbaVector128(pixels, actual, width, height, rowBytes, bgra: layout.R == 2, hasAlpha: layout.A >= 0, premultiplied);
+            if (!expected.AsSpan().SequenceEqual(actual))
+                mismatches.Add($"128-bit tier, {label}, {layout.Layout}, premultiplied {premultiplied}");
         }
 
         foreach (var layout in layouts)

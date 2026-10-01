@@ -871,3 +871,41 @@ The harness's default 300 ms warmup left the JIT short of steady state on shapes
 | .NET 10, `matrix/sa-byte-45k-set` | 931 (318) / 284 (282) | 287 / 285 |
 
 `DOTNET_TieredCompilation=0` read main's set decode at 301 µs. NativeAOT does not tier, so its rows use the default.
+
+### ARM64 JIT machine code
+
+Every FeatherQR method the end-to-end shapes compile, main against the branch, run once with `DOTNET_TieredCompilation=0` (fully optimized and without a profile, so the code follows the source alone) and `DOTNET_JitDisasm`, compared per method with handles, string tokens and static-field offsets masked:
+
+| | .NET 8 | .NET 10 |
+|---|---|---|
+| Methods compiled | 484 | 476 |
+| Identical | 360 | 363 |
+| Constants only | 105 | 92 |
+| Other instructions | 19 | 21 |
+
+The other instructions, by cause (instructions, main → branch):
+
+| Methods | .NET 8 | .NET 10 | Cause |
+|---|---|---|---|
+| The 128-bit samplers: Standard QR, Micro QR, rMQR and its affine form | −6 to −10 | −3 to −5 | Phase 1b and its follow-up |
+| `EccBlockDecoder.TryCorrect`, `Deinterleave` | +38, −7 | +29, +1 | Merge follow-up: one block corrected in place, the copies by reference |
+| Standard QR's search levels: `DecodeCorners`, `DecodeFromFinders`, `DecodeOtherGrid`, `SampleAndDecode`, `DecodeTriple`, `DecodeWithMirrorRetry` | +20, +47, +139, +37, −14, −5 | +35, +51, +137, +52, +2, +7 | Merge follow-up: a level returns a settled attempt as it is |
+| `RmQRMatrixDecoder.ExtractCodewords` | +42 | +39 | Phase 5's third tier name in the pinned-kernel message; outlined below |
+| `RmQRBinaryEncoder.EncodeDataCodewordsWithoutEci`, `RmQRVersionSelector.GetMaxDataLength`, `BuildFitCapacities` | +2, ±0 | −3 | No source change: the JIT had reached nearby constant tables from one base register, and added tables moved them apart |
+| Static constructors, `RmQRModulePlacer.BuildLayout`, `SimdTiers.Report`, `LuminanceConverter.ConvertRgbaForTest` | | | Run once, or report and test entries |
+
+With the profile (tiered, the default), `DecodeMatrix` of rMQR read 838 → 865 instructions on .NET 8, a larger frame zeroed in the prologue; without it, identical in both trees.
+
+`ExtractCodewords` with its two throws outlined, instructions (main / branch / outlined):
+
+| Build | main | branch | outlined |
+|---|---|---|---|
+| JIT .NET 8 | 515 | 557 | 107 |
+| JIT .NET 10 | 491 | 530 | 102 |
+| ILC ARM64 | 349 | 378 | 79 |
+| ILC x64, default | 147 | 348 | 96 |
+| ILC `x86-64-v3` | 319 | 370 | 132 |
+
+On the .NET 10 JIT the method is 1,964 → 408 bytes, its prologue 20 → 14 instructions, and both kernel calls became tail calls. `DecodeMatrix`, the five-argument wrapper and every other method compile as before on each build; the .NET 8 rMQR encoder method above returned to main's form, its table addressing again. ILC's x64 listings were cross-compiled on this machine (`-r osx-x64`); the x64 JIT was not checked.
+
+NativeAOT, the branch → outlined, nine alternations on battery, where this machine switched between speed states about 25 % apart: the fastest runs level (R17x139 matrix decode 0.851 / 0.851 µs, corrected 2.834 / 2.872, R7x43 0.149 / 0.151, the R17x139 image 29.03 / 29.05), ratios of medians 0.93 to 1.01.

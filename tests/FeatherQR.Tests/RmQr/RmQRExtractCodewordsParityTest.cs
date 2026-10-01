@@ -196,4 +196,43 @@ public class RmQRExtractCodewordsParityTest
                 .Because($"128-bit pair-plane tier, version {version} ({width}x{height}) must not depend on bytes past width*height");
         }
     }
+
+    /// <summary>
+    /// A pinned vector kernel refuses what it cannot honour rather than fall back to another tier, which a parity test would then
+    /// compare against itself: a tier this machine does not run throws <see cref="PlatformNotSupportedException"/> naming the kernel,
+    /// and a stream that is not the version's codeword count throws <see cref="ArgumentException"/> on the stream, since the vector
+    /// kernels emit whole words off a per-version table. Each machine reaches one of the two per kernel.
+    /// </summary>
+    [Test]
+    [Arguments(nameof(RmQRMatrixDecoder.ExtractKernel.BitPlanes))]
+    [Arguments(nameof(RmQRMatrixDecoder.ExtractKernel.PairPlanes))]
+    [Arguments(nameof(RmQRMatrixDecoder.ExtractKernel.PairPlanesVector128))]
+    public async Task PinnedKernel_RefusesAnAbsentTierOrAStreamOfTheWrongLength(string kernelName)
+    {
+        var kernel = Enum.Parse<RmQRMatrixDecoder.ExtractKernel>(kernelName);
+        const RmQRVersion Version = RmQRVersion.R13x77;
+        var width = RmQRConstants.GetWidth(Version);
+        var height = RmQRConstants.GetHeight(Version);
+        var modules = new byte[width * height];
+        var exact = RmQRConstants.GetTotalCodewordCount(Version);
+        var supported = kernel switch
+        {
+            RmQRMatrixDecoder.ExtractKernel.BitPlanes => RmQRMatrixDecoder.IsBitPlaneTierSupported,
+            RmQRMatrixDecoder.ExtractKernel.PairPlanes => RmQRMatrixDecoder.IsPairPlaneTierSupported,
+            _ => RmQRMatrixDecoder.IsPairPlaneVector128TierSupported,
+        };
+
+        if (!supported)
+        {
+            var absent = Assert.Throws<PlatformNotSupportedException>(
+                () => RmQRMatrixDecoder.ExtractCodewords(modules, width, height, Version, new byte[exact], kernel));
+            await Assert.That(absent.Message).Contains($"ExtractKernel.{kernel} was pinned");
+            return;
+        }
+
+        var wrongLength = Assert.Throws<ArgumentException>(
+            () => RmQRMatrixDecoder.ExtractCodewords(modules, width, height, Version, new byte[exact - 1], kernel));
+        await Assert.That(wrongLength.ParamName).IsEqualTo("stream");
+        await Assert.That(wrongLength.Message).Contains($"ExtractKernel.{kernel} emits whole words off a per-version table, so the stream must be exactly {exact} bytes for {Version}; got {exact - 1}.");
+    }
 }
