@@ -4,24 +4,35 @@ This page lists the SIMD code path (tier) each kernel runs on each kind of build
 
 ## Builds
 
-Each build falls into one of four build classes, except the netstandard builds, which run no SIMD at all:
+### What .NET gives each build
 
-| Build | Build class |
+| Build | SIMD available |
 |---|---|
-| JIT (x64 CPU with AVX2) | x64 with AVX2 |
-| JIT (x64 with `DOTNET_EnableAVX=0`) | x64 without AVX |
-| JIT (ARM64) | ARM64 |
-| NativeAOT (x64 with `IlcInstructionSet=x86-64-v3`) | x64 with AVX2 |
-| NativeAOT (x64, default) | x64 without AVX |
-| NativeAOT (ARM64) | ARM64 |
-| WebAssembly, interpreted or AOT (`WasmEnableSIMD`, on by default) | WebAssembly |
-| netstandard2.0/2.1 (.NET Framework, .NET 7 and earlier) | None: every kernel runs scalar |
+| JIT, x64 | Every instruction set the CPU has. GFNI needs .NET 10 |
+| JIT, x64, with `DOTNET_EnableAVX=0` | The same as a default NativeAOT publish |
+| NativeAOT, x64, default | Up to SSE4.2, and GFNI, each checked at run time. No AVX, `Avx2`, `Bmi2` and `Vector256` always report false, even on CPUs that have them |
+| NativeAOT, x64, `IlcInstructionSet=x86-64-v3` | AVX2 and BMI2 required, GFNI checked at run time. On a CPU without AVX2 the app stops at startup with "The required instruction sets are not supported by the current CPU." |
+| NativeAOT, x64, `IlcInstructionSet=x86-64-v2,avx` | AVX required; AVX2, BMI2 and GFNI checked at run time, but `Vector256` always reports false. On a CPU without AVX the app stops at startup |
+| JIT or NativeAOT, ARM64 | AdvSimd always available, the dot-product instructions (`Dp`) checked at run time. Cortex-A53 and A72-class cores lack them |
+| WebAssembly, interpreted or AOT | 128-bit `PackedSimd` with `WasmEnableSIMD`, on by default. Both modes see the same flags |
+| .NET Framework | No hardware intrinsics: `System.Runtime.Intrinsics` starts with .NET Core 3.0 |
 
-- A default NativeAOT publish on x64 is limited to SSE4.2 and GFNI. Both are checked at run time, so tiers written with explicit intrinsics such as `Ssse3` and `Gfni` run on CPUs that have them. AVX2 and the rest of AVX are not available, even on CPUs that have them: `Avx2`, `Bmi2` and `Vector256` always report false.
-- Portable `Vector128` code in a default NativeAOT publish is limited to SSE2, because it gets no run-time check. An operation SSE2 lacks, such as a variable shuffle, becomes a slower sequence of SSE2 instructions, even on a CPU with SSSE3.
+Portable `Vector128` code in a default NativeAOT publish is limited to SSE2, because it gets no run-time check. An operation SSE2 lacks, such as a variable shuffle, becomes a slower sequence of SSE2 instructions, even on a CPU with SSSE3.
+
+### How FeatherQR uses them
+
+FeatherQR ships net8.0, net10.0 and netstandard2.0/2.1 builds. It groups the .NET builds above into four build classes, and `SimdTiers.cs` states the tier each kernel takes in each class:
+
+| Build class | Builds |
+|---|---|
+| x64 with AVX2 | JIT on an x64 CPU with AVX2; NativeAOT with `x86-64-v3` |
+| x64 without AVX | NativeAOT, default; JIT with `DOTNET_EnableAVX=0` |
+| ARM64 | JIT or NativeAOT |
+| WebAssembly | Interpreted or AOT |
+
+- The netstandard2.0/2.1 builds have no SIMD tiers: every kernel runs scalar. .NET Framework, and .NET 7 and earlier, load them.
 - GFNI tiers run only in the net10.0 build. .NET 8 has no GFNI API, so the net8.0 build, which apps on .NET 8 and 9 use, runs the next tier instead.
-- On ARM64 the dot product (`AdvSimdDp`) depends on the CPU: the JIT and NativeAOT both check for it at run time. Cortex-A53 and A72-class cores don't have it.
-- Interpreted and AOT-compiled WebAssembly run the same tiers, because they see the same flags.
+- Two builds are in none of the classes, and no CI run checks them: a JIT on an x64 CPU without AVX2, and NativeAOT with `x86-64-v2,avx`, which runs the `Avx2` tiers but not the `Vector256` ones.
 
 The tiers each build class always has, and those that depend on the CPU. A tier not listed for a class is never available there. Tiers joined by `+` come together: a CPU has both or neither.
 
@@ -40,9 +51,9 @@ A tier is named after the minimum it requires, and some kernels require more: `E
 
 | Tier | Requires |
 |---|---|
-| `Scalar` | Nothing: a plain loop |
-| `Vector128` | Portable 128-bit vectors: SSE2 on x64, AdvSimd on ARM64, PackedSimd on WebAssembly |
-| `Vector256` | Portable 256-bit vectors: AVX2 on x64 |
+| `Scalar` | Nothing, a plain loop |
+| `Vector128` | Portable 128-bit vectors. SSE2 on x64, AdvSimd on ARM64, PackedSimd on WebAssembly |
+| `Vector256` | Portable 256-bit vectors. AVX2 on x64 |
 | `Sse2` | x64 SSE2 |
 | `Ssse3` | x64 SSSE3 |
 | `Sse41` | x64 SSE4.1 |
@@ -51,14 +62,14 @@ A tier is named after the minimum it requires, and some kernels require more: `E
 | `Gfni` | x64 GFNI on 128-bit vectors, .NET 10 and later |
 | `GfniV256` | x64 GFNI on 256-bit vectors, .NET 10 and later |
 | `AdvSimd` | ARM64 AdvSimd (NEON) |
-| `AdvSimdDp` | ARM64 AdvSimd plus the ARMv8.2 dot product |
+| `AdvSimdDp` | ARM64 AdvSimd plus the ARMv8.2 dot-product `Dp` instructions |
 | `PackedSimd` | WebAssembly SIMD instructions, used where the portable `Vector128` code compiles poorly |
 
-There is no AVX-512 (`Vector512`) tier, because it gained nothing where it was tried. 512-bit versions of the rMQR codeword extraction and the Standard QR mask scoring were measured on Zen 4, which runs a 512-bit operation as two 256-bit halves, and neither beat the 256-bit tier beyond noise. A default NativeAOT publish can't use AVX-512 anyway. The JIT on an AVX-512 CPU still uses some AVX-512 instructions inside the 256-bit tiers, such as vector compares through mask registers.
+There is no AVX-512 (`Vector512`) tier, I've tried but it gained nothing. 512-bit versions of the rMQR codeword extraction and the Standard QR mask scoring were measured on Zen 4, which runs a 512-bit operation as two 256-bit halves, and neither beat the 256-bit tier beyond noise. A default NativeAOT publish can't use AVX-512 anyway. The JIT on an AVX-512 CPU still uses some AVX-512 instructions inside the 256-bit tiers, such as vector compares through mask registers.
 
 ## Kernels
 
-For each kernel: its tiers in the order its dispatch tries them, and the tier it runs on each build class. Where the CPU decides, the cell lists the options in order: "`Gfni` or `Ssse3`" means `Gfni` if the CPU has it, otherwise `Ssse3`. A cell is the tier for large inputs; small inputs, and the tail of a large one, may run a lower tier. What each kernel does, and why a cell stays scalar, is noted next to its row in `SimdTiers.cs`.
+For each kernel, its tiers in the order its dispatch tries them, and the tier it runs on each build class. Where the CPU decides, the cell lists the options in order: "`Gfni` or `Ssse3`" means `Gfni` if the CPU has it, otherwise `Ssse3`. A cell is the tier for large inputs; small inputs, and the tail of a large one, may run a lower tier. What each kernel does, and why a cell stays scalar, is noted next to its row in `SimdTiers.cs`.
 
 <!-- BEGIN GENERATED kernels: SimdTiersDocTest renders it from SimdTiers.cs -->
 | Kernel | Tiers, in dispatch order | x64 without AVX | x64 with AVX2 | ARM64 | WebAssembly |
