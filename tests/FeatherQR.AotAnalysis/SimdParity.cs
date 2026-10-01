@@ -45,6 +45,7 @@ internal static class SimdParity
         failures += Report("EccBinaryDecoder.ComputeSyndromesVector128", SyndromeMismatches);
         failures += Report("EccBinaryEncoder.PackedSimdKernel", EccEncoderMismatches);
         failures += Report("RmQRMatrixDecoder pair planes, 128-bit", ExtractMismatches);
+        failures += Report("RmQRBinaryEncoder value writers", ValueWriterMismatches);
         return failures == 0 ? 0 : 1;
     }
 
@@ -916,6 +917,67 @@ internal static class SimdParity
             }
         }
         return mismatches;
+    }
+
+    private delegate void ValueWriter(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> text, bool vectorized);
+
+    /// <summary>
+    /// The rMQR Numeric and Alphanumeric writers, the tier this build takes against the SWAR and table loops, from every pending-bit
+    /// count a header leaves: every length to the R17x139 capacities (zeros, nines or colons, the alphabet in turn, random), and each
+    /// alphanumeric symbol in each of 16 positions. The streams compared are the stored bytes followed by the pending bits.
+    /// </summary>
+    private static List<string> ValueWriterMismatches()
+    {
+        const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+        var mismatches = new List<string>();
+        var random = new Random(20261001);
+        string RandomText(string set, int length) => string.Create(length, set, (span, s) => { for (var i = 0; i < span.Length; i++) span[i] = s[random.Next(s.Length)]; });
+        string CyclicText(string set, int length) => string.Create(length, set, (span, s) => { for (var i = 0; i < span.Length; i++) span[i] = s[(i + length) % s.Length]; });
+        void Check(string name, ValueWriter writer, string text)
+        {
+            for (var header = 0; header <= 12; header++)
+            {
+                if (!Stream(writer, text, header, vectorized: true).AsSpan().SequenceEqual(Stream(writer, text, header, vectorized: false)))
+                    mismatches.Add($"{name}, length {text.Length}, header {header}");
+            }
+        }
+        for (var length = 0; length <= 361; length++)
+        {
+            Check("numeric zeros", RmQRBinaryEncoder.WriteNumeric, new string('0', length));
+            Check("numeric nines", RmQRBinaryEncoder.WriteNumeric, new string('9', length));
+            Check("numeric random", RmQRBinaryEncoder.WriteNumeric, RandomText("0123456789", length));
+        }
+        for (var length = 0; length <= 219; length++)
+        {
+            Check("alphanumeric colons", RmQRBinaryEncoder.WriteAlphanumeric, new string(':', length));
+            Check("alphanumeric cyclic", RmQRBinaryEncoder.WriteAlphanumeric, CyclicText(alphabet, length));
+            Check("alphanumeric random", RmQRBinaryEncoder.WriteAlphanumeric, RandomText(alphabet, length));
+        }
+        foreach (var symbol in alphabet)
+        {
+            for (var position = 0; position < 16; position++)
+            {
+                var chars = new string('A', 16).ToCharArray();
+                chars[position] = symbol;
+                Check($"alphanumeric '{symbol}' at {position}", RmQRBinaryEncoder.WriteAlphanumeric, new string(chars));
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>The writer's stream from <paramref name="header"/> set bits: stored bytes, then the pending bits, as whole bytes and the bit count.</summary>
+    private static byte[] Stream(ValueWriter writer, string text, int header, bool vectorized)
+    {
+        var stored = new byte[512];
+        var acc = header == 0 ? 0UL : ulong.MaxValue << (64 - header);
+        var accBits = header;
+        var bytePos = 0;
+        writer(ref stored[0], ref acc, ref accBits, ref bytePos, text, vectorized);
+        var stream = new byte[bytePos + 8 + 4];
+        stored.AsSpan(0, bytePos).CopyTo(stream);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(stream.AsSpan(bytePos), acc);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(stream.AsSpan(bytePos + 8), bytePos * 8 + accBits);
+        return stream.AsSpan(0, bytePos + (accBits + 7) / 8).ToArray().Concat(stream.AsSpan(bytePos + 8).ToArray()).ToArray();
     }
 
     /// <summary>A 3 x 3 box blur, edges clamped: grey pixels for the second look.</summary>

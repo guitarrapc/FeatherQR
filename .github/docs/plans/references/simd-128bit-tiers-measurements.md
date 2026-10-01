@@ -719,3 +719,44 @@ Against the build before phase 5 (HEAD `2820b5d`, the same harness), ratio of me
 | image/rmqr-r17x139-8px | 0.90 (34.3-34.6 → 30.9-31.0) | 0.85 (35.2-38.1 → 30.8-31.2) | 0.95 (212.1-224.5 → 204.5-210.1) |
 
 Default NativeAOT is the run before the WebAssembly gates moved, which left its code as it was; its encodes, whose code did not change, read 0.97 to 1.05 there. The Micro QR M2 and M3 encodes, under the encoder's gate, read 1.03 and 1.05 on WebAssembly AOT in this run and 1.00 and 1.01 over seven alternations.
+
+## Phase 6: rMQR value writers
+
+Each shape alone in its own process, three runs: the range of the three, ratios of their medians.
+
+### Shares
+
+The writer alone (its harness shape, the call included) over the encode of the same content, µs. Default NativeAOT runs its SSE4.1 tier, WebAssembly the SWAR and table loops:
+
+| Writer, content | NativeAOT default | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|
+| Numeric, 12 digits (R7x43) | 0.007 / 0.177-0.188 (3.9 %) | 0.016 / 0.369-0.375 (4.3 %) | 0.060-0.062 / 2.435-2.455 (2.5 %) |
+| Alphanumeric, 43 chars (R11x59) | 0.014-0.015 / 0.339-0.350 (4.1 %) | 0.040-0.041 / 0.599-0.612 (6.8 %) | 0.200-0.202 / 3.472-3.521 (5.7 %) |
+| Numeric, 361 digits (version fitted) | 0.079-0.080 / 1.283-1.318 (6.1 %) | 0.103-0.105 / 1.948-1.958 (5.3 %) | 0.473-0.478 / 10.57-10.84 (4.5 %) |
+| Alphanumeric, 120 chars (version fitted) | 0.030-0.031 / 0.791-0.865 (3.8 %) | 0.091-0.094 / 1.353-1.397 (6.6 %) | 0.480-0.496 / 7.034-7.237 (6.7 %) |
+
+### The steps alone
+
+µs, the SWAR or table loop → the WebAssembly step:
+
+| Step, content | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|
+| Alphanumeric, 16 chars a step, 43 chars | 0.04 → 0.03 (0.78-0.80) | 0.20-0.21 → 0.17-0.18 (0.84-0.86) |
+| Alphanumeric, 120 chars | 0.09-0.10 → 0.06 (0.62-0.64) | 0.47-0.50 → 0.36-0.38 (0.76-0.78) |
+| Numeric, 24 digits a step, 361 digits | 0.10 → 0.09-0.10 (0.92) | 0.46-0.49 → 0.59-0.60 (1.26) |
+
+The most the Alphanumeric step can take off an encode, its share times its saving: 2.5 % (120 chars AOT-compiled), 1.6 % (interpreted), 1.5 % and 0.9 % on the 43-character symbol.
+
+### End to end, three forms of the Alphanumeric step
+
+Against the build before phase 6 (HEAD `f67beb5`, the same harness), ratio of medians, WebAssembly AOT | interpreted:
+
+| Encode | Inlined into the writer | Out of line, state returned | Its own encode method |
+|---|---|---|---|
+| Numeric, R7x43 | 0.97 \| 1.04 | 1.02 \| 0.99 | 1.01 \| 1.00 |
+| Alphanumeric, R11x59 | 1.04 \| 0.98 | 1.01 \| 1.05 | 1.01 \| 0.98 |
+| Byte, R17x139 | 1.04 \| 0.98 | 1.04 \| 0.97 | 0.98 \| 0.99 |
+| Numeric, 361 digits | 1.07 \| 0.97 | 1.02 \| 0.99 | 1.02 \| 0.99 |
+| Alphanumeric, 120 chars | 0.94 \| 1.04 | 1.00 \| 1.02 | 0.99 \| 0.97 |
+
+Inlined, the Numeric encode on WebAssembly AOT read 1.926-1.948 µs before and 2.005-2.068 after, with no change to its own code. Out of line, the writer's call cost the 43-character step its gain (1.05 AOT-compiled, 1.25 interpreted alone). As its own method, the 120-character encode read 1.313-1.317 → 1.291-1.306 µs AOT-compiled.

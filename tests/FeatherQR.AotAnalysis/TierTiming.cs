@@ -153,6 +153,8 @@ internal static class TierTiming
         new("encode/rmqr-r7x43-num", () => RmQREncode("012345678901", RmQRVersion.R7x43)),
         new("encode/rmqr-r11x59-alnum", () => RmQREncode("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.", RmQRVersion.R11x59)),
         new("encode/rmqr-r17x139-byte", () => RmQREncode(RmQRByte, RmQRVersion.R17x139)),
+        new("encode/rmqr-numeric-361", () => RmQREncodeFit(new string('7', 361))),
+        new("encode/rmqr-alnum-120", () => RmQREncodeFit(new string('A', 120))),
         // The data-object API: the symbol packed to bits by the generator, unpacked again by the decoder
         new("data/micro-m4-byte-encode", () => () => MicroQRCodeGenerator.Create("bytes m4 mode", MicroQREccLevel.M).Size),
         new("data/micro-m4-byte-decode", () => MicroDataDecode("bytes m4 mode", MicroQREccLevel.M)),
@@ -264,6 +266,14 @@ internal static class TierTiming
         new("kernel/EccEncode-15-30-scalar", () => EccEncode(15, 30, scalar: true)),
         new("kernel/EccEncode-16-8", () => EccEncode(16, 8, scalar: false)),
         new("kernel/EccEncode-16-8-scalar", () => EccEncode(16, 8, scalar: true)),
+        new("kernel/RmQRNumeric-12", () => RmQRValueWriter("012345678901", alphanumeric: false)),
+        new("kernel/RmQRNumeric-12-scalar", () => RmQRValueWriter("012345678901", alphanumeric: false, vectorized: false)),
+        new("kernel/RmQRNumeric-361", () => RmQRValueWriter(new string('7', 361), alphanumeric: false)),
+        new("kernel/RmQRNumeric-361-scalar", () => RmQRValueWriter(new string('7', 361), alphanumeric: false, vectorized: false)),
+        new("kernel/RmQRAlphanumeric-43", () => RmQRValueWriter("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.", alphanumeric: true)),
+        new("kernel/RmQRAlphanumeric-43-scalar", () => RmQRValueWriter("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.", alphanumeric: true, vectorized: false)),
+        new("kernel/RmQRAlphanumeric-120", () => RmQRValueWriter(new string('A', 120), alphanumeric: true)),
+        new("kernel/RmQRAlphanumeric-120-scalar", () => RmQRValueWriter(new string('A', 120), alphanumeric: true, vectorized: false)),
         new("kernel/RmQRExtract-R17x139", () => RmQRExtract(RmQRVersion.R17x139, scalar: false)),
         new("kernel/RmQRExtract-R17x139-scalar", () => RmQRExtract(RmQRVersion.R17x139, scalar: true)),
         new("kernel/RmQRExtract-R13x77", () => RmQRExtract(RmQRVersion.R13x77, scalar: false)),
@@ -373,6 +383,31 @@ internal static class TierTiming
         var destination = new byte[1 << 13];
         var options = new RmQRCodeGeneratorOptions { Version = version };
         return () => RmQRCodeGenerator.Create(text, RmQREccLevel.M, destination, options);
+    }
+
+    /// <summary>The version chosen to fit, as the segmentation benchmark's Single arm encodes.</summary>
+    private static Func<int> RmQREncodeFit(string text)
+    {
+        var destination = new byte[1 << 13];
+        return () => RmQRCodeGenerator.Create(text, RmQREccLevel.M, destination);
+    }
+
+    /// <summary>The rMQR Numeric or Alphanumeric writer alone over a payload: the tier this build takes, or the SWAR and table loops.</summary>
+    private static Func<int> RmQRValueWriter(string text, bool alphanumeric, bool vectorized = true)
+    {
+        var destination = new byte[256];
+        return () =>
+        {
+            ref var dest = ref destination[0];
+            ulong acc = 0;
+            var accBits = 0;
+            var bytePos = 0;
+            if (alphanumeric)
+                RmQRBinaryEncoder.WriteAlphanumeric(ref dest, ref acc, ref accBits, ref bytePos, text, vectorized);
+            else
+                RmQRBinaryEncoder.WriteNumeric(ref dest, ref acc, ref accBits, ref bytePos, text, vectorized);
+            return bytePos + accBits;
+        };
     }
 
     private static Func<int> RmQRDataEncode(string text, RmQRVersion version)

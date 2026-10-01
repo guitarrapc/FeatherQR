@@ -310,6 +310,9 @@ internal static class SimdTiers
         new("MicroQRSampleGrid",       [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
 
         // ---- rMQR ----
+        // ARM64 and WebAssembly stay scalar. On WebAssembly the writers are 2.5 to 6.8 % of an rMQR encode; a 16-character Alphanumeric step runs
+        // 0.62 to 0.86 of the table loop, at most 2.5 % of an encode, and inlined into the encode's switch it slowed the Numeric encode 6 % AOT-compiled;
+        // a 24-digit Numeric step ran 1.26x the SWAR loop interpreted. ARM64's Alphanumeric batch lost to the same switch (the rMQR encoder record)
         new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar],             [Scalar]),
         new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128],          [Vector128]),
         new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),

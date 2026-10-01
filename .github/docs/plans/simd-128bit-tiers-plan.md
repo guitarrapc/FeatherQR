@@ -422,3 +422,23 @@ Matrix decode against the build before phase 5: version 40 0.21-0.22 on default 
 - A branch that folds away still changes its method when its operands take an argument's address: keep a new condition's operands out of a dispatch that unchanged builds share, one call down.
 - Put a size gate in the tier's entry and point the parity check and the probe at the kernel behind it, or the kernel's small inputs go unchecked and unmeasured.
 - Every flag property a dispatch reads is `AggressiveInlining`, whichever flag it reads.
+
+### Phase 6, rMQR value writers (2026-10-01)
+
+**Done.**
+- **Shares measured.** The Numeric and Alphanumeric writers are inlined into the encode, so phase 1's sampler never saw them; timed alone, they are 2.5 to 6.8 % of an rMQR encode on WebAssembly and 3.8 to 6.1 % on default NativeAOT, which already runs their SSE4.1 tier. On WebAssembly that clears the bar.
+- **WebAssembly steps written, measured and left out**; `RmQRValueSegments` stays scalar there, the reason beside its row. A 16-character Alphanumeric step (the value table's rows by swizzle, 45·a + b in 16-bit lanes, two pairs a lane by the 16-bit dot product, two 44-bit appends) ran 0.62 to 0.86 of the table loop alone, which bounds its gain at 2.5 % of an encode. Inlined into the writer it slowed the Numeric encode 6 % on WebAssembly AOT; out of line, with the writer's state passed in and returned, the call took the gain; as an encode method of its own it moved the encodes 0.97 to 1.02, inside the runs' spread. A 24-digit Numeric step (the three digits of eight groups gathered by swizzles of two byte vectors, multiplied and added in 16-bit lanes) tied AOT-compiled (0.92) and ran 1.26x the SWAR loop interpreted.
+- **ARM64 not measured.** Its cell keeps the rMQR encoder record's reason: an Alphanumeric batch won alone and lost end to end, to the same switch.
+- **`--parity`** holds the writers, the tier each build takes against the SWAR and table loops, from every pending-bit count a header leaves. On default NativeAOT that is the SSE4.1 tier, which the test suite reaches only on its own CPU; planted faults in its letter offset and its Numeric pair weight gave 14,872 mismatches.
+- Harness: `kernel/RmQRNumeric-*` and `kernel/RmQRAlphanumeric-*` beside their loops, and encodes at a fitted version (`encode/rmqr-numeric-361`, `encode/rmqr-alnum-120`).
+
+**Numbers** (tables in the [measurements](references/simd-128bit-tiers-measurements.md#phase-6-rmqr-value-writers)): the three forms of the Alphanumeric step moved the five rMQR encodes 0.94 to 1.07 on WebAssembly AOT and 0.97 to 1.05 interpreted. No `src/` change but the row's comment, so there is no benchmark delta.
+
+**Found on the way.**
+- **On WebAssembly AOT, a step inlined into one arm of the encode's switch slowed another arm 6 %** (the Numeric encode, 1.926-1.948 → 2.005-2.068 µs), as the rMQR encoder record found on ARM64. The 43-character Alphanumeric encode read 1.04 though its own writer ran 0.78.
+- **The interpreter charges a vector step by the operation.** The Numeric step, which tied AOT-compiled, lost 26 % interpreted to a loop that turns three digits into one multiply.
+- **Passing the writer's state to an out-of-line step and back costs a call per segment**, which a 43-character segment did not repay (1.05 AOT-compiled, 1.25 interpreted alone).
+
+**Lessons.**
+- Bound a step's end-to-end gain by its share times its saving before trying forms of it: 2.5 % was under the bar from the first kernel timing.
+- Judge a step inlined into a shared method by every caller's shape, not by its own.
