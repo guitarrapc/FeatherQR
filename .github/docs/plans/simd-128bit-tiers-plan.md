@@ -97,6 +97,8 @@ With AVX but not AVX2 (`x86-64-v2,avx`), `Avx2` reads true and `Vector256.IsHard
 - **x64 without AVX under the JIT.** The existing `FeatherQR.Benchmark` with `--envVars DOTNET_EnableAVX:0` ranks explicit x86 variants, with the same statistics as every other benchmark number. Portable variants are ranked on a default NativeAOT build.
 - **Real builds.** An opt-in timing mode in `tests/FeatherQR.AotAnalysis` (NativeAOT) and `tests/FeatherQR.WasmReport` (WebAssembly under Node.js), from one source file shared like `SimdReport.cs` (D5). It times the benchmark shapes end to end, and kernels alone, each through its dispatch and its scalar entry. Inputs are built from module matrices without SkiaSharp, since the WebAssembly report has only the core.
 - **Shares.** WebAssembly AOT: V8's sampler (`node --cpu-prof`), self time of each kernel's methods. x64: kernel-alone time over end-to-end time for kernels called once per operation, and a knob that moves one kernel alone (`DOTNET_EnableGFNI=0` for the syndrome pass). Not the .NET sampler on Windows: it stops threads only at GC-safe points, so a call-free kernel loop hands its samples to the caller.
+- **ARM64 without the dot product.** `DOTNET_EnableArm64Dp=0` under the JIT, and NativeAOT with `IlcInstructionSet=armv8-a,-dotprod`, which compiles the code without it; plain `armv8-a` keeps it as a run-time check, true on any core that has it.
+- **The JIT needs its warmup.** Under the timing mode's default 300 ms the JIT can still be tiering on shapes over a few microseconds; a run whose median sits far above its minimum is not at steady state. The ARM64 JIT rows use `--warmup-ms 2000`.
 - **Variants for WebAssembly are ranked on WebAssembly.** Measurements so far: [references/simd-128bit-tiers-measurements.md](references/simd-128bit-tiers-measurements.md).
 
 ## Phases
@@ -112,7 +114,7 @@ Each phase appends a Progress log entry: Done, Lessons, and the benchmark delta 
 | 4 | Encode lanes and mask scoring | `ModulePlacerMaskCode`, `ModeSegmenterLanes`, `StructuredAppendLanes` | As phase 2 |
 | 5 | GF(256) and bit planes | `EccBinaryEncoder` (WebAssembly), `EccBinaryDecoder`, `RmQRExtractCodewords` | As phase 2 |
 | 6 | rMQR value writers | `RmQRValueSegments`, decided from phase 1's shares; a rewrite only if it clears the bar | As phase 2 |
-| 7 | Confirm and fold | End-to-end before and after on default NativeAOT (linux-x64, win-x64) and WebAssembly (interpreted, AOT). Spec inventory, scope row and per-symbology records updated. Plan deleted | Every scalar cell in the x64-without-AVX and WebAssembly columns raised, or carrying its measured reason. Public API unchanged |
+| 7 | Confirm and fold | End-to-end before and after on default NativeAOT (linux-x64, win-x64), WebAssembly (interpreted, AOT) and ARM64 (the JIT on .NET 8 and 10, NativeAOT, each with and without the dot product). Spec inventory, scope row and per-symbology records updated. Plan deleted | Every scalar cell in the x64-without-AVX and WebAssembly columns raised, or carrying its measured reason. Public API unchanged |
 
 Phases 2-6 group kernels by shared work. Phase 1's ranking sets the order, so the kernel behind most of a build's gap goes first, whatever its group. A group whose kernels all fall under the bar closes with their reasons. Each phase can be its own PR.
 
@@ -476,3 +478,36 @@ The version 6 image read 136.4 → 130.8 µs interpreted against the tree with o
 - Compare a fixed cost per decode in µs: a run with traces off hides it in a decode several times longer.
 - ILC inlines less than the JIT: a small helper with `out` parameters in a hot loop needs its ILC disassembly read, not the JIT's.
 - On the interpreter a result every level takes up front is a call per operation; take it at the first attempt that does not settle.
+
+### ARM64 measurements (2026-10-01)
+
+**Question.** Every number above was taken on x64 and WebAssembly. ARM64 runs the branch too: one of its cells changed (`LuminanceConverter` without the dot product, scalar → `Vector128`), the cells that stay had their code touched (the samplers' clamp, the extraction, syndrome and luminance dispatches, the block decoder, the search levels), and phase 6 left the rMQR writers' share on ARM64 unmeasured.
+
+**Done.**
+- Timed on Apple M2 against main at the merge base: the JIT on .NET 10 and .NET 8, each also with `DOTNET_EnableArm64Dp=0`; NativeAOT; NativeAOT built without the dot product (`IlcInstructionSet=armv8-a,-dotprod`). The end-to-end shapes, the luminance kernels and the rMQR writers, each shape in its own process, three runs alternating.
+- `--simd-class Arm64` and `--parity` pass on NativeAOT with and without the dot product and on the JIT with `DOTNET_EnableArm64Dp=0`.
+- No `src/` change.
+
+**Numbers** (tables in the [measurements](references/simd-128bit-tiers-measurements.md#arm64-apple-m2)):
+
+| Without the dot product, against main | NativeAOT | JIT .NET 10 | JIT .NET 8 |
+|---|---|---|---|
+| Luminance, opaque / straight alpha | 0.51 / 0.71 | 0.50 / 0.76 | 0.44 / 0.74 |
+| Bitmap decode, v40 / R17x139 | 0.69 / 0.60 | 0.67 / 0.59 | 0.67 / 0.57 |
+
+The new cell wins on every build it runs on; the dot-product tier, where a core has it, stays about twice as fast as it.
+
+With the dot product, end to end against main: 0.87 to 1.02 on NativeAOT, 0.89 to 1.01 on the .NET 10 JIT, 0.92 to 1.02 on .NET 8. Faster: matrix decode of small symbols (version 1 0.89-0.92, rMQR R7x43 0.87-0.94, the merge follow-up), and Standard QR images on the .NET 10 JIT (bowed 0.91-0.93, version 6 0.94). Slower past 1 %: NativeAOT's Micro QR M4 decodes (1.02, and 1.03-1.04 over five more alternations) and the .NET 8 JIT's rMQR R17x139 matrix decodes (1.01-1.02): code placement, and a difference that does not hold between runs (below).
+
+The rMQR value writers are 3.8 to 11 % of an rMQR encode on every ARM64 build, above the bar, where x64 reads 3.8 to 6.1 % and WebAssembly 2.5 to 6.8 %: Numeric 361 digits 10.6-11.2 %, Alphanumeric 120 chars 8.6-9.5 %, 43 chars 7.5-8.2 %, Numeric 12 digits 3.8-4.3 %. The cell's recorded reason still decides it: the rMQR encoder record's batched Alphanumeric writer saved 19-28 % of the writer alone, at most 2.7 % of an encode, and lost end to end to the shared switch; its Numeric batch read −9 % at 361 digits and +6 % at 12. A Numeric step gated on length, as the WebAssembly encoder kernel's entry is, was not tried.
+
+**Found on the way.**
+- **A no-dot-product NativeAOT build is a flag away.** `armv8-a,-dotprod` compiles the code without it, so the cell is timed on the build's own code, not under a knob. Plain `armv8-a` reports `AdvSimdDp`: ILC keeps the dot product as a run-time check.
+- **NativeAOT Micro QR M4 decodes read 1.02 to 1.04 from the merge follow-up, which they do not run.** ILC compiles every Micro QR, `EccBinaryDecoder` and `ModuleBitPacker` method to the same instructions in both trees, and the syndrome tables keep their addresses. Code placement, as the merge note's rMQR encode.
+- **The .NET 8 JIT on ARM64 compiles two rMQR methods longer, outside their loops.** `ExtractCodewords` gained 41 instructions in its pinned-kernel throw path (phase 5), and `DecodeMatrix` 27 with the merge follow-up, mostly a larger frame zeroed in the prologue. The R17x139 matrix decode read 1.01 to 1.03, clean and corrected swapping places between runs, so no fixed cost carries over.
+- **The default 300 ms warmup left the JIT tiering.** The .NET 8 JIT read Micro QR and rMQR images at 16 to 26 µs against 5 to 6 after 3 s, and the .NET 10 JIT main's Structured Append set decode at 931 µs against 287. The first pass showed slowdowns of up to 4 % that the longer warmup removed. The x64 JIT columns of phase 1 used the default and were not checked again.
+- **The harness's scalar luminance entry is not the scalar path under the JIT** (280 µs on the .NET 10 JIT where the dispatch's scalar path ran 204; level on NativeAOT). The ratios are against main's dispatch.
+
+**Lessons.**
+- Time a tier on the build that runs it, even for an ARM64 cell: ILC's instruction-set flag gives that build where a knob only stands in for it.
+- Before trusting a JIT timing, compare each shape's median to its minimum; a wide gap is tiering, not the code.

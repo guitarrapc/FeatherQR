@@ -760,3 +760,114 @@ Against the build before phase 6 (HEAD `f67beb5`, the same harness), ratio of me
 | Alphanumeric, 120 chars | 0.94 \| 1.04 | 1.00 \| 1.02 | 0.99 \| 0.97 |
 
 Inlined, the Numeric encode on WebAssembly AOT read 1.926-1.948 µs before and 2.005-2.068 after, with no change to its own code. Out of line, the writer's call cost the 43-character step its gain (1.05 AOT-compiled, 1.25 interpreted alone). As its own method, the 120-character encode read 1.313-1.317 → 1.291-1.306 µs AOT-compiled.
+
+## ARM64 (Apple M2)
+
+Taken on 2026-10-01 against main at the merge base (`3e1f29d`, #442), so each ratio is this branch as a whole on ARM64.
+
+- **Machine.** Apple M2 (MacBook Air, 4 performance and 4 efficiency cores, no fan), macOS, .NET 10.0.12 and 8.0.31 (osx-arm64). Other processes held about 2.5 cores throughout (load average 3 to 8).
+- **Builds.** The JIT on .NET 10 and .NET 8, each also with `DOTNET_EnableArm64Dp=0`; NativeAOT (net10.0) with its default target; NativeAOT with `IlcInstructionSet=armv8-a,-dotprod`, whose code is compiled without the dot product (plain `armv8-a` keeps it, checked at run time).
+- **Harness.** One copy of `TierTiming.cs` cut to the end-to-end shapes, the luminance kernels and the rMQR writers, built against both trees. Each shape in its own process, three runs, the two trees alternating: the range of the three, ratios of their medians. The JIT rows use `--warmup-ms 2000` (below).
+- `--simd-class Arm64` and `--parity` of the report project pass on NativeAOT with and without the dot product, and on the .NET 10 JIT with `DOTNET_EnableArm64Dp=0`.
+
+### Luminance without the dot product
+
+The one ARM64 cell this branch changes: `LuminanceConverter` without `Dp`, scalar on main, the 128-bit tier here. Main's dispatch → this branch's, µs:
+
+| Shape | NativeAOT, no dot product | JIT .NET 10, `Dp=0` | JIT .NET 8, `Dp=0` |
+|---|---|---|---|
+| Luminance, v40 at 3 px, opaque | 0.51 (204 → 103-104) | 0.50 (204 → 103-104) | 0.44 (203 → 89.3-89.4) |
+| Luminance, R17x139 at 8 px, opaque | 0.51 (127-128 → 64.6-65.4) | 0.51 (127-128 → 64.5-68.9) | 0.44 (127 → 56.2-56.4) |
+| Luminance, v40 at 3 px, straight alpha | 0.71 (268-278 → 192) | 0.76 (251-254 → 192-193) | 0.74 (248-249 → 183) |
+| bitmap/qr-v40-3px | 0.69 (336-341 → 233-235) | 0.67 (318-336 → 217-227) | 0.67 (326-356 → 218-224) |
+| bitmap/rmqr-r17x139-8px | 0.60 (157-158 → 93.4-94.3) | 0.59 (153 → 90.3-90.4) | 0.57 (152 → 86.2-87.2) |
+
+The JIT's R17x139 row is from a run with the default warmup. The dot-product tier, where it runs, converts the three images in 44.8, 28.1 and 108 µs on NativeAOT and the .NET 10 JIT (49.9, 31.3 and 117 on .NET 8): the 128-bit tier takes about twice its time on opaque pixels, scalar four to five times.
+
+The harness's scalar entry (`ConvertRgbaForTest` pinned to the scalar tier) is not the scalar path under the JIT: it ran 280 µs on the .NET 10 JIT and 218 on .NET 8 where main's dispatch, scalar under `Dp=0`, ran 204 (NativeAOT: both 204). The ratios are against main's dispatch.
+
+### End to end, with the dot product
+
+The cells that stay, whose code the branch touched (the samplers' clamp, the extraction, syndrome and luminance dispatches, the block decoder, the search levels). Main → this branch, ratio of medians (main range → branch range, µs):
+
+| Shape | NativeAOT | JIT .NET 10 | JIT .NET 8 |
+|---|---|---|---|
+| encode/qr-v1-num-L | 1.00 (1.94-1.95 → 1.94-1.95) | 0.99 (1.87-1.93 → 1.87) | 0.99 (2.03-2.04 → 2.00-2.02) |
+| encode/qr-v1-alnum-M | 1.01 (1.91-1.92 → 1.92-1.93) | 1.00 (1.86-1.89 → 1.86-1.88) | 0.99 (1.99-2.03 → 1.98-2.02) |
+| encode/qr-v6-url-M | 1.00 (3.67 → 3.67) | 1.01 (3.58-3.63 → 3.62-3.65) | 1.00 (3.76-3.78 → 3.72-3.76) |
+| encode/qr-v20-byte-M | 1.00 (47.4-47.5 → 47.5) | 0.92 (53.8-59.4 → 54.1-59.6) | 1.00 (47.5-47.6 → 47.6-48.3) |
+| encode/qr-v40-byte-L | 1.00 (123 → 123-127) | 1.00 (123-126 → 123) | 1.00 (128 → 128) |
+| encode/qr-v40-byte-H | 1.00 (120 → 120) | 1.00 (118-122 → 118) | 1.00 (123 → 122-123) |
+| encode/micro-m2-num | 0.99 (0.172-0.173 → 0.170-0.171) | 0.98 (0.162-0.166 → 0.162-0.163) | 0.99 (0.185-0.187 → 0.184-0.186) |
+| encode/micro-m3-alnum | 1.00 (0.230-0.232 → 0.231-0.232) | 1.01 (0.217-0.235 → 0.220-0.222) | 1.00 (0.233-0.236 → 0.232-0.234) |
+| encode/micro-m4-byte | 1.00 (0.269-0.270 → 0.268-0.270) | 1.00 (0.248-0.250 → 0.247-0.249) | 0.97 (0.277-0.278 → 0.268) |
+| encode/rmqr-r7x43-num | 1.00 (0.130-0.131 → 0.131) | 1.00 (0.120-0.121 → 0.120-0.121) | 1.00 (0.141-0.143 → 0.142-0.143) |
+| encode/rmqr-r11x59-alnum | 1.00 (0.264-0.265 → 0.265) | 1.00 (0.255-0.257 → 0.255-0.256) | 1.01 (0.296 → 0.297-0.301) |
+| encode/rmqr-r17x139-byte | 0.99 (0.789-0.794 → 0.788-0.871) | 1.00 (0.761-0.765 → 0.761-0.766) | 1.01 (0.864-0.866 → 0.868-0.870) |
+| encode/rmqr-numeric-361 | 1.00 (0.894-0.895 → 0.893) | 1.00 (0.861-0.865 → 0.860-0.863) | 1.00 (0.928-0.937 → 0.929-0.931) |
+| encode/rmqr-alnum-120 | 1.00 (0.594 → 0.594-0.595) | 0.98 (0.584-0.595 → 0.582-0.597) | 1.00 (0.664 → 0.662-0.663) |
+| data/micro-m4-byte-encode | 1.00 (0.247-0.249 → 0.247) | 1.00 (0.239-0.242 → 0.239-0.240) | 0.99 (0.254-0.261 → 0.258-0.261) |
+| data/micro-m4-byte-decode | 1.02 (0.511 → 0.519-0.529) | 1.00 (0.313 → 0.313) | 1.00 (0.373 → 0.373-0.378) |
+| data/rmqr-r17x139-byte-encode | 1.00 (0.871-0.874 → 0.873-0.877) | 1.00 (0.854-0.858 → 0.855-0.857) | 1.00 (0.895-0.959 → 0.896-0.901) |
+| data/rmqr-r17x139-byte-decode | 0.98 (0.954-0.959 → 0.934-0.938) | 0.99 (0.882-0.887 → 0.868-0.872) | 1.00 (1.05 → 1.05) |
+| encode/sa-byte-45k-single | 1.01 (2,030-2,106 → 2,044-2,057) | 1.00 (2,006-2,015 → 2,001-2,006) | 1.01 (2,086-2,097 → 2,095-2,123) |
+| encode/sa-mixed-40k-single | 1.00 (1,763-1,766 → 1,758-1,761) | 0.99 (1,748-1,754 → 1,743-1,756) | 0.99 (1,833-1,848 → 1,830-1,835) |
+| encode/sa-mixed-40k-optimal | 1.00 (3,658-3,668 → 3,663-3,671) | 1.00 (2,186-2,215 → 2,181-2,194) | 1.00 (2,362-2,367 → 2,354-2,360) |
+| encode/sa-utf8-15k-mixed-optimal | 1.00 (1,549-1,551 → 1,549-1,551) | 1.00 (1,456-1,467 → 1,460-1,507) | 1.00 (1,569-1,576 → 1,572-1,581) |
+| matrix/qr-v1-num-L | 0.91 (0.306-0.308 → 0.277-0.278) | 0.89 (0.267-0.273 → 0.239-0.244) | 0.92 (0.274-0.277 → 0.252-0.253) |
+| matrix/qr-v6-url-M | 0.97 (0.959-0.960 → 0.931-0.932) | 0.97 (0.884-0.888 → 0.859-0.866) | 0.97 (0.906-0.908 → 0.874-0.899) |
+| matrix/qr-v40-byte-L | 0.99 (17.3 → 17.1) | 0.99 (16.8-16.9 → 16.6-16.7) | 0.97 (16.8-16.9 → 16.3-16.4) |
+| matrix/qr-v40-byte-H | 0.99 (17.1-17.2 → 16.9) | 0.99 (16.2-16.6 → 16.2-16.4) | 0.98 (17.1 → 16.8) |
+| matrix/micro-m2-num | 1.01 (0.162-0.163 → 0.162-0.165) | 0.99 (0.144-0.147 → 0.144-0.146) | 0.99 (0.170-0.171 → 0.168-0.171) |
+| matrix/micro-m4-byte | 1.02 (0.469-0.471 → 0.479-0.489) | 1.00 (0.264-0.265 → 0.265) | 1.00 (0.335-0.336 → 0.335-0.336) |
+| matrix/rmqr-r7x43-num | 0.87 (0.170 → 0.148-0.153) | 0.90 (0.137-0.138 → 0.122-0.123) | 0.94 (0.155-0.159 → 0.147-0.152) |
+| matrix/rmqr-r17x139-byte | 0.98 (0.862-0.864 → 0.843-0.845) | 0.98 (0.771-0.773 → 0.759-0.761) | 1.01 (0.946-0.948 → 0.952-0.954) |
+| matrix/rmqr-r17x139-byte-corrected | 0.99 (2.82-2.83 → 2.80-2.81) | 1.00 (2.06-2.08 → 2.06-2.09) | 1.02 (2.27-2.28 → 2.31-2.33) |
+| matrix/sa-byte-45k-set | 0.99 (286-293 → 283-287) | 0.99 (283-285 → 280-285) | 0.97 (283-284 → 275-285) |
+| image/qr-v40-3px | 0.99 (130-131 → 127-131) | 0.96 (120-121 → 115-117) | 0.97 (120-125 → 119-120) |
+| image/qr-v40-3.4px | 0.97 (152-155 → 147-151) | 1.01 (138-152 → 139-142) | 0.98 (140-153 → 139-146) |
+| image/qr-v40-4px-rot17 | 0.99 (463-470 → 458-469) | 0.98 (450-460 → 448-467) | 1.00 (457-463 → 457-463) |
+| image/qr-v40-4px-soft | 0.99 (339-344 → 331-337) | 0.95 (316-337 → 317-320) | 0.99 (313-323 → 312-329) |
+| image/qr-v25-4px-keystone15 | 1.00 (337-341 → 336-340) | 0.99 (313-318 → 309-314) | 0.98 (321-330 → 320-321) |
+| image/qr-v6-4px | 0.99 (12.8 → 12.6-12.7) | 0.94 (12.5-12.6 → 11.8) | 0.99 (11.8 → 11.6) |
+| image/qr-v25-4px-bowed | 1.00 (364-368 → 364-370) | 0.91 (357-378 → 334-345) | 0.99 (345-350 → 345-346) |
+| image/qr-v40-3.5px-bowed | 1.00 (718-723 → 719-721) | 0.93 (728-732 → 676-687) | 1.00 (687-690 → 684-688) |
+| image/none-noise | 1.00 (5,271-5,278 → 5,267-5,276) | 1.00 (4,880-4,912 → 4,885-4,898) | 1.00 (4,869-4,896 → 4,864-4,873) |
+| image/none-gradient | 1.01 (774-775 → 779) | 0.98 (742 → 728-731) | 1.01 (759-760 → 761-766) |
+| image/micro-m4-8px | 0.99 (5.74-5.77 → 5.71-5.73) | 0.94 (5.55-5.56 → 5.21-5.23) | 1.00 (5.16-5.19 → 5.14-5.17) |
+| image/rmqr-r7x43-8px | 0.99 (6.60-6.61 → 6.55-6.57) | 0.97 (5.98-6.01 → 5.81-5.86) | 1.00 (5.92-5.94 → 5.90-5.94) |
+| image/rmqr-r17x139-8px | 1.00 (29.0 → 29.0-29.1) | 0.99 (26.0-26.2 → 25.8-25.9) | 0.99 (25.4-25.8 → 25.1-25.2) |
+| image/rmqr-r17x139-4px-keystone15 | 1.00 (146 → 144-146) | 0.98 (123-125 → 120-123) | 0.99 (142-143 → 141-142) |
+| bitmap/qr-v40-3px | 1.00 (175-178 → 174-176) | 0.96 (162-174 → 161-167) | 0.94 (161-177 → 158-168) |
+| bitmap/rmqr-r17x139-8px | 1.00 (56.9 → 56.7-56.8) | 0.99 (54.0 → 53.7-53.8) | 1.00 (48.8-48.9 → 48.7-48.8) |
+
+NativeAOT reads 0.87 to 1.02, the .NET 10 JIT 0.89 to 1.01, .NET 8 0.92 to 1.02. The faster rows are the merge follow-up's matrix decodes of small symbols and, on the .NET 10 JIT, Standard QR images. The .NET 10 JIT's version 20 encode spread 54 to 60 µs in both trees. The rows past 1.01:
+
+- **NativeAOT Micro QR M4, matrix and data-object decode, 1.02** (five alternations: 1.03-1.04, from the merge follow-up alone, which these decodes do not run). Built with ILC's `JitDisasm`, the merged tree and the follow-up compile all 355 Micro QR, `EccBinaryDecoder` and `ModuleBitPacker` methods to the same instructions, and the syndrome tables sit at the same addresses; only the Micro QR encoder's alphanumeric table moved. Code placement, as the merge note's rMQR encode.
+- **The .NET 8 JIT's rMQR R17x139 matrix decode, 1.01 and corrected 1.02.** With the default warmup the clean shape read 1.03 and the corrected one 1.00, the other way round, so no fixed cost carries over. Its Tier-1 code: `ExtractCodewords` 532 → 573 instructions, all in the pinned-kernel throw path (phase 5's third tier name and condition; its hot path differs by one compare's immediate); `DecodeMatrix` 838 → 865 with the merge follow-up, mostly a larger stack frame zeroed in the prologue (a `dczva` loop); `EccBlockDecoder.TryCorrect` 285 → 314, its deinterleave loop without bounds checks.
+
+### rMQR value writers
+
+The writer alone (its harness shape, the call included) over the encode of the same content, µs. ARM64 runs the SWAR and table loops:
+
+| Writer, content | NativeAOT | JIT .NET 10 | JIT .NET 8 |
+|---|---|---|---|
+| Numeric, 12 digits (R7x43) | 0.005 / 0.131 (3.8 %) | 0.005 / 0.121-0.122 (4.1 %) | 0.005-0.006 / 0.139-0.144 (4.3 %) |
+| Alphanumeric, 43 chars (R11x59) | 0.020 / 0.265 (7.5 %) | 0.021-0.022 / 0.255-0.273 (8.2 %) | 0.024-0.025 / 0.296-0.297 (8.1 %) |
+| Numeric, 361 digits (version fitted) | 0.097 / 0.893 (10.9 %) | 0.097 / 0.861-0.871 (11.2 %) | 0.097-0.099 / 0.927-0.928 (10.6 %) |
+| Alphanumeric, 120 chars (version fitted) | 0.051 / 0.594-0.595 (8.6 %) | 0.053 / 0.584-0.603 (9.0 %) | 0.063 / 0.663-0.665 (9.5 %) |
+
+Default warmup; these shapes run in nanoseconds and tier within it.
+
+### The JIT's warmup
+
+The harness's default 300 ms warmup left the JIT short of steady state on shapes over a few microseconds: within a run, the median sat far above the minimum. With 3 s of warmup:
+
+| Shape, µs median (min) | 300 ms | 3 s |
+|---|---|---|
+| .NET 8, `image/rmqr-r7x43-8px`, main / branch | 25.0 (5.95) / 26.0 (5.95) | 6.00 / 6.07 |
+| .NET 8, `image/micro-m4-8px` | 18.0 (5.17) / 16.0 (5.17) | 5.24 / 5.20 |
+| .NET 8, `image/rmqr-r17x139-8px` | 73.4 (25.2) / 76.8 (25.3) | 26.2 / 25.3 |
+| .NET 10, `matrix/sa-byte-45k-set` | 931 (318) / 284 (282) | 287 / 285 |
+
+`DOTNET_TieredCompilation=0` read main's set decode at 301 µs. NativeAOT does not tier, so its rows use the default.
