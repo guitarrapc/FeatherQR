@@ -448,3 +448,31 @@ Matrix decode against the build before phase 5: version 40 0.21-0.22 on default 
 - **What moved.** main (#442) took Standard QR's four-point sampler out of `QRImageDecoder` into `ImageDecoders/PerspectiveGridSampler`, shared with Micro QR's perspective search. The branch's changes to its tiers came with the rename (`VectorCast.ToPixel` in the 128-bit tier, the pre-.NET 9 fix-up in the 256-bit tier, `PixelIndex.Clamp` in their tails); the scalar sampler, a new file on main, took `PixelIndex.Clamp` by hand. The row `QRSampleGrid` is now `PerspectiveGridSampler`, with the branch's SSE2 and `PackedSimd` cells and `VectorCast.Simd.cs` among its files; `kernel/QRSampleGrid` is now `kernel/PerspectiveGridSampler`.
 - **Checked.** The test suite on .NET 10 and .NET 8, and `--simd-class` and `--parity` on the six builds.
 - **Numbers.** Base, main, the branch before the merge and the merged tree, each shape in its own process. Against main the merged tree reads what the branch read against the base: version 40 matrix decode 0.20 on default NativeAOT, 0.25 on WebAssembly AOT, 0.33 interpreted; the version 40 image 0.20, 0.18, 0.36. Against the branch it reads main's own changes. rMQR matrix decode pays a fixed cost main added (R7x43 +21 to 28 ns on default NativeAOT, +0.38 µs interpreted, as from base to main). Small images run 7 to 10 % slower interpreted (version 6 at 4 px +9 to 12 µs, Micro QR M4 +3 µs); the finder search and the threshold read level, so the difference sits in main's rewritten decode after the finder search. With jiterpreter traces off it looked level, but only as a share: the decode is 4 to 8 times longer there and pays the same µs (follow-up below). Every other shape read within 3 % in at least one of two runs, but two encodes that ran faster in both (Micro QR M4 on default NativeAOT, 0.94 and 0.95; the Optimal set on WebAssembly AOT, 0.93 and 0.94).
+
+### Merge follow-up, the decode after the finder search (2026-10-01)
+
+**Done.**
+- **rMQR matrix decode's fixed cost, two parts.** ILC left `RmQRConstants.GetFormatBlock` and `GetFormatTail` as calls inside the matrix decoder's format reader, where the JIT inlines them; both are `AggressiveInlining` now, like the file's other accessors (`ReadFormatCopies` 127 → 105 instructions on x64 ILC, 125 → 103 on ARM64, the JIT's 102 unchanged). And the shared block stage, `EccBlockDecoder`, deinterleaved a single block and copied its data back, though one block is its own interleaving; it now corrects that block in place, and the deinterleave writes by reference after one length check (215 → 189 instructions on x64 ILC). Its exception message is a constant: interpolated, it added 26. Each part alone took R7x43 to 0.88 and 0.93 on default NativeAOT, both to 0.83.
+- **Standard QR small images.** Every level of the search after the finder search (the triple, the corner, the dimension, the grid, the mirror retry) took a `SearchResult` before its first attempt: about 30 interpreted calls a read. A level now takes it at its first attempt that does not settle and returns a settled attempt as it is, which either rule reports. Compiled, the five methods are 7 to 69 instructions longer (each early return copies the 64-byte diagnostics) and read level.
+- **Two `PixelIndex.Clamp` crefs name their overload.** Both had been ambiguous (CS0419) since the second overload came in with phase 3.
+- **Checked.** The test suite on .NET 10 and .NET 8; `--simd-class` and `--parity` on default, x86-64-v2 and x86-64-v3 NativeAOT, the JIT with and without AVX, and both WebAssembly modes.
+
+**Numbers** (against the merged tree, each shape in its own process, medians; the [merge note](#merge-of-mains-shared-image-decode-2026-10-01) has the branch before it):
+
+| Shape | default NativeAOT | WebAssembly AOT | interpreted |
+|---|---|---|---|
+| rMQR R7x43 matrix | 0.83 | 0.84 | 0.82 |
+| Version 1 matrix | 0.94 | 0.90 | 0.95 |
+| Version 6 image, 4 px | level | 0.98 | 0.93 |
+
+The version 6 image read 136.4 → 130.8 µs interpreted against the tree with only the rMQR changes (the branch before the merge 129.8 to 132.0). Every other shape read within the runs' spread. Two that read past 3 % in one run were run again: an interpreted Standard QR encode read 1.10 for the merged tree too, and an rMQR encode on default NativeAOT read 1.02 to 1.03 with either change alone though it runs neither, which is code placement.
+
+**Found on the way.**
+- **The merge note's traces-off reading was a share, not a level.** With jiterpreter traces off Micro QR M4 read 343 to 346 µs before the merge and 345 to 349 after, the same few µs in a decode 8 times longer; the version 6 read, 834 and 836 µs, spreads 814 to 903, wider than its 9 to 12 µs.
+- **Micro QR M4 stays 2 to 4 µs slower interpreted, and nothing found takes it back.** A read runs the same methods the same number of times as before the merge, plus five wrappers from main's split (the passes, the candidate and both-ways decodes, the ranking, the containment check). Without the ones that go without undoing the split (forwarders and `ImageView`'s constructor inlined, the containment check skipped before any read, one not-detected record a scan) it read 46.18 µs against 45.69 over 15 runs each; inlining the candidate and both-ways decodes too moved nothing. Compiled, the read is level.
+- **Stopwatch probes move the cost they time on the interpreter.** They added 2.7 µs to the branch's Micro QR read and none to the merged one, so stage times there rank causes and an A/B of unprobed builds decides.
+
+**Lessons.**
+- Compare a fixed cost per decode in µs: a run with traces off hides it in a decode several times longer.
+- ILC inlines less than the JIT: a small helper with `out` parameters in a hot loop needs its ILC disassembly read, not the JIT's.
+- On the interpreter a result every level takes up front is a call per operation; take it at the first attempt that does not settle.
