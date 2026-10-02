@@ -12,6 +12,8 @@ using System.Text;
 ///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
 ///   Byte_V40_L : version 40-L, byte mode (largest data volume)
 ///   Byte_V40_H : version 40-H, byte mode (81 blocks, max ECC share)
+///   Kanji_Short_V1_M : version 1-M, Kanji mode, 8 characters (KanjiEncode's Short)
+///   Kanji_Long_V15_L : version 15-L, Kanji mode, 320 characters (KanjiEncode's Long)
 ///   Image_Byte_Url_V6_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
 /// </summary>
 public class QRCodeDecodeEndToEnd
@@ -26,6 +28,10 @@ public class QRCodeDecodeEndToEnd
     private int _byteLongLSize;
     private byte[] _byteLongHModules = default!;
     private int _byteLongHSize;
+    private byte[] _kanjiShortModules = default!;
+    private int _kanjiShortSize;
+    private byte[] _kanjiLongModules = default!;
+    private int _kanjiLongSize;
     private byte[] _microNumericModules = default!;
     private int _microNumericSize;
     private char[] _chars = default!;
@@ -49,6 +55,8 @@ public class QRCodeDecodeEndToEnd
         _byteLongH = BuildDeterministicText(1200);
         (_byteLongLModules, _byteLongLSize) = BuildModules(_byteLongL, QREccLevel.L);
         (_byteLongHModules, _byteLongHSize) = BuildModules(_byteLongH, QREccLevel.H);
+        (_kanjiShortModules, _kanjiShortSize) = BuildModules("日本語のテキスト", QREccLevel.M, allowKanji: true);
+        (_kanjiLongModules, _kanjiLongSize) = BuildModules(string.Concat(Enumerable.Repeat("吾輩は猫である。名前はまだ無い。", 20)), QREccLevel.L, allowKanji: true);
         _chars = new char[QRCodeDecoder.GetMaxDecodedLength(40)];
 
         (_microNumericModules, _microNumericSize) = BuildMicro("0123456789", MicroQREccLevel.L);
@@ -91,6 +99,20 @@ public class QRCodeDecodeEndToEnd
     public string QR_Byte_V40_H_Decode()
     {
         QRCodeDecoder.TryDecode(_byteLongHModules, _byteLongHSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Kanji_Short_V1_M_Decode()
+    {
+        QRCodeDecoder.TryDecode(_kanjiShortModules, _kanjiShortSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Kanji_Long_V15_L_Decode()
+    {
+        QRCodeDecoder.TryDecode(_kanjiLongModules, _kanjiLongSize, out var text, out _);
         return text;
     }
 
@@ -138,6 +160,20 @@ public class QRCodeDecodeEndToEnd
         return written;
     }
 
+    [Benchmark(Description = "QR_Kanji_Short_V1_M_Decode (Span)")]
+    public int QR_Kanji_Short_V1_M_DecodeSpan()
+    {
+        QRCodeDecoder.TryDecode(_kanjiShortModules, _kanjiShortSize, _chars, out var written, out _);
+        return written;
+    }
+
+    [Benchmark(Description = "QR_Kanji_Long_V15_L_Decode (Span)")]
+    public int QR_Kanji_Long_V15_L_DecodeSpan()
+    {
+        QRCodeDecoder.TryDecode(_kanjiLongModules, _kanjiLongSize, _chars, out var written, out _);
+        return written;
+    }
+
     [Benchmark(Description = "Image_Byte_Url_V6_M_Decode (Span)")]
     public int Image_Byte_Url_V6_M_DecodeSpan()
     {
@@ -154,11 +190,12 @@ public class QRCodeDecodeEndToEnd
         return written;
     }
 
-    private static (byte[] modules, int size) BuildModules(string content, QREccLevel eccLevel)
+    private static (byte[] modules, int size) BuildModules(string content, QREccLevel eccLevel, bool allowKanji = false)
     {
-        var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
+        var options = new QRCodeGeneratorOptions { QuietZoneSize = 0, AllowKanji = allowKanji };
+        var calculated = Sizing.Required(content.AsSpan(), eccLevel, options);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        QRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, options);
         return (buffer, calculated.Size);
     }
 

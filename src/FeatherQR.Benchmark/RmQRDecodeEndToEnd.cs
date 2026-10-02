@@ -6,7 +6,8 @@
 ///   Numeric_R7x43_M      : smallest symbol, single RS block
 ///   Alphanumeric_R11x59_M: mid symbol, single block
 ///   Byte_R17x139_M       : largest symbol, 4 RS blocks
-///   *_Corrected          : Numeric_R7x43 and Byte_R17x139 with damage the decoder
+///   Kanji_R13x43_M       : Kanji mode, 15 characters (KanjiEncode's payload)
+///   *_Corrected         : Numeric_R7x43 and Byte_R17x139 with damage the decoder
 ///                          confirms as exactly N corrected errors, so the
 ///                          Berlekamp-Massey/Chien/Forney correction path runs rather
 ///                          than syndrome generation alone (the clean cases exit early)
@@ -16,9 +17,11 @@ public class RmQRDecodeEndToEnd
     private byte[] _numericModules = default!;
     private byte[] _alphanumericModules = default!;
     private byte[] _byteModules = default!;
+    private byte[] _kanjiModules = default!;
     private (int Width, int Height) _numericSize;
     private (int Width, int Height) _alphanumericSize;
     private (int Width, int Height) _byteSize;
+    private (int Width, int Height) _kanjiSize;
     private byte[] _numericDamagedModules = default!;
     private byte[] _byteDamagedModules = default!;
     private byte[] _standardModules = default!;
@@ -32,6 +35,7 @@ public class RmQRDecodeEndToEnd
         (_numericModules, _numericSize) = Build("012345678901", RmQREccLevel.M, RmQRVersion.R7x43);
         (_alphanumericModules, _alphanumericSize) = Build("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.", RmQREccLevel.M, RmQRVersion.R11x59);
         (_byteModules, _byteSize) = Build(string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150), RmQREccLevel.M, RmQRVersion.R17x139);
+        (_kanjiModules, _kanjiSize) = Build("日本語のテキストです、ようこそ", RmQREccLevel.M, RmQRVersion.R13x43, allowKanji: true);
         _chars = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
 
         // Correctable damage: flip a few modules and keep only a corruption the decoder
@@ -70,6 +74,13 @@ public class RmQRDecodeEndToEnd
     }
 
     [Benchmark]
+    public string RmQR_Kanji_R13x43_Decode()
+    {
+        RmQRCodeDecoder.TryDecode(_kanjiModules, _kanjiSize.Width, _kanjiSize.Height, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
     public string RmQR_Numeric_R7x43_CorrectedDecode()
     {
         RmQRCodeDecoder.TryDecode(_numericDamagedModules, _numericSize.Width, _numericSize.Height, out var text, out _);
@@ -103,6 +114,13 @@ public class RmQRDecodeEndToEnd
     public int RmQR_Byte_R17x139_DecodeSpan()
     {
         RmQRCodeDecoder.TryDecode(_byteModules, _byteSize.Width, _byteSize.Height, _chars, out var written, out _);
+        return written;
+    }
+
+    [Benchmark(Description = "RmQR_Kanji_R13x43_Decode (Span)")]
+    public int RmQR_Kanji_R13x43_DecodeSpan()
+    {
+        RmQRCodeDecoder.TryDecode(_kanjiModules, _kanjiSize.Width, _kanjiSize.Height, _chars, out var written, out _);
         return written;
     }
 
@@ -167,11 +185,12 @@ public class RmQRDecodeEndToEnd
         throw new InvalidOperationException($"No {flips}-error correctable damage found for {version} ({size.Width}x{size.Height}).");
     }
 
-    private static (byte[] modules, (int Width, int Height) size) Build(string content, RmQREccLevel eccLevel, RmQRVersion version)
+    private static (byte[] modules, (int Width, int Height) size) Build(string content, RmQREccLevel eccLevel, RmQRVersion version, bool allowKanji = false)
     {
-        var calculated = Sizing.Required(content.AsSpan(), eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var options = new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0, AllowKanji = allowKanji };
+        var calculated = Sizing.Required(content.AsSpan(), eccLevel, options);
         var buffer = new byte[calculated.BufferSize];
-        RmQRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        RmQRCodeGenerator.Create(content.AsSpan(), eccLevel, buffer, options);
         return (buffer, (calculated.Width, calculated.Height));
     }
 }

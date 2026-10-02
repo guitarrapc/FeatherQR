@@ -11,6 +11,8 @@ using System.Text;
 ///   Byte_V20_M : version 20-M, byte mode (mid-size, exercises the 2-word SoA mask tier)
 ///   Byte_V40_L : version 40-L, byte mode (largest data blocks)
 ///   Byte_V40_H : version 40-H, byte mode (81 blocks x 30 ecc, max ECC share)
+///   Kanji_Short_V1_M : version 1-M, Kanji mode, 8 characters (KanjiEncode's Short)
+///   Kanji_Long_V15_L : version 15-L, Kanji mode, 320 characters (KanjiEncode's Long)
 /// </summary>
 public class QRCodeEncodeEndToEnd
 {
@@ -20,6 +22,8 @@ public class QRCodeEncodeEndToEnd
     private string _byteMidM = default!;
     private string _byteLongL = default!;
     private string _byteLongH = default!;
+    private string _kanjiShort = default!;
+    private string _kanjiLong = default!;
     private byte[] _spanDestination = default!;
 
     [GlobalSetup]
@@ -31,6 +35,8 @@ public class QRCodeEncodeEndToEnd
         _byteMidM = BuildDeterministicText(620); // version 20-M byte mode (max 666)
         _byteLongL = BuildDeterministicText(2900); // version 40-L byte mode (max 2953)
         _byteLongH = BuildDeterministicText(1200); // version 40-H byte mode (max 1273)
+        _kanjiShort = "日本語のテキスト"; // version 1-M Kanji mode (max 8)
+        _kanjiLong = string.Concat(Enumerable.Repeat("吾輩は猫である。名前はまだ無い。", 20)); // version 15-L Kanji mode (max 320)
         _spanDestination = new byte[Math.Max(
             Sizing.Required(_byteLongL.AsSpan(), QREccLevel.L).BufferSize,
             Sizing.Required(_numeric.AsSpan(), MicroQREccLevel.L).BufferSize)];
@@ -74,6 +80,18 @@ public class QRCodeEncodeEndToEnd
         return QRCodeGenerator.Create(_byteLongH.AsSpan(), QREccLevel.H);
     }
 
+    [Benchmark]
+    public QRCodeData QR_Kanji_Short_V1_M_Encode()
+    {
+        return QRCodeGenerator.Create(_kanjiShort.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true });
+    }
+
+    [Benchmark]
+    public QRCodeData QR_Kanji_Long_V15_L_Encode()
+    {
+        return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, new QRCodeGeneratorOptions { AllowKanji = true });
+    }
+
     // Span destination (zero-allocation) variants
 
     [Benchmark(Description = "QR_Numeric_V1_L_Encode (Span)")]
@@ -104,6 +122,18 @@ public class QRCodeEncodeEndToEnd
     public int QR_Byte_V40_H_EncodeSpan()
     {
         return QRCodeGenerator.Create(_byteLongH.AsSpan(), QREccLevel.H, _spanDestination);
+    }
+
+    [Benchmark(Description = "QR_Kanji_Short_V1_M_Encode (Span)")]
+    public int QR_Kanji_Short_V1_M_EncodeSpan()
+    {
+        return QRCodeGenerator.Create(_kanjiShort.AsSpan(), QREccLevel.M, _spanDestination, new QRCodeGeneratorOptions { AllowKanji = true });
+    }
+
+    [Benchmark(Description = "QR_Kanji_Long_V15_L_Encode (Span)")]
+    public int QR_Kanji_Long_V15_L_EncodeSpan()
+    {
+        return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, _spanDestination, new QRCodeGeneratorOptions { AllowKanji = true });
     }
 
     // Micro QR M2-L with the same numeric payload, for scale reference.

@@ -8,6 +8,7 @@
 ///   Byte_R17x139_M       : largest symbol, 150 bytes (capacity boundary, 4 RS blocks)
 ///   Latin1_Eci_R17x139_M : explicit ECI 3 Byte segment
 ///   Utf8_Eci_R17x139_M   : explicit ECI 26 Byte segment
+///   Kanji_R13x43_M       : Kanji mode, 15 characters (KanjiEncode's payload)
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
 ///
 /// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>): it varies content shape rather than version, and every row needs a same-run Single pair, which does not belong in this table.
@@ -19,6 +20,7 @@ public class RmQREncodeEndToEnd
     private string _byte = default!;
     private string _latin1 = default!;
     private string _utf8 = default!;
+    private string _kanji = default!;
     private byte[] _spanDestination = default!;
 
     [GlobalSetup]
@@ -29,6 +31,7 @@ public class RmQREncodeEndToEnd
         _byte = string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150); // R17x139-M byte boundary
         _latin1 = string.Concat(Enumerable.Repeat("Café déjà vu. ", 8));
         _utf8 = string.Concat(Enumerable.Repeat("日本語QRコード", 5));
+        _kanji = "日本語のテキストです、ようこそ";
         _spanDestination = new byte[Math.Max(
             Sizing.Required(_byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }).BufferSize,
             Sizing.Required(_numeric.AsSpan(), QREccLevel.L).BufferSize)];
@@ -67,6 +70,12 @@ public class RmQREncodeEndToEnd
     }
 
     [Benchmark]
+    public RmQRCodeData RmQR_Kanji_R13x43_Encode()
+    {
+        return RmQRCodeGenerator.Create(_kanji.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Version = RmQRVersion.R13x43 });
+    }
+
+    [Benchmark]
     public RmQRCodeData RmQR_Numeric_AutoFit_Encode()
     {
         return RmQRCodeGenerator.Create(_numeric.AsSpan(), RmQREccLevel.M);
@@ -102,6 +111,12 @@ public class RmQREncodeEndToEnd
     public int RmQR_Utf8Eci_R17x139_EncodeSpan()
     {
         return RmQRCodeGenerator.Create(_utf8.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R17x139 });
+    }
+
+    [Benchmark(Description = "RmQR_Kanji_R13x43_Encode (Span)")]
+    public int RmQR_Kanji_R13x43_EncodeSpan()
+    {
+        return RmQRCodeGenerator.Create(_kanji.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { AllowKanji = true, Version = RmQRVersion.R13x43 });
     }
 
     [Benchmark(Description = "RmQR_Numeric_AutoFit_Encode (Span)")]
