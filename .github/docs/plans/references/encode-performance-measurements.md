@@ -88,15 +88,17 @@ Current `main`, default quiet zone 2.
 
 Both encoders run at or under their decoders' speed once the quiet zone is taken out. The Micro QR span path clears the whole destination, builds the core in a separate stack buffer and copies its rows, which is 27 to 49 ns over the quiet-zone-free row, 19 to 23 % of the quiet-zone row. rMQR already writes the core into the strided window and clears only the margins, and its remaining 32 to 132 ns is the per-row margin clears and the strided placement.
 
-## Three small changes, measured together
+## Two small changes, and a third that was dropped
 
-The change applied, to a copy of the library:
+The changes, applied to a copy of the library:
 
 - `GetEccInfo` indexes a flat array in `[version][L, M, Q, H]` order instead of scanning, and still throws for an undefined level.
 - The finder-like windows of rule 3 share their terms in the AVX2 tiers (single-word lane-per-pattern, two-word and three-word SoA). A forward window is four light modules followed by the seven-module core (dark, light, three dark, light, dark), and a backward window is the core followed by four light modules. The four-light run is already computed for rule 1, so each orientation is two ANDs over shared terms instead of an 11-term chain. In the column direction the core and the run are computed once per row and reused by the windows that overlap them.
-- `[SkipLocalsInit]` on `MaskCode64Simd`, `ScoreLanes64`, `PlaceDataWords` and `QRCodeGenerator.WriteCoreModules`, whose stack buffers are all written before they are read. Without it `MaskCode64Simd` zeroes about 6.5 KB per call.
+- Dropped: `[SkipLocalsInit]` on `MaskCode64Simd`, `ScoreLanes64`, `PlaceDataWords` and `QRCodeGenerator.WriteCoreModules`, whose stack buffers are all written before they are read. Without it `MaskCode64Simd` zeroes about 6.5 KB per call. It was measured on its own (below) and is not used, for the reasons in the plan's What has to stay true.
 
-Output was identical on the 7,647-symbol corpus.
+Output was identical on the 7,647-symbol corpus for every variant.
+
+The table is the three changes together, two interleaved rounds per side. The stack change does nothing measurable from version 20 up, where the tiers rent their scratch, so the version 20 and 40 rows stand for the two kept changes. A single round of those two alone gave 0.64 at version 20 and 0.79 to 0.80 at version 40 end to end, and a mask stage of 0.60 at version 20 and 0.72 to 0.86 on the four version 40 shapes.
 
 | Shape | E2E base | E2E change | Ratio | Mask base | Mask change | Ratio |
 |---|---|---|---|---|---|---|
@@ -110,7 +112,24 @@ Output was identical on the 7,647-symbol corpus.
 | V40-L, 7,089 digits | 71.2 µs | 58.9 µs | 0.83 | 55.2 µs | 45.8 µs | 0.83 |
 | V40-H, 1,200 bytes | 75.1 µs | 56.4 µs | 0.75 | 56.9 µs | 47.3 µs | 0.83 |
 
-Version selection alone went from 69 ns to 11 ns at version 6, from 535 ns to 29 ns at version 20 and from 2.35 µs to 65 ns at version 40. A run of the first two changes without `[SkipLocalsInit]` put the mask stage at 0.95 of base at version 1 and 0.60 at version 20, so the stack zeroing accounts for most of the small-version gain and the shared windows for most of the large-version one. The two-word tier (versions 12 to 29) gained the most.
+Version selection alone went from 69 ns to 11 ns at version 6, from 535 ns to 29 ns at version 20 and from 2.35 µs to 65 ns at version 40. The two-word tier (versions 12 to 29) gained the most from the shared windows.
+
+### Stack zeroing on its own
+
+Four builds, two interleaved rounds each, on the versions where the single-word tier runs: base, A (the two kept changes), B (A with `[SkipLocalsInit]` as above) and C (A with the single-word tier's buffers and the placement bit buffer sized to the symbol instead of their fixed maximum, which is safe code). E2E is the span API at quiet zone 0.
+
+| Row | Base | A | B | C |
+|---|---|---|---|---|
+| E2E, V1-L digits | 781 ns | 686 ns | 621 ns | 665 ns |
+| E2E, V1-M alphanumeric | 821 ns | 794 ns | 699 ns | 708 ns |
+| E2E, V6-M URL | 1.90 µs | 1.72 µs | 1.71 µs | 1.71 µs |
+| E2E, V10-M alphanumeric | 3.43 µs | 2.84 µs | 2.77 µs | 2.92 µs |
+| Mask, V1-L digits | 545 ns | 509 ns | 459 ns | 486 ns |
+| Mask, V1-M alphanumeric | 590 ns | 578 ns | 540 ns | 551 ns |
+| Mask, V6-M URL | 1.12 µs | 1.03 µs | 1.02 µs | 1.06 µs |
+| Mask, V10-M alphanumeric | 1.50 µs | 1.44 µs | 1.36 µs | 1.47 µs |
+
+Skipping the zeroing (B against A) saved 65 to 95 ns end to end at version 1, 8 to 12 % of base, and 17 to 70 ns at versions 6 and 10, 1 to 2 %. Sizing the buffers (C against A) won back 21 and 86 ns of that at version 1 and lost at versions 6 and 10. That fits a variable-size `stackalloc` zeroing less efficiently than a constant-size one, which the disassembly has not confirmed. Two safe options were not tried: a constant 32-row size for versions 1 to 3, and one buffer fewer (the shared windows reuse the equality and row buffers, and the complement rows can be computed where they are read).
 
 ## A transposed scorer for versions 12 to 40
 
@@ -118,7 +137,7 @@ Row-direction penalty rules on rows wider than one word pull bits across words f
 
 The prototype holds the masked candidate twice: as row words and as column words (the transpose). Every run and finder-like rule then runs in the column direction on both, which in the transpose is the row direction of the symbol. Masking is an XOR, so the transposed candidate is the transposed data XOR a per-version transposed template, and the data is transposed once per symbol, not once per pattern. Format and version bits are per-version overlays in both orientations. The 2x2 rule keeps one one-bit shift per row word. Balance is a popcount of the row words.
 
-It was checked on 240 matrices (versions 1 to 40, six inputs each, one of them all light data, every ECC level): all eight scores equal a textbook byte-matrix scorer, and the chosen pattern and masked bytes equal the library's.
+It was checked on 240 matrices (versions 1 to 40, six inputs each, one of them all light data, every ECC level): all eight scores equal a textbook byte-matrix scorer, and the chosen pattern and masked bytes equal the library's. Its source, with the check and the benchmark, is [encode-performance-transposed-scorer.cs](encode-performance-transposed-scorer.cs), kept for reference and compiled by no project.
 
 | Version | Library mask selection | Prototype | Ratio |
 |---|---|---|---|
