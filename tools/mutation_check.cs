@@ -12,14 +12,16 @@ using System.Xml.Linq;
 // heavy test needs, and whether a test catches anything the rest of the suite misses.
 //
 //   dotnet run tools/mutation_check.cs -- validate <mutants.tsv>
-//   dotnet run tools/mutation_check.cs -- run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>]
+//   dotnet run tools/mutation_check.cs -- run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>] [--project <csproj>] [--allow-dirty]
 //   dotnet run tools/mutation_check.cs -- report <out-dir>
 //   dotnet run tools/mutation_check.cs -- evaluate <out-dir> --keep <[Class.]Method>=<regex>...
 //   dotnet run tools/mutation_check.cs -- compare <before-dir> <after-dir>
 //   dotnet run tools/mutation_check.cs -- helper <path-in-the-test-project>
 //
 // A mutants file is tab-separated, one edit a line: id, path from the repository root, the text to
-// find and the text to put in its place, both literal. The text must occur exactly once in the file.
+// find and the text to put in its place, both literal. The text must occur exactly once in the file;
+// a '␤' in either stands for a line break, written as the file writes its own, so a line repeated
+// elsewhere in the file is found with the line beside it that is not.
 // Lines sharing an id are one fault, applied together; '#' starts a comment. A fault is small and of
 // the kind the test exists to catch: a bound one step too tight, `<` for `<=`, a constant off by one.
 //
@@ -28,7 +30,8 @@ using System.Xml.Linq;
 // `run` builds the test project in Release (a Debug.Assert would take the test host down instead of
 // failing a test) and runs the suite once unchanged, which must catch nothing, then once a fault: the
 // fault written into src, built, run, and the file put back from memory. The files a fault touches must
-// be clean in git, so that `git checkout -- <file>` is a way back should the run be killed. Each run
+// be clean in git, so that `git checkout -- <file>` is a way back should the run be killed; `--allow-dirty`
+// runs on files with changes of their own, which a killed run leaves faulted, so copy them aside first. Each run
 // leaves <id>.json (the failed test cases and the logged sub-cases), the TRX and the logs in <out-dir>.
 //
 // A test that walks many sub-cases (seeds, versions, budgets) stops at its first failure, which says
@@ -81,7 +84,7 @@ static int Usage()
 {
     Console.Error.WriteLine("""
         usage: mutation_check validate <mutants.tsv>
-               mutation_check run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>]
+               mutation_check run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>] [--project <csproj>] [--allow-dirty]
                mutation_check report <out-dir>
                mutation_check evaluate <out-dir> --keep <[Class.]Method>=<regex>...
                mutation_check compare <before-dir> <after-dir>
@@ -526,6 +529,7 @@ static class TextFile
 
     public static int Occurrences(string text, string find)
     {
+        find = WithLineBreaks(find, text);
         var count = 0;
         for (var at = text.IndexOf(find, StringComparison.Ordinal); at >= 0; at = text.IndexOf(find, at + find.Length, StringComparison.Ordinal))
             count++;
@@ -534,7 +538,12 @@ static class TextFile
 
     public static string Replace(string text, string find, string replace)
     {
+        find = WithLineBreaks(find, text);
         var at = text.IndexOf(find, StringComparison.Ordinal);
-        return string.Concat(text.AsSpan(0, at), replace, text.AsSpan(at + find.Length));
+        return string.Concat(text.AsSpan(0, at), WithLineBreaks(replace, text), text.AsSpan(at + find.Length));
     }
+
+    // A '␤' is a line break in the file's own line ending
+    private static string WithLineBreaks(string value, string text)
+        => value.Contains('␤') ? value.Replace("␤", text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n", StringComparison.Ordinal) : value;
 }

@@ -128,7 +128,7 @@ internal static partial class FinderPatternFinder
     /// <remarks>
     /// Strided like <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/>, but with no fallback of its own: this scan has only a flat candidate list, and every signal available inside it is a statement about the image rather than about the symbol being looked for.
     /// A confirmation test (any candidate seen on two or more rows) reads like a per-symbol signal but is not one — a second QR code, a printed logo, or salt-and-pepper noise confirms by itself and would suppress the pass the real symbol needed.
-    /// The only question that distinguishes them is "did anything actually decode", which only the caller can answer, so the widening lives there: the image decoders run this scan first and re-run <see cref="FindCandidatesFullSweep"/> when nothing decoded.
+    /// The only question that distinguishes them is "did anything actually decode", which only the caller can answer, so the widening lives there: the image decoders run this scan first and re-run <see cref="FindCandidatesFullSweep"/> when nothing decoded, a read too long for the destination counting as decoded.
     /// Skipping three rows in four is most of the rMQR image path: end to end the span decode of the widest symbol is 2.7x a strideless build's.
     /// </remarks>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
@@ -143,7 +143,7 @@ internal static partial class FinderPatternFinder
 
     /// <summary>
     /// Every row, no stride.
-    /// The widening step of <see cref="FindCandidates"/>: the image decoders re-run the scan through this entry when the strided pass produced nothing that decoded, which is what keeps the detection envelope from ever being narrower than a full sweep's.
+    /// The widening step of <see cref="FindCandidates"/>: the image decoders re-run the scan through this entry when the strided pass produced nothing that decoded, which on an image of one symbol keeps the detection envelope from ever being narrower than a full sweep's; after a read too long for the destination it does not run.
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>

@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.RmQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
-/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data), each within a budget of decodes; a successful decode ends the scan and a read that did not fit ends the candidate, whose frames see only its own results; otherwise the scan reports the result that went furthest.
+/// The global and regional passes scan with a row stride, then sweep every row unless that read a symbol or read one too long for the destination; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data), each within a budget of decodes; a successful decode ends the scan and a read that did not fit ends the candidate, whose frames see only its own results; otherwise each finder scan reports the result that went furthest (<see cref="CandidateScan"/>).
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
 /// 1. Frames: four right angles, each also with its axes swapped (mirror); first from the axis-aligned module sizes
@@ -36,9 +36,6 @@ namespace FeatherQR.Internals.RmQR;
 /// </remarks>
 internal static partial class RmQRImageDecoder
 {
-    /// <summary>Candidates actually tried, most-confirmed first (false hits rank behind).</summary>
-    private const int MaxCandidatesToTry = 8;
-
     /// <summary>Full-grid decode attempts per finder candidate (all frames together).</summary>
     private const int MaxDecodeAttemptsPerCandidate = 256;
 
@@ -85,7 +82,7 @@ internal static partial class RmQRImageDecoder
     private static RmQRCodeDecodeInfo NotDetected() => new(DecodeStatus.NotDetected, default, default, 0);
 
     /// <summary>
-    /// This decoder's pass through the shared image decode passes: the strided scan and the sweep (<see cref="DecodeLuminanceCore(ReadOnlySpan{byte}, ReadOnlySpan{int}, int, int, Span{char}, out int, out RmQRCodeDecodeInfo)"/>), and at the midpoint the sweep alone, its edges located at the midpoint too.
+    /// This decoder's pass through the shared image decode passes: the strided scan and the sweep (<see cref="CandidateScan.Decode"/>), and at the midpoint the sweep alone, its edges located at the midpoint too.
     /// </summary>
     private readonly struct SymbolPass : ISymbolPass<RmQRCodeDecodeInfo>
     {
@@ -94,144 +91,63 @@ internal static partial class RmQRImageDecoder
         public RmQRCodeDecodeInfo NotDetected => RmQRImageDecoder.NotDetected();
 
         public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
-            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out noFinder, out threshold, out grey);
+        {
+            var decoder = new CandidateDecoder();
+            return CandidateScan.Decode<CandidateDecoder, RmQRCodeDecodeInfo>(ref decoder, luminance, histogram, width, height, destination, out charsWritten, out info, out noFinder, out threshold, out grey);
+        }
 
         public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
             => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
 
         public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
-            => DecodeLuminanceScan(new ImageView(luminance, width, height, threshold, grey), destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
+        {
+            var decoder = new CandidateDecoder();
+            return CandidateScan.Scan<CandidateDecoder, RmQRCodeDecodeInfo>(ref decoder, new ImageView(luminance, width, height, threshold, grey), destination, out charsWritten, out info, fullSweep: true, skip: default, tried: default, out _, out _);
+        }
     }
 
-    /// <summary>
-    /// Strided finder scan first, then a full sweep when nothing was read.
-    /// </summary>
-    /// <remarks>
-    /// The widening trigger has to be a question about the symbol, and "did anything decode" is the only one available.
-    /// The scan itself cannot ask it: every signal inside a flat candidate list is a statement about the image, so a second QR code or a noise artefact would answer it in the real symbol's place and suppress the sweep the symbol needed.
-    /// Paid only on images that fail, and it makes the detection envelope a superset of a full sweep's: the symbol is read if either pass reads it.
-    /// </remarks>
+    /// <summary>This decoder's part of the shared candidate scan: a candidate's decode (<see cref="DecodeCandidate"/>) and the corners of its results.</summary>
+    private readonly struct CandidateDecoder : ICandidateDecoder<RmQRCodeDecodeInfo>
+    {
+        public RmQRCodeDecodeInfo NotDetected => RmQRImageDecoder.NotDetected();
+
+        /// <summary>The largest symbol, R17x139, whose 2.3 KB the scan rents rather than take from the stack.</summary>
+        public int ModuleBufferLength => MaxModules;
+
+        public SymbolCorners Corners(in RmQRCodeDecodeInfo info) => info.Corners;
+
+        public RmQRCodeDecodeInfo WithoutCorners(in RmQRCodeDecodeInfo info) => info.WithCorners(default);
+
+        public DecodeStatus DecodeCandidate(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, ref SearchResult<RmQRCodeDecodeInfo> result)
+            => RmQRImageDecoder.DecodeCandidate(image, candidate, modules, destination, out charsWritten, out info, ref result);
+    }
+
+    /// <summary>The strided finder scan and, unless it read a symbol or read one too long for the destination, the full sweep, at the global threshold of <paramref name="histogram"/> (<see cref="CandidateScan.Decode"/>).</summary>
     internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
-        => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info, out _, out _, out _);
-
-    /// <summary>The strided scan and the sweep at the global threshold; <paramref name="noFinder"/> when neither found a finder candidate, with the threshold and levels they used.</summary>
-    private static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
     {
-        // Hoisted: the two scans binarize the same buffer
-        threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out grey);
-        var image = new ImageView(luminance, width, height, threshold, grey);
-
-        Span<FinderPattern> tried = stackalloc FinderPattern[MaxCandidatesToTry];
-        var status = DecodeLuminanceScan(image, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
-        noFinder = false;
-        // Terminal, not just successful: DestinationTooSmall is only reached after the symbol has been located, sampled, RS-corrected and its segment found to fit the bitstream, so the buffer is the only thing missing and a wider finder scan cannot change it. (That ordering is a precondition, not a given: the segment decoders check bitstream sufficiency before destination sufficiency precisely so a malformed count cannot masquerade as a short buffer here.)
-        // A verdict on the content does not end it: the sweep can find another symbol that reads.
-        if (IsTerminal(status))
-            return status;
-
-        // A candidate the strided scan tried decodes the same way in the sweep, so it is not tried again; unless that scan settled, when every candidate stays
-        var skip = IsSettled(status) ? default : tried.Slice(0, triedCount);
-        var sweptStatus = DecodeLuminanceScan(image, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _, out var sweptFound);
-        noFinder = stridedFound == 0 && sweptFound == 0;
-        // Settled, not just successful: when the sweep is the pass that reads the symbol, its DestinationTooSmall or its verdict on the content is the answer.
-        if (IsSettled(sweptStatus))
-        {
-            charsWritten = sweptChars;
-            info = sweptInfo;
-            return sweptStatus;
-        }
-
-        // Both failed: keep the strided pass's diagnostic, which is the one whose candidate ranking the caller would have seen before this retry existed.
-        return status;
-    }
-
-    /// <summary>
-    /// One finder scan and the candidates it ranks first; those equal to one in <paramref name="skip"/> are not decoded, and each one decoded is written to <paramref name="tried"/>.
-    /// </summary>
-    /// <remarks>
-    /// A candidate's decode depends only on its position and module size, the image and the threshold, so a candidate tried by a scan that settled on nothing settles on nothing again, and skipping it changes only a failure the caller does not report.
-    /// </remarks>
-    private static DecodeStatus DecodeLuminanceScan(in ImageView image, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep, ReadOnlySpan<FinderPattern> skip, Span<FinderPattern> tried, out int triedCount, out int found)
-    {
-        charsWritten = 0;
-        triedCount = 0;
-
-        Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var candidateCount = fullSweep
-            ? FinderPatternFinder.FindCandidatesFullSweep(image.Luminance, image.Width, image.Height, image.Threshold, candidates, image.Grey)
-            : FinderPatternFinder.FindCandidates(image.Luminance, image.Width, image.Height, image.Threshold, candidates, image.Grey);
-        found = candidateCount;
-        if (candidateCount == 0)
-        {
-            info = NotDetected();
-            return DecodeStatus.NotDetected;
-        }
-
-        FinderPatternFinder.RankByConfirmation(candidates.Slice(0, candidateCount));
-
-        var best = new SearchResult<RmQRCodeDecodeInfo>(ReportRule.Furthest, NotDetected());
-
-        // The module buffer is sized for the largest symbol; rented rather than stack-allocated (2.3 KB) since this sits under the public image entry point.
-        var rentedModules = ArrayPool<byte>.Shared.Rent(MaxModules);
-        try
-        {
-            var modules = rentedModules.AsSpan(0, MaxModules);
-            Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
-            // Where each read that did not fit lies: a later candidate inside one is a finder-like pattern in that symbol's own data, not another symbol
-            Span<SymbolCorners> readSymbols = stackalloc SymbolCorners[MaxCandidatesToTry];
-            var readCount = 0;
-            var ranked = Math.Min(candidateCount, MaxCandidatesToTry);
-            for (var c = 0; c < ranked; c++)
-            {
-                // Not replaced by the next in rank: the candidates tried stay the first eight
-                if (FinderPatternFinder.ContainsCandidate(skip, candidates[c]))
-                    continue;
-                if (SymbolGeometry.AnyContains(readSymbols.Slice(0, readCount), candidates[c].X, candidates[c].Y))
-                    continue;
-                if (!tried.IsEmpty)
-                    tried[triedCount++] = candidates[c];
-
-                // The frames see only this candidate's results: a read that did not fit on another one ends none of them
-                var candidateResult = new SearchResult<RmQRCodeDecodeInfo>(ReportRule.Furthest, NotDetected());
-                var status = DecodeCandidate(image, candidates[c], modules, orientations, destination, out charsWritten, out info, ref candidateResult);
-                if (status == DecodeStatus.Success)
-                    return status;
-                var candidateInfo = candidateResult.Info;
-                if (candidateResult.Status == DecodeStatus.DestinationTooSmall && !candidateInfo.Corners.IsEmpty)
-                    readSymbols[readCount++] = candidateInfo.Corners;
-                // Corners are reported with a read only
-                best.Other(candidateResult.Status, 0, candidateInfo.WithCorners(default));
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rentedModules, clearArray: false);
-        }
-
-        charsWritten = 0;
-        info = best.Info;
-        return best.Status;
+        var decoder = new CandidateDecoder();
+        return CandidateScan.Decode<CandidateDecoder, RmQRCodeDecodeInfo>(ref decoder, luminance, histogram, width, height, destination, out charsWritten, out info, out _, out _, out _);
     }
 
     /// <summary>
     /// One finder candidate within its budget of decodes: the axis-aligned frames, then those of the finder's outline, then those of each axis pair from the angular sweep.
-    /// Ends at a read, or at a read that did not fit, since its symbol was read and no other frame of this finder can change that.
+    /// Ends at a read, or at a read that did not fit, since its symbol was read up to the caller's buffer and no other frame of this finder can change that; a sized call reads it, its content permitting (<see cref="AttemptStatus.Progress"/>).
     /// </summary>
     /// <remarks>
     /// A read that did not fit went through the format information and every Reed-Solomon block, the evidence a read rests on; the perspective search, this finder's other frames and the inverted pass would only find the same symbol again at hundreds of times the cost.
-    /// Other candidates of the same polarity are still tried, so a second symbol in the image that does fit is found whatever the candidates' order; a fitting symbol of the opposite polarity beside one too long is the trade-off of the inverted pass not running.
+    /// The other candidates of the finder scan that made it are still tried, so a second symbol among them that does fit is found whatever their order; a fitting symbol that only the full sweep or the inverted pass would find is not, the trade-off of neither running after it (<see cref="CandidateScan.Decode"/>).
     /// It also ranks above every other failure (<see cref="AttemptStatus.Progress"/>), a verdict on the content included, so it reaches the caller even when an earlier attempt failed at Reed-Solomon or another symbol's content gave a verdict.
     /// </remarks>
     private static DecodeStatus DecodeCandidate(
         in ImageView image,
         FinderPattern finder,
         Span<byte> modules,
-        Span<OrientationCandidate> orientations,
         Span<char> destination,
         out int charsWritten,
         out RmQRCodeDecodeInfo info,
         ref SearchResult<RmQRCodeDecodeInfo> best)
     {
+        Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[FinderAxisEstimator.MaxOrientationCandidates];
         var attemptsRemaining = MaxDecodeAttemptsPerCandidate;
 
         // Fast path: right-angle frames from the axis-aligned module sizes.
@@ -830,10 +746,10 @@ internal static partial class RmQRImageDecoder
     }
 
     /// <summary>
-    /// Samples the full grid through the transform and runs the matrix decoder, unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information that neither read nor read too long for the destination is read again by coverage while the budget lasts.
+    /// Samples the full grid through the transform and decodes it (<see cref="GridRead"/>), unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information that neither read nor read too long for the destination is read again by coverage while the budget lasts.
     /// Each decode spends one of the budget, the re-read whether or not it changes a module.
     /// </summary>
-    private static DecodeStatus Attempt(
+    internal static DecodeStatus Attempt(
         in ImageView image,
         in PerspectiveTransform transform,
         int symbolWidth,
@@ -854,55 +770,47 @@ internal static partial class RmQRImageDecoder
         }
 
         attemptsRemaining--;
-        var grid = modules.Slice(0, symbolWidth * symbolHeight);
-        SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, symbolWidth, symbolHeight, grid);
-        var status = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out info);
-        if (IsTerminal(status))
+        var gridModules = modules.Slice(0, symbolWidth * symbolHeight);
+        SampleGrid(image.Luminance, image.Width, image.Height, image.Threshold, transform, symbolWidth, symbolHeight, gridModules);
+        var grid = new TransformGrid(transform, symbolWidth, symbolHeight, budgetLeft: attemptsRemaining > 0);
+        var status = GridRead.Decode<TransformGrid, RmQRCodeDecodeInfo>(ref grid, image, gridModules, destination, out charsWritten, out info, ref best, out _, out var readByCoverage);
+        if (readByCoverage)
+            attemptsRemaining--;
+        return status;
+    }
+
+    /// <summary>
+    /// A grid sampled through a transform, decoded once: the frames carry a mirrored capture in their axes, so the transform is in
+    /// symbol order and never transposed. Read again by coverage while the budget lasts (<see cref="GridRead"/>).
+    /// </summary>
+    private struct TransformGrid(in PerspectiveTransform transform, int width, int height, bool budgetLeft) : IGridRead<RmQRCodeDecodeInfo>
+    {
+        private readonly PerspectiveTransform _transform = transform;
+        private DecodeStatus _status;
+
+        public readonly int Columns => width;
+
+        public readonly int Rows => height;
+
+        public readonly void Map(float u, float v, out float x, out float y) => _transform.Transform(u, v, out x, out y);
+
+        public DecodeStatus Decode(ReadOnlySpan<byte> modules, in ImageView image, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, ref SearchResult<RmQRCodeDecodeInfo> result)
         {
-            // The frames already carry a mirrored capture in their axes, so the transform is in symbol order and never transposed.
-            // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it
-            info = info.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
-            if (status == DecodeStatus.Success)
-                return status;
+            _status = RmQRMatrixDecoder.DecodeMatrix(modules, width, height, destination, out charsWritten, out info);
+            if (IsTerminal(_status))
+            {
+                // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it
+                info = info.WithCorners(SymbolGeometry.FromTransform(_transform, width, height, transposed: false));
+                if (_status == DecodeStatus.Success)
+                    return _status;
+            }
+            result.Other(_status, 0, info);
+            return _status;
         }
 
-        best.Other(status, 0, info);
-        // A read that did not fit is reported as it is: read by coverage, the same grid reads the same text on a real image, and on
-        // a crafted one another, which the call would have returned though a sized call never does
-        if (IsTerminal(status) || !image.Grey.IsEnabled || !IsPastFormat(status) || attemptsRemaining <= 0)
-            return status;
+        public readonly bool PastFormat => IsPastFormat(_status);
 
-        // Grey edges: the same grid read by coverage, decoded only where it differs from the one that failed
-        attemptsRemaining--;
-        var midpoint = image.Grey.Midpoint;
-        var changed = false;
-        for (var row = 0; row < symbolHeight; row++)
-        {
-            for (var column = 0; column < symbolWidth; column++)
-            {
-                transform.Transform(column + 0.5f, row + 0.5f, out var x, out var y);
-                var dark = LuminanceSampler.Bilinear(image.Luminance, image.Width, image.Height, x, y) < midpoint ? (byte)1 : (byte)0;
-                changed |= grid[row * symbolWidth + column] != dark;
-                grid[row * symbolWidth + column] = dark;
-            }
-        }
-        if (!changed)
-            return status;
-        var coverageStatus = RmQRMatrixDecoder.DecodeMatrix(grid, symbolWidth, symbolHeight, destination, out charsWritten, out var coverageInfo);
-        if (IsTerminal(coverageStatus))
-        {
-            coverageInfo = coverageInfo.WithCorners(SymbolGeometry.FromTransform(transform, symbolWidth, symbolHeight, transposed: false));
-            if (coverageStatus == DecodeStatus.Success)
-            {
-                info = coverageInfo;
-                return coverageStatus;
-            }
-        }
-        best.Other(coverageStatus, 0, coverageInfo);
-        if (Progress(coverageStatus) <= Progress(status))
-            return status;
-        info = coverageInfo;
-        return coverageStatus;
+        public readonly bool MayReadByCoverage(ReadOnlySpan<byte> modules) => budgetLeft;
     }
 
     /// <summary>

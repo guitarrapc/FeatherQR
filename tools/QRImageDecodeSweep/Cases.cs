@@ -54,18 +54,10 @@ internal static class Cases
         var ecc = (QREccLevel)random.Next(4);
         var mode = new[] { "numeric", "alphanumeric", "byte" }[random.Next(3)];
         var full = RandomText(random, mode, 7100);
+        // A text that does not fit is false; a defect of the draw, an undefined level among them, throws
         int Capacity(int atMost) => LongestFit(full, text =>
-        {
-            try
-            {
-                var qr = QRCodeGenerator.Create(text, ecc, new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = QRVersionRange.AtMost(atMost) });
-                return (qr.Size - 17) / 4 <= atMost;
-            }
-            catch
-            {
-                return false;
-            }
-        });
+            QRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out var size, new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = QRVersionRange.AtMost(atMost) })
+            && size.Version <= atMost);
 
         // Longer than the version below holds and no longer than this one does, so the smallest version that fits is the one asked for.
         // A fraction of this version's capacity alone would not do: from version 6 up the version below holds over 75 % of it.
@@ -92,17 +84,7 @@ internal static class Cases
         var mode = modes[random.Next(modes.Length)];
         var alphabetText = mode == "byte" ? RandomTextNoPrefix(random, 40) : RandomText(random, mode, 40);
         var capacity = LongestFit(alphabetText, text =>
-        {
-            try
-            {
-                MicroQRCodeGenerator.Create(text, ecc, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0, Version = (MicroQRVersion)version });
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        });
+            MicroQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = 0, Version = (MicroQRVersion)version }));
         var length = Math.Max(1, (int)Math.Ceiling(capacity * (0.6 + random.NextDouble() * 0.4)));
         var payload = alphabetText[..Math.Min(length, Math.Max(1, capacity))];
         if (payload[^1] == ' ')
@@ -130,17 +112,7 @@ internal static class Cases
         var mode = new[] { "numeric", "alphanumeric", "byte" }[random.Next(3)];
         var full = mode == "byte" ? RandomTextNoPrefix(random, 400) : RandomText(random, mode, 400);
         var capacity = LongestFit(full, text =>
-        {
-            try
-            {
-                RmQRCodeGenerator.Create(text, ecc, new RmQRCodeGeneratorOptions { QuietZoneSize = 0, Version = version });
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        });
+            RmQRCodeGenerator.TryGetRequiredBufferSize(text, ecc, out _, new RmQRCodeGeneratorOptions { QuietZoneSize = 0, Version = version }));
         var length = Math.Max(1, (int)Math.Ceiling(capacity * (0.6 + random.NextDouble() * 0.4)));
         var payload = full[..Math.Min(length, Math.Max(1, capacity))];
         if (payload[^1] == ' ')

@@ -34,6 +34,7 @@ internal static class AttemptStatus
     /// <remarks>
     /// A verdict comes after error correction too, so a wrong grid's correction failure tried before the right one cannot mask it.
     /// A read too long for the destination ranks above a verdict, one on another symbol included, since a larger destination reads that symbol and the verdict holds at any size.
+    /// The segment decoders check the content after the buffer, though: a symbol whose content fails reads too long for a short destination and gives its failure to a larger one (a residual: qrcode-symbologies.md, single-finder candidate scan).
     /// </remarks>
     public static int Progress(DecodeStatus status) => status switch
     {
@@ -64,7 +65,7 @@ internal enum ReportRule
 /// </summary>
 /// <remarks>
 /// It decides which result is reported, not where the search stops: each method returns whether the result it was given settles the symbol (<see cref="AttemptStatus.IsSettled"/>), and the caller decides whether that ends its search.
-/// Standard QR stops at a settled result; Micro QR's and rMQR's scans go on past everything but a read, since another symbol in the image may read.
+/// Standard QR stops at a settled result; each finder scan of Micro QR and rMQR goes on to its other candidates past everything but a read, since another symbol in the image may read (<see cref="CandidateScan"/>).
 /// </remarks>
 /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
 internal struct SearchResult<TInfo>
