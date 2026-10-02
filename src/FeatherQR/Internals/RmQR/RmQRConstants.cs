@@ -25,7 +25,7 @@ internal static class RmQRConstants
     /// <summary>Terminator is 000 (3 bits), shortened at capacity.</summary>
     public const int TerminatorLength = 3;
 
-    /// <summary>Kanji mode indicator value; decoded but never encoded (symbology scope decision).</summary>
+    /// <summary>Kanji mode indicator value.</summary>
     public const int KanjiModeIndicatorValue = 0b100;
 
     // XOR masks applied to the 18-bit BCH word of each format-information copy.
@@ -131,7 +131,8 @@ internal static class RmQRConstants
     // column is pinned by derivation instead: Table 3 takes the narrowest count field
     // that still expresses the largest count the version's M-level data capacity
     // allows, a rule that reproduces all 96 verified widths exactly. The column is now read on every Kanji
-    // segment the decoder meets.
+    // segment the decoder meets and written on every one the encoder emits, and a published transcription
+    // of Table 3 agrees with it on all 32 versions (RmQRBinaryEncoderKanjiTest).
     private static ReadOnlySpan<byte> numericCountBits =>
     [
         4, 5, 6, 7, 7,
@@ -280,12 +281,13 @@ internal static class RmQRConstants
         EncodingMode.Numeric => 0b001,
         EncodingMode.Alphanumeric => 0b010,
         EncodingMode.Byte => 0b011,
+        EncodingMode.Kanji => KanjiModeIndicatorValue,
         EncodingMode.ECI => 0b111,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
     };
 
     /// <summary>
-    /// Dense index of the encodable modes (Numeric 0, Alphanumeric 1, Byte 2) for per-mode tables; <see cref="EncodingMode"/> values themselves are the Standard QR mode-indicator bits (1, 2, 4) and are not contiguous.
+    /// Dense index of the encodable modes (Numeric 0, Alphanumeric 1, Byte 2, Kanji 3) for per-mode tables; <see cref="EncodingMode"/> values themselves are the Standard QR mode-indicator bits (1, 2, 4, 8) and are not contiguous.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetModeIndex(EncodingMode mode) => mode switch
@@ -293,11 +295,12 @@ internal static class RmQRConstants
         EncodingMode.Numeric => 0,
         EncodingMode.Alphanumeric => 1,
         EncodingMode.Byte => 2,
+        EncodingMode.Kanji => 3,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
     };
 
-    /// <summary>Number of dense-indexed encodable modes (the range of <see cref="GetModeIndex"/>: Numeric, Alphanumeric, Byte); ECI / Kanji are not part of it.</summary>
-    public const int ModeCount = 3;
+    /// <summary>Number of dense-indexed encodable modes (the range of <see cref="GetModeIndex"/>: Numeric, Alphanumeric, Byte, Kanji); ECI is not part of it.</summary>
+    public const int ModeCount = 4;
 
     /// <summary>Character count indicator width in bits (ISO/IEC 23941 Table 3).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -305,11 +308,12 @@ internal static class RmQRConstants
     {
         0 => numericCountBits[Index(version)],
         1 => alphanumericCountBits[Index(version)],
-        _ => byteCountBits[Index(version)],
+        2 => byteCountBits[Index(version)],
+        _ => kanjiCountBits[Index(version)],
     }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
     /// <summary>
-    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation and read for real by the rMQR Kanji fixtures, which cover widths 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139); 2, 3 and 6 rest on the derivation.
+    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation, by the published transcription of ISO/IEC 23941 Table 3 (<c>RmQRBinaryEncoderKanjiTest</c>), and read for real by the rMQR Kanji fixtures, which cover widths 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(RmQRVersion version) => kanjiCountBits[Index(version)];

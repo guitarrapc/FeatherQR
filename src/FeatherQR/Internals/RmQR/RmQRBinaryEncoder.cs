@@ -155,6 +155,13 @@ internal static partial class RmQRBinaryEncoder
                     WriteLatin1(ref dest, ref acc, ref accBits, ref bytePos, text, vectorized: true);
                     break;
                 }
+            case EncodingMode.Kanji:
+                {
+                    var countBits = RmQRConstants.GetKanjiCountIndicatorLength(version);
+                    Append(ref dest, ref acc, ref accBits, ref bytePos, (RmQRConstants.KanjiModeIndicatorValue << countBits) | analysis.DataLength, RmQRConstants.ModeIndicatorLength + countBits);
+                    WriteKanji(ref dest, ref acc, ref accBits, ref bytePos, text);
+                    break;
+                }
             default:
                 throw new ArgumentOutOfRangeException(nameof(analysis), $"Encoding mode {mode} is not supported by rMQR.");
         }
@@ -346,6 +353,33 @@ internal static partial class RmQRBinaryEncoder
         {
             Append(ref dest, ref acc, ref accBits, ref bytePos, (byte)text[i], 8);
         }
+    }
+
+    /// <summary>
+    /// Kanji segment: 13 bits per character, the compacted Shift_JIS value (ISO/IEC 18004 8.4.5) that <see cref="ShiftJisKanjiReverseTable"/> holds for it; two characters share one 26-bit append.
+    /// A character without a cell is caught after the loop from the OR of the lookups (a miss is -1): it still occupies its 13 bits, so every store stays inside the capacity version selection guaranteed.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void WriteKanji(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> chars)
+    {
+        var misses = 0;
+        var i = 0;
+        for (; i + 1 < chars.Length; i += 2)
+        {
+            var first = ShiftJisKanjiReverseTable.Lookup(chars[i]);
+            var second = ShiftJisKanjiReverseTable.Lookup(chars[i + 1]);
+            misses |= first | second;
+            Append(ref dest, ref acc, ref accBits, ref bytePos, (first << 13) | (second & 0x1FFF), 26);
+        }
+        if (i < chars.Length)
+        {
+            var last = ShiftJisKanjiReverseTable.Lookup(chars[i]);
+            misses |= last;
+            Append(ref dest, ref acc, ref accBits, ref bytePos, last, 13);
+        }
+
+        if (misses < 0)
+            KanjiCells.ThrowCharacterWithoutCell(chars);
     }
 
     /// <summary>

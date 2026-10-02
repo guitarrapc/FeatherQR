@@ -1,0 +1,18 @@
+{
+  "id": "r7x59-m-kanji-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 2,
+  "versionName": "R7x59",
+  "width": 59,
+  "height": 7,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 4,
+  "payloadText": "\u3000\u6ECC\u6F3E\u7199\u03A9\u0416",
+  "payloadUtf8Hex": "E38080E6BB8CE6BCBEE78699CEA9D096",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

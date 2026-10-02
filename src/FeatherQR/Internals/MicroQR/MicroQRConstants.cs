@@ -127,7 +127,7 @@ internal static class MicroQRConstants
 
     /// <summary>
     /// Mode indicator width in bits: 0 for M1 (numeric implied), version − 1 otherwise.
-    /// Indicator values: Numeric = 0, Alphanumeric = 1, Byte = 2 (ISO/IEC 18004 Table 2).
+    /// Indicator values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (ISO/IEC 18004 Table 2).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetModeIndicatorLength(MicroQRVersion version) => (int)version - 1;
@@ -138,30 +138,31 @@ internal static class MicroQRConstants
         EncodingMode.Numeric => 0,
         EncodingMode.Alphanumeric => 1,
         EncodingMode.Byte => 2,
+        EncodingMode.Kanji => 3,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR."),
     };
 
     /// <summary>
-    /// Mode availability per version (ISO/IEC 18004): M1 numeric only, M2 adds alphanumeric, M3/M4 add byte.
-    /// Kanji is decode-only, so it is absent here; its count width lives in <see cref="GetKanjiCountIndicatorLength"/>.
+    /// Mode availability per version (ISO/IEC 18004): M1 numeric only, M2 adds alphanumeric, M3/M4 add byte and Kanji.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsModeSupported(MicroQRVersion version, EncodingMode mode) => mode switch
     {
         EncodingMode.Numeric => true,
         EncodingMode.Alphanumeric => version >= MicroQRVersion.M2,
-        EncodingMode.Byte => version >= MicroQRVersion.M3,
+        EncodingMode.Byte or EncodingMode.Kanji => version >= MicroQRVersion.M3,
         _ => false,
     };
 
     /// <summary>
-    /// Character count indicator width in bits (ISO/IEC 18004 Table 3): Numeric = version + 2, Alphanumeric/Byte = version + 1.
+    /// Character count indicator width in bits (ISO/IEC 18004 Table 3): Numeric = version + 2, Alphanumeric/Byte = version + 1, Kanji = version (M3 and M4 only).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetCountIndicatorLength(MicroQRVersion version, EncodingMode mode) => mode switch
     {
         EncodingMode.Numeric => (int)version + 2,
         EncodingMode.Alphanumeric or EncodingMode.Byte => (int)version + 1,
+        EncodingMode.Kanji => GetKanjiCountIndicatorLength(version),
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR."),
     };
 

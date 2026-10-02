@@ -65,7 +65,7 @@ internal static partial class ModeSegmenter
 
     /// <summary><see cref="Reconstruct"/> for one lane of the table <see cref="ComputeCostsLanes"/> filled.</summary>
     internal static bool ReconstructLane(int length, ReadOnlySpan<byte> table, int lane, int finalState, Span<ModeSegment> segments, out int segmentCount)
-        => WalkBack(length, table.Slice(lane * ParentBytesPerChar), LaneTableBytesPerChar, finalState, segments, materialise: true, out segmentCount, out _, out _, out _);
+        => WalkBack(length, table.Slice(lane * ParentBytesPerChar), LaneTableBytesPerChar, finalState, segments, materialise: true, out segmentCount, out _, out _, out _, out _);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LaneByteCost(ReadOnlySpan<char> text, int start, int length, int i) => ByteCost(text.Slice(start, length), i, EciMode.Utf8);

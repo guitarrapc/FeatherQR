@@ -79,7 +79,7 @@ public class MicroQRBinaryDecoderUnitTest
         await Assert.That(decoded).IsEqualTo(text);
     }
 
-    // Kanji mode (decode only; M3 and M4 are the only versions that define it)
+    // Kanji mode (M3 and M4 are the only versions that define it)
 
     /// <summary>Bit-string builder for hand-made streams (MSB first, zero-padded).</summary>
     private static byte[] Bits(string bits)

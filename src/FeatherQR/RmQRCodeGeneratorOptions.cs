@@ -23,7 +23,7 @@ public readonly record struct RmQRCodeGeneratorOptions
     /// </summary>
     /// <remarks>
     /// Prefer the object initializer (<c>new RmQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order, and pass constructor arguments by name.
-    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation)"/>.
+    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation, bool)"/>.
     /// </remarks>
     /// <param name="eciMode">See <see cref="EciMode"/>.</param>
     /// <param name="version">See <see cref="Version"/>.</param>
@@ -31,13 +31,15 @@ public readonly record struct RmQRCodeGeneratorOptions
     /// <param name="height">See <see cref="Height"/>.</param>
     /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
     /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
+    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
     public RmQRCodeGeneratorOptions(
         EciMode eciMode = EciMode.Default,
         RmQRVersion? version = null,
         RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea,
         RmQRHeight? height = null,
         int quietZoneSize = RmQRConstants.QuietZoneModules,
-        RmQRSegmentation segmentation = RmQRSegmentation.Single)
+        RmQRSegmentation segmentation = RmQRSegmentation.Single,
+        bool allowKanji = false)
         : this()
     {
         EciMode = eciMode;
@@ -46,6 +48,7 @@ public readonly record struct RmQRCodeGeneratorOptions
         Height = height;
         QuietZoneSize = quietZoneSize;
         Segmentation = segmentation;
+        AllowKanji = allowKanji;
     }
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
@@ -53,7 +56,7 @@ public readonly record struct RmQRCodeGeneratorOptions
 
     /// <summary>
     /// Character encoding declaration.
-    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content.
+    /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content, and with <see cref="AllowKanji"/> Kanji mode (no ECI) for text JIS X 0208 holds.
     /// </summary>
     /// <remarks>
     /// Only <see cref="EciMode.Default"/>, <see cref="EciMode.Iso8859_1"/> and <see cref="EciMode.Utf8"/> are accepted.
@@ -94,4 +97,22 @@ public readonly record struct RmQRCodeGeneratorOptions
     /// Size a destination buffer with the same value you encode with: the two modes can select different versions.
     /// </summary>
     public RmQRSegmentation Segmentation { get; init; }
+
+    /// <summary>
+    /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind an 11-bit ECI header.
+    /// Off by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Applies only where the charset is the library's choice (<see cref="EciMode.Default"/>); a charset the caller names is written as named.
+    /// Then text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) is one Kanji segment, and under <see cref="RmQRSegmentation.Optimal"/> text that is so apart from its ASCII can be Kanji runs beside runs of that ASCII, where that is the smaller symbol.
+    /// Seven JIS X 0208 characters that Windows code page 932 reads differently, among them the wave dash 〜, keep a text in UTF-8, as does any character outside the table.
+    /// The capacity can matter more than in Standard QR: R7x43-M holds 3 characters in Kanji mode and 1 in UTF-8.
+    /// </para>
+    /// <para>
+    /// Off by default, as on the other two symbologies, because not every reader reads Kanji mode: in Standard QR an Android 17 phone's own QR scanner and Google Lens on it show nothing readable for it.
+    /// Neither phone's own scanner reads rMQR at all; Denso Wave's reader and zxing-cpp read it in Kanji mode and in UTF-8 alike.
+    /// </para>
+    /// </remarks>
+    public bool AllowKanji { get; init; }
 }

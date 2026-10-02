@@ -12,7 +12,7 @@ internal static class EncodingModeExtensions
     /// Character count indicator width for Kanji mode (ISO/IEC 18004 Table 3): 8 bits for versions 1-9, 10 for 10-26, 12 for 27-40.
     /// </summary>
     /// <remarks>
-    /// Kanji sits outside <see cref="EncodingMode"/> because that enum names the modes the encoder writes, and this library reads Kanji without emitting it.
+    /// The decoder reads the mode from its raw indicator bits and asks for this width directly; the encoder reaches the same width through <see cref="GetCountIndicatorLength"/>.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(int version)
@@ -24,9 +24,9 @@ internal static class EncodingModeExtensions
     /// <param name="version">QR code version (1-40).</param>
     /// <param name="mode">Encoding mode.</param>
     /// <returns>Bit length (8-16 bits):
-    /// - Version 1-9: Numeric=10, Alphanumeric=9, Byte=8
-    /// - Version 10-26: Numeric=12, Alphanumeric=11, Byte=16
-    /// - Version 27-40: Numeric=14, Alphanumeric=13, Byte=16</returns>
+    /// - Version 1-9: Numeric=10, Alphanumeric=9, Byte=8, Kanji=8
+    /// - Version 10-26: Numeric=12, Alphanumeric=11, Byte=16, Kanji=10
+    /// - Version 27-40: Numeric=14, Alphanumeric=13, Byte=16, Kanji=12</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetCountIndicatorLength(this EncodingMode mode, int version)
     {
@@ -37,6 +37,7 @@ internal static class EncodingModeExtensions
                 EncodingMode.Numeric => 10,
                 EncodingMode.Alphanumeric => 9,
                 EncodingMode.Byte => 8,
+                EncodingMode.Kanji => 8,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
             };
         }
@@ -47,6 +48,7 @@ internal static class EncodingModeExtensions
                 EncodingMode.Numeric => 12,
                 EncodingMode.Alphanumeric => 11,
                 EncodingMode.Byte => 16,
+                EncodingMode.Kanji => 10,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
             };
         }
@@ -57,6 +59,7 @@ internal static class EncodingModeExtensions
                 EncodingMode.Numeric => 14,
                 EncodingMode.Alphanumeric => 13,
                 EncodingMode.Byte => 16,
+                EncodingMode.Kanji => 12,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
             };
         }

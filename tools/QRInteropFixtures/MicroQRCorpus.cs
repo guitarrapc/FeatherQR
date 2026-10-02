@@ -42,7 +42,8 @@ public static class MicroQRCorpus
         new("m4-l-utf8-japanese", "こんにちは", "L", 4, "Byte", Utf8: true),
 
         // Kanji mode (ISO/IEC 18004 8.4.5): M3 and M4 only, the versions whose mode
-        // indicator is wide enough to express it. Decode-only for this library, and
+        // indicator is wide enough to express it. Read by this library's decoder and compared with
+        // its encoder (KanjiEncoderOracleTest), and
         // qrtool is the only lineage here that can emit it (libzint rejects non-ASCII
         // input through the ZXingCpp wrapper, and M1/M2 have no Kanji mode at all).
         new("m3-l-kanji", "日本語", "L", 3, "Kanji"),

@@ -16,7 +16,7 @@ namespace FeatherQR.Tests;
 /// observe is the same as no status.
 /// </para>
 /// <para>
-/// The symbol has to be built here because no generator in this library emits Kanji:
+/// The symbol has to be built here because no generator in this library writes a cell outside its Kanji encoder table:
 /// hand-made data codewords go through the real ECC, placement, mask and format
 /// pipeline, so what the decoder sees is a genuine level L symbol (version 1 here).
 /// </para>
