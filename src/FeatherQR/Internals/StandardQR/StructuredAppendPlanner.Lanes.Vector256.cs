@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 
 namespace FeatherQR.Internals.StandardQR;
 
@@ -10,6 +11,9 @@ internal static partial class StructuredAppendPlanner
     private static bool WalkLanes<TWidth>(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps)
         where TWidth : ICharWidth
     {
+        if (!AdvSimd.Arm64.IsSupported && !Vector256.IsHardwareAccelerated && BudgetsFit16(budgets, charset))
+            return WalkLanesVector128<TWidth>(text, charset, version, budgets, limit, placed, start, counts, laneEnds, out apartSteps);
+
         const int unreachableCost = ModeSegmenter.Unreachable;
         var used = budgets.Length;
         var length = text.Length;

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using FeatherQR.Internals.ImageDecoders;
 using static FeatherQR.Internals.ImageDecoders.AttemptStatus;
 
@@ -254,12 +255,14 @@ internal static partial class QRImageDecoder
     internal static DecodeStatus DecodeTriple<TAttempt>(ref TAttempt attempt, in ImageView image, ReadOnlySpan<FinderPattern> patterns, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
         where TAttempt : struct, ICornerAttempt
     {
-        var result = NewResult();
         var shapeCorner = ShapeCorner(patterns);
         OrderAroundCorner(patterns, shapeCorner, out var topLeft, out var topRight, out var bottomLeft);
-        var status = attempt.Decode(image, topLeft, topRight, bottomLeft, ref modules, destination, out var shapeCharsWritten, out var shapeInfo);
-        if (result.Main(status, shapeCharsWritten, shapeInfo))
-            return result.Report(out charsWritten, out info);
+        var status = attempt.Decode(image, topLeft, topRight, bottomLeft, ref modules, destination, out charsWritten, out info);
+        if (IsSettled(status))
+            return status;
+
+        var result = NewResult();
+        result.Main(status, charsWritten, info);
 
         for (var i = 1; i < 3; i++)
         {
@@ -280,18 +283,26 @@ internal static partial class QRImageDecoder
         // Under about 1.5 px/module a crisp module is 1 or 2 px wide and a sample has an eighth of a pixel to spare, which no grid extrapolated from the finder centres keeps. The
         // timing patterns mark every module boundary between the finders. First, because where both grids read, this one's corners are the symbol's own edges and the other's are extrapolated to within a module; two lines that do not read cost a few hundred pixels.
         // Tried ahead of the main path, the grids from the finders, which it does not replace unless it settles
-        var result = NewResult();
         var frameStatus = DecodeThroughTimingFrame(image, topLeft, topRight, bottomLeft, ref modules, destination, out var frameCharsWritten, out var frameInfo);
-        if (result.Other(frameStatus, frameCharsWritten, frameInfo))
-            return result.Report(out charsWritten, out info);
+        if (IsSettled(frameStatus))
+        {
+            charsWritten = frameCharsWritten;
+            info = frameInfo;
+            return frameStatus;
+        }
 
         var moduleSizes = MeasureModuleSizes(image.Luminance, image.Width, image.Height, image.Threshold, default, topLeft, topRight, bottomLeft);
         RefineFinderCentres(image.Luminance, image.Width, image.Height, image.Grey, moduleSizes, ref topLeft, ref topRight, ref bottomLeft);
         // Measured again where there are grey levels: outward from the centres that moved, and to sub-pixel edges
         if (image.Grey.IsEnabled)
             moduleSizes = MeasureModuleSizes(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft);
-        var status = DecodeFromFinders(image, topLeft, topRight, bottomLeft, moduleSizes, ref modules, destination, out var findersCharsWritten, out var findersInfo);
-        result.Main(status, findersCharsWritten, findersInfo);
+        var status = DecodeFromFinders(image, topLeft, topRight, bottomLeft, moduleSizes, ref modules, destination, out charsWritten, out info);
+        if (IsSettled(status))
+            return status;
+
+        var result = NewResult();
+        result.Other(frameStatus, frameCharsWritten, frameInfo);
+        result.Main(status, charsWritten, info);
         return result.Report(out charsWritten, out info);
     }
 
@@ -330,7 +341,6 @@ internal static partial class QRImageDecoder
     /// <summary>The dimension candidates in turn: the estimate, the timing count, the version information, the timing match, the runner-up.</summary>
     private static DecodeStatus DecodeFromFinders(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderModuleSizes moduleSizes, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
-        var result = NewResult();
         var timingCounted = false;
         var timingDimension = 0;
         var matchedDimension = -1;
@@ -348,13 +358,20 @@ internal static partial class QRImageDecoder
                     timingDimension = matchedDimension = MatchTimingDimension(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, topLeft, topRight, bottomLeft, moduleSizes, frame);
             }
             if (timingDimension == 0)
-                return result.Report(out charsWritten, out info);
+            {
+                charsWritten = 0;
+                info = NotDetectedInfo;
+                return DecodeStatus.NotDetected;
+            }
             dimension = timingDimension;
         }
 
-        var status = SampleAndDecode(image, topLeft, topRight, bottomLeft, frame, dimension, moduleSize, ref modules, destination, out var estimateCharsWritten, out var estimateInfo, out var versionDimension);
-        if (result.Main(status, estimateCharsWritten, estimateInfo))
-            return result.Report(out charsWritten, out info);
+        var status = SampleAndDecode(image, topLeft, topRight, bottomLeft, frame, dimension, moduleSize, ref modules, destination, out charsWritten, out info, out var versionDimension);
+        if (IsSettled(status))
+            return status;
+
+        var result = NewResult();
+        result.Main(status, charsWritten, info);
 
         // The timing patterns count the modules the estimate only measures.
         // Counted only once the estimate has failed, so a successful decode never pays for it.
@@ -492,32 +509,44 @@ internal static partial class QRImageDecoder
     private static DecodeStatus SampleAndDecode(in ImageView image, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, in FinderFrame frame, int dimension, float moduleSize, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out int versionDimension, bool finderFallback = true)
     {
         versionDimension = 0;
-        var result = NewResult();
         var transform = BuildGridTransform(image.Luminance, image.Width, image.Height, image.Threshold, image.Grey, frame, dimension, moduleSize, out var alignmentAnchored);
 
         modules.Reserve(dimension);
         var first = modules.First(dimension);
 
+        var meshFirstStatus = DecodeStatus.NotDetected;
+        var meshFirstCharsWritten = 0;
+        QRCodeDecodeInfo meshFirstInfo = default;
+
         // Nothing anchored the fourth corner, so the transform below is the finders' parallelogram; the rest of the alignment lattice anchors the mesh.
         // Tried ahead of the main path, the grid through the transform, which it does not replace unless it settles
         if (!alignmentAnchored)
         {
-            var meshStatus = DecodeThroughMesh(image, frame, dimension, moduleSize, first, destination, out var meshCharsWritten, out var meshInfo);
-            if (result.Other(meshStatus, meshCharsWritten, meshInfo))
-                return result.Report(out charsWritten, out info);
+            meshFirstStatus = DecodeThroughMesh(image, frame, dimension, moduleSize, first, destination, out meshFirstCharsWritten, out meshFirstInfo);
+            if (IsSettled(meshFirstStatus))
+            {
+                charsWritten = meshFirstCharsWritten;
+                info = meshFirstInfo;
+                return meshFirstStatus;
+            }
         }
 
         PerspectiveGridSampler.Sample(image.Luminance, image.Width, image.Height, image.Threshold, transform, dimension, first);
 
         // Read before the mirror retry transposes the matrix in place
         var namedDimension = ReadVersionDimension(first, dimension);
-        var status = DecodeWithMirrorRetry(first, dimension, destination, out var gridCharsWritten, out var gridInfo, out var transposed);
+        var status = DecodeWithMirrorRetry(first, dimension, destination, out charsWritten, out info, out var transposed);
         if (status == DecodeStatus.Success)
-            gridInfo = gridInfo.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
+            info = info.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
         else if (namedDimension != dimension)
             versionDimension = namedDimension;
-        if (result.Main(status, gridCharsWritten, gridInfo))
-            return result.Report(out charsWritten, out info);
+        if (IsSettled(status))
+            return status;
+
+        var result = NewResult();
+        if (!alignmentAnchored)
+            result.Other(meshFirstStatus, meshFirstCharsWritten, meshFirstInfo);
+        result.Main(status, charsWritten, info);
 
         if (image.Grey.IsEnabled)
         {
@@ -649,14 +678,18 @@ internal static partial class QRImageDecoder
     /// <remarks>
     /// The grid is transposed in place because the matrix level reads the modules two at a time along the placement runs, which a transposed view would not keep contiguous.
     /// Micro QR reads its transpose through a view, since its matrix level reads every module through one, and rMQR samples again with the frame's axes swapped, since a transposed rMQR grid is no rMQR grid.
+    /// Out of line: the JIT would inline it into <see cref="DecodeOtherGrid"/> alone, a failure path, where it only adds code.
     /// </remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out bool transposed)
     {
         transposed = false;
+        var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
+        if (IsSettled(status))
+            return status;
+
         var result = NewResult();
-        var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out var straightCharsWritten, out var straightInfo);
-        if (result.Main(status, straightCharsWritten, straightInfo))
-            return result.Report(out charsWritten, out info);
+        result.Main(status, charsWritten, info);
 
         TransposeInPlace(modules, dimension);
         var mirroredStatus = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out var mirroredCharsWritten, out var mirroredInfo);
@@ -673,7 +706,10 @@ internal static partial class QRImageDecoder
 
     private static QRCodeDecodeInfo NotDetectedInfo => new(DecodeStatus.NotDetected, 0, default, -1, 0);
 
-    /// <summary>A result for one level of the search, under <see cref="Reporting"/>.</summary>
+    /// <summary>
+    /// A result for one level of the search, under <see cref="Reporting"/>.
+    /// A level takes one only once an attempt has not settled: either rule reports a settled attempt that follows unsettled ones as it is, and on the WebAssembly interpreter every result operation is a call.
+    /// </summary>
     private static SearchResult<QRCodeDecodeInfo> NewResult() => new(Reporting, NotDetectedInfo);
 
     /// <summary>
@@ -1377,16 +1413,9 @@ internal static partial class QRImageDecoder
                 var x = rowXs[cellI] + (rowXs[cellI + 1] - rowXs[cellI]) * s;
                 var y = rowYs[cellI] + (rowYs[cellI + 1] - rowYs[cellI]) * s;
 
-                var px = (int)x;
-                var py = (int)y;
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                // The same pixel on every runtime, whatever its cast makes of NaN and of coordinates past the int range
+                var px = PixelIndex.Clamp(x, width);
+                var py = PixelIndex.Clamp(y, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

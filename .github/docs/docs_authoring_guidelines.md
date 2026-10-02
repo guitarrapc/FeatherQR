@@ -19,7 +19,7 @@ Links must not turn file splits into maintenance chaos:
 
 - `README.md` in this directory is the **only** document that enumerates the full document set. GitHub renders it automatically when the `.github/docs` folder is opened, so one link to the folder lands on the index.
 - The repository root `README.md` links freely to user documentation (`docs/`), and into `.github/docs` only via the index, plus **at most one** design-record deep link per feature section, where the section discusses scope or limitations that the design record explains.
-- Documents inside `.github/docs` cross-link each other with relative links as needed; shared content itself lives only in `specs/qrcode-symbologies.md`.
+- Documents inside `.github/docs` cross-link each other with relative links as needed; shared content itself lives only in `specs/qrcode-symbologies.md`, apart from the SIMD tier tables rendered into `specs/qrcode-simd-tiers.md`.
 - When renaming or adding a document: update the index, then grep the repository for the old file name and fix every inbound link in the same change (README, skills, memory files included).
 
 ## What belongs in a document
@@ -44,6 +44,10 @@ Every per-symbology spec follows one of the templates below. When adding a new s
 ### Architecture record (`qrcode-symbologies.md`)
 
 The single home for anything shared across symbologies: shared component inventory, dependency rules, API and data-model direction, scope decisions, and the document index. Per-symbology documents link here instead of restating shared content, duplication is how split files drift.
+
+### Generated tables (`qrcode-simd-tiers.md`)
+
+Tables rendered from the code. Each sits between `<!-- BEGIN GENERATED {name}: … -->` and `<!-- END GENERATED {name} -->` and is never edited by hand: `SimdTiersDocTest` fails when one differs from the code and, run outside CI, rewrites it. The text around the tables only says how to read them (the builds in each class, the key to the tiers); the reason behind a cell stays beside its row in the code, and why the table has its shape stays in `qrcode-symbologies.md`.
 
 ### Spec-to-code map (`{symbology}-spec-map.md`)
 
@@ -93,7 +97,7 @@ A decoder's design record shows its decode figures under What. They follow these
 
 ## Cross-document consistency rules
 
-- Shared knowledge appears exactly once, in `qrcode-symbologies.md`; per-symbology documents link to it.
+- Shared knowledge appears exactly once, in `qrcode-symbologies.md` (the SIMD tier tables in `qrcode-simd-tiers.md`); per-symbology documents link to it.
 - When code moves or is added, update the affected spec-map links in the same change.
 - After implementing, update the relevant design record with decisions and lessons learned that were not captured upfront.
 - Keep the [documentation index](README.md) in sync when adding or renaming documents.

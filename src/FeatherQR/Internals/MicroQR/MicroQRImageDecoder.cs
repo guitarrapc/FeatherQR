@@ -770,17 +770,8 @@ internal static partial class MicroQRImageDecoder
             {
                 var gridU = u + 0.5f;
                 // Pixel edges sit on integers, so the pixel containing a point is its floor
-                var px = (int)(rowX + gridU * uX);
-                var py = (int)(rowY + gridU * uY);
-
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                var px = PixelIndex.Clamp(rowX + gridU * uX, width);
+                var py = PixelIndex.Clamp(rowY + gridU * uY, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

@@ -42,7 +42,7 @@ Reference tests: [TryGetRequiredBufferSizeTest](../../../tests/FeatherQR.Tests/S
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Section 8.5 | Generator polynomial and polynomial division over GF(2^8) | [EccBinaryEncoder.CalculateECC](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.cs), scalar kernel plus SIMD variants ([SSSE3 / GFNI](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.X86.cs), [ARM AdvSimd](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.Arm64.cs)), shared across symbologies |
+| Section 8.5 | Generator polynomial and polynomial division over GF(2^8) | [EccBinaryEncoder.CalculateECC](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.cs), scalar kernel plus SIMD variants ([SSSE3 / GFNI](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.X86.cs), [ARM AdvSimd](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.Arm64.cs), [WebAssembly](../../../src/FeatherQR/Internals/BinaryEncoders/EccBinaryEncoder.Wasm.cs)), shared across symbologies |
 | Annex I | Worked encoding example | Used as test vectors in [EccBinaryEncoderUnitTest](../../../tests/FeatherQR.Tests/Shared/EccBinaryEncoderUnitTest.cs) |
 
 Reference tests: [EccBinaryEncoderKernelParityTest](../../../tests/FeatherQR.Tests/Shared/EccBinaryEncoderKernelParityTest.cs), every SIMD kernel is checked against a naive Section 8.5 reference implementation.

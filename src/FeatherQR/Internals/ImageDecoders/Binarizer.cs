@@ -113,7 +113,7 @@ internal static partial class Binarizer
     internal static void FillHistogram(ReadOnlySpan<byte> luminance, Span<int> histogram)
     {
 #if NET8_0_OR_GREATER
-        // A 512-bit tier and a portable 128-bit tier were measured and left out; ARM64 has its own tier. See the decoder spec.
+        // A 512-bit tier was measured and left out; ARM64 has its own tier. See the decoder spec.
         if (Vector256.IsHardwareAccelerated)
         {
             FillHistogramVector256(luminance, histogram);
@@ -122,6 +122,11 @@ internal static partial class Binarizer
         if (AdvSimd.Arm64.IsSupported)
         {
             FillHistogramAdvSimd(luminance, histogram);
+            return;
+        }
+        if (Vector128.IsHardwareAccelerated)
+        {
+            FillHistogramVector128(luminance, histogram);
             return;
         }
 #endif

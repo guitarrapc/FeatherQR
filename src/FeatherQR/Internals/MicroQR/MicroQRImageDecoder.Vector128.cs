@@ -1,7 +1,6 @@
 #if NET8_0_OR_GREATER
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using FeatherQR.Internals.ImageDecoders;
 
 namespace FeatherQR.Internals.MicroQR;
 
@@ -12,8 +11,8 @@ internal static partial class MicroQRImageDecoder
         var laneCentres = Vector128.Create(0.5f, 1.5f, 2.5f, 3.5f);
         var columnX = Vector128.Create(uX);
         var columnY = Vector128.Create(uY);
-        var maxPx = Vector128.Create(width - 1);
-        var maxPy = Vector128.Create(height - 1);
+        var lastX = Vector128.Create((float)(width - 1));
+        var lastY = Vector128.Create((float)(height - 1));
         var stride = Vector128.Create(width);
         Span<int> indices = stackalloc int[4];
         for (var v = 0; v < size; v++)
@@ -30,10 +29,8 @@ internal static partial class MicroQRImageDecoder
             {
                 // u + lane + 0.5 is exact, as the scalar gridU is
                 var gridU = laneCentres + Vector128.Create((float)u);
-                var px = Vector128.ConvertToInt32(rowXs + gridU * columnX);
-                var py = Vector128.ConvertToInt32(rowYs + gridU * columnY);
-                px = Vector128.Max(Vector128.Min(px, maxPx), Vector128<int>.Zero);
-                py = Vector128.Max(Vector128.Min(py, maxPy), Vector128<int>.Zero);
+                var px = VectorCast.ToPixel(rowXs + gridU * columnX, lastX);
+                var py = VectorCast.ToPixel(rowYs + gridU * columnY, lastY);
                 (py * stride + px).CopyTo(indices);
                 modules[rowBase + u] = luminance[indices[0]] < threshold ? (byte)1 : (byte)0;
                 modules[rowBase + u + 1] = luminance[indices[1]] < threshold ? (byte)1 : (byte)0;
@@ -44,8 +41,8 @@ internal static partial class MicroQRImageDecoder
             for (; u < size; u++)
             {
                 var gridU = u + 0.5f;
-                var px = Math.Min(Math.Max((int)(rowX + gridU * uX), 0), width - 1);
-                var py = Math.Min(Math.Max((int)(rowY + gridU * uY), 0), height - 1);
+                var px = PixelIndex.Clamp(rowX + gridU * uX, width);
+                var py = PixelIndex.Clamp(rowY + gridU * uY, height);
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }
         }

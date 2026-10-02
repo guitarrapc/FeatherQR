@@ -22,8 +22,8 @@ internal static partial class FinderPatternFinder
     {
         // How the edges come out of the pixels.
         //
-        // 1. A row is taken 64 pixels at a time. DarkWord makes the word for the machine (two 32-byte compares on x64, the
-        //    NEON fold on ARM64), bit i set where pixel x + i is dark. The word is used at once and never stored, so there is
+        // 1. A row is taken 64 pixels at a time. DarkWord makes the word for the machine (two 32-byte compares on 256-bit
+        //    vectors, the NEON fold on ARM64, four 16-byte compares elsewhere), bit i set where pixel x + i is dark. The word is used at once and never stored, so there is
         //    no mask buffer to clear, write and read back.
         //
         // 2. Edges come from the word and the same word one pixel later:
@@ -116,6 +116,8 @@ internal static partial class FinderPatternFinder
         //
         //      The third add pairs the vector with itself, so its low 64 bits are the word and the high 64 a copy.
         //
+        // Other 128-bit targets (x64 without AVX, WebAssembly): four 16-byte compares, a movemask each, shifted into place.
+        //
         // The last word of a row is partial: what is left is taken a vector at a time where a vector fits, then pixel by pixel,
         // and the bits past the row stay 0, which is what lets a run that reaches the end of the row end there.
         //
@@ -154,17 +156,27 @@ internal static partial class FinderPatternFinder
         }
         else
         {
-            // ARM64: the fold
             var thr = Vector128.Create(threshold);
             if (x + 64 <= width)
             {
-                var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)x), thr) & NeonBitWeights;
-                var d1 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 16)), thr) & NeonBitWeights;
-                var d2 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 32)), thr) & NeonBitWeights;
-                var d3 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 48)), thr) & NeonBitWeights;
-                var s = AdvSimd.Arm64.AddPairwise(AdvSimd.Arm64.AddPairwise(d0, d1), AdvSimd.Arm64.AddPairwise(d2, d3));
-                s = AdvSimd.Arm64.AddPairwise(s, s);
-                return s.AsUInt64().ToScalar();
+                if (AdvSimd.Arm64.IsSupported)
+                {
+                    // ARM64: the fold
+                    var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)x), thr) & NeonBitWeights;
+                    var d1 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 16)), thr) & NeonBitWeights;
+                    var d2 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 32)), thr) & NeonBitWeights;
+                    var d3 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 48)), thr) & NeonBitWeights;
+                    var s = AdvSimd.Arm64.AddPairwise(AdvSimd.Arm64.AddPairwise(d0, d1), AdvSimd.Arm64.AddPairwise(d2, d3));
+                    s = AdvSimd.Arm64.AddPairwise(s, s);
+                    return s.AsUInt64().ToScalar();
+                }
+
+                // 128-bit vectors elsewhere: a movemask each 16 pixels
+                ulong m0 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)x), thr).ExtractMostSignificantBits();
+                ulong m1 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 16)), thr).ExtractMostSignificantBits();
+                ulong m2 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 32)), thr).ExtractMostSignificantBits();
+                ulong m3 = Vector128.LessThan(Vector128.LoadUnsafe(ref pixels, (nuint)(x + 48)), thr).ExtractMostSignificantBits();
+                return m0 | m1 << 16 | m2 << 32 | m3 << 48;
             }
 
             // The last, partial word: 16 pixels at a time, then pixel by pixel
@@ -232,13 +244,13 @@ internal static partial class FinderPatternFinder
         //   starts   s0   s1   s2   s3 ...      window k is dark runs k, k + 1 and k + 2 and the two gaps between:
         //   ends     e0   e1   e2   e3 ...      e[k] - s[k], s[k+1] - e[k], e[k+1] - s[k+1], s[k+2] - e[k+1], e[k+2] - s[k+2]
         //
-        // A step judges ClassifyWindowLanes windows at once, sixteen with 256-bit vectors and eight on ARM64, and gets one bit
+        // A step judges ClassifyWindowLanes windows at once, sixteen with 256-bit vectors and eight with 128-bit ones, and gets one bit
         // a window for each of the three checks. The lanes past the last window of a row read whatever the buffer holds and
         // are masked off (live), and the near-miss bits are masked off while the grey levels are off, because the mask walk
         // skips that check then. Only flagged windows run scalar code, in row order, through the follow-ups the mask walk runs.
         //
-        // On ARM64 the verdicts arrive as lanes and each becomes bits by a short sequence, so the OR of the three is turned
-        // into bits first, and a step with nothing flagged, which on a symbol is nearly every step, pays only that one.
+        // With 128-bit vectors the verdicts arrive as lanes, so the OR of the three is turned into bits first, and a step with
+        // nothing flagged, which on a symbol is nearly every step, pays only that one (on ARM64 each is a short sequence).
         var endCount = ExtractRowEdges(luminance.Slice(y * width, width), threshold, edges.Slice(0, half), edges.Slice(half, half));
         ref var starts = ref MemoryMarshal.GetReference(edges);
         ref var ends = ref Unsafe.Add(ref starts, half);

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -12,7 +13,7 @@ namespace FeatherQR.Internals;
 /// Conversion between the byte-per-module matrix (0 = light, non-zero = dark) and the MSB-first bit-packed storage of the Micro QR / rMQR data models: bit 7 of byte 0 is module 0, the padding bits of the final byte are zero.
 /// </summary>
 /// <remarks>
-/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+ — pack: non-zero compare, lane reversal within each byte group (pshufb / tbl), move-mask; unpack: per-lane byte broadcast, bit mask, compare — with a SWAR / unrolled scalar tail, and a portable scalar path on netstandard.
+/// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+ — pack: non-zero compare, lane reversal within each byte group (pshufb / tbl / WebAssembly swizzle), move-mask; unpack: per-lane byte broadcast, bit mask, compare — with a SWAR / unrolled scalar tail, and a portable scalar path on netstandard.
 /// Kept behind byte parity with a naive reference by <c>ModuleBitPackerParityTest</c>.
 /// </remarks>
 internal static class ModuleBitPacker
@@ -55,6 +56,16 @@ internal static class ModuleBitPacker
                 var reversed = Ssse3.IsSupported ? Ssse3.Shuffle(dark, reverse) : AdvSimd.Arm64.VectorTableLookup(dark, reverse);
                 var mask = (ushort)reversed.ExtractMostSignificantBits();
                 WriteLittleEndian(ref Unsafe.Add(ref dst, i >> 3), mask);
+            }
+        }
+        if (PackedSimd.IsSupported && count - i >= 16)
+        {
+            // WebAssembly: the same step, its swizzle reversing the lanes
+            var reverse = Vector128.Create((byte)7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8);
+            for (; i + 16 <= count; i += 16)
+            {
+                var dark = ~Vector128.Equals(Vector128.LoadUnsafe(ref src, (nuint)i), Vector128<byte>.Zero);
+                WriteLittleEndian(ref Unsafe.Add(ref dst, i >> 3), (ushort)PackedSimd.Swizzle(dark, reverse).ExtractMostSignificantBits());
             }
         }
 #endif
@@ -124,6 +135,17 @@ internal static class ModuleBitPacker
                 var v = Vector128.Create(ReadLittleEndianUInt16(ref Unsafe.Add(ref src, i >> 3))).AsByte();
                 var m = (Ssse3.IsSupported ? Ssse3.Shuffle(v, sel) : AdvSimd.Arm64.VectorTableLookup(v, sel)) & bitm;
                 (Vector128.Equals(m, bitm) & one).StoreUnsafe(ref dst, (nuint)i);
+            }
+        }
+        if (PackedSimd.IsSupported && count - i >= 16)
+        {
+            // WebAssembly: the same step with its swizzle, and a min with 1 for the compare and AND, since a lane holds 0 or its bit
+            var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+            var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
+            for (; i + 16 <= count; i += 16)
+            {
+                var v = Vector128.Create(ReadLittleEndianUInt16(ref Unsafe.Add(ref src, i >> 3))).AsByte();
+                Vector128.Min(PackedSimd.Swizzle(v, sel) & bitm, Vector128<byte>.One).StoreUnsafe(ref dst, (nuint)i);
             }
         }
 #endif

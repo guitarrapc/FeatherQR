@@ -300,6 +300,37 @@ internal static partial class ModulePlacer
 
     private static MaskLayout64 BuildMaskLayout64(int version, int size)
     {
+        var (preScalar, fmtScalar) = BuildMaskRows64(version, size);
+        var pre = new Vector256<ulong>[2 * size];
+        for (var g = 0; g < 2; g++)
+        {
+            for (var y = 0; y < size; y++)
+            {
+                pre[g * size + y] = Vector256.Create(preScalar[(4 * g) * size + y], preScalar[(4 * g + 1) * size + y], preScalar[(4 * g + 2) * size + y], preScalar[(4 * g + 3) * size + y]);
+            }
+        }
+        var fmt = new Vector256<ulong>[8 * size];
+        for (var e = 0; e < 4; e++)
+        {
+            for (var g = 0; g < 2; g++)
+            {
+                var lane0 = (e * 8 + 4 * g) * size;
+                for (var y = 0; y < size; y++)
+                {
+                    fmt[(e * 2 + g) * size + y] = Vector256.Create(fmtScalar[lane0 + y], fmtScalar[lane0 + size + y], fmtScalar[lane0 + 2 * size + y], fmtScalar[lane0 + 3 * size + y]);
+                }
+            }
+        }
+
+        return new MaskLayout64(pre, fmt, preScalar);
+    }
+
+    /// <summary>
+    /// The single-word tiers' per-version rows: each pattern's mask restricted to the data area ([pattern * size + y]), and the rows of each
+    /// (ECC level, pattern) format information, both copies ([(ecc * 8 + pattern) * size + y]).
+    /// </summary>
+    private static (ulong[] Pre, ulong[] Fmt) BuildMaskRows64(int version, int size)
+    {
         var blockedMask = GetLayout(version).BlockedMask;
         var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
 
@@ -315,51 +346,33 @@ internal static partial class ModulePlacer
             allowed[y] = ~blocked & rowMask;
         }
 
-        var preScalar = new ulong[8 * size];
+        var pre = new ulong[8 * size];
         for (var p = 0; p < 8; p++)
         {
             for (var y = 0; y < size; y++)
             {
-                preScalar[p * size + y] = _maskTemplates64[p * 12 + (y % 12)] & allowed[y];
-            }
-        }
-        var pre = new Vector256<ulong>[2 * size];
-        for (var g = 0; g < 2; g++)
-        {
-            for (var y = 0; y < size; y++)
-            {
-                pre[g * size + y] = Vector256.Create(preScalar[(4 * g) * size + y], preScalar[(4 * g + 1) * size + y], preScalar[(4 * g + 2) * size + y], preScalar[(4 * g + 3) * size + y]);
+                pre[p * size + y] = _maskTemplates64[p * 12 + (y % 12)] & allowed[y];
             }
         }
 
         // format overlays: copy 1 at (FormatXs1[i], FormatYs1[i]), copy 2 at (size-1-i, 8) for i < 8 and (8, size-15+i) for i >= 8 — the same coordinates PokeFormatBits64 uses.
-        var fmt = new Vector256<ulong>[8 * size];
-        var lanes = new ulong[4][];
+        var fmt = new ulong[32 * size];
         for (var e = 0; e < 4; e++)
         {
-            for (var g = 0; g < 2; g++)
+            for (var p = 0; p < 8; p++)
             {
-                for (var lane = 0; lane < 4; lane++)
+                var rowsOverlay = fmt.AsSpan((e * 8 + p) * size, size);
+                var bits = QRCodeConstants.GetFormatBits((QREccLevel)e, p);
+                for (var i = 0; i < 15; i++)
                 {
-                    var rowsOverlay = new ulong[size];
-                    var bits = QRCodeConstants.GetFormatBits((QREccLevel)e, 4 * g + lane);
-                    for (var i = 0; i < 15; i++)
-                    {
-                        if ((bits & (1 << i)) == 0) continue;
-                        rowsOverlay[FormatYs1[i]] |= 1ul << FormatXs1[i];
-                        if (i < 8) rowsOverlay[8] |= 1ul << (size - 1 - i);
-                        else rowsOverlay[size - 15 + i] |= 1ul << 8;
-                    }
-                    lanes[lane] = rowsOverlay;
-                }
-                for (var y = 0; y < size; y++)
-                {
-                    fmt[(e * 2 + g) * size + y] = Vector256.Create(lanes[0][y], lanes[1][y], lanes[2][y], lanes[3][y]);
+                    if ((bits & (1 << i)) == 0) continue;
+                    rowsOverlay[FormatYs1[i]] |= 1ul << FormatXs1[i];
+                    if (i < 8) rowsOverlay[8] |= 1ul << (size - 1 - i);
+                    else rowsOverlay[size - 15 + i] |= 1ul << 8;
                 }
             }
         }
-
-        return new MaskLayout64(pre, fmt, preScalar);
+        return (pre, fmt);
     }
 
     internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)

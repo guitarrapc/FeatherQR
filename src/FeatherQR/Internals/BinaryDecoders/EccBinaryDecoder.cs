@@ -15,8 +15,8 @@ namespace FeatherQR.Internals.BinaryDecoders;
 /// </code>
 /// Corrects up to ⌊eccCount/2⌋ byte errors per block, in place.
 /// <para>
-/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has three tiers: a GFNI kernel on net10.0+ x64 (see EccBinaryDecoder.X86.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
-/// All three produce byte-identical output; see the decoder kernel parity tests.
+/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the verification pass) has four tiers: a GFNI kernel on net10.0+ x64 (see EccBinaryDecoder.X86.cs), an AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs), a 128-bit kernel on x64 without GFNI and on WebAssembly (see EccBinaryDecoder.Vector128.cs), and a scalar log-domain path with four interleaved Horner chains everywhere else.
+/// All four produce byte-identical output; see the decoder kernel parity tests.
 /// Berlekamp-Massey, Chien and Forney stay scalar on every target.
 /// </para>
 /// </remarks>
@@ -216,15 +216,15 @@ internal static partial class EccBinaryDecoder
     /// Returns true when any syndrome is non-zero (the block has errors).
     /// </summary>
     /// <remarks>
-    /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes long, not <paramref name="eccCount"/>: both vector kernels store their accumulator registers whole and only the first <paramref name="eccCount"/> lanes are meaningful.
-    /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode; EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes and .AdvSimdKernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
+    /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes long, not <paramref name="eccCount"/>: the vector kernels store their accumulator registers whole and only the first <paramref name="eccCount"/> lanes are meaningful.
+    /// A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-checks the destination) but silently corrupts the caller's stack on ARM64, so x64 CI cannot see the ARM failure mode; EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes, .AdvSimdKernel_WritesExactlySyndromeLanes and .Vector128Kernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
     /// <para>
-    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once) or the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs); both keep every syndrome in vector lanes rather than walking the codeword once per syndrome.
+    /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register, one multiply per data byte for every syndrome at once), the AdvSimd kernel on ARM64 (see EccBinaryDecoder.Arm64.cs) or the 128-bit kernel on the other vector targets (see EccBinaryDecoder.Vector128.cs); each keeps every syndrome in vector lanes rather than walking the codeword once per syndrome.
     /// </para>
     /// <para>
     /// The scalar path keeps the Horner multiply in log domain — the multiplier's log is the constant i, so each step is one zero-check + one log load + one exp load (measured 0.84-0.90x of the GaloisField.Multiply form) — and runs four syndromes per pass over the codeword.
     /// That interleaving is not cosmetic: the per-syndrome walk is bound by the dependent log → exp load chain rather than by throughput, so four independent accumulators measured 2.2-2.9x the single walk on large blocks.
-    /// This is the tier netstandard2.0/2.1 and any CPU without GFNI or AdvSimd runs.
+    /// This is the tier netstandard2.0/2.1 runs, and any build without 128-bit vectors.
     /// </para>
     /// </remarks>
     private static bool ComputeSyndromes(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
@@ -242,6 +242,10 @@ internal static partial class EccBinaryDecoder
         if (IsAdvSimdTierSupported)
         {
             return ComputeSyndromesAdvSimd(codeword, eccCount, syndromes);
+        }
+        if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            return ComputeSyndromesVector128(codeword, eccCount, syndromes);
         }
 #endif
         return ComputeSyndromesScalar(codeword, eccCount, syndromes);

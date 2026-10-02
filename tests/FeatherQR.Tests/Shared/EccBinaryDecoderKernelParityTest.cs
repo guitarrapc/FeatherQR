@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// Parity tests for the syndrome-pass kernels: the scalar log-domain kernel is
 /// checked against a naive ISO/IEC 18004 reference (Horner with GaloisField.Multiply),
-/// and the GFNI kernel (net10.0+ x64) against the scalar kernel, byte for byte.
+/// and the GFNI kernel (net10.0+ x64), the NEON kernel and the 128-bit kernel against the scalar kernel, byte for byte.
 /// </summary>
 public class EccBinaryDecoderKernelParityTest
 {
@@ -310,6 +310,94 @@ public class EccBinaryDecoderKernelParityTest
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// The 128-bit kernel against the scalar one, entered directly: the dispatch takes it only without GFNI and NEON. Random blocks, then
+    /// the boundary sweep of the NEON kernel's test (every ECC count, lengths across the eight-byte step, its four-byte remainder and its
+    /// scalar tail, the 16-lane boundary, degenerate fills), and the destination written exactly SyndromeLanes wide.
+    /// </summary>
+    [Test]
+    public async Task Vector128Kernel_MatchesScalarKernel()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+
+        var random = new Random(20261001);
+        for (var round = 0; round < 300; round++)
+        {
+            var length = random.Next(8, 256);
+            var eccCount = random.Next(1, 31);
+            var codeword = new byte[length];
+            if (round % 10 != 0)
+                random.NextBytes(codeword);
+            await AssertVector128Matches(codeword, eccCount);
+        }
+
+        for (var eccCount = 1; eccCount <= 30; eccCount++)
+        {
+            foreach (var length in new[] { eccCount + 1, eccCount + 2, eccCount + 3, eccCount + 4, eccCount + 5, eccCount + 6, eccCount + 7, eccCount + 8, eccCount + 9, 13, 39, 40, 47, 48, 58, 149, 152, 153, 255 })
+            {
+                if (length <= eccCount || length > 255)
+                    continue;
+                foreach (var fill in new[] { 0x00, 0xFF, 0x01, 0x80 })
+                {
+                    var codeword = new byte[length];
+                    Array.Fill(codeword, (byte)fill);
+                    await AssertVector128Matches(codeword, eccCount);
+                }
+            }
+        }
+    }
+
+    [Test]
+    public async Task Vector128Kernel_WritesExactlySyndromeLanes()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+
+        const byte Poison = 0x5A;
+        const int TailBytes = 32;
+
+        var random = new Random(20260821);
+        for (var eccCount = 1; eccCount <= 30; eccCount++)
+        {
+            foreach (var length in new[] { eccCount + 1, 13, 58, 255 })
+            {
+                var codeword = new byte[length];
+                random.NextBytes(codeword);
+
+                var backing = new byte[EccBinaryDecoder.SyndromeLanes + TailBytes];
+                backing.AsSpan().Fill(Poison);
+                EccBinaryDecoder.ComputeSyndromesVector128(codeword, eccCount, backing.AsSpan(0, EccBinaryDecoder.SyndromeLanes));
+
+                for (var i = EccBinaryDecoder.SyndromeLanes; i < backing.Length; i++)
+                {
+                    await Assert.That(backing[i]).IsEqualTo(Poison)
+                        .Because($"eccCount {eccCount}, length {length}: wrote {i - EccBinaryDecoder.SyndromeLanes + 1} byte(s) past SyndromeLanes");
+                }
+            }
+        }
+    }
+
+    private static async Task AssertVector128Matches(byte[] codeword, int eccCount)
+    {
+        var expected = new byte[eccCount];
+        var expectedHasError = EccBinaryDecoder.ComputeSyndromesScalar(codeword, eccCount, expected);
+
+        var actual = new byte[EccBinaryDecoder.SyndromeLanes];
+        Array.Fill(actual, (byte)0xA5); // poison: a kernel that writes nothing must fail
+        var actualHasError = EccBinaryDecoder.ComputeSyndromesVector128(codeword, eccCount, actual);
+
+        var because = $"length {codeword.Length}, eccCount {eccCount}";
+        await Assert.That(actualHasError).IsEquivalentTo(expectedHasError).Because(because);
+        await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching).Because(because);
     }
 
     /// <summary>

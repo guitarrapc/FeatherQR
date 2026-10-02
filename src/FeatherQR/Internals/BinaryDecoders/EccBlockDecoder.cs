@@ -1,3 +1,6 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
@@ -15,16 +18,24 @@ internal static class EccBlockDecoder
     /// Deinterleaves <paramref name="codewords"/> into <paramref name="blocks"/>, corrects each block, and writes the corrected data codewords over the front of <paramref name="codewords"/>, in block order.
     /// </summary>
     /// <param name="codewords">The interleaved stream, data then ECC codewords (<see cref="ECCInfo.TotalDataCodewords"/> plus the ECC codewords of every block). On success its first <see cref="ECCInfo.TotalDataCodewords"/> bytes are the corrected data.</param>
-    /// <param name="blocks">Work space as long as the stream; it holds each block's data then ECC codewords, group 1 first.</param>
+    /// <param name="blocks">Work space as long as the stream; with two or more blocks it holds each block's data then ECC codewords, group 1 first.</param>
     /// <param name="eccInfo">The block structure.</param>
     /// <param name="correctionCapacity">The most errors a block may correct and still be read. A block Reed-Solomon corrects with more is refused, which is how a symbology reserves misdecode protection codewords; the full strength is <see cref="ECCInfo.ECCPerBlock"/> / 2, which Reed-Solomon never exceeds.</param>
     /// <param name="errorsCorrected">The errors corrected over every block. On failure, those of the blocks before the one that failed, plus that block's own when the capacity refused it.</param>
     /// <returns>Whether every block was read. It stops at the first block that is not.</returns>
     public static bool TryCorrect(Span<byte> codewords, Span<byte> blocks, in ECCInfo eccInfo, int correctionCapacity, out int errorsCorrected)
     {
+        var totalBlocks = eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2;
+        if (totalBlocks == 1)
+        {
+            // One block is its own interleaving: corrected in place, its data codewords are already at the front.
+            var dataLength = eccInfo.BlocksInGroup1 == 1 ? eccInfo.CodewordsInGroup1 : eccInfo.CodewordsInGroup2;
+            return EccBinaryDecoder.TryCorrect(codewords.Slice(0, dataLength + eccInfo.ECCPerBlock), eccInfo.ECCPerBlock, out errorsCorrected)
+                && errorsCorrected <= correctionCapacity;
+        }
+
         Deinterleave(codewords, blocks, eccInfo);
 
-        var totalBlocks = eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2;
         errorsCorrected = 0;
         var dataOffset = 0;
         var blockOffset = 0;
@@ -62,6 +73,12 @@ internal static class EccBlockDecoder
         var g1BlockLength = g1Cw + eccPerBlock;
         var g2BlockLength = g2Cw + eccPerBlock;
         var group2Base = g1Blocks * g1BlockLength;
+        var total = group2Base + g2Blocks * g2BlockLength;
+        if (interleaved.Length < total || blocks.Length < total)
+            throw new ArgumentException("The stream and the work space must hold every codeword of the block structure.", nameof(blocks));
+        // Every index below is under total, so the copies go by reference without a bounds check each
+        ref var source = ref MemoryMarshal.GetReference(interleaved);
+        ref var target = ref MemoryMarshal.GetReference(blocks);
 
         var pos = 0;
 
@@ -70,30 +87,30 @@ internal static class EccBlockDecoder
         for (var i = 0; i < common; i++)
         {
             for (var b = 0; b < g1Blocks; b++)
-                blocks[b * g1BlockLength + i] = interleaved[pos++];
+                Unsafe.Add(ref target, b * g1BlockLength + i) = Unsafe.Add(ref source, pos++);
             for (var b = 0; b < g2Blocks; b++)
-                blocks[group2Base + b * g2BlockLength + i] = interleaved[pos++];
+                Unsafe.Add(ref target, group2Base + b * g2BlockLength + i) = Unsafe.Add(ref source, pos++);
         }
 
         // Tail rows: only the group with longer blocks still has codewords
         for (var i = common; i < g1Cw; i++)
         {
             for (var b = 0; b < g1Blocks; b++)
-                blocks[b * g1BlockLength + i] = interleaved[pos++];
+                Unsafe.Add(ref target, b * g1BlockLength + i) = Unsafe.Add(ref source, pos++);
         }
         for (var t = common; t < g2Cw; t++)
         {
             for (var b = 0; b < g2Blocks; b++)
-                blocks[group2Base + b * g2BlockLength + t] = interleaved[pos++];
+                Unsafe.Add(ref target, group2Base + b * g2BlockLength + t) = Unsafe.Add(ref source, pos++);
         }
 
         // ECC rows: all blocks have exactly eccPerBlock codewords
         for (var e = 0; e < eccPerBlock; e++)
         {
             for (var b = 0; b < g1Blocks; b++)
-                blocks[b * g1BlockLength + g1Cw + e] = interleaved[pos++];
+                Unsafe.Add(ref target, b * g1BlockLength + g1Cw + e) = Unsafe.Add(ref source, pos++);
             for (var b = 0; b < g2Blocks; b++)
-                blocks[group2Base + b * g2BlockLength + g2Cw + e] = interleaved[pos++];
+                Unsafe.Add(ref target, group2Base + b * g2BlockLength + g2Cw + e) = Unsafe.Add(ref source, pos++);
         }
     }
 }

@@ -31,7 +31,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `ModuleBitPacker` | Byte-per-module ↔ MSB-first bit-packed conversion of the Micro QR and rMQR data models (`SetCoreData` / `GetCoreData`) is the same operation for both; Standard QR's `QRCodeData` keeps its own (frozen) storage kernel |
 | `ECCInfo` | RS block structure (data codewords, ECC per block, up to two block groups) describes all three symbologies |
 | `BinaryInterleaver` | Block interleaving of data then ECC codewords depends only on the `ECCInfo` block structure; Standard QR and rMQR interleave identically (Micro QR has one block). Lifted from `Internals.StandardQR` to `Internals.BinaryEncoders` when rMQR became the second consumer (rMQR Phase 5.4); the only symbology-specific input, the remainder-bit count, is passed in by the caller |
-| `EccBlockDecoder` | The matrix decoders' Reed-Solomon block stage: the stream deinterleaved into its blocks, the exact inverse of `BinaryInterleaver`, each block corrected up to a capacity the symbology passes, and the data gathered in block order. Standard QR and rMQR run it; Micro QR has one block and a half codeword, and corrects it itself. Until 2026-09-29 Standard QR and rMQR each wrote the stage out, rMQR as its own fused loop; sharing it changed no read and no status, and rMQR's loop put back measured 1.6 to 2.8 % slower than the shared stage on a matrix with errors |
+| `EccBlockDecoder` | The matrix decoders' Reed-Solomon block stage: the stream deinterleaved into its blocks, the exact inverse of `BinaryInterleaver`, each block corrected up to a capacity the symbology passes, and the data gathered in block order. Standard QR and rMQR run it; Micro QR has one block and a half codeword, and corrects it itself. Until 2026-09-29 Standard QR and rMQR each wrote the stage out, rMQR as its own fused loop; sharing it changed no read and no status, and rMQR's loop put back measured 1.6 to 2.8 % slower than the shared stage on a matrix with errors. A single block is its own interleaving and is corrected in place, without the deinterleave and the copy back (2026-10-01): 29 of rMQR's 64 versions and levels have one, and 12 of Standard QR's 160, all at versions 1 to 5 |
 | `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology. `EncodingMode` also names Kanji, whose cells come from the shared `ShiftJisKanjiReverseTable`, and the analysis selects it for an eligible text when the caller sets `AllowKanji` |
 | `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count), the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) and the ECI designator reader (lifted from `QRBinaryDecoder` when rMQR became its second consumer, Phase 6) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
 | `LuminanceConverter`, `PixelLayout`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent. The luminance kernels are the seam the first-party image adapter feeds (see the package seam below) |
@@ -50,7 +50,7 @@ Dependency rule: shared code never references a symbology namespace; symbology n
 
 Two detection primitives were lifted from `Internals.StandardQR` to the shared `Internals.ImageDecoders` namespace when Micro QR image detection (Phase 4b) became their second consumer, exactly the trigger this document prescribed:
 
-- `Binarizer`, generic binarization (moved out of `QRImageDecoder`): the histogram is counted once an image (a 256-bit tier and an ARM64 tier count a block's two extreme values in registers, the ARM64 one spreading dense blocks over four sub-histograms; a scalar walk elsewhere), the threshold search and the grey levels read the histogram alone (the levels also give the luminance an edge is located at, halfway between them whether or not the image has grey pixels), and the inverted retry every image decoder makes mirrors the first polarity's bins instead of counting the negative and searches the threshold again on them, because two values with nothing between them tie at every split and `256 - threshold` is a different threshold on exactly a rendered symbol; all three tiers are held to one bin count, and the decisions and measurements are in [standardqr-decoder.md](standardqr-decoder.md)
+- `Binarizer`, generic binarization (moved out of `QRImageDecoder`): the histogram is counted once an image (a 256-bit tier, an ARM64 tier and a 128-bit tier count a block's two extreme values in registers, the ARM64 one spreading dense blocks over four sub-histograms; a scalar walk where no vector is accelerated), the threshold search and the grey levels read the histogram alone (the levels also give the luminance an edge is located at, halfway between them whether or not the image has grey pixels), and the inverted retry every image decoder makes mirrors the first polarity's bins instead of counting the negative and searches the threshold again on them, because two values with nothing between them tie at every split and `256 - threshold` is a different threshold on exactly a rendered symbol; all four tiers are held to one bin count, and the decisions and measurements are in [standardqr-decoder.md](standardqr-decoder.md)
 - `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR and rMQR use the same finder pattern shape (single finder instead of three) via `FindCandidates`, which returns the cross-checked candidates and leaves to the decoder how many of them it decodes (a bounded number), Micro QR and rMQR both taking them in the order `RankByConfirmation` gives, the most confirmed first, while Standard QR keeps its best-three selection in `TryFind`; runs that miss the ratio by less than 1.5 px on every one of the five are measured again from grey levels (`GreyLevels`, taken from the threshold's own histogram) before they are refused, which is what reads anti-aliased edges at about 2 px/module. Each cross-check line is held to its own ratio; a column may be as much longer or shorter than its row as a finder in perspective is drawn (5/12 to 12/5), and past the row's own 40 % only when the rising diagonal reads too, which is what finds the finder a strong keystone stretches, in all three symbologies, for 30 more candidates over 540 two-level noise images (474 against 444) and the same 60 of them yielding a triple; the single-finder decoders' failures took 2 to 7 % longer (rMQR noise, a turned Micro QR), not traced further. A cross-check line the ratio refuses is read again by the distances between its edges of the same polarity (`IsFinderRatioByLikeEdges`), which a ring printed or read too thick or too thin keeps: within the row's own 40 %, with the row's shift sign, and with the rising diagonal asked too; its cost is in [standardqr-decoder.md](standardqr-decoder.md#image-detection-and-sampling), and what it reads in each decoder's image envelope
 - `LocalBinarizer`, a regional binarization (8 × 8 blocks, each pixel against the mean black point of the 5 × 5 blocks around its own), the regional pass of every image decoder ([Image decode passes](#image-decode-passes); `RegionalRetry` runs its two polarities, each binarized from its own pixels, so the three decoders share the order and the skips); it reads symbols under a lighting gradient, and why it is an added attempt rather than a replacement is in [standardqr-decoder.md](standardqr-decoder.md#image-detection-and-sampling)
 - `ImageDecodePasses`, the image decode passes themselves ([Image decode passes](#image-decode-passes)): one sequence and one set of rules for the three image decoders, each of which gives its symbol pass as a struct (`ISymbolPass`), so the calls stay direct. The midpoint pass is a switch of that struct, off for Standard QR. Until 2026-09-29 each decoder ran its own copy of the sequence, Micro QR's and rMQR's line for line; moving them changed no read and no status over the image decode sweep and the real-image corpus
@@ -63,6 +63,7 @@ Two detection primitives were lifted from `Internals.StandardQR` to the shared `
   - A search reports its failure by one of two rules. Standard QR reports the main path's attempt at each level of its search, the attempt it would make alone, unless another settles. Micro QR and rMQR report the failure that went furthest, since they try many grids of one finder and none of them is first.
   - Standard QR stays on its own rule because its format word names no version. A grid sampled at a guessed dimension reads near-random bits there, and about half of all 15-bit words lie within three bits of a valid word, so the grid gets past the format information by chance and fails at Reed-Solomon with its own dimension's version. Moved to the furthest failure on 2026-09-30 to try it, 51 of 80 symbols with their format information destroyed reported `DataUncorrectable` one version too small, where they had reported `FormatInformationInvalid` with their own version; no read changed. Micro QR's format word names the symbol and rMQR's the version, so there a grid of a size other than the one the word names is refused at the format information.
   - Where a search stops stays the decoder's. A terminal result ends the passes in all three. Inside a pass, Standard QR stops at a settled result, and Micro QR's and rMQR's scans stop at a read, and at a read too long for the destination once the other candidates of its finder scan have run, since another symbol in the image may read ([single-finder candidate scan](#single-finder-candidate-scan)).
+  - Standard QR takes a level's result only at the level's first attempt that does not settle, and returns a settled attempt as it is, which either rule reports when only unsettled attempts came before it. On the WebAssembly interpreter every result operation is a call: taken ahead of each level, the results cost a version 6 read at 4 px/module about 6 µs of 136, and nothing measurable compiled (2026-10-01).
   - Micro QR's and rMQR's rules for a finder candidate, a read that does not fit the destination included, are in [single-finder candidate scan](#single-finder-candidate-scan).
   - Until 2026-09-29 each decoder wrote these out itself, the furthest-failure ranking twice.
 - Not shared, on purpose: the mirror retry. The three decoders read a mirrored capture, whose finders are the same and whose data is transposed, three ways, each for a reason:
@@ -379,272 +380,111 @@ Sibling namespaces bound the blast radius instead: a Micro QR change cannot touc
 
 ### When Kanji mode is written
 
-All three decoders read Kanji mode. Reading it is an interoperability obligation: Japanese-market
-encoders emit it, and a decoder that rejects those symbols leaves callers no way through. Since
-2.0.0 all three generators also write it, on request (`AllowKanji` on each generator's options,
-off by default), for one class of text: the library chose the charset and chose UTF-8 (`EciMode.Default`, and on Standard QR no byte order mark), and every character
-is ASCII or has an encoder cell, which is JIS X 0208 without the seven cells CP932 reads
-differently. When every character has a cell, the text goes out as one Kanji segment with no ECI
-header, under both segmentations. When some are ASCII, `Single` writes UTF-8 as before, because
-one segment cannot hold both, and `Optimal` weighs a Kanji plan: Kanji runs beside Numeric,
-Alphanumeric and Byte runs of the ASCII, with no ECI header, taken where it needs a smaller
-version than the UTF-8 stream. Every other text, and every text without the option, is written as
-before, bit for bit.
+All three decoders read Kanji mode. Reading it is an interoperability obligation: Japanese-market encoders emit it, and a decoder that rejects those symbols leaves callers no way through. Since 2.0.0 all three generators also write it, on request (`AllowKanji` on each generator's options, off by default), for one class of text: the library chose the charset and chose UTF-8 (`EciMode.Default`, and on Standard QR no byte order mark), and every character is ASCII or has an encoder cell, which is JIS X 0208 without the seven cells CP932 reads differently. When every character has a cell, the text goes out as one Kanji segment with no ECI header, under both segmentations. When some are ASCII, `Single` writes UTF-8 as before, because one segment cannot hold both, and `Optimal` weighs a Kanji plan: Kanji runs beside Numeric, Alphanumeric and Byte runs of the ASCII, with no ECI header, taken where it needs a smaller version than the UTF-8 stream. Every other text, and every text without the option, is written as before, bit for bit.
 
 Why this rule and not a wider one:
 
-- **Only on request.** For a while during 2.0.0's development, though in no release, the generators
-  wrote Kanji mode unasked. Scanned from a screen on 2026-10-01, an Android 17 phone's own QR scanner and Google Lens on it
-  read nothing from a Kanji-mode Standard QR symbol, with or without ECI 20, and read the same text
-  as UTF-8 behind ECI 26; the iPhone camera, Google Lens on iPhone, ZXing, zxing-cpp, CodeGlyphX and
-  Denso Wave's reader read both. A default that half the phones misread is not one, so UTF-8 is the
-  default on all three symbologies and Kanji mode is for callers who know their readers or need the
-  capacity. Micro QR and rMQR are read by neither phone's own scanner, and Denso Wave's reader and
-  zxing-cpp read them in Kanji mode and in UTF-8 alike, so nothing measured set them apart; one rule
-  for all three is the simpler contract.
+- **Only on request.** For a while during 2.0.0's development, though in no release, the generators wrote Kanji mode unasked. Scanned from a screen on 2026-10-01, an Android 17 phone's own QR scanner and Google Lens on it read nothing from a Kanji-mode Standard QR symbol, with or without ECI 20, and read the same text as UTF-8 behind ECI 26; the iPhone camera, Google Lens on iPhone, ZXing, zxing-cpp, CodeGlyphX and Denso Wave's reader read both. A default that half the phones misread is not one, so UTF-8 is the default on all three symbologies and Kanji mode is for callers who know their readers or need the capacity. Micro QR and rMQR are read by neither phone's own scanner, and Denso Wave's reader and zxing-cpp read them in Kanji mode and in UTF-8 alike, so nothing measured set them apart; one rule for all three is the simpler contract.
 
-- **It reaches exactly the texts UTF-8 served worst, and never grows a symbol.** A character with
-  a cell costs 13 bits in Kanji mode against 16 or 24 in UTF-8, and the stream drops the 12-bit
-  (rMQR 11-bit) ECI header. ASCII and ISO-8859-1 output never moves. On Micro QR, which has no
-  ECI, Kanji mode is also the standard's own way to carry the text, where its UTF-8 was bare bytes
-  a reader had to recognise.
-- **A charset the caller chose is honoured.** Explicit UTF-8, or a byte order mark (a request for
-  UTF-8 in effect), keeps UTF-8 with or without the option. Micro QR has no charset option;
-  `AllowKanji` is its one switch.
-- **The seven divergent cells are never written.** Either reading written at one of them decodes
-  to different text in a CP932 reader (ZXing.Net) and in this library, so neither has an encoder
-  cell and a text holding one stays UTF-8.
-- **No Kanji beside an ECI header.** A text that would need both (a character without a
-  cell next to ones with) stays UTF-8. ISO/IEC 18004:2015 reads an ECI as governing the bytes of
-  every mode, Kanji mode being a compaction of Shift_JIS-range byte pairs (7.4.2.1, 7.3.6, Annex H),
-  so a Kanji segment after ECI 26 means UTF-8 bytes, not JIS X 0208 characters. Readers split on
-  it. zxing-cpp and ZBar follow the standard, while ZXing and its ports read JIS X 0208 there by
-  their maintainer's choice. Measured 2026-10-01 (`spot-check-kanji`): zxing-cpp 0.5.2 returns
-  replacement characters for such a segment, and ISO-8859-1 for a Kanji segment placed ahead of
-  the ECI, so no order of segments avoids it. Decided with the user the same day: a Kanji segment
-  is never written beside an ECI header.
-- **Kanji segments carry no ECI.** Every reader that decodes text reads a Kanji segment with no
-  ECI as Shift_JIS, on both sides of that split. Strictly, the default interpretation has been
-  ISO-8859-1 since the 2006 edition, and zint warns on Kanji without ECI 20. ECI 20 would settle
-  that at 12 bits a symbol, and the phone that reads no Kanji mode (Android 17) read no ECI 20
-  Kanji either, so the symbol stays without one.
-- **The rule is about what can be represented, not about script**: Greek, Cyrillic and box
-  drawing in JIS X 0208 go out in Kanji mode like kana do.
-- **`Optimal` never grows a symbol either.** The Kanji plan is taken only below the version the
-  single-mode stream needs, as any plan is, and the UTF-8 plan `Optimal` wrote before competes
-  with it at every version: interleaved kanji and digits pay a segment header a run as Kanji
-  runs, and there one UTF-8 Byte run can be the smaller plan. At a version both fit, the Kanji
-  plan is written.
+- **It reaches exactly the texts UTF-8 served worst, and never grows a symbol.** A character with a cell costs 13 bits in Kanji mode against 16 or 24 in UTF-8, and the stream drops the 12-bit (rMQR 11-bit) ECI header. ASCII and ISO-8859-1 output never moves. On Micro QR, which has no ECI, Kanji mode is also the standard's own way to carry the text, where its UTF-8 was bare bytes a reader had to recognise.
+- **A charset the caller chose is honoured.** Explicit UTF-8, or a byte order mark (a request for UTF-8 in effect), keeps UTF-8 with or without the option. Micro QR has no charset option; `AllowKanji` is its one switch.
+- **The seven divergent cells are never written.** Either reading written at one of them decodes to different text in a CP932 reader (ZXing.Net) and in this library, so neither has an encoder cell and a text holding one stays UTF-8.
+- **No Kanji beside an ECI header.** A text that would need both (a character without a cell next to ones with) stays UTF-8. ISO/IEC 18004:2015 reads an ECI as governing the bytes of every mode, Kanji mode being a compaction of Shift_JIS-range byte pairs (7.4.2.1, 7.3.6, Annex H), so a Kanji segment after ECI 26 means UTF-8 bytes, not JIS X 0208 characters. Readers split on it. zxing-cpp and ZBar follow the standard, while ZXing and its ports read JIS X 0208 there by their maintainer's choice. Measured 2026-10-01 (`spot-check-kanji`): zxing-cpp 0.5.2 returns replacement characters for such a segment, and ISO-8859-1 for a Kanji segment placed ahead of the ECI, so no order of segments avoids it. Decided with the user the same day: a Kanji segment is never written beside an ECI header.
+- **Kanji segments carry no ECI.** Every reader that decodes text reads a Kanji segment with no ECI as Shift_JIS, on both sides of that split. Strictly, the default interpretation has been ISO-8859-1 since the 2006 edition, and zint warns on Kanji without ECI 20. ECI 20 would settle that at 12 bits a symbol, and the phone that reads no Kanji mode (Android 17) read no ECI 20 Kanji either, so the symbol stays without one.
+- **The rule is about what can be represented, not about script**: Greek, Cyrillic and box drawing in JIS X 0208 go out in Kanji mode like kana do.
+- **`Optimal` never grows a symbol either.** The Kanji plan is taken only below the version the single-mode stream needs, as any plan is, and the UTF-8 plan `Optimal` wrote before competes with it at every version: interleaved kanji and digits pay a segment header a run as Kanji runs, and there one UTF-8 Byte run can be the smaller plan. At a version both fit, the Kanji plan is written.
 
-A Structured Append set follows the same rule for the whole text. An eligible set carries no ECI
-header in any symbol, and its parity is the XOR of the whole text's Shift_JIS bytes (an ASCII
-character as its byte), which do not depend on the plan, so the parity is still fixed before the
-text is split. Under `Single` the set is a Kanji set only when every character has a cell, every
-chunk one Kanji segment; under `Optimal` a text with ASCII in it becomes a Kanji set, every chunk
-its Kanji plan, only when that set needs fewer symbols than the UTF-8 set, or as many at a lower
-version, so `Optimal` never gives a larger set than before. A text of every-cell characters is a
-Kanji set under both, since its Kanji set is never the larger. A text that fits one symbol is
-`Create`'s symbol, the question asked the way `Create` asks it.
+A Structured Append set follows the same rule for the whole text. An eligible set carries no ECI header in any symbol, and its parity is the XOR of the whole text's Shift_JIS bytes (an ASCII character as its byte), which do not depend on the plan, so the parity is still fixed before the text is split. Under `Single` the set is a Kanji set only when every character has a cell, every chunk one Kanji segment; under `Optimal` a text with ASCII in it becomes a Kanji set, every chunk its Kanji plan, only when that set needs fewer symbols than the UTF-8 set, or as many at a lower version, so `Optimal` never gives a larger set than before. A text of every-cell characters is a Kanji set under both, since its Kanji set is never the larger. A text that fits one symbol is `Create`'s symbol, the question asked the way `Create` asks it.
 
-`Decode(Encode(x)) == x` holds for Kanji output as for any other, and ZXing.Net and zxing-cpp read
-it. `Encode(Decode(y))` reproduces a Kanji symbol `y` only when `y` is what this library writes
-for its text; symbols other encoders write with Kanji beside an ECI header, with CP932 readings, or
-with a split this library would not choose are read but not reproduced. The Kanji capacity columns are encoding capacities now, checked at every version and
-level of each symbology in the `*BinaryEncoderKanjiTest` classes.
+`Decode(Encode(x)) == x` holds for Kanji output as for any other, and ZXing.Net and zxing-cpp read it. `Encode(Decode(y))` reproduces a Kanji symbol `y` only when `y` is what this library writes for its text; symbols other encoders write with Kanji beside an ECI header, with CP932 readings, or with a split this library would not choose are read but not reproduced. The Kanji capacity columns are encoding capacities now, checked at every version and level of each symbology in the `*BinaryEncoderKanjiTest` classes.
 
-**The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F,
-0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line,
-minus sign, and the cent / pound / not signs), and, within the Kanji-mode range, CP932
-additionally assigns 83 characters the standard does not, all of them NEC row 13 (0x8740-0x879C:
-circled digits, roman numerals, unit ligatures). Choosing CP932 would have
-mangled exactly the characters Japanese payloads use in URLs and price strings. The shared
-`ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it
-are reported as `DecodeStatus.UnmappedCharacter` rather than replaced, so a corrupt symbol never
-becomes a plausible wrong answer and a caller can tell "a CP932 reader would read this" from the
-structural `UnsupportedContent` cases (FNC1, unmapped ECI). The
-table costs 16 KB of RVA data, shared by all three symbologies, with no allocation and no static
-constructor.
+**The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line, minus sign, and the cent / pound / not signs), and, within the Kanji-mode range, CP932 additionally assigns 83 characters the standard does not, all of them NEC row 13 (0x8740-0x879C: circled digits, roman numerals, unit ligatures). Choosing CP932 would have mangled exactly the characters Japanese payloads use in URLs and price strings. The shared `ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it are reported as `DecodeStatus.UnmappedCharacter` rather than replaced, so a corrupt symbol never becomes a plausible wrong answer and a caller can tell "a CP932 reader would read this" from the structural `UnsupportedContent` cases (FNC1, unmapped ECI). The table costs 16 KB of RVA data, shared by all three symbologies, with no allocation and no static constructor.
 
-**The table is derived from a measurement and gated by arithmetic, not transcribed.** Its values
-come from a sweep of every structurally valid Kanji-mode cell (8,023 of them, encoded by qrtool as
-raw Shift_JIS and read back by zxing-cpp), and the generator refuses to emit unless that swept data
-reproduces JIS X 0208's published repertoire size and its delta against CP932 is exactly the
-documented divergence set. Reproducing **6,879** assigned cells independently (524 non-kanji +
-6,355 kanji) is what makes "this really is JIS X 0208" a measurement rather than an assumption.
-Because every other table test constrains only *which* cells are assigned and would pass a table
-whose readings were permuted, a golden digest over all 8,192 entries pins the values themselves;
-regenerating the table is expected to change it, in the same reviewed commit.
+**The table is derived from a measurement and gated by arithmetic, not transcribed.** Its values come from a sweep of every structurally valid Kanji-mode cell (8,023 of them, encoded by qrtool as raw Shift_JIS and read back by zxing-cpp), and the generator refuses to emit unless that swept data reproduces JIS X 0208's published repertoire size and its delta against CP932 is exactly the documented divergence set. Reproducing **6,879** assigned cells independently (524 non-kanji + 6,355 kanji) is what makes "this really is JIS X 0208" a measurement rather than an assumption. Because every other table test constrains only *which* cells are assigned and would pass a table whose readings were permuted, a golden digest over all 8,192 entries pins the values themselves; regenerating the table is expected to change it, in the same reviewed commit.
 
-**The encoder's reverse table is the forward table's inverse, minus seven cells.**
-`ShiftJisKanjiReverseTable` maps a UTF-16 code unit to the 13-bit value of its cell, and holds
-6,872 of them: the 6,879 above without the seven CP932 reads differently. Neither reading of those
-seven has a cell to write, because a symbol written there decodes to different text in a CP932
-reader and in this library, whichever reading was written. The same generator emits it from the
-forward table and refuses unless, over every UTF-16 code unit, it is the exact inverse of the
-forward table on those cells and misses everything else, both readings of the seven included. A
-golden digest over all 65,536 lookups pins it, as the forward table's digest pins that one.
+**The encoder's reverse table is the forward table's inverse, minus seven cells.** `ShiftJisKanjiReverseTable` maps a UTF-16 code unit to the 13-bit value of its cell, and holds 6,872 of them: the 6,879 above without the seven CP932 reads differently. Neither reading of those seven has a cell to write, because a symbol written there decodes to different text in a CP932 reader and in this library, whichever reading was written. The same generator emits it from the forward table and refuses unless, over every UTF-16 code unit, it is the exact inverse of the forward table on those cells and misses everything else, both readings of the seven included. A golden digest over all 65,536 lookups pins it, as the forward table's digest pins that one.
 
-Its layout was chosen by measurement (2026-09-29, .NET 10, x64, 1,000 characters of Japanese
-prose and the 6,872 cells shuffled): a directory over the high byte, a 10-byte record per 64 code
-units (a membership word and the count of members before it), and the values in code-unit order
-packed at 13 bits. That is 15,146 bytes of RVA data and 2 to 3 ns a character. Binary search over
-sorted pairs took 27 KB and 14 ns; a perfect hash checked through the forward table, 14 KB and 7 ns;
-unpacked 16-bit values, 17.7 KB, over the 16 KB target, and not consistently faster (9 % ahead on
-prose in one run, 26 % behind in the other, level on the shuffled cells in both). Keeping the word and its count in
-separate arrays, so that a lookup touches two tables for them instead of one record, was 3 to 27 %
-slower. Removing the bounds checks gained 0.2
-to 0.5 ns, which does not pay for unsafe code.
+Its layout was chosen by measurement (2026-09-29, .NET 10, x64, 1,000 characters of Japanese prose and the 6,872 cells shuffled): a directory over the high byte, a 10-byte record per 64 code units (a membership word and the count of members before it), and the values in code-unit order packed at 13 bits. That is 15,146 bytes of RVA data and 2 to 3 ns a character. Binary search over sorted pairs took 27 KB and 14 ns; a perfect hash checked through the forward table, 14 KB and 7 ns; unpacked 16-bit values, 17.7 KB, over the 16 KB target, and not consistently faster (9 % ahead on prose in one run, 26 % behind in the other, level on the shuffled cells in both). Keeping the word and its count in separate arrays, so that a lookup touches two tables for them instead of one record, was 3 to 27 % slower. Removing the bounds checks gained 0.2 to 0.5 ns, which does not pay for unsafe code.
 
-What a trimmed consumer pays for Kanji encoding (`PublishTrimmed`, `TrimMode=full`, win-x64,
-measured 2026-09-29 against the commit before any encoder referenced the table): QR encode only
-115,200 → 132,608 bytes of `FeatherQR.dll` (+17.0 KB), all three symbologies encoding 178,176 →
-197,120 (+18.5 KB), decode only 73,216 unchanged. That is the 15.1 KB table plus the writers and
-the eligibility pass. A decode-only consumer keeps neither table it does not use, and an encoding
-consumer keeps the reverse table whether or not its text ever reaches Kanji mode, because the
-writers' mode switches reference it. Kanji plans under `Optimal` (the eighth segmentation state,
-each planner's Kanji scan) added 4.5 KB more to QR encode only (137,216 bytes) and 7.0 KB to all
-three (204,288), measured 2026-09-30; a consumer that never sets `Optimal` keeps them too, since
-the segmentation is a run-time option. Kanji sets in Structured Append cost a consumer that calls
-`CreateStructuredAppend` 4.0 KB (161,792 → 165,888 bytes) and the others at most 0.5 KB (QR encode
-only 137,216 unchanged, all three 204,288 → 204,800), measured the same day. Making Kanji mode
-opt-in (`AllowKanji`, 2026-10-01) removed none of it, since the option is read at run time: all three
-205,312 bytes and `CreateStructuredAppend` 166,400 (+0.5 KB each), QR encode only and decode only
-unchanged. Speeding up Kanji plans (a membership test for the analysis, the scan's table kept for
-the build, 2026-10-01) added 1.0 KB to QR encode only (138,240) and to `CreateStructuredAppend`
-(167,424), and 1.5 KB to all three (206,848); decode only unchanged.
+What a trimmed consumer pays for Kanji encoding (`PublishTrimmed`, `TrimMode=full`, win-x64, measured 2026-09-29 against the commit before any encoder referenced the table): QR encode only 115,200 → 132,608 bytes of `FeatherQR.dll` (+17.0 KB), all three symbologies encoding 178,176 → 197,120 (+18.5 KB), decode only 73,216 unchanged. That is the 15.1 KB table plus the writers and the eligibility pass. A decode-only consumer keeps neither table it does not use, and an encoding consumer keeps the reverse table whether or not its text ever reaches Kanji mode, because the writers' mode switches reference it. Kanji plans under `Optimal` (the eighth segmentation state, each planner's Kanji scan) added 4.5 KB more to QR encode only (137,216 bytes) and 7.0 KB to all three (204,288), measured 2026-09-30; a consumer that never sets `Optimal` keeps them too, since the segmentation is a run-time option. Kanji sets in Structured Append cost a consumer that calls `CreateStructuredAppend` 4.0 KB (161,792 → 165,888 bytes) and the others at most 0.5 KB (QR encode only 137,216 unchanged, all three 204,288 → 204,800), measured the same day. Making Kanji mode opt-in (`AllowKanji`, 2026-10-01) removed none of it, since the option is read at run time: all three 205,312 bytes and `CreateStructuredAppend` 166,400 (+0.5 KB each), QR encode only and decode only unchanged. Speeding up Kanji plans (a membership test for the analysis, the scan's table kept for the build, 2026-10-01) added 1.0 KB to QR encode only (138,240) and to `CreateStructuredAppend` (167,424), and 1.5 KB to all three (206,848); decode only unchanged.
 
-Two failure causes are kept apart on the error path: a structurally impossible byte pair is
-`InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing
-arithmetic sits on the error path only, so the happy path stays a single indexed load.
+Two failure causes are kept apart on the error path: a structurally impossible byte pair is `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing arithmetic sits on the error path only, so the happy path stays a single indexed load.
 
-On the image path `UnmappedCharacter` and `UnsupportedContent` are verdicts on the symbol's content,
-reached only after its error correction, and one is reported when no attempt reads a symbol. The
-first attempt and the inverted retry run as they always have, so a readable symbol elsewhere in the
-image (a light-on-dark one beside it, say) is still read. A verdict from either skips the regional
-pass, which looks for a symbol the global threshold cannot see, so a second, unevenly lit symbol
-beside a symbol that gave a verdict is not looked for. In the regional
-pass a verdict on the positive ends it before the negative. Inside an attempt a verdict counts like a read
-wherever Standard QR chooses between grids for one symbol (the timing frame or the finder grid, other
-dimensions, the mesh or the global grid, the finder-only grid, the mirrored grid), whichever grid
-reached it; Micro QR and rMQR rank a verdict above a correction failure on another grid for the same
-symbol and report a verdict their full finder sweep reaches. Their scans still try every remaining
-candidate after a verdict, and a verdict from the strided scan still runs the full sweep, which can
-find another symbol that reads. When every attempt fails short of the content, the first attempt's
-diagnostics are reported.
-`DataUncorrectable` and `InvalidBitstream` stay out of that rule: noise reaches the first, and
-through a miscorrection the second. A failed decode, of an image or of a matrix, reports no characters written,
-whatever it left in the destination. The matrix overloads do since 2.0.0: before, one that failed partway through
-the bit stream counted the segments it had written, and only the image overloads reported none.
+On the image path `UnmappedCharacter` and `UnsupportedContent` are verdicts on the symbol's content, reached only after its error correction, and one is reported when no attempt reads a symbol. The first attempt and the inverted retry run as they always have, so a readable symbol elsewhere in the image (a light-on-dark one beside it, say) is still read. A verdict from either skips the regional pass, which looks for a symbol the global threshold cannot see, so a second, unevenly lit symbol beside a symbol that gave a verdict is not looked for. In the regional pass a verdict on the positive ends it before the negative. Inside an attempt a verdict counts like a read wherever Standard QR chooses between grids for one symbol (the timing frame or the finder grid, other dimensions, the mesh or the global grid, the finder-only grid, the mirrored grid), whichever grid reached it; Micro QR and rMQR rank a verdict above a correction failure on another grid for the same symbol and report a verdict their full finder sweep reaches. Their scans still try every remaining candidate after a verdict, and a verdict from the strided scan still runs the full sweep, which can find another symbol that reads. When every attempt fails short of the content, the first attempt's diagnostics are reported. `DataUncorrectable` and `InvalidBitstream` stay out of that rule: noise reaches the first, and through a miscorrection the second. A failed decode, of an image or of a matrix, reports no characters written, whatever it left in the destination. The matrix overloads do since 2.0.0: before, one that failed partway through the bit stream counted the segments it had written, and only the image overloads reported none.
 
-Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode
-segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1.
-Structured Append is read and written since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md) and [standardqr-encoder.md](standardqr-encoder.md)).
+Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1. Structured Append is read and written since 2.0.0 (Standard QR only, see [standardqr-decoder.md](standardqr-decoder.md) and [standardqr-encoder.md](standardqr-encoder.md)).
 
 ### Allocation contract
 
-The span-destination overloads are documented as allocating nothing **per call**, not as
-never touching the heap. Every symbology lazily builds immutable lookup tables on first use
-and caches them for the process: per-version placement and extraction layouts, and — on
-ARM64, where the syndrome kernel reads its data terms out of a table rather than computing
-them — a 24 KB alpha-step table shared by all three symbologies. They are built once, keyed
-by version, published with a release store, and bounded (about 100 KB if every rMQR version
-were exercised). A benchmark that measures allocation must warm up first, or it attributes
-that one-time build to the call that happened to trigger it.
+The span-destination overloads are documented as allocating nothing **per call**, not as never touching the heap. Every symbology lazily builds immutable lookup tables on first use and caches them for the process: per-version placement and extraction layouts, and — on ARM64, where the syndrome kernel reads its data terms out of a table rather than computing them — a 24 KB alpha-step table shared by all three symbologies. They are built once, keyed by version, published with a release store, and bounded (about 100 KB if every rMQR version were exercised). A benchmark that measures allocation must warm up first, or it attributes that one-time build to the call that happened to trigger it.
 
-The promise is held by a test, not by reading the code. `DecodeAllocationTest` decodes through
-every allocation-free overload of the three decoders: the matrix overloads with and without a quiet
-zone, the image overloads on each path the image level reads through (upright, turned, mirrored,
-keystone, the next finder triple, the meshes, the timing frame, low density, the anisotropic grid,
-the perspective search, light on dark, uneven light) and on images that fail (noise, another
-symbology's symbol). It also counts Standard QR's module buffers out at once, which is one. An
-allocation planted at each stage of both levels, 47 of them, was caught by it (2026-09-29).
-What measuring it taught:
+The promise is held by a test, not by reading the code. `DecodeAllocationTest` decodes through every allocation-free overload of the three decoders: the matrix overloads with and without a quiet zone, the image overloads on each path the image level reads through (upright, turned, mirrored, keystone, the next finder triple, the meshes, the timing frame, low density, the anisotropic grid, the perspective search, light on dark, uneven light) and on images that fail (noise, another symbology's symbol). It also counts Standard QR's module buffers out at once, which is one. An allocation planted at each stage of both levels, 47 of them, was caught by it (2026-09-29). What measuring it taught:
 
-- **Release only.** Debug allocates where Release does not: a span initialized from a list of
-  literals (`stackalloc float[] { … }`, `ReadOnlySpan<int> x = [ … ]`) allocated 72 B a call
-  unoptimized. A file-based script (`dotnet run script.cs`) runs Release only with `-c Release` on
-  the command line; a `#:property Configuration=Release` directive alone still gave the 72 B.
-- **Warm up, then take the quietest of a few rounds.** The shared array pool can drop a buffer when
-  a collection runs, so one round can see one rent allocate; a call that allocates every time does
-  so in every round.
-- **Alone.** Such a test runs `[NotInParallel]`. The pool's thread slot holds one array a size, and a
-  second of that size comes from per-core stacks that tests running beside it drain. That is how
-  Standard QR's nested module buffers showed up, as 4,120 B on noise in one run of six, before each
-  scan held one ([standardqr-decoder.md](standardqr-decoder.md), Performance).
-- **A planted allocation has to escape.** `GC.KeepAlive(new byte[1])` is caught where
-  `new byte[1].Length` at the same stage was not (.NET 10): an array that never leaves the method
-  need not be allocated at all.
+- **Release only.** Debug allocates where Release does not: a span initialized from a list of literals (`stackalloc float[] { … }`, `ReadOnlySpan<int> x = [ … ]`) allocated 72 B a call unoptimized. A file-based script (`dotnet run script.cs`) runs Release only with `-c Release` on the command line; a `#:property Configuration=Release` directive alone still gave the 72 B.
+- **Warm up, then take the quietest of a few rounds.** The shared array pool can drop a buffer when a collection runs, so one round can see one rent allocate; a call that allocates every time does so in every round.
+- **Alone.** Such a test runs `[NotInParallel]`. The pool's thread slot holds one array a size, and a second of that size comes from per-core stacks that tests running beside it drain. That is how Standard QR's nested module buffers showed up, as 4,120 B on noise in one run of six, before each scan held one ([standardqr-decoder.md](standardqr-decoder.md), Performance).
+- **A planted allocation has to escape.** `GC.KeepAlive(new byte[1])` is caught where `new byte[1].Length` at the same stage was not (.NET 10): an array that never leaves the method need not be allocated at all.
 
 ### SIMD tier inventory
 
-Which SIMD tier each kernel runs on which build is not listed here: it is declared in one table,
-[SimdTiers.cs](../../../src/FeatherQR/Internals/SimdTiers.cs), and checked against real builds. The
-table holds every kernel with its tiers in the order its dispatch prefers them, each tier's condition,
-and per build class the tier the kernel takes there. A build prints its own answer:
-`tests/FeatherQR.AotAnalysis` for native builds and `tests/FeatherQR.WasmReport` for WebAssembly (run
-under Node.js, which has a browser's WebAssembly SIMD) print the instruction sets the build and the CPU
-give and every kernel's tiers with the one it takes, and given `--simd-class` fail when the build
-disagrees with the table. The shared kernels there are the controls a new symbology or kernel reuses
-rather than reimplements.
+[SimdTiers.cs](../../../src/FeatherQR/Internals/SimdTiers.cs) is the one table that says which SIMD tier each kernel runs on each build, and real builds are checked against it. For each kernel it lists the tiers in the order the dispatch tries them, the condition of each tier, and the tier the kernel runs on each build class. [qrcode-simd-tiers.md](qrcode-simd-tiers.md) shows the table rendered, with the builds in each of the four build classes and a key to the tiers. The shared kernels in the table are the ones a new symbology or kernel should reuse rather than reimplement.
 
-| Build class | Builds | Left to the CPU |
-|---|---|---|
-| x64 without AVX | A default NativeAOT publish; the JIT under `DOTNET_EnableAVX=0`, which reads the same flags | GFNI |
-| x64 with AVX2 | The JIT on an AVX2 CPU; NativeAOT for `x86-64-v3` | GFNI with its 256-bit form; fast PEXT (not on AMD before Zen 3) |
-| ARM64 | The JIT; a default NativeAOT publish | The ARMv8.2 dot product |
-| WebAssembly | With its SIMD proposal (the default), interpreted or AOT-compiled | Nothing |
+Each build also reports what it actually runs. `tests/FeatherQR.AotAnalysis` (native builds) and `tests/FeatherQR.WasmReport` (WebAssembly, run under Node.js, which has a browser's WebAssembly SIMD) print the instruction sets the build and the CPU provide, and each kernel's tiers with the one it runs. With `--simd-class` they fail when the build disagrees with the table.
 
-A cell of the table is one tier or, where the class leaves an instruction set to the CPU, the tiers the
-CPU decides between; on each machine it pins exactly one. When the table was drawn (2026-09-28), 11 of
-28 kernels ran scalar on x64 without AVX (nine whose only x64 tiers are AVX2 or 256-bit, and the
-Structured Append parity and scanner, which have no x64 tier), 2 with AVX2, 1 on ARM64 (the rMQR value
-writers, SSE4.1 only) and 19 on WebAssembly, where only the portable 128-bit tiers run; the
-netstandard builds have no intrinsics and run scalar everywhere. Which instruction set a NativeAOT
-publish should target, and how much of the AVX2 territory 128-bit tiers should cover, are decisions
-that read this table; it makes neither. Where a kernel records a portable 128-bit tier as measured and
-left out (`Binarizer`), that measurement compared it with the 256-bit tier under the JIT, where the
-256-bit tier always runs, not with the scalar tier a default NativeAOT publish runs instead.
+A cell holds one tier, or, where the build class leaves an instruction set to the CPU, the tiers the CPU chooses between; on any one machine exactly one of them runs. When the table was first drawn (2026-09-28), 11 of the 28 kernels ran scalar on x64 without AVX, 2 on x64 with AVX2, 1 on ARM64 and 19 on WebAssembly, and more on CPUs without GFNI, fast PEXT or the ARM64 dot-product instructions (`Dp`). Since the 128-bit round below (2026-10-01), only these run scalar: the Structured Append parity and scanner on x64, the rMQR value writers on ARM64, and six kernels on WebAssembly. Each has its measured reason next to its row, and no cell drops to scalar because the CPU lacks a feature. The netstandard builds have no intrinsics, so they run scalar everywhere. Which instruction set a NativeAOT publish should target is a separate decision: the table is an input to it, not the answer.
 
-What keeps the table true:
+What keeps the table accurate:
 
-- **The dispatch reads its own flags, and a source test ties the table to them.** `SimdTiersTest`: every instruction-set flag a kernel's files read is the condition of a tier the table declares for that kernel, every declared tier's flags are read there, each tier's own condition reads its flags, and no other file reads one (`HardwareCapabilities` aside). The order a dispatch tries its tiers in is the one thing it cannot see. The dispatch does not read the table, because the JIT inlines a dispatch into its caller only when the dispatch reads `IsSupported` itself (Lessons learned).
-- **The table states the tier, not a floor.** A floor passes a table that understates (a kernel gains a tier, or loses its GFNI tier on a runner that has GFNI); a plain snapshot flaps, because hosted runners change CPU between jobs. `SimdTierTableTest` checks the table in every CPU state each class allows, ARM64 and WebAssembly included on any machine, and that removing the tier a kernel takes fails the check in every state where it was taken, the change the source test lets through when the code and the declaration lose it together. It also holds the test process to its own class, so every test leg checks its JIT.
-- **CI runs every build class.** The `aot-analysis` job publishes the NativeAOT gate as the default linux-x64 build, an `x86-64-v3` build and the default build on linux-arm64, win-arm64 and osx-arm64, runs each with `--simd-class`, and runs the JIT on the same runners, under `DOTNET_EnableAVX=0` on x64 and `DOTNET_EnableArm64Dp=0` on ARM64 for the side of a class the runner's CPU does not show. The linux-x64 runner had no GFNI when the job was first run (2026-09-28), so the GFNI side of the x64 cells has run only on a developer machine. The `wasm-simd` job runs the WebAssembly report interpreted and AOT-compiled; a report of its own, run headless, rather than one read out of the Playground, which would need a browser and would put the library's internals into an app that ships.
-- **A file's name says which instruction families it may use.** `{stem}.X86.cs` holds x86 intrinsics with the vectors they work on, `{stem}.Arm64.cs` ARM intrinsics with 128-bit vectors, `{stem}.Vector256.cs` and `{stem}.Vector128.cs` portable vectors of that width or narrower, and `{stem}.Simd.cs` a tier that picks its instructions per instruction set inside one method; the stem file holds the entry, the dispatch and the scalar tier and uses no vector instruction. Tiers move between files only as whole methods (Lessons learned). Six stem files keep a tier inline, where an entry the scalar build also runs holds the vector steps beside the scalar tail they hand over to; `SimdLayoutTest.InlineTiers` lists them with where, and fails when one of them stops or another file starts.
-- **A new kernel or tier** needs its row in the table and its files in `SimdTiersTest`; the tests fail until both are there.
+- **Each dispatch reads its own flags, and a source test ties the table to them.** `SimdTiersTest` checks that every instruction-set flag a kernel's files read is the condition of a tier the table declares for that kernel, that every declared tier's flags are read there, that each tier's condition reads its own flags, and that no other file reads one (`HardwareCapabilities` aside). The one thing it cannot check is the order a dispatch tries its tiers in. The dispatch does not read the table itself, because the JIT inlines a dispatch into its caller only when the dispatch reads `IsSupported` directly (Lessons learned).
+- **The table states the exact tier, not a minimum.** A minimum would let a table that understates pass (a kernel gains a tier, or loses its GFNI tier on a runner that has GFNI), and a plain snapshot would flap, because hosted runners change CPUs between jobs. `SimdTierTableTest` checks the table in every CPU state each class allows, on any machine, ARM64 and WebAssembly included. It also checks that removing the tier a kernel runs fails the check in every state where that tier was chosen, which is the change the source test misses when the code and the declaration lose the tier together. Finally it holds the test process to its own class, so every test leg checks its JIT.
+- **CI runs every build class.** The `aot-analysis` job publishes the NativeAOT gate as the default linux-x64 build, an `x86-64-v3` build, and the default build on linux-arm64, win-arm64 and osx-arm64, and runs each with `--simd-class`. It also runs the JIT on the same runners, with `DOTNET_EnableAVX=0` on x64 and `DOTNET_EnableArm64Dp=0` on ARM64, to cover the side of a class the runner's CPU does not show. The linux-x64 runner had no GFNI when the job first ran (2026-09-28), so the GFNI side of the x64 cells has only run on a developer machine. The `wasm-simd` job runs the WebAssembly report both interpreted and AOT-compiled. It is a headless report of its own rather than one read from the Playground, which would need a browser and would put the library's internals into an app that ships. Both jobs also pass `--parity`, which checks every vector tier against its scalar form on random inputs, NaN and out-of-range coordinates included, in the code that build actually emitted. It is the only check of output for `PackedSimd` operations and for ILC's code. The JIT runs with the knobs pass it too, since the test suite covers only the side of a class the runner's CPU picks.
+- **A file's name says which instruction families it may use.** `{stem}.X86.cs` holds x86 intrinsics and the vectors they work on; `{stem}.Arm64.cs` ARM intrinsics on 128-bit vectors; `{stem}.Vector256.cs` and `{stem}.Vector128.cs` portable vectors of that width or narrower; and `{stem}.Simd.cs` a tier that picks its instructions per instruction set inside one method (WebAssembly's `PackedSimd` among them). The stem file holds the entry point, the dispatch and the scalar tier, and uses no vector instructions. Tiers move between files only as whole methods (Lessons learned). Six stem files keep a tier inline, where an entry point the scalar build also runs holds the vector steps next to the scalar tail they hand over to. `SimdLayoutTest.InlineTiers` lists them and where the tier sits, and fails when one of them stops being inline or another file starts.
+- **The rendered tables follow the code.** `SimdTiersDocTest` renders the tables in [qrcode-simd-tiers.md](qrcode-simd-tiers.md) from `SimdTiers.cs` and fails when the file differs. Outside CI it also rewrites them, so a change to the table shows up as a diff to commit. It checks that the document's key names every tier too.
+- **A new kernel, tier or build class fails the tests until every piece is in place:** a kernel needs its row in the table and its files in `SimdTiersTest`, a tier its key row in qrcode-simd-tiers.md, and a build class its name in `SimdTiersDocTest`.
 
-Architecture-neutral work already benefits every target: cached per-version layouts, pair
-stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
-finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
+#### The 128-bit round
 
-The ARM64 optimization queue is closed. Four components were measured and deliberately left
-below it, with reasons: Otsu histogramming (serial histogram updates, already near its
-measured per-pixel floor), sub-finder and perspective search (branchy, data-dependent and
-failure-path dominated), rendering and PNG encode (Skia/native-code dominated), and the
-1.3-8.3 ns version selector. Reopen ARM work only with a new profile naming a different
-mechanism. That happened once (2026-09-21): a stage profile of the Standard QR matrix decode
-on Apple M2 named the syndrome pass's carried dependency chain, and the shared AdvSimd kernel
-was re-associated to eight bytes a step (see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)); the queue is closed again behind it.
-The Otsu entry above was reopened the same way (2026-09-22): an image-decode stage profile on
-Apple M2 put the histogram fill at 30-87 % of a version 40 decode, because the same-bin
-increment chain costs this core twice what it costs x64. The fill now has an ARM64 tier
-(block extremes counted without a movemask, dense blocks over four sub-histograms, which this
-core's L1 holds and x64's did not; see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)), and its "near the per-pixel floor" reason no
-longer stands. The queue is closed again behind it.
-The finder search and the mesh sampler followed on 2026-09-22 by the same route: after the
-fill's tier the profile named the finder's mask walk (10 to 50 % of a version 40 decode, 46 % of
-a no-symbol image, bound by its branches as on x64) and then the sampler's column-table tier
-(45 of a 138 µs decode), and both have ARM64 tiers now (the row kernel's word from the NEON fold,
-eight windows a step; the sampler on four lanes, two steps a body). What the x64 round found
-there transferred as structure and not as instructions, and each tier was searched again on the
-M2 against its own reference (see the Performance lessons in
-[standardqr-decoder.md](standardqr-decoder.md)). WASM runs the scalar fill and the column table and
-the 128-bit mask walk (the table's WebAssembly column); how fast is unmeasured, since the 128-bit forms
-measured on x64 say nothing about it.
-The queue is closed again behind them, on the same rule.
+From 2026-09-29 to 2026-10-01, every scalar cell on x64 without AVX (a default NativeAOT publish) and on WebAssembly got a portable `Vector128` tier where one beat what that build was running, and kept its measured reason where none did. A tier shipped only under these rules, which still apply to new ones:
 
+- **It beats what the build runs, measured on that build, and loses nowhere beyond noise.** A kernel under about 3 % of every benchmark shape on a build is left as it is there, with its measured reason next to its row. Interpreted and AOT-compiled WebAssembly run the same tier, so it has to hold on both; most Blazor apps run interpreted.
+- **It is portable `Vector128`, and an operation that is slow on one build may use that platform's instruction behind its `IsSupported` check** (x86 on a default NativeAOT publish, `PackedSimd` on WebAssembly). The instruction stays only where it wins. There is no 128-bit GFNI tier: it would fill the x64 cell only on GFNI CPUs and do nothing for WebAssembly.
+- **A step only WebAssembly needs is gated on `PackedSimd.IsSupported`**, which is constant false elsewhere. Gated on `Vector128.IsHardwareAccelerated` instead, it would be compiled into a default NativeAOT publish, where its SSSE3 check runs at run time.
+- **Its output matches the scalar tier's.** A parity test calls the tier directly, because the dispatch hides a lower tier behind a higher one, and planted faults make it fail. `--parity` checks the code each CI build emitted, through the tier's own entry point, NaN and out-of-range input included.
+- **Its machine code is read, not only timed.** Cells that did not change compile as before, and moving code between methods or files costs no instructions, on the JIT (.NET 8 and 10; x64 with and without AVX; ARM64) and on ILC (default x64, `x86-64-v3`, ARM64).
+- **Both .NET targets compile it.** An operation .NET 8 lacks (`ShuffleNative`, `AddSaturate`, `NarrowWithSaturation`, `MinNative`) gets a .NET 8 version, or the .NET 8 build keeps its old tier. No public API was added, and nothing allocates.
+
+Each build was measured on itself. `--time` in both report projects times the benchmark shapes end to end, and each kernel alone through its dispatch and through its scalar entry point. x64 without AVX was measured as a default NativeAOT publish, because the JIT under `DOTNET_EnableAVX=0` compiles portable vectors the way `x86-64-v2` does, not the way a default publish does. ARM64 without the dot-product instructions was NativeAOT built with `IlcInstructionSet=armv8-a,-dotprod`. Each shape ran in its own process, alternating between builds, and a kernel's share is its time alone divided by the shape's time.
+
+End to end, the branch's time divided by main's (1cf1436, with Kanji encoding and the shared Micro QR and rMQR decode pipeline), measured 2026-10-02 with each shape in its own process, five alternations, and eleven for any shape that read above 1.00:
+
+| Shapes | win-x64 NativeAOT | linux-x64 NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|
+| Matrix decode (10) | 0.20 to 0.91 | 0.21 to 0.86 | 0.24 to 0.88 | 0.32 to 0.96 |
+| Image decode (14) | 0.20 to 0.95 | 0.21 to 0.96 | 0.17 to 0.52 | 0.28 to 0.87 |
+| Bitmap decode (2) | 0.20 to 0.27 | 0.22 to 0.27 | 0.30 to 0.48 | 0.40 to 0.48 |
+| Data-object API (4) | 0.25 to 1.02 | 0.23 to 1.00 | 0.30 to 0.86 | 0.46 to 0.95 |
+| Encode (18) | 0.62 to 1.01 | 0.66 to 1.00 | 0.49 to 0.99 | 0.51 to 1.00 |
+| Kanji encode (2) | 0.99 to 1.00 | 1.00 | 0.97 to 0.98 | 0.96 |
+
+The Kanji encodes are Standard QR with `AllowKanji`: 200 chars that all have a Kanji cell under `Single`, and 400 chars of Kanji and ASCII under `Optimal`. The cells above 1.00 are three small encodes on win-x64 (Micro QR M3 and two rMQR shapes, 1.01 to 1.02, 2 to 25 ns). ILC compiles their methods to the same instructions as main's, or fewer (rMQR's format placement), and the same shapes read 0.95 to 0.97 on linux-x64, so the difference is code placement. On ARM64 (Apple M2, measured 2026-10-01 against main at 3e1f29d), where the round changed one cell, the end-to-end shapes read 0.87 to 1.02 with the dot-product instructions, on NativeAOT and the JIT, and the bitmap decodes 0.57 to 0.69 without them.
+
+Each kernel's results are in its symbology's record: the edge list, the histogram, the samplers, the syndromes and the search levels in [standardqr-decoder.md](standardqr-decoder.md); mask selection, the Structured Append walks and the Reed-Solomon encoder in [standardqr-encoder.md](standardqr-encoder.md); the extraction and the luminance in [rmqr-decoder.md](rmqr-decoder.md); the placer and the value writers in [rmqr-encoder.md](rmqr-encoder.md). Three shared kernels have no record of their own, so their results are here:
+
+- **`TextAnalyzer` on WebAssembly**, 16 chars per step, is 2.7 to 12x faster than scalar on 2,900 chars. A block with a char above U+00FF settles every flag, so where the tier narrows chars to bytes, the narrowing is exact. The dispatch takes the tier only for texts of 32 chars or more: interpreted, it costs about 0.2 µs on any text up to 24 chars, 1.6x the scalar pass at 8 chars, and is level or better from 32. The smallest encodes showed that cost (1.03 to 1.09 interpreted) until the threshold moved from 8 to 32 at the end of the round.
+- **`ModuleBitPacker` on WebAssembly**, using the swizzle for the byte reversal, is 2.2 to 4.1x faster. Only the data-object API packs and unpacks, so the span API's shapes never showed it.
+- **`ModeSegmenter`'s lanes on x64 without AVX and on WebAssembly** are the ARM64 four-lane groups on portable vectors, so those builds now plan a set's symbols together too. That moved a set's time by 1 to 3 %.
+
+#### The ARM64 queue
+
+Some work already helps every target, whatever its SIMD: cached per-version layouts, pair stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe finder stride with a full-sweep retry, sub-finder guards, and Otsu reuse.
+
+The ARM64 optimization queue is closed. Four components were measured and deliberately left out of it: Otsu histogramming (serial histogram updates, already near its measured per-pixel floor), the sub-finder and perspective search (branchy, data-dependent and dominated by the failure path), rendering and PNG encoding (dominated by Skia's native code), and the 1.3-8.3 ns version selector. ARM64 work reopens only when a new profile names a different mechanism. That has happened three times, and each time the queue was closed again afterwards:
+
+- **2026-09-21.** A stage profile of the Standard QR matrix decode on Apple M2 named the syndrome pass's carried dependency chain, and the shared AdvSimd kernel was re-associated to eight bytes per step.
+- **2026-09-22, the histogram fill.** An image-decode stage profile on Apple M2 put the fill at 30-87 % of a version 40 decode, because the same-bin increment chain costs this core twice what it costs x64. The fill now has an ARM64 tier (block extremes counted without a movemask, and dense blocks spread over four sub-histograms, which this core's L1 holds and x64's did not), so the Otsu entry's "near the per-pixel floor" reason no longer stands.
+- **2026-09-22, the finder search and the mesh sampler.** After the fill's tier, the profile named the finder's mask walk (10 to 50 % of a version 40 decode, 46 % of an image with no symbol, bound by its branches as on x64) and then the sampler's column-table tier (45 µs of a 138 µs decode). Both now have ARM64 tiers: the row kernel builds its word from the NEON fold, eight windows per step, and the sampler runs on four lanes, two steps per loop body. What the x64 round found carried over as structure, not as instructions, and each tier was tuned again on the M2 against its own reference.
+
+The details are in the Performance lessons of [standardqr-decoder.md](standardqr-decoder.md). WebAssembly and x64 without AVX ran the scalar fill, the column table and the 128-bit mask walk until the 128-bit round gave them 128-bit tiers for the fill, the mesh sampler and the edge list, each measured on those builds.
 ## Scope decisions
 
 | Decision | Choice | Revisit when |
@@ -667,7 +507,7 @@ The queue is closed again behind them, on the same rule.
 | Physical scanner acceptance | Not automated, and deliberately never a conformance gate: a phone scanner disagreeing proves an interoperability problem, never a specification violation. Run ad hoc against a representative print/screen set before a symbology's first release | A field report that the committed corpus and the image-degradation tests both pass but real scanners fail |
 | SIMD tier table | One table in `Internals/SimdTiers.cs`, per kernel and build class, checked by source and table tests and by every build class in CI; the dispatch keeps its own flag reads; tiers move between files only as whole methods, six kept inline and listed | A JIT that inlines a dispatch through a property, which would let the dispatch read the table; a kept-inline tier rewritten as a method of its own for another reason |
 | NativeAOT instruction-set target | Not decided: the tier table is what the decision reads, and no public API or README text says anything about `IlcInstructionSet` | A plan for it |
-| 128-bit tiers where x64 without AVX or WebAssembly runs scalar | Planned for 2.0.0: a kernel gets one where it beats scalar on that build, measured on that build; a kernel too small to matter stays scalar, with its reason beside its table row | They ship |
+| 128-bit tiers where x64 without AVX or WebAssembly runs scalar | Done for 2.0.0 (2026-10-01, the 128-bit round under the SIMD tier inventory): a kernel has one where it beats what the build ran, measured on that build; the Structured Append parity and scanner on x64, six kernels on WebAssembly and the rMQR value writers on ARM64 stay scalar, each with its reason beside its row | A new kernel or build class, or a profile that puts a scalar cell's kernel over the bar |
 
 ## Lessons learned
 
@@ -701,19 +541,32 @@ The queue is closed again behind them, on the same rule.
 - **GitHub Pages project sites do not follow a repository rename**, and shared Playground links carry their settings in the URL hash, which a meta refresh drops. The user-site stub therefore forwards by script and keeps the meta refresh only as the no-script fallback. `user.github.io/<name>/` resolves to the project site first and the user site's folder second, so the stub is invisible until the project site is gone, which is expected rather than a deployment failure.
 - **Transitive pinning, a file-based tool and a rename each have a blast radius the plan underestimated.** The plan's Phase 1 inventory expected one `InternalsVisibleTo` use and found three; expected zero core dependencies and found the netstandard shims; expected the dependency assertion to be a literal table and had to decide the pinning question first. Each was caught by a check that ran against the artifact rather than the source: the metadata test, the nupkg guard, the compiler with the grant removed.
 
-- **A default NativeAOT publish on x64 drops everything from AVX on, and the JIT can show that dispatch without an AOT compile.** Under ILCompiler 10.0.9 `Vector256`, `Avx2` and `Bmi2` read false on any CPU, while SSE2 to SSE4.2, POPCNT and GFNI survive, so SSE-family tiers keep running. `DOTNET_EnableAVX=0` makes the JIT read exactly the same flags; `DOTNET_EnableHWIntrinsic=0` reads none. `x86-x64-v3`, a spelling older documents carry, is rejected as an unknown instruction set; the name is `x86-64-v3`.
-- **Only a dispatch that reads `IsSupported` itself compiles as it does today.** Moving every dispatch onto `bool` properties declared in one table kept ILC's code and the JIT's machine code for the kernels, but not the JIT's inlining: `ModulePlacer.MaskCode` stopped being inlined into its caller, and `TextAnalyzer.Analyze` inlined 167 methods instead of 9 before dropping its dead tiers. Of a property, an aggressively inlined property, a `static readonly` field and the direct read, the JIT inlined the dispatch into its caller only for the direct read. Under ILC a tier enum the dispatch compares keeps a compare per branch and every unreachable branch, where a `bool` property folds like the read. So the table is checked against the dispatch rather than read by it.
-- **A list of tiers read off the code is wrong where it matters.** The first inventory, made by reading the gates, put `EccBinaryEncoder` on SSSE3 under a default NativeAOT publish (it runs 128-bit GFNI there) and missed the three kernels with no tier for one architecture: the Structured Append parity and scanner have none for x64, the rMQR value writers none for ARM64. Each was in the code; the builds' own reports found them.
-- **A tier's name is the least it needs, and a kernel can ask more.** `EccBinaryDecoder` runs 256-bit GFNI on `Gfni.V256` alone, `EccBinaryEncoder` also asks for AVX2, and `Gfni.V256` stays true under `DOTNET_EnableAVX2=0`, so the table keeps each kernel's own condition. Nor is every combination of what a class leaves to the CPU a CPU: with AVX present, GFNI comes with its 256-bit form, so the class leaves the two to the CPU as one group.
-- **On ARM64 the useful knob is `DOTNET_EnableArm64Dp=0`.** It shows on an Apple M2 what a core without the dot product runs. `DOTNET_EnableArm64AdvSimd=0` turns everything off on .NET 8 and is ignored on .NET 10, and a NativeAOT binary ignores both. ILC checks the dot product at run time rather than taking it from the target: it reads true under `IlcInstructionSet=armv8-a` on an M2, and on the linux-arm64, win-arm64 and osx-arm64 runners alike.
-- **A loop moved out of its method is not the same code, even when every loop is the same instructions.** Cutting the Standard QR row-mask and bit-expansion loops into inlined methods in their family files kept every loop instruction for instruction under the JIT (.NET 8 and 10, with and without AVX) and ILC (x64, `x86-64-v3`, ARM64), but added 2 to 22 instructions a call around them (a larger frame, a spill, reloads, reordered blocks); handing the index and the threshold vector through removed one. Nothing in C# pins register allocation or block layout, and a file layout is not worth code the compilers emit differently, so tiers move only as whole methods, whose disassembly stayed identical in all seven configurations.
-- **This machine cannot measure a few instructions a call.** ShortRun and 20-iteration rounds of the image decode and encode benchmarks, before and after alternating, put the same build 9 to 37 % apart from itself on half the rows. Disassembly identical to the previous commit is what a layout change is held to.
-- **ILC produces ARM64 code on an x64 machine without an ARM64 linker.** The publish stops at its linker check before ILC runs, but ILC itself, run on the x64 response file retargeted to ARM64, compiles and writes its disassembly, which is all a codegen comparison needs.
-- **Interpreted and AOT-compiled WebAssembly run the same tiers.** The Mono interpreter reports 128-bit vectors accelerated as the AOT build does, so a Blazor WebAssembly app that never turns AOT on runs the same nine vector tiers the Playground does, and one build class covers both.
+- **A default NativeAOT publish on x64 is limited to SSE4.2 and GFNI, and the JIT can reproduce its dispatch without an AOT compile.** Under ILCompiler 10.0.9, `Vector256`, `Avx2` and `Bmi2` read false on any CPU, while SSE2 through SSE4.2, POPCNT and GFNI are still detected, so SSE-family tiers keep running. `DOTNET_EnableAVX=0` makes the JIT read exactly the same flags; `DOTNET_EnableHWIntrinsic=0` turns them all off. The instruction set is spelled `x86-64-v3`; `x86-x64-v3`, a spelling older documents carry, is rejected as unknown.
+- **A dispatch has to read `IsSupported` itself to compile as it does today.** When every dispatch was moved onto `bool` properties declared in one table, ILC's code and the JIT's machine code for the kernels stayed the same, but the JIT's inlining did not: `ModulePlacer.MaskCode` stopped being inlined into its caller, and `TextAnalyzer.Analyze` inlined 167 methods instead of 9 before dropping its dead tiers. Of four forms (a property, an aggressively inlined property, a `static readonly` field and the direct read), the JIT inlined the dispatch into its caller only for the direct read. Under ILC, a dispatch that compares a tier enum keeps a compare per branch and every unreachable branch, where a `bool` property folds away like the direct read. So the table is checked against the dispatch rather than read by it.
+- **A list of tiers worked out by reading the code was wrong exactly where it mattered.** The first inventory, made by reading the gates, put `EccBinaryEncoder` on SSSE3 under a default NativeAOT publish (it runs 128-bit GFNI there), and missed the three kernels with no tier for one architecture: the Structured Append parity and scanner have none for x64, and the rMQR value writers none for ARM64. All of it was in the code; the builds' own reports found it.
+- **A tier is named for the minimum it needs, and a kernel can require more.** `EccBinaryDecoder` runs 256-bit GFNI on `Gfni.V256` alone, while `EccBinaryEncoder` also requires AVX2, and `Gfni.V256` stays true under `DOTNET_EnableAVX2=0`, so the table keeps each kernel's own condition. Nor is every combination of what a class leaves to the CPU a real CPU: with AVX present, a CPU with GFNI also has its 256-bit form, so the class leaves the two to the CPU as one group.
+- **On ARM64 the useful knob is `DOTNET_EnableArm64Dp=0`.** It shows on an Apple M2 what a core without the dot-product instructions runs. `DOTNET_EnableArm64AdvSimd=0` turns everything off on .NET 8 and is ignored on .NET 10, and a NativeAOT binary ignores both. ILC checks for the dot-product instructions at run time instead of deciding from the target instruction set: `Dp.IsSupported` reads true under `IlcInstructionSet=armv8-a` on an M2, and on the linux-arm64, win-arm64 and osx-arm64 runners alike.
+- **Moving a loop out of its method changes the code around it, even when the loop itself compiles the same.** Cutting the Standard QR row-mask and bit-expansion loops into inlined methods in their family files kept every loop identical, instruction for instruction, under the JIT (.NET 8 and 10, with and without AVX) and ILC (x64, `x86-64-v3`, ARM64), but added 2 to 22 instructions per call around them (a larger frame, a spill, reloads, reordered blocks); passing the index and the threshold vector in removed one of them. Nothing in C# pins register allocation or block layout, and a file layout is not worth different machine code, so tiers move between files only as whole methods, whose disassembly stayed identical in all seven configurations.
+- **This machine cannot measure a difference of a few instructions per call.** ShortRun and 20-iteration rounds of the image decode and encode benchmarks, alternating before and after, put the same build 9 to 37 % apart from itself on half the rows. A layout change is therefore held to disassembly identical to the previous commit.
+- **ILC can produce ARM64 code on an x64 machine that has no ARM64 linker.** The publish stops at its linker check before ILC runs, but ILC itself, run on the x64 response file retargeted to ARM64, compiles and writes its disassembly, which is all a codegen comparison needs.
+- **Interpreted and AOT-compiled WebAssembly run the same tiers.** The Mono interpreter reports 128-bit vectors as accelerated, just as the AOT build does, so a Blazor WebAssembly app that never turns AOT on runs the same vector tiers as the Playground, and one build class covers both.
 
 - **A change of a few percent needs the fastest of interleaved runs, not a benchmark job.** Judging the decode refactors of 2026-09-29 on this machine, the `ShortRun` job gave error bars as large as the mean on some shapes (Micro QR `M2_512px`, 5,613 ± 15,843 µs), three launches of fifteen iterations moved one tree 23 % between two runs (Standard QR version 40 at 3 px/module, 112.7 and 91.4 µs), and one process of a build could be 2.5 times another on a 4 µs decode. A small harness over both trees, alternating eight to twelve times and keeping each shape's fastest round, first quartile and median, held a percent; the benchmarks stay for absolute numbers.
 - **Even then a shape can lean by which shapes share its process.** rMQR's gradient image measured +0.4 to +1.4 % in six runs of the rMQR shapes alone, two of them with part of the change taken back out, and −1.0 to −1.4 % in both runs of every shape. A lean that survives taking the code it is blamed on back out is not that code's.
 - **The order of an A/B run can manufacture a regression.** Two rounds that ran the base first each time put rMQR's image decode 15 to 21 % behind after the candidate scan was shared, and Micro QR's failing paths moved 16 to 25 %. Three rounds with error bars, the order alternated, put every shape within 1 to 4 % and inside its error bars (2026-10-01). A machine that drifts during a run favours whichever tree runs first.
+
+- **Portable vector code in a default NativeAOT publish is limited to SSE2.** SSSE3 through SSE4.2 are run-time checks there: explicit intrinsics behind `IsSupported` can use them, and portable operations cannot. Per 4,096 vectors, a saturating `Vector128.ConvertToInt32` took 52 µs against 3 under `x86-64-v2`, and a variable `Vector128.Shuffle` 43 against 3. A tier's flags do not say how its operations are compiled; only timing it on the build does.
+- **WebAssembly's runtimes disagree on a cast.** The interpreter writes `int.MinValue` for NaN and for values past 2^31, AOT-compiled code saturates, and an AOT build still interprets some methods, so a scalar sampler's output outside the image depended on how it ran. Every tier clamps before it converts, and passes the conversion only values it converts exactly.
+- **Mono's WebAssembly AOT compiles some portable operations as calls into corlib's software fallback.** 64-bit lane shifts were one, and the mask tier ran 8x slower than scalar until they went through `PackedSimd`. A new WebAssembly kernel's AOT profile is checked for corlib calls.
+- **The interpreter charges per operation and per call, and hoists nothing.** A constant a helper builds is rebuilt on every call, a vector step costs about as much as three modules in scalar code, and a call ends a jiterpreter trace, so a step that wins in a probe can lose inside its kernel. Its break-even point is higher than AOT-compiled code's (the Structured Append walks at chunks of 80 chars against 32, rMQR's pair planes at 44 stream bits per eight columns against 27 to 33), and since one flag gates both WebAssembly builds, the threshold follows the interpreter. Each shape is timed in a process of its own: an unchanged kernel ran 1.8x slower after another build's shapes had run in the same process.
+- **On the interpreter, a fixed cost per decode hides behind a share.** With jiterpreter traces off a decode runs 4 to 8 times longer but pays the same µs, so its share shrinks; compare µs instead. Stopwatch probes change what they time there (2.7 µs added to one tree's read, none to the other's), so they can rank causes, but an A/B of unprobed builds decides. Splitting the image decode into shared steps (2026-09-29) costs a Micro QR M4 read 2 to 4 µs interpreted: the same methods run as often, plus five wrappers, and inlining every wrapper that could go without undoing the split won none of it back.
+- **A dispatch change reaches callers on builds whose cell did not change.** A branch that folds away still stopped the JIT from inlining its method, because the JIT judges by the IL before folding. An operand that takes an argument's address (a span's `Length`) made the .NET 10 JIT copy the span under a flag that is constant false. ILC kept a flag property as a call until it was `AggressiveInlining`. And a changed method was inlined into just one of its five callers, making that caller 86 to 139 instructions longer (`DecodeWithMirrorRetry`, `NoInlining` since). Compare the callers' listings too, with `DOTNET_TieredCompilation=0`, since tier-1 code follows the run's profile.
+- **ILC inlines less than the JIT.** It kept two small helpers with `out` parameters as calls inside rMQR's format reader, where the JIT inlined them.
+- **An interpolated exception message is compiled into the method that throws it, on every build.** The rMQR extraction dispatch's two messages made it several times the size of its working path; with them moved out, it went from 530 to 102 instructions on the ARM64 JIT.
+- **`--parity` through a dispatch only checks the tier the CI machine picks.** Every ARM64 runner has the dot-product instructions, so ILC's ARM64 code for the 128-bit luminance tier never ran in CI until `--parity` called the tier directly.
+- **A share has to come from timing a stage alone.** A per-function sample put the Structured Append walks at 2.4 % of a set and the segmenter at 13 to 18 %; timed alone, the planner was 17 to 49 %, because the scalar walks run inside the segmenter's functions. And the span API's shapes never run the bit packer, which only the data-object API calls.
+- **Bound a step's gain by its share times its saving before building variants of it.** For the rMQR writers on WebAssembly that bound was 2.5 %, below the bar, known from the first kernel timing.
+- **The JIT needs its warmup.** Under the timing mode's default 300 ms, the JIT can still be tiering on a shape of a few µs (Micro QR and rMQR images at 16 to 26 µs, against 5 to 6 after 3 s, on the ARM64 .NET 8 JIT); a median far above the minimum means tiering, not the code.
 
 - **An output default is judged by the readers people carry.** Every library reader agreed with the Kanji output, and the standard was on Kanji mode's side for a segment with no ECI, yet an Android phone's own scanners read none of it; the default went back to UTF-8 and Kanji mode became an option. The phone scan came after the default had been changed, when it belonged before.
 - **An option has to reach every path that analyses the text, and the paths the tests take by default are not all of them.** When `AllowKanji` was threaded through the three generators, a mutation pass that turned each call site's argument to `true` and to `false` found three paths no test took with the option set: the refusal's advice, version resolution under a range or the boost, and Micro QR's ranged sizing.

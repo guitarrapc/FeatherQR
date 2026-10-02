@@ -6,6 +6,7 @@ using System.Runtime.Intrinsics.X86;
 #if NET8_0_OR_GREATER
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.Wasm;
 #endif
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -67,6 +68,13 @@ internal static partial class TextAnalyzer
         if (AdvSimd.Arm64.IsSupported && text.Length >= 8)
         {
             return AnalyzeAdvSimd(text, requestedEciMode);
+        }
+
+        // Portable 128-bit path for WebAssembly (16 chars at once, 8-char remainder blocks), from 32 chars: below that the
+        // interpreter's setup costs more than the scalar pass, and one flag gates the interpreted and AOT-compiled builds alike
+        if (PackedSimd.IsSupported && text.Length >= 32)
+        {
+            return AnalyzeVector128(text, requestedEciMode);
         }
 #endif
 #endif

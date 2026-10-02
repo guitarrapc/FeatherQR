@@ -1,6 +1,4 @@
 #if NET8_0_OR_GREATER
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 
 namespace FeatherQR.Internals.ImageDecoders;
@@ -14,9 +12,8 @@ internal static partial class PerspectiveGridSampler
         var a11 = Vector128.Create(transform.a11);
         var a12 = Vector128.Create(transform.a12);
         var a13 = Vector128.Create(transform.a13);
-        var zero = Vector128<int>.Zero;
-        var maxPx = Vector128.Create(width - 1);
-        var maxPy = Vector128.Create(height - 1);
+        var lastX = Vector128.Create((float)(width - 1));
+        var lastY = Vector128.Create((float)(height - 1));
         var widthVector = Vector128.Create(width);
 
         Span<int> indices = stackalloc int[8];
@@ -43,11 +40,11 @@ internal static partial class PerspectiveGridSampler
                 var xHi = (a11 * gridXHi + rowNumeratorX) * reciprocalHi;
                 var yHi = (a12 * gridXHi + rowNumeratorY) * reciprocalHi;
 
-                // ConvertToInt32 truncates toward zero like the scalar cast, so both take the pixel containing the point (ConvertToInt32Native is the one that follows the platform's rounding); out-of-range lanes differ from scalar saturation but are clamped into bounds either way.
-                var pxLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo), maxPx), zero);
-                var pyLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo), maxPy), zero);
-                var pxHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi), maxPx), zero);
-                var pyHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi), maxPy), zero);
+                // The pixel the scalar tier's PixelIndex.Clamp takes
+                var pxLo = VectorCast.ToPixel(xLo, lastX);
+                var pyLo = VectorCast.ToPixel(yLo, lastY);
+                var pxHi = VectorCast.ToPixel(xHi, lastX);
+                var pyHi = VectorCast.ToPixel(yHi, lastY);
 
                 (pyLo * widthVector + pxLo).CopyTo(indices);
                 (pyHi * widthVector + pxHi).CopyTo(indices.Slice(4));
@@ -66,8 +63,8 @@ internal static partial class PerspectiveGridSampler
                 var x = (a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (a12 * gridX + rowNumeratorY) * reciprocal;
 
-                var px = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x), maxPx), zero);
-                var py = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y), maxPy), zero);
+                var px = VectorCast.ToPixel(x, lastX);
+                var py = VectorCast.ToPixel(y, lastY);
 
                 (py * widthVector + px).CopyTo(indices);
 
@@ -89,16 +86,8 @@ internal static partial class PerspectiveGridSampler
                 var x = (transform.a11 * gridXs + rowNX) * reciprocal;
                 var y = (transform.a12 * gridXs + rowNY) * reciprocal;
 
-                var px = (int)x;
-                var py = (int)y;
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                var px = PixelIndex.Clamp(x, width);
+                var py = PixelIndex.Clamp(y, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

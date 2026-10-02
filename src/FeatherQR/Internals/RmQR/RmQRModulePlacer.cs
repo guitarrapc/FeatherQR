@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -291,6 +292,18 @@ internal static partial class RmQRModulePlacer
                     var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
                     var repl = AdvSimd.Arm64.VectorTableLookup(v, sel);
                     ((AdvSimd.CompareTest(repl, bitm) & one) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+                }
+            }
+            if (PackedSimd.IsSupported)
+            {
+                // WebAssembly: the SSSE3 step with its swizzle, and a min with 1 for the compare and AND, since a lane holds 0 or its bit
+                var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+                var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
+                for (; k + 2 <= byteCount; k += 2)
+                {
+                    var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
+                    var m = PackedSimd.Swizzle(v, sel) & bitm;
+                    (Vector128.Min(m, Vector128<byte>.One) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
                 }
             }
         }

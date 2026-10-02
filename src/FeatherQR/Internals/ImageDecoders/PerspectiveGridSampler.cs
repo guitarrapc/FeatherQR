@@ -56,19 +56,10 @@ internal static partial class PerspectiveGridSampler
                 var x = (transform.a11 * gridX + rowNumeratorX) * reciprocal;
                 var y = (transform.a12 * gridX + rowNumeratorY) * reciprocal;
 
-                // Pixel edges sit on integers, so the pixel containing a point is its floor
-                var px = (int)x;
-                var py = (int)y;
-
-                // Clamp: mild inaccuracy at the outermost modules must not read OOB
-                if (px < 0)
-                    px = 0;
-                else if (px >= width)
-                    px = width - 1;
-                if (py < 0)
-                    py = 0;
-                else if (py >= height)
-                    py = height - 1;
+                // Pixel edges sit on integers, so the pixel containing a point is its floor; clamped, since mild inaccuracy at the
+                // outermost modules must not read OOB
+                var px = PixelIndex.Clamp(x, width);
+                var py = PixelIndex.Clamp(y, height);
 
                 modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }

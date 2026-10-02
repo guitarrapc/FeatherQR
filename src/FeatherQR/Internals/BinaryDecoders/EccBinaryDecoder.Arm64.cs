@@ -84,7 +84,7 @@ internal static partial class EccBinaryDecoder
 
     /// <summary>
     /// Lazily built step tables, one 24 KB array holding three 256-entry tables of 32-byte vectors: entry (k-1, c) is lane i → c·α^(k·i) for k = 1..3.
-    /// Only the AdvSimd tier reads it, so nothing is allocated on other targets.
+    /// The AdvSimd and 128-bit tiers read it, so nothing is allocated where neither runs.
     /// </summary>
     private static byte[]? alphaStepTables;
 

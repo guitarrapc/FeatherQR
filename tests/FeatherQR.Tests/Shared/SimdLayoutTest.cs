@@ -9,10 +9,11 @@ namespace FeatherQR.Tests;
 /// <remarks>
 /// <para>
 /// <c>{stem}.X86.cs</c> holds x86 intrinsics (with the portable vectors they work on), <c>{stem}.Arm64.cs</c>
-/// ARM intrinsics (with 128-bit vectors), <c>{stem}.Vector256.cs</c> and <c>{stem}.Vector128.cs</c> portable
+/// ARM intrinsics (with 128-bit vectors), <c>{stem}.Wasm.cs</c> WebAssembly's <c>PackedSimd</c> (with 128-bit vectors),
+/// <c>{stem}.Vector256.cs</c> and <c>{stem}.Vector128.cs</c> portable
 /// vectors of that width or narrower, where <c>{stem}</c> is the type, or the type and a feature
 /// (<c>ModulePlacer.Masking</c>). <c>{stem}.Simd.cs</c> holds a vector tier that picks its instructions per
-/// instruction set inside one method, so no single family's file can take it; a file whose code one family's
+/// instruction set inside one method (WebAssembly's <c>PackedSimd</c> among them), so no single family's file can take it; a file whose code one family's
 /// file could take is named for that family instead. Every other file, the stem file among them, holds the
 /// entry, the dispatch and the scalar tier, and uses no vector instruction at all.
 /// </para>
@@ -37,11 +38,11 @@ public class SimdLayoutTest
     /// </summary>
     private static readonly Dictionary<string, string> InlineTiers = new()
     {
-        ["ModuleBitPacker.cs"] = "Pack and Unpack run their AVX2 and SSSE3 / AdvSimd steps before the scalar tail they share",
+        ["ModuleBitPacker.cs"] = "Pack and Unpack run their AVX2, SSSE3 / AdvSimd and PackedSimd steps before the scalar tail they share",
         ["ImageDecoders/LuminanceInverter.cs"] = "Invert runs its 256-bit and 128-bit loops before the scalar tail",
         ["MicroQR/MicroQRBinaryEncoder.cs"] = "the Byte segment's AdvSimd and SSE2 steps sit in EncodeDataCodewords beside its scalar path",
         ["RmQR/RmQRBinaryEncoder.cs"] = "the Numeric, Alphanumeric and Latin-1 writers run their vector steps before the SWAR and scalar tails",
-        ["RmQR/RmQRModulePlacer.cs"] = "ExpandBitsMasked runs its AVX2, SSSE3 and AdvSimd steps before the scalar tail",
+        ["RmQR/RmQRModulePlacer.cs"] = "ExpandBitsMasked runs its AVX2, SSSE3, AdvSimd and PackedSimd steps before the scalar tail",
         ["StandardQR/ModulePlacer.ExpandBits.cs"] = "ExpandBits runs its AVX2 and SSSE3 steps before the scalar tail",
     };
 
@@ -76,6 +77,9 @@ public class SimdLayoutTest
     [Arguments("Gfni.V256.GaloisFieldAffineTransform(x, m, 0)", "X86")]
     [Arguments("AdvSimd.Arm64.AddPairwise(a, b)", "Arm")]
     [Arguments("Dp.DotProduct(acc, a, b)", "Arm")]
+    [Arguments("PackedSimd.ConvertToInt32Saturate(v)", "Wasm")]
+    [Arguments("System.Runtime.Intrinsics.Wasm.PackedSimd.PopCount(v)", "Wasm")]
+    [Arguments("if (PackedSimd.IsSupported)", "")]
     [Arguments("Vector256.Create((byte)1)", "Vector256")]
     [Arguments("Vector256<byte> v = default;", "Vector256")]
     [Arguments("var m = Vector128<byte>.Zero;", "Vector128")]
@@ -104,6 +108,8 @@ public class SimdLayoutTest
     [Arguments("LocalBinarizer.Vector128.cs", "var v = Vector256.Create((byte)1);", false)]
     [Arguments("FinderPatternFinder.Simd.cs", "var v = Vector256.Create((byte)1); var w = AdvSimd.Arm64.AddPairwise(a, b);", true)]
     [Arguments("MicroQRModulePlacer.Simd.cs", "var v = Ssse3.Shuffle(a, b); var w = AdvSimd.Arm64.VectorTableLookup(a, b);", true)]
+    [Arguments("VectorCast.Simd.cs", "var v = Sse2.ConvertToVector128Int32WithTruncation(a); var w = PackedSimd.ConvertToInt32Saturate(a); var x = Vector128.ConvertToInt32(a);", true)]
+    [Arguments("VectorCast.Vector128.cs", "var w = PackedSimd.ConvertToInt32Saturate(a);", false)]
     [Arguments("FinderPatternFinder.Simd.cs", "var v = Avx2.Shuffle(a, b); var w = Vector128.Create((byte)1);", false)]
     [Arguments("FinderPatternFinder.Simd.cs", "var w = Vector128.Create((byte)1);", false)]
     [Arguments("FinderPatternFinder.Simd.cs", "var x = 1;", false)]
@@ -117,6 +123,7 @@ public class SimdLayoutTest
     [
         ("X86", ["X86", "Vector256", "Vector128"], "X86"),
         ("Arm64", ["Arm", "Vector128"], "Arm"),
+        ("Wasm", ["Wasm", "Vector128"], "Wasm"),
         ("Vector256", ["Vector256", "Vector128"], "Vector256"),
         ("Vector128", ["Vector128"], "Vector128"),
     ];
@@ -147,7 +154,7 @@ public class SimdLayoutTest
             yield return $"{relative} is named for {own} and uses none";
     }
 
-    /// <summary>The instruction families the source uses, in a fixed order: X86, Arm, Vector256, Vector128 (which covers Vector64).</summary>
+    /// <summary>The instruction families the source uses, in a fixed order: X86, Arm, Wasm, Vector256, Vector128 (which covers Vector64).</summary>
     private static IEnumerable<string> Families(string source)
     {
         var code = LaneCount.Replace(StripCommentsAndStrings(source), "");
@@ -155,6 +162,8 @@ public class SimdLayoutTest
             yield return "X86";
         if (ArmUse.IsMatch(code))
             yield return "Arm";
+        if (WasmUse.IsMatch(code))
+            yield return "Wasm";
         if (Vector256Use.IsMatch(code))
             yield return "Vector256";
         if (Vector128Use.IsMatch(code))
@@ -163,6 +172,7 @@ public class SimdLayoutTest
 
     private static readonly Regex X86Use = new(@"\b(?:Avx\w*|Sse\w*|Ssse3|Bmi[12]|Lzcnt|Popcnt|Gfni|Pclmulqdq|X86Base|X86Serialize|Fma)(?:\.(?:X64|V128|V256|V512))?\.(?!IsSupported\b)[A-Z]\w*\s*[(<]", RegexOptions.CultureInvariant);
     private static readonly Regex ArmUse = new(@"\b(?:AdvSimd|Dp|ArmBase|Crc32|Rdm|Sha1|Sha256|Sve\w*)(?:\.Arm64)?\.(?!IsSupported\b)[A-Z]\w*\s*[(<]", RegexOptions.CultureInvariant);
+    private static readonly Regex WasmUse = new(@"\bPackedSimd\.(?!IsSupported\b)[A-Z]\w*\s*[(<]", RegexOptions.CultureInvariant);
     private static readonly Regex Vector256Use = new(@"\bVector(?:256|512)(?:<[^>]*>)?\.(?!IsHardwareAccelerated\b)[A-Z]\w*|\bVector(?:256|512)<", RegexOptions.CultureInvariant);
     private static readonly Regex Vector128Use = new(@"\bVector(?:128|64)(?:<[^>]*>)?\.(?!IsHardwareAccelerated\b)[A-Z]\w*|\bVector(?:128|64)<", RegexOptions.CultureInvariant);
     private static readonly Regex LaneCount = new(@"\bVector(?:64|128|256|512)<\w+>\.Count\b", RegexOptions.CultureInvariant);

@@ -52,12 +52,12 @@ internal static partial class StructuredAppendPlanner
         var a1 = unreachable;
         var b = unreachable;
         var cheapest = Vector128<ushort>.Zero; // the start state, then the cheapest of the six
-        var vOpenNumeric = NeonCosts(openNumeric);
-        var vOpenAlnum = NeonCosts(openAlnum);
-        var vOpenByte = NeonCosts(openByte);
-        var vOpenByte8 = NeonCosts(openByte + 8);
-        var eight = NeonCosts(8);
-        var vBudget = NeonCosts(budget[0], budget[1], budget[2], budget[3], budget[4], budget[5], budget[6], budget[7]);
+        var vOpenNumeric = Costs16(openNumeric);
+        var vOpenAlnum = Costs16(openAlnum);
+        var vOpenByte = Costs16(openByte);
+        var vOpenByte8 = Costs16(openByte + 8);
+        var eight = Costs16(8);
+        var vBudget = Costs16(budget[0], budget[1], budget[2], budget[3], budget[4], budget[5], budget[6], budget[7]);
         ref var origin = ref MemoryMarshal.GetReference(text);
         int s0 = start, s1 = start, s2 = start, s3 = start, s4 = start, s5 = start, s6 = start, s7 = start;
 
@@ -78,7 +78,7 @@ internal static partial class StructuredAppendPlanner
                 {
                     // No Byte run opens at a U+FEFF past the head of a chunk (ModeSegmenter.ByteOrderMark), and only the first chunk can start at one.
                     nb = TWidth.Utf8
-                        ? AdvSimd.AddSaturate(ch == ModeSegmenter.ByteOrderMark && position > start ? b : Vector128.Min(b, AdvSimd.AddSaturate(cheapest, vOpenByte)), NeonCosts(8 * LaneByteCost(text, position, charset)))
+                        ? AdvSimd.AddSaturate(ch == ModeSegmenter.ByteOrderMark && position > start ? b : Vector128.Min(b, AdvSimd.AddSaturate(cheapest, vOpenByte)), Costs16(8 * LaneByteCost(text, position, charset)))
                         : Vector128.Min(AdvSimd.AddSaturate(b, eight), AdvSimd.AddSaturate(cheapest, vOpenByte8));
                     if (AdvSimd.Arm64.MaxAcross(Vector128.GreaterThan(nb, vBudget)).ToScalar() == 0)
                     {
@@ -92,7 +92,7 @@ internal static partial class StructuredAppendPlanner
                             ch = Unsafe.Add(ref origin, position);
                             if (ModeSegmenter.ClassOf(ch) != ModeSegmenter.ClassOther)
                                 break;
-                            nb = TWidth.Utf8 ? AdvSimd.AddSaturate(b, NeonCosts(8 * LaneByteCost(text, position, charset))) : AdvSimd.AddSaturate(b, eight);
+                            nb = TWidth.Utf8 ? AdvSimd.AddSaturate(b, Costs16(8 * LaneByteCost(text, position, charset))) : AdvSimd.AddSaturate(b, eight);
                             if (AdvSimd.Arm64.MaxAcross(Vector128.GreaterThan(nb, vBudget)).ToScalar() != 0)
                                 break; // some lane closes here: the step above takes it
                             b = nb;
@@ -108,13 +108,13 @@ internal static partial class StructuredAppendPlanner
                 else
                 {
                     nb = Vector128.Min(AdvSimd.AddSaturate(b, eight), AdvSimd.AddSaturate(cheapest, vOpenByte8));
-                    na1 = Vector128.Min(AdvSimd.AddSaturate(a0, NeonCosts(6)), AdvSimd.AddSaturate(cheapest, vOpenAlnum));
-                    na0 = AdvSimd.AddSaturate(a1, NeonCosts(5));
+                    na1 = Vector128.Min(AdvSimd.AddSaturate(a0, Costs16(6)), AdvSimd.AddSaturate(cheapest, vOpenAlnum));
+                    na0 = AdvSimd.AddSaturate(a1, Costs16(5));
                     if (cls == ModeSegmenter.ClassDigit)
                     {
-                        nn1 = Vector128.Min(AdvSimd.AddSaturate(n0, NeonCosts(4)), AdvSimd.AddSaturate(cheapest, vOpenNumeric));
-                        nn2 = AdvSimd.AddSaturate(n1, NeonCosts(3));
-                        nn0 = AdvSimd.AddSaturate(n2, NeonCosts(3));
+                        nn1 = Vector128.Min(AdvSimd.AddSaturate(n0, Costs16(4)), AdvSimd.AddSaturate(cheapest, vOpenNumeric));
+                        nn2 = AdvSimd.AddSaturate(n1, Costs16(3));
+                        nn0 = AdvSimd.AddSaturate(n2, Costs16(3));
                         next = Vector128.Min(Vector128.Min(Vector128.Min(nn0, nn1), Vector128.Min(nn2, na0)), Vector128.Min(na1, nb));
                     }
                     else
@@ -129,29 +129,29 @@ internal static partial class StructuredAppendPlanner
             {
                 apartSteps++;
                 int p0 = s0 + step, p1 = s1 + step, p2 = s2 + step, p3 = s3 + step, p4 = s4 + step, p5 = s5 + step, p6 = s6 + step, p7 = s7 + step;
-                var classes = NeonCosts(
+                var classes = Costs16(
                     ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p0)), ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p1)), ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p2)), ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p3)),
                     ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p4)), ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p5)), ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p6)), ModeSegmenter.ClassOf(Unsafe.Add(ref origin, p7)));
-                var isDigit = Vector128.Equals(classes, NeonCosts(ModeSegmenter.ClassDigit));
+                var isDigit = Vector128.Equals(classes, Costs16(ModeSegmenter.ClassDigit));
                 var isAlnum = Vector128.GreaterThan(classes, Vector128<ushort>.Zero);
                 var byteBits = TWidth.Utf8
-                    ? NeonCosts(
+                    ? Costs16(
                         8 * LaneByteCost(text, p0, charset), 8 * LaneByteCost(text, p1, charset), 8 * LaneByteCost(text, p2, charset), 8 * LaneByteCost(text, p3, charset),
                         8 * LaneByteCost(text, p4, charset), 8 * LaneByteCost(text, p5, charset), 8 * LaneByteCost(text, p6, charset), 8 * LaneByteCost(text, p7, charset))
                     : eight;
 
-                nn1 = Vector128.ConditionalSelect(isDigit, Vector128.Min(AdvSimd.AddSaturate(n0, NeonCosts(4)), AdvSimd.AddSaturate(cheapest, vOpenNumeric)), unreachable);
-                nn2 = Vector128.ConditionalSelect(isDigit, AdvSimd.AddSaturate(n1, NeonCosts(3)), unreachable);
-                nn0 = Vector128.ConditionalSelect(isDigit, AdvSimd.AddSaturate(n2, NeonCosts(3)), unreachable);
-                na1 = Vector128.ConditionalSelect(isAlnum, Vector128.Min(AdvSimd.AddSaturate(a0, NeonCosts(6)), AdvSimd.AddSaturate(cheapest, vOpenAlnum)), unreachable);
-                na0 = Vector128.ConditionalSelect(isAlnum, AdvSimd.AddSaturate(a1, NeonCosts(5)), unreachable);
+                nn1 = Vector128.ConditionalSelect(isDigit, Vector128.Min(AdvSimd.AddSaturate(n0, Costs16(4)), AdvSimd.AddSaturate(cheapest, vOpenNumeric)), unreachable);
+                nn2 = Vector128.ConditionalSelect(isDigit, AdvSimd.AddSaturate(n1, Costs16(3)), unreachable);
+                nn0 = Vector128.ConditionalSelect(isDigit, AdvSimd.AddSaturate(n2, Costs16(3)), unreachable);
+                na1 = Vector128.ConditionalSelect(isAlnum, Vector128.Min(AdvSimd.AddSaturate(a0, Costs16(6)), AdvSimd.AddSaturate(cheapest, vOpenAlnum)), unreachable);
+                na0 = Vector128.ConditionalSelect(isAlnum, AdvSimd.AddSaturate(a1, Costs16(5)), unreachable);
                 // No rule for a U+FEFF here: a lane that moves while the lanes are apart is at the head of its chunk, one character and then the marks its cut was kept off, where continuing that character's run is never dearer than opening another.
                 nb = AdvSimd.AddSaturate(Vector128.Min(b, AdvSimd.AddSaturate(cheapest, vOpenByte)), byteBits);
                 next = Vector128.Min(Vector128.Min(Vector128.Min(nn0, nn1), Vector128.Min(nn2, na0)), Vector128.Min(na1, nb));
 
                 // The lanes ahead of the one furthest behind wait for it: they keep their states and read this character again, so the lanes are back at one character a few steps after a close, whatever the close cost each of them (a pair is two characters back, a cut kept off a mark more).
                 var lowest = Math.Min(Math.Min(Math.Min(s0, s1), Math.Min(s2, s3)), Math.Min(Math.Min(s4, s5), Math.Min(s6, s7)));
-                var hold = NeonHoldOffsets(s0, s1, s2, s3, s4, s5, s6, s7, lowest);
+                var hold = HoldOffsets16(s0, s1, s2, s3, s4, s5, s6, s7, lowest);
                 nn0 = Vector128.ConditionalSelect(hold, n0, nn0);
                 nn1 = Vector128.ConditionalSelect(hold, n1, nn1);
                 nn2 = Vector128.ConditionalSelect(hold, n2, nn2);
@@ -223,7 +223,7 @@ internal static partial class StructuredAppendPlanner
                 offset[lane] -= 1 + (position - end);
             }
 
-            vBudget = NeonCosts(budget[0], budget[1], budget[2], budget[3], budget[4], budget[5], budget[6], budget[7]);
+            vBudget = Costs16(budget[0], budget[1], budget[2], budget[3], budget[4], budget[5], budget[6], budget[7]);
             n0 = Vector128.ConditionalSelect(over, unreachable, nn0);
             n1 = Vector128.ConditionalSelect(over, unreachable, nn1);
             n2 = Vector128.ConditionalSelect(over, unreachable, nn2);
@@ -333,15 +333,5 @@ internal static partial class StructuredAppendPlanner
             return index > 0 && char.IsHighSurrogate(text[index - 1]) ? 0 : 3;
         return 3;
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<ushort> NeonCosts(int value) => Vector128.Create((ushort)value);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<ushort> NeonCosts(int a, int b, int c, int d, int e, int f, int g, int h)
-        => Vector128.Create((ushort)a, (ushort)b, (ushort)c, (ushort)d, (ushort)e, (ushort)f, (ushort)g, (ushort)h);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<ushort> NeonHoldOffsets(int a, int b, int c, int d, int e, int f, int g, int h, int lowest)
-        => Vector128.Create((ushort)(a > lowest ? ushort.MaxValue : 0), (ushort)(b > lowest ? ushort.MaxValue : 0), (ushort)(c > lowest ? ushort.MaxValue : 0), (ushort)(d > lowest ? ushort.MaxValue : 0), (ushort)(e > lowest ? ushort.MaxValue : 0), (ushort)(f > lowest ? ushort.MaxValue : 0), (ushort)(g > lowest ? ushort.MaxValue : 0), (ushort)(h > lowest ? ushort.MaxValue : 0));
 }
 #endif

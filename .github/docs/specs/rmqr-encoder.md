@@ -129,7 +129,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 | Symbology | rMQR |
 | Versions | All 32 (R7x43 … R17x139) |
 | ECC levels | M, H |
-| Data modes | Numeric, Alphanumeric, Byte (ECI 3 for ISO-8859-1, ECI 26 for UTF-8; ASCII omits ECI) |
+| Data modes | Numeric, Alphanumeric, Byte (ECI 3 for ISO-8859-1, ECI 26 for UTF-8; ASCII omits ECI), and Kanji on request (`AllowKanji`, no ECI header) |
 | Segmentation | One segment in a single mode (default), or the minimal-bit mixed-mode split (opt-in `RmQRSegmentation.Optimal`) |
 | Version selection | Exact version, or automatic fit by strategy, optionally within a fixed height |
 | Quiet zone | Configurable non-negative size, default 2 (the ISO/IEC 23941 quiet zone) |
@@ -137,8 +137,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 
 ### Not implemented
 
-- Kanji mode, intentionally for ENCODING (the decoder reads it since the Kanji decode work; the tables' Kanji column is load-bearing there;
-  Japanese text uses Byte mode with UTF-8 ECI, matching the Standard QR product policy)
+- Kanji beside an ECI header: Kanji mode is written only when the charset is the library's choice ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written))
 - FNC1, Structured Append (rMQR does not define Structured Append)
 
 ### Symbol parameters (verified)
@@ -180,21 +179,7 @@ Version index is height-major (all widths of height 7, then 9, …); it is the 5
 | 30 | R17x99 | 17 x 99 | 23, 49, 75 | 160 | 100 / 3 / 20 | 56 / 4 / 26 | 8 / 8 / 7 |
 | 31 | R17x139 | 17 x 139 | 27, 55, 83, 111 | 232 | 152 / 4 / 20 | 76 / 6 / 26 | 9 / 8 / 8 |
 
-Kanji count-indicator widths are not in this table, which predates Kanji support.
-`RmQRConstants.GetKanjiCountIndicatorLength` carries them (values 2-7, monotone below the byte
-widths), pinned by the narrowest-field derivation below and, since the decoder shipped, read for
-real by the qrtool Kanji fixtures. Since Kanji encoding phase 6.6 those cover every width:
-R11x43, R13x59, R15x59 and R17x139 carry widths 4, 5 and 7, and R7x43-M, R7x59-M, R9x43-H and
-R9x139-M, each filled to its Kanji capacity, carry 2, 3, 3 and 6. `KanjiEncoderOracleTest` holds
-this library's symbol of each fixture's text to qrtool's, module for module (rMQR has one mask),
-and each filled count to the last one this library holds. Before that, widths 2, 3 and 6 rested
-on the derivation and on a second check: the transcription of ISO/IEC 23941 Table 3 that the English Wikipedia
-article on rMQR reproduces agrees with all 32 Kanji widths (and all 96 others), and the Kanji
-column of its Table 7 transcription agrees with the capacity those widths give on 63 of 64 cells.
-The 64th, R11x77-M, is a corrupt row in that table, not a disagreement: its Numeric,
-Alphanumeric and Byte cells are R11x59-H's. Both checks live in `RmQRBinaryEncoderKanjiTest`,
-where the Kanji writers are tested. With `AllowKanji` the generator writes Kanji for text whose every character has
-an encoder cell ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)).
+Kanji count-indicator widths are not in this table, which predates Kanji support. `RmQRConstants.GetKanjiCountIndicatorLength` carries them (values 2-7, monotone below the byte widths), pinned by the narrowest-field derivation below and, since the decoder shipped, read for real by the qrtool Kanji fixtures. Since Kanji encoding phase 6.6 those cover every width: R11x43, R13x59, R15x59 and R17x139 carry widths 4, 5 and 7, and R7x43-M, R7x59-M, R9x43-H and R9x139-M, each filled to its Kanji capacity, carry 2, 3, 3 and 6. `KanjiEncoderOracleTest` holds this library's symbol of each fixture's text to qrtool's, module for module (rMQR has one mask), and each filled count to the last one this library holds. Before that, widths 2, 3 and 6 rested on the derivation and on a second check: the transcription of ISO/IEC 23941 Table 3 that the English Wikipedia article on rMQR reproduces agrees with all 32 Kanji widths (and all 96 others), and the Kanji column of its Table 7 transcription agrees with the capacity those widths give on 63 of 64 cells. The 64th, R11x77-M, is a corrupt row in that table, not a disagreement: its Numeric, Alphanumeric and Byte cells are R11x59-H's. Both checks live in `RmQRBinaryEncoderKanjiTest`, where the Kanji writers are tested. With `AllowKanji` the generator writes Kanji for text whose every character has an encoder cell ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)).
 
 Data capacity in characters (Numeric / Alphanumeric / Byte), single segment, no ECI header:
 
@@ -245,7 +230,7 @@ Reject an unknown version, an unknown ECC level, a `height` constraint combined 
 
 ### 2. Analyze text
 
-Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment). The default charset policy matches Standard QR: ASCII omits ECI, ISO-8859-1 text emits assignment 3, and other Unicode text is encoded as UTF-8 with assignment 26. An explicit `EciMode` can select ISO-8859-1 or UTF-8; explicit ISO-8859-1 rejects unrepresentable input instead of narrowing it.
+Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment, and Kanji on request). The default charset policy matches Standard QR: ASCII omits ECI, ISO-8859-1 text emits assignment 3, and other Unicode text is encoded as UTF-8 with assignment 26. An explicit `EciMode` can select ISO-8859-1 or UTF-8; explicit ISO-8859-1 rejects unrepresentable input instead of narrowing it. With `AllowKanji`, when the charset is left to the library, a text whose every character has an encoder cell is one Kanji segment with no ECI header, and under `Optimal` a Kanji-eligible text with ASCII in it is also priced as a Kanji plan ([Mixed-mode segmentation](#mixed-mode-segmentation)).
 
 The analyzer decides the charset for every path. It also decides the mode for the default single-segment path; `RmQRSegmentation.Optimal` decides modes per run instead (see [Mixed-mode segmentation](#mixed-mode-segmentation)) but takes the charset from the same analysis, because the charset is a property of the content and not of the split.
 
@@ -343,10 +328,7 @@ The single mask is applied to data modules while placing. Both format copies com
 - Two-dimensional fit exposed as strategy + optional height constraint: rMQR exists to fit narrow print lanes; "fixed height, auto width" is the dominant real-world request (libzint's `R<h>xauto`), and area/width/height minimization covers the rest without a free-form size search that would mostly select non-existent sizes.
 - Letterbox instead of stretch for explicit canvas sizes: a rectangular symbol drawn into an arbitrary rectangle at non-uniform scale is not the same symbol; module aspect ratio must survive.
 - Fixed mask means the placer is a static permutation per version; no mask scoring machinery is designed in.
-- Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics.
-  rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment
-  3 or UTF-8 assignment 26, following Standard QR's policy. Kanji mode remains intentionally
-  un-encoded (the decoder reads it); ECI + Byte mode is the interoperable Unicode path.
+- Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics. rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment 3 or UTF-8 assignment 26, following Standard QR's policy, and ECI + Byte mode is the interoperable Unicode path. Kanji mode stayed un-encoded until 2.0.0, which writes it on request (the Kanji row under Decisions).
 
 ## Decisions
 
@@ -361,8 +343,8 @@ The single mask is applied to data modules while placing. Both format copies com
 | Mixed-mode segmentation | Opt-in via `RmQRSegmentation.Optimal`, defaulting to `Single`. Changing the default would move the emitted bit stream and therefore the rendered symbol for every existing caller, and planning is a search that cannot be free (whether a split helps is only knowable by planning it). The bounds make it roughly free where it cannot help, which weakens but does not remove the argument | A major version allows changing the default, at which point `Single` is only ever better by accident; the breakage would be callers relying on the "too long" exception, plus any caller pinned to today's rendered dimensions (see the quiet-zone note above) |
 | Segmentation surface | Two values rather than three. A `WhenNeeded` middle value ("plan only when the single mode does not fit") was evaluated and rejected: for a requested version `Optimal` already costs nothing when the single mode fits, so the value only added the top-end rescue, and the bounds later made the ordinary case roughly free as well | A concrete caller needs the rescue without ever wanting a smaller symbol |
 | Interleaver | Lifted `BinaryInterleaver` to `Internals.BinaryEncoders` (Phase 5.4): it never used the version, only the `ECCInfo` block structure; the remainder-bit count became a parameter | - |
-| Placer performance | Reference per-module placer first (Phase 5.5), then the benchmark-driven fast path (follow-up, 2026-08-16): per-version tables built once by the reference painters (painted template per version × ECC, zigzag order as core indices, mask per position, column-pair segmentation), vector bit expansion fused with the mask, 16-bit pair stores + index scatter; the reference stays the source of truth (tables, decoder predicate) and the parity test pins both. ARM64 gained a second store tier (2026-08-20, `RmQRModulePlacer.Arm64.cs`): eight consecutive columns are transposed in registers so one symbol row is one 8-byte store instead of one 16-bit store per two modules, and the leftovers are segmented by row RUN rather than by whole column pair — the pair test disqualified 56 % of R11x27's modules although 91.8 % of those sit in stretches where both columns are ordinary data, leaving only 4-12 % genuinely isolated. Encode E2E improved an honest 15-43 % after accounting for a -4.5 % control drift. The portable expand became branch-free SWAR in the same round, which is what netstandard2.0/2.1 and non-SIMD targets run for the whole message | Placement stops being about half of the encode pipeline, or a profile names the template copy (33 ns of 287 ns at R17x139) |
-| Bit-stream performance | Reference shape first (Phase 5.3), then the benchmark-driven fast path (follow-up, 2026-08-16): raw-local writer, SWAR / SSE numeric and alphanumeric value kernels, SSE2 byte narrowing, capability-gated with scalar fallbacks; kernel-level parity tests pin vector vs scalar, the naive-reference parity pins the stream. Latin-1 gained a portable `Vector128.Narrow` tier (2026-08-20) for targets with 128-bit vectors and no SSE2 (ARM64 NEON, WASM), 16 characters per iteration: 9.2x on the writer and -11 % on byte-mode encode E2E. What was slow was the writer-state update rate, not character decoding — every gain in that round came from making one append cover more characters | The numeric and alphanumeric writers were measured and DECLINED, so their missing ARM tiers are a decision rather than an oversight: post-placement shares are byte 10.4 %, Latin-1 ECI 8.5 %, alphanumeric 5.4 %, numeric **0.3 %**. Alphanumeric batching won 19-28 % in isolation and measured worse end to end (331.6/304.7 → 339.9/348.2 ns) because production keeps all three writers in one `switch`, so enlarging one arm changes the whole method's codegen; it becomes available for free if encode is ever restructured so each mode compiles independently. Numeric is -9 % at 361 digits but +6 % at 12, the only numeric payload in the E2E set |
+| Placer performance | Reference per-module placer first (Phase 5.5), then the benchmark-driven fast path (follow-up, 2026-08-16): per-version tables built once by the reference painters (painted template per version × ECC, zigzag order as core indices, mask per position, column-pair segmentation), vector bit expansion fused with the mask, 16-bit pair stores + index scatter; the reference stays the source of truth (tables, decoder predicate) and the parity test pins both. ARM64 gained a second store tier (2026-08-20, `RmQRModulePlacer.Arm64.cs`): eight consecutive columns are transposed in registers so one symbol row is one 8-byte store instead of one 16-bit store per two modules, and the leftovers are segmented by row RUN rather than by whole column pair — the pair test disqualified 56 % of R11x27's modules although 91.8 % of those sit in stretches where both columns are ordinary data, leaving only 4-12 % genuinely isolated. Encode E2E improved an honest 15-43 % after accounting for a -4.5 % control drift. The portable expand became branch-free SWAR in the same round, which is what netstandard2.0/2.1 and non-SIMD targets run for the whole message. WebAssembly runs the masked expand 16 modules a step on its own swizzle (2026-09-30): 0.93 of the scalar expand at R17x139 AOT-compiled and 0.96 interpreted | Placement stops being about half of the encode pipeline, or a profile names the template copy (33 ns of 287 ns at R17x139) |
+| Bit-stream performance | Reference shape first (Phase 5.3), then the benchmark-driven fast path (follow-up, 2026-08-16): raw-local writer, SWAR / SSE numeric and alphanumeric value kernels, SSE2 byte narrowing, capability-gated with scalar fallbacks; kernel-level parity tests pin vector vs scalar, the naive-reference parity pins the stream. Latin-1 gained a portable `Vector128.Narrow` tier (2026-08-20) for targets with 128-bit vectors and no SSE2 (ARM64 NEON, WASM), 16 characters per iteration: 9.2x on the writer and -11 % on byte-mode encode E2E. What was slow was the writer-state update rate, not character decoding — every gain in that round came from making one append cover more characters | The numeric and alphanumeric writers were measured and DECLINED, so their missing ARM tiers are a decision rather than an oversight: post-placement shares are byte 10.4 %, Latin-1 ECI 8.5 %, alphanumeric 5.4 %, numeric **0.3 %**. Alphanumeric batching won 19-28 % in isolation and measured worse end to end (331.6/304.7 → 339.9/348.2 ns) because production keeps all three writers in one `switch`, so enlarging one arm changes the whole method's codegen; it becomes available for free if encode is ever restructured so each mode compiles independently. Numeric is -9 % at 361 digits but +6 % at 12, the only numeric payload in the E2E set. WebAssembly declined them the same way (2026-10-01): there the writers are 2.5-6.8 % of an encode, and a 16-character alphanumeric step ran 0.62-0.86 of the table loop alone, so it could take 2.5 % at most. Inlined, it slowed the numeric encode 6 % AOT-compiled; as an encode method of its own, which removes the switch effect, it moved encodes 0.97-1.02, inside the runs' spread. A 24-digit numeric step ran 1.26x the SWAR loop interpreted. ARM64 measured again (2026-10-01, Apple M2, the JIT and NativeAOT): the writers are 3.8 to 11 % of an encode there (numeric at 361 digits 10.6 to 11.2 %, alphanumeric at 120 characters 8.6 to 9.5 %), above the bar, and the end-to-end loss above still decides it; a numeric step gated on length was not tried |
 
 ## Verification record
 
@@ -380,11 +362,7 @@ Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--
 | Mask, zigzag start and direction, interleaving | The R7x43-M "1" symbol yields exactly the predicted codewords `22 20 EC 11` and multi-block versions deinterleave to the predicted streams | Confirmed |
 | Alignment column positions, sub-finder and corner patterns | Visual inspection of R7x43 / R9x59 / R11x27 plus the free-module count agreement above | Consistent |
 
-Not verified here: the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond
-the correction capacity). The decoder resolves it indirectly — the block structure verified
-above leaves at most one unused ECC codeword per block, and zxing-cpp corrects rMQR at full
-Reed-Solomon strength — but the Table 8 capacity column itself is still unread; see the Correction
-cap decision in [rMQR Decoder](rmqr-decoder.md).
+Not verified here: the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond the correction capacity). The decoder resolves it indirectly — the block structure verified above leaves at most one unused ECC codeword per block, and zxing-cpp corrects rMQR at full Reed-Solomon strength — but the Table 8 capacity column itself is still unread; see the Correction cap decision in [rMQR Decoder](rmqr-decoder.md).
 
 ## Lessons Learned
 

@@ -5,7 +5,7 @@ using FeatherQR.Internals.BinaryEncoders;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Verifies that every ECC kernel (scalar, SSSE3, GFNI, NEON) produces byte-identical
+/// Verifies that every ECC kernel (scalar, SSSE3, GFNI, NEON, WebAssembly) produces byte-identical
 /// output to a naive reference implementation of ISO/IEC 18004 Section 8.5
 /// polynomial division. CalculateECC dispatches by hardware capability, so these
 /// tests exercise each kernel directly in addition to the public entry point.
@@ -99,6 +99,28 @@ public class EccBinaryEncoderKernelParityTest
 
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccAdvSimd(data, actual, eccCount);
+
+            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Combos))]
+    public async Task PackedSimdKernel_MatchesNaiveReference(int dataLength, int eccCount)
+    {
+        if (!System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported)
+        {
+            Skip.Test("PackedSimd (WebAssembly SIMD) not supported on this machine");
+            return;
+        }
+
+        foreach (var data in EnumerateInputs(dataLength))
+        {
+            var expected = new byte[eccCount];
+            NaiveReferenceECC(data, expected, eccCount);
+
+            var actual = new byte[eccCount];
+            EccBinaryEncoder.PackedSimdKernel(data, actual, eccCount);
 
             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }

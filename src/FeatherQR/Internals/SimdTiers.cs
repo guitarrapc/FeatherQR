@@ -1,6 +1,7 @@
 using static FeatherQR.Internals.SimdTier;
 #if NET8_0_OR_GREATER
 using Arm = System.Runtime.Intrinsics.Arm;
+using Wasm = System.Runtime.Intrinsics.Wasm;
 using X86 = System.Runtime.Intrinsics.X86;
 #endif
 
@@ -38,6 +39,8 @@ internal enum SimdTier : byte
     AdvSimd,
     /// <summary>ARM64 AdvSimd with the ARMv8.2 dot product, which Cortex-A53/A72-class cores lack.</summary>
     AdvSimdDp,
+    /// <summary>WebAssembly PackedSimd, where a portable 128-bit tier takes an operation WebAssembly has and the portable form lowers badly.</summary>
+    PackedSimd,
 }
 
 /// <summary>
@@ -87,7 +90,7 @@ internal sealed class SimdKernel
     /// <summary>Every tier the kernel has besides the scalar one, most preferred first.</summary>
     internal (SimdTier Tier, bool Runs)[] Tiers { get; }
 
-    /// <summary>The first tier that can run here, which the dispatch takes for inputs large enough for it; <see cref="SimdTier.Scalar"/> when none can.</summary>
+    /// <summary>The first tier that can run here, the one the dispatch prefers; <see cref="SimdTier.Scalar"/> when none can.</summary>
     internal SimdTier Active
     {
         get
@@ -116,7 +119,7 @@ internal sealed class SimdKernel
 /// A probe put the flag behind a property, an aggressively inlined property and a <see langword="static"/> <see langword="readonly"/> field: the JIT inlined the dispatch into its caller only when the dispatch read <c>IsSupported</c> itself. (ILC compiled all of them alike.)
 /// </para>
 /// <para>
-/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>) or takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
+/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>), takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>) or takes a range it does not cover (<c>ModulePlacer.MaskCode</c>, whose 128-bit tier scores versions 1-11), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
 /// </para>
 /// </remarks>
 internal static class SimdTiers
@@ -141,6 +144,7 @@ internal static class SimdTiers
 #endif
         internal static bool AdvSimd => Arm.AdvSimd.Arm64.IsSupported;
         internal static bool AdvSimdDp => Arm.Dp.IsSupported && Arm.AdvSimd.Arm64.IsSupported;
+        internal static bool PackedSimd => Wasm.PackedSimd.IsSupported;
 #else
         internal static bool Vector128 => false;
         internal static bool Vector256 => false;
@@ -153,6 +157,7 @@ internal static class SimdTiers
         internal static bool GfniV256 => false;
         internal static bool AdvSimd => false;
         internal static bool AdvSimdDp => false;
+        internal static bool PackedSimd => false;
 #endif
     }
 
@@ -170,6 +175,7 @@ internal static class SimdTiers
         (SimdTier.GfniV256, Isa.GfniV256),
         (SimdTier.AdvSimd, Isa.AdvSimd),
         (SimdTier.AdvSimdDp, Isa.AdvSimdDp),
+        (SimdTier.PackedSimd, Isa.PackedSimd),
     ];
 
     /// <summary>
@@ -181,42 +187,42 @@ internal static class SimdTiers
         // ---- Shared across symbologies ----
 
         // TextAnalyzer.Analyze: the mode and charset scan of the input text
-        new("TextAnalyzer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Sse2, Isa.Sse2), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        new("TextAnalyzer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Sse2, Isa.Sse2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // ModuleBitPacker.Pack / Unpack: byte-per-module to MSB-first bits and back; the SSSE3 / AdvSimd step also finishes what the AVX2 step leaves
-        new("ModuleBitPacker", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // ModeSegmenter.ComputeCostsLanes: the mixed-mode cost walk over eight pieces at once
-        new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // EccBinaryEncoder.CalculateEcc: Reed-Solomon remainder; GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2
-        new("EccBinaryEncoder", (SimdTier.GfniV256, Isa.GfniV256 && Isa.Avx2), (SimdTier.Gfni, Isa.Gfni), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // EccBinaryDecoder.ComputeSyndromes: the syndrome pass
-        new("EccBinaryDecoder", (SimdTier.GfniV256, Isa.GfniV256), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // LuminanceConverter.ConvertRgba: RGBA / BGRA pixels to 8-bit luminance
-        new("LuminanceConverter", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimdDp, Isa.AdvSimdDp)),
+        new("ModuleBitPacker", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
+        // ModeSegmenter.ComputeCostsLanes: the mixed-mode cost walk over eight pieces at once; the 128-bit tier's four-lane groups narrow their parent entries with SSE2 on x64 and PackedSimd on WebAssembly
+        new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // EccBinaryEncoder.CalculateEcc: Reed-Solomon remainder; GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2; WebAssembly runs the NEON kernel with its swizzle for the table lookup
+        new("EccBinaryEncoder", (SimdTier.GfniV256, Isa.GfniV256 && Isa.Avx2), (SimdTier.Gfni, Isa.Gfni), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
+        // EccBinaryDecoder.ComputeSyndromes: the syndrome pass; the 128-bit tier multiplies by each lane's constant through its bit planes, with no platform instruction
+        new("EccBinaryDecoder", (SimdTier.GfniV256, Isa.GfniV256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // LuminanceConverter.ConvertRgba: RGBA / BGRA pixels to 8-bit luminance; the 128-bit tier's 16-bit dot product and narrowing are SSE2 on x64 and PackedSimd on WebAssembly
+        new("LuminanceConverter", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimdDp, Isa.AdvSimdDp), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // LuminanceInverter: the negative image for the light-on-dark pass
         new("LuminanceInverter", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
         // Binarizer.FillHistogram: the luminance histogram behind the global threshold
-        new("Binarizer", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        new("Binarizer", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // LocalBinarizer: block statistics, block thresholds and the dark count of the regional retry
         new("LocalBinarizer", (SimdTier.Vector128, Isa.Vector128)),
         // FinderPatternFinder.ScanRowMask: a row's dark bitmask for the finder search's mask walk
         new("FinderRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // FinderPatternFinder.ScanRowEdges: the finder search's edge-list row kernel, sixteen windows a step on 256-bit vectors and eight on ARM64
-        new("FinderRowEdges", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // PerspectiveGridSampler.Sample: a square grid through one projective transform (Standard QR's four-point, parallelogram and frame grids, Micro QR's perspective search); the 128-bit tier also takes grids too small for the 256-bit one
-        new("PerspectiveGridSampler", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Vector128, Isa.Vector128)),
+        // FinderPatternFinder.ScanRowEdges: the finder search's edge-list row kernel, sixteen windows a step on 256-bit vectors and eight on 128-bit ones; ARM64 folds its rows into words
+        new("FinderRowEdges", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // PerspectiveGridSampler.Sample: a square grid through one projective transform (Standard QR's four-point, parallelogram and frame grids, Micro QR's perspective search); the 128-bit tier also takes grids too small for the 256-bit one, and converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
+        new("PerspectiveGridSampler", (SimdTier.Vector256, Isa.Vector256), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
 
         // ---- Standard QR ----
 
         // ModulePlacer.ExpandBits: message bits to module bytes; the SSSE3 step also finishes what the AVX2 step leaves
         new("ModulePlacerExpandBits", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3)),
-        // ModulePlacer.MaskCode: mask scoring and selection
-        new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // ModulePlacer.MaskCode: mask scoring and selection; the 128-bit tier scores versions 1-11, its popcount SSSE3 on x64 and PackedSimd on WebAssembly
+        new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Ssse3, Isa.Vector128 && Isa.Ssse3), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // AlignmentPatternFinder.ScanRowMask: a row's dark bitmask for the alignment search
         new("AlignmentRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler
-        new("QRSampleGridPiecewise", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // StructuredAppendPlanner.TryNarrowWithLanes / WalkLanes: the chunk-budget walks over eight budgets at once
-        new("StructuredAppendLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd)),
+        // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler; the 128-bit tier converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
+        new("QRSampleGridPiecewise", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // StructuredAppendPlanner.TryNarrowWithLanes / WalkLanes: the chunk-budget walks over eight budgets at once; the 128-bit tier's saturating add is SSE2 on x64 and PackedSimd on WebAssembly
+        new("StructuredAppendLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // StructuredAppendPlanner.Parity: the XOR of the message's encoded bytes
         new("StructuredAppendParity", (SimdTier.AdvSimd, Isa.AdvSimd)),
         // StructuredAppendScanner.ModeBoundaries / Utf8PrefixLength: the character boundaries of the single-mode cost model
@@ -228,8 +234,8 @@ internal static class SimdTiers
         new("MicroQRByteSegment", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Sse2)),
         // MicroQRModulePlacer.PlaceSymbol: placement, masking and mask selection
         new("MicroQRModulePlacer", (SimdTier.Avx2Pext, Isa.Avx2Pext), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // MicroQRImageDecoder.SampleGrid: the affine module-centre sampler of the grid searches
-        new("MicroQRSampleGrid", (SimdTier.Vector128, Isa.Vector128)),
+        // MicroQRImageDecoder.SampleGrid: the affine module-centre sampler of the grid searches; coordinates converted as PerspectiveGridSampler's
+        new("MicroQRSampleGrid", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
 
         // ---- rMQR ----
 
@@ -238,13 +244,13 @@ internal static class SimdTiers
         // RmQRBinaryEncoder.WriteLatin1: the Byte segment's narrowing
         new("RmQRLatin1Segment", (SimdTier.Sse2, Isa.Sse2), (SimdTier.Vector128, Isa.Vector128)),
         // RmQRModulePlacer: masked bit expansion (the SSSE3 step also finishes what the AVX2 step leaves) and, on ARM64, the block and run stores
-        new("RmQRModulePlacer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // RmQRMatrixDecoder.ExtractCodewords: codeword extraction, x64 bit planes or ARM64 pair planes
-        new("RmQRExtractCodewords", (SimdTier.Avx2Pext, Isa.Avx2Pext), (SimdTier.AdvSimd, Isa.AdvSimd)),
-        // RmQRImageDecoder.ClassifySubFinderLattice: the sub-finder lattice classification
-        new("RmQRSubFinderLattice", (SimdTier.Vector128, Isa.Vector128)),
-        // RmQRImageDecoder.SampleGrid: the perspective sampler
-        new("RmQRSampleGrid", (SimdTier.Vector128, Isa.Vector128)),
+        new("RmQRModulePlacer", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
+        // RmQRMatrixDecoder.ExtractCodewords: codeword extraction, x64 bit planes or ARM64 pair planes; the 128-bit tier is the pair planes on portable vectors, which WebAssembly takes only for symbols of 44 stream bits or more per eight columns
+        new("RmQRExtractCodewords", (SimdTier.Avx2Pext, Isa.Avx2Pext), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // RmQRImageDecoder.ClassifySubFinderLattice: the sub-finder lattice classification; coordinates converted as PerspectiveGridSampler's
+        new("RmQRSubFinderLattice", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // RmQRImageDecoder.SampleGrid: the perspective sampler; coordinates converted as PerspectiveGridSampler's
+        new("RmQRSampleGrid", (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
     ];
 
     /// <summary>
@@ -253,15 +259,15 @@ internal static class SimdTiers
     /// </summary>
     internal static (SimdTier[] Present, SimdTier[] Absent, SimdTier[][] LeftToCpu) Definition(SimdBuildClass buildClass) => buildClass switch
     {
-        SimdBuildClass.X64Sse => ([Vector128, Sse2, Ssse3, Sse41], [Vector256, Avx2, Avx2Pext, GfniV256, AdvSimd, AdvSimdDp], [[Gfni]]),
-        SimdBuildClass.X64Avx2 => ([Vector128, Vector256, Sse2, Ssse3, Sse41, Avx2], [AdvSimd, AdvSimdDp], [[Gfni, GfniV256], [Avx2Pext]]),
-        SimdBuildClass.Arm64 => ([Vector128, AdvSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256], [[AdvSimdDp]]),
-        SimdBuildClass.Wasm => ([Vector128], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256, AdvSimd, AdvSimdDp], []),
+        SimdBuildClass.X64Sse => ([Vector128, Sse2, Ssse3, Sse41], [Vector256, Avx2, Avx2Pext, GfniV256, AdvSimd, AdvSimdDp, PackedSimd], [[Gfni]]),
+        SimdBuildClass.X64Avx2 => ([Vector128, Vector256, Sse2, Ssse3, Sse41, Avx2], [AdvSimd, AdvSimdDp, PackedSimd], [[Gfni, GfniV256], [Avx2Pext]]),
+        SimdBuildClass.Arm64 => ([Vector128, AdvSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256, PackedSimd], [[AdvSimdDp]]),
+        SimdBuildClass.Wasm => ([Vector128, PackedSimd], [Vector256, Sse2, Ssse3, Sse41, Avx2, Avx2Pext, Gfni, GfniV256, AdvSimd, AdvSimdDp], []),
         _ => throw new ArgumentOutOfRangeException(nameof(buildClass), buildClass, "Unknown build class."),
     };
 
     /// <summary>
-    /// Which tier each kernel takes per build class: the answer to "which kernel runs which tier on which build", and CI holds every build to it (<c>--simd-class</c> of tests/FeatherQR.AotAnalysis and tests/FeatherQR.WasmReport); .github/docs/specs/qrcode-symbologies.md says what keeps it true.
+    /// Which tier each kernel takes per build class: the answer to "which kernel runs which tier on which build", and CI holds every build to it (<c>--simd-class</c> of tests/FeatherQR.AotAnalysis and tests/FeatherQR.WasmReport); .github/docs/specs/qrcode-symbologies.md says what keeps it true, and SimdTiersDocTest renders it into .github/docs/specs/qrcode-simd-tiers.md.
     /// A cell with one tier is that tier. A cell with more lists what the CPU decides between, most preferred first: the first whose instruction set the process has is expected, and the last when it has none of them.
     /// </summary>
     internal static SimdExpectation[] Expected() =>
@@ -269,40 +275,52 @@ internal static class SimdTiers
         //  kernel                     x64, no AVX      x64, AVX2             ARM64                 WebAssembly
 
         // ---- Shared across symbologies ----
-        new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd],            [Scalar]),
-        new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
-        new("ModeSegmenterLanes",      [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
-        new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [Scalar]),
-        new("EccBinaryDecoder",        [Scalar],        [GfniV256, Scalar],   [AdvSimd],            [Scalar]),
-        new("LuminanceConverter",      [Scalar],        [Avx2],               [AdvSimdDp, Scalar],  [Scalar]),
+        new("TextAnalyzer",            [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),
+        new("ModuleBitPacker",         [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
+        new("ModeSegmenterLanes",      [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
+        new("EccBinaryEncoder",        [Gfni, Ssse3],   [GfniV256, Ssse3],    [AdvSimd],            [PackedSimd]),
+        new("EccBinaryDecoder",        [Vector128],     [GfniV256, Vector128], [AdvSimd],           [Vector128]),
+        new("LuminanceConverter",      [Sse2],          [Avx2],               [AdvSimdDp, Vector128], [PackedSimd]),
         new("LuminanceInverter",       [Vector128],     [Vector256],          [Vector128],          [Vector128]),
-        new("Binarizer",               [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        // WebAssembly keeps the 128-bit tier though AOT-compiled it counts dense input (soft, noise, a gradient) 4-11 % slower than scalar: at most 2 % of a decode, inside the runs' spread, against 0.09-0.31 on rendered symbols
+        new("Binarizer",               [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("LocalBinarizer",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
         new("FinderRowMask",           [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
-        new("FinderRowEdges",          [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
-        new("PerspectiveGridSampler",  [Vector128],     [Vector256],          [Vector128],          [Vector128]),
+        new("FinderRowEdges",          [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
+        new("PerspectiveGridSampler",  [Sse2],          [Vector256],          [Vector128],          [PackedSimd]),
 
         // ---- Standard QR ----
+        // WebAssembly stays scalar: the expand is 0.5 % of a version 40 encode AOT-compiled and 0.3 % interpreted
         new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
-        new("ModulePlacerMaskCode",    [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
+        new("ModulePlacerMaskCode",    [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
+        // WebAssembly keeps the 128-bit tier though the interpreter runs it 16-21 % slower than scalar: AOT-compiled it is 1.5x faster, and the search is under 2 % of any shape there
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
-        new("QRSampleGridPiecewise",   [Scalar],        [Avx2],               [AdvSimd],            [Scalar]),
-        new("StructuredAppendLanes",   [Scalar],        [Vector256],          [AdvSimd],            [Scalar]),
+        new("QRSampleGridPiecewise",   [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),
+        new("StructuredAppendLanes",   [Sse2],          [Vector256],          [AdvSimd],            [PackedSimd]),
+        // x64 and WebAssembly stay scalar: the parity pass is 1.2 % of a 45,000-character set on a default NativeAOT publish, 0.7 to 0.8 % with AVX2, 0.8 % on WebAssembly AOT
         new("StructuredAppendParity",  [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
+        // x64 and WebAssembly stay scalar: the scanner is 0.2 % or less of a Structured Append encode on a default NativeAOT publish (0.3 % with AVX2, the same scalar time over a shorter encode), 0.1 % on WebAssembly AOT
         new("StructuredAppendScanner", [Scalar],        [Scalar],             [AdvSimd],            [Scalar]),
 
         // ---- Micro QR ----
+        // WebAssembly stays scalar: a vector step for the 8 to 15 chars saves 1.5 % of an M4 Byte encode AOT-compiled and 2.5 % interpreted
         new("MicroQRByteSegment",      [Sse2],          [Sse2],               [AdvSimd],            [Scalar]),
+        // WebAssembly stays scalar: the 16-module vector unpack places an M4 symbol in 0.25 µs against 0.27 AOT-compiled, and 1.59 against 1.43 interpreted
         new("MicroQRModulePlacer",     [Ssse3],         [Avx2Pext, Ssse3],    [AdvSimd],            [Scalar]),
-        new("MicroQRSampleGrid",       [Vector128],     [Vector128],          [Vector128],          [Vector128]),
+        new("MicroQRSampleGrid",       [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
 
         // ---- rMQR ----
+        // ARM64 and WebAssembly stay scalar. On WebAssembly the writers are 2.5 to 6.8 % of an rMQR encode; a 16-character Alphanumeric step runs
+        // 0.62 to 0.86 of the table loop, at most 2.5 % of an encode, and inlined into the encode's switch it slowed the Numeric encode 6 % AOT-compiled;
+        // a 24-digit Numeric step ran 1.26x the SWAR loop interpreted. On ARM64 the writers are 3.8 to 11 % of an rMQR encode; its Alphanumeric batch
+        // saved 19 to 28 % of the writer alone, at most 2.7 % of an encode, and lost end to end to the same switch, and its Numeric batch read −9 % at
+        // 361 digits and +6 % at 12 (the rMQR encoder record)
         new("RmQRValueSegments",       [Sse41],         [Sse41],              [Scalar],             [Scalar]),
         new("RmQRLatin1Segment",       [Sse2],          [Sse2],               [Vector128],          [Vector128]),
-        new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
-        new("RmQRExtractCodewords",    [Scalar],        [Avx2Pext, Scalar],   [AdvSimd],            [Scalar]),
-        new("RmQRSubFinderLattice",    [Vector128],     [Vector128],          [Vector128],          [Vector128]),
-        new("RmQRSampleGrid",          [Vector128],     [Vector128],          [Vector128],          [Vector128]),
+        new("RmQRModulePlacer",        [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
+        new("RmQRExtractCodewords",    [Vector128],     [Avx2Pext, Vector128], [AdvSimd],           [PackedSimd]),
+        new("RmQRSubFinderLattice",    [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
+        new("RmQRSampleGrid",          [Sse2],          [Sse2],               [Vector128],          [PackedSimd]),
     ];
 
     /// <summary>What in this process disagrees with <see cref="Expected"/> for <paramref name="buildClass"/>; empty when nothing does.</summary>

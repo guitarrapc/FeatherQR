@@ -110,6 +110,7 @@ internal static partial class RmQRMatrixDecoder
     /// Two tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2 (see RmQRMatrixDecoder.X86.cs) and a portable table walk everywhere else.
     /// Measured 16-64x and 8-12x respectively over the per-module reference walk across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
     /// ARM64 has a third tier (RmQRMatrixDecoder.Arm64.cs) built on pair-interleaved planes instead, because NEON has no PEXT/PDEP; it is 1.1-3.3x the portable tier.
+    /// The pair planes on portable vectors (RmQRMatrixDecoder.Vector128.cs) take x64 without fast PEXT, and WebAssembly for symbols with enough stream bits per column (<see cref="PairPlanesVector128Pay"/>).
     /// </remarks>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream)
         => ExtractCodewords(modules, width, height, version, stream, ExtractKernel.Auto);
@@ -130,6 +131,22 @@ internal static partial class RmQRMatrixDecoder
         false;
 #endif
 
+    /// <summary>
+    /// Whether the pair planes on portable vectors run on this machine (parity tests skip them otherwise). Not on ARM64, whose own pair
+    /// planes always run first, so its dispatch drops the branch.
+    /// </summary>
+    internal static bool IsPairPlaneVector128TierSupported
+    {
+        // ILC ARM64 leaves this a call without it, and the call keeps the dead branch.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get =>
+#if NET8_0_OR_GREATER
+            System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated && !IsPairPlaneTierSupported;
+#else
+            false;
+#endif
+    }
+
     /// <summary>Which extraction kernel to run; anything but <see cref="ExtractKernel.Auto"/> is for parity tests.</summary>
     internal enum ExtractKernel
     {
@@ -141,6 +158,8 @@ internal static partial class RmQRMatrixDecoder
         BitPlanes,
         /// <summary>ARM64 pair-interleaved planes + run compression.</summary>
         PairPlanes,
+        /// <summary>The pair planes on portable 128-bit vectors.</summary>
+        PairPlanesVector128,
     }
 
     /// <summary>
@@ -149,14 +168,14 @@ internal static partial class RmQRMatrixDecoder
     /// </summary>
     internal static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream, ExtractKernel kernel)
     {
-        if (kernel is ExtractKernel.BitPlanes or ExtractKernel.PairPlanes)
+        if (kernel is ExtractKernel.BitPlanes or ExtractKernel.PairPlanes or ExtractKernel.PairPlanesVector128)
         {
-            var supported = kernel == ExtractKernel.BitPlanes ? IsBitPlaneTierSupported : IsPairPlaneTierSupported;
+            var supported = kernel == ExtractKernel.BitPlanes ? IsBitPlaneTierSupported : kernel == ExtractKernel.PairPlanes ? IsPairPlaneTierSupported : IsPairPlaneVector128TierSupported;
             if (!supported)
-                throw new PlatformNotSupportedException($"{nameof(ExtractKernel)}.{kernel} was pinned, but that tier does not run on this machine. Guard the call with {nameof(IsBitPlaneTierSupported)} / {nameof(IsPairPlaneTierSupported)}.");
+                ThrowPinnedTierAbsent(kernel);
             var expected = RmQRConstants.GetTotalCodewordCount(version);
             if (stream.Length != expected)
-                throw new ArgumentException($"{nameof(ExtractKernel)}.{kernel} emits whole words off a per-version table, so the stream must be exactly {expected} bytes for {version}; got {stream.Length}.", nameof(stream));
+                ThrowPinnedStreamLength(kernel, version, expected, stream.Length, nameof(stream));
         }
 
         var layout = GetExtractLayout(version);
@@ -176,11 +195,28 @@ internal static partial class RmQRMatrixDecoder
                 ExtractCodewordsPairPlanes(modules, width, height, layout.PairPlanes!, stream);
                 return;
             }
+            if ((kernel == ExtractKernel.Auto || kernel == ExtractKernel.PairPlanesVector128) && IsPairPlaneVector128TierSupported
+                && (kernel != ExtractKernel.Auto || PairPlanesVector128Pay(width, stream.Length * 8)))
+            {
+                // The layout has none where the bit planes run, so a pinned call there builds its own.
+                ExtractCodewordsPairPlanesVector128(modules, width, height, layout.PairPlanes ?? BuildPairPlaneLayout(version, width, height, stream.Length * 8), stream);
+                return;
+            }
         }
 #endif
         // The portable tier reads the geometry out of the walk-order table instead.
         ExtractCodewordsScalar(modules, layout.Order, stream);
     }
+
+    // Outlined so the dispatch every matrix decode runs does not carry the messages' formatting: inline, it was most of
+    // the method (530 → 102 instructions on the ARM64 JIT, 348 → 96 on a default x64 NativeAOT publish).
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowPinnedTierAbsent(ExtractKernel kernel)
+        => throw new PlatformNotSupportedException($"{nameof(ExtractKernel)}.{kernel} was pinned, but that tier does not run on this machine. Guard the call with {nameof(IsBitPlaneTierSupported)} / {nameof(IsPairPlaneTierSupported)} / {nameof(IsPairPlaneVector128TierSupported)}.");
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowPinnedStreamLength(ExtractKernel kernel, RmQRVersion version, int expected, int actual, string paramName)
+        => throw new ArgumentException($"{nameof(ExtractKernel)}.{kernel} emits whole words off a per-version table, so the stream must be exactly {expected} bytes for {version}; got {actual}.", paramName);
 
     /// <summary>
     /// Portable tier: one gather per stream bit through the walk-order table, the output byte accumulated in a register so each is stored once.
@@ -216,7 +252,7 @@ internal static partial class RmQRMatrixDecoder
     // ---------------------------------------------------------------
     // Per-version extraction tables (built once from the placer's own predicates, so they are correct by construction; published with a volatile write - a benign
     // race builds identical tables twice).
-    // Memory per version: 2 bytes per stream bit plus 24 bytes per column pair, and on ARM64 the pair-plane run tables on top of that. Measured: R17x139 is 5,368 B on x64/portable (3,712 B of order plus 69 column pairs) and 7,368 B on ARM64; decoding all 32 versions costs about 68 KB and about 100 KB respectively.
+    // Memory per version: 2 bytes per stream bit plus 24 bytes per column pair, and where a pair-plane tier runs the pair-plane run tables on top of that. Measured: R17x139 is 5,368 B without them (3,712 B of order plus 69 column pairs) and 7,368 B with them; decoding all 32 versions costs about 68 KB and about 100 KB respectively.
     // ---------------------------------------------------------------
 
     /// <summary>Low bits of an <see cref="ExtractLayout.Order"/> entry: the core module index.</summary>
@@ -232,7 +268,7 @@ internal static partial class RmQRMatrixDecoder
     private const int PlaneStride = 160;
 
     /// <summary>
-    /// Everything the ARM64 pair-plane kernel derives from the version alone.
+    /// Everything the pair-plane kernels derive from the version alone.
     /// Unlike the x64 form, a lane here is a whole column PAIR: the transpose interleaves the two columns as it goes, so the plane word already is the pair's output field with the function modules still in it, and the kernel only has to compress it.
     /// The compression is described as runs of consecutive data bits, because function modules come from rectangular blocks and not from scattered modules (a pair averages 1.0-2.3 runs, worst case 5-11).
     /// </summary>
@@ -366,7 +402,7 @@ internal static partial class RmQRMatrixDecoder
         /// </summary>
         public readonly uint[] Pairs;
 
-        /// <summary>Tables for the ARM64 pair-plane kernel; null when that tier cannot run here.</summary>
+        /// <summary>Tables for the pair-plane kernels; null where neither runs.</summary>
         public readonly PairPlaneLayout? PairPlanes;
 
         public ExtractLayout(ushort[] order, uint[] pairs, PairPlaneLayout? pairPlanes)
@@ -458,6 +494,22 @@ internal static partial class RmQRMatrixDecoder
             upward = !upward;
         }
 
-        return new ExtractLayout(order, pairs.ToArray(), IsPairPlaneTierSupported ? BuildPairPlaneLayout(version, width, height, bitCount) : null);
+        var pairPlanes = IsPairPlaneTierSupported || (!IsBitPlaneTierSupported && IsPairPlaneVector128TierSupported);
+        return new ExtractLayout(order, pairs.ToArray(), pairPlanes ? BuildPairPlaneLayout(version, width, height, bitCount) : null);
     }
+
+    /// <summary>
+    /// Whether the portable pair planes beat the walk on this symbol: on every symbol on x64; on WebAssembly from
+    /// <see cref="MinPackedSimdBitsPerBlock"/> stream bits per eight columns, below which the interpreter lost to the walk.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool PairPlanesVector128Pay(int width, int bitCount) =>
+#if NET8_0_OR_GREATER
+        !System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported || bitCount >= MinPackedSimdBitsPerBlock * ((width + 7) / 8);
+#else
+        false;
+#endif
+
+    // One flag gates both WebAssembly builds, and the interpreter's break-even is the higher one.
+    private const int MinPackedSimdBitsPerBlock = 44;
 }
