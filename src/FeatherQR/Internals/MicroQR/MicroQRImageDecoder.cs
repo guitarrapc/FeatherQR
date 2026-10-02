@@ -11,7 +11,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
-/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data); a successful decode ends the scan and a read that did not fit ends the candidate, whose attempts see only its own results; otherwise the scan reports the result that went furthest.
+/// The global and regional passes scan with a row stride, then sweep every row unless that read a symbol or read one too long for the destination; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data); a successful decode ends the scan and a read that did not fit ends the candidate, whose attempts see only its own results; otherwise each finder scan reports the result that went furthest (<see cref="CandidateScan"/>).
 /// Each grid is decoded through the matrix level as soon as it is sampled, keeping only the corrections its structure earns (<see cref="MicroQRGridEvidence"/>), then transposed unless it read, a read that did not fit included.
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
@@ -88,7 +88,7 @@ internal static partial class MicroQRImageDecoder
             => MicroQRImageDecoder.DecodeCandidate(image, candidate, modules, destination, out charsWritten, out info, ref result);
     }
 
-    /// <summary>The strided finder scan and, when nothing was read, the full sweep, at the global threshold of <paramref name="histogram"/> (<see cref="CandidateScan.Decode"/>).</summary>
+    /// <summary>The strided finder scan and, unless it read a symbol or read one too long for the destination, the full sweep, at the global threshold of <paramref name="histogram"/> (<see cref="CandidateScan.Decode"/>).</summary>
     internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
         var decoder = new CandidateDecoder();
@@ -98,7 +98,7 @@ internal static partial class MicroQRImageDecoder
     /// <summary>
     /// One finder candidate: the frames along the image axes at each right angle, then the arbitrary-orientation path.
     /// A terminal result ends the candidate, a read that does not fit the destination as well as one that does: its grids are
-    /// tried in the same order whatever the destination, so the read that does not fit is the one a sized call returns, and a
+    /// tried in the same order whatever the destination, so the read that does not fit is the one a sized call returns, its content permitting (<see cref="AttemptStatus.Progress"/>), and a
     /// later grid could only read something else.
     /// </summary>
     private static DecodeStatus DecodeCandidate(in ImageView image, FinderPattern candidate, Span<byte> modules, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best)
@@ -410,7 +410,7 @@ internal static partial class MicroQRImageDecoder
     /// symbol's format modules sit next to the finder, where the frame is best; texture reads a word within 3 bits about half the
     /// time and an exact one about 1 in 1,000.
     /// </remarks>
-    private struct BothWays<TGrid>(TGrid grid, int size) : IGridRead<MicroQRCodeDecodeInfo>
+    internal struct BothWays<TGrid>(TGrid grid, int size) : IGridRead<MicroQRCodeDecodeInfo>
         where TGrid : struct, ICoverageGrid
     {
         private DecodeStatus _straight;
@@ -467,7 +467,7 @@ internal static partial class MicroQRImageDecoder
     }
 
     /// <summary>A sampled grid's matrix decode, with the quiet zone and the corners of the mapping it was sampled through.</summary>
-    private interface ISampledGrid
+    internal interface ISampledGrid
     {
         DecodeStatus Decode<TModules>(ReadOnlySpan<byte> modules, in TModules grid, int size, in ImageView image, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
             where TModules : struct, IMicroQRModules;
@@ -476,12 +476,12 @@ internal static partial class MicroQRImageDecoder
     }
 
     /// <summary>A sampled grid that can be sampled again by coverage: grid coordinates to image coordinates.</summary>
-    private interface ICoverageGrid : ISampledGrid
+    internal interface ICoverageGrid : ISampledGrid
     {
         void Map(float u, float v, out float x, out float y);
     }
 
-    private readonly struct AffineGrid(float originX, float originY, float uX, float uY, float vX, float vY) : ICoverageGrid
+    internal readonly struct AffineGrid(float originX, float originY, float uX, float uY, float vX, float vY) : ICoverageGrid
     {
         public void Map(float u, float v, out float x, out float y)
         {

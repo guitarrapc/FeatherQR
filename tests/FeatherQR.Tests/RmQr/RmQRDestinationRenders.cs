@@ -72,9 +72,9 @@ internal static class RmQRDestinationRenders
 
     /// <summary>
     /// <paramref name="upright"/> at 6 px/module, whose finder is confirmed on more rows, above <paramref name="turned"/>
-    /// at 4 px/module, turned about its centre.
+    /// at 4 px/module, turned about its centre. Without <paramref name="drawUpright"/>, the turned one alone where it would be.
     /// </summary>
-    public static (byte[] Luminance, int Width, int Height) RenderUprightAndTurned(RmQRCodeData upright, RmQRCodeData turned, float degrees)
+    public static (byte[] Luminance, int Width, int Height) RenderUprightAndTurned(RmQRCodeData upright, RmQRCodeData turned, float degrees, bool drawUpright = true)
     {
         const int margin = 24;
         var uprightWidth = upright.Width * 6;
@@ -88,7 +88,8 @@ internal static class RmQRDestinationRenders
         using (var canvas = new SKCanvas(bitmap))
         {
             canvas.Clear(SKColors.White);
-            SymbolRenderer.Render(canvas, SKRect.Create(margin, margin, uprightWidth, uprightHeight), upright, SKColors.Black, SKColors.White);
+            if (drawUpright)
+                SymbolRenderer.Render(canvas, SKRect.Create(margin, margin, uprightWidth, uprightHeight), upright, SKColors.Black, SKColors.White);
             canvas.Translate(margin + turnedSide / 2f, uprightHeight + 2 * margin + turnedSide / 2f);
             canvas.RotateDegrees(degrees);
             canvas.Translate(-turnedWidth / 2f, -turnedHeight / 2f);
@@ -118,6 +119,26 @@ internal static class RmQRDestinationRenders
         var destination = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
         var status = RmQRMatrixDecoder.DecodeMatrix(grid, columns, rows, destination, out var written, out _);
         return status == DecodeStatus.Success ? new string(destination, 0, written) : status.ToString();
+    }
+
+    /// <summary>
+    /// A symbol at 8 px/module with its top edge shortened by <paramref name="tilt"/> of its width a side, turned by
+    /// <paramref name="degrees"/> (<see cref="RmQRCodeDecoderPerspectiveTest"/>'s keystone).
+    /// </summary>
+    public static (byte[] Luminance, int Width, int Height) RenderKeystone(string content, RmQRVersion version, float tilt, float degrees = 0f)
+    {
+        using var bitmap = RmQRCodeDecoderPerspectiveTest.RenderKeystone(content, version, tilt, horizontal: false, rotateDegrees: degrees);
+        return (Luminance(bitmap), bitmap.Width, bitmap.Height);
+    }
+
+    /// <summary>
+    /// A symbol of level M turned by <paramref name="degrees"/> at <paramref name="pixelsPerModule"/>, its edges anti-aliased and
+    /// evenly lit (<see cref="UnevenLightingRenderer"/> at no depth), as <see cref="SubPixelFrameDecodeTest"/> draws its turned renders.
+    /// </summary>
+    public static (byte[] Luminance, int Width, int Height) RenderTurnedGrey(string content, RmQRVersion version, float pixelsPerModule, float degrees)
+    {
+        var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
+        return UnevenLightingRenderer.Render((row, column) => data[row, column], data.Width, data.Height, pixelsPerModule, degrees, 0.3f, 0.6f, true, UnevenLight.Shadow, 0f, 0f);
     }
 
     private static byte[] Luminance(SKBitmap bitmap)

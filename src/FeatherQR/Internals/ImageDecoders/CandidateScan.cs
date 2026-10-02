@@ -30,10 +30,11 @@ internal interface ICandidateDecoder<TInfo>
 }
 
 /// <summary>
-/// The scan of the decoders that read around a single finder: a strided finder scan, then a full sweep when nothing read; in
-/// each, the first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination.
-/// A successful decode ends the scan, a read that did not fit ends its candidate, and each candidate's grids see only its own
-/// results; otherwise the scan reports the result that went furthest.
+/// The scan of the decoders that read around a single finder: a strided finder scan, then a full sweep unless it read a symbol
+/// or read one too long for the destination; in each, the first eight candidates, most confirmed first, less any inside a symbol
+/// that read but did not fit the destination. A successful decode ends the scan, a read that did not fit ends its candidate,
+/// and each candidate's grids see only its own results; otherwise each finder scan reports the result that went furthest, and
+/// the scan the sweep's if it settled, the strided scan's if not.
 /// </summary>
 /// <remarks>
 /// The rules and why they are so are in the architecture record (qrcode-symbologies.md, single-finder candidate scan); what each decoder does with one
@@ -48,13 +49,14 @@ internal static class CandidateScan
     private const int MaxStackModuleBuffer = 512;
 
     /// <summary>
-    /// The strided scan, then the sweep when nothing read, at the global threshold of <paramref name="histogram"/>;
+    /// The strided scan, then the sweep unless it read a symbol or read one too long for the destination, at the global threshold of <paramref name="histogram"/>;
     /// <paramref name="noFinder"/> when neither found a finder candidate, with the threshold and grey levels they used.
     /// </summary>
     /// <remarks>
     /// The widening trigger has to be a question about the symbol, and "did anything decode" is the only one available.
     /// The scan itself cannot ask it: every signal inside a flat candidate list is a statement about the image, so a second symbol or a noise artefact would answer it in the real symbol's place and suppress the sweep the symbol needed.
-    /// Paid only on images that fail, and it makes the detection envelope a superset of a full sweep's: the symbol is read if either scan reads it.
+    /// Paid only on images the strided scan does not read, and on an image of one symbol it makes the detection envelope a superset of a full sweep's: the symbol is read if either scan reads it.
+    /// After a read too long for the destination no sweep runs, so a second symbol that fits and that only the sweep finds is not read (a residual: qrcode-symbologies.md, single-finder candidate scan).
     /// </remarks>
     public static DecodeStatus Decode<TDecoder, TInfo>(ref TDecoder decoder, ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)
         where TDecoder : struct, ICandidateDecoder<TInfo>
@@ -67,15 +69,17 @@ internal static class CandidateScan
         var status = Scan<TDecoder, TInfo>(ref decoder, image, destination, out charsWritten, out info, fullSweep: false, skip: default, tried, out var triedCount, out var stridedFound);
         noFinder = false;
         // Terminal, not just successful: DestinationTooSmall is only reached after the symbol has been located, sampled,
-        // RS-corrected and its segment found to fit the bitstream, so the buffer is the only thing missing and a wider finder scan
-        // cannot change it. (That ordering is a precondition, not a given: the segment decoders check bitstream sufficiency before
-        // destination sufficiency precisely so a malformed count cannot masquerade as a short buffer here.) A verdict on the
-        // content does not end it: the sweep can find another symbol that reads.
+        // RS-corrected and its segment found to fit the bitstream. (That ordering is a precondition, not a given: the segment
+        // decoders check bitstream sufficiency before destination sufficiency precisely so a malformed count cannot masquerade as
+        // a short buffer here; they check the content after it.) A sized call stops at that symbol as a read, so no sweep runs
+        // here either, which keeps a probe for the buffer's size as cheap as a sized call; the price is a second symbol that
+        // fits and that only the sweep finds. A verdict on the content does not end it: the sweep can find another symbol that
+        // reads.
         if (AttemptStatus.IsTerminal(status))
             return status;
 
-        // A candidate the strided scan tried decodes the same way in the sweep, so it is not tried again; unless that scan
-        // settled, when every candidate stays
+        // A candidate equal to one the strided scan tried (same position and module size, to the bit) decodes the same way in the
+        // sweep, so it is not tried again; unless that scan settled, when every candidate stays
         var skip = AttemptStatus.IsSettled(status) ? default : tried.Slice(0, triedCount);
         var sweptStatus = Scan<TDecoder, TInfo>(ref decoder, image, destination, out var sweptChars, out var sweptInfo, fullSweep: true, skip, tried: default, out _, out var sweptFound);
         noFinder = stridedFound == 0 && sweptFound == 0;

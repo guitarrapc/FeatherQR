@@ -120,7 +120,7 @@ public class RmQRCodeDecoderPerspectiveTest
     private static string ContentFor(RmQRVersion version)
         => version == RmQRVersion.R7x43 ? "RMQR 43" : "RMQR IMAGE 123";
 
-    private static SKBitmap RenderKeystone(string content, RmQRVersion version, float tilt, bool horizontal, float rotateDegrees)
+    internal static SKBitmap RenderKeystone(string content, RmQRVersion version, float tilt, bool horizontal, float rotateDegrees)
     {
         var qr = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 2 });
         var widthPx = qr.Width * 8;

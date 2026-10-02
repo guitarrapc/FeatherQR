@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.RmQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
-/// The global and regional passes scan with a row stride, then sweep every row when that read nothing; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data), each within a budget of decodes; a successful decode ends the scan and a read that did not fit ends the candidate, whose frames see only its own results; otherwise the scan reports the result that went furthest.
+/// The global and regional passes scan with a row stride, then sweep every row unless that read a symbol or read one too long for the destination; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data), each within a budget of decodes; a successful decode ends the scan and a read that did not fit ends the candidate, whose frames see only its own results; otherwise each finder scan reports the result that went furthest (<see cref="CandidateScan"/>).
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
 /// 1. Frames: four right angles, each also with its axes swapped (mirror); first from the axis-aligned module sizes
@@ -122,7 +122,7 @@ internal static partial class RmQRImageDecoder
             => RmQRImageDecoder.DecodeCandidate(image, candidate, modules, destination, out charsWritten, out info, ref result);
     }
 
-    /// <summary>The strided finder scan and, when nothing was read, the full sweep, at the global threshold of <paramref name="histogram"/> (<see cref="CandidateScan.Decode"/>).</summary>
+    /// <summary>The strided finder scan and, unless it read a symbol or read one too long for the destination, the full sweep, at the global threshold of <paramref name="histogram"/> (<see cref="CandidateScan.Decode"/>).</summary>
     internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
     {
         var decoder = new CandidateDecoder();
@@ -131,11 +131,11 @@ internal static partial class RmQRImageDecoder
 
     /// <summary>
     /// One finder candidate within its budget of decodes: the axis-aligned frames, then those of the finder's outline, then those of each axis pair from the angular sweep.
-    /// Ends at a read, or at a read that did not fit, since its symbol was read and no other frame of this finder can change that.
+    /// Ends at a read, or at a read that did not fit, since its symbol was read up to the caller's buffer and no other frame of this finder can change that; a sized call reads it, its content permitting (<see cref="AttemptStatus.Progress"/>).
     /// </summary>
     /// <remarks>
     /// A read that did not fit went through the format information and every Reed-Solomon block, the evidence a read rests on; the perspective search, this finder's other frames and the inverted pass would only find the same symbol again at hundreds of times the cost.
-    /// Other candidates of the same polarity are still tried, so a second symbol in the image that does fit is found whatever the candidates' order; a fitting symbol of the opposite polarity beside one too long is the trade-off of the inverted pass not running.
+    /// The other candidates of the finder scan that made it are still tried, so a second symbol among them that does fit is found whatever their order; a fitting symbol that only the full sweep or the inverted pass would find is not, the trade-off of neither running after it (<see cref="CandidateScan.Decode"/>).
     /// It also ranks above every other failure (<see cref="AttemptStatus.Progress"/>), a verdict on the content included, so it reaches the caller even when an earlier attempt failed at Reed-Solomon or another symbol's content gave a verdict.
     /// </remarks>
     private static DecodeStatus DecodeCandidate(
@@ -749,7 +749,7 @@ internal static partial class RmQRImageDecoder
     /// Samples the full grid through the transform and decodes it (<see cref="GridRead"/>), unless the budget is spent or the grid does not fit the image; on an image with grey levels, a grid past its format information that neither read nor read too long for the destination is read again by coverage while the budget lasts.
     /// Each decode spends one of the budget, the re-read whether or not it changes a module.
     /// </summary>
-    private static DecodeStatus Attempt(
+    internal static DecodeStatus Attempt(
         in ImageView image,
         in PerspectiveTransform transform,
         int symbolWidth,

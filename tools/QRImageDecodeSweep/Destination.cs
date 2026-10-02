@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using FeatherQR;
 using FeatherQR.Tests;
@@ -9,24 +10,31 @@ namespace QRImageDecodeSweep;
 /// <summary>
 /// What a destination too short for a symbol's text costs the decoders that read around a single finder, Micro QR and rMQR:
 /// each render decoded into a sized destination, one a character short and one of 2 characters, with the status, version and
-/// time of each (the fastest of a few calls).
+/// time of each (the fastest of five rounds, the three calls taken in turn each round).
 /// </summary>
 /// <remarks>
-/// Two sets a symbology. The random renders are the ones the decoder records' figures were measured on: a random version, level
-/// and text, turned at random, each pixel the mean of 2 × 2 point samples, with uniform noise, from a fixed seed, so two trees
-/// draw the same images. The known renders are the ones whose scan ranks a finder-like pattern inside the symbol after its
+/// Two sets a symbology. The random renders are the ones the cost figures of the single-finder candidate scan were measured on
+/// (qrcode-symbologies.md): a random version, level and text, turned at random, each pixel the mean of 2 × 2 point samples,
+/// with uniform noise, from a fixed seed, so two trees draw the same images; a draw whose text no length fits the symbol is
+/// skipped, so a set has fewer renders than draws. The known renders are the ones whose scan ranks a finder-like pattern inside the symbol after its
 /// finder, which the skip exists for (the destination contract test draws the same ones).
 /// </remarks>
 internal static class Destination
 {
     public const int DefaultCount = 600;
 
+    /// <summary>Rounds of the three calls; each call's time is its fastest.</summary>
+    private const int Rounds = 5;
+
     private const string Alphanumeric = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
 
-    private static readonly string[] columns = ["render", "kind", "ppm", "angle", "noise", "sized", "sizedVersion", "text", "short", "shortVersion", "tiny", "tinyVersion", "sizedUs", "shortUs", "tinyUs"];
+    private static readonly string[] columns = ["render", "kind", "ppm", "angle", "noise", "image", "sized", "sizedVersion", "text", "short", "shortVersion", "tiny", "tinyVersion", "sizedUs", "shortUs", "tinyUs"];
 
-    /// <summary>One render's three decodes: the sized one's status, version and text, the others' status and version, and each one's time in microseconds.</summary>
-    public sealed record Row(string Render, string Kind, string Ppm, string Angle, string Noise, string Sized, string SizedVersion, string Text, string Short, string ShortVersion, string Tiny, string TinyVersion, double SizedUs, double ShortUs, double TinyUs)
+    /// <summary>
+    /// One render's three decodes: a digest of its pixels, the sized one's status, version and text, the others' status and
+    /// version, and each one's time in microseconds.
+    /// </summary>
+    public sealed record Row(string Render, string Kind, string Ppm, string Angle, string Noise, string Image, string Sized, string SizedVersion, string Text, string Short, string ShortVersion, string Tiny, string TinyVersion, double SizedUs, double ShortUs, double TinyUs)
     {
         public bool Read => Sized == nameof(DecodeStatus.Success);
 
@@ -48,20 +56,27 @@ internal static class Destination
 
     private static Row Measure(string symbology, string name, string kind, byte[] luminance, int width, int height, double ppm, double angle, double noise)
     {
+        var image = Convert.ToHexString(SHA256.HashData(luminance), 0, 8);
         var sized = new char[symbology == Symbologies.MicroQr ? MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4) : RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
         var (sizedStatus, sizedVersion, sizedWritten) = Decode(symbology, luminance, width, height, sized);
         var text = sizedStatus == DecodeStatus.Success ? new string(sized, 0, sizedWritten) : "";
-        var sizedUs = Time(() => Decode(symbology, luminance, width, height, sized), 5);
         if (text.Length < 2)
-            return new Row(name, kind, F(ppm), F(angle), F(noise), sizedStatus.ToString(), sizedVersion, text, "-", "", "-", "", sizedUs, 0, 0);
+            return new Row(name, kind, F(ppm), F(angle), F(noise), image, sizedStatus.ToString(), sizedVersion, text, "-", "", "-", "", Time(() => Decode(symbology, luminance, width, height, sized), Rounds), 0, 0);
 
         var shortDestination = new char[text.Length - 1];
         var (shortStatus, shortVersion, _) = Decode(symbology, luminance, width, height, shortDestination);
-        var shortUs = Time(() => Decode(symbology, luminance, width, height, shortDestination), 3);
         var tiny = new char[2];
         var (tinyStatus, tinyVersion, _) = Decode(symbology, luminance, width, height, tiny);
-        var tinyUs = Time(() => Decode(symbology, luminance, width, height, tiny), 3);
-        return new Row(name, kind, F(ppm), F(angle), F(noise), sizedStatus.ToString(), sizedVersion, text, shortStatus.ToString(), shortVersion, tinyStatus.ToString(), tinyVersion, sizedUs, shortUs, tinyUs);
+        // The three calls in turn each round, each keeping its fastest: a stall of the machine lands in one call of one round,
+        // where timed a call's rounds at a time it fell on one of the three and moved the 95th percentile by up to half
+        var (sizedUs, shortUs, tinyUs) = (double.MaxValue, double.MaxValue, double.MaxValue);
+        for (var round = 0; round < Rounds; round++)
+        {
+            sizedUs = Math.Min(sizedUs, Time(() => Decode(symbology, luminance, width, height, sized), 1));
+            shortUs = Math.Min(shortUs, Time(() => Decode(symbology, luminance, width, height, shortDestination), 1));
+            tinyUs = Math.Min(tinyUs, Time(() => Decode(symbology, luminance, width, height, tiny), 1));
+        }
+        return new Row(name, kind, F(ppm), F(angle), F(noise), image, sizedStatus.ToString(), sizedVersion, text, shortStatus.ToString(), shortVersion, tinyStatus.ToString(), tinyVersion, sizedUs, shortUs, tinyUs);
     }
 
     private static (DecodeStatus Status, string Version, int Written) Decode(string symbology, byte[] luminance, int width, int height, char[] destination)
@@ -128,7 +143,8 @@ internal static class Destination
         var random = new Random(20261001);
         for (var i = 0; i < count; i++)
         {
-            var version = (RmQRVersion)random.Next(32);
+            // The versions run from 1
+            var version = (RmQRVersion)(1 + random.Next(32));
             var level = random.Next(2) == 0 ? RmQREccLevel.M : RmQREccLevel.H;
             var data = Generate(random, 60, content => RmQRCodeGenerator.Create(content, level, new RmQRCodeGeneratorOptions { Version = version }));
             if (data is null)
@@ -244,18 +260,22 @@ internal static class Destination
         using var writer = new StreamWriter(path, false, new UTF8Encoding(false)) { NewLine = "\n" };
         writer.WriteLine(string.Join(',', columns));
         foreach (var r in rows)
-            writer.WriteLine(string.Join(',', r.Render, r.Kind, r.Ppm, r.Angle, r.Noise, r.Sized, r.SizedVersion, Quote(r.Text), r.Short, r.ShortVersion, r.Tiny, r.TinyVersion, F(r.SizedUs), F(r.ShortUs), F(r.TinyUs)));
+            writer.WriteLine(string.Join(',', r.Render, r.Kind, r.Ppm, r.Angle, r.Noise, r.Image, r.Sized, r.SizedVersion, Quote(r.Text), r.Short, r.ShortVersion, r.Tiny, r.TinyVersion, F(r.SizedUs), F(r.ShortUs), F(r.TinyUs)));
     }
 
+    /// <summary>A result file; one written before the pixel digest was a column (2026-10-01) is read with an empty digest.</summary>
     public static List<Row> Read(string path)
     {
         var lines = File.ReadAllLines(path);
-        if (lines.Length == 0 || lines[0] != string.Join(',', columns))
+        var withImage = lines.Length > 0 && lines[0] == string.Join(',', columns);
+        if (!withImage && (lines.Length == 0 || lines[0] != string.Join(',', columns.Where(static c => c != "image"))))
             throw new InvalidDataException($"{path} is not a destination result file of this tool.");
-        return lines.Skip(1).Where(static l => l.Length > 0).Select(static line =>
+        return lines.Skip(1).Where(static l => l.Length > 0).Select(line =>
         {
-            var f = Split(line);
-            return new Row(f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9], f[10], f[11], double.Parse(f[12], CultureInfo.InvariantCulture), double.Parse(f[13], CultureInfo.InvariantCulture), double.Parse(f[14], CultureInfo.InvariantCulture));
+            var f = Split(line).ToList();
+            if (!withImage)
+                f.Insert(Array.IndexOf(columns, "image"), "");
+            return new Row(f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9], f[10], f[11], f[12], double.Parse(f[13], CultureInfo.InvariantCulture), double.Parse(f[14], CultureInfo.InvariantCulture), double.Parse(f[15], CultureInfo.InvariantCulture));
         }).ToList();
     }
 
@@ -278,40 +298,81 @@ internal static class Destination
             sb.AppendLine(CultureInfo.InvariantCulture, $"| {group.Key} | {group.Count()} | {group.Count(static r => r.Read)} | {asRules} of {measured.Count} | {Spread(measured.Select(static r => r.ShortRatio))} | {Spread(measured.Where(static r => r.TinyTooShort).Select(static r => r.TinyRatio))} |");
         }
         sb.AppendLine();
+
+        // Every version, a missing one at 0: a draw the generator skips leaves no row, so a total cannot show which went missing
+        var versions = symbology == Symbologies.MicroQr ? Enum.GetNames<MicroQRVersion>() : Enum.GetNames<RmQRVersion>();
+        var drawn = rows.Where(static r => !r.Render.StartsWith("known", StringComparison.Ordinal)).GroupBy(static r => r.Kind[..r.Kind.IndexOf('-')]).ToDictionary(static g => g.Key, static g => g.Count());
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Random renders by version: {string.Join(", ", versions.Select(v => $"{v} {drawn.GetValueOrDefault(v)}"))}");
+        sb.AppendLine();
         foreach (var r in rows.Where(static r => r.Render.StartsWith("known", StringComparison.Ordinal)))
             sb.AppendLine(CultureInfo.InvariantCulture, $"- {r.Render} ({r.Kind}): sized {r.Sized}, short {r.Short} {r.ShortRatio:F2} times, 2 characters {r.Tiny} {r.TinyRatio:F2} times");
         sb.AppendLine();
         return sb.ToString();
     }
 
-    /// <summary>Two result files of the same set from two trees, render for render: every status, version or text that moved, and the cost before and after.</summary>
+    /// <summary>
+    /// Two result files of the same set from two trees, render for render: every status, version or text that moved, and the cost
+    /// before and after over the pairs of one image. The render names pair the rows whatever the decoder does, and the pixel digest
+    /// says whether a pair is one image; a file from before the digest falls back on how the render was made (kind, ppm, angle and
+    /// noise), which tells a redrawn set but not a renderer that changed. A pair that is not one image (an encoder, a renderer or
+    /// the draws changed) is listed apart, since what moved there says nothing about the decoder, and so is a render in only one of
+    /// the files.
+    /// </summary>
     public static int Compare(string beforePath, string afterPath)
     {
         var before = Read(beforePath);
-        var afterByRender = Read(afterPath).ToDictionary(static r => r.Render);
+        var after = Read(afterPath);
+        var afterByRender = after.ToDictionary(static r => r.Render);
+        var beforeRenders = before.Select(static r => r.Render).ToHashSet();
+        var pairs = new List<(Row Before, Row After)>();
         var moved = new List<string>();
+        var apart = new List<string>();
+        var byHowMade = 0;
         foreach (var b in before)
         {
             if (!afterByRender.TryGetValue(b.Render, out var a))
             {
-                moved.Add($"{b.Render}: not in {afterPath}");
+                apart.Add($"{b.Render}: not in {afterPath}");
                 continue;
             }
+            var withoutDigest = b.Image.Length == 0 || a.Image.Length == 0;
+            if (withoutDigest)
+                byHowMade++;
+            if (withoutDigest ? (b.Kind, b.Ppm, b.Angle, b.Noise) != (a.Kind, a.Ppm, a.Angle, a.Noise) : b.Image != a.Image)
+            {
+                apart.Add($"{b.Render}: another image ({b.Kind} -> {a.Kind})");
+                continue;
+            }
+            pairs.Add((b, a));
             if ((b.Sized, b.SizedVersion, b.Text, b.Short, b.ShortVersion, b.Tiny, b.TinyVersion) != (a.Sized, a.SizedVersion, a.Text, a.Short, a.ShortVersion, a.Tiny, a.TinyVersion))
                 moved.Add($"{b.Render} ({b.Kind}): {b.Sized} {b.SizedVersion} '{b.Text}', short {b.Short} {b.ShortVersion}, 2 characters {b.Tiny} {b.TinyVersion} -> {a.Sized} {a.SizedVersion} '{a.Text}', short {a.Short} {a.ShortVersion}, 2 characters {a.Tiny} {a.TinyVersion}");
         }
+        foreach (var a in after.Where(r => !beforeRenders.Contains(r.Render)))
+            apart.Add($"{a.Render}: not in {beforePath}");
 
-        Console.WriteLine("| | Short / sized: median, 95 %, worst | 2 characters / sized: median, 95 %, worst |");
+        Console.WriteLine($"| Pairs of one image ({pairs.Count:N0} of {before.Count:N0} renders before, {after.Count:N0} after) | Short / sized: median, 95 %, worst | 2 characters / sized: median, 95 %, worst |");
         Console.WriteLine("|---|---|---|");
-        foreach (var (name, rows) in new[] { ("before", before), ("after", afterByRender.Values.ToList()) })
+        foreach (var (name, rows) in new[] { ("before", pairs.Select(static p => p.Before)), ("after", pairs.Select(static p => p.After)) })
         {
             var measured = rows.Where(static r => r.Read && r.Text.Length >= 2).ToList();
             Console.WriteLine($"| {name} | {Spread(measured.Select(static r => r.ShortRatio))} | {Spread(measured.Where(static r => r.TinyTooShort).Select(static r => r.TinyRatio))} |");
         }
         Console.WriteLine();
-        Console.WriteLine(moved.Count == 0 ? $"{before.Count:N0} renders, no status, version or text moved." : $"Moved ({moved.Count:N0}):");
+        if (byHowMade > 0)
+            Console.WriteLine($"{byHowMade:N0} pairs are told apart by how the render was made, not by its pixels: a file without the pixel digest cannot show a renderer that changed.");
+        if (pairs.Count == 0)
+            Console.WriteLine("No pair is one image: nothing was compared.");
+        else
+            Console.WriteLine(moved.Count == 0 ? $"In {pairs.Count:N0} pairs of one image, no status, version or text moved." : $"Moved, in {pairs.Count:N0} pairs of one image ({moved.Count:N0}):");
         foreach (var line in moved)
             Console.WriteLine($"  {line}");
+        if (apart.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"Not one image in both files ({apart.Count:N0}), left out of the above:");
+            foreach (var line in apart)
+                Console.WriteLine($"  {line}");
+        }
         return 0;
     }
 

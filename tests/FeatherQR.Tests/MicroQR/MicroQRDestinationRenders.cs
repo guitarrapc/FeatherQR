@@ -27,9 +27,10 @@ internal static class MicroQRDestinationRenders
 
     /// <summary>
     /// The big symbol at 8 px/module, whose finder is confirmed on more rows, and the small one at 5, one above the other; the
-    /// small one turned about its centre by <paramref name="smallDegrees"/>, in a cell wide enough for any turn.
+    /// small one turned about its centre by <paramref name="smallDegrees"/>, in a cell wide enough for any turn. Without
+    /// <paramref name="drawBig"/>, the small one alone where it would be.
     /// </summary>
-    public static (byte[] Luminance, int Width, int Height) RenderTwo(string bigContent, MicroQRVersion bigVersion, MicroQREccLevel bigLevel, string smallContent, MicroQRVersion smallVersion, MicroQREccLevel smallLevel, bool bigAbove, float smallDegrees = 0f)
+    public static (byte[] Luminance, int Width, int Height) RenderTwo(string bigContent, MicroQRVersion bigVersion, MicroQREccLevel bigLevel, string smallContent, MicroQRVersion smallVersion, MicroQREccLevel smallLevel, bool bigAbove, float smallDegrees = 0f, bool drawBig = true)
     {
         var big = MicroQRCodeGenerator.Create(bigContent, bigLevel, new MicroQRCodeGeneratorOptions { Version = bigVersion });
         var small = MicroQRCodeGenerator.Create(smallContent, smallLevel, new MicroQRCodeGeneratorOptions { Version = smallVersion });
@@ -44,7 +45,8 @@ internal static class MicroQRDestinationRenders
         {
             canvas.Clear(SKColors.White);
             var (bigTop, smallTop) = bigAbove ? (margin, 2 * margin + bigPx) : (2 * margin + smallCell, margin);
-            SymbolRenderer.Render(canvas, SKRect.Create(margin, bigTop, bigPx, bigPx), big, SKColors.Black, SKColors.White);
+            if (drawBig)
+                SymbolRenderer.Render(canvas, SKRect.Create(margin, bigTop, bigPx, bigPx), big, SKColors.Black, SKColors.White);
             canvas.Save();
             canvas.Translate(margin + smallCell / 2f, smallTop + smallCell / 2f);
             canvas.RotateDegrees(smallDegrees);

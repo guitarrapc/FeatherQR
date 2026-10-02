@@ -12,7 +12,7 @@ using System.Xml.Linq;
 // heavy test needs, and whether a test catches anything the rest of the suite misses.
 //
 //   dotnet run tools/mutation_check.cs -- validate <mutants.tsv>
-//   dotnet run tools/mutation_check.cs -- run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>]
+//   dotnet run tools/mutation_check.cs -- run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>] [--project <csproj>] [--allow-dirty]
 //   dotnet run tools/mutation_check.cs -- report <out-dir>
 //   dotnet run tools/mutation_check.cs -- evaluate <out-dir> --keep <[Class.]Method>=<regex>...
 //   dotnet run tools/mutation_check.cs -- compare <before-dir> <after-dir>
@@ -30,7 +30,8 @@ using System.Xml.Linq;
 // `run` builds the test project in Release (a Debug.Assert would take the test host down instead of
 // failing a test) and runs the suite once unchanged, which must catch nothing, then once a fault: the
 // fault written into src, built, run, and the file put back from memory. The files a fault touches must
-// be clean in git, so that `git checkout -- <file>` is a way back should the run be killed. Each run
+// be clean in git, so that `git checkout -- <file>` is a way back should the run be killed; `--allow-dirty`
+// runs on files with changes of their own, which a killed run leaves faulted, so copy them aside first. Each run
 // leaves <id>.json (the failed test cases and the logged sub-cases), the TRX and the logs in <out-dir>.
 //
 // A test that walks many sub-cases (seeds, versions, budgets) stops at its first failure, which says
@@ -83,7 +84,7 @@ static int Usage()
 {
     Console.Error.WriteLine("""
         usage: mutation_check validate <mutants.tsv>
-               mutation_check run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>]
+               mutation_check run <mutants.tsv> <out-dir> [--filter <treenode-filter>]... [--tfm net10.0] [--only <id>] [--timeout <minutes>] [--project <csproj>] [--allow-dirty]
                mutation_check report <out-dir>
                mutation_check evaluate <out-dir> --keep <[Class.]Method>=<regex>...
                mutation_check compare <before-dir> <after-dir>

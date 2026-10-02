@@ -140,6 +140,24 @@ public class SubPixelFrameDecodeTest
         await Assert.That(text).IsEqualTo(content);
     }
 
+    /// <summary>Mirrored, as a front camera captures one: the grid read again by coverage is the one read transposed.</summary>
+    [Test]
+    [Arguments(MicroQRVersion.M3, 1.56f)]
+    [Arguments(MicroQRVersion.M3, 1.76f)]
+    [Arguments(MicroQRVersion.M4, 1.54f)]
+    public async Task MicroQR_BilinearUpscaleMirrored_Decodes(MicroQRVersion version, float pixelsPerModule)
+    {
+        var content = MicroContent(version);
+        var qr = MicroQRCodeGenerator.Create(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = version });
+        var (luminance, width, height) = BilinearUpscaleRenderer.Render((row, column) => qr[column, row], qr.Size, qr.Size, pixelsPerModule);
+        await AssertGreyEdges(luminance);
+
+        var success = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{version} at {pixelsPerModule} px/module: {info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
     public static IEnumerable<(RmQRVersion, float, float, float)> RmQRAntiAliased()
     {
         yield return (RmQRVersion.R11x59, 1.34f, 0.1f, 0.35f);

@@ -23,7 +23,7 @@ Behavior: each of the [shared image decode passes](qrcode-symbologies.md#image-d
 - the axis-aligned path, in each right-angle orientation: a grid per size from M4 down to M1, then a grid fitted to the timing patterns, then, at low density, a table of module boundaries read off them;
 - the arbitrary-orientation path: the finder's axes from an angular sweep, a grid per size in each frame and orientation, and a scale search and a perspective search around any grid that gets past its format information.
 
-Each grid goes through the matrix level, keeps only the corrections its structure earns, and is read again transposed unless it read, a read that does not fit the destination included, which ends its candidate but not the scan. In an image with grey levels, a per-size or search grid that neither read nor read too long for the destination, and whose format word reads exactly, is also read again by coverage. The stages and their order are drawn in the [spec-to-code map](microqr-spec-map.md#image-detection-and-sampling).
+Each grid goes through the matrix level, keeps only the corrections its structure earns, and is read again transposed unless it read, a read that does not fit the destination included, which ends its candidate, and the scan once the other candidates of its finder scan have run ([single-finder candidate scan](qrcode-symbologies.md#single-finder-candidate-scan)). In an image with grey levels, a per-size or search grid that neither read nor read too long for the destination, and whose format word reads exactly, is also read again by coverage. The stages and their order are drawn in the [spec-to-code map](microqr-spec-map.md#image-detection-and-sampling).
 
 ### Image decode figures
 

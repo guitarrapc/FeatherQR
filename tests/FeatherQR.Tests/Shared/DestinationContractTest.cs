@@ -9,12 +9,14 @@ namespace FeatherQR.Tests;
 /// A read that does not fit ends the finder candidate that made it: its grids are tried in the same order whatever the
 /// destination, so it is the read a sized call returns, and the candidate's other grids and searches could only read something
 /// else at many times the cost. It carries its corners until the scan has used them: a later candidate inside that symbol is a
-/// finder-like pattern in its own data, and is skipped. The other candidates are still tried, so another symbol that fits is
-/// read. The corners are reported with a read only.
+/// finder-like pattern in its own data, and is skipped. The other candidates of that finder scan are still tried, so another
+/// symbol among them that fits is read; the full sweep does not run after it (<see cref="CandidateScanTest"/>). The corners are
+/// reported with a read only.
 /// </para>
 /// <para>
-/// The timing tests run alone; each one's bound is a multiple of a sized call and 30 ms for a scheduling stall, sized against the
-/// regression it guards, which its summary gives as measured.
+/// The timing tests run alone. Each compares the median of a call with a destination of 2 characters against a sized call's,
+/// calls of each in turn, so a stall of the machine moves neither; its bound, 3 or 5 times, is sized against the regression it
+/// guards, which its summary gives as measured.
 /// </para>
 /// </remarks>
 public class DestinationContractTest
@@ -33,9 +35,9 @@ public class DestinationContractTest
 
     /// <summary>
     /// An image of two symbols: the big one, tried first, and the other, with a destination of <see cref="DestinationLength"/>
-    /// characters, too short for the big one's text.
+    /// characters, too short for the big one's text; <see cref="RenderOther"/>, when given, draws the other one alone where it is.
     /// </summary>
-    public sealed record TwoSymbols(SingleFinderDecoder Decoder, string Name, Func<(byte[] Luminance, int Width, int Height)> Render, string BigText, string BigVersion, string OtherText, string OtherVersion, int DestinationLength)
+    public sealed record TwoSymbols(SingleFinderDecoder Decoder, string Name, Func<(byte[] Luminance, int Width, int Height)> Render, string BigText, string BigVersion, string OtherText, string OtherVersion, int DestinationLength, Func<(byte[] Luminance, int Width, int Height)>? RenderOther = null)
     {
         public override string ToString() => $"{Decoder}, {Name}";
     }
@@ -87,11 +89,24 @@ public class DestinationContractTest
     public static IEnumerable<Func<TimedImage>> SymbolsToTime()
     {
         yield return () => new TimedImage(SingleFinderDecoder.MicroQR, "M4-M at 4 px/module", () => MicroQRDestinationRenders.Render("MICRO QR M4 TEST", MicroQRVersion.M4, MicroQREccLevel.M, pixelsPerModule: 4, degrees: 0f), "MICRO QR M4 TEST", "M4", 2_000, 5);
-        // Micro QR renders that read through one grid site each, found by planting a read that does not fit ending nothing there
+        // Micro QR renders that read through one grid site each, found by planting a read that does not fit ending nothing there.
+        // The site is not asserted, since the decoder reports none, so the faults are planted again when these renders change
+        // (qrcode-symbologies.md, single-finder candidate scan)
         yield return () => new TimedImage(SingleFinderDecoder.MicroQR, "M4-L at 2.65 px/module, 90.5°, noisy: the timing frame", () => MicroQRDestinationRenders.RenderTurnedSupersampled(MicroQRVersion.M4, MicroQRText, MicroQREccLevel.L, 2.65, 90.5, noise: 28, seed: 1355), MicroQRText, "M4", 200, 5);
         yield return () => new TimedImage(SingleFinderDecoder.MicroQR, "M3-L nearest at 1.35 px/module: the module boundaries", () => MicroQRDestinationRenders.RenderNearest(MicroQRVersion.M3, "HELLO WORLD", MicroQREccLevel.L, 1.35), "HELLO WORLD", "M3", 500, 5);
         yield return () => new TimedImage(SingleFinderDecoder.MicroQR, "M4-L at 2.5 px/module, 2°: the coverage re-read", () => MicroQRDestinationRenders.RenderTurnedSupersampled(MicroQRVersion.M4, MicroQRText, MicroQREccLevel.L, 2.5, 2.0), MicroQRText, "M4", 200, 5);
         yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R13x99-M at 6 px/module", () => RmQRDestinationRenders.Render("RMQR IMAGE 123", RmQRVersion.R13x99, pixelsPerModule: 6), "RMQR IMAGE 123", "R13x99", 2_000, 5);
+        // rMQR keystones that read through the perspective search, found the same way
+        yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R17x139-M, top edge 2 % shorter a side: the perspective search", () => RmQRDestinationRenders.RenderKeystone("RMQR IMAGE 123", RmQRVersion.R17x139, 0.02f), "RMQR IMAGE 123", "R17x139", 200, 3);
+        yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R13x99-M, top edge 2 % shorter a side: the perspective search", () => RmQRDestinationRenders.RenderKeystone("RMQR IMAGE 123", RmQRVersion.R13x99, 0.02f), "RMQR IMAGE 123", "R13x99", 200, 3);
+        yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R11x99-M, top edge 2 % shorter a side: the perimeter traced in a scaled frame", () => RmQRDestinationRenders.RenderKeystone("RMQR IMAGE 123", RmQRVersion.R11x99, 0.02f), "RMQR IMAGE 123", "R11x99", 200, 3);
+        yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R13x59-M, top edge 8 % shorter a side, 30°: the outline's frames", () => RmQRDestinationRenders.RenderKeystone("RMQR IMAGE 123", RmQRVersion.R13x59, 0.08f, 30f), "RMQR IMAGE 123", "R13x59", 200, 3);
+        yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R17x77-M at 1.35 px/module, 45°, grey edges: the angular sweep's frames", () => RmQRDestinationRenders.RenderTurnedGrey("RMQR 12", RmQRVersion.R17x77, 1.35f, 45f), "RMQR 12", "R17x77", 200, 3);
+        yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R17x99-M at 1.30 px/module, 240°, grey edges: the isotropic grid", () => RmQRDestinationRenders.RenderTurnedGrey("RMQR 12", RmQRVersion.R17x99, 1.30f, 240f), "RMQR 12", "R17x99", 200, 3);
+        yield return () => new TimedImage(SingleFinderDecoder.RmQR, "R13x77-M at 1.30 px/module, 180°, grey edges: a frame's scales", () => RmQRDestinationRenders.RenderTurnedGrey("RMQR 12", RmQRVersion.R13x77, 1.30f, 180f), "RMQR 12", "R13x77", 200, 3);
+        // Micro QR renders that read through the scale search, and through its caller once the search has ended
+        yield return () => new TimedImage(SingleFinderDecoder.MicroQR, "M4-M at 3.25 px/module, 145°, noisy: the scale search", () => MicroQRDestinationRenders.RenderTurnedSupersampled(MicroQRVersion.M4, "MICRO QR M4 TEST", MicroQREccLevel.M, 3.25, 145, noise: 24, seed: 3), "MICRO QR M4 TEST", "M4", 200, 3);
+        yield return () => new TimedImage(SingleFinderDecoder.MicroQR, "M3-M at 2.0 px/module, 20°, noisy: after the scale search", () => MicroQRDestinationRenders.RenderTurnedSupersampled(MicroQRVersion.M3, "HELLO WORLD", MicroQREccLevel.M, 2.0, 20, noise: 24, seed: 3), "HELLO WORLD", "M3", 200, 3);
     }
 
     private const string MicroQRText = "MICRO QR M4L TEST 01";
@@ -102,9 +117,15 @@ public class DestinationContractTest
     /// rMQR 250 to 500 times (its perspective search, then the inverted pass). A Micro QR grid that reads its transpose after a
     /// read that does not fit lets one scale search run, about 40 times on the first calls and 70 warm. A read that does not fit
     /// ends the candidate wherever it is made: on the renders read through the timing frame, the module boundaries and the
-    /// coverage re-read, a grid site that let it go on cost about 27, 58 and 56 times. Stopped at the read, the call costs what a
-    /// sized one does. The bound is 5 times a sized call and 30 ms; the runs keep it near 10 times once warm, below every one of
-    /// those. The inverted image stops at the same read.
+    /// coverage re-read, a grid site that let it go on cost about 27, 30 to 38 and 53 times. With the site's fault planted, the
+    /// renders after them cost these per-call medians (full-suite runs, 2026-10-02, as are those three):
+    /// - the rMQR keystones: about 7 and 11 times through the perspective search, 5 through the perimeter traced in a scaled
+    ///   frame, and 21 through the outline's frames;
+    /// - the low-density turned rMQR renders: about 26 through the angular sweep, 50 through the isotropic grid, and 70 through a
+    ///   frame's scales and the anisotropic grid;
+    /// - the noisy turned Micro QR renders: about 6.5 through the scale search and 5.5 after it.
+    /// Stopped at the read, the call costs what a sized one does. The bound is 5 times a sized call, 3 for the renders after the
+    /// first ones, below every one of those. The inverted image stops at the same read.
     /// </summary>
     [Test]
     [NotInParallel]
@@ -161,6 +182,8 @@ public class DestinationContractTest
 
     public static IEnumerable<Func<TimedImage>> SkipImages()
     {
+        // These renders, and the stacked ones, also hold rMQR's frame loop and module boundaries sites and the corners, which no
+        // other test catches: plant the faults again when they change (tools/mutants/single-finder-candidate-scan.tsv)
         // Micro QR: the pattern at (61,110) and (49,56); transposed, a mirrored capture read by the transposed grid
         foreach (var mirrored in new[] { false, true })
         {
@@ -181,10 +204,10 @@ public class DestinationContractTest
 
     /// <summary>
     /// A read that does not fit keeps its corners until the scan has used them, so a later candidate inside the symbol is skipped:
-    /// searched in full after the read, it cost Micro QR about 40 to 47 times a sized call once warm and 12 to 38 on a process's
-    /// first calls, and rMQR about 55 to 105 times through a frame's grid, about 38 through the module boundaries and about 9
-    /// through the coverage re-read (2026-10-01). Skipped, the call costs what a sized one does. Each image's bound (3 or 5 times a
-    /// sized call and 30 ms) and runs are sized against its own regression. The premise is asserted (<see cref="SkipPremise"/>),
+    /// searched in full after the read, it cost rMQR about 86 times a sized call through a frame's grid, 40 through the module
+    /// boundaries and 8.5 through the coverage re-read, and Micro QR 32 to 39 times (per-call medians in one run of the full suite,
+    /// 2026-10-02). Skipped, the call costs what a sized one does. Each image's bound (3 or 5 times a
+    /// sized call) and calls are sized against its own regression. The premise is asserted (<see cref="SkipPremise"/>),
     /// since a render a little larger or smaller may have none.
     /// </summary>
     [Test]
@@ -288,23 +311,41 @@ public class DestinationContractTest
     public static IEnumerable<Func<TwoSymbols>> NeitherSymbolFits()
     {
         const string microBig = "MICRO QR M4 TEST";
-        yield return () => new TwoSymbols(SingleFinderDecoder.MicroQR, "M4 below M3", () => MicroQRDestinationRenders.RenderTwo(microBig, MicroQRVersion.M4, MicroQREccLevel.M, "HELLO WORLD", MicroQRVersion.M3, MicroQREccLevel.L, bigAbove: false), microBig, "M4", "HELLO WORLD", "M3", 8);
+        yield return () => new TwoSymbols(SingleFinderDecoder.MicroQR, "M4 below M3", () => MicroQRDestinationRenders.RenderTwo(microBig, MicroQRVersion.M4, MicroQREccLevel.M, "HELLO WORLD", MicroQRVersion.M3, MicroQREccLevel.L, bigAbove: false), microBig, "M4", "HELLO WORLD", "M3", 8,
+            () => MicroQRDestinationRenders.RenderTwo(microBig, MicroQRVersion.M4, MicroQREccLevel.M, "HELLO WORLD", MicroQRVersion.M3, MicroQREccLevel.L, bigAbove: false, drawBig: false));
 
         const string rmqrBig = "RMQR IMAGE 123 LONGER PAYLOAD";
         foreach (var degrees in new[] { 90f, 30f })
         {
-            yield return () => new TwoSymbols(SingleFinderDecoder.RmQR, $"R13x99 above R11x59 at {degrees}°", () => RmQRDestinationRenders.RenderUprightAndTurned(
-                RmQRCodeDecoderImageTest.Create(rmqrBig, RmQREccLevel.M, RmQRVersion.R13x99), RmQRCodeDecoderImageTest.Create("RMQR IMAGE 123", RmQREccLevel.M, RmQRVersion.R11x59), degrees), rmqrBig, "R13x99", "RMQR IMAGE 123", "R11x59", 8);
+            var big = RmQRCodeDecoderImageTest.Create(rmqrBig, RmQREccLevel.M, RmQRVersion.R13x99);
+            var other = RmQRCodeDecoderImageTest.Create("RMQR IMAGE 123", RmQREccLevel.M, RmQRVersion.R11x59);
+            yield return () => new TwoSymbols(SingleFinderDecoder.RmQR, $"R13x99 above R11x59 at {degrees}°", () => RmQRDestinationRenders.RenderUprightAndTurned(big, other, degrees), rmqrBig, "R13x99", "RMQR IMAGE 123", "R11x59", 8,
+                () => RmQRDestinationRenders.RenderUprightAndTurned(big, other, degrees, drawUpright: false));
         }
     }
 
-    /// <summary>Neither symbol fits: the read that did not fit is reported, the first candidate's on the tie, and no text.</summary>
+    /// <summary>
+    /// Neither symbol fits: the read that did not fit is reported, the first candidate's on the tie, and no text. The other symbol
+    /// alone reads too long as well, and its candidate is decoded after the big one's in the same finder scan (no sweep runs after
+    /// a read too long), so the two tie and the report is the first candidate's by that rule, not by the other's failing or not
+    /// being tried.
+    /// </summary>
     [Test]
     [MethodDataSource(nameof(NeitherSymbolFits))]
     public async Task DestinationTooSmallForBothSymbols_ReportsTheFirstCandidates(TwoSymbols image)
     {
+        var (otherLuminance, otherWidth, otherHeight) = image.RenderOther!();
+        var alone = image.Decoder.Decode(otherLuminance, otherWidth, otherHeight, new char[image.DestinationLength]);
+        await Assert.That((alone.Status, alone.Version)).IsEqualTo((DecodeStatus.DestinationTooSmall, image.OtherVersion))
+            .Because("premise: the other symbol alone reads too long for the destination");
+
         var (luminance, width, height) = image.Render();
         await AssertTheBigSymbolIsTriedFirst(image, luminance, width, height);
+        // A destination that fits only the other symbol reads it after the big one's read too long: its candidate is decoded
+        var fitsTheOther = new char[image.OtherText.Length];
+        var other = image.Decoder.Decode(luminance, width, height, fitsTheOther);
+        await Assert.That((new string(fitsTheOther, 0, other.Written), other.Version)).IsEqualTo((image.OtherText, image.OtherVersion))
+            .Because("premise: the other symbol's candidate is decoded in this image");
 
         var read = image.Decoder.Decode(luminance, width, height, new char[image.DestinationLength]);
 
@@ -320,24 +361,40 @@ public class DestinationContractTest
             .Because("premise: the big symbol's candidate is tried first");
     }
 
-    /// <summary>A destination of 2 characters, timed over <paramref name="iterations"/> runs against a sized one, and what it reports.</summary>
+    /// <summary>
+    /// A destination of 2 characters against a sized one, <paramref name="iterations"/> calls of each in turn, and what it reports.
+    /// The medians of the calls are compared: a stall of the machine lands in one call and moves neither, where the total of a
+    /// loop of each, one after the other, takes the whole stall into one loop.
+    /// </summary>
     private static async Task AssertCostsAboutASizedCall(SingleFinderDecoder decoder, byte[] luminance, int width, int height, char[] sized, char[] tiny, int iterations, int boundFactor, string version, string because)
     {
+        decoder.Decode(luminance, width, height, sized);
         decoder.Decode(luminance, width, height, tiny);
 
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        for (var i = 0; i < iterations; i++)
-            decoder.Decode(luminance, width, height, sized);
-        var sizedElapsed = stopwatch.Elapsed;
-
-        stopwatch.Restart();
+        var sizedTicks = new long[iterations];
+        var tinyTicks = new long[iterations];
         var read = default(SingleFinderRead);
         for (var i = 0; i < iterations; i++)
+        {
+            var start = System.Diagnostics.Stopwatch.GetTimestamp();
+            decoder.Decode(luminance, width, height, sized);
+            var between = System.Diagnostics.Stopwatch.GetTimestamp();
             read = decoder.Decode(luminance, width, height, tiny);
-        var tinyElapsed = stopwatch.Elapsed;
+            tinyTicks[i] = System.Diagnostics.Stopwatch.GetTimestamp() - between;
+            sizedTicks[i] = between - start;
+        }
+        var (sizedMedian, tinyMedian) = (Median(sizedTicks), Median(tinyTicks));
 
         await Assert.That(read).IsEqualTo(new SingleFinderRead(false, 0, DecodeStatus.DestinationTooSmall, version, default));
-        await Assert.That(tinyElapsed).IsLessThan(TimeSpan.FromTicks(sizedElapsed.Ticks * boundFactor) + TimeSpan.FromMilliseconds(30))
-            .Because($"{because}: sized {sizedElapsed.TotalMilliseconds:F2} ms against tiny {tinyElapsed.TotalMilliseconds:F2} ms over {iterations} runs");
+        await Assert.That(tinyMedian).IsLessThanOrEqualTo(sizedMedian * boundFactor)
+            .Because($"{because}: a call's median, sized {Milliseconds(sizedMedian):F3} ms against tiny {Milliseconds(tinyMedian):F3} ms over {iterations} calls each");
+
+        static long Median(long[] ticks)
+        {
+            Array.Sort(ticks);
+            return ticks[ticks.Length / 2];
+        }
+
+        static double Milliseconds(long ticks) => ticks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
     }
 }
