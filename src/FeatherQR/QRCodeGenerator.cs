@@ -222,7 +222,7 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, when the options contradict each other, or when <paramref name="eccLevel"/> is not a defined value.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
@@ -256,7 +256,7 @@ public static class QRCodeGenerator
     /// <param name="destination">Where to write the matrix. Needs <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, when the options contradict each other, or when <paramref name="eccLevel"/> is not a defined value.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
@@ -332,7 +332,7 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">How much damage each QR code should survive; the same level for every symbol of the set.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings; the version range bounds the size of every symbol.</param>
     /// <returns>The symbols in set order: one when the text fits a single symbol, otherwise two to sixteen.</returns>
-    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), when the options contradict each other, or when <paramref name="eccLevel"/> is not a defined value.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
@@ -1302,31 +1302,29 @@ public static class QRCodeGenerator
             effectiveLength += 3;
         }
 
+        // Data bits (already in length for Byte mode as byte count), the same at every version.
+        // Priced in long: 8 × effectiveLength wraps int past ~268M bytes and would read as a
+        // fit, and an early length guard here would skip the ECC level's validation below.
+        long dataBits = encoding switch
+        {
+            EncodingMode.Numeric => CalculateNumericBits(length),
+            EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
+            EncodingMode.Byte => effectiveLength * 8L,
+            EncodingMode.Kanji => length * 13L,
+            _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
+        };
+
         // Iterate through versions to find the minimum suitable version
         // Character count indicator size changes at version 10 and 27
         for (var version = minVersion; version <= maxVersion; version++)
         {
             var countIndicatorBits = encoding.GetCountIndicatorLength(version);
 
-            // Data bits (already in length for Byte mode as byte count). Priced in long:
-            // 8 × effectiveLength wraps int past ~268M bytes and would read as a fit, and
-            // an early length guard here would skip the validation below it.
-            long dataBits = encoding switch
-            {
-                EncodingMode.Numeric => CalculateNumericBits(length),
-                EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
-                EncodingMode.Byte => effectiveLength * 8L,
-                EncodingMode.Kanji => length * 13L,
-                _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
-            };
-
             // Total required bits
             var totalRequiredBits = eciHeaderBits + modeIndicatorBits + countIndicatorBits + dataBits;
 
-            // Get actual capacity for this version and ECC level
-            // Use CapacityTable (which has VersionInfo structure)
-            var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
-            var capacityBits = eccInfo.TotalDataCodewords * 8; // convert bytes to bits
+            // Actual capacity for this version and ECC level (an index into the ECC table)
+            var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8; // convert bytes to bits
 
             if (capacityBits >= totalRequiredBits)
             {

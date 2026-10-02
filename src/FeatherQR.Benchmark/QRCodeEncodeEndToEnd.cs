@@ -20,7 +20,7 @@ using System.Text;
 /// Byte_Url_V6_M and Kanji_V6_M share version and level, so they differ in mode, not in symbol size.
 /// The "(Span, QZ0)" rows write no quiet zone, so they time what the decode benchmarks read (QRCodeDecodeEndToEnd decodes quiet-zone-free matrices).
 /// The "(Span)" rows keep the default quiet zone of 4, the matrix a caller gets with default options.
-/// The three long alphanumeric and numeric shapes are the writer shapes of standardqr-binary-encoder-plan.md.
+/// The three long alphanumeric and numeric shapes are long enough to time the Alphanumeric and Numeric writers.
 /// </summary>
 public class QRCodeEncodeEndToEnd
 {

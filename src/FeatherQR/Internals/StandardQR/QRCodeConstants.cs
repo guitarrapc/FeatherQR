@@ -5,12 +5,20 @@ namespace FeatherQR.Internals.StandardQR;
 internal static class QRCodeConstants
 {
     private static readonly Lazy<IReadOnlyList<AlignmentPattern>> alignmentPatternTable = new(() => CreateAlignmentPatternTable());
-    private static readonly Lazy<IReadOnlyList<ECCInfo>> capacityECCTable = new(() => CreateCapacityECCTable());
     private static readonly Lazy<IReadOnlyList<VersionInfo>> capacityTable = new(() => CreateCapacityTable());
 
     public static IReadOnlyList<AlignmentPattern> AlignmentPatternTable => alignmentPatternTable.Value;
-    public static IReadOnlyList<ECCInfo> CapacityECCTable => capacityECCTable.Value;
+    public static IReadOnlyList<ECCInfo> CapacityECCTable => EccInfoTable.Entries;
     public static IReadOnlyList<VersionInfo> CapacityTable => capacityTable.Value;
+
+    /// <summary>
+    /// The ECC table in <c>[version - 1][L, M, Q, H]</c> order, the order <see cref="QREccLevel"/> numbers the levels, so <see cref="GetEccInfo"/> is an index.
+    /// A nested class so it is built on first use: its base values are a static field declared further down this file.
+    /// </summary>
+    private static class EccInfoTable
+    {
+        public static readonly ECCInfo[] Entries = CreateCapacityECCTable();
+    }
 
     // Maximum data capacity for each QR code version (1-40) and error correction level (L,M,Q,H)
     // Array structure: [version-1][eccLevel][encodingMode]
@@ -532,16 +540,26 @@ internal static class QRCodeConstants
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static ECCInfo GetEccInfo(int version, QREccLevel eccLevel)
     {
-        var table = CapacityECCTable;
-        for (var i = 0; i < table.Count; i++)
-        {
-            var item = table[i];
-            if (item.Version == version && item.ErrorCorrectionLevel == eccLevel)
-                return item;
-        }
-
-        throw new ArgumentException($"ECC info not found for version {version}, level {eccLevel}");
+        // An index, not a scan: automatic version selection asks once per version it tries, and scanning the
+        // 160 entries cost 2.35 us of a version 40 encode. Every generator entry point reaches this before it
+        // uses the level, so an undefined one fails here, named as the public parameter is.
+        if ((uint)eccLevel > (uint)QREccLevel.H)
+            throw UndefinedLevel(eccLevel);
+        if ((uint)(version - 1) >= 40u)
+            throw NoEntry(version, eccLevel);
+        return EccInfoTable.Entries[(version - 1) * 4 + (int)eccLevel];
     }
+
+    /// <summary>
+    /// Exactly <see cref="ArgumentException"/>: Standard QR froze that type for an undefined level, where Micro QR and rMQR report <see cref="ArgumentOutOfRangeException"/>.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ArgumentException UndefinedLevel(QREccLevel eccLevel)
+        => new($"ECC level {eccLevel} is not defined. Use L, M, Q or H.", nameof(eccLevel));
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ArgumentException NoEntry(int version, QREccLevel eccLevel)
+        => new($"ECC info not found for version {version}, level {eccLevel}");
 
     // Format and Version String Generation
 
@@ -702,7 +720,7 @@ internal static class QRCodeConstants
     /// Initializes error correction configuration table from base values.
     /// Creates ECCInfo entries for all version/ECC level combinations.
     /// </summary>
-    private static IReadOnlyList<ECCInfo> CreateCapacityECCTable()
+    private static ECCInfo[] CreateCapacityECCTable()
     {
         var table = new List<ECCInfo>(160); // 40 versions × 4 ECC levels
         for (var i = 0; i < (4 * 6 * 40); i = i + (4 * 6))
@@ -752,7 +770,7 @@ internal static class QRCodeConstants
                 )
             ]);
         }
-        return table;
+        return table.ToArray();
     }
 
     /// <summary>
