@@ -90,7 +90,7 @@ internal sealed class SimdKernel
     /// <summary>Every tier the kernel has besides the scalar one, most preferred first.</summary>
     internal (SimdTier Tier, bool Runs)[] Tiers { get; }
 
-    /// <summary>The first tier that can run here, which the dispatch takes for inputs large enough for it; <see cref="SimdTier.Scalar"/> when none can.</summary>
+    /// <summary>The first tier that can run here, the one the dispatch prefers; <see cref="SimdTier.Scalar"/> when none can.</summary>
     internal SimdTier Active
     {
         get
@@ -119,7 +119,7 @@ internal sealed class SimdKernel
 /// A probe put the flag behind a property, an aggressively inlined property and a <see langword="static"/> <see langword="readonly"/> field: the JIT inlined the dispatch into its caller only when the dispatch read <c>IsSupported</c> itself. (ILC compiled all of them alike.)
 /// </para>
 /// <para>
-/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>) or takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
+/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>), takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>) or takes a range it does not cover (<c>ModulePlacer.MaskCode</c>, whose 128-bit tier scores versions 1-11), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
 /// </para>
 /// </remarks>
 internal static class SimdTiers

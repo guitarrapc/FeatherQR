@@ -69,7 +69,7 @@ There is no AVX-512 (`Vector512`) tier, I've tried but it gained nothing. 512-bi
 
 ## Kernels
 
-For each kernel, its tiers in the order its dispatch tries them, and the tier it runs on each build class. Where the CPU decides, the cell lists the options in order: "`Gfni` or `Ssse3`" means `Gfni` if the CPU has it, otherwise `Ssse3`. A cell is the tier for large inputs; small inputs, and the tail of a large one, may run a lower tier. What each kernel does, and why a cell stays scalar, is noted next to its row in `SimdTiers.cs`.
+For each kernel, its tiers in the order its dispatch tries them, and the tier the dispatch prefers on each build class. Where the CPU decides, the cell lists the options in order: "`Gfni` or `Ssse3`" means `Gfni` if the CPU has it, otherwise `Ssse3`. The dispatch can still take a lower tier for some inputs: small inputs, the tail of a large one, or a range the tier does not cover, such as versions 12 and up in `ModulePlacerMaskCode`, whose 128-bit tier scores versions 1 to 11. What each kernel does, and why a cell stays scalar, is noted next to its row in `SimdTiers.cs`.
 
 <!-- BEGIN GENERATED kernels: SimdTiersDocTest renders it from SimdTiers.cs -->
 | Kernel | Tiers, in dispatch order | x64 without AVX | x64 with AVX2 | ARM64 | WebAssembly |
