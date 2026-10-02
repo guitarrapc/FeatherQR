@@ -125,7 +125,7 @@ The grids scaled from the finder fail first, and no timing frame is fitted.
 |---|---|
 | Versions | M1 to M4, named by the matrix size, which the format information must agree with |
 | ECC levels | L, M and Q, as each version defines them; M1 only detects errors |
-| Data modes | Numeric, Alphanumeric, Byte (UTF-8 or ISO-8859-1 by heuristic, since Micro QR has no ECI), Kanji (M3 and M4, JIS X 0208; decode only) |
+| Data modes | Numeric, Alphanumeric, Byte (UTF-8 or ISO-8859-1 by heuristic, since Micro QR has no ECI), Kanji (M3 and M4, JIS X 0208; the generator writes it on request, `AllowKanji`, for text JIS X 0208 holds) |
 | Quiet zone | Matrix: any uniform light border; the finder's corner locates the core |
 | Error correction | Reed-Solomon, capped at the capacity t of ISO Table 9; corrections reported |
 | Format information | One 15-bit copy, up to 3 bit errors corrected |

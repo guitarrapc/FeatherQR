@@ -1,0 +1,18 @@
+{
+  "id": "r7x43-m-kanji-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 1,
+  "versionName": "R7x43",
+  "width": 43,
+  "height": 7,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 4,
+  "payloadText": "\u4E9C\u6F3E\u7199",
+  "payloadUtf8Hex": "E4BA9CE6BCBEE78699",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

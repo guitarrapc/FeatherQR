@@ -109,6 +109,10 @@
               <input type="checkbox" id="ecc-boost-check" />
               <span class="field__label" title="Raise the ECC level when the chosen version has spare capacity. Never changes the symbol size; the decoded result below shows the level actually used.">Boost ECC to fill spare capacity</span>
             </label>
+            <label class="field field--inline field--checkbox" id="allow-kanji-row">
+              <input type="checkbox" id="allow-kanji-check" />
+              <span class="field__label" title="Write Japanese text in Kanji mode instead of UTF-8: 13 bits a character, so a smaller symbol. Applies when every character has a Kanji-mode (JIS X 0208) code; other text stays UTF-8. Off by default because Android's own scanners (camera, Google Lens) cannot read Kanji mode; iPhone and dedicated readers can.">Kanji mode for Japanese text</span>
+            </label>
             <label class="field">
               <span class="field__label">Version</span>
               <select id="version-select" title="QR symbol version (matrix size). Auto picks the smallest that fits."></select>

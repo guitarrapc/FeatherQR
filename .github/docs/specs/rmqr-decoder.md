@@ -135,7 +135,7 @@ A crisp R11x77 at a little over one pixel per module.
 |---|---|
 | Versions | All 32 (R7x43 … R17x139), identified by width × height and cross-checked against the format information |
 | ECC levels | M, H |
-| Data modes | Numeric, Alphanumeric, Byte (UTF-8 / ISO-8859-1 heuristics as the other symbologies), Kanji (JIS X 0208; decode only), ECI headers 1 / 3 / 26 / 27 |
+| Data modes | Numeric, Alphanumeric, Byte (UTF-8 / ISO-8859-1 heuristics as the other symbologies), Kanji (JIS X 0208; the generator writes it for text JIS X 0208 holds), ECI headers 1 / 3 / 26 / 27 |
 | Quiet zone | Matrix: any light border, uniform or not (dark bounding box = core). Image: 1, 2 and 4 modules verified; the finder scan needs some light margin around the finder |
 | Error correction | Reed-Solomon per block at full strength ⌊ecc/2⌋ codewords per block, corrections reported |
 | Format information | Matrix: either copy alone suffices (≤ 3 bit errors per copy corrected; only copies naming the version the dimensions give count, the closer of those wins, so a copy miscorrected toward another version's word cannot veto the valid one). Image: the finder-side copy must be readable (≤ 3 bit errors) to name the version before any grid is fitted (at low density the counted width × height names it instead), and the sub-finder-side copy is a consistency gate on the perspective path; each sampled grid then goes through the matrix decoder, which arbitrates both copies as on the matrix path |

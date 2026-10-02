@@ -16,16 +16,19 @@ public class StructuredAppendZXingCrossTest
     private const string Sentence = "The quick brown fox jumps over the lazy dog. ";
 
     [Test]
-    [Arguments("ascii", 600, 5, QREccLevel.M, QRSegmentation.Single, false, false)]
-    [Arguments("digits", 1201, 6, QREccLevel.M, QRSegmentation.Single, false, false)]
-    [Arguments("latin1", 329, 3, QREccLevel.M, QRSegmentation.Single, false, false)]
-    [Arguments("japanese", 67, 5, QREccLevel.M, QRSegmentation.Single, false, false)]
-    [Arguments("emoji", 120, 2, QREccLevel.L, QRSegmentation.Single, false, false)]
-    [Arguments("mixed", 600, 6, QREccLevel.M, QRSegmentation.Optimal, false, false)]
-    [Arguments("ascii", 470, 2, QREccLevel.L, QRSegmentation.Single, true, false)]
-    [Arguments("latin1", 329, 3, QREccLevel.M, QRSegmentation.Optimal, true, false)]
-    [Arguments("japanese", 67, 5, QREccLevel.M, QRSegmentation.Single, false, true)]
-    public async Task Set_IsReadByZXingWithTheSameHeaderAndText(string kind, int length, int maxVersion, QREccLevel ecc, QRSegmentation segmentation, bool boost, bool bom)
+    [Arguments("ascii", 600, 5, QREccLevel.M, QRSegmentation.Single, false, false, false)]
+    [Arguments("digits", 1201, 6, QREccLevel.M, QRSegmentation.Single, false, false, false)]
+    [Arguments("latin1", 329, 3, QREccLevel.M, QRSegmentation.Single, false, false, false)]
+    [Arguments("japanese", 67, 5, QREccLevel.M, QRSegmentation.Single, false, false, false)]
+    [Arguments("emoji", 120, 2, QREccLevel.L, QRSegmentation.Single, false, false, false)]
+    [Arguments("mixed", 600, 6, QREccLevel.M, QRSegmentation.Optimal, false, false, false)]
+    [Arguments("ascii", 470, 2, QREccLevel.L, QRSegmentation.Single, true, false, false)]
+    [Arguments("latin1", 329, 3, QREccLevel.M, QRSegmentation.Optimal, true, false, false)]
+    [Arguments("japanese", 67, 5, QREccLevel.M, QRSegmentation.Single, false, true, false)]
+    [Arguments("japanese", 67, 5, QREccLevel.M, QRSegmentation.Optimal, false, false, true)] // a Kanji set: Kanji runs beside the ASCII, no ECI, the Shift_JIS parity
+    [Arguments("japaneseCells", 61, 3, QREccLevel.M, QRSegmentation.Single, false, false, true)] // a Kanji set: one Kanji segment a symbol
+    [Arguments("japaneseCells", 61, 3, QREccLevel.M, QRSegmentation.Optimal, true, false, true)]
+    public async Task Set_IsReadByZXingWithTheSameHeaderAndText(string kind, int length, int maxVersion, QREccLevel ecc, QRSegmentation segmentation, bool boost, bool bom, bool kanjiSet)
     {
         var text = Text(kind, length);
         var options = new QRCodeGeneratorOptions
@@ -35,9 +38,16 @@ public class StructuredAppendZXingCrossTest
             BoostEccLevel = boost,
             Utf8Bom = bom,
             EciMode = bom ? EciMode.Utf8 : EciMode.Default,
+            AllowKanji = kanjiSet,
         };
         var symbols = QRCodeGenerator.CreateStructuredAppend(text, ecc, options);
         await Assert.That(symbols.Length).IsBetween(2, 16);
+
+        // A Kanji set carries the XOR of the text's Shift_JIS bytes. The UTF-8 set the option falls back to carries the XOR of
+        // its UTF-8 bytes, a different value for these texts, so a row that came out UTF-8 fails here rather than passing as one.
+        var shiftJisParity = kanjiSet ? Xor(KanjiStreamReference.ShiftJisBytes(text)) : (byte)0;
+        if (kanjiSet)
+            await Assert.That(Xor(Encoding.UTF8.GetBytes(text))).IsNotEqualTo(shiftJisParity).Because("the premise: the two charsets give this text different parities");
 
         var reader = new BarcodeReader
         {
@@ -57,6 +67,8 @@ public class StructuredAppendZXingCrossTest
             await Assert.That(sequence >> 4).IsEqualTo(ourInfo.StructuredAppend.Index);
             await Assert.That((sequence & 0x0F) + 1).IsEqualTo(ourInfo.StructuredAppend.Count);
             await Assert.That(parity).IsEqualTo((int)ourInfo.StructuredAppend.Parity);
+            if (kanjiSet)
+                await Assert.That(parity).IsEqualTo((int)shiftJisParity).Because($"symbol {i} of a Kanji set carries the Shift_JIS parity");
 
             // ZXing.Net keeps a byte order mark in the text; this library's decoder consumes it.
             var zxingText = result.Text.TrimStart('﻿');
@@ -82,6 +94,14 @@ public class StructuredAppendZXingCrossTest
         return bitmap;
     }
 
+    private static byte Xor(byte[] bytes)
+    {
+        byte parity = 0;
+        foreach (var b in bytes)
+            parity ^= b;
+        return parity;
+    }
+
     private static string Text(string kind, int length)
     {
         var unit = kind switch
@@ -89,6 +109,7 @@ public class StructuredAppendZXingCrossTest
             "digits" => "0123456789",
             "latin1" => "Crème brûlée à la carte, jalapeño, naïve café. ",
             "japanese" => "こんにちは世界、QRコードの分割テストです。",
+            "japaneseCells" => "こんにちは世界、日本語の分割テストです。",
             "emoji" => "🎉🎊🎈",
             "mixed" => "order 20260915 item 0000123456 qty 42 ",
             _ => Sentence,

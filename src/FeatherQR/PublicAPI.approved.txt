@@ -84,9 +84,10 @@ namespace FeatherQR
 
     public readonly struct MicroQRCodeGeneratorOptions : IEquatable<MicroQRCodeGeneratorOptions>
     {
-        public MicroQRCodeGeneratorOptions(MicroQRVersionRange version = null, int quietZoneSize = 2, int? maskPattern = null, MicroQRSegmentation segmentation = 0);
+        public MicroQRCodeGeneratorOptions(MicroQRVersionRange version = null, int quietZoneSize = 2, int? maskPattern = null, MicroQRSegmentation segmentation = 0, bool allowKanji = false);
         public MicroQRSegmentation Segmentation { get; init; }
         public MicroQRVersionRange Version { get; init; }
+        public bool AllowKanji { get; init; }
         public int QuietZoneSize { get; init; }
         public int? MaskPattern { get; init; }
         public static MicroQRCodeGeneratorOptions Default { get; }
@@ -200,10 +201,11 @@ namespace FeatherQR
 
     public readonly struct QRCodeGeneratorOptions : IEquatable<QRCodeGeneratorOptions>
     {
-        public QRCodeGeneratorOptions(EciMode eciMode = 0, bool utf8Bom = false, QRVersionRange version = null, int quietZoneSize = 4, int? maskPattern = null, bool boostEccLevel = false, QRSegmentation segmentation = 0);
+        public QRCodeGeneratorOptions(EciMode eciMode = 0, bool utf8Bom = false, QRVersionRange version = null, int quietZoneSize = 4, int? maskPattern = null, bool boostEccLevel = false, QRSegmentation segmentation = 0, bool allowKanji = false);
         public EciMode EciMode { get; init; }
         public QRSegmentation Segmentation { get; init; }
         public QRVersionRange Version { get; init; }
+        public bool AllowKanji { get; init; }
         public bool BoostEccLevel { get; init; }
         public bool Utf8Bom { get; init; }
         public int QuietZoneSize { get; init; }
@@ -307,12 +309,13 @@ namespace FeatherQR
 
     public readonly struct RmQRCodeGeneratorOptions : IEquatable<RmQRCodeGeneratorOptions>
     {
-        public RmQRCodeGeneratorOptions(EciMode eciMode = 0, RmQRVersion? version = null, RmQRFitStrategy fitStrategy = 0, RmQRHeight? height = null, int quietZoneSize = 2, RmQRSegmentation segmentation = 0);
+        public RmQRCodeGeneratorOptions(EciMode eciMode = 0, RmQRVersion? version = null, RmQRFitStrategy fitStrategy = 0, RmQRHeight? height = null, int quietZoneSize = 2, RmQRSegmentation segmentation = 0, bool allowKanji = false);
         public EciMode EciMode { get; init; }
         public RmQRFitStrategy FitStrategy { get; init; }
         public RmQRHeight? Height { get; init; }
         public RmQRSegmentation Segmentation { get; init; }
         public RmQRVersion? Version { get; init; }
+        public bool AllowKanji { get; init; }
         public int QuietZoneSize { get; init; }
         public static RmQRCodeGeneratorOptions Default { get; }
     }

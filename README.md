@@ -282,6 +282,7 @@ var rmqr = RmQRCodeGenerator.Create("content", RmQREccLevel.M, new RmQRCodeGener
 | `FitStrategy` | — | — | `MinimizeArea` |
 | `Height` | — | — | `null` (any height) |
 | `Segmentation` | `Single` | `Single` | `Single` |
+| `AllowKanji` | `false` | `false` | `false` |
 
 The quiet zone defaults differ because the specifications do: ISO/IEC 18004 requires 4 modules for Standard QR and 2 for Micro QR, ISO/IEC 23941 requires 2 for rMQR. `0` is a valid setting for all three.
 
@@ -375,8 +376,57 @@ Three notes:
 - All three symbologies carry the option (`QRSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation`, see the rMQR section below). On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win:
 
 ```csharp
-var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L,
-    new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
+var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
+```
+
+#### Kanji mode for Japanese text
+
+By default Japanese text is written in Byte mode as UTF-8, 24 bits for a kana or a kanji, plus a 12-bit ECI header for wider compatibility. If you want to use Kanji mode, set `AllowKanji` to true. `AllowKanji` writes in Kanji mode, 13 bits a character and no ECI header, so a symbol holds about 1.85 times as many characters (see the Kanji columns of the [Data Capacity Reference](docs/data-capacity.md)).
+
+```csharp
+var utf8  = QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M);                                                  // requires version 2
+var kanji = QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true }); // fit in version 1
+
+var micro = MicroQRCodeGenerator.Create("こんにちは", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { AllowKanji = true }); // M3 instead of M4
+```
+
+It is off by default because not every reader handles Kanji mode.
+
+Readers actually tested.
+
+| Reader | Kanji Mode Support |
+|--------|------------------|
+| Android (QR scanner, Google Lens, Android 17) | No |
+| iPhone Camera | Yes |
+| ZXing | Yes |
+| zxing-cpp | Yes |
+| Denso Wave | Yes |
+
+- Kanji may needed only if you know the readers, such as industrial or Japanese-market scanners, or when you need the capacity.
+- Micro QR has Kanji mode from M3, and `CreateStructuredAppend` follows the same rule for the whole message.
+
+Here's the list of examples showing which text is written in Kanji mode, with the option set:
+
+```csharp
+var kanji = new QRCodeGeneratorOptions { AllowKanji = true };
+
+// Every character is in JIS X 0208 (kana, kanji, and the Greek, Cyrillic and symbols it holds): Kanji mode
+QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, kanji);   // Kanji, version 1 (UTF-8 needs 2)
+QRCodeGenerator.Create("Привет", QREccLevel.M, kanji);             // Kanji
+
+// One character outside JIS X 0208 keeps the whole text in UTF-8
+QRCodeGenerator.Create("日本語のテキスト😀", QREccLevel.M, kanji); // UTF-8, version 3: emoji
+QRCodeGenerator.Create("日本語のテキスト①", QREccLevel.M, kanji); // UTF-8, version 3: ① is an NEC special character
+QRCodeGenerator.Create("ﾆﾎﾝｺﾞ", QREccLevel.M, kanji);             // UTF-8: halfwidth katakana
+QRCodeGenerator.Create("日本語～", QREccLevel.M, kanji);           // UTF-8: one Kanji cell reads as ～ on Windows (CP932) and 〜 in JIS X 0208, so neither is written
+
+// A charset you choose is kept
+QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, kanji with { EciMode = EciMode.Utf8 }); // UTF-8, version 2
+QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M, kanji with { Utf8Bom = true });          // UTF-8 with a byte order mark, version 3
+
+// ASCII in the text: the default Single keeps it UTF-8, Optimal writes Kanji runs beside the ASCII
+QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, kanji);                                                 // UTF-8, version 2
+QRCodeGenerator.Create("東京タワー333m", QREccLevel.M, kanji with { Segmentation = QRSegmentation.Optimal }); // Kanji + ASCII runs, version 1
 ```
 
 #### Structured Append (one message across several symbols)
@@ -384,8 +434,7 @@ var micro = MicroQRCodeGenerator.Create("AB12345678901234567", MicroQREccLevel.L
 When a message is too long for the largest symbol you can print, `CreateStructuredAppend` splits it across up to sixteen Standard QR symbols that a reader joins back into one message. The version range says how large a symbol may be: the set uses the fewest symbols within it, all at one version, and text that fits one symbol comes back as that single symbol.
 
 ```csharp
-var symbols = QRCodeGenerator.CreateStructuredAppend(longText, QREccLevel.M,
-    new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10) });
+var symbols = QRCodeGenerator.CreateStructuredAppend(longText, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(10) });
 // symbols.Length is 1 to 16; render each one as usual
 ```
 
@@ -491,7 +540,7 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
@@ -500,7 +549,7 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -526,21 +575,21 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 #### Windows
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.3" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.4" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
@@ -608,16 +657,16 @@ Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and
 
 ### Are ISO-8859-2 and other encodings supported?
 
-Encoding: FeatherQR writes ISO-8859-1 and UTF-8. Other encodings (e.g. ISO-8859-2, Shift JIS) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
+Encoding: FeatherQR writes ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208) when you ask for it with `AllowKanji` (see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text)). Other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
 
-Decoding is wider: the decoders also read Kanji mode segments (Shift JIS, JIS X 0208) produced by other encoders. ECI 20 (Shift_JIS) Byte segments are still not read.
+Decoding reads Kanji mode segments from any encoder. ECI 20 (Shift_JIS) Byte segments are still not read.
 
 | Supported | Encoding Mode | Encoding |
 | --- | --- | --- |
 | Supported | Numeric | ISO-8859-1 |
 | Supported | Alphanumeric | ISO-8859-1 |
 | Supported | Byte | UTF-8 |
-| Decode only | Kanji | Shift JIS (JIS X 0208) |
+| Supported (written with `AllowKanji`) | Kanji | Shift JIS (JIS X 0208) |
 
 ### Does SVG output require SkiaSharp.Svg or other packages?
 
@@ -699,7 +748,7 @@ QR codes support four levels of error correction, which allow the code to remain
 QR codes support different encoding modes optimized for specific character types. FeatherQR automatically selects the most efficient mode for your content.
 
 > [!NOTE]
-> Kanji is decode only. The decoders read Kanji segments produced by other encoders (JIS X 0208), but the generators always write Japanese text in Byte mode as UTF-8.
+> Kanji mode is written only when you ask for it (`AllowKanji`, see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text)); by default the generators write Japanese text in Byte mode as UTF-8. The decoders read Kanji segments from any encoder.
 >
 > The mapping is JIS X 0208, not Microsoft CP932. They disagree on seven cells (wave dash, minus sign, the cent / pound / not signs, reverse solidus and the double vertical line), and, within the Kanji-mode range, CP932 additionally defines 83 characters the standard does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A symbol whose Kanji segment contains one of those 83 fails to decode with `UnmappedCharacter` rather than being silently rewritten. That status is distinct from `UnsupportedContent`, so you can tell "a CP932 reader would read this" from "this uses a feature the library does not implement".
 
@@ -708,7 +757,7 @@ QR codes support different encoding modes optimized for specific character types
 | **Numeric** | 0-9 | ~3.3 bits | Phone numbers, postal codes |
 | **Alphanumeric** | 0-9, A-Z, space, $ % * + - . / : | ~5.5 bits | URLs (uppercase), product codes |
 | **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, mixed-case URLs, non-ASCII text |
-| **Kanji** (**decode only**) | Shift JIS (JIS X 0208) characters | 13 bits | Japanese text from other encoders |
+| **Kanji** | Shift JIS (JIS X 0208) characters | 13 bits | Japanese text, with `AllowKanji` |
 
 ### Version and Size
 

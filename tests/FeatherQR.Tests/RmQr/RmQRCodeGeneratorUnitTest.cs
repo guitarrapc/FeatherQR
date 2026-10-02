@@ -105,7 +105,8 @@ public class RmQRCodeGeneratorUnitTest
     [Test]
     public async Task Create_DefaultEci_AutoDetectsUtf8_AndExplicitUtf8Matches()
     {
-        const string text = "こんにちは世界";
+        // ～ has no Kanji cell, so the text is not written in Kanji mode and the library's choice is UTF-8.
+        const string text = "こんにちは世界～";
         var automatic = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R13x59, QuietZoneSize = 0 });
         var explicitUtf8 = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R13x59, QuietZoneSize = 0 });
 

@@ -130,7 +130,7 @@ internal static class SegmentDecoders
     /// Decodes a Kanji segment payload of <paramref name="count"/> characters (ISO/IEC 18004 8.4.5): 13 bits per character, JIS X 0208 via <see cref="ShiftJisKanjiTable"/>.
     /// </summary>
     /// <remarks>
-    /// Decode only: no symbology emits Kanji mode, so this reads symbols other encoders produced.
+    /// It reads Kanji segments from any encoder, this library's included (written with <c>AllowKanji</c>).
     /// Unmapped cells fail the segment rather than yielding a replacement character, because a Kanji segment carries no redundancy of its own and a guessed character is indistinguishable from a correct one.
     /// </remarks>
     public static DecodeStatus DecodeKanjiPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)

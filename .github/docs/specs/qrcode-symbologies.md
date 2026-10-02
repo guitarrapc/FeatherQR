@@ -32,7 +32,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `ECCInfo` | RS block structure (data codewords, ECC per block, up to two block groups) describes all three symbologies |
 | `BinaryInterleaver` | Block interleaving of data then ECC codewords depends only on the `ECCInfo` block structure; Standard QR and rMQR interleave identically (Micro QR has one block). Lifted from `Internals.StandardQR` to `Internals.BinaryEncoders` when rMQR became the second consumer (rMQR Phase 5.4); the only symbology-specific input, the remainder-bit count, is passed in by the caller |
 | `EccBlockDecoder` | The matrix decoders' Reed-Solomon block stage: the stream deinterleaved into its blocks, the exact inverse of `BinaryInterleaver`, each block corrected up to a capacity the symbology passes, and the data gathered in block order. Standard QR and rMQR run it; Micro QR has one block and a half codeword, and corrects it itself. Until 2026-09-29 Standard QR and rMQR each wrote the stage out, rMQR as its own fused loop; sharing it changed no read and no status, and rMQR's loop put back measured 1.6 to 2.8 % slower than the shared stage on a matrix with errors |
-| `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology |
+| `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology. `EncodingMode` also names Kanji, whose cells come from the shared `ShiftJisKanjiReverseTable`, and the analysis selects it for an eligible text when the caller sets `AllowKanji` |
 | `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count), the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) and the ECI designator reader (lifted from `QRBinaryDecoder` when rMQR became its second consumer, Phase 6) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
 | `LuminanceConverter`, `PixelLayout`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent. The luminance kernels are the seam the first-party image adapter feeds (see the package seam below) |
 | `Point`, `Rectangle` | Plain geometry types |
@@ -377,19 +377,80 @@ Sibling namespaces bound the blast radius instead: a Micro QR change cannot touc
 
 `QRCodeData` is a shipped public type whose contract is square, 21–177 modules, versions 1–40, with a serialization format that encodes exactly that. Generalizing it would either break the serialization contract or turn every member into a symbology-conditional. Sibling data types keep the shipped contract byte-for-byte stable and let rectangular geometry be designed without compatibility constraints.
 
-### Why Kanji mode is read but never written
+### When Kanji mode is written
 
-Kanji is asymmetric on purpose: all three decoders read it, no generator emits it.
+All three decoders read Kanji mode. Reading it is an interoperability obligation: Japanese-market
+encoders emit it, and a decoder that rejects those symbols leaves callers no way through. Since
+2.0.0 all three generators also write it, on request (`AllowKanji` on each generator's options,
+off by default), for one class of text: the library chose the charset and chose UTF-8 (`EciMode.Default`, and on Standard QR no byte order mark), and every character
+is ASCII or has an encoder cell, which is JIS X 0208 without the seven cells CP932 reads
+differently. When every character has a cell, the text goes out as one Kanji segment with no ECI
+header, under both segmentations. When some are ASCII, `Single` writes UTF-8 as before, because
+one segment cannot hold both, and `Optimal` weighs a Kanji plan: Kanji runs beside Numeric,
+Alphanumeric and Byte runs of the ASCII, with no ECI header, taken where it needs a smaller
+version than the UTF-8 stream. Every other text, and every text without the option, is written as
+before, bit for bit.
 
-Reading it is an interoperability obligation. Japanese-market encoders do emit Kanji mode, and a
-decoder that rejects those symbols cannot read them at all, which is a hole no caller can work
-around. Writing it is a different decision: UTF-8 Byte mode already carries Japanese text, and
-emitting Kanji would change the default output of shipped generators. Decoding changes no output,
-so it ships on its own.
+Why this rule and not a wider one:
 
-The consequence is a deliberate round-trip asymmetry: `Decode(Encode(x)) == x` holds, but
-`Encode(Decode(y))` does not reproduce a Kanji symbol `y`. The capacity tables therefore keep the
-Kanji column for the decoder's count-indicator widths, not as a commitment to encode.
+- **Only on request.** For a while during 2.0.0's development, though in no release, the generators
+  wrote Kanji mode unasked. Scanned from a screen on 2026-10-01, an Android 17 phone's own QR scanner and Google Lens on it
+  read nothing from a Kanji-mode Standard QR symbol, with or without ECI 20, and read the same text
+  as UTF-8 behind ECI 26; the iPhone camera, Google Lens on iPhone, ZXing, zxing-cpp, CodeGlyphX and
+  Denso Wave's reader read both. A default that half the phones misread is not one, so UTF-8 is the
+  default on all three symbologies and Kanji mode is for callers who know their readers or need the
+  capacity. Micro QR and rMQR are read by neither phone's own scanner, and Denso Wave's reader and
+  zxing-cpp read them in Kanji mode and in UTF-8 alike, so nothing measured set them apart; one rule
+  for all three is the simpler contract.
+
+- **It reaches exactly the texts UTF-8 served worst, and never grows a symbol.** A character with
+  a cell costs 13 bits in Kanji mode against 16 or 24 in UTF-8, and the stream drops the 12-bit
+  (rMQR 11-bit) ECI header. ASCII and ISO-8859-1 output never moves. On Micro QR, which has no
+  ECI, Kanji mode is also the standard's own way to carry the text, where its UTF-8 was bare bytes
+  a reader had to recognise.
+- **A charset the caller chose is honoured.** Explicit UTF-8, or a byte order mark (a request for
+  UTF-8 in effect), keeps UTF-8 with or without the option. Micro QR has no charset option;
+  `AllowKanji` is its one switch.
+- **The seven divergent cells are never written.** Either reading written at one of them decodes
+  to different text in a CP932 reader (ZXing.Net) and in this library, so neither has an encoder
+  cell and a text holding one stays UTF-8.
+- **No Kanji beside an ECI header.** A text that would need both (a character without a
+  cell next to ones with) stays UTF-8. ISO/IEC 18004:2015 reads an ECI as governing the bytes of
+  every mode, Kanji mode being a compaction of Shift_JIS-range byte pairs (7.4.2.1, 7.3.6, Annex H),
+  so a Kanji segment after ECI 26 means UTF-8 bytes, not JIS X 0208 characters. Readers split on
+  it. zxing-cpp and ZBar follow the standard, while ZXing and its ports read JIS X 0208 there by
+  their maintainer's choice. Measured 2026-10-01 (`spot-check-kanji`): zxing-cpp 0.5.2 returns
+  replacement characters for such a segment, and ISO-8859-1 for a Kanji segment placed ahead of
+  the ECI, so no order of segments avoids it. Decided with the user the same day: a Kanji segment
+  is never written beside an ECI header.
+- **Kanji segments carry no ECI.** Every reader that decodes text reads a Kanji segment with no
+  ECI as Shift_JIS, on both sides of that split. Strictly, the default interpretation has been
+  ISO-8859-1 since the 2006 edition, and zint warns on Kanji without ECI 20. ECI 20 would settle
+  that at 12 bits a symbol, and the phone that reads no Kanji mode (Android 17) read no ECI 20
+  Kanji either, so the symbol stays without one.
+- **The rule is about what can be represented, not about script**: Greek, Cyrillic and box
+  drawing in JIS X 0208 go out in Kanji mode like kana do.
+- **`Optimal` never grows a symbol either.** The Kanji plan is taken only below the version the
+  single-mode stream needs, as any plan is, and the UTF-8 plan `Optimal` wrote before competes
+  with it at every version: interleaved kanji and digits pay a segment header a run as Kanji
+  runs, and there one UTF-8 Byte run can be the smaller plan. At a version both fit, the Kanji
+  plan is written.
+
+A Structured Append set follows the same rule for the whole text. An eligible set carries no ECI
+header in any symbol, and its parity is the XOR of the whole text's Shift_JIS bytes (an ASCII
+character as its byte), which do not depend on the plan, so the parity is still fixed before the
+text is split. Under `Single` the set is a Kanji set only when every character has a cell, every
+chunk one Kanji segment; under `Optimal` a text with ASCII in it becomes a Kanji set, every chunk
+its Kanji plan, only when that set needs fewer symbols than the UTF-8 set, or as many at a lower
+version, so `Optimal` never gives a larger set than before. A text of every-cell characters is a
+Kanji set under both, since its Kanji set is never the larger. A text that fits one symbol is
+`Create`'s symbol, the question asked the way `Create` asks it.
+
+`Decode(Encode(x)) == x` holds for Kanji output as for any other, and ZXing.Net and zxing-cpp read
+it. `Encode(Decode(y))` reproduces a Kanji symbol `y` only when `y` is what this library writes
+for its text; symbols other encoders write with Kanji beside an ECI header, with CP932 readings, or
+with a split this library would not choose are read but not reproduced. The Kanji capacity columns are encoding capacities now, checked at every version and
+level of each symbology in the `*BinaryEncoderKanjiTest` classes.
 
 **The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F,
 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line,
@@ -413,6 +474,44 @@ documented divergence set. Reproducing **6,879** assigned cells independently (5
 Because every other table test constrains only *which* cells are assigned and would pass a table
 whose readings were permuted, a golden digest over all 8,192 entries pins the values themselves;
 regenerating the table is expected to change it, in the same reviewed commit.
+
+**The encoder's reverse table is the forward table's inverse, minus seven cells.**
+`ShiftJisKanjiReverseTable` maps a UTF-16 code unit to the 13-bit value of its cell, and holds
+6,872 of them: the 6,879 above without the seven CP932 reads differently. Neither reading of those
+seven has a cell to write, because a symbol written there decodes to different text in a CP932
+reader and in this library, whichever reading was written. The same generator emits it from the
+forward table and refuses unless, over every UTF-16 code unit, it is the exact inverse of the
+forward table on those cells and misses everything else, both readings of the seven included. A
+golden digest over all 65,536 lookups pins it, as the forward table's digest pins that one.
+
+Its layout was chosen by measurement (2026-09-29, .NET 10, x64, 1,000 characters of Japanese
+prose and the 6,872 cells shuffled): a directory over the high byte, a 10-byte record per 64 code
+units (a membership word and the count of members before it), and the values in code-unit order
+packed at 13 bits. That is 15,146 bytes of RVA data and 2 to 3 ns a character. Binary search over
+sorted pairs took 27 KB and 14 ns; a perfect hash checked through the forward table, 14 KB and 7 ns;
+unpacked 16-bit values, 17.7 KB, over the 16 KB target, and not consistently faster (9 % ahead on
+prose in one run, 26 % behind in the other, level on the shuffled cells in both). Keeping the word and its count in
+separate arrays, so that a lookup touches two tables for them instead of one record, was 3 to 27 %
+slower. Removing the bounds checks gained 0.2
+to 0.5 ns, which does not pay for unsafe code.
+
+What a trimmed consumer pays for Kanji encoding (`PublishTrimmed`, `TrimMode=full`, win-x64,
+measured 2026-09-29 against the commit before any encoder referenced the table): QR encode only
+115,200 → 132,608 bytes of `FeatherQR.dll` (+17.0 KB), all three symbologies encoding 178,176 →
+197,120 (+18.5 KB), decode only 73,216 unchanged. That is the 15.1 KB table plus the writers and
+the eligibility pass. A decode-only consumer keeps neither table it does not use, and an encoding
+consumer keeps the reverse table whether or not its text ever reaches Kanji mode, because the
+writers' mode switches reference it. Kanji plans under `Optimal` (the eighth segmentation state,
+each planner's Kanji scan) added 4.5 KB more to QR encode only (137,216 bytes) and 7.0 KB to all
+three (204,288), measured 2026-09-30; a consumer that never sets `Optimal` keeps them too, since
+the segmentation is a run-time option. Kanji sets in Structured Append cost a consumer that calls
+`CreateStructuredAppend` 4.0 KB (161,792 → 165,888 bytes) and the others at most 0.5 KB (QR encode
+only 137,216 unchanged, all three 204,288 → 204,800), measured the same day. Making Kanji mode
+opt-in (`AllowKanji`, 2026-10-01) removed none of it, since the option is read at run time: all three
+205,312 bytes and `CreateStructuredAppend` 166,400 (+0.5 KB each), QR encode only and decode only
+unchanged. Speeding up Kanji plans (a membership test for the analysis, the scan's table kept for
+the build, 2026-10-01) added 1.0 KB to QR encode only (138,240) and to `CreateStructuredAppend`
+(167,424), and 1.5 KB to all three (206,848); decode only unchanged.
 
 Two failure causes are kept apart on the error path: a structurally impossible byte pair is
 `InvalidBitstream`, a well-formed but unassigned cell is `UnmappedCharacter`. The distinguishing
@@ -559,7 +658,7 @@ The queue is closed again behind them, on the same rule.
 | The announced removals (`GetRequiredBufferSize`, `Compression`, parameter-list generator overloads) | Done in 2.0.0-preview.3. Every generator now takes only `in {Sym}CodeGeneratorOptions`, defaulted | Never; a throwing sizing method is asserted absent |
 | 2.0.0 type renames (the `QR` casing rule, `QREccLevel` to `QREccLevel` and friends) and the `string` convenience overloads | Out of the split and out of the removals; their own plan, same major, before `2.0.0` final | That plan |
 | Pages fallback stub on the user site | Kept for as long as 1.x packages are listed on nuget.org, since their READMEs link the old Playground URL | Never while a 1.x listing exists |
-| Kanji mode (all symbologies) | Decode only, JIS X 0208 mapping; encoders keep emitting UTF-8 Byte mode (with ECI where the symbology supports it) | Encoding: a policy change backed by concrete demand, since it alters shipped generator output |
+| Kanji mode (all symbologies) | Read with the JIS X 0208 mapping. Written on request (`AllowKanji`) when the charset is the library's choice ([When Kanji mode is written](#when-kanji-mode-is-written)): one Kanji segment for text whose every character has an encoder cell, and under `Optimal` Kanji runs beside ASCII runs where that plan is smaller; Structured Append sets by the same rule, with the Shift_JIS parity | Kanji beside an ECI header, if the readers that follow the standard there (zxing-cpp, ZBar) are measured to apply JIS X 0208 to it; Kanji mode by default, if an Android phone's own scanners are measured to read it |
 | ECI 20 (Shift_JIS) byte segments | Unsupported; reported as `UnsupportedContent` (structural, unlike the per-character `UnmappedCharacter`) | Demand for symbols that pair ECI 20 with Byte mode; needs the full CP932 range, roughly twice the Kanji table |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
@@ -615,3 +714,8 @@ The queue is closed again behind them, on the same rule.
 - **A change of a few percent needs the fastest of interleaved runs, not a benchmark job.** Judging the decode refactors of 2026-09-29 on this machine, the `ShortRun` job gave error bars as large as the mean on some shapes (Micro QR `M2_512px`, 5,613 ± 15,843 µs), three launches of fifteen iterations moved one tree 23 % between two runs (Standard QR version 40 at 3 px/module, 112.7 and 91.4 µs), and one process of a build could be 2.5 times another on a 4 µs decode. A small harness over both trees, alternating eight to twelve times and keeping each shape's fastest round, first quartile and median, held a percent; the benchmarks stay for absolute numbers.
 - **Even then a shape can lean by which shapes share its process.** rMQR's gradient image measured +0.4 to +1.4 % in six runs of the rMQR shapes alone, two of them with part of the change taken back out, and −1.0 to −1.4 % in both runs of every shape. A lean that survives taking the code it is blamed on back out is not that code's.
 - **The order of an A/B run can manufacture a regression.** Two rounds that ran the base first each time put rMQR's image decode 15 to 21 % behind after the candidate scan was shared, and Micro QR's failing paths moved 16 to 25 %. Three rounds with error bars, the order alternated, put every shape within 1 to 4 % and inside its error bars (2026-10-01). A machine that drifts during a run favours whichever tree runs first.
+
+- **An output default is judged by the readers people carry.** Every library reader agreed with the Kanji output, and the standard was on Kanji mode's side for a segment with no ECI, yet an Android phone's own scanners read none of it; the default went back to UTF-8 and Kanji mode became an option. The phone scan came after the default had been changed, when it belonged before.
+- **An option has to reach every path that analyses the text, and the paths the tests take by default are not all of them.** When `AllowKanji` was threaded through the three generators, a mutation pass that turned each call site's argument to `true` and to `false` found three paths no test took with the option set: the refusal's advice, version resolution under a range or the boost, and Micro QR's ranged sizing.
+- **A byte-for-byte comparison through the public API catches what the tests do not.** Run against the previous commit on every entry point, sizing call and refusal, it found a Micro QR refusal wording changed for every text, not only Kanji text, with a space dropped in the edit; no test pinned the other texts' wording.
+- **A hand edit to a generated file has to go into the generator.** The committed forward Kanji table's comments had been reflowed by hand while the template had not, so regenerating it rewrote 31 lines with no data change. The template was brought in line, and regeneration now reproduces the committed file byte for byte.

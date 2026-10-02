@@ -76,12 +76,21 @@ public static class RmQRCorpus
         cases.Add(new("r13x59-m-utf8-japanese", "こんにちは世界", "M", 13, 59, "Byte", Utf8: true));      // 21 bytes of 36
         cases.Add(new("r17x139-h-utf8-mixed", "rMQR 矩形コード ✓ naïve café", "H", 17, 139, "Byte", Utf8: true));
 
-        // Kanji mode (ISO/IEC 23941 7.4.5, mode indicator 100): decode-only for this
-        // library, so external symbols are the only way to exercise it. qrtool takes
+        // Kanji mode (ISO/IEC 23941 7.4.5, mode indicator 100): read by this library's decoder and
+        // compared with its encoder module for module (KanjiEncoderOracleTest). qrtool takes
         // the payload as raw Shift_JIS bytes; libzint cannot produce Kanji at all.
         cases.Add(new("r11x43-m-kanji", "日本語漢字", "M", 11, 43, "Kanji"));
         cases.Add(new("r13x59-h-kanji", "漢字試験", "H", 13, 59, "Kanji"));
         cases.Add(new("r17x139-m-kanji-long", Cyclic("日本語漢字符号化試験用文字列", 60), "M", 17, 139, "Kanji"));
+
+        // The Kanji count widths the cases above leave to derivation (2, 3 and 6; ISO/IEC 23941
+        // Table 3), each filled to the version's Kanji capacity: the data bits less the 3-bit
+        // mode indicator and the count, in 13-bit characters. All four are under 11 modules
+        // high, clear of qrtool's tail defect.
+        cases.Add(new("r7x43-m-kanji-max", "亜漾熙", "M", 7, 43, "Kanji"));                       // 2 bits: 3 of (48 - 5) / 13
+        cases.Add(new("r7x59-m-kanji-max", "　滌漾熙ΩЖ", "M", 7, 59, "Kanji"));                  // 3 bits: 6 of (96 - 6) / 13
+        cases.Add(new("r9x43-h-kanji-max", "─┼ヶ", "H", 9, 43, "Kanji"));                       // 3 bits: 3 of (56 - 6) / 13
+        cases.Add(new("r9x139-m-kanji-max", Cyclic(StandardQrCorpus.KanjiCellCycle, 38), "M", 9, 139, "Kanji")); // 6 bits: 38 of (504 - 9) / 13
 
         // The seven cells where JIS X 0208 and CP932 disagree, with the Shift_JIS bytes
         // pinned because .NET cannot encode the JIS X 0208 readings (U+301C is not in

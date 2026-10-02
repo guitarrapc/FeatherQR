@@ -26,6 +26,11 @@ internal enum EncodingMode
     /// </summary>
     Byte = 4,
     /// <summary>
+    /// JIS X 0208 characters (13 bits per character): the Shift_JIS pair compacted as ISO/IEC 18004 8.4.5 defines, looked up in <see cref="ShiftJisKanjiReverseTable"/>.
+    /// Written without an ECI header; the count indicator counts characters.
+    /// </summary>
+    Kanji = 8,
+    /// <summary>
     /// Extended Channel Interpretation (metadata only).
     /// Mode indicator: 0111 + 8-bit assignment number Specifies character encoding for Byte mode:
     ///   - ECI 3: ISO-8859-1

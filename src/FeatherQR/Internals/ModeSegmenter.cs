@@ -57,6 +57,9 @@ internal static partial class ModeSegmenter
     private const int StateByte = 5;
     private const int StateStart = 6;
 
+    // The eighth state, reached only by the program for a Kanji-eligible text (ComputeCostsKanji).
+    private const int StateKanji = 7;
+
     // Character classes of the table below; 1 is the alphanumeric alphabet outside the digits.
     internal const int ClassOther = 0;
     internal const int ClassDigit = 2;
@@ -69,6 +72,9 @@ internal static partial class ModeSegmenter
     private const int SixthsPerDigit = 20;
     private const int SixthsPerAlnum = 33;
     private const int SixthsPerByte = 48;
+
+    // A character with a Kanji cell in a Kanji-eligible text: 13 bits, the only mode that carries it without an ECI header.
+    private const int SixthsPerKanji = 78;
 
     /// <summary>
     /// The class of each ASCII character for the program, one load per character: outside the alphanumeric alphabet, inside it, or a digit.
@@ -457,6 +463,265 @@ internal static partial class ModeSegmenter
     private static int StoppedBefore(ReadOnlySpan<char> text, int i)
         => i > 0 && char.IsLowSurrogate(text[i]) && char.IsHighSurrogate(text[i - 1]) ? i - 1 : i;
 
+    /// <summary>
+    /// <see cref="ComputeCosts"/> for a Kanji-eligible text (<see cref="TextAnalysisResult.KanjiPlannable"/>: every character ASCII or with an encoder cell), with the eighth state, Kanji, beside the seven.
+    /// An ASCII character reaches Numeric, Alphanumeric and Byte at one byte, as under a Latin charset; a character with a cell reaches only Kanji, since Byte could carry it only under an ECI header, which a plan with Kanji runs never has.
+    /// Every mode is allowed: Micro QR plans Kanji only from M3, where all four exist.
+    /// </summary>
+    /// <remarks>
+    /// After any character either Kanji or the other six states are reachable, never both, so Kanji's predecessor takes the byte Byte's takes at an ASCII position: the table stays <see cref="ParentBytesPerChar"/> bytes a character, and <see cref="WalkBack"/> steps a Kanji run the way it steps a Byte run.
+    /// A program of its own rather than a flag on the seven-state loops, so every text that is not eligible runs exactly the program it ran before.
+    /// </remarks>
+    public static int ComputeCostsKanji(ReadOnlySpan<char> text, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, int cciKanji, Span<byte> parents, out int finalState)
+    {
+        Debug.Assert(parents.IsEmpty || parents.Length == text.Length * ParentBytesPerChar);
+
+        // Opening a run costs its headers plus its first character: 4 bits for a digit, 6 for
+        // an alphanumeric, 8 for a byte, 13 for a character with a cell.
+        var openNumeric = modeIndicatorBits + cciNumeric + 4;
+        var openAlnum = modeIndicatorBits + cciAlnum + 6;
+        var openByte = modeIndicatorBits + cciByte + 8;
+        var openKanji = modeIndicatorBits + cciKanji + 13;
+
+        if (parents.IsEmpty)
+            return CostsKanji(text, openNumeric, openAlnum, openByte, openKanji, out finalState);
+
+        Debug.Assert(text.Length is > 0 and <= MaxTrackedChars);
+        return FromKey(TrackedKanji(text, openNumeric << 3, openAlnum << 3, openByte << 3, openKanji << 3, parents), out finalState);
+    }
+
+    /// <summary>
+    /// <see cref="LongestPrefixWithinBudget"/> for a Kanji-eligible text, on the program of <see cref="ComputeCostsKanji"/>: the longest prefix whose minimal plan costs at most <paramref name="budgetBits"/>, in characters.
+    /// The walk of a Kanji Structured Append set. An eligible text has no surrogate, so every character is a candidate end.
+    /// </summary>
+    public static int LongestPrefixWithinBudgetKanji(ReadOnlySpan<char> text, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, int cciKanji, int budgetBits)
+    {
+        var openNumeric = modeIndicatorBits + cciNumeric + 4;
+        var openAlnum = modeIndicatorBits + cciAlnum + 6;
+        var openByte = modeIndicatorBits + cciByte + 8;
+        var openKanji = modeIndicatorBits + cciKanji + 13;
+
+        int n0 = Unreachable, n1 = Unreachable, n2 = Unreachable, a0 = Unreachable, a1 = Unreachable, b = Unreachable;
+        var cheapest = 0;
+        var length = text.Length;
+        for (var i = 0; i < length; i++)
+        {
+            var c = text[i];
+            if (c >= 0x80)
+            {
+                // A run of characters with a cell is one Kanji run, opened from whatever the ASCII before it ended in.
+                var k = cheapest + openKanji;
+                n0 = n1 = n2 = a0 = a1 = b = Unreachable;
+                while (true)
+                {
+                    if (k > budgetBits)
+                        return i;
+                    if (i + 1 >= length || text[i + 1] < 0x80)
+                        break;
+                    i++;
+                    k += 13;
+                }
+                cheapest = k;
+                continue;
+            }
+
+            var cls = ClassOf(c);
+            if (cls == ClassOther)
+            {
+                b = Math.Min(b + 8, cheapest + openByte);
+                n0 = n1 = n2 = a0 = a1 = Unreachable;
+                while (true)
+                {
+                    if (b > budgetBits)
+                        return i;
+                    if (i + 1 >= length || text[i + 1] >= 0x80 || ClassOf(text[i + 1]) != ClassOther)
+                        break;
+                    i++;
+                    b += 8;
+                }
+                cheapest = b;
+                continue;
+            }
+
+            if (cls == ClassDigit)
+            {
+                var wrapped = n2 + 3;
+                n2 = n1 + 3;
+                n1 = Math.Min(n0 + 4, cheapest + openNumeric);
+                n0 = wrapped;
+            }
+            else
+            {
+                n0 = n1 = n2 = Unreachable;
+            }
+            var paired = a1 + 5;
+            a1 = Math.Min(a0 + 6, cheapest + openAlnum);
+            a0 = paired;
+            b = Math.Min(b + 8, cheapest + openByte);
+            cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
+
+            if (cheapest > budgetBits)
+                return i;
+        }
+
+        return length;
+    }
+
+    /// <summary>Costs only, for a Kanji-eligible text: the version scans and the rMQR floor.</summary>
+    private static int CostsKanji(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, int openKanji, out int finalState)
+    {
+        int n0 = Unreachable, n1 = Unreachable, n2 = Unreachable, a0 = Unreachable, a1 = Unreachable, b = Unreachable, k = Unreachable;
+        var cheapest = 0; // the start state, then the cheapest reachable state
+        var length = text.Length;
+        for (var i = 0; i < length; i++)
+        {
+            var c = text[i];
+            if (c >= 0x80)
+            {
+                // Only Kanji encodes a character with a cell, so it alone stays reachable and every
+                // further one extends its run: one add each. The run is consumed whole here, so the
+                // character before it was ASCII (or there was none) and the run opens.
+                k = cheapest + openKanji;
+                n0 = n1 = n2 = a0 = a1 = b = Unreachable;
+                while (i + 1 < length && text[i + 1] >= 0x80)
+                {
+                    k += 13;
+                    i++;
+                }
+                cheapest = k;
+                continue;
+            }
+
+            var cls = ClassOf(c);
+            if (cls == ClassOther)
+            {
+                // Of the ASCII modes only Byte encodes this character.
+                b = Math.Min(b + 8, cheapest + openByte);
+                n0 = n1 = n2 = a0 = a1 = k = Unreachable;
+                while (i + 1 < length && text[i + 1] < 0x80 && ClassOf(text[i + 1]) == ClassOther)
+                {
+                    b += 8;
+                    i++;
+                }
+                cheapest = b;
+                continue;
+            }
+
+            if (cls == ClassDigit)
+            {
+                var wrapped = n2 + 3;
+                n2 = n1 + 3;
+                n1 = Math.Min(n0 + 4, cheapest + openNumeric);
+                n0 = wrapped;
+            }
+            else
+            {
+                n0 = n1 = n2 = Unreachable;
+            }
+            var paired = a1 + 5;
+            a1 = Math.Min(a0 + 6, cheapest + openAlnum);
+            a0 = paired;
+            b = Math.Min(b + 8, cheapest + openByte);
+            k = Unreachable;
+            cheapest = Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b));
+        }
+
+        return Best(n0, n1, n2, a0, a1, b, k, out finalState);
+    }
+
+    /// <summary>
+    /// Keys with parents for a Kanji-eligible text: the plan a symbol is written from. Returns the cheapest key.
+    /// The widths are keys already (bits times eight), each with its first character in.
+    /// </summary>
+    private static int TrackedKanji(ReadOnlySpan<char> text, int openNumeric, int openAlnum, int openByte, int openKanji, Span<byte> table)
+    {
+        const int U = UnreachableKey;
+        const int stride = ParentBytesPerChar;
+        int n0 = U | StateNumeric0, n1 = U | StateNumeric1, n2 = U | StateNumeric2, a0 = U | StateAlnum0, a1 = U | StateAlnum1, b = U | StateByte, k = U | StateKanji;
+
+        // The first character opens whatever encodes it from the start; its predecessors say so.
+        var first = text[0];
+        if (first >= 0x80)
+        {
+            k = openKanji | StateKanji;
+        }
+        else
+        {
+            var firstClass = ClassOf(first);
+            if (firstClass == ClassDigit)
+                n1 = openNumeric | StateNumeric1;
+            if (firstClass != ClassOther)
+                a1 = openAlnum | StateAlnum1;
+            b = openByte | StateByte;
+        }
+        table[0] = StateStart;
+        table[1] = StateStart | (StateStart << 3);
+
+        var length = text.Length;
+        for (var i = 1; i < length; i++)
+        {
+            var c = text[i];
+            var numeric = Math.Min(Math.Min(n0, n1), n2);
+            var alnum = Math.Min(a0, a1);
+            if (c >= 0x80)
+            {
+                // Continued from Kanji (13 bits), or opened from the cheapest ASCII state; only one side is reachable.
+                var kanjiKey = Math.Min(k + 104, Math.Min(Math.Min(numeric, alnum), b) + openKanji);
+                table[i * stride] = (byte)(kanjiKey & 7);
+                k = (kanjiKey & ~7) | StateKanji;
+                n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2; a0 = U | StateAlnum0; a1 = U | StateAlnum1; b = U | StateByte;
+                while (i + 1 < length && text[i + 1] >= 0x80)
+                {
+                    i++;
+                    k += 104;
+                    table[i * stride] = StateKanji;
+                }
+                continue;
+            }
+
+            var cls = ClassOf(c);
+            // Opened from Numeric, Alphanumeric or Kanji, or continued (8 bits).
+            var byteKey = Math.Min(Math.Min(Math.Min(numeric, alnum), k) + openByte, b + 64);
+            table[i * stride] = (byte)(byteKey & 7);
+            if (cls == ClassOther)
+            {
+                b = (byteKey & ~7) | StateByte;
+                n0 = U | StateNumeric0; n1 = U | StateNumeric1; n2 = U | StateNumeric2; a0 = U | StateAlnum0; a1 = U | StateAlnum1; k = U | StateKanji;
+                while (i + 1 < length && text[i + 1] < 0x80 && ClassOf(text[i + 1]) == ClassOther)
+                {
+                    i++;
+                    b += 64;
+                    table[i * stride] = StateByte;
+                }
+                continue;
+            }
+
+            int nn0 = U | StateNumeric0, nn1 = U | StateNumeric1, nn2 = U | StateNumeric2;
+            var parentNumeric1 = 0;
+            if (cls == ClassDigit)
+            {
+                // Continued from Numeric0 (4 bits), or opened from Alphanumeric, Byte or Kanji.
+                var key = Math.Min(n0 + 32, Math.Min(Math.Min(alnum, b), k) + openNumeric);
+                parentNumeric1 = key & 7;
+                nn1 = (key & ~7) | StateNumeric1;
+                nn2 = n1 + 25; // 3 bits, and Numeric1 becomes Numeric2
+                nn0 = n2 + 22; // 3 bits, and Numeric2 becomes Numeric0
+            }
+
+            // Opened from Numeric, Byte or Kanji, or continued from Alnum0 (6 bits).
+            var alnumKey = Math.Min(Math.Min(Math.Min(numeric, b), k) + openAlnum, a0 + 48);
+            table[i * stride + 1] = (byte)(parentNumeric1 | ((alnumKey & 7) << 3));
+
+            n0 = nn0; n1 = nn1; n2 = nn2;
+            a0 = a1 + 39; // 5 bits, and Alnum1 becomes Alnum0
+            a1 = (alnumKey & ~7) | StateAlnum1;
+            b = (byteKey & ~7) | StateByte;
+            k = U | StateKanji;
+        }
+
+        return Math.Min(Math.Min(Math.Min(Math.Min(n0, n1), Math.Min(n2, a0)), Math.Min(a1, b)), k);
+    }
+
     /// <summary>The cheapest state to end in, and its cost; <see cref="Unreachable"/> exactly when no allowed mode set encodes the content. The lowest state wins a tie.</summary>
     private static int Best(int n0, int n1, int n2, int a0, int a1, int b, out int state)
     {
@@ -471,28 +736,45 @@ internal static partial class ModeSegmenter
         return best;
     }
 
+    /// <summary><see cref="Best(int, int, int, int, int, int, out int)"/> with Kanji, the highest state, last.</summary>
+    private static int Best(int n0, int n1, int n2, int a0, int a1, int b, int k, out int state)
+    {
+        var best = Best(n0, n1, n2, a0, a1, b, out state);
+        if (k < best)
+        {
+            best = k;
+            state = StateKanji;
+        }
+        return best;
+    }
+
     /// <summary>
     /// Walks the predecessor table back into runs, oldest first.
     /// Returns false when the plan needs more runs than the caller lent room for.
     /// </summary>
     public static bool Reconstruct(ReadOnlySpan<char> text, ReadOnlySpan<byte> parents, int finalState, Span<ModeSegment> segments, out int segmentCount)
-        => WalkBack(text.Length, parents, ParentBytesPerChar, finalState, segments, materialise: true, out segmentCount, out _, out _, out _);
+        => WalkBack(text.Length, parents, ParentBytesPerChar, finalState, segments, materialise: true, out segmentCount, out _, out _, out _, out _);
 
     /// <summary>Counts the runs of each mode on the minimal-cost path, without materialising it.</summary>
     public static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte)
-        => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte);
+        => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte, out _);
+
+    /// <summary>Counts the runs of each mode on the minimal-cost path of <see cref="ComputeCostsKanji"/>, without materialising it.</summary>
+    public static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte, out int runsKanji)
+        => WalkBack(length, parents, ParentBytesPerChar, finalState, default, materialise: false, out _, out runsNumeric, out runsAlnum, out runsByte, out runsKanji);
 
     /// <summary>
-    /// The walk back, run by run. A run of Numeric can only begin where the state is Numeric1, every third character of the run, and a run of Alphanumeric where it is Alnum1, every second; a run of Byte begins at the first entry that does not say Byte.
+    /// The walk back, run by run. A run of Numeric can only begin where the state is Numeric1, every third character of the run, and a run of Alphanumeric where it is Alnum1, every second; a run of Byte or Kanji begins at the first entry that does not say Byte or Kanji.
     /// Each step reads whether the run continued at the place before, whose address is the position alone, so no load waits for the one before it.
     /// The first character's predecessor is the start, which no run continues from, so every search lands at or after it.
     /// </summary>
-    private static bool WalkBack(int length, ReadOnlySpan<byte> table, int stride, int finalState, Span<ModeSegment> segments, bool materialise, out int segmentCount, out int runsNumeric, out int runsAlnum, out int runsByte)
+    private static bool WalkBack(int length, ReadOnlySpan<byte> table, int stride, int finalState, Span<ModeSegment> segments, bool materialise, out int segmentCount, out int runsNumeric, out int runsAlnum, out int runsByte, out int runsKanji)
     {
         segmentCount = 0;
         runsNumeric = 0;
         runsAlnum = 0;
         runsByte = 0;
+        runsKanji = 0;
         var state = finalState;
         var end = length;
         var count = 0;
@@ -517,13 +799,21 @@ internal static partial class ModeSegmenter
                 while ((parent = table[i * stride + 1] & 7) == StateNumeric0)
                     i -= 3;
             }
-            else
+            else if (state <= StateAlnum1)
             {
                 mode = 1;
                 runsAlnum++;
                 i -= state == StateAlnum1 ? 0 : 1;
                 while ((parent = table[i * stride + 1] >> 3) == StateAlnum0)
                     i -= 2;
+            }
+            else
+            {
+                // Kanji, whose predecessor sits where Byte's does at an ASCII position.
+                mode = 3;
+                runsKanji++;
+                while ((parent = table[i * stride]) == StateKanji)
+                    i--;
             }
 
             if (materialise)
@@ -574,11 +864,30 @@ internal static partial class ModeSegmenter
     /// <summary>Payload bits of <paramref name="unitCount"/> units in <paramref name="mode"/> (ISO/IEC 18004 7.4 / ISO/IEC 23941 7.4).</summary>
     public static int PayloadBits(EncodingMode mode, int unitCount) => mode switch
     {
-        EncodingMode.Numeric => unitCount / 3 * 10 + (unitCount % 3) switch { 2 => 7, 1 => 4, _ => 0 },
-        EncodingMode.Alphanumeric => unitCount / 2 * 11 + unitCount % 2 * 6,
+        EncodingMode.Numeric => NumericPayloadBits(unitCount),
+        EncodingMode.Alphanumeric => AlphanumericPayloadBits(unitCount),
         EncodingMode.Byte => unitCount * 8,
+        EncodingMode.Kanji => unitCount * 13,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} has no payload cost model."),
     };
+
+    /// <summary>
+    /// Payload bits of a run by its <see cref="ModeSegment.ModeIndex"/>, for the loops that price or write a plan run by run: no mode lookup and no throwing arm, so it inlines.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int PayloadBitsOfIndex(int modeIndex, int unitCount) => modeIndex switch
+    {
+        0 => NumericPayloadBits(unitCount),
+        1 => AlphanumericPayloadBits(unitCount),
+        2 => unitCount * 8,
+        _ => unitCount * 13,
+    };
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int NumericPayloadBits(int digits) => digits / 3 * 10 + (digits % 3) switch { 2 => 7, 1 => 4, _ => 0 };
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int AlphanumericPayloadBits(int characters) => characters / 2 * 11 + characters % 2 * 6;
 
     /// <summary>Encoded byte count of a Byte-mode run, i.e. the value its count indicator carries.</summary>
     /// <remarks>
@@ -663,6 +972,52 @@ internal static partial class ModeSegmenter
             else
                 sixths += SixthsPerByte * ByteCost(text, i, charset);
         }
+        return sixths;
+    }
+
+    /// <summary>
+    /// <see cref="CheapestSixths"/> for a Kanji-eligible text, the screen of <see cref="ComputeCostsKanji"/>: a character with a cell at Kanji's 13 bits, the only mode that carries it without an ECI header, and ASCII at one byte.
+    /// Priced as its UTF-8 bytes instead, a kana would count 24 bits against the 13 a Kanji plan pays, and the screen would reject versions the plan fits.
+    /// </summary>
+    public static int CheapestSixthsKanji(ReadOnlySpan<char> text)
+        => CheapestSixthsKanji(text, out _, out _, out _);
+
+    /// <summary>
+    /// <see cref="CheapestSixthsKanji(ReadOnlySpan{char})"/>, with what the same pass also knows: the UTF-8 plan's sixths (<see cref="CheapestSixths"/> under UTF-8, a character with a cell at its two or three bytes), and how many maximal stretches of characters with a cell and of ASCII the text has.
+    /// </summary>
+    /// <remarks>
+    /// No run of a Kanji plan crosses from one kind of stretch to the other (Kanji holds no ASCII, and no other mode holds a character with a cell), so each stretch opens at least one run, and a planner's screen adds a header per stretch rather than one in all.
+    /// For interleaved text that is most of the plan's cost, and the one-header screen let through versions its plan could not fit.
+    /// </remarks>
+    public static int CheapestSixthsKanji(ReadOnlySpan<char> text, out int utf8Sixths, out int cellRuns, out int asciiRuns)
+    {
+        var sixths = 0;
+        var utf8 = 0;
+        cellRuns = 0;
+        asciiRuns = 0;
+        var previousWasCell = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c >= 0x80)
+            {
+                sixths += SixthsPerKanji;
+                utf8 += c < 0x800 ? 2 * SixthsPerByte : 3 * SixthsPerByte; // an eligible text has no surrogate
+                if (i == 0 || !previousWasCell)
+                    cellRuns++;
+                previousWasCell = true;
+            }
+            else
+            {
+                var cost = ClassOf(c) switch { ClassDigit => SixthsPerDigit, ClassOther => SixthsPerByte, _ => SixthsPerAlnum };
+                sixths += cost;
+                utf8 += cost;
+                if (i == 0 || previousWasCell)
+                    asciiRuns++;
+                previousWasCell = false;
+            }
+        }
+        utf8Sixths = utf8;
         return sixths;
     }
 

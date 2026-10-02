@@ -136,6 +136,7 @@ const symbologySelect = document.getElementById('symbology-select');
 const eccSelect = document.getElementById('ecc-select');
 const eccBoostRow = document.getElementById('ecc-boost-row');
 const eccBoostCheck = document.getElementById('ecc-boost-check');
+const allowKanjiCheck = document.getElementById('allow-kanji-check');
 const versionSelect = document.getElementById('version-select');
 const rmqrFitRow = document.getElementById('rmqr-fit-row');
 const rmqrFitSelect = document.getElementById('rmqr-fit-select');
@@ -387,6 +388,7 @@ function collectState() {
     symbology: symbologySelect.value,
     ecc: eccSelect.value,
     eccBoost: eccBoostCheck.checked,
+    allowKanji: allowKanjiCheck.checked,
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
     version: Number(versionSelect.value),
@@ -424,6 +426,7 @@ function applyStateToControls(state) {
     populateVersionSelect();
     if (state.ecc) eccSelect.value = state.ecc;
     if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
+    if (typeof state.allowKanji === 'boolean') allowKanjiCheck.checked = state.allowKanji;
     if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
     if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
     if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
@@ -1065,7 +1068,7 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, eccBoostCheck, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
+  contentEl, eccSelect, eccBoostCheck, allowKanjiCheck, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,

@@ -176,7 +176,7 @@ public class QRBinaryDecoderUnitTest
         await Assert.That(Decode(data, out _)).IsEquivalentTo(DecodeStatus.InvalidBitstream);
     }
 
-    // Kanji mode (decode only: no generator in this library emits it)
+    // Kanji mode
 
     /// <summary>ISO/IEC 18004 8.4.5 compaction, so the streams below read as hand-made.</summary>
     private static int Kanji(int sjis)

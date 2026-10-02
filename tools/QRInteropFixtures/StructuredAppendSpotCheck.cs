@@ -17,13 +17,17 @@ namespace QRInteropFixtures;
 /// count, parity and text this library's own decoder reports. Then the parity of the set is
 /// compared with the one the pinned balancing encoder writes for the same text and level,
 /// which is the same definition (the whole text's bytes in the set's charset) and so must
-/// be the same byte. Findings are recorded in specs/qrcode-test-fixtures.md.
+/// be the same byte. A Kanji set (written with <c>AllowKanji</c>) has no oracle here, since
+/// the oracle writes UTF-8; it is told apart by what zxing-cpp reads, not by its parity: no
+/// symbol carries an ECI and the raw bytes are the text's Shift_JIS bytes. Its parity must then
+/// be their XOR, and every other set's the oracle's, so each set is held to one value.
+/// Findings are recorded in specs/qrcode-test-fixtures.md.
 /// </summary>
 public static class StructuredAppendSpotCheck
 {
     private const int PixelsPerModule = 8;
 
-    private sealed record Variant(string Name, QRSegmentation Segmentation, bool Boost, bool Bom, EciMode Eci);
+    private sealed record Variant(string Name, QRSegmentation Segmentation, bool Boost, bool Bom, EciMode Eci, bool AllowKanji = false);
 
     public static int Run()
     {
@@ -34,6 +38,9 @@ public static class StructuredAppendSpotCheck
             new Variant("boost", QRSegmentation.Single, true, false, EciMode.Default),
             new Variant("utf8-eci", QRSegmentation.Single, false, false, EciMode.Utf8),
             new Variant("utf8-bom", QRSegmentation.Single, false, true, EciMode.Utf8),
+            // Kanji sets, which the generator writes only when asked (AllowKanji).
+            new Variant("kanji", QRSegmentation.Single, false, false, EciMode.Default, AllowKanji: true),
+            new Variant("kanji-opt", QRSegmentation.Optimal, false, false, EciMode.Default, AllowKanji: true),
         };
         var cpp = new CppReader { Formats = CppFormat.QRCode, TryHarder = true };
         var net = new NetReader();
@@ -54,6 +61,7 @@ public static class StructuredAppendSpotCheck
                     BoostEccLevel = variant.Boost,
                     Utf8Bom = variant.Bom,
                     EciMode = variant.Eci,
+                    AllowKanji = variant.AllowKanji,
                 };
 
                 QRCodeData[] set;
@@ -76,6 +84,8 @@ public static class StructuredAppendSpotCheck
                 var netOk = 0;
                 var glyphOk = 0;
                 var texts = new string[set.Length];
+                var rawBytes = new List<byte>();
+                var anyEci = false;
                 byte parity = 0;
                 var version = set[0].Version;
                 var level = "";
@@ -92,6 +102,12 @@ public static class StructuredAppendSpotCheck
                     var (luminance, width) = RenderLuminance(set[i]);
                     var cppResults = cpp.From(new ZXingCpp.ImageView(luminance, width, width, ZXingCpp.ImageFormat.Lum));
                     var cppText = cppResults.Length == 1 ? cppResults[0].Text.TrimStart('﻿') : null;
+                    if (cppResults.Length == 1)
+                    {
+                        // The payload bytes as the stream carries them (a Kanji segment's as Shift_JIS pairs), and whether an ECI declared their charset.
+                        rawBytes.AddRange(cppResults[0].Bytes);
+                        anyEci |= cppResults[0].HasECI;
+                    }
                     if (cppResults.Length == 1 && cppResults[0].SequenceIndex == ours.Index && cppResults[0].SequenceSize == ours.Count && cppResults[0].SequenceId == ours.Parity.ToString() && cppText == ourText)
                         cppOk++;
                     else
@@ -129,9 +145,25 @@ public static class StructuredAppendSpotCheck
                     if (oracleSet.Count >= 2 && GlyphDecoder.TryDecode(ToGlyphMatrix(oracleSet[0]), out var oracle) && oracle.StructuredAppend is { } oracleHeader)
                     {
                         parityChecks++;
-                        parityNote = oracleHeader.Parity == parity ? $"{parity} = oracle" : $"{parity} != oracle {oracleHeader.Parity}";
-                        if (oracleHeader.Parity != parity)
+                        // Which set this is comes from the stream zxing-cpp read, never from the parity under test: a Kanji set
+                        // declares no ECI and carries the text's Shift_JIS bytes, where they differ from its UTF-8 bytes (an ASCII
+                        // text's are the same either way, and so is its parity). A Kanji set's parity is the XOR of those bytes,
+                        // which CodeGlyphX's Kanji set of the Japanese case also carries (176); any other set's is the oracle's.
+                        var shiftJis = ShiftJisBytes(caseDefinition.PayloadText);
+                        var kanjiSet = !anyEci && shiftJis is not null
+                            && !shiftJis.AsSpan().SequenceEqual(System.Text.Encoding.UTF8.GetBytes(caseDefinition.PayloadText))
+                            && rawBytes.Count == shiftJis.Length && shiftJis.AsSpan().SequenceEqual(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rawBytes));
+                        var expected = kanjiSet ? (byte)shiftJis!.Aggregate(0, (p, b) => p ^ b) : oracleHeader.Parity;
+                        var source = kanjiSet ? "Shift_JIS" : "oracle";
+                        if (parity == expected)
+                        {
+                            parityNote = kanjiSet ? $"{parity} = Shift_JIS (a Kanji set; the UTF-8 oracle writes {oracleHeader.Parity})" : $"{parity} = oracle";
+                        }
+                        else
+                        {
+                            parityNote = $"{parity} != {source} {expected}{(kanjiSet ? " (a Kanji set)" : "")}";
                             mismatches++;
+                        }
                     }
                 }
 
@@ -143,6 +175,19 @@ public static class StructuredAppendSpotCheck
 
         Console.WriteLine($"{symbols} symbols read by three readers, {parityChecks} parity comparisons, {mismatches} mismatches");
         return mismatches == 0 ? 0 : 1;
+    }
+
+    /// <summary>The text's Shift_JIS bytes as CP932 writes them, or null for a text CP932 cannot write.</summary>
+    private static byte[]? ShiftJisBytes(string text)
+    {
+        try
+        {
+            return KanjiPayload.ToShiftJisBytes(text, null);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static (byte[] Luminance, int Width) RenderLuminance(QRCodeData data)

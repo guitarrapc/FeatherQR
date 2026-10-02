@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// A symbol whose content decodes to a verdict reports that verdict, whichever attempt read it.
-/// The symbols are built from codewords through each symbology's ECC and placement: no generator here emits Kanji.
+/// The symbols are built from codewords through each symbology's ECC and placement: a verdict needs content the generators never write, such as a Kanji cell outside their encoder table.
 /// </summary>
 public class ContentVerdictImageDecodeTest
 {
