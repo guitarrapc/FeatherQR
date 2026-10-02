@@ -129,7 +129,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 | Symbology | rMQR |
 | Versions | All 32 (R7x43 … R17x139) |
 | ECC levels | M, H |
-| Data modes | Numeric, Alphanumeric, Byte (ECI 3 for ISO-8859-1, ECI 26 for UTF-8; ASCII omits ECI) |
+| Data modes | Numeric, Alphanumeric, Byte (ECI 3 for ISO-8859-1, ECI 26 for UTF-8; ASCII omits ECI), and Kanji on request (`AllowKanji`, no ECI header) |
 | Segmentation | One segment in a single mode (default), or the minimal-bit mixed-mode split (opt-in `RmQRSegmentation.Optimal`) |
 | Version selection | Exact version, or automatic fit by strategy, optionally within a fixed height |
 | Quiet zone | Configurable non-negative size, default 2 (the ISO/IEC 23941 quiet zone) |
@@ -137,7 +137,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 
 ### Not implemented
 
-- Kanji mode, intentionally for ENCODING (the decoder reads it since the Kanji decode work; the tables' Kanji column is load-bearing there; Japanese text uses Byte mode with UTF-8 ECI, matching the Standard QR product policy)
+- Kanji beside an ECI header: Kanji mode is written only when the charset is the library's choice ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written))
 - FNC1, Structured Append (rMQR does not define Structured Append)
 
 ### Symbol parameters (verified)
@@ -230,7 +230,7 @@ Reject an unknown version, an unknown ECC level, a `height` constraint combined 
 
 ### 2. Analyze text
 
-Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment). The default charset policy matches Standard QR: ASCII omits ECI, ISO-8859-1 text emits assignment 3, and other Unicode text is encoded as UTF-8 with assignment 26. An explicit `EciMode` can select ISO-8859-1 or UTF-8; explicit ISO-8859-1 rejects unrepresentable input instead of narrowing it.
+Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment, and Kanji on request). The default charset policy matches Standard QR: ASCII omits ECI, ISO-8859-1 text emits assignment 3, and other Unicode text is encoded as UTF-8 with assignment 26. An explicit `EciMode` can select ISO-8859-1 or UTF-8; explicit ISO-8859-1 rejects unrepresentable input instead of narrowing it. With `AllowKanji`, when the charset is left to the library, a text whose every character has an encoder cell is one Kanji segment with no ECI header, and under `Optimal` a Kanji-eligible text with ASCII in it is also priced as a Kanji plan ([Mixed-mode segmentation](#mixed-mode-segmentation)).
 
 The analyzer decides the charset for every path. It also decides the mode for the default single-segment path; `RmQRSegmentation.Optimal` decides modes per run instead (see [Mixed-mode segmentation](#mixed-mode-segmentation)) but takes the charset from the same analysis, because the charset is a property of the content and not of the split.
 
@@ -328,7 +328,7 @@ The single mask is applied to data modules while placing. Both format copies com
 - Two-dimensional fit exposed as strategy + optional height constraint: rMQR exists to fit narrow print lanes; "fixed height, auto width" is the dominant real-world request (libzint's `R<h>xauto`), and area/width/height minimization covers the rest without a free-form size search that would mostly select non-existent sizes.
 - Letterbox instead of stretch for explicit canvas sizes: a rectangular symbol drawn into an arbitrary rectangle at non-uniform scale is not the same symbol; module aspect ratio must survive.
 - Fixed mask means the placer is a static permutation per version; no mask scoring machinery is designed in.
-- Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics. rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment 3 or UTF-8 assignment 26, following Standard QR's policy. Kanji mode remains intentionally un-encoded (the decoder reads it); ECI + Byte mode is the interoperable Unicode path.
+- Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics. rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment 3 or UTF-8 assignment 26, following Standard QR's policy, and ECI + Byte mode is the interoperable Unicode path. Kanji mode stayed un-encoded until 2.0.0, which writes it on request (the Kanji row under Decisions).
 
 ## Decisions
 
