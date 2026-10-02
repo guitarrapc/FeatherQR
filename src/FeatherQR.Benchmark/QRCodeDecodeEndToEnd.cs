@@ -12,7 +12,7 @@ using System.Text;
 ///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
 ///   Kanji_V6_M : version 6-M, Kanji mode (capacity boundary, 65 characters)
 ///   Byte_V40_L : version 40-L, byte mode (largest data volume)
-///   Byte_V40_H : version 40-H, byte mode (81 blocks, max ECC share)
+///   Byte_V40_H : version 39-H, byte mode (77 blocks x 30 ecc). Named V40 before 1,200 bytes was found to fit version 39
 ///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
 ///   Image_Byte_Url_V6_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
 ///   *_Corrected : Numeric_V1_L (2 errors) and Byte_V40_H (81 errors, one a block on average) with damage the decoder confirms as exactly that many corrected errors, so the correction path runs rather than syndrome generation alone (the clean cases exit early)

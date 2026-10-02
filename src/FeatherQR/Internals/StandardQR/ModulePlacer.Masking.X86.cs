@@ -387,7 +387,10 @@ internal static partial class ModulePlacer
         if ((uint)eccLevel > 3)
             throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "QREccLevel was out of range");
 
-        Span<ulong> packed = stackalloc ulong[64];
+        // Stack buffers are zeroed on every call, and that zeroing was a measurable share of a small symbol's
+        // selection, so they come in two constant sizes: 32 rows for versions 1-3, 64 above. (Skipping the
+        // zeroing with [SkipLocalsInit] was measured and is not used: see Decisions in specs/standardqr-encoder.md.)
+        Span<ulong> packed = size <= 32 ? stackalloc ulong[32] : stackalloc ulong[64];
         packed = packed[..size];
         PackRows64Wide(buffer, size, packed);
 
@@ -407,10 +410,10 @@ internal static partial class ModulePlacer
         }
 
         // rows4[y] = row y of the group's four candidates (masked, format bits in);
-        // scratch for the complements and the vertical-equality rows (the 5-run marker is a rolling register in the scorer)
-        Span<Vector256<ulong>> rows4 = stackalloc Vector256<ulong>[64];
-        Span<Vector256<ulong>> nrows4 = stackalloc Vector256<ulong>[64];
-        Span<Vector256<ulong>> eq4 = stackalloc Vector256<ulong>[64];
+        // scratch for the vertical-equality rows (the 5-run marker is a rolling register in the scorer, and the
+        // complements are computed where they are read: a third buffer cost more to zero than they cost to redo)
+        Span<Vector256<ulong>> rows4 = size <= 32 ? stackalloc Vector256<ulong>[32] : stackalloc Vector256<ulong>[64];
+        Span<Vector256<ulong>> eq4 = size <= 32 ? stackalloc Vector256<ulong>[32] : stackalloc Vector256<ulong>[64];
 
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
@@ -424,7 +427,7 @@ internal static partial class ModulePlacer
             {
                 rows4[y] = (Vector256.Create(packed[y]) ^ Unsafe.Add(ref pre, preBase + y)) | Unsafe.Add(ref fmt, fmtBase + y);
             }
-            var scores = ScoreLanes64(rows4, nrows4, eq4, size, g == 0 ? int.MaxValue : bestScore);
+            var scores = ScoreLanes64(rows4, eq4, size, g == 0 ? int.MaxValue : bestScore);
             for (var lane = 0; lane < 4; lane++)
             {
                 var s = scores.GetElement(lane);
@@ -474,7 +477,7 @@ internal static partial class ModulePlacer
     /// When all four lanes' partials exceed <paramref name="abortAbove"/> at the checkpoint, every lane reports int.MaxValue (pass int.MaxValue to disable, as for the first group).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> nrows, Span<Vector256<ulong>> eq, int size, int abortAbove)
+    internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> eq, int size, int abortAbove)
     {
         var rowMaskV = Vector256.Create(size == 64 ? ulong.MaxValue : (1ul << size) - 1);
         var startMaskV = Vector256.Create((1ul << (size - 10)) - 1);
@@ -486,12 +489,11 @@ internal static partial class ModulePlacer
         var accP3 = Vector256<ulong>.Zero;    // rule-3 windows (x40)
         var accBlack = Vector256<ulong>.Zero;
 
-        // Row-direction rules 1 and 3, balance popcount, complements.
+        // Row-direction rules 1 and 3, balance popcount.
         for (var y = 0; y < size; y++)
         {
             var x = rows[y];
             var nx = Vector256.AndNot(rowMaskV, x);
-            nrows[y] = nx;
             accBlack += Pop256(x);
             var y2 = x & Vector256.ShiftRightLogical(x, 1);
             var y4 = y2 & Vector256.ShiftRightLogical(y2, 2);
@@ -547,11 +549,16 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Column rule 3: 11-row windows.
+        // Column rule 3: 11-row windows, each row's complement taken here rather than kept in a buffer.
         for (var b0 = 0; b0 <= size - 11; b0++)
         {
-            var mf = nrows[b0] & nrows[b0 + 1] & nrows[b0 + 2] & nrows[b0 + 3] & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & rows[b0 + 7] & rows[b0 + 8] & nrows[b0 + 9] & rows[b0 + 10];
-            var mb = rows[b0] & nrows[b0 + 1] & rows[b0 + 2] & rows[b0 + 3] & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & nrows[b0 + 7] & nrows[b0 + 8] & nrows[b0 + 9] & nrows[b0 + 10];
+            var r0 = rows[b0]; var r1 = rows[b0 + 1]; var r2 = rows[b0 + 2]; var r3 = rows[b0 + 3]; var r4 = rows[b0 + 4]; var r5 = rows[b0 + 5];
+            var r6 = rows[b0 + 6]; var r7 = rows[b0 + 7]; var r8 = rows[b0 + 8]; var r9 = rows[b0 + 9]; var r10 = rows[b0 + 10];
+            var n0 = Vector256.AndNot(rowMaskV, r0); var n1 = Vector256.AndNot(rowMaskV, r1); var n2 = Vector256.AndNot(rowMaskV, r2);
+            var n3 = Vector256.AndNot(rowMaskV, r3); var n5 = Vector256.AndNot(rowMaskV, r5); var n7 = Vector256.AndNot(rowMaskV, r7);
+            var n8 = Vector256.AndNot(rowMaskV, r8); var n9 = Vector256.AndNot(rowMaskV, r9); var n10 = Vector256.AndNot(rowMaskV, r10);
+            var mf = n0 & n1 & n2 & n3 & r4 & n5 & r6 & r7 & r8 & n9 & r10;
+            var mb = r0 & n1 & r2 & r3 & r4 & n5 & r6 & n7 & n8 & n9 & n10;
             accP3 += Pop256(mf | mb);
         }
 

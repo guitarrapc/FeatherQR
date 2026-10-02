@@ -364,6 +364,8 @@ Only UTF-8 is counted. Latin-1 is one byte per `char`, out-of-range ones include
 
 The version calculation does not reserve the four terminator bits: the terminator may shrink to the remaining capacity, down to zero bits for an exact fit. If no version holds the header and payload bits, generation fails instead of truncating.
 
+Each candidate's capacity is an index into the version × level ECC table, not a search of it. The level was validated on entry (step 1), so the lookup's own range check only keeps an internal caller from reading another level's entry.
+
 A version pinned by `QRCodeGeneratorOptions.Version` bypasses automatic selection. It is meant for callers that need a fixed symbol size and know the payload fits.
 
 #### Version ranges
@@ -602,6 +604,7 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - Mask scoring includes format and version information, because scoring a data-only candidate can pick a different winner than scoring the final matrix.
 - Structured Append is one method, with the count taken from the version cap. It has no explicit-count overload, no set sizing API (`TryGetRequiredBufferSize` stays single-symbol) and no combine helper. The first two can come in a minor release on request. A combine helper would fix an irreversible reassembly policy (a missing symbol, a duplicate, a parity mismatch), and the four rules on `QRStructuredAppend` are all a caller needs.
 - A set of one is never written: its header costs 20 bits and tells a reader nothing. The decoder still accepts one.
+- Stack buffers stay zero-initialized: the encoder uses no `[SkipLocalsInit]`. Skipping the zeroing measured 1 to 12 % of a version 1 to 10 encode (2026-10-02) and nothing on larger symbols. Under the memory safety rules C# 15 starts in preview, a `stackalloc` without an initializer in such a member is an unsafe operation, and in an encoder a read before a write would not fail but put stale stack bytes into a symbol that leaves the process. The zeroing's cost is cut instead by allocating less (see Lessons Learned, Performance).
 - The parity follows the bytes, so Kanji encoding changes Japanese text's parity: in Kanji mode (with `AllowKanji`) it is the XOR of Shift_JIS bytes, not UTF-8 ones. A set stays consistent, so no reader breaks, but a pinned value of this encoder's parity for Japanese input depends on the option: 「こんにちは世界、QRコードの分割テストです。」×3 carries 176 as a Kanji set and 6 as the UTF-8 set. `StructuredAppendKanjiTest` checks the Kanji sets' parity, and older tests check ASCII, Latin-1 and UTF-8. The decode corpus holds Japanese sets both ways, since the decoder reports what is on the wire.
 
 ---
@@ -636,6 +639,8 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - The data placement stream should stay in a register: refilling a 64-bit MSB-aligned accumulator removes a byte load and a variable shift per module and enables a two-module fast path for the common unblocked case (the reference walk).
 - Everything the placer derives from the version alone belongs in a per-version table. Painting function patterns, building the blocked bit mask and deciding the zigzag order per symbol took ~25-35 % of the encode. A cached template + mask + walk order (built by the reference painters, so correct by construction) reduced the placer to a memcpy, one vector bit expansion and a run/scatter store pass: 9x at version 1 and 4.5x at version 40 in the kernel, -26 % (v1) to -44 % (v40) on the encode E2E. The decoder shares the cached mask. Strided byte scatter is bound by store issue, and wider stores per row do not help (as with the rMQR placer).
 - Reed-Solomon setup is reusable: generator polynomials depend only on the ECC count, so caching their log-domain form removes repeated construction and reduces the scalar inner loop to table lookup and XOR.
+- A lookup that reads as constant can be a scan. `QRCodeConstants.GetEccInfo` walked its 160 entries through `IReadOnlyList<ECCInfo>`, and automatic selection asks once per version it tries, which was 2.35 µs of a version 40 encode, more than the whole interleave. As an index it is 0.1 µs (2026-10-02).
+- On small symbols the zeroing of stack buffers is a visible cost. The single-word mask tier zeroed 6.5 KB per call, sized for 64 rows whatever the symbol, about 50 ns of a 700 ns version 1 encode. A constant 32-row size for versions 1 to 3, and complements computed where they are read instead of kept in a third buffer, took the version 1 to 10 encodes to 0.93 to 0.97 of their time. A size taken from the symbol at run time lost at versions 6 and 10, where a variable-size `stackalloc` zeroes less efficiently than a constant one.
 - Steady-state allocation guarantees need warm-up-aware tests: lazy tables, JIT compilation and `ArrayPool` initialization are one-time effects, so the Release-only allocation test warms them up before measuring the span API.
 
 ### Structured Append

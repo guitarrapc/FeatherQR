@@ -1316,31 +1316,29 @@ public static class QRCodeGenerator
             effectiveLength += 3;
         }
 
+        // Data bits (already in length for Byte mode as byte count), the same at every version.
+        // Priced in long: 8 × effectiveLength wraps int past ~268M bytes and would read as a
+        // fit, and an early length guard here would skip the ECC level's validation below.
+        long dataBits = encoding switch
+        {
+            EncodingMode.Numeric => CalculateNumericBits(length),
+            EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
+            EncodingMode.Byte => effectiveLength * 8L,
+            EncodingMode.Kanji => length * 13L,
+            _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
+        };
+
         // Iterate through versions to find the minimum suitable version
         // Character count indicator size changes at version 10 and 27
         for (var version = minVersion; version <= maxVersion; version++)
         {
             var countIndicatorBits = encoding.GetCountIndicatorLength(version);
 
-            // Data bits (already in length for Byte mode as byte count). Priced in long:
-            // 8 × effectiveLength wraps int past ~268M bytes and would read as a fit, and
-            // an early length guard here would skip the validation below it.
-            long dataBits = encoding switch
-            {
-                EncodingMode.Numeric => CalculateNumericBits(length),
-                EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
-                EncodingMode.Byte => effectiveLength * 8L,
-                EncodingMode.Kanji => length * 13L,
-                _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
-            };
-
             // Total required bits
             var totalRequiredBits = eciHeaderBits + modeIndicatorBits + countIndicatorBits + dataBits;
 
-            // Get actual capacity for this version and ECC level
-            // Use CapacityTable (which has VersionInfo structure)
-            var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
-            var capacityBits = eccInfo.TotalDataCodewords * 8; // convert bytes to bits
+            // Actual capacity for this version and ECC level (an index into the ECC table)
+            var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8; // convert bytes to bits
 
             if (capacityBits >= totalRequiredBits)
             {
