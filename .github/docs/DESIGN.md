@@ -1,43 +1,69 @@
 # Library Design
 
 FeatherQR aims to be the best QR code library for C#.
-We pursue encoding and decoding implemented in pure C#, first-class support for NativeAOT and WebAssembly, performance backed by measurement, and an API that feels good from the very first line of code.
+We aim to provide encoding and decoding in pure C#, support for NativeAOT and WebAssembly, performance backed by measurements, and an API that feels natural from the first line.
 
-This document defines the design principles that make FeatherQR what it is. Design details for individual features and implementations are documented in [specs/](specs/).
+This document records the design principles that guide FeatherQR.
+Designs for individual features and implementations are recorded in [specs/](specs/).
 
 ## Principles
 
-### A Pure C# Core with No External Dependencies
+### Keep dependencies out of the core
 
-The core QR code encoding and decoding algorithms depend only on the BCL, while SkiaSharp is responsible solely for rendering and image I/O.
-The core remains pure C#: rather than adding external dependencies, we implement the algorithms we need ourselves.
-The package boundary enforces this: `FeatherQR` is the core and declares no dependency, `FeatherQR.SkiaSharp` is the rendering layer and is the only package that references SkiaSharp. A build that adds a dependency to the core fails the gate that checks the packaged dependency graph.
-This is what the name means. Lightweight is no dependencies in the core, no allocations on the hot paths, and safety under trimming and NativeAOT. It is not a claim about assembly size.
+The QR code encoding and decoding core uses only the BCL and is separate from external rendering libraries.
+The packages enforce this boundary.
+A build that adds a dependency to the core fails the package dependency graph check.
+
+- `FeatherQR` implements the QR code core in pure C#, including the algorithms it needs.
+- `FeatherQR.SkiaSharp` references SkiaSharp for rendering.
+
+The name reflects this design.
+"Lightweight" means no dependencies in the core, no allocations on hot paths, and safe behavior under trimming and NativeAOT.
+It makes no claim about assembly size.
 
 ### Zero Allocation
 
-We avoid unnecessary allocations made solely for processing and provide APIs that write results directly into caller-provided buffers.
-We pursue zero allocation on hot paths while balancing performance with minimal memory allocation.
+We aim for zero allocation on hot paths while maintaining performance.
+We avoid unnecessary memory allocations and provide APIs that write results directly into caller-provided buffers.
 
-### Performance Is Measured
+### Measure performance
 
-We optimize based on measurements of real usage paths, not assumptions.
-Beyond techniques such as `Span<T>`, `Memory<T>`, `stackalloc`, and SIMD, we inspect the generated CPU instructions and branches with BenchmarkDotNet to pursue the best possible performance.
+We measure performance continuously and plan and implement optimizations based on end-to-end measurements and microbenchmarks.
+We use `Span<T>`, `Memory<T>`, `stackalloc` and SIMD, and inspect benchmark disassembly to check the generated CPU instructions and branches.
+The available SIMD instruction sets can differ between JIT, AOT and WebAssembly.
+We therefore base SIMD implementations on performance measurements.
 
 ### API-Driven Development
 
-We design an API that feels natural and pleasant to use, then determine how to implement it without compromising that experience or performance.
-The API should let users start with a single line of code and progressively move down to lower-level control when needed.
+We design an API that feels natural to users before implementing it, then find a way to combine that usability with performance.
+Users can start with one line of code and move gradually to lower-level control as needed.
+QR codes have multiple standards, including Standard QR, Micro QR and rMQR.
+We study each standard, evaluate its requirements and implement support that conforms to it.
+We design the APIs with consistent operations, predictable behavior and ease of use across standards.
 
-### Multiplatform by Design
+```csharp
+// DO
+QRCodeGenerator.Create(/*....*/);
+MicroQRCodeGenerator.Create(/*....*/);
+QRCodeDecoder.TryDecode(/*....*/);
+MicroQRCodeDecoder.TryDecode(/*....*/);
 
-We treat NativeAOT, trimming, and WebAssembly as first-class execution environments.
-We avoid reflection and dynamic code generation, and continuously verify builds and behavior on NativeAOT and WebAssembly.
+// AVOID
+QRCodeGenerator.CreateQRCode(/*....*/);
+MicroQRCodeGenerator.CreateMicroQRCode(/*....*/);
+QRCodeDecoder.TryDecodeQRCode(/*....*/);
+MicroQRCodeDecoder.TryDecodeMicroQRCode(/*....*/);
+```
+
+### Support multiple platforms
+
+We treat NativeAOT and WebAssembly as first-class runtime environments alongside JIT on Linux, macOS and Windows for x64 and ARM64.
+We use no reflection or dynamic code generation and continuously verify builds and behavior on NativeAOT and WebAssembly.
 
 ## Playground
 
-The Playground serves as a working demonstration of the library's design principles.
-Its AOT-compiled WebAssembly performs encoding and decoding entirely in the browser, without relying on a server.
+The Playground demonstrates how to use the library and verifies WebAssembly support.
+Its AOT-compiled WebAssembly encodes and decodes in the browser, without a server.
 
 ---
 
@@ -50,34 +76,53 @@ FeatherQRは、C#における最高のQRコードライブラリを目指しま�
 
 ## 原則
 
-### 純粋なC#、依存のないコア
+### コアに依存を作らない
 
-QRコードのエンコードとデコードのコアはBCLだけで完結し、SkiaSharpは描画と画像の入出力だけを担います。
-コアは純粋なC#であり続け、外部依存を増やすのではなく、必要なアルゴリズムは自ら実装します。
-この境界はパッケージで強制します。`FeatherQR`がコアであり依存を宣言せず、`FeatherQR.SkiaSharp`が描画層でありSkiaSharpを参照する唯一のパッケージです。コアに依存が加わるビルドは、パッケージの依存グラフを検査するゲートで止まります。
+QRコードのエンコードとデコードのコアはBCLだけで実装し、外部レンダリングと分離します。
+この境界はパッケージで強制します。コアに依存が加わるビルドは、パッケージの依存グラフを検査するゲートで止まります。
+- `FeatherQR`がQRコードのコア実装であり純粋なC#で、必要なアルゴリズムは自分で実装します。
+- `FeatherQR.SkiaSharp`はレンダラーとしてSkiaSharpを参照するパッケージです。
+
 名前の意味もここにあります。軽量とは、コアに依存がないこと、ホットパスで割り当てをしないこと、トリミングとNativeAOTで安全に動くことです。アセンブリの大きさの主張ではありません。
 
 ### ゼロアロケーション
 
-処理のためだけの不要なメモリアロケーションを許容せず、呼び出し側が用意した領域へ直接結果を書き込めるAPIを提供します。
 ホットパスのゼロアロケーションを追求し、パフォーマンスと最小アロケーションの両立を目指します。
+不要なメモリアロケーションを許容せず、呼び出し側が用意した領域へ直接結果を書き込めるAPIを提供します。
 
-### 性能は計測する
+### 性能を計測する
 
-最適化は推測ではなく、実際に利用される経路を測定した結果に基づいて行います。
+常に性能を計測して、最適化は推測ではなくEnd-to-End経路/マイクロベンチマーク経路の測定に基づいて計画、実装します。
 `Span<T>`、`Memory<T>`、`stackalloc`、SIMDといった高速化手法だけでなく、ベンチマークによる逆アセンブル結果から、生成されたCPU命令や分岐まで確認して性能を追求します。
+SIMDはJIT、AOT、WebAssemblyでそれぞれ利用できる命令セットが異なりえます。そのため、性能計測に基づいて実装します。
 
 ### API駆動開発
 
 実装に先立って、使う人にとって自然で気持ちのよいAPIを設計し、その手触りと性能を両立する方法を考えます。
 1行で使い始められ、必要に応じて低レベルな制御へ段階的に降りられるAPIを提供します。
+QRコードはStandardQR、MicroQR、rMQRなど複数のQRコード規格があり、各規格に適合するように調査、検討、実装します。
+ユーザーに提供するAPIは、規格が異なっても一貫した対称性、予測可能性、使いやすさを意識して設計します。
+
+```csharp
+// DO
+QRCodeGenerator.Create(/*....*/);
+MicroQRCodeGenerator.Create(/*....*/);
+QRCodeDecoder.TryDecode(/*....*/);
+MicroQRCodeDecoder.TryDecode(/*....*/);
+
+// AVOID
+QRCodeGenerator.CreateQRCode(/*....*/);
+MicroQRCodeGenerator.CreateMicroQRCode(/*....*/);
+QRCodeDecoder.TryDecodeQRCode(/*....*/);
+MicroQRCodeDecoder.TryDecodeMicroQRCode(/*....*/);
+```
 
 ### マルチプラットフォーム
 
-NativeAOT、トリミング、WebAssemblyを第一級の実行環境として扱います。
-リフレクションや動的コード生成を避け、NativeAOTとWebAssemblyでのビルドと動作を継続的に検証します。
+Linux/macOS/Windowsに対するJIT(x64/ARM64)に限らず、NativeAOT、WebAssemblyを第一級の実行環境として扱います。
+リフレクションや動的コード生成は使わず、NativeAOTとWebAssemblyでのビルドと動作を継続的に検証します。
 
-## Playground
+## プレイグラウンド
 
-Playgroundは、このライブラリの動く証明として提供しています。
+Playgroundは、このライブラリの利用例を示すものでWASM対応を担保するものです。
 AOTコンパイルされたWebAssemblyが、サーバーに依存せずブラウザ上でエンコードとデコードを実行します。
