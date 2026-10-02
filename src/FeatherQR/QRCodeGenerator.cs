@@ -222,8 +222,9 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">How much damage the QR code should survive: L recovers 7% of it, M 15%, Q 25% and H 30%.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the content does not fit, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
     {
         // One compare on the default path; validation of the value itself lives in the
@@ -255,8 +256,9 @@ public static class QRCodeGenerator
     /// <param name="destination">Where to write the matrix. Needs <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit, or when the options contradict each other.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
     {
         if (options.Segmentation != QRSegmentation.Single)

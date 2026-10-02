@@ -371,6 +371,48 @@ public class QRCodeGeneratorUnitTest
         Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.Create(tooLarge, QREccLevel.L));
     }
 
+    /// <summary>
+    /// Content past version 40 fails both overloads with the exception their documentation names: <see cref="InvalidOperationException"/>
+    /// when the range spans every version, however it is written, and <see cref="ArgumentException"/> itself when it is narrowed.
+    /// </summary>
+    [Test]
+    [Arguments("Any", true)]
+    [Arguments("AtMost(40)", true)]
+    [Arguments("AtMost(39)", false)]
+    [Arguments("Exactly(40)", false)]
+    public async Task Create_PastVersion40_ThrowsTheDocumentedExceptionForTheRange(string range, bool spansEveryVersion)
+    {
+        var options = new QRCodeGeneratorOptions
+        {
+            Version = range switch
+            {
+                "Any" => QRVersionRange.Any,
+                "AtMost(40)" => QRVersionRange.AtMost(40),
+                "AtMost(39)" => QRVersionRange.AtMost(39),
+                _ => QRVersionRange.Exactly(40),
+            },
+        };
+        var tooLarge = new string('1', 7090); // V40-L max + 1
+        var destination = new byte[200_000];
+        var expected = spansEveryVersion ? typeof(InvalidOperationException) : typeof(ArgumentException);
+
+        await Assert.That(ThrownType(() => QRCodeGenerator.Create(tooLarge, QREccLevel.L, options))).IsEqualTo(expected);
+        await Assert.That(ThrownType(() => QRCodeGenerator.Create(tooLarge.AsSpan(), QREccLevel.L, destination, options))).IsEqualTo(expected);
+    }
+
+    private static Type? ThrownType(Action action)
+    {
+        try
+        {
+            action();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex.GetType();
+        }
+    }
+
     // Consistency Tests
 
     [Test]

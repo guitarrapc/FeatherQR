@@ -24,6 +24,7 @@
   <!-- The renders are the test suite's own, so a kind measured here is the kind a test draws. -->
   <ItemGroup>
     <Compile Include="..\..\tests\FeatherQR.Tests\Shared\AntiAliasedRenderer.cs" Link="Renderers\AntiAliasedRenderer.cs" />
+    <Compile Include="..\..\tests\FeatherQR.Tests\Shared\BilinearUpscaleRenderer.cs" Link="Renderers\BilinearUpscaleRenderer.cs" />
     <Compile Include="..\..\tests\FeatherQR.Tests\Shared\NearestNeighbourRenderer.cs" Link="Renderers\NearestNeighbourRenderer.cs" />
     <Compile Include="..\..\tests\FeatherQR.Tests\Shared\SupersampledRenderer.cs" Link="Renderers\SupersampledRenderer.cs" />
   </ItemGroup>
