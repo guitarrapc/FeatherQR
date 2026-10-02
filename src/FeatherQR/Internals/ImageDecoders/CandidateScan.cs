@@ -129,6 +129,10 @@ internal static class CandidateScan
         // says more than "not detected"
         var best = new SearchResult<TInfo>(ReportRule.Furthest, decoder.NotDetected);
 
+        // No candidate, no module buffer: rMQR's is rented, and an image with no finder scans twice
+        if (ranked.IsEmpty)
+            return best.Report(out charsWritten, out info);
+
         var moduleLength = decoder.ModuleBufferLength;
         byte[]? rented = null;
         Span<byte> modules = moduleLength <= MaxStackModuleBuffer

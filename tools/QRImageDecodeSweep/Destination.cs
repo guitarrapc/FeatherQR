@@ -185,7 +185,8 @@ internal static class Destination
             {
                 return create(content);
             }
-            catch (Exception)
+            // A text the symbol does not hold; anything else, an out-of-range version among them, is a defect of the draw
+            catch (ArgumentException ex) when (ex is not ArgumentOutOfRangeException)
             {
             }
         }

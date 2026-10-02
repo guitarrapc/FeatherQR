@@ -18,13 +18,20 @@ public class CandidateScanTest
 
     /// <summary>
     /// Returns each candidate's scripted outcome as a decoder does, keeping it in the candidate's result, and records the
-    /// candidates it was asked for and whether each one's result started empty.
+    /// candidates it was asked for, whether each one's result started empty, and each time it was asked its module buffer's length.
     /// </summary>
-    private readonly struct ScriptedDecoder(Dictionary<float, Outcome> outcomes, List<int> calls, List<bool> freshResults, int moduleBufferLength, List<int> moduleLengths) : ICandidateDecoder<ScriptedInfo>
+    private readonly struct ScriptedDecoder(Dictionary<float, Outcome> outcomes, List<int> calls, List<bool> freshResults, int moduleBufferLength, List<int> moduleLengths, List<int> moduleBufferRequests) : ICandidateDecoder<ScriptedInfo>
     {
         public ScriptedInfo NotDetected => new(-1, DecodeStatus.NotDetected, default);
 
-        public int ModuleBufferLength => moduleBufferLength;
+        public int ModuleBufferLength
+        {
+            get
+            {
+                moduleBufferRequests.Add(moduleBufferLength);
+                return moduleBufferLength;
+            }
+        }
 
         public SymbolCorners Corners(in ScriptedInfo info) => info.Corners;
 
@@ -51,6 +58,7 @@ public class CandidateScanTest
         public List<int> Calls { get; } = [];
         public List<bool> FreshResults { get; } = [];
         public List<int> ModuleLengths { get; } = [];
+        public List<int> ModuleBufferRequests { get; } = [];
         public int ModuleBufferLength { get; init; } = 64;
 
         public (DecodeStatus Status, int CharsWritten, ScriptedInfo Info, int[] Tried) Run(int candidateCount, params int[] skip)
@@ -59,7 +67,7 @@ public class CandidateScanTest
             var ranked = Enumerable.Range(0, candidateCount).Select(static i => Candidate(i)).ToArray();
             var skipped = skip.Select(static i => Candidate(i)).ToArray();
             var tried = new FinderPattern[CandidateScan.MaxCandidatesToTry];
-            var decoder = new ScriptedDecoder(Outcomes, Calls, FreshResults, ModuleBufferLength, ModuleLengths);
+            var decoder = new ScriptedDecoder(Outcomes, Calls, FreshResults, ModuleBufferLength, ModuleLengths, ModuleBufferRequests);
             var destination = new char[16];
             var status = CandidateScan.DecodeRanked<ScriptedDecoder, ScriptedInfo>(ref decoder, default, ranked, destination, out var charsWritten, out var info, skipped, tried, out var triedCount);
             return (status, charsWritten, info, tried.Take(triedCount).Select(static c => (int)c.X).ToArray());
@@ -208,6 +216,23 @@ public class CandidateScanTest
         scan.Run(3);
 
         await Assert.That(scan.ModuleLengths).IsEquivalentTo(new[] { length, length, length }, CollectionOrdering.Matching);
+    }
+
+    /// <summary>
+    /// A scan that found no candidate takes no module buffer, as each decoder returned before taking one when the scan was its
+    /// own: rMQR's is rented from the pool, and the strided scan and the sweep of an image with no finder would each rent one for
+    /// nothing. A scan with candidates takes one for all of them. The decoder is asked the buffer's length when one is taken.
+    /// </summary>
+    [Test]
+    [Arguments(0, 0)]
+    [Arguments(3, 1)]
+    public async Task DecodeRanked_TakesAModuleBuffer_OnlyWithACandidate(int candidates, int buffers)
+    {
+        var scan = new Scan { ModuleBufferLength = 17 * 139 };
+
+        scan.Run(candidates);
+
+        await Assert.That(scan.ModuleBufferRequests.Count).IsEqualTo(buffers);
     }
 
     /// <summary>

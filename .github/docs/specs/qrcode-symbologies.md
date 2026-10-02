@@ -182,7 +182,7 @@ result that went furthest, its corners stripped, and the scan the sweep's if it 
 - Standard QR stays out: its triple and mesh paths and its main-path report rule (`SearchResult`, above) are its own. Revisit only if `GridRead` fits its coverage re-read without changing that rule.
 
 **How the code is shaped**
-- **The scratch.** The scan holds one module buffer for its candidates, from the stack for Micro QR's 289 B and rented for rMQR's 2,363 B, since a scan holds one buffer at a time ([allocation contract](#allocation-contract)). The small tables are taken inside each candidate's decode.
+- **The scratch.** The scan holds one module buffer for its candidates, and none when it found no candidate, from the stack for Micro QR's 289 B and rented for rMQR's 2,363 B, since a scan holds one buffer at a time ([allocation contract](#allocation-contract)). The small tables are taken inside each candidate's decode.
   - A struct cannot hold a span without being a `ref struct`, and netstandard2.0 can pass neither one as a generic argument nor static abstract members. So the decoder's part is instance members on a struct, as in `ImageDecodePasses`.
 - **The corners.** The scan reads and strips them through the decoder's struct, not through an interface on the public diagnostic records, which would change public types to serve internals.
 - **The grid's results.** A decoder's grid carries what its last decode found, which is why `GridRead` takes it by `ref`. Micro QR's condition needs each orientation's result, and it is still asked only once the shared terms hold.
