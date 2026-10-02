@@ -60,9 +60,10 @@ internal static class MicroQRBinaryDecoder
                 if (modeValue > ModeKanji)
                     return DecodeStatus.InvalidBitstream; // M4 indicators 4-7 are undefined
 
-                // Kanji is outside EncodingMode (that enum names the modes the encoder
-                // writes), so it takes an early branch and leaves the three encodable
-                // modes on exactly the shape they had before Kanji decoding existed.
+                // Kanji takes an early branch rather than an arm of the switch below, which
+                // leaves the other three modes on exactly the shape they had before Kanji
+                // decoding existed: a fourth arm there cost the M2 numeric and M4 byte decodes
+                // 12-15 %.
                 int countBits;
                 if (modeValue == ModeKanji)
                 {

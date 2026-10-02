@@ -41,7 +41,7 @@ internal static partial class MicroQRBinaryEncoder
     /// <param name="text">Input text; must satisfy the mode's alphabet and the version's capacity (validated by the caller).</param>
     /// <param name="version">Micro QR version (M1-M4).</param>
     /// <param name="eccLevel">Error correction level (valid for the version).</param>
-    /// <param name="mode">Data encoding mode (Numeric / Alphanumeric / Byte).</param>
+    /// <param name="mode">Data encoding mode (Numeric / Alphanumeric / Byte / Kanji, the last two from M3).</param>
     /// <param name="destination">Destination for the data codewords. When at least 16 bytes long the full accumulator is stored (bytes beyond the returned count are zero); shorter destinations receive exactly the codeword bytes.</param>
     /// <returns>Number of codeword bytes written (= data codeword count for the version/ECC).</returns>
     public static int EncodeDataCodewords(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, EncodingMode mode, Span<byte> destination)
@@ -197,6 +197,11 @@ internal static partial class MicroQRBinaryEncoder
                     }
                     break;
                 }
+
+            case EncodingMode.Kanji:
+                Append(ref hi, ref lo, ref pos, modeValue | text.Length, headerBits);
+                WriteKanjiData(ref hi, ref lo, ref pos, text);
+                break;
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR.");
@@ -385,6 +390,33 @@ internal static partial class MicroQRBinaryEncoder
         {
             Append(ref hi, ref lo, ref pos, AlnumValues[chars[i] & 0x7F], 6);
         }
+    }
+
+    /// <summary>
+    /// Kanji segment: 13 bits per character, the compacted Shift_JIS value (ISO/IEC 18004 8.4.5) that <see cref="ShiftJisKanjiReverseTable"/> holds for it; two characters share one 26-bit append.
+    /// A character without a cell is caught after the loop from the OR of the lookups (a miss is -1): it still occupies its 13 bits, so the accumulator stays inside the capacity the caller validated.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteKanjiData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> chars)
+    {
+        var misses = 0;
+        var i = 0;
+        for (; i + 1 < chars.Length; i += 2)
+        {
+            var first = ShiftJisKanjiReverseTable.Lookup(chars[i]);
+            var second = ShiftJisKanjiReverseTable.Lookup(chars[i + 1]);
+            misses |= first | second;
+            Append(ref hi, ref lo, ref pos, (first << 13) | (second & 0x1FFF), 26);
+        }
+        if (i < chars.Length)
+        {
+            var last = ShiftJisKanjiReverseTable.Lookup(chars[i]);
+            misses |= last;
+            Append(ref hi, ref lo, ref pos, last, 13);
+        }
+
+        if (misses < 0)
+            KanjiCells.ThrowCharacterWithoutCell(chars);
     }
 
     /// <summary>

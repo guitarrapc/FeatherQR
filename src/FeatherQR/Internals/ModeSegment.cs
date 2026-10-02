@@ -16,12 +16,12 @@ internal readonly struct ModeSegment
     public readonly ushort Length;
 
     /// <summary>
-    /// Character count indicator value: digits for Numeric, characters for Alphanumeric, encoded byte count for Byte.
+    /// Character count indicator value: digits for Numeric, characters for Alphanumeric and Kanji, encoded byte count for Byte.
     /// Kept alongside <see cref="Length"/> so the planner and the encoder agree on the bit budget.
     /// </summary>
     public readonly ushort UnitCount;
 
-    /// <summary>Dense mode index: 0 Numeric, 1 Alphanumeric, 2 Byte.</summary>
+    /// <summary>Dense mode index: 0 Numeric, 1 Alphanumeric, 2 Byte, 3 Kanji.</summary>
     public readonly byte ModeIndex;
 
     public ModeSegment(int modeIndex, int start, int length, int unitCount)
@@ -29,7 +29,7 @@ internal readonly struct ModeSegment
         // The fields are packed to keep a plan on the stack, so the ranges the packing
         // assumes are asserted rather than left to a silent truncation. The longest
         // plannable content of either symbology stays far below ushort.MaxValue.
-        Debug.Assert((uint)modeIndex <= 2, "mode index must be Numeric, Alphanumeric or Byte");
+        Debug.Assert((uint)modeIndex <= 3, "mode index must be Numeric, Alphanumeric, Byte or Kanji");
         Debug.Assert((uint)start <= ushort.MaxValue && (uint)length <= ushort.MaxValue && (uint)unitCount <= ushort.MaxValue);
         ModeIndex = (byte)modeIndex;
         Start = (ushort)start;
@@ -41,6 +41,7 @@ internal readonly struct ModeSegment
     {
         0 => EncodingMode.Numeric,
         1 => EncodingMode.Alphanumeric,
+        3 => EncodingMode.Kanji,
         _ => EncodingMode.Byte,
     };
 }

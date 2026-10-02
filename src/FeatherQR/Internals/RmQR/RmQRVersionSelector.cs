@@ -26,6 +26,7 @@ internal static class RmQRVersionSelector
             EncodingMode.Numeric => dataLength / 3 * 10L + (dataLength % 3) switch { 2 => 7, 1 => 4, _ => 0 },
             EncodingMode.Alphanumeric => dataLength / 2 * 11L + dataLength % 2 * 6,
             EncodingMode.Byte => dataLength * 8L,
+            EncodingMode.Kanji => dataLength * 13L,
             _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
         };
         return headerBits + dataBits;
@@ -44,6 +45,7 @@ internal static class RmQRVersionSelector
             EncodingMode.Numeric => dataLength / 3 * 10L + (dataLength % 3) switch { 2 => 7, 1 => 4, _ => 0 },
             EncodingMode.Alphanumeric => dataLength / 2 * 11L + dataLength % 2 * 6,
             EncodingMode.Byte => dataLength * 8L,
+            EncodingMode.Kanji => dataLength * 13L,
             _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
         };
         return headerBits + dataBits;
@@ -81,6 +83,8 @@ internal static class RmQRVersionSelector
                     var remainder = dataBits - pairs * 11;
                     return pairs * 2 + (remainder >= 6 ? 1 : 0);
                 }
+            case EncodingMode.Kanji:
+                return dataBits / 13;
             default:
                 return dataBits / 8;
         }
@@ -110,6 +114,8 @@ internal static class RmQRVersionSelector
                     var remainder = dataBits - pairs * 11;
                     return pairs * 2 + (remainder >= 6 ? 1 : 0);
                 }
+            case EncodingMode.Kanji:
+                return dataBits / 13;
             default:
                 return dataBits / 8;
         }
@@ -237,7 +243,7 @@ internal static class RmQRVersionSelector
     //   FitOrders[strategy][rank]                       = version (1..32), best first
     //   FitCapacities[((mode*2+ecc)*2+eci)*3+strategy]  = that version's max data length
     //   FitHeightMasks[strategy][(height-7)/2]          = bit `rank` set when the version has that height
-    // 3 × 32 B + 36 × 64 B + 3 × 24 B ≈ 2.5 KB of table data. Declaration order matters:
+    // 3 × 32 B + 48 × 64 B + 3 × 24 B ≈ 3.2 KB of table data. Declaration order matters:
     // static field initializers run textually, and the two lower tables index FitOrders.
     // ---------------------------------------------------------------
     private static readonly byte[][] FitOrders = BuildFitOrders();
@@ -265,7 +271,7 @@ internal static class RmQRVersionSelector
     private static ushort[][] BuildFitCapacities()
     {
         var tables = new ushort[RmQRConstants.ModeCount * 2 * 2 * 3][];
-        foreach (var mode in new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte })
+        foreach (var mode in new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte, EncodingMode.Kanji })
             for (var e = 0; e < 2; e++)
                 for (var eci = 0; eci < 2; eci++)
                     for (var s = 0; s < 3; s++)
@@ -371,11 +377,11 @@ internal static class RmQRVersionSelector
         }
     }
 
-    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric characters, Byte encoded bytes.</summary>
+    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric and Kanji characters, Byte encoded bytes.</summary>
     private static string FormatDataLength(int dataLength, EncodingMode mode) => mode switch
     {
         EncodingMode.Numeric => $"{dataLength} digits",
-        EncodingMode.Alphanumeric => $"{dataLength} characters",
+        EncodingMode.Alphanumeric or EncodingMode.Kanji => $"{dataLength} characters",
         _ => $"{dataLength} bytes",
     };
 

@@ -8,30 +8,33 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class MicroQRCodeDecoderRoundTripTest
 {
-    public static IEnumerable<(string text, MicroQREccLevel ecc, MicroQRVersion version)> RoundTripCases()
+    public static IEnumerable<(string text, MicroQREccLevel ecc, MicroQRVersion version, bool allowKanji)> RoundTripCases()
     {
-        yield return ("1", MicroQREccLevel.ErrorDetectionOnly, MicroQRVersion.M1);
-        yield return ("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRVersion.M1);
-        yield return ("0123456789", MicroQREccLevel.L, MicroQRVersion.M2);
-        yield return ("12345678", MicroQREccLevel.M, MicroQRVersion.M2);
-        yield return ("AC-42", MicroQREccLevel.L, MicroQRVersion.M2);
-        yield return ("HELLO", MicroQREccLevel.M, MicroQRVersion.M2);
-        yield return ("12345678901234567890123", MicroQREccLevel.L, MicroQRVersion.M3);
-        yield return ("HELLO WORLD 14", MicroQREccLevel.L, MicroQRVersion.M3);
-        yield return ("byte hi", MicroQREccLevel.M, MicroQRVersion.M3);
-        yield return ("99999999999999999999999999999999999", MicroQREccLevel.L, MicroQRVersion.M4);
-        yield return ("HELLO WORLD PLUS 21ST", MicroQREccLevel.L, MicroQRVersion.M4);
-        yield return ("bytes m4 mode", MicroQREccLevel.M, MicroQRVersion.M4);
-        yield return ("bytes!!!!", MicroQREccLevel.Q, MicroQRVersion.M4);
-        yield return ("Café au lait", MicroQREccLevel.L, MicroQRVersion.M4);
-        yield return ("こんにちは", MicroQREccLevel.L, MicroQRVersion.M4);
+        yield return ("1", MicroQREccLevel.ErrorDetectionOnly, MicroQRVersion.M1, false);
+        yield return ("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRVersion.M1, false);
+        yield return ("0123456789", MicroQREccLevel.L, MicroQRVersion.M2, false);
+        yield return ("12345678", MicroQREccLevel.M, MicroQRVersion.M2, false);
+        yield return ("AC-42", MicroQREccLevel.L, MicroQRVersion.M2, false);
+        yield return ("HELLO", MicroQREccLevel.M, MicroQRVersion.M2, false);
+        yield return ("12345678901234567890123", MicroQREccLevel.L, MicroQRVersion.M3, false);
+        yield return ("HELLO WORLD 14", MicroQREccLevel.L, MicroQRVersion.M3, false);
+        yield return ("byte hi", MicroQREccLevel.M, MicroQRVersion.M3, false);
+        yield return ("99999999999999999999999999999999999", MicroQREccLevel.L, MicroQRVersion.M4, false);
+        yield return ("HELLO WORLD PLUS 21ST", MicroQREccLevel.L, MicroQRVersion.M4, false);
+        yield return ("bytes m4 mode", MicroQREccLevel.M, MicroQRVersion.M4, false);
+        yield return ("bytes!!!!", MicroQREccLevel.Q, MicroQRVersion.M4, false);
+        yield return ("Café au lait", MicroQREccLevel.L, MicroQRVersion.M4, false);
+        yield return ("こんにちは", MicroQREccLevel.L, MicroQRVersion.M4, false);          // UTF-8 by default: M4-L's 15 bytes
+        yield return ("こんにちは", MicroQREccLevel.L, MicroQRVersion.M3, true);           // AllowKanji: 5 of M3-L's 6 characters
+        yield return ("こんにちは世界です", MicroQREccLevel.L, MicroQRVersion.M4, true);   // AllowKanji: M4-L's 9 characters, the full count
+        yield return ("こんにち～", MicroQREccLevel.L, MicroQRVersion.M4, true);           // ～ has no Kanji cell: UTF-8 even with AllowKanji, M4-L's 15 bytes
     }
 
     [Test]
     [MethodDataSource(nameof(RoundTripCases))]
-    public async Task RoundTrip_MicroQRCodeData(string text, MicroQREccLevel ecc, MicroQRVersion version)
+    public async Task RoundTrip_MicroQRCodeData(string text, MicroQREccLevel ecc, MicroQRVersion version, bool allowKanji)
     {
-        var data = MicroQRCodeGenerator.Create(text, ecc);
+        var data = MicroQRCodeGenerator.Create(text, ecc, new MicroQRCodeGeneratorOptions { AllowKanji = allowKanji });
 
         var success = MicroQRCodeDecoder.TryDecode(data, out var decoded, out var info);
 
@@ -46,13 +49,14 @@ public class MicroQRCodeDecoderRoundTripTest
 
     [Test]
     [MethodDataSource(nameof(RoundTripCases))]
-    public async Task RoundTrip_ModuleMatrix_WithAndWithoutQuietZone(string text, MicroQREccLevel ecc, MicroQRVersion version)
+    public async Task RoundTrip_ModuleMatrix_WithAndWithoutQuietZone(string text, MicroQREccLevel ecc, MicroQRVersion version, bool allowKanji)
     {
         foreach (var quietZone in (int[])[0, 2, 4])
         {
-            var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
+            var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone, AllowKanji = allowKanji };
+            var calculated = Sizing.Required(text.AsSpan(), ecc, options);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, options);
 
             var success = MicroQRCodeDecoder.TryDecode(modules, calculated.Size, out var decoded, out var info);
 
@@ -65,14 +69,15 @@ public class MicroQRCodeDecoderRoundTripTest
 
     [Test]
     [MethodDataSource(nameof(RoundTripCases))]
-    public async Task RoundTrip_SpanDestination_MatchesStringOverload(string text, MicroQREccLevel ecc, MicroQRVersion version)
+    public async Task RoundTrip_SpanDestination_MatchesStringOverload(string text, MicroQREccLevel ecc, MicroQRVersion version, bool allowKanji)
     {
         // Quiet zone 0 exercises the in-place fast path, 2 the core-copy branch.
         foreach (var quietZone in (int[])[0, 2])
         {
-            var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
+            var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone, AllowKanji = allowKanji };
+            var calculated = Sizing.Required(text.AsSpan(), ecc, options);
             var modules = new byte[calculated.BufferSize];
-            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone });
+            MicroQRCodeGenerator.Create(text.AsSpan(), ecc, modules, options);
 
             var destination = new char[MicroQRCodeDecoder.GetMaxDecodedLength(version)];
             var success = MicroQRCodeDecoder.TryDecode(modules, calculated.Size, destination, out var charsWritten, out var info);

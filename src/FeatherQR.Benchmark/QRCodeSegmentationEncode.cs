@@ -17,7 +17,8 @@
 ///                not (its 140-bit optimum misses v1-M's 128 bits) and emits the
 ///                Single stream — the priced-but-no-candidate-fits path
 ///   url-58     : a realistic payload (version 4-M as one run, version 3-M split)
-///   utf8-60    : multi-byte runs behind an ECI prefix
+///   utf8-60    : Japanese with digits: Single writes UTF-8 behind an ECI prefix (6-M),
+///                Optimal a Kanji plan, Kanji runs beside Numeric runs (5-M)
 ///
 /// Every fixture fits under Single too, so no row compares a success with a throw.
 /// ECC M only: other levels shift which version wins but not the shape of the work.

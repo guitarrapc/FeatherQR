@@ -4,7 +4,8 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// Generates <c>src/FeatherQR/Internals/ShiftJisKanjiTable.cs</c> from the
-/// Kanji-mode sweep (<c>probe-kanji-sweep</c>).
+/// Kanji-mode sweep (<c>probe-kanji-sweep</c>), and its encoder inverse
+/// <c>ShiftJisKanjiReverseTable.cs</c> from that table (<see cref="ReverseTable"/>).
 ///
 /// Provenance matters more than convenience here: hand-transcribing ~6,900
 /// mappings is not reviewable, and a table copied from CP932 would silently
@@ -59,14 +60,25 @@ public static class KanjiTableGenerator
         if (!Validate(table, cp932, sjisOf, swept))
             return 1;
 
+        // Both tables are validated before either is written, so a failed reverse
+        // gate cannot leave a forward table from one sweep beside a reverse from another.
+        var reverse = ReverseTable.Build(table, KnownDivergences.Select(static d => ToIndex13(d.Sjis)).ToHashSet());
+        if (!reverse.Validate(table, KnownDivergences.SelectMany(static d => new[] { d.JisX0208, d.Cp932 })))
+            return 1;
+
         var outputPath = Path.Combine(repoRoot, "src", "FeatherQR", "Internals", "ShiftJisKanjiTable.cs");
         File.WriteAllText(outputPath, Emit(table), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         Console.WriteLine($"wrote {outputPath} ({new FileInfo(outputPath).Length:N0} bytes source, {IndexCount * 2:N0} bytes of table data)");
+
+        var reversePath = Path.Combine(repoRoot, "src", "FeatherQR", "Internals", "ShiftJisKanjiReverseTable.cs");
+        File.WriteAllText(reversePath, reverse.Emit(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        Console.WriteLine($"wrote {reversePath} ({new FileInfo(reversePath).Length:N0} bytes source, {reverse.DataSize:N0} bytes of table data)");
 
         // ShiftJisKanjiTableUnitTest.Table_MatchesItsGoldenDigest pins every entry
         // against this value; a regeneration that legitimately changes the data has to
         // update it, and a bare hex mismatch in CI is not a useful instruction.
         Console.WriteLine($"golden digest (GoldenDigest in ShiftJisKanjiTableUnitTest): {Digest(table)}");
+        Console.WriteLine($"golden digest (GoldenDigest in ShiftJisKanjiReverseTableUnitTest): {reverse.Digest()}");
         return 0;
     }
 
@@ -181,28 +193,17 @@ public static class KanjiTableGenerator
             namespace FeatherQR.Internals;
 
             /// <summary>
-            /// JIS X 0208 to Unicode for ISO/IEC 18004 Kanji mode, shared by all three
-            /// symbologies. Indexed by the 13-bit compacted value (8.4.5), so a lookup is a
-            /// single load with no arithmetic.
+            /// JIS X 0208 to Unicode for ISO/IEC 18004 Kanji mode, shared by all three symbologies.
+            /// Indexed by the 13-bit compacted value (8.4.5), so a lookup is a single load with no arithmetic.
             /// </summary>
             /// <remarks>
             /// <para>
-            /// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the
-            /// cells CP932 adds stay unmapped here, so a symbol carrying them is reported
-            /// as DecodeStatus.UnmappedCharacter rather than silently rewritten. The
-            /// canonical statement of
-            /// the divergence set and the reasoning is the scope decision in
-            /// .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file
-            /// so a regeneration cannot reintroduce a stale copy (they were wrong in four
-            /// places once already).
+            /// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the cells CP932 adds stay unmapped here, so a symbol carrying them is reported as DecodeStatus.UnmappedCharacter rather than silently rewritten.
+            /// The canonical statement of the divergence set and the reasoning is the scope decision in .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file so a regeneration cannot reintroduce a stale copy (they were wrong in four places once already).
             /// </para>
             /// <para>
-            /// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping. The
-            /// caller separates the two reasons a cell can be unmapped with
-            /// <see cref="IsStructurallyValid"/>: a value no Shift_JIS pair can express is a
-            /// corrupt bitstream (DecodeStatus.InvalidBitstream), a well-formed value
-            /// outside the repertoire is a character this mapping has no reading for
-            /// (DecodeStatus.UnmappedCharacter).
+            /// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping.
+            /// The caller separates the two reasons a cell can be unmapped with <see cref="IsStructurallyValid"/>: a value no Shift_JIS pair can express is a corrupt bitstream (DecodeStatus.InvalidBitstream), a well-formed value outside the repertoire is a character this mapping has no reading for (DecodeStatus.UnmappedCharacter).
             /// </para>
             /// </remarks>
             internal static class ShiftJisKanjiTable
@@ -220,17 +221,15 @@ public static class KanjiTableGenerator
                 private const int ReservedLowByte = 0x3F;
 
                 /// <summary>
-                /// Maps a 13-bit Kanji-mode value to its JIS X 0208 character, or
-                /// <c>'\0'</c> when the cell is not in the repertoire.
+                /// Maps a 13-bit Kanji-mode value to its JIS X 0208 character, or <c>'\0'</c> when the cell is not in the repertoire.
                 /// </summary>
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public static char Lookup(int index13)
                     => (char)BinaryPrimitives.ReadUInt16LittleEndian(Table.Slice(index13 * 2, 2));
 
                 /// <summary>
-                /// True when some Shift_JIS pair in the Kanji-mode ranges can produce this
-                /// value. False means the bitstream is corrupt, not merely unmapped: the two
-                /// get different statuses, InvalidBitstream and UnmappedCharacter.
+                /// True when some Shift_JIS pair in the Kanji-mode ranges can produce this value.
+                /// False means the bitstream is corrupt, not merely unmapped: the two get different statuses, InvalidBitstream and UnmappedCharacter.
                 /// </summary>
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public static bool IsStructurallyValid(int index13)

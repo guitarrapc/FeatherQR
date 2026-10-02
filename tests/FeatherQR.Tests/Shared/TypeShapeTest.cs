@@ -141,7 +141,8 @@ public class TypeShapeTest
                 quietZoneSize: 0,
                 maskPattern: 3,
                 boostEccLevel: true,
-                segmentation: QRSegmentation.Optimal))
+                segmentation: QRSegmentation.Optimal,
+                allowKanji: true))
             .IsEqualTo(new QRCodeGeneratorOptions
             {
                 EciMode = EciMode.Utf8,
@@ -151,18 +152,21 @@ public class TypeShapeTest
                 MaskPattern = 3,
                 BoostEccLevel = true,
                 Segmentation = QRSegmentation.Optimal,
+                AllowKanji = true,
             });
         await Assert.That(new MicroQRCodeGeneratorOptions(
                 version: MicroQRVersion.M3,
                 quietZoneSize: 0,
                 maskPattern: 2,
-                segmentation: MicroQRSegmentation.Optimal))
+                segmentation: MicroQRSegmentation.Optimal,
+                allowKanji: true))
             .IsEqualTo(new MicroQRCodeGeneratorOptions
             {
                 Version = MicroQRVersion.M3,
                 QuietZoneSize = 0,
                 MaskPattern = 2,
                 Segmentation = MicroQRSegmentation.Optimal,
+                AllowKanji = true,
             });
         await Assert.That(new RmQRCodeGeneratorOptions(
                 eciMode: EciMode.Utf8,
@@ -170,7 +174,8 @@ public class TypeShapeTest
                 fitStrategy: RmQRFitStrategy.MinimizeWidth,
                 height: RmQRHeight.H7,
                 quietZoneSize: 0,
-                segmentation: RmQRSegmentation.Optimal))
+                segmentation: RmQRSegmentation.Optimal,
+                allowKanji: true))
             .IsEqualTo(new RmQRCodeGeneratorOptions
             {
                 EciMode = EciMode.Utf8,
@@ -179,6 +184,7 @@ public class TypeShapeTest
                 Height = RmQRHeight.H7,
                 QuietZoneSize = 0,
                 Segmentation = RmQRSegmentation.Optimal,
+                AllowKanji = true,
             });
 
         // An omitted parameter has to reproduce what `default` carries for that property.
@@ -199,10 +205,13 @@ public class TypeShapeTest
         await Assert.That(new RmQRCodeGeneratorOptions(eciMode: EciMode.Utf8).QuietZoneSize).IsEqualTo(2);
 
         // Same-typed parameters given the same value hide a crossed assignment, and the
-        // call above gives both bools `true`. One call per bool separates them; the other
+        // call above gives all three bools `true`. One call per bool separates them; the other
         // parameter pairs are all distinctly typed, so a crossing there cannot compile.
-        await Assert.That(new QRCodeGeneratorOptions(utf8Bom: true).BoostEccLevel).IsFalse();
-        await Assert.That(new QRCodeGeneratorOptions(boostEccLevel: true).Utf8Bom).IsFalse();
+        await Assert.That(new QRCodeGeneratorOptions(utf8Bom: true)).IsEqualTo(new QRCodeGeneratorOptions { Utf8Bom = true });
+        await Assert.That(new QRCodeGeneratorOptions(boostEccLevel: true)).IsEqualTo(new QRCodeGeneratorOptions { BoostEccLevel = true });
+        await Assert.That(new QRCodeGeneratorOptions(allowKanji: true)).IsEqualTo(new QRCodeGeneratorOptions { AllowKanji = true });
+        await Assert.That(new MicroQRCodeGeneratorOptions(allowKanji: true)).IsEqualTo(new MicroQRCodeGeneratorOptions { AllowKanji = true });
+        await Assert.That(new RmQRCodeGeneratorOptions(allowKanji: true)).IsEqualTo(new RmQRCodeGeneratorOptions { AllowKanji = true });
 
         // IconData carries three `int` and two `int?` parameters, so every value here is
         // distinct and a crossing shows up as a wrong property rather than a wrong count.

@@ -340,9 +340,10 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.H, 424)]  // V40-H byte max
     public async Task Create_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
+        // All-kana text goes out in Kanji mode at the default charset; this one is about Byte mode.
         var text = new string('\u3042', maxChars);
 
-        var qr = QRCodeGenerator.Create(text, eccLevel);
+        var qr = QRCodeGenerator.Create(text, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEquivalentTo(40);
@@ -353,9 +354,10 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.H, 424)]  // V40-H byte max
     public async Task Create_Span_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
+        // All-kana text goes out in Kanji mode at the default charset; this one is about Byte mode.
         var text = new string('\u3042', maxChars);
 
-        var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel);
+        var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
         var version = CalculateVersion(qr.Size);
 
         await Assert.That(version).IsEquivalentTo(40);

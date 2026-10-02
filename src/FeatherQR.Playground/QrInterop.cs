@@ -309,6 +309,7 @@ public static partial class QrInterop
             Version = ParseVersionRange(request.Version),
             QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
             BoostEccLevel = request.EccBoost,
+            AllowKanji = request.AllowKanji,
         });
     }
 
@@ -320,6 +321,7 @@ public static partial class QrInterop
             FitStrategy = ParseRmFitStrategy(request.FitStrategy),
             Height = ParseRmHeight(request.Height),
             QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+            AllowKanji = request.AllowKanji,
         });
     }
 
@@ -376,6 +378,7 @@ public static partial class QrInterop
             {
                 Version = ParseMicroVersion(request.Version),
                 QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+                AllowKanji = request.AllowKanji,
             });
     }
 
@@ -522,7 +525,7 @@ public static partial class QrInterop
             {
                 (startIndex + i + 1).TryFormat(textBuffer.AsSpan(prefixLength + 2), out var digits);
                 var text = textBuffer.AsSpan(0, prefixLength + 2 + digits);
-                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
+                written = QRCodeGenerator.Create(text, ecc, moduleBuffer, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -553,7 +556,7 @@ public static partial class QrInterop
         for (var i = 0; i < count; i++)
         {
             var text = string.Create(CultureInfo.InvariantCulture, $"{request.Content} #{startIndex + i + 1}");
-            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone });
+            var data = QRCodeGenerator.Create(text.AsSpan(), ecc, new QRCodeGeneratorOptions { Version = ParseVersionRange(request.Version), QuietZoneSize = quietZone, AllowKanji = request.AllowKanji });
             qrVersion = data.Version;
             matrixSize = data.Size;
             bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
@@ -585,7 +588,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                written = MicroQRCodeGenerator.Create(request.Content.AsSpan(), ecc, moduleBuffer, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
+                written = MicroQRCodeGenerator.Create(request.Content.AsSpan(), ecc, moduleBuffer, new MicroQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone, AllowKanji = request.AllowKanji });
                 bytesTotal += written;
             }
             stopwatch.Stop();
@@ -613,7 +616,7 @@ public static partial class QrInterop
         var height = ParseRmHeight(request.Height);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
 
-        var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone };
+        var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone, AllowKanji = request.AllowKanji };
         if (!RmQRCodeGenerator.TryGetRequiredBufferSize(request.Content.AsSpan(), ecc, out var calculated, rmOptions))
             throw new ArgumentException($"Content does not fit any rMQR symbol under the requested constraints ({request.Content.Length} characters, ECC {ecc}, Version {(version is null ? "auto" : version.ToString())}, FitStrategy {fit}, Height {(height is null ? "auto" : height.ToString())}, QuietZone {quietZone}).", nameof(request));
 
@@ -843,6 +846,8 @@ public sealed record QrRequest
     public string Ecc { get; init; } = "M";
     /// <summary>Standard QR only: raise the ECC level above <see cref="Ecc"/> when the chosen version's spare capacity allows, without changing the version.</summary>
     public bool EccBoost { get; init; }
+    /// <summary>Write Japanese text in Kanji mode where the library can (<see cref="QRCodeGeneratorOptions.AllowKanji"/> and its Micro QR and rMQR twins). Off by default, as in the library, because Android's own scanners read none of it.</summary>
+    public bool AllowKanji { get; init; }
     /// <summary>Output image size in pixels (square for Standard / Micro QR; the image width for rMQR, height from the symbol aspect ratio).</summary>
     public int Size { get; init; } = 512;
     /// <summary>Quiet zone in modules (0-10).</summary>

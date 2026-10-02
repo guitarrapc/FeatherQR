@@ -13,7 +13,15 @@ using System.Text;
 
 namespace FeatherQR.Internals;
 
-internal readonly record struct TextAnalysisResult(EncodingMode EncodingMode, EciMode EciMode, int DataLength);
+/// <summary>The single mode a text fits, the charset it is written in, and its length in that mode's units.</summary>
+/// <param name="EncodingMode">The narrowest single mode that holds the whole text.</param>
+/// <param name="EciMode">The charset the single-mode stream declares, or <see cref="EciMode.Default"/> for none.</param>
+/// <param name="DataLength">The text's length in <paramref name="EncodingMode"/>'s units: characters, or encoded bytes for Byte mode.</param>
+/// <param name="KanjiPlannable">
+/// The text is Kanji-eligible and holds ASCII, so a mixed-mode plan can write its other characters as Kanji runs beside runs of its ASCII, with no ECI header.
+/// Set only for a caller that plans Kanji (<see cref="TextAnalyzer.Analyze(ReadOnlySpan{char}, EciMode, bool, bool)"/>); the rest of the analysis is then the UTF-8 one, which is what the single-mode stream writes.
+/// </param>
+internal readonly record struct TextAnalysisResult(EncodingMode EncodingMode, EciMode EciMode, int DataLength, bool KanjiPlannable = false);
 
 /// <summary>
 /// Text analyzer for automatic encoding and ECI mode detection in single pass.
@@ -73,6 +81,60 @@ internal static partial class TextAnalyzer
 
         // Scalar fallback for .NET Standard or short text
         return AnalyzeScalar(text, requestedEciMode);
+    }
+
+    /// <summary>
+    /// <see cref="Analyze(ReadOnlySpan{char}, EciMode)"/>, then Kanji mode for a text that Kanji mode holds on its own: the charset was left to the library, the library chose UTF-8, and every character has an encoder cell.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every such character costs 13 bits in Kanji mode against 16 or 24 in UTF-8, and the stream carries no ECI header, so the result never needs a larger version than UTF-8 would.
+    /// A text with ASCII in it stays UTF-8 here, because one Kanji segment cannot hold ASCII; mixing the two is a plan's business.
+    /// </para>
+    /// <para>
+    /// The pass runs only once the analysis has resolved UTF-8, and stops at the first character without a cell, so ASCII and Latin-1 text pays one comparison for it.
+    /// <paramref name="allowKanji"/> is the caller's <c>AllowKanji</c> option, and false also where UTF-8 was asked for in effect (a byte order mark).
+    /// </para>
+    /// <para>
+    /// <paramref name="planKanji"/> is for a mixed-mode path: the pass then reads past ASCII too, and a text whose characters are all ASCII or have a cell comes back as its UTF-8 analysis marked <see cref="TextAnalysisResult.KanjiPlannable"/>.
+    /// A single-mode path leaves it off and keeps stopping at the first ASCII character, since one Kanji segment cannot hold one.
+    /// </para>
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static TextAnalysisResult Analyze(ReadOnlySpan<char> text, EciMode requestedEciMode, bool allowKanji, bool planKanji = false)
+    {
+        var analysis = Analyze(text, requestedEciMode);
+        return allowKanji && analysis.EciMode == EciMode.Utf8 && requestedEciMode == EciMode.Default
+            ? ResolveKanji(text, in analysis, planKanji)
+            : analysis;
+    }
+
+    /// <summary>
+    /// The Kanji analysis of a UTF-8 text when every character has an encoder cell; with <paramref name="planKanji"/>, the UTF-8 analysis marked plannable when every character is ASCII or has one; otherwise the UTF-8 analysis unchanged.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static TextAnalysisResult ResolveKanji(ReadOnlySpan<char> text, in TextAnalysisResult utf8, bool planKanji)
+    {
+        var ascii = false;
+        foreach (var c in text)
+        {
+            // No ASCII character has a cell (U+005C's is one of the seven never written), so ASCII skips the lookup.
+            // The rest ask membership only; the writer looks the value up, once per character.
+            if (c < 0x80)
+            {
+                if (!planKanji)
+                    return utf8;
+                ascii = true;
+            }
+            else if (!ShiftJisKanjiReverseTable.HasCell(c))
+            {
+                return utf8;
+            }
+        }
+
+        return ascii
+            ? utf8 with { KanjiPlannable = true }
+            : new TextAnalysisResult(EncodingMode.Kanji, EciMode.Default, text.Length);
     }
 
     /// <summary>

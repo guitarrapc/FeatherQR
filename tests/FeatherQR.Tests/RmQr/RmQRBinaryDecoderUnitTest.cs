@@ -99,7 +99,7 @@ public class RmQRBinaryDecoderUnitTest
         await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.UnsupportedContent);
     }
 
-    // Kanji mode (decode only; the rMQR encoder never emits it)
+    // Kanji mode
 
     /// <summary>ISO/IEC 18004 8.4.5 compaction, rendered as a 13-bit string.</summary>
     private static string Kanji(int sjis)

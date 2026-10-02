@@ -173,7 +173,7 @@ public class ShiftJisKanjiTableUnitTest
     /// <summary>
     /// Structural validity separates "corrupt bitstream" from "well-formed but not in
     /// the repertoire", which is what lets the decoder report InvalidBitstream and
-    /// UnsupportedContent for the two different causes of a zero lookup.
+    /// UnmappedCharacter for the two different causes of a zero lookup.
     /// </summary>
     /// <remarks>
     /// The expected set is built by enumerating real Shift_JIS lead/trail pairs and

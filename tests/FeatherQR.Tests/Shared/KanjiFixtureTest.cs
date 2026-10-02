@@ -15,8 +15,9 @@ namespace FeatherQR.Tests;
 /// nothing to say. The count assertions below fail instead.
 /// </para>
 /// <para>
-/// This library never emits Kanji mode, so these fixtures are the only symbols that
-/// reach the JIS X 0208 decode path at all. Generators: ZXing.Net (Standard QR,
+/// These fixtures are the Kanji symbols other encoders wrote; this library's own Kanji
+/// output is checked where it is written (the *BinaryEncoderKanjiTest classes and
+/// KanjiEligibilityTest) and against these same symbols (KanjiEncoderOracleTest). Generators: ZXing.Net (Standard QR,
 /// mode self-reported by its encoder) and qrtool (Micro QR M3/M4, rMQR). libzint
 /// cannot produce Kanji, it emits Byte mode with ECI 20 for the same input.
 /// </para>
@@ -40,9 +41,9 @@ public class KanjiFixtureTest
     [Test]
     public async Task Corpus_CarriesKanjiFixturesForEverySymbology()
     {
-        await Assert.That(StandardQrIds().Count()).IsGreaterThanOrEqualTo(5).Because("Standard QR Kanji fixtures (zxing-net)");
+        await Assert.That(StandardQrIds().Count()).IsGreaterThanOrEqualTo(7).Because("Standard QR Kanji fixtures (zxing-net)");
         await Assert.That(MicroQrIds().Count()).IsGreaterThanOrEqualTo(5).Because("Micro QR Kanji fixtures (qrtool, M3/M4)");
-        await Assert.That(RmQrIds().Count()).IsGreaterThanOrEqualTo(4).Because("rMQR Kanji fixtures (qrtool)");
+        await Assert.That(RmQrIds().Count()).IsGreaterThanOrEqualTo(8).Because("rMQR Kanji fixtures (qrtool)");
     }
 
     [Test]

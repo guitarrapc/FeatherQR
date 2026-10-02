@@ -10,8 +10,10 @@ namespace FeatherQR;
 /// Encodes text into a Standard QR code (ISO/IEC 18004), versions 1 to 40.
 /// </summary>
 /// <remarks>
-/// Writes Numeric, Alphanumeric and Byte mode, the last as ISO-8859-1 or UTF-8 with an ECI header.
-/// Kanji mode is never written, so Japanese text goes out as UTF-8 in Byte mode; <see cref="QRCodeDecoder"/> does read Kanji that other encoders produce.
+/// Writes Numeric, Alphanumeric and Byte mode, the last as ISO-8859-1 or UTF-8 with an ECI header, and Kanji mode.
+/// Kanji mode carries text whose every character is in JIS X 0208 (Japanese, and the Greek, Cyrillic and symbols that table holds) at 13 bits a character with no ECI header, where UTF-8 would take 16 or 24; it is written only when the caller sets <see cref="QRCodeGeneratorOptions.AllowKanji"/>, the charset is left at <see cref="EciMode.Default"/> and no byte order mark is asked for, and that option is off by default because an Android phone's own scanners read none of it.
+/// Under <see cref="QRSegmentation.Optimal"/> such text with ASCII in it can be written as Kanji runs beside Numeric, Alphanumeric and Byte runs of the ASCII, where that is the smaller symbol.
+/// A Structured Append set of such text is written in Kanji mode too, with the XOR of the text's Shift_JIS bytes as its parity: under both segmentations when every character is in the table, and under <see cref="QRSegmentation.Optimal"/> with ASCII in it where that set needs fewer symbols than the UTF-8 set, or as many at a lower version.
 /// </remarks>
 public static class QRCodeGenerator
 {
@@ -44,7 +46,10 @@ public static class QRCodeGenerator
     /// <summary>Symbols of a Structured Append set planned in one pass; <c>ModeSegmenter.Lanes</c> where that exists.</summary>
     private const int MaxPlanLanes = 8;
 
-    private static QRCodeData CreateCore(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion, int quietZoneSize, int maskPattern)
+    /// <summary>Whether the analysis may resolve to Kanji mode: the caller asked for it, and no byte order mark asks for UTF-8 instead.</summary>
+    private static bool AllowsKanji(in QRCodeGeneratorOptions options) => options.AllowKanji && !options.Utf8Bom;
+
+    private static QRCodeData CreateCore(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, bool allowKanji, int requestedVersion, int quietZoneSize, int maskPattern)
     {
         // QR code generation process:
         // ------------------------------------------------
@@ -76,7 +81,7 @@ public static class QRCodeGenerator
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
 
         // Prepare configuration
-        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion);
+        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji, requestedVersion);
 
         var result = new QRCodeData(config.Version, quietZoneSize);
         var coreSize = result.GetCoreSize();
@@ -105,7 +110,7 @@ public static class QRCodeGenerator
         }
     }
 
-    private static int CreateCore(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, bool utf8BOM, EciMode eciMode, int requestedVersion, int quietZoneSize, int maskPattern)
+    private static int CreateCore(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, bool utf8BOM, EciMode eciMode, bool allowKanji, int requestedVersion, int quietZoneSize, int maskPattern)
     {
         if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
             throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
@@ -113,7 +118,7 @@ public static class QRCodeGenerator
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
 
         // Prepare configuration
-        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion);
+        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji, requestedVersion);
 
         var coreSize = QRCodeData.SizeFromVersion(config.Version);
         var (totalSize, requiredSize) = CalculateMatrixSize(coreSize, quietZoneSize);
@@ -227,7 +232,7 @@ public static class QRCodeGenerator
             return CreateOptimal(textSpan, eccLevel, in options);
 
         var (version, resolvedEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-        return CreateCore(textSpan, resolvedEcc, options.Utf8Bom, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        return CreateCore(textSpan, resolvedEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
     }
 
     /// <summary>
@@ -258,7 +263,7 @@ public static class QRCodeGenerator
             return CreateOptimalTo(textSpan, eccLevel, destination, in options);
 
         var (version, resolvedEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-        return CreateCore(textSpan, resolvedEcc, destination, options.Utf8Bom, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        return CreateCore(textSpan, resolvedEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
     }
 
     /// <summary>
@@ -283,7 +288,7 @@ public static class QRCodeGenerator
         if (options.Segmentation != QRSegmentation.Single)
             ValidateOptimalEntry(options.Segmentation);
 
-        var analysisResult = TextAnalyzer.Analyze(text, options.EciMode);
+        var analysisResult = TextAnalyzer.Analyze(text, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: options.Segmentation != QRSegmentation.Single);
         if (!TryResolveVersion(text, eccLevel, in analysisResult, in options, out var version))
             return false;
 
@@ -317,7 +322,7 @@ public static class QRCodeGenerator
     /// Text that fits one symbol within the range returns that one symbol, exactly as <see cref="Create(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> would, with no Structured Append header.
     /// </para>
     /// <para>
-    /// The charset is decided once for the whole text and declared in every symbol, and the parity every symbol carries is the XOR of the whole text's bytes in that charset. A byte order mark, when <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for one, is written in the first symbol only, and only when that symbol is in Byte mode: the mark heads the byte stream, and a first symbol of digits or alphanumerics has none to head, so the set then carries no mark and the parity counts none. <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> raises the whole set to the level every symbol can take. Splits never fall inside a surrogate pair, nor, in UTF-8, before a U+FEFF: a reader takes one at the head of a symbol for a byte order mark and drops it, which is also what becomes of one at the head of the text, as it does in a single symbol.
+    /// The charset is decided once for the whole text and declared in every symbol, and the parity every symbol carries is the XOR of the whole text's bytes in that charset. With <see cref="QRCodeGeneratorOptions.AllowKanji"/>, text that Kanji mode carries (see the class remarks) makes a Kanji set instead: no symbol declares a charset, a chunk is one Kanji segment under <see cref="QRSegmentation.Single"/> or its mix of Kanji and ASCII runs under <see cref="QRSegmentation.Optimal"/>, and the parity is the XOR of the whole text's Shift_JIS bytes. With ASCII in the text the set is a Kanji set only under <see cref="QRSegmentation.Optimal"/>, and only where it needs fewer symbols than the UTF-8 set, or as many at a lower version; <see cref="EciMode.Utf8"/> keeps the UTF-8 set. A byte order mark, when <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for one, is written in the first symbol only, and only when that symbol is in Byte mode: the mark heads the byte stream, and a first symbol of digits or alphanumerics has none to head, so the set then carries no mark and the parity counts none. <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> raises the whole set to the level every symbol can take. Splits never fall inside a surrogate pair, nor, in UTF-8, before a U+FEFF: a reader takes one at the head of a symbol for a byte order mark and drops it, which is also what becomes of one at the head of the text, as it does in a single symbol.
     /// Reassembly is described on <see cref="QRStructuredAppend"/>; each symbol decodes to its own part of the text.
     /// </para>
     /// </remarks>
@@ -331,10 +336,10 @@ public static class QRCodeGenerator
         => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
 
     /// <summary>
-    /// What a set spends on this thread beside the planner's walks (<c>StructuredAppendPlanner.ScalarWalks</c>): the chunks the writer plans one by one, its passes that plan up to eight together, and the one-symbol questions. No set shows them; tests that pin where the work goes read them. One increment a plan or a question.
+    /// What a set spends on this thread beside the planner's walks (<c>StructuredAppendPlanner.ScalarWalks</c>): the chunks the writer plans one by one, its passes that plan up to eight together, the one-symbol questions, and for a Kanji-eligible text the Kanji and UTF-8 sets planned to be weighed. No set shows them; tests that pin where the work goes read them. One increment a plan or a question.
     /// </summary>
     [ThreadStatic]
-    internal static int ChunkPlans, LanePlanPasses, OneSymbolQuestions;
+    internal static int ChunkPlans, LanePlanPasses, OneSymbolQuestions, KanjiSetPlans, Utf8SetPlans;
 
     /// <summary>
     /// <see cref="CreateStructuredAppend(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> with the choice of planning the symbols of the set together left to the caller; the set is the same either way, which is what <c>StructuredAppendWriterPlanTest</c> holds it to.
@@ -346,16 +351,22 @@ public static class QRCodeGenerator
             ValidateOptimalEntry(options.Segmentation);
 
         // The charset is decided once, from the whole text: "the bytes of the whole input" has to
-        // name one byte sequence, and every symbol then declares it.
-        var wholeText = TextAnalyzer.Analyze(textSpan, options.EciMode);
-        var charset = wholeText.EciMode;
+        // name one byte sequence, and every symbol then declares it. The analysis is Create's, so a
+        // Kanji-eligible text can be a Kanji set: no ECI header in any symbol, and the parity of the
+        // text's Shift_JIS bytes (standardqr-encoder.md, "A Kanji-eligible text can be a Kanji set").
+        var wholeText = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: options.Segmentation != QRSegmentation.Single);
 
         Span<int> chunkEnds = stackalloc int[StructuredAppendPlanner.MaxSymbols];
-        if (!TryPlanSetOrSymbol(textSpan, eccLevel, in wholeText, in options, chunkEnds, out var count, out var version, out var oneRunPlans))
+        if (!TryPlanSetOrSymbol(textSpan, eccLevel, in wholeText, in options, chunkEnds, out var count, out var version, out var oneRunPlans, out var kanjiSet))
             throw new ArgumentException(DoesNotFitSetMessage(textSpan, in wholeText, eccLevel, in options), nameof(options));
 
         if (count == 1)
             return [Create(textSpan, eccLevel, options)];
+
+        if (kanjiSet)
+            return CreateKanjiSet(textSpan, eccLevel, in options, chunkEnds.Slice(0, count), version);
+
+        var charset = wholeText.EciMode;
 
         // The boost is decided for the set: the level every symbol can take at the shared
         // version. A chunk's cost does not depend on the level, so the set is priced once and
@@ -472,9 +483,19 @@ public static class QRCodeGenerator
     /// The planner prices every chunk with the set header, so a text it splits or refuses may still be one that a single symbol holds without it, and such a text is not a set.
     /// The planner says which texts that could be, by the measure its search ran on, and of those the question is asked the way <c>Create</c> asks it.
     /// </remarks>
-    private static bool TryPlanSetOrSymbol(ReadOnlySpan<char> text, QREccLevel eccLevel, in TextAnalysisResult wholeText, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool oneRunPlans)
+    private static bool TryPlanSetOrSymbol(ReadOnlySpan<char> text, QREccLevel eccLevel, in TextAnalysisResult wholeText, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool oneRunPlans, out bool kanjiSet)
     {
-        var planned = StructuredAppendPlanner.TryPlan(text, eccLevel, wholeText.EciMode, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out count, out version, out _, out oneRunPlans, out var mayBeOneSymbol, allowLanes: true);
+        bool planned, mayBeOneSymbol;
+        if (wholeText.EncodingMode == EncodingMode.Kanji || wholeText.KanjiPlannable)
+        {
+            planned = TryPlanKanjiSetOrUtf8Set(text, eccLevel, in wholeText, in options, chunkEnds, out count, out version, out oneRunPlans, out mayBeOneSymbol, out kanjiSet);
+        }
+        else
+        {
+            kanjiSet = false;
+            planned = StructuredAppendPlanner.TryPlan(text, eccLevel, wholeText.EciMode, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out count, out version, out _, out oneRunPlans, out mayBeOneSymbol, allowLanes: true);
+        }
+
         if ((planned && count == 1) || !mayBeOneSymbol)
             return planned;
         OneSymbolQuestions++;
@@ -482,7 +503,172 @@ public static class QRCodeGenerator
             return planned;
 
         count = 1;
+        kanjiSet = false;
         return true;
+    }
+
+    /// <summary>
+    /// The set of a Kanji-eligible text: the Kanji set, and for a text with ASCII in it (under Optimal, since under Single it is not one segment a chunk) today's UTF-8 set beside it.
+    /// The Kanji set is taken unless the UTF-8 set needs fewer symbols, or as many at a version no larger.
+    /// </summary>
+    /// <remarks>
+    /// Text whose every character has a cell is a Kanji set under both segmentations, as <c>Create</c> writes it in Kanji mode under both: character for character 13 bits against 16 or 24 as UTF-8, and no ECI header, so any split of its UTF-8 set is a split of its Kanji set too, and the Kanji set is never larger.
+    /// A text with ASCII in it pays a header a run where its characters change kind, so there the UTF-8 set can be the smaller; comparing the two the way <c>Create</c> compares a plan with the single stream keeps <c>Optimal</c> from growing a set, and leaves today's set where the Kanji one is no smaller.
+    /// Each set has a floor, the fewest symbols of the largest version its characters at their cheapest rate could fill, and for the Kanji set a run for every stretch of cells and of ASCII (<see cref="StructuredAppendPlanner.CanHoldKanji"/>).
+    /// The set with the lower floor is planned first, and the other only where its floor says it could still win: a Kanji set planned only to lose costs a walk of the eight-state program, which is more than the UTF-8 set it loses to.
+    /// </remarks>
+    private static bool TryPlanKanjiSetOrUtf8Set(ReadOnlySpan<char> text, QREccLevel eccLevel, in TextAnalysisResult wholeText, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool oneRunPlans, out bool mayBeOneSymbol, out bool kanjiSet)
+    {
+        oneRunPlans = false;
+        if (wholeText.EncodingMode == EncodingMode.Kanji)
+            return kanjiSet = PlanKanjiSet(text, eccLevel, in options, chunkEnds, out count, out version, out mayBeOneSymbol);
+
+        var kanjiSixths = ModeSegmenter.CheapestSixthsKanji(text, out var utf8Sixths, out var cellRuns, out var asciiRuns);
+        var kanjiCheapest = (kanjiSixths + 5) / 6;
+        var utf8Cheapest = (utf8Sixths + 5) / 6;
+        var stretches = cellRuns + asciiRuns;
+        var largest = StructuredAppendPlanner.Capacity(options.Version.Max, eccLevel);
+        var kanjiFloor = StructuredAppendPlanner.FewestSymbolsKanji(largest, kanjiCheapest, stretches);
+        var utf8Floor = StructuredAppendPlanner.FewestSymbols(largest, utf8Cheapest, EciMode.Utf8);
+        Span<int> otherEnds = stackalloc int[StructuredAppendPlanner.MaxSymbols];
+
+        if (kanjiFloor <= utf8Floor)
+        {
+            var kanjiPlanned = PlanKanjiSet(text, eccLevel, in options, chunkEnds, out count, out version, out mayBeOneSymbol);
+            kanjiSet = kanjiPlanned;
+
+            // The UTF-8 set wins with fewer symbols, or as many at a version no larger. Where its floor rules out both it is not planned, and it cannot be one symbol either.
+            if (kanjiPlanned && (count == 1 || utf8Floor > count
+                || (utf8Floor == count && !StructuredAppendPlanner.CanHold(StructuredAppendPlanner.Capacity(version, eccLevel), count, utf8Cheapest, EciMode.Utf8))))
+                return true;
+
+            var utf8Planned = PlanUtf8Set(text, eccLevel, in wholeText, in options, otherEnds, out var utf8Count, out var utf8Version, out var utf8OneRunPlans, out var utf8MayBeOneSymbol);
+            mayBeOneSymbol |= utf8MayBeOneSymbol;
+            if (!utf8Planned || (kanjiPlanned && (count < utf8Count || (count == utf8Count && version < utf8Version))))
+                return kanjiPlanned;
+
+            otherEnds.Slice(0, utf8Count).CopyTo(chunkEnds);
+            count = utf8Count;
+            version = utf8Version;
+            oneRunPlans = utf8OneRunPlans;
+            kanjiSet = false;
+            return true;
+        }
+        else
+        {
+            var utf8Planned = PlanUtf8Set(text, eccLevel, in wholeText, in options, chunkEnds, out count, out version, out oneRunPlans, out mayBeOneSymbol);
+            kanjiSet = false;
+
+            // The Kanji set wins with fewer symbols, or as many at a lower version. Where its floor rules out both it is not planned; it may still be one symbol without the set header, which its floor at one symbol given the header's bits back says.
+            if (utf8Planned && (count == 1 || kanjiFloor > count
+                || (kanjiFloor == count && (version == options.Version.Min || !StructuredAppendPlanner.CanHoldKanji(StructuredAppendPlanner.Capacity(version - 1, eccLevel), count, kanjiCheapest, stretches)))))
+            {
+                mayBeOneSymbol |= StructuredAppendPlanner.CanHoldKanji(largest + StructuredAppendPlanner.HeaderBits, 1, kanjiCheapest, stretches);
+                return true;
+            }
+
+            var kanjiPlanned = PlanKanjiSet(text, eccLevel, in options, otherEnds, out var kanjiCount, out var kanjiVersion, out var kanjiMayBeOneSymbol);
+            mayBeOneSymbol |= kanjiMayBeOneSymbol;
+            if (!kanjiPlanned || (utf8Planned && (count < kanjiCount || (count == kanjiCount && version <= kanjiVersion))))
+                return utf8Planned;
+
+            otherEnds.Slice(0, kanjiCount).CopyTo(chunkEnds);
+            count = kanjiCount;
+            version = kanjiVersion;
+            oneRunPlans = false;
+            kanjiSet = true;
+            return true;
+        }
+    }
+
+    private static bool PlanKanjiSet(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool mayBeOneSymbol)
+    {
+        KanjiSetPlans++;
+        return StructuredAppendPlanner.TryPlanKanji(text, eccLevel, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out count, out version, out _, out mayBeOneSymbol);
+    }
+
+    private static bool PlanUtf8Set(ReadOnlySpan<char> text, QREccLevel eccLevel, in TextAnalysisResult wholeText, in QRCodeGeneratorOptions options, Span<int> chunkEnds, out int count, out int version, out bool oneRunPlans, out bool mayBeOneSymbol)
+    {
+        Utf8SetPlans++;
+        return StructuredAppendPlanner.TryPlan(text, eccLevel, wholeText.EciMode, wholeText.EncodingMode, options.Utf8Bom, options.Segmentation, options.Version.Min, options.Version.Max, chunkEnds, out count, out version, out _, out oneRunPlans, out mayBeOneSymbol, allowLanes: true);
+    }
+
+    /// <summary>
+    /// Writes the Kanji set the planner split: every symbol at the shared version, behind the header and with no ECI header, carrying the parity of the whole text's Shift_JIS bytes.
+    /// A chunk is one Kanji segment under <see cref="QRSegmentation.Single"/> (every character has a cell) and its Kanji plan under <see cref="QRSegmentation.Optimal"/>, with no UTF-8 fallback, since the set carries one charset.
+    /// </summary>
+    /// <remarks>The chunks' plans run one by one: Kanji sets take the scalar program, not the lanes (standardqr-encoder.md, "The lanes").</remarks>
+    private static QRCodeData[] CreateKanjiSet(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options, ReadOnlySpan<int> chunkEnds, int version)
+    {
+        var count = chunkEnds.Length;
+        var segmentation = options.Segmentation;
+
+        // The boost is decided for the set, from its fullest chunk, as for any set.
+        var level = eccLevel;
+        if (options.BoostEccLevel && level < QREccLevel.H)
+        {
+            var fullest = 0;
+            for (int i = 0, from = 0; i < count; from = chunkEnds[i], i++)
+                fullest = Math.Max(fullest, StructuredAppendPlanner.ChunkBitsKanji(textSpan.Slice(from, chunkEnds[i] - from), version, segmentation));
+            while (level < QREccLevel.H && fullest <= StructuredAppendPlanner.Capacity(version, level + 1))
+                level += 1;
+        }
+
+        var parity = StructuredAppendPlanner.ParityKanji(textSpan);
+        var eccInfo = QRCodeConstants.GetEccInfo(version, level);
+        var capacity = eccInfo.TotalDataCodewords * 8;
+        var maskPattern = options.MaskPattern ?? AutomaticMask;
+        var coreSize = QRCodeData.SizeFromVersion(version);
+        var longestChunk = LongestChunk(chunkEnds);
+        var symbols = new QRCodeData[count];
+        byte[]? rentedWorkBuffer = null;
+        ModeSegment[]? rentedPlan = null;
+        Span<ModeSegment> plan = segmentation != QRSegmentation.Optimal
+            ? default
+            : longestChunk <= QRSegmentPlanner.MaxStackSegments
+                ? stackalloc ModeSegment[QRSegmentPlanner.MaxStackSegments]
+                : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(longestChunk));
+        try
+        {
+            rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(coreSize * coreSize);
+            var workBuffer = rentedWorkBuffer.AsSpan(0, coreSize * coreSize);
+
+            var start = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var chunk = textSpan.Slice(start, chunkEnds[i] - start);
+                var header = new QRStructuredAppend(i, count, parity);
+                if (segmentation == QRSegmentation.Optimal)
+                {
+                    ChunkPlans++;
+                    if (!QRSegmentPlanner.TryBuildKanjiPlan(chunk, version, level, plan, out var segmentCount, out var planBits) || planBits + StructuredAppendPlanner.HeaderBits > capacity)
+                        throw new InvalidOperationException($"A Structured Append chunk of {chunk.Length} characters does not fit version {version} at ECC level {level} after planning.");
+                    var planned = new QRConfiguration(version, level, EncodingMode.Kanji, EciMode.Default, false, eccInfo, chunk.Length, header);
+                    WriteCoreModulesPlanned(chunk, in planned, plan.Slice(0, segmentCount), workBuffer, coreSize, maskPattern);
+                }
+                else
+                {
+                    if (StructuredAppendPlanner.ChunkBitsKanji(chunk, version, QRSegmentation.Single) > capacity)
+                        throw new InvalidOperationException($"A Structured Append chunk of {chunk.Length} characters does not fit version {version} at ECC level {level} after planning.");
+                    var config = new QRConfiguration(version, level, EncodingMode.Kanji, EciMode.Default, false, eccInfo, chunk.Length, header);
+                    WriteCoreModules(chunk, in config, workBuffer, coreSize, maskPattern);
+                }
+
+                var result = new QRCodeData(version, options.QuietZoneSize);
+                result.SetCoreData(workBuffer);
+                symbols[i] = result;
+                start = chunkEnds[i];
+            }
+        }
+        finally
+        {
+            if (rentedWorkBuffer is not null)
+                ArrayPool<byte>.Shared.Return(rentedWorkBuffer, clearArray: false);
+            if (rentedPlan is not null)
+                ArrayPool<ModeSegment>.Shared.Return(rentedPlan, clearArray: false);
+        }
+
+        return symbols;
     }
 
     /// <summary>
@@ -564,7 +750,12 @@ public static class QRCodeGenerator
     {
         Span<int> ends = stackalloc int[StructuredAppendPlanner.MaxSymbols];
         var changed = options with { Version = new QRVersionRange(options.Version.Min, maxVersion), Segmentation = segmentation };
-        return TryPlanSetOrSymbol(text, eccLevel, in analysis, in changed, ends, out _, out _, out _);
+
+        // The segmentation decides whether a text with ASCII in it may be a Kanji set, so a change of it is planned from the analysis it would get.
+        var changedAnalysis = segmentation == options.Segmentation
+            ? analysis
+            : TextAnalyzer.Analyze(text, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: segmentation != QRSegmentation.Single);
+        return TryPlanSetOrSymbol(text, eccLevel, in changedAnalysis, in changed, ends, out _, out _, out _, out _);
     }
 
     /// <summary>The cost of the chunk that needs the most bits, which is what decides whether a level holds the whole set.</summary>
@@ -668,7 +859,7 @@ public static class QRCodeGenerator
 
         ValidateQuietZoneSize(options.QuietZoneSize);
 
-        var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options));
         if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom, options.Version.Min, options.Version.Max, out var version))
         {
             if (options.Version.IsAny)
@@ -720,12 +911,13 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">How much damage the QR code can survive.</param>
     /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
     /// <param name="eciMode">The character encoding to declare, or <see cref="EciMode.Default"/> to choose one from the text.</param>
+    /// <param name="allowKanji">Whether the caller asked for Kanji mode (<see cref="QRCodeGeneratorOptions.AllowKanji"/>); a byte order mark overrides it.</param>
     /// <param name="requestedVersion">The QR code size to use (1 to 40), or -1 to pick the smallest size the text fits in.</param>
     /// <returns>The version, encoding mode, ECI mode and error correction layout to encode with.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion)
+    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, bool allowKanji, int requestedVersion)
     {
-        var analysisResult = TextAnalyzer.Analyze(textSpan, eciMode);
+        var analysisResult = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: allowKanji && !utf8BOM);
 
         // Select QR code version (auto or manual)
         var version = requestedVersion == -1
@@ -1122,6 +1314,7 @@ public static class QRCodeGenerator
                 EncodingMode.Numeric => CalculateNumericBits(length),
                 EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
                 EncodingMode.Byte => effectiveLength * 8L,
+                EncodingMode.Kanji => length * 13L,
                 _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
             };
 
@@ -1190,7 +1383,7 @@ public static class QRCodeGenerator
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: true);
 
         // The BOM is a stream-level prefix written only into UTF-8 Byte-mode streams:
         // a split would relocate it into the middle of the decoded text, so that
@@ -1199,12 +1392,33 @@ public static class QRCodeGenerator
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
             var (bomVersion, bomEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-            return CreateCore(textSpan, bomEcc, options.Utf8Bom, options.EciMode, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, bomEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
-        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, out var useSegments);
+        byte[]? rentedKanjiTable = null;
+        var kanjiTableLength = KanjiTableLength(textSpan, in analysis);
+        Span<byte> kanjiTable = kanjiTableLength == 0
+            ? default
+            : kanjiTableLength <= ModeSegmenter.MaxStackParents
+                ? stackalloc byte[ModeSegmenter.MaxStackParents]
+                : (rentedKanjiTable = ArrayPool<byte>.Shared.Rent(kanjiTableLength));
+        try
+        {
+            return CreateOptimalPlanned(textSpan, eccLevel, in analysis, in options, kanjiTable);
+        }
+        finally
+        {
+            if (rentedKanjiTable is not null)
+                ArrayPool<byte>.Shared.Return(rentedKanjiTable, clearArray: false);
+        }
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimal"/>, with the Kanji plan's table held (empty for a text with no Kanji plan).</summary>
+    private static QRCodeData CreateOptimalPlanned(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> kanjiTable)
+    {
+        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
-            return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), options.Utf8Bom, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         // The plan buffer is acquired only once a split is known to pay: content no
         // split can help (all-Numeric included) never rents it.
@@ -1214,11 +1428,11 @@ public static class QRCodeGenerator
             : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, plan, ref version, out var segmentCount);
+            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
-                return CreateCore(textSpan, resolvedEcc, options.Utf8Bom, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+                return CreateCore(textSpan, resolvedEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
-            var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, analysis.EciMode, false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
+            var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, PlanCharset(in analysis, kanjiPlan), false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
             var result = new QRCodeData(version, options.QuietZoneSize);
             var coreSize = result.GetCoreSize();
             var dataLength = coreSize * coreSize;
@@ -1250,17 +1464,38 @@ public static class QRCodeGenerator
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: true);
 
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
             var (bomVersion, bomEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-            return CreateCore(textSpan, bomEcc, destination, options.Utf8Bom, options.EciMode, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, bomEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
-        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, out var useSegments);
+        byte[]? rentedKanjiTable = null;
+        var kanjiTableLength = KanjiTableLength(textSpan, in analysis);
+        Span<byte> kanjiTable = kanjiTableLength == 0
+            ? default
+            : kanjiTableLength <= ModeSegmenter.MaxStackParents
+                ? stackalloc byte[ModeSegmenter.MaxStackParents]
+                : (rentedKanjiTable = ArrayPool<byte>.Shared.Rent(kanjiTableLength));
+        try
+        {
+            return CreateOptimalToPlanned(textSpan, eccLevel, destination, in analysis, in options, kanjiTable);
+        }
+        finally
+        {
+            if (rentedKanjiTable is not null)
+                ArrayPool<byte>.Shared.Return(rentedKanjiTable, clearArray: false);
+        }
+    }
+
+    /// <summary>The rest of <see cref="CreateOptimalTo"/>, with the Kanji plan's table held (empty for a text with no Kanji plan).</summary>
+    private static int CreateOptimalToPlanned(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> kanjiTable)
+    {
+        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
-            return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), destination, options.Utf8Bom, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         ModeSegment[]? rentedPlan = null;
         Span<ModeSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
@@ -1268,11 +1503,11 @@ public static class QRCodeGenerator
             : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, plan, ref version, out var segmentCount);
+            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
-                return CreateCore(textSpan, resolvedEcc, destination, options.Utf8Bom, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+                return CreateCore(textSpan, resolvedEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
-            var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, analysis.EciMode, false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
+            var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, PlanCharset(in analysis, kanjiPlan), false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
             var segments = plan.Slice(0, segmentCount);
             var maskPattern = options.MaskPattern ?? AutomaticMask;
             var quietZoneSize = options.QuietZoneSize;
@@ -1334,14 +1569,24 @@ public static class QRCodeGenerator
     /// <summary>
     /// Fits a version under mixed-mode segmentation.
     /// Throws the canonical "does not fit" errors when nothing fits.
-    /// When <paramref name="useSegments"/> is false the caller emits the single-mode stream without ever acquiring a plan buffer.
+    /// When <paramref name="useSegments"/> is false the caller emits the single-mode stream without ever acquiring a plan buffer; when <paramref name="kanjiPlan"/> is true the plan is a Kanji-eligible text's Kanji plan, written under <see cref="PlanCharset"/>.
     /// </summary>
-    private static int SelectOptimalVersion(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, out bool useSegments)
+    /// <remarks><paramref name="kanjiTable"/> receives the Kanji plan's table, which <see cref="BuildPlanOrFallback"/> builds from (<see cref="QRSegmentPlanner.TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, Span{byte}, out int, out bool, out bool, out int, out int)"/>).</remarks>
+    private static int SelectOptimalVersion(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<byte> kanjiTable, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
-        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, out var version, out useSegments))
+        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, kanjiTable, out var version, out useSegments, out kanjiPlan, out kanjiFinalState, out kanjiPlannedBits))
             ThrowDoesNotFit(in analysis, eccLevel, in options);
         return version;
     }
+
+    /// <summary>
+    /// Bytes of the table the version scan keeps for the Kanji plan's build: the program's predecessors, two bytes a character, for a text whose Kanji plan the planner prices; none otherwise.
+    /// </summary>
+    private static int KanjiTableLength(ReadOnlySpan<char> text, in TextAnalysisResult analysis)
+        => analysis.KanjiPlannable && text.Length <= QRSegmentPlanner.MaxPlannableChars ? text.Length * ModeSegmenter.ParentBytesPerChar : 0;
+
+    /// <summary>The charset a plan is written under: none for a Kanji plan, whose Byte runs hold only ASCII; the analysis's otherwise.</summary>
+    private static EciMode PlanCharset(in TextAnalysisResult analysis, bool kanjiPlan) => kanjiPlan ? EciMode.Default : analysis.EciMode;
 
     /// <summary>
     /// The single-mode ECC boost of <see cref="ResolveVersionAndEcc"/>: the version stays, the level rises while the single-mode stream still fits it.
@@ -1358,9 +1603,13 @@ public static class QRCodeGenerator
     /// A zero segment count means the single-mode stream is what gets emitted.
     /// Throws the canonical "does not fit" errors when the fallback does not fit either.
     /// </summary>
-    private static QREccLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<ModeSegment> plan, ref int version, out int segmentCount)
+    private static QREccLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, bool kanjiPlan, ReadOnlySpan<byte> kanjiTable, int kanjiFinalState, int kanjiPlannedBits, Span<ModeSegment> plan, ref int version, out int segmentCount)
     {
-        if (!QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
+        // A Kanji plan is built from the table the scan kept, without running the program again.
+        var built = kanjiPlan
+            ? QRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, out segmentCount)
+            : QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount);
+        if (!built)
         {
             // The plan that justified this version could not be rebuilt (it needed
             // more runs than the buffer holds, the decoder would misread it, or the
@@ -1379,7 +1628,7 @@ public static class QRCodeGenerator
         // depends only on the version — so only the capacity side of the compare moves.
         if (options.BoostEccLevel)
         {
-            var streamBits = QRSegmentPlanner.MeasurePlan(version, plan.Slice(0, segmentCount)) + analysis.EciMode.GetStandardQrHeaderBits();
+            var streamBits = QRSegmentPlanner.MeasurePlan(version, plan.Slice(0, segmentCount)) + PlanCharset(in analysis, kanjiPlan).GetStandardQrHeaderBits();
             while (eccLevel < QREccLevel.H && streamBits <= QRCodeConstants.GetEccInfo(version, eccLevel + 1).TotalDataCodewords * 8)
                 eccLevel += 1;
         }
@@ -1393,7 +1642,7 @@ public static class QRCodeGenerator
     /// </summary>
     private static bool TryPlanOptimalVersion(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, out int version)
     {
-        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, out version, out var useSegments))
+        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, out version, out var useSegments, out var kanjiPlan))
             return false;
         if (!useSegments)
             return true;
@@ -1404,7 +1653,10 @@ public static class QRCodeGenerator
             : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            if (QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out _))
+            var built = kanjiPlan
+                ? QRSegmentPlanner.TryBuildKanjiPlan(textSpan, version, eccLevel, plan, out _)
+                : QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out _);
+            if (built)
                 return true;
         }
         finally

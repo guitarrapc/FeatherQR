@@ -77,6 +77,9 @@ internal static partial class MicroQRBinaryEncoder
                 case EncodingMode.Alphanumeric:
                     WriteAlphanumericData(ref hi, ref lo, ref pos, chars);
                     break;
+                case EncodingMode.Kanji:
+                    WriteKanjiData(ref hi, ref lo, ref pos, chars);
+                    break;
                 default:
                     if (charset == EciMode.Utf8)
                     {

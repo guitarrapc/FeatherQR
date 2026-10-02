@@ -30,8 +30,9 @@
 ///   mixed-*    : the common shape; the upper bound accepts without a per-version run
 ///                [2 passes: floor + building the chosen plan]
 ///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [2 passes]
-///   utf8-60    : multi-byte runs behind an ECI prefix; like alt1-120 it plans and
-///                gains nothing, landing on the same version in both arms [2 passes]
+///   utf8-60    : Japanese with digits: Single writes UTF-8 behind an ECI prefix
+///                (R13x139), Optimal a Kanji plan, Kanji runs beside Numeric runs
+///                (R17x77); its UTF-8 plan would gain nothing
 ///
 /// Every fixture fits under Single too, so no row is comparing a success with a throw.
 /// ECC M only: the H capacities shift which version wins but not the shape of the work.

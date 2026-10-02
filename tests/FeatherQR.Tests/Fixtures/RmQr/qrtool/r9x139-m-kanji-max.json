@@ -1,0 +1,18 @@
+{
+  "id": "r9x139-m-kanji-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 10,
+  "versionName": "R9x139",
+  "width": 139,
+  "height": 9,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 4,
+  "payloadText": "\u3000\u6ECC\u6F3E\u7199\u4E9C\u5F0C\u8155\u03A9\u0416\u2500\u253C\uFF10\uFF21\u3041\u30F6\u65E5\u672C\u8A9E\u6F22\u5B57\u7B26\u53F7\u5316\u8A66\u9A13\u7528\u6587\u5B57\u5217\u3000\u6ECC\u6F3E\u7199\u4E9C\u5F0C\u8155\u03A9\u0416",
+  "payloadUtf8Hex": "E38080E6BB8CE6BCBEE78699E4BA9CE5BC8CE88595CEA9D096E29480E294BCEFBC90EFBCA1E38181E383B6E697A5E69CACE8AA9EE6BCA2E5AD97E7ACA6E58FB7E58C96E8A9A6E9A893E794A8E69687E5AD97E58897E38080E6BB8CE6BCBEE78699E4BA9CE5BC8CE88595CEA9D096",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}
