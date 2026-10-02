@@ -541,8 +541,9 @@ internal static class QRCodeConstants
     internal static ECCInfo GetEccInfo(int version, QREccLevel eccLevel)
     {
         // An index, not a scan: automatic version selection asks once per version it tries, and scanning the
-        // 160 entries cost 2.35 us of a version 40 encode. Every generator entry point reaches this before it
-        // uses the level, so an undefined one fails here, named as the public parameter is.
+        // 160 entries cost 2.35 us of a version 40 encode. The generator's entry points validate the level
+        // before they reach this. The range check here keeps an internal caller from reading another level's
+        // entry, and reports what the entry points report.
         if ((uint)eccLevel > (uint)QREccLevel.H)
             throw UndefinedLevel(eccLevel);
         if ((uint)(version - 1) >= 40u)
@@ -550,12 +551,10 @@ internal static class QRCodeConstants
         return EccInfoTable.Entries[(version - 1) * 4 + (int)eccLevel];
     }
 
-    /// <summary>
-    /// Exactly <see cref="ArgumentException"/>: Standard QR froze that type for an undefined level, where Micro QR and rMQR report <see cref="ArgumentOutOfRangeException"/>.
-    /// </summary>
+    /// <summary>The exception <c>QRCodeGenerator.ValidateEccLevel</c> throws, so a path that missed it still reports the public contract.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static ArgumentException UndefinedLevel(QREccLevel eccLevel)
-        => new($"ECC level {eccLevel} is not defined. Use L, M, Q or H.", nameof(eccLevel));
+    private static ArgumentOutOfRangeException UndefinedLevel(QREccLevel eccLevel)
+        => new(nameof(eccLevel), $"Invalid QR ECC level: {eccLevel}");
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static ArgumentException NoEntry(int version, QREccLevel eccLevel)

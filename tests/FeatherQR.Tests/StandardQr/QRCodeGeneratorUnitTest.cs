@@ -796,26 +796,105 @@ public class QRCodeGeneratorUnitTest
         Assert.Throws<ArgumentOutOfRangeException>(() => Create("HELLO".AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = -1 }));
     }
 
-    [Test]
-    [Arguments(40_000)]        // totalSize fits in int, but totalSize繝ｻ繧托ｽｽ・ｲ overflows
-    [Arguments(int.MaxValue)]  // totalSize itself exceeds int.MaxValue
-    public async Task Create_SpanDestination_OversizedQuietZone_Throws(int quietZoneSize)
+    // ---- the level, the ECI and the quiet zone at every entry -------------------------------
+    //
+    // Each route reaches the version by its own path. The arguments are checked before any
+    // of them, with Micro QR's and rMQR's bounds and parameter names.
+
+    public enum Route
     {
-        var buffer = new byte[64 * 64];
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => Create("HELLO".AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }));
-        await Assert.That(ex.ParamName).IsEqualTo("quietZoneSize");
+        Create,
+        CreateToSpan,
+        NarrowedRange,
+        Boost,
+        Optimal,
+        OptimalWithBom,
+        OptimalToSpan,
+        Sizing,
+        SizingOptimal,
+        StructuredAppend,
     }
 
     [Test]
-    [Arguments(-1)]
-    [Arguments(40_000)]
-    [Arguments(int.MaxValue)]
-    public async Task TryGetRequiredBufferSize_InvalidQuietZone_Throws(int quietZoneSize)
+    [MethodDataSource(nameof(RoutesWithUndefinedLevels))]
+    public async Task Entry_UndefinedEccLevel_ThrowsNamingTheLevel(Route route, QREccLevel eccLevel)
     {
-        // An argument error, not a "does not fit": the Try shape reports the second as
-        // false and keeps throwing for the first.
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.TryGetRequiredBufferSize("HELLO".AsSpan(), QREccLevel.L, out _, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }));
-        await Assert.That(ex.ParamName).IsEqualTo("quietZoneSize");
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() => Enter(route, eccLevel, quietZoneSize: 4));
+        await Assert.That(error.ParamName).IsEqualTo("eccLevel");
+    }
+
+    [Test]
+    [MethodDataSource(nameof(RoutesWithUndefinedEcis))]
+    public async Task Entry_UndefinedEciMode_ThrowsNamingTheEci(Route route, EciMode eciMode)
+    {
+        // Most routes carry Alphanumeric text, on which an undefined ECI used to reach the header
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() => Enter(route, QREccLevel.M, quietZoneSize: 4, eciMode));
+        await Assert.That(error.ParamName).IsEqualTo("eciMode");
+    }
+
+    [Test]
+    [MethodDataSource(nameof(RoutesWithQuietZonesOutOfRange))]
+    public async Task Entry_QuietZoneOutOfRange_ThrowsNamingTheQuietZone(Route route, int quietZoneSize)
+    {
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() => Enter(route, QREccLevel.M, quietZoneSize));
+        await Assert.That(error.ParamName).IsEqualTo("quietZoneSize");
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Routes))]
+    public async Task Entry_QuietZoneAtTheBound_IsAccepted(Route route)
+    {
+        if (route is Route.CreateToSpan or Route.OptimalToSpan)
+        {
+            // A 20,000-module side needs a 400 MB buffer, so the span routes show the
+            // quiet zone passed by failing on the one-byte destination instead.
+            var error = Assert.Throws<ArgumentException>(() => Enter(route, QREccLevel.M, 10_000));
+            await Assert.That(error.ParamName).IsEqualTo("destination");
+            return;
+        }
+
+        await Assert.That(Enter(route, QREccLevel.M, 10_000)).IsEqualTo(Enter(route, QREccLevel.M, 0) + 2 * 10_000);
+    }
+
+    public static IEnumerable<Route> Routes() => Enum.GetValues<Route>();
+
+    public static IEnumerable<(Route, QREccLevel)> RoutesWithUndefinedLevels()
+        => from route in Enum.GetValues<Route>()
+           from eccLevel in new[] { (QREccLevel)4, (QREccLevel)(-1) }
+           select (route, eccLevel);
+
+    public static IEnumerable<(Route, EciMode)> RoutesWithUndefinedEcis()
+        => from route in Enum.GetValues<Route>()
+           from eciMode in new[] { (EciMode)1, (EciMode)77, (EciMode)(-1) }
+           select (route, eciMode);
+
+    public static IEnumerable<(Route, int)> RoutesWithQuietZonesOutOfRange()
+        => from route in Enum.GetValues<Route>()
+           from quietZoneSize in new[] { -1, 10_001, (1 << 30) - 1, int.MaxValue }
+           select (route, quietZoneSize);
+
+    /// <summary>The symbol's side, quiet zone included, through <paramref name="route"/>. The span routes write to a one-byte buffer, so they return only by throwing.</summary>
+    private static int Enter(Route route, QREccLevel eccLevel, int quietZoneSize, EciMode eciMode = EciMode.Default)
+    {
+        const string Text = "HELLO WORLD";
+        var options = new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize, EciMode = eciMode };
+        var optimal = options with { Segmentation = QRSegmentation.Optimal };
+        return route switch
+        {
+            Route.Create => QRCodeGenerator.Create(Text, eccLevel, options).Size,
+            Route.CreateToSpan => QRCodeGenerator.Create(Text, eccLevel, new byte[1], options),
+            Route.NarrowedRange => QRCodeGenerator.Create(Text, eccLevel, options with { Version = QRVersionRange.AtLeast(2) }).Size,
+            Route.Boost => QRCodeGenerator.Create(Text, eccLevel, options with { BoostEccLevel = true }).Size,
+            Route.Optimal => QRCodeGenerator.Create("HELLO 12345678901234", eccLevel, optimal).Size,
+            // A UTF-8 Byte stream with a byte order mark is not split, so it leaves Optimal for the single-mode path
+            Route.OptimalWithBom => QRCodeGenerator.Create("héllo", eccLevel, optimal with { Utf8Bom = true, EciMode = eciMode == EciMode.Default ? EciMode.Utf8 : eciMode }).Size,
+            Route.OptimalToSpan => QRCodeGenerator.Create("HELLO 12345678901234", eccLevel, new byte[1], optimal),
+            Route.Sizing => QRCodeGenerator.TryGetRequiredBufferSize(Text, eccLevel, out var size, options) ? size.Size : -1,
+            Route.SizingOptimal => QRCodeGenerator.TryGetRequiredBufferSize("HELLO 12345678901234", eccLevel, out var optimalSize, optimal) ? optimalSize.Size : -1,
+            // Version 1 holds 20 alphanumerics at M, so 50 make a set
+            Route.StructuredAppend => QRCodeGenerator.CreateStructuredAppend(new string('A', 50), eccLevel, options with { Version = QRVersionRange.AtMost(1) })[0].Size,
+            _ => throw new ArgumentOutOfRangeException(nameof(route)),
+        };
     }
 
     // Helpers
