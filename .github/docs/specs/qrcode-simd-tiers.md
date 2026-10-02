@@ -12,7 +12,7 @@ This page lists the SIMD code path (tier) each kernel runs on each kind of build
 | JIT, x64, with `DOTNET_EnableAVX=0` | The same as a default NativeAOT publish |
 | NativeAOT, x64, default | Up to SSE4.2, and GFNI, each checked at run time. No AVX, `Avx2`, `Bmi2` and `Vector256` always report false, even on CPUs that have them |
 | NativeAOT, x64, `IlcInstructionSet=x86-64-v3` | AVX2 and BMI2 required, GFNI checked at run time. On a CPU without AVX2 the app stops at startup with "The required instruction sets are not supported by the current CPU." |
-| NativeAOT, x64, `IlcInstructionSet=x86-64-v2,avx` | AVX required; AVX2, BMI2 and GFNI checked at run time, but `Vector256` always reports false. On a CPU without AVX the app stops at startup |
+| NativeAOT, x64, `IlcInstructionSet=x86-64-v2,avx` | AVX required. AVX2, BMI2 and GFNI checked at run time, but `Vector256` always reports false. On a CPU without AVX the app stops at startup |
 | JIT or NativeAOT, ARM64 | AdvSimd always available, the dot-product instructions (`Dp`) checked at run time. Cortex-A53 and A72-class cores lack them |
 | WebAssembly, interpreted or AOT | 128-bit `PackedSimd` with `WasmEnableSIMD`, on by default. Both modes see the same flags |
 | .NET Framework | No hardware intrinsics: `System.Runtime.Intrinsics` starts with .NET Core 3.0 |
@@ -25,8 +25,8 @@ FeatherQR ships net8.0, net10.0 and netstandard2.0/2.1 builds. It groups the .NE
 
 | Build class | Builds |
 |---|---|
-| x64 with AVX2 | JIT on an x64 CPU with AVX2; NativeAOT with `x86-64-v3` |
-| x64 without AVX | NativeAOT, default; JIT with `DOTNET_EnableAVX=0` |
+| x64 with AVX2 | JIT on an x64 CPU with AVX2, or NativeAOT with `x86-64-v3` |
+| x64 without AVX | Default NativeAOT, or JIT with `DOTNET_EnableAVX=0` |
 | ARM64 | JIT or NativeAOT |
 | WebAssembly | Interpreted or AOT |
 
