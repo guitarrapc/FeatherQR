@@ -163,6 +163,8 @@ internal static class TierTiming
         new("encode/sa-byte-45k-single", () => StructuredAppend(Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), QRSegmentation.Single)),
         new("encode/sa-mixed-40k-single", () => StructuredAppend(Repeat("order 20260915 item 0000123456 qty 42 ", 40_000), QRSegmentation.Single)),
         new("encode/sa-mixed-40k-optimal", () => StructuredAppend(Repeat("order 20260915 item 0000123456 qty 42 ", 40_000), QRSegmentation.Optimal)),
+        new("encode/qr-kanji-200", () => QRKanji(Repeat("日本語の漢字モード", 200), QRSegmentation.Single)),
+        new("encode/qr-kanji-mixed-optimal", () => QRKanji(Repeat("ご注文番号 20260915 の商品を 42 個、本日発送いたしました。", 400), QRSegmentation.Optimal)),
         new("encode/sa-utf8-15k-mixed-optimal", () => StructuredAppend(Repeat("ご注文番号 20260915-0000123456 の商品を 42 個、本日発送いたしました。", 15_000), QRSegmentation.Optimal)),
 
         new("matrix/qr-v1-num-L", () => QRMatrix("0123456789", QREccLevel.L)),
@@ -426,6 +428,13 @@ internal static class TierTiming
     {
         var data = MicroQRCodeGenerator.Create(text, ecc);
         return Checked(() => MicroQRCodeDecoder.TryDecode(data, out var decoded) ? decoded.Length : 0, text.Length);
+    }
+
+    private static Func<int> QRKanji(string text, QRSegmentation segmentation)
+    {
+        var options = new QRCodeGeneratorOptions { AllowKanji = true, Segmentation = segmentation };
+        var destination = new byte[1 << 16];
+        return () => QRCodeGenerator.Create(text, QREccLevel.M, destination, options);
     }
 
     private static Func<int> StructuredAppend(string content, QRSegmentation segmentation)

@@ -455,17 +455,18 @@ From 2026-09-29 to 2026-10-01, every scalar cell on x64 without AVX (a default N
 
 Each build was measured on itself. `--time` in both report projects times the benchmark shapes end to end, and each kernel alone through its dispatch and through its scalar entry point. x64 without AVX was measured as a default NativeAOT publish, because the JIT under `DOTNET_EnableAVX=0` compiles portable vectors the way `x86-64-v2` does, not the way a default publish does. ARM64 without the dot-product instructions was NativeAOT built with `IlcInstructionSet=armv8-a,-dotprod`. Each shape ran in its own process, alternating between builds, and a kernel's share is its time alone divided by the shape's time.
 
-End to end, the branch's time divided by main's at the merge base (3e1f29d), measured 2026-10-01 with each shape in its own process, five alternations, and eleven for any shape that ever read above 1.00:
+End to end, the branch's time divided by main's (1cf1436, with Kanji encoding and the shared Micro QR and rMQR decode pipeline), measured 2026-10-02 with each shape in its own process, five alternations, and eleven for any shape that read above 1.00:
 
 | Shapes | win-x64 NativeAOT | linux-x64 NativeAOT | WebAssembly AOT | WebAssembly interpreted |
 |---|---|---|---|---|
-| Matrix decode (10) | 0.29 to 0.96 | 0.20 to 0.86 | 0.24 to 0.89 | 0.33 to 0.95 |
-| Image decode (14) | 0.26 to 0.87 | 0.21 to 0.96 | 0.17 to 0.54 | 0.29 to 0.90 |
-| Bitmap decode (2) | 0.20 to 0.23 | 0.22 to 0.30 | 0.31 to 0.42 | 0.39 to 0.47 |
-| Data-object API (4) | 0.25 to 1.01 | 0.30 to 1.01 | 0.30 to 0.83 | 0.46 to 0.89 |
-| Encode (18) | 0.62 to 1.01 | 0.60 to 1.03 | 0.50 to 1.02 | 0.50 to 1.01 |
+| Matrix decode (10) | 0.20 to 0.91 | 0.21 to 0.86 | 0.24 to 0.88 | 0.32 to 0.96 |
+| Image decode (14) | 0.20 to 0.95 | 0.21 to 0.96 | 0.17 to 0.52 | 0.28 to 0.87 |
+| Bitmap decode (2) | 0.20 to 0.27 | 0.22 to 0.27 | 0.30 to 0.48 | 0.40 to 0.48 |
+| Data-object API (4) | 0.25 to 1.02 | 0.23 to 1.00 | 0.30 to 0.86 | 0.46 to 0.95 |
+| Encode (18) | 0.62 to 1.01 | 0.66 to 1.00 | 0.49 to 0.99 | 0.51 to 1.00 |
+| Kanji encode (2) | 0.99 to 1.00 | 1.00 | 0.97 to 0.98 | 0.96 |
 
-The cells above 1.00 are encodes within their runs' spread. On ARM64 (Apple M2), where the round changed one cell, the end-to-end shapes read 0.87 to 1.02 with the dot-product instructions, on NativeAOT and the JIT, and the bitmap decodes 0.57 to 0.69 without them.
+The Kanji encodes are Standard QR with `AllowKanji`: 200 chars that all have a Kanji cell under `Single`, and 400 chars of Kanji and ASCII under `Optimal`. The cells above 1.00 are three small encodes on win-x64 (Micro QR M3 and two rMQR shapes, 1.01 to 1.02, 2 to 25 ns). ILC compiles their methods to the same instructions as main's, or fewer (rMQR's format placement), and the same shapes read 0.95 to 0.97 on linux-x64, so the difference is code placement. On ARM64 (Apple M2, measured 2026-10-01 against main at 3e1f29d), where the round changed one cell, the end-to-end shapes read 0.87 to 1.02 with the dot-product instructions, on NativeAOT and the JIT, and the bitmap decodes 0.57 to 0.69 without them.
 
 Each kernel's results are in its symbology's record: the edge list, the histogram, the samplers, the syndromes and the search levels in [standardqr-decoder.md](standardqr-decoder.md); mask selection, the Structured Append walks and the Reed-Solomon encoder in [standardqr-encoder.md](standardqr-encoder.md); the extraction and the luminance in [rmqr-decoder.md](rmqr-decoder.md); the placer and the value writers in [rmqr-encoder.md](rmqr-encoder.md). Three shared kernels have no record of their own, so their results are here:
 
