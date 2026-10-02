@@ -571,10 +571,10 @@ public class StructuredAppendStreamTest
     [Test]
     public async Task OneSymbolText_DoesNotAnswerForTheSizeOfItsQuietZone()
     {
-        // Create holds it, so the set is that symbol; the quiet zone is not part of the question.
+        // Create holds it, so the set is that symbol, at the largest quiet zone Create takes too.
         // Seventeen bytes are in the last bits of version 1-L, where the planner splits and the question is asked.
         var text = new string('a', 17);
-        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(1), QuietZoneSize = 30_000 };
+        var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(1), QuietZoneSize = 10_000 };
         var set = QRCodeGenerator.CreateStructuredAppend(text, QREccLevel.L, options);
 
         await Assert.That(set.Length).IsEqualTo(1);

@@ -43,7 +43,7 @@ The encoder exposes two output models.
 - flat row-major order.
 - quiet zone included.
 
-`TryGetRequiredBufferSize` returns the required matrix side, byte count and selected version. It returns `false` when the content exceeds every version in range. Argument errors (a negative or overflowing quiet zone) still throw, so `false` only means "does not fit".
+`TryGetRequiredBufferSize` returns the required matrix side, byte count and selected version. It returns `false` when the content exceeds every version in range. Argument errors (an undefined ECC level, a quiet zone outside 0 to 10,000) still throw, so `false` only means "does not fit".
 
 It is the only sizing method. The throwing `GetRequiredBufferSize` released in 1.1.1 was deprecated in 1.2.0 and removed in 2.0.0. [rmqr-encoder.md](rmqr-encoder.md) records why sizing is split this way and why it is a `Try` method rather than a dedicated exception type. Standard QR follows the same rule, so all three symbologies share one surface.
 
@@ -306,12 +306,13 @@ The refusal also states two reasons the set's size does not show: a run of U+FEF
 
 ### 1. Validate the matrix request
 
-All generation overloads reject:
+Every entry point (`Create`, `CreateStructuredAppend`, `TryGetRequiredBufferSize`) rejects, before it reads the content:
 
 - requested versions outside `1..40` (except `-1`, meaning automatic).
-- negative quiet-zone sizes.
+- an undefined ECC level.
+- quiet-zone sizes outside `0..10,000`, the bound Micro QR and rMQR use. The `QRCodeData` constructors apply it too.
 
-`TryGetRequiredBufferSize` and the span-output overload also reject quiet zones whose side or squared byte count exceeds `int.MaxValue`, and the span overload rejects buffers smaller than the matrix. These paths compute dimensions in `long` before narrowing to `int`, so `coreSize + 2 * quietZoneSize` and `totalSize * totalSize` cannot overflow.
+Errors come in the order the other two symbologies report them: quiet zone, segmentation, ECC level, then whether the content fits. At 10,000 the largest side squared still fits `int`, so the size arithmetic needs no overflow check. The span overload also rejects buffers smaller than the matrix.
 
 ### 2. Analyze text and choose mode / ECI
 
@@ -621,6 +622,7 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - Remainder bits must be deterministic though they carry no payload: stack and pooled buffers are not guaranteed zeroed, so an untouched tail makes output depend on prior memory contents.
 - Mask candidates must contain their own format bits: the 30 format modules affect runs, 2×2 blocks, finder-like windows and dark balance, so scoring without them is observably a different algorithm.
 - The quiet zone should not inflate object storage: keeping it virtual cut `QRCodeData` to core bits and kept the public matrix coordinate space.
+- An argument checked where it is first used is checked only on the routes that use it. The ECC level was checked by the capacity-table lookup, which threw `ArgumentException` without a parameter name, and the quiet zone's upper bound by the buffer-size arithmetic, which only the sizing and span routes ran, so `Create` and `CreateStructuredAppend` returned a `QRCodeData` whose `Size` had overflowed. Both are now checked at every entry, with Micro QR's and rMQR's bounds and parameter names.
 
 ### Performance
 
@@ -671,7 +673,7 @@ The encoder is covered at several independent layers:
 | Interleaving | unequal block groups, single-block identity, version-40 block counts, naive-reference parity |
 | Placement | binary placement parity against a per-module zigzag reference |
 | Masking | all-zero, all-one, and realistic matrices compared with byte-domain reference formulas |
-| Output APIs | `QRCodeData` and span matrices compared module-for-module, dirty buffers, quiet-zone sizes, overflow checks, allocation test |
+| Output APIs | `QRCodeData` and span matrices compared module-for-module, dirty buffers, quiet-zone sizes, argument bounds on every entry route, allocation test |
 | External compatibility | generated images decoded by ZXing |
 | Internal compatibility | encode/decode round trips for all versions and ECC levels |
 

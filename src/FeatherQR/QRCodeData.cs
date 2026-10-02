@@ -214,9 +214,12 @@ public sealed class QRCodeData
     /// Creates an empty matrix sized for the given version.
     /// </summary>
     /// <param name="version">The QR code version, 1 to 40.</param>
-    /// <param name="quietZoneSize">Width of the light border in modules. The standard asks for 4; 0 leaves the QR code hard to scan.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. The standard asks for 4; 0 leaves the QR code hard to scan.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public QRCodeData(int version, int quietZoneSize)
     {
+        ValidateQuietZone(quietZoneSize);
+
         Version = version;
         _baseSize = SizeFromVersion(version);
         _quietZoneSize = quietZoneSize;
@@ -232,9 +235,10 @@ public sealed class QRCodeData
     /// It holds the core modules only, so the quiet zone is chosen again here and need not match the one the code was serialized with.
     /// </remarks>
     /// <param name="rawData">The serialized QR code.</param>
-    /// <param name="quietZoneSize">Width of the light border in modules. 4 is the standard width.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. 4 is the standard width.</param>
     /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public QRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
     {
     }
@@ -247,11 +251,14 @@ public sealed class QRCodeData
     /// It holds the core modules only, so the quiet zone is chosen again here and need not match the one the code was serialized with.
     /// </remarks>
     /// <param name="rawDataSpan">The serialized QR code.</param>
-    /// <param name="quietZoneSize">Width of the light border in modules. 4 is the standard width.</param>
+    /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. 4 is the standard width.</param>
     /// <exception cref="InvalidDataException">Thrown when the data is not a serialized QR code.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the data ends before the matrix is filled.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public QRCodeData(ReadOnlySpan<byte> rawDataSpan, int quietZoneSize)
     {
+        ValidateQuietZone(quietZoneSize);
+
         // Validate minimum size
         if (rawDataSpan.Length < 4)
             throw new InvalidDataException($"Invalid QR code data: too short ({rawDataSpan.Length} bytes).");
@@ -515,6 +522,14 @@ public sealed class QRCodeData
             }
             _bits[m >> 3] = b;
         }
+    }
+
+    private static void ValidateQuietZone(int quietZoneSize)
+    {
+        // Same bounds as QRCodeGenerator: negative widths break the virtual quiet-zone
+        // translation, and the cap keeps the side and its square within int.
+        if (quietZoneSize < 0 || quietZoneSize > 10_000)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
     }
 
     /// <summary>Serialized payload length in bytes for a core of the given size (bits rounded up to whole bytes).</summary>

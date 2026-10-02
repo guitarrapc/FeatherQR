@@ -81,6 +81,33 @@ public class QRCodeDataUnitTest
         }
     }
 
+    // Constructors
+
+    [Test]
+    [Arguments(-1)]
+    [Arguments(10_001)]
+    [Arguments((1 << 30) - 1)]
+    [Arguments(int.MaxValue)]
+    public async Task Constructor_QuietZoneOutOfRange_Throws(int quietZoneSize)
+    {
+        // The bound Micro QR and rMQR data share, which keeps the side and its square in int
+        var raw = QRCodeGenerator.Create("123", QREccLevel.L).GetRawData();
+
+        var empty = Assert.Throws<ArgumentOutOfRangeException>(() => new QRCodeData(1, quietZoneSize));
+        var restored = Assert.Throws<ArgumentOutOfRangeException>(() => new QRCodeData(raw, quietZoneSize));
+        await Assert.That(empty.ParamName).IsEqualTo("quietZoneSize");
+        await Assert.That(restored.ParamName).IsEqualTo("quietZoneSize");
+    }
+
+    [Test]
+    public async Task Constructor_QuietZoneAtTheBound_IsAccepted()
+    {
+        var raw = QRCodeGenerator.Create("123", QREccLevel.L).GetRawData();
+
+        await Assert.That(new QRCodeData(40, 10_000).Size).IsEqualTo(177 + 2 * 10_000);
+        await Assert.That(new QRCodeData(raw, 10_000).Size).IsEqualTo(21 + 2 * 10_000);
+    }
+
     // SetCoreData
 
     /// <summary>

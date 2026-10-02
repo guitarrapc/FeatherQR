@@ -77,8 +77,8 @@ public static class QRCodeGenerator
 
         if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
             throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
-        if (quietZoneSize < 0)
-            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
+        ValidateQuietZoneSize(quietZoneSize);
+        ValidateEccLevel(eccLevel);
 
         // Prepare configuration
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji, requestedVersion);
@@ -114,8 +114,8 @@ public static class QRCodeGenerator
     {
         if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
             throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
-        if (quietZoneSize < 0)
-            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
+        ValidateQuietZoneSize(quietZoneSize);
+        ValidateEccLevel(eccLevel);
 
         // Prepare configuration
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji, requestedVersion);
@@ -223,7 +223,7 @@ public static class QRCodeGenerator
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>The module matrix.</returns>
     /// <exception cref="ArgumentException">Thrown when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static QRCodeData Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
     {
@@ -257,7 +257,7 @@ public static class QRCodeGenerator
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     /// <returns>The number of bytes written.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is too small, when the content does not fit a narrowed <see cref="QRCodeGeneratorOptions.Version"/>, or when the options contradict each other.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the content does not fit version 40 and <see cref="QRCodeGeneratorOptions.Version"/> spans every version, as it does by default.</exception>
     public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = default)
     {
@@ -281,14 +281,14 @@ public static class QRCodeGenerator
     /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings.</param>
     /// <returns><c>true</c> when the content fits.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="eccLevel"/> is not a defined value.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for a negative or absurdly large quiet zone, or an undefined segmentation.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for a quiet zone outside 0 to 10,000, or an undefined level or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default)
     {
         size = default;
         ValidateQuietZoneSize(options.QuietZoneSize);
         if (options.Segmentation != QRSegmentation.Single)
             ValidateOptimalEntry(options.Segmentation);
+        ValidateEccLevel(eccLevel);
 
         var analysisResult = TextAnalyzer.Analyze(text, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: options.Segmentation != QRSegmentation.Single);
         if (!TryResolveVersion(text, eccLevel, in analysisResult, in options, out var version))
@@ -333,7 +333,7 @@ public static class QRCodeGenerator
     /// <param name="options">Encoding, version, quiet zone and segmentation settings; the version range bounds the size of every symbol.</param>
     /// <returns>The symbols in set order: one when the text fits a single symbol, otherwise two to sixteen.</returns>
     /// <exception cref="ArgumentException">Thrown when the text does not fit sixteen symbols of the largest version in the range, which includes a run of U+FEFF that no symbol holds together with the character ahead of it (no symbol after the first may begin with that character), or when the options contradict each other.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined option value.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for an undefined level or option value, or a quiet zone outside 0 to 10,000.</exception>
     public static QRCodeData[] CreateStructuredAppend(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options = default)
         => CreateStructuredAppend(textSpan, eccLevel, in options, planTogether: true);
 
@@ -351,6 +351,7 @@ public static class QRCodeGenerator
         ValidateQuietZoneSize(options.QuietZoneSize);
         if (options.Segmentation != QRSegmentation.Single)
             ValidateOptimalEntry(options.Segmentation);
+        ValidateEccLevel(eccLevel);
 
         // The charset is decided once, from the whole text: "the bytes of the whole input" has to
         // name one byte sequence, and every symbol then declares it. The analysis is Create's, so a
@@ -860,6 +861,7 @@ public static class QRCodeGenerator
             return (AutomaticVersion, eccLevel);   // the overload this feeds validates the quiet zone itself
 
         ValidateQuietZoneSize(options.QuietZoneSize);
+        ValidateEccLevel(eccLevel);
 
         var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options));
         if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom, options.Version.Min, options.Version.Max, out var version))
@@ -884,24 +886,24 @@ public static class QRCodeGenerator
 
     private static void ValidateQuietZoneSize(int quietZoneSize)
     {
-        if (quietZoneSize < 0)
-            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
+        // The bound Micro QR and rMQR use; the largest side squared stays below int.MaxValue
+        if (quietZoneSize < 0 || quietZoneSize > 10_000)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
+    }
+
+    private static void ValidateEccLevel(QREccLevel eccLevel)
+    {
+        if ((uint)eccLevel > (uint)QREccLevel.H)
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid QR ECC level: {eccLevel}");
     }
 
     /// <summary>
-    /// Computes the matrix side length (core + quiet zone) and the byte-per-module buffer size, guarding against <see cref="int"/> overflow from oversized quiet zones.
+    /// The matrix side length (core + quiet zone) and the byte-per-module buffer size, for a quiet zone <see cref="ValidateQuietZoneSize"/> accepted.
     /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the buffer size would exceed <see cref="int.MaxValue"/>.</exception>
     private static (int TotalSize, int BufferSize) CalculateMatrixSize(int coreSize, int quietZoneSize)
     {
-        // long arithmetic: quietZoneSize is caller-controlled, and totalSize² can
-        // exceed int.MaxValue long before totalSize itself does. The first check
-        // also keeps the squaring below long.MaxValue.
-        var totalSize = coreSize + 2L * quietZoneSize;
-        if (totalSize > int.MaxValue || totalSize * totalSize > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size {quietZoneSize} makes the matrix ({totalSize}x{totalSize} modules) exceed the maximum supported buffer size ({int.MaxValue} bytes).");
-
-        return ((int)totalSize, (int)(totalSize * totalSize));
+        var totalSize = coreSize + 2 * quietZoneSize;
+        return (totalSize, totalSize * totalSize);
     }
 
     // Pipelines
@@ -1378,12 +1380,12 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static QRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        // Negative quiet zone first, then segmentation: the same precedence as
-        // TryGetRequiredBufferSize and the rMQR generator, so every surface reports
-        // the same error first for the same broken options. (An oversized quiet zone
-        // is caught later by CalculateMatrixSize, as on every Standard QR path.)
+        // Quiet zone, then segmentation, then level: the same precedence as
+        // TryGetRequiredBufferSize and the Micro QR and rMQR generators, so every surface
+        // reports the same error first for the same broken arguments.
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
+        ValidateEccLevel(eccLevel);
 
         var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: true);
 
@@ -1465,6 +1467,7 @@ public static class QRCodeGenerator
     {
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
+        ValidateEccLevel(eccLevel);
 
         var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: true);
 
