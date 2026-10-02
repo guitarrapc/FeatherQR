@@ -129,3 +129,14 @@ Lessons.
 - On this machine a whole run of one shape lands in one of two speeds, on either build: version 19-M ran at about 21 µs or at 27 to 29 µs per run, likely from where the process lands on the two-CCD 7950X3D. A median over five runs still flips when two runs on one side land slow, so a change smaller than that gap is read from the lowest run median, from more runs, or with the process pinned to one CCD.
 - Background load is bursty here. An early three-round A/B read Part A 50 % slower on a mask kernel it does not touch, and five rounds with run medians put it level. A single round decides nothing.
 - Indexing the table left a version-independent cost inside the scan: the payload's bit count was recomputed for every version tried. A loop over versions is read for what does not depend on the version.
+
+### Phase 2 follow-up, the ECC table's build (2026-10-03)
+
+No hot path moved: only the table's one-time build changed, and a lookup still allocates nothing.
+
+Done.
+- `CreateCapacityECCTable` fills its 160-entry array in place. Phase 2 kept the old build, a `List<ECCInfo>` grown by a four-entry collection expression per version, and added `ToArray`, so the table's first use allocated 17,360 B for a 5,144 B array: the list's array, 40 temporary arrays with their wrappers (7,040 B), and the copy. It now allocates the array alone, and the first Standard QR encode in a process went from 90,256 to 78,040 B. The retained memory is that array either way, and the `Lazy<T>`, its delegate and the list that phase 2 removed were about 100 B.
+- `QRCodeConstantsEccInfoTest` fails on each of five planted faults in the new build: the version or the level label one off, the data one version or one level off, and a field read from its neighbour.
+
+Lessons.
+- A table's first-use allocation read against the table's own size shows what its build wastes. Swapping `Lazy<List<T>>` for an array by appending `ToArray` kept the whole list build and added a copy.
