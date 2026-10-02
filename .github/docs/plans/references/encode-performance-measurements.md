@@ -9,6 +9,8 @@ All numbers are from one Windows box (Ryzen 9 7950X3D, Zen 4) under .NET 10.0.9 
 - Stage costs come from a scratch BenchmarkDotNet project that reached the internals. Each stage was timed on precomputed input from the stage before it, so a stage row is that stage alone. Mask selection rows include a copy of the unmasked matrix, because the selection masks in place, and the copy is listed separately.
 - The job was one launch, 4 warmups and 12 iterations of 150 ms. A/B rows are the mean of two interleaved rounds (base, change, base, change). Single rounds of the same row moved by up to 30 %, for example a version 1 encode at 892 ± 249 ns in one round against 683 in the mean.
 - The 1.2.0 comparison loaded the 1.2.0 sources (`SkiaSharp.QrCode`, built from the tag) and the current `FeatherQR` into one process, with the same inputs and the span API at quiet zone 0. The setup checked that both versions encode the Standard QR shapes to identical modules.
+- The benchmark rows named `QR_Byte_V20_M` and `QR_Byte_V40_H` encode version 19-M and version 39-H: 620 bytes fit 19-M and 1,200 bytes fit 39-H. Phase 1's version check found it, and the tables here use the true versions.
+- Phase 1 committed the stage harness as the `stage/` shapes of the timing mode in `tests/FeatherQR.AotAnalysis` (`--time --shape stage/`). Run there on `main` (2026-10-02, two runs), every end-to-end and mask selection row reproduced the stage table below within 12 %. Placement and interleave read 23 to 63 % higher when every shape ran interleaved in one process, and within 3 % of the table when each ran alone, so a memory-bound stage is compared alone or in the same mode on both sides.
 - Every experiment was checked for identical output before it was timed: the public API's output over 7,647 symbols was hashed in both builds. The corpus held lengths 0 to 64 and 70 to 2,997, four alphabets (digits, the alphanumeric set, ASCII, ASCII with Japanese and Latin-1), every ECC level, quiet zone 0 and 4, the class API, and Micro QR and rMQR where the content fits.
 
 ## 1.2.0 against the current code
@@ -19,9 +21,9 @@ Same process, span API, quiet zone 0. Error columns ran up to ±11 %, so encode 
 |---|---|---|---|---|
 | Standard QR V1-L, 10 digits | 756 ns | 809 ns | 990 ns | 252 ns |
 | Standard QR V6-M, URL | 2.01 µs | 1.93 µs | 5.58 µs | 1.04 µs |
-| Standard QR V20-M, 620 bytes | 23.4 µs | 22.9 µs | 31.0 µs | 4.79 µs |
+| Standard QR V19-M, 620 bytes | 23.4 µs | 22.9 µs | 31.0 µs | 4.79 µs |
 | Standard QR V40-L, 2,900 bytes | 78.8 µs | 71.9 µs | 144.6 µs | 15.7 µs |
-| Standard QR V40-H, 1,200 bytes | 70.4 µs | 79.8 µs | 113.8 µs | 16.2 µs |
+| Standard QR V39-H, 1,200 bytes | 70.4 µs | 79.8 µs | 113.8 µs | 16.2 µs |
 | Micro QR M2-L, 10 digits | 133 ns | 130 ns | 321 ns | 156 ns |
 | Micro QR M4-M, 13 bytes | 166 ns | 165 ns | 601 ns | 304 ns |
 | rMQR R7x43-M, 12 digits | 135 ns | 132 ns | 196 ns | 128 ns |
@@ -29,11 +31,41 @@ Same process, span API, quiet zone 0. Error columns ran up to ±11 %, so encode 
 
 The README's benchmark images still show the 1.2.0 numbers. The repository's encode benchmarks time the span API at the default quiet zone, while the decode benchmarks read quiet-zone-free matrices, so their encode and decode rows do not compare like with like.
 
+## Phase 1 baseline: encode rows without a quiet zone
+
+The new "(Span, QZ0)" rows of the encode benchmarks on `main` (BenchmarkDotNet ShortRun, one run), beside the decode of the same symbol from the 1.2.0 comparison above where it has one. Both read and write quiet-zone-free matrices, so the pair compares like with like.
+
+| Shape | Encode, quiet zone 0 | Decode |
+|---|---|---|
+| Standard QR V1-L, 10 digits | 702 ns | 252 ns |
+| Standard QR V1-M, 16 alphanumeric | 747 ns | |
+| Standard QR V6-M, URL | 1.79 µs | 1.04 µs |
+| Standard QR V6-M, 65 Kanji | 1.99 µs | |
+| Standard QR V10-M, 300 alphanumeric | 3.06 µs | |
+| Standard QR V15-L, 320 Kanji | 14.1 µs | |
+| Standard QR V19-M, 620 bytes | 21.3 µs | 4.79 µs |
+| Standard QR V39-H, 1,200 bytes | 64.0 µs | 16.2 µs |
+| Standard QR V40-L, 2,900 bytes | 65.8 µs | 15.7 µs |
+| Standard QR V40-L, 4,296 alphanumeric | 76.3 µs | |
+| Standard QR V40-L, 7,089 digits | 69.0 µs | |
+| Micro QR M2-L, 10 digits | 115 ns | 156 ns |
+| Micro QR M3-L, 14 alphanumeric | 148 ns | |
+| Micro QR M4-M, 13 bytes | 145 ns | 304 ns |
+| Micro QR M4-M, 8 Kanji | 164 ns | |
+| rMQR R7x43-M, 12 digits | 116 ns | 128 ns |
+| rMQR R11x59-M, 43 alphanumeric | 215 ns | |
+| rMQR R17x139-M, 150 bytes | 774 ns | 671 ns |
+| rMQR R17x139-M, 92 Kanji | 1.08 µs | |
+
+The same run's class row for 7,089 digits read 95 µs, and two re-runs of that row read 71 and 77 µs, so a single ShortRun row is not a baseline on its own.
+
+On a default NativeAOT build (the 128-bit build class, where versions 12 to 40 score masks with the scalar tiers), the timing mode put the V40-L 2,900-byte encode at 94 µs without a quiet zone, with mask selection at 77.5 µs (82 %) and the forced mask path at 65.6 µs. These are phase 6's starting numbers.
+
 ## Standard QR stage costs
 
 Current `main`. The E2E rows are the public API. The stage rows, with the copy taken out of the mask row, add up to the quiet-zone-free E2E row within 10 %.
 
-| Stage | V1-L digits | V6-M URL | V20-M bytes | V40-L bytes | V40-H bytes |
+| Stage | V1-L digits | V6-M URL | V19-M bytes | V40-L bytes | V39-H bytes |
 |---|---|---|---|---|---|
 | E2E, span, quiet zone 4 | 774 ns | 1.92 µs | 21.0 µs | 68.4 µs | 69.3 µs |
 | E2E, span, quiet zone 0 | 712 ns | 1.76 µs | 21.3 µs | 68.0 µs | 66.3 µs |
@@ -50,7 +82,7 @@ Current `main`. The E2E rows are the public API. The stage rows, with the copy t
 | Format and version information | 23 ns | 22 ns | 38 ns | 38 ns | 38 ns |
 | `QRCodeData` pack (class API only) | 46 ns | 162 ns | 748 ns | 2.78 µs | 2.65 µs |
 
-Mask selection is 66 % of the encode at version 1, 55 % at version 6, 83 % at version 20 and 76 to 81 % at version 40. Without it a version 40 encode would take about 13 µs, under the 16 µs decode.
+Mask selection is 66 % of the encode at version 1, 55 % at version 6, 83 % at version 19 and 76 to 81 % at versions 39 and 40. Without it a version 40-L encode would take about 13 µs, under the 16 µs decode.
 
 Version selection is a linear scan: `QRCodeConstants.GetEccInfo` walks the 160-entry table through `IReadOnlyList<ECCInfo>`, and automatic selection calls it once per version it tries.
 
@@ -98,7 +130,7 @@ The changes, applied to a copy of the library:
 
 Output was identical on the 7,647-symbol corpus for every variant.
 
-The table is the three changes together, two interleaved rounds per side. The stack change does nothing measurable from version 20 up, where the tiers rent their scratch, so the version 20 and 40 rows stand for the two kept changes. A single round of those two alone gave 0.64 at version 20 and 0.79 to 0.80 at version 40 end to end, and a mask stage of 0.60 at version 20 and 0.72 to 0.86 on the four version 40 shapes.
+The table is the three changes together, two interleaved rounds per side. The stack change does nothing measurable on the version 19 to 40 rows, where the tiers rent their scratch, so those rows stand for the two kept changes. A single round of those two alone gave 0.64 at version 19 and 0.79 to 0.80 at versions 39 and 40 end to end, and a mask stage of 0.60 at version 19 and 0.72 to 0.86 on the four version 39 and 40 shapes.
 
 | Shape | E2E base | E2E change | Ratio | Mask base | Mask change | Ratio |
 |---|---|---|---|---|---|---|
@@ -106,13 +138,13 @@ The table is the three changes together, two interleaved rounds per side. The st
 | V1-M, 16 alphanumeric | 859 ns | 727 ns | 0.85 | 599 ns | 523 ns | 0.87 |
 | V6-M, URL | 1.95 µs | 1.88 µs | 0.96 | 1.08 µs | 954 ns | 0.89 |
 | V10-M, 300 alphanumeric | 3.30 µs | 3.01 µs | 0.91 | 1.65 µs | 1.36 µs | 0.83 |
-| V20-M, 620 bytes | 23.0 µs | 13.7 µs | 0.59 | 19.5 µs | 10.3 µs | 0.53 |
+| V19-M, 620 bytes | 23.0 µs | 13.7 µs | 0.59 | 19.5 µs | 10.3 µs | 0.53 |
 | V40-L, 2,900 bytes | 66.5 µs | 54.6 µs | 0.82 | 53.6 µs | 44.6 µs | 0.83 |
 | V40-L, 4,296 alphanumeric | 82.0 µs | 67.6 µs | 0.82 | 63.0 µs | 43.9 µs | 0.70 |
 | V40-L, 7,089 digits | 71.2 µs | 58.9 µs | 0.83 | 55.2 µs | 45.8 µs | 0.83 |
-| V40-H, 1,200 bytes | 75.1 µs | 56.4 µs | 0.75 | 56.9 µs | 47.3 µs | 0.83 |
+| V39-H, 1,200 bytes | 75.1 µs | 56.4 µs | 0.75 | 56.9 µs | 47.3 µs | 0.83 |
 
-Version selection alone went from 69 ns to 11 ns at version 6, from 535 ns to 29 ns at version 20 and from 2.35 µs to 65 ns at version 40. The two-word tier (versions 12 to 29) gained the most from the shared windows.
+Version selection alone went from 69 ns to 11 ns at version 6, from 535 ns to 29 ns at version 19 and from 2.35 µs to 65 ns at version 40. The two-word tier (versions 12 to 29) gained the most from the shared windows.
 
 ### Stack zeroing on its own
 
@@ -148,7 +180,7 @@ It was checked on 240 matrices (versions 1 to 40, six inputs each, one of them a
 | 27 | 27.3 µs | 10.0 µs | 0.37 |
 | 40 | 59.4 µs | 20.9 µs | 0.35 |
 
-The library column is current `main`, without the three small changes. Against the shared-window tiers the prototype is about 0.75 at version 20 and 0.47 at version 40. Below version 12 a row is one word, shifts are single instructions, and the lane-per-pattern tier stays faster. Versions 12 to 19 were not measured.
+The library column is current `main`, without the three small changes. Against the shared-window tiers the prototype is about 0.75 around version 20 (its version 20 against their version 19) and 0.47 at version 40. Below version 12 a row is one word, shifts are single instructions, and the lane-per-pattern tier stays faster. Versions 12 to 19 were not measured.
 
 The prototype is not tuned. It transposes 64x64 blocks with scalar code, has no early-abort checkpoint, and counts bits with the nibble-table popcount, which by operation count is estimated at over half of its work. Its full per-pattern tables take about 75 KB per version at version 40, against about 95 KB for the placement layout. Masks are periodic in 12 rows and 12 columns, so per-version allowed rows ANDed with 12-periodic templates would be much smaller.
 

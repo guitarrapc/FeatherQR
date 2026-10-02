@@ -23,7 +23,7 @@ using FeatherQR.Tests;
 /// with a trailing <c>$</c> the one name: interpreted WebAssembly times a shape by what ran before it in the process, so a comparison
 /// there runs each shape alone.
 /// </remarks>
-internal static class TierTiming
+internal static partial class TierTiming
 {
     private sealed record Shape(string Name, Func<Func<int>> Build, bool Available = true);
 
@@ -361,6 +361,7 @@ internal static class TierTiming
         new("probe/movemask-packedsimd", () => Probe(MovemaskPackedSimd), PackedSimd.IsSupported),
         .. new[] { 3, 5, 6, 9, 13, 16 }.SelectMany(d => new[] { 2, 5, 7, 10, 17 }.SelectMany(e => new Shape[] { new($"probe/ecc-encode-{d}-{e}", () => EccEncodePackedSimd(d, e), PackedSimd.IsSupported), new($"probe/ecc-encode-{d}-{e}-scalar", () => EccEncode(d, e, scalar: true)) })),
         .. Enum.GetValues<RmQRVersion>().SelectMany(v => new Shape[] { new($"probe/rmqr-extract-{v}", () => RmQRExtract(v, scalar: false)), new($"probe/rmqr-extract-{v}-scalar", () => RmQRExtract(v, scalar: true)) }),
+        .. EncodeStageShapes(),
     ];
 
     private static QRCodeData Large() => QRCodeGenerator.Create(DeterministicText(2900), QREccLevel.L, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(40) });
