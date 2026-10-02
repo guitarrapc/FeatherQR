@@ -137,8 +137,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 
 ### Not implemented
 
-- Kanji mode, intentionally for ENCODING (the decoder reads it since the Kanji decode work; the tables' Kanji column is load-bearing there;
-  Japanese text uses Byte mode with UTF-8 ECI, matching the Standard QR product policy)
+- Kanji mode, intentionally for ENCODING (the decoder reads it since the Kanji decode work; the tables' Kanji column is load-bearing there; Japanese text uses Byte mode with UTF-8 ECI, matching the Standard QR product policy)
 - FNC1, Structured Append (rMQR does not define Structured Append)
 
 ### Symbol parameters (verified)
@@ -329,10 +328,7 @@ The single mask is applied to data modules while placing. Both format copies com
 - Two-dimensional fit exposed as strategy + optional height constraint: rMQR exists to fit narrow print lanes; "fixed height, auto width" is the dominant real-world request (libzint's `R<h>xauto`), and area/width/height minimization covers the rest without a free-form size search that would mostly select non-existent sizes.
 - Letterbox instead of stretch for explicit canvas sizes: a rectangular symbol drawn into an arbitrary rectangle at non-uniform scale is not the same symbol; module aspect ratio must survive.
 - Fixed mask means the placer is a static permutation per version; no mask scoring machinery is designed in.
-- Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics.
-  rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment
-  3 or UTF-8 assignment 26, following Standard QR's policy. Kanji mode remains intentionally
-  un-encoded (the decoder reads it); ECI + Byte mode is the interoperable Unicode path.
+- Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics. rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment 3 or UTF-8 assignment 26, following Standard QR's policy. Kanji mode remains intentionally un-encoded (the decoder reads it); ECI + Byte mode is the interoperable Unicode path.
 
 ## Decisions
 
