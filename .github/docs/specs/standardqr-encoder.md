@@ -56,7 +56,7 @@ The encoder overwrites every byte of the region it writes: the core is copied fr
 | Symbology | Standard QR |
 | Versions | 1–40 |
 | ECC levels | L, M, Q, H |
-| Data modes | Numeric, Alphanumeric, Byte |
+| Data modes | Numeric, Alphanumeric, Byte, and Kanji |
 | ECI | Default/no header, ISO-8859-1 (assignment 3), UTF-8 (assignment 26) |
 | UTF-8 BOM | Optional in UTF-8 Byte mode |
 | Version selection | Automatic minimum-fit, caller-requested version, or a version range |
@@ -68,7 +68,6 @@ The encoder overwrites every byte of the region it writes: the core is copied fr
 
 ### Not implemented
 
-- Kanji mode
 - FNC1
 - Arbitrary ECI assignment numbers
 - Arbitrary binary payload input
@@ -102,15 +101,15 @@ Under `Optimal` the mixed plan's candidates include the single-mode plan, so the
 
 The first version priced each binary-search probe with a full analysis (and, under `Optimal`, a full cost run) of a prefix that could reach the end of the text. `StructuredAppendPlannerTest` checks the fast path against a reference walk pricing one character at a time by the cost definition, at every budget where the answer can change.
 
-A run only Byte can encode costs one addition per character, not a state-machine step. A character outside the alphanumeric alphabet can only extend Byte, so after one, the program's six other states stay unreachable until an alphanumeric character arrives. The loop detects this and adds the bytes to the Byte state directly, recording the predecessor the state machine would have recorded. This path takes 86 % of characters in Japanese behind a UTF-8 declaration, 55 % in English prose and 24 % in the digit-and-word mixture.
+A run only Byte can encode costs one addition per character, not a state-machine step. A character outside the alphanumeric alphabet can only extend Byte, so after one, the program's five other mode states stay unreachable until an alphanumeric character arrives. The loop detects this and adds the bytes to the Byte state directly, recording the predecessor the state machine would have recorded. This path takes 86 % of characters in Japanese behind a UTF-8 declaration, 55 % in English prose and 24 % in the digit-and-word mixture.
 
-All three symbologies share the program, so `ModeSegmenterByteRunParityTest` checks it against an independent program that always walks all seven states, on cost, final state and reconstructed plan, across the bands, charsets and the mode-availability flags Micro QR passes.
+All three symbologies share the program, so `ModeSegmenterByteRunParityTest` checks it against an independent program that always walks all seven states (the six mode states and the virtual start), on cost, final state and reconstructed plan, across the bands, charsets and the mode-availability flags Micro QR passes.
 
-The program's step is arithmetic on six registers: each target state continues its run or opens it from the cheapest state, one add and one min over the previous character's six costs. The first form relaxed every state from every state through two stack arrays, paying a bounds-checked write per relaxation, a 28-byte copy per character and, on the prefix walk, a six-state scan per character, memory traffic that cost six times the arithmetic (13 ns per character against 2).
+The program's step is arithmetic on six registers, one per mode state: each target state continues its run or opens it from the cheapest state, one add and one min over the previous character's six costs. The first form relaxed every state from every state through two stack arrays, paying a bounds-checked write per relaxation, a 28-byte copy per character and, on the prefix walk, a six-state scan per character, memory traffic that cost six times the arithmetic (13 ns per character against 2).
 
 The common shape, a Latin charset with Byte allowed, has its own loops for costs, costs with parents and the prefix walk, so the constant byte cost and mode flags are not re-decided per character. UTF-8 and the Micro QR versions lacking a mode share one general loop per entry point.
 
-Where parents are recorded, candidates are tried in state order and a later one wins only when strictly cheaper, the relaxation's tie-break, so the writer emits the same plan byte for byte. On a Latin symbol a character's six parents are one 8-byte store.
+Where parents are recorded, candidates are tried in state order and a later one wins only when strictly cheaper, the relaxation's tie-break, so the writer emits the same plan byte for byte. On a Latin symbol a character's three varying parents take two byte stores: one for the Byte state's parent, and one that packs the Numeric1 and Alnum1 parents.
 
 `ModeSegmenterPlanParityTest` checks every loop against the all-states relaxation and its predecessor rule on cost, final state, reconstructed runs and the walk's stopping point at every budget where that point can change, across the bands, three charsets, the four mode-availability combinations and seeded random mixes of every class.
 
@@ -150,7 +149,7 @@ The first walk runs only when the bound's count leaves each symbol two margins o
 
 Every shortcut is a lower bound or an existing split, so the plan is the one the three searches alone would find. `StructuredAppendPlannerTest` checks count, version and budget against a walk that prices one character at a time, on periodic content, content whose density changes, ranges that cross a band (9/10, 26/27), and the pair-heavy content that fails the first margin.
 
-In program passes per plan, the digit-and-word mixture went from 8.9 to 7.0, digits followed by that mixture from 8.0 to 5.0, and random runs from 10.9 to 7.0. No shape takes more passes than before. Pricing the even cut's chunks as eight lanes of one vector program measured 4.6 times the scalar pricing and was dropped, since the design that replaced the even cut has no cut to price.
+In program passes per plan, the digit-and-word mixture went from 8.9 to 7.0, digits followed by that mixture from 8.0 to 5.0, and random runs from 10.9 to 7.0. No shape takes more passes than before. Pricing the even cut's chunks as eight lanes of one vector program ran 4.6 times as fast as the scalar pricing and was dropped, since the design that replaced the even cut has no cut to price.
 
 The budget search walks eight budgets at a time. After the walk near the floor, a plan under `Optimal` used to be the whole text's plan, that walk and five bisection probes inside its 31-bit bracket: seven program passes, five of them the same walk at budgets a few bits apart.
 
@@ -188,13 +187,13 @@ A byte order mark from `Utf8Bom` keeps the scalar walks, since its chunk is pric
 
 A surrogate pair needs no stepping rule of its own: it is priced whole on its first half, so a budget it breaks is broken on both halves, and the chunk ends before the pair either way. A mutation that dropped the rule and changed no plan showed this.
 
-The scalar probes run where neither accelerated 256-bit vectors nor ARM64 NEON are available. NEON keeps native vectors in registers and tests whether any budget overflowed before extracting lane bits. Wrapping the vector state in another struct caused costly stack traffic. NEON's shorter threshold follows measurements around the old boundary and on small symbols: the compact state wins below 128 characters, while very short chunks still favor scalar probes. `StructuredAppendNeonParityTest` checks saturation, long text offsets and the budget representation boundary against the scalar walk.
+The scalar probes run on the netstandard builds, on targets without accelerated 128-bit vectors, and on content whose chunks average under the backend's threshold: 128 characters for the 256-bit path, 20 for NEON, 40 for portable vectors on x64 and 80 on WebAssembly. NEON keeps native vectors in registers and tests whether any budget overflowed before extracting lane bits. Wrapping the vector state in another struct caused costly stack traffic. NEON's shorter threshold follows measurements around the old boundary and on small symbols: the compact state wins below 128 characters, while very short chunks still favor scalar probes. `StructuredAppendNeonParityTest` checks saturation, long text offsets and the budget representation boundary against the scalar walk.
 
 `StructuredAppendLaneWalkTest` checks the lanes against the scalar walk, lane by lane, covering:
 
 - walks from the start of the text, and resumed walks.
 - budgets one, four and thirteen bits apart.
-- four versions (both sides of each count indicator band's edge, and 40).
+- four versions (9, 26, 27 and 40: below the 9/10 edge, both sides of the 26/27 edge, and the largest).
 - eight lanes, and two.
 - every charset.
 - pairs, lone surrogates and U+FEFF inside the text (one on every line, after digits, after a pair, at the head).
@@ -222,7 +221,7 @@ Third, up to eight symbols' plans are built in one pass. The program is a serial
 
 - eight at once with accelerated 256-bit vectors.
 - groups of four 32-bit lanes with ARM64 NEON.
-- on every other 128-bit target, the same groups on portable vectors, which moved an Optimal set 1 to 3 %.
+- on every other 128-bit target, the same groups on portable vectors, which cut an Optimal set's time by 1 to 3 % (WebAssembly AOT unchanged).
 
 Carrying each state with its predecessor as a key makes this a vector step rather than fifteen compares and blends. The key is the cost shifted up three bits over the state's number, so its minimum is the minimum cost and, among equal costs, the lowest state: the tie-break every ordered chain had, since each listed its candidates in state order. The predecessor is the low bits of a minimum the cost-only loop takes anyway. In scalar code the keyed body is only as fast as the ordered chains, and it replaced them so that the lanes and the single chunk share one arithmetic.
 
@@ -626,9 +625,9 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 ### Performance
 
 - Bit-packing was the decisive mask optimization. Parallelizing eight expensive byte-domain candidates still pays the byte-domain cost plus scheduling and allocation overhead. Packed scalar rows measured roughly 8× at version 1, 44× at version 10 and 30–40× at version 40 over the former per-module implementation.
-- For the small versions the eight candidates are the vector lanes, not the rows. With one `ulong` per row (versions 1-11), four candidates per vector remove every scalar tail and per-candidate horizontal reduction, and make the pre-masked templates and format-bit overlays per-version tables (one XOR / OR per row). With the popcounts of provably disjoint bit sets fused (dark vs light 5-runs, the two finder-like orientations), this halved the mask kernel again (1.6-1.9x) after the lane-per-row round. Fusing all scoring passes into one loop lost to register pressure, and a vectorized balance score gained nothing measurable.
+- For the small versions the eight candidates are the vector lanes, not the rows. With one `ulong` per row (versions 1-11), four candidates per vector remove every scalar tail and per-candidate horizontal reduction, and make the pre-masked templates and format-bit overlays per-version tables (one XOR / OR per row). With the popcounts of provably disjoint bit sets fused (dark vs light 5-runs, the two finder-like orientations), this made the mask kernel 1.6-1.9x as fast again after the lane-per-row round. Fusing all scoring passes into one loop lost to register pressure, and a vectorized balance score gained nothing measurable.
 
-  x64 without AVX2 and WebAssembly run the same scorer on two candidates per 128-bit vector (2026-09-30), popcounting with SSSE3's nibble table or WebAssembly's byte popcount into 16-bit accumulators. Versions 1-11 run at 0.59 to 0.63 of the scalar paths on default NativeAOT, 0.46 to 0.49 on WebAssembly AOT and 0.69 to 0.71 interpreted. WebAssembly needs its own 64-bit lane shifts there, since the portable ones call a software fallback in AOT-compiled code, 8x slower than scalar. The SoA scorers for versions 12-40, two rows per vector, lost to the scalar paths on both targets (0.94 to 1.68 on default NativeAOT, 1.40 to 5.80 on WebAssembly), so those versions stay scalar there.
+  x64 without AVX2 and WebAssembly run the same scorer on two candidates per 128-bit vector (2026-09-30), popcounting with SSSE3's nibble table or WebAssembly's byte popcount into 16-bit accumulators. Versions 1-11 run at 0.59 to 0.63 of the scalar paths on default NativeAOT, 0.46 to 0.49 on WebAssembly AOT and 0.69 to 0.71 interpreted. WebAssembly needs its own 64-bit lane shifts there, since the portable ones call a software fallback in AOT-compiled code, 8x slower than scalar. The SoA scorers for versions 12-40, two rows per vector, did not beat the scalar paths on either target: they took 0.94 to 1.68 of the scalar paths' time on default NativeAOT, the 0.94 at version 20 within its runs' spread, and 1.40 to 5.80 on WebAssembly, so those versions stay scalar there.
 
 - Sequential output is faster for interleaving: round-robin source reads into a contiguous destination beat sequential reads with scattered writes, despite the strided access.
 - The data placement stream should stay in a register: refilling a 64-bit MSB-aligned accumulator removes a byte load and a variable shift per module and enables a two-module fast path for the common unblocked case (the reference walk).

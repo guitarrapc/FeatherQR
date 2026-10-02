@@ -149,7 +149,7 @@ The measured image envelope (Tier 1 to 2) is kept conservative because a single 
 
 On the [image decode sweep](qrcode-test-fixtures.md#image-decode-sweep) of 2026-09-28, this library reads 17,887 of 18,400 images and zxing-cpp 0.5.2 reads 12,524 of them, none that this library misses. The sweep has 400 cases, a hundred a version, each encoded by this library and by libzint, with 800 renders a kind.
 
-This library reads 798 to 800 of 800 in every kind except anti-aliased edges at 1.0-1.25 px/module (299) and 1.25-1.5 (794). Bilinear upscales at 2-2.5, where zxing-cpp led most when the sweep began (54 of 1,200), read 798. zxing-cpp's kinds range from 30 (anti-aliased, 1.0-1.25) to 798 (crisp, 3-6). On the real images this library reads 64 of 64 and zxing-cpp 59.
+This library reads 798 to 800 of 800 in every kind except anti-aliased edges at 1.0-1.25 px/module (299) and 1.25-1.5 (794). Bilinear upscales at 2-2.5, where zxing-cpp led most when the sweep began on 2026-09-21 (54 renders only it read, of 1,200 a kind, when three encoders drew each case), read 798. zxing-cpp's kinds range from 30 (anti-aliased, 1.0-1.25) to 798 (crisp, 3-6). On the real images this library reads 64 of 64 and zxing-cpp 59.
 
 ### Not supported
 
@@ -158,7 +158,7 @@ This library reads 798 to 800 of 800 in every kind except anti-aliased edges at 
 ## Why
 
 - Micro QR has its own explicitly typed decoder, and `QRCodeDecoder` stays Standard QR only, so default Standard QR scanning performance is unaffected.
-- Every size is tried instead of reading the size first. Micro QR has four sizes, and the format word must match the size its grid was sampled at, so a wrong-size grid almost always fails at the format word. Larger sizes go first: a real M4 sampled as M2 reads a garbled sub-grid, while trying the real sizes first ends the search at the first success.
+- Every size is tried instead of reading the size first. Micro QR has four sizes, and the format word must match the size its grid was sampled at, so a wrong-size grid almost always fails at the format word. Larger sizes go first, M4 down to M1. Each grid is anchored on the finder, so one smaller than the symbol samples a garbled sub-grid of it (a real M4 sampled as M2), and from M4 down a symbol's own size is tried before its sub-grids, the search ending at the first success.
 - The axes come from the finder alone. One finder cannot give the orientation the way Standard QR's three finders do, so its local axes come from an angular sweep of dark-light-dark runs, and the decoder searches over the two projective coefficients it leaves unknown. This covers arbitrary rotation and mild perspective, but not strong perspective.
 - The scale and perspective searches turn one grid into hundreds, so they start only once a grid's format information decodes, either way round. Wrong grids overwhelmingly fail before that point.
 
@@ -201,10 +201,10 @@ This library reads 798 to 800 of 800 in every kind except anti-aliased edges at 
 
   False results on the foreign set fell from 1,110 to 2. M1 under a 40 % shadow became readable: 3,265, 101 and 0 of 10,000 renders became 9,987, 9,996 and 9,998. The rule lost 0.6 % of M1 reads at 1-2.5 px/module, anti-aliased or resampled.
 
-  The structure is counted after Reed-Solomon reads a grid. M2-M4 already reach 33 bits at zero corrections, M1's correction is cheaper than reading its quiet zone, and the check first placed in front of Reed-Solomon made noise 8 % slower. The cost falls on symbols past the lighting bounds: a turned anti-aliased M1 under a 55 % shadow fails in 2.6 ms, where the refusal gave up at its first M1 grid in 0.5 ms.
+  The structure is counted after Reed-Solomon reads a grid. M2-M4 already reach 33 bits at zero corrections, M1's Reed-Solomon check is cheaper than reading its quiet zone, and the check first placed in front of Reed-Solomon made noise 8 % slower. The cost falls on symbols past the lighting bounds: a turned anti-aliased M1 under a 55 % shadow fails in 2.6 ms, where the refusal gave up at its first M1 grid in 0.5 ms.
 - The bar and the ring were measured, and texture and a near-miss grid are different adversaries. At bars of 29, 31, 33 and 35 bits, low-density M1 losses and misreads were 77 and 25, 174 and 20, 274 and 16, and 516 and 11, while over the same bars the predicted foreign false results fall from 7.7 to 0.3 a million (measured before the quiet zone moved to its final sampler). Both are small at a bar of 33. A bar of 36, which excludes the one foreign verdict traced, lost 21 of 200,000 mixed renders where 33 lost 8, both with the second ring described below.
 
-  The ring 1.5 modules out, clear of anti-aliased grey, cut low-density M1 losses from 256 to 63, but near-miss misreads rose from 17 to 21, and two real M1 misreads and an M4-M foreign verdict came back. A grid a little too small puts the first ring on the symbol's own edge, and only that ring sees it. Both rings together gave 34 losses and 28 misreads. Counting the worse timing line twice kept the verdict it was aimed at and doubled the losses.
+  The ring 1.5 modules out, clear of anti-aliased grey, cut low-density M1 losses from 256 to 63, but near-miss misreads rose from 17 to 21, and two real M1 misreads and an M4-M foreign verdict came back. A grid a little too small puts the first ring on the symbol's own edge, and only that ring sees it. Both rings together gave 34 losses and 28 misreads. The decoder counts only the ring next to the symbol. Counting the worse timing line twice kept the verdict it was aimed at and doubled the losses.
 
   Structure evidence rejects texture, and only the ring next to the symbol sees a near-miss grid. A change that helps against one adversary can make the other worse, so each has its own measuring set.
 - Against the other readers, each reader's design explains its results (2026-09-24, zxing-cpp 0.5.2 with `TryHarder`, CodeGlyphX 2.1.0 on RGBA input):
@@ -221,7 +221,7 @@ This library reads 798 to 800 of 800 in every kind except anti-aliased edges at 
 
   The refined finder centre is not biased on them (0.04-0.08 module from the true centre). A different starting point changes which grids the search tries, and so which such grid gets through. The lead is the check on the data in Decisions. Re-sampling nudged grids from the kept read's corners measured nothing, because the corner transform is not faithful at 1-2 px/module.
 
-  The two foreign results left are both rMQR images read at M3-L's limit. The one traced reached 35.0 bits, with its timing 1 of 14 off and its format 3 bits off. Two foreign results are the rate the bar is set for, and two images do not establish a cause.
+  The two foreign results left are both rMQR images read at M3-L's limit. The one traced reached 35.0 bits, with its timing 1 of 14 off and its format 3 bits off. Two in the 1,000,000 foreign images are the rate the bar is set for, about 2^-19 an image, and two images do not establish a cause.
 
   Two misreads seen before the rule have not been checked since: a Micro QR symbol turned 30° holding the unmapped Kanji cell 0x8794 read as "95549", and an M4-L holding an unmapped cell, anti-aliased at 1.60 px/module, read as M1 "0824".
 - Each grid is sampled once and read in both orientations (2026-09-24). A failing decode on 512 × 512 noise-like images spent 90 % of its time in the scale and perspective searches: sampling 32 %, codeword extraction 27 %, Reed-Solomon 13 %, the format read 9 % and the transposed copy for the mirrored read 5 %.

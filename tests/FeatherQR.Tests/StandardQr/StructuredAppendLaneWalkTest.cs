@@ -87,7 +87,7 @@ public class StructuredAppendLaneWalkTest
         var laneEnds = new int[8 * StructuredAppendPlanner.MaxSymbols];
         var counts = new int[8];
         var worstApart = 0;
-        // Both sides of each count indicator band's edge and the largest version; the full batch and the smallest.
+        // The last version below the first count indicator edge, both sides of the second edge and the largest version; the full batch and the smallest.
         // A mid-band version and a middle lane count caught no planted lane fault the others miss; the spacing of 4 did.
         foreach (var version in new[] { 9, 26, 27, 40 })
         {
