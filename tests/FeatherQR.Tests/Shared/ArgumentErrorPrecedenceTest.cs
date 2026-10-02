@@ -113,6 +113,33 @@ public class ArgumentErrorPrecedenceTest
         await AssertArgument("segmentation", () => RmQRCodeGenerator.Create("1", (RmQREccLevel)9, new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)7 }));
     }
 
+    [Test]
+    public async Task UndefinedEciWins_OverAnUndefinedEccLevel()
+    {
+        // rMQR's order, which Standard QR shares: quiet zone, segmentation, ECI, then level
+        var eci = new QRCodeGeneratorOptions { EciMode = (EciMode)77 };
+
+        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci));
+        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci with { Version = QRVersionRange.AtLeast(2) }));
+        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci with { BoostEccLevel = true }));
+        await AssertArgument("eciMode", () => QRCodeGenerator.Create("1", (QREccLevel)9, eci with { Segmentation = QRSegmentation.Optimal }));
+        await AssertArgument("eciMode", () => QRCodeGenerator.TryGetRequiredBufferSize("1", (QREccLevel)9, out _, eci));
+        await AssertArgument("eciMode", () => QRCodeGenerator.CreateStructuredAppend("1", (QREccLevel)9, eci));
+        await AssertArgument("eciMode", () => RmQRCodeGenerator.Create("1", (RmQREccLevel)9, new RmQRCodeGeneratorOptions { EciMode = (EciMode)77 }));
+
+        await AssertQuietZone(() => QRCodeGenerator.Create("1", QREccLevel.M, eci with { QuietZoneSize = -1 }));
+        await AssertArgument("segmentation", () => QRCodeGenerator.Create("1", QREccLevel.M, eci with { Segmentation = (QRSegmentation)7 }));
+        await AssertArgument("segmentation", () => RmQRCodeGenerator.Create("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = (EciMode)77, Segmentation = (RmQRSegmentation)7 }));
+    }
+
+    [Test]
+    public async Task UndefinedEciWins_OverAContentThatDoesNotFit()
+    {
+        await AssertArgument("eciMode", () => QRCodeGenerator.Create(TooLongForVersion1, QREccLevel.M, new QRCodeGeneratorOptions { Version = 1, EciMode = (EciMode)77 }));
+        await AssertArgument("eciMode", () => QRCodeGenerator.TryGetRequiredBufferSize(TooLongForVersion1.AsSpan(), QREccLevel.M, out _, new QRCodeGeneratorOptions { Version = 1, EciMode = (EciMode)77 }));
+        await AssertArgument("eciMode", () => RmQRCodeGenerator.Create(new string('A', 500), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, EciMode = (EciMode)77 }));
+    }
+
     private static async Task AssertQuietZone(Action call) => await AssertArgument("quietZoneSize", call);
 
     /// <summary>The message of the <see cref="ArgumentOutOfRangeException"/> <paramref name="call"/> throws, once it names <paramref name="paramName"/>.</summary>

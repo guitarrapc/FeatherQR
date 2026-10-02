@@ -215,9 +215,11 @@ public sealed class QRCodeData
     /// </summary>
     /// <param name="version">The QR code version, 1 to 40.</param>
     /// <param name="quietZoneSize">Width of the light border in modules, 0 to 10,000. The standard asks for 4; 0 leaves the QR code hard to scan.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not 1 to 40 or the quiet zone size is out of range.</exception>
     public QRCodeData(int version, int quietZoneSize)
     {
+        if ((uint)(version - 1) > 39)
+            throw new ArgumentOutOfRangeException(nameof(version), $"Invalid QR version: {version}");
         ValidateQuietZone(quietZoneSize);
 
         Version = version;

@@ -310,9 +310,10 @@ Every entry point (`Create`, `CreateStructuredAppend`, `TryGetRequiredBufferSize
 
 - requested versions outside `1..40` (except `-1`, meaning automatic).
 - an undefined ECC level.
-- quiet-zone sizes outside `0..10,000`, the bound Micro QR and rMQR use. The `QRCodeData` constructors apply it too.
+- an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`.
+- quiet-zone sizes outside `0..10,000`, the bound Micro QR and rMQR use. The `QRCodeData` constructors apply it too, after refusing a version outside `1..40`.
 
-Errors come in the order the other two symbologies report them: quiet zone, segmentation, ECC level, then whether the content fits. At 10,000 the largest side squared still fits `int`, so the size arithmetic needs no overflow check. The span overload also rejects buffers smaller than the matrix.
+Errors come in the order the other two symbologies report them: quiet zone, segmentation, ECI (rMQR's place for it; Micro QR has none), ECC level, then whether the content fits. At 10,000 the largest side squared still fits `int`, so the size arithmetic needs no overflow check. The span overload also rejects buffers smaller than the matrix.
 
 ### 2. Analyze text and choose mode / ECI
 
@@ -622,7 +623,7 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - Remainder bits must be deterministic though they carry no payload: stack and pooled buffers are not guaranteed zeroed, so an untouched tail makes output depend on prior memory contents.
 - Mask candidates must contain their own format bits: the 30 format modules affect runs, 2×2 blocks, finder-like windows and dark balance, so scoring without them is observably a different algorithm.
 - The quiet zone should not inflate object storage: keeping it virtual cut `QRCodeData` to core bits and kept the public matrix coordinate space.
-- An argument checked where it is first used is checked only on the routes that use it. The ECC level was checked by the capacity-table lookup, which threw `ArgumentException` without a parameter name, and the quiet zone's upper bound by the buffer-size arithmetic, which only the sizing and span routes ran, so `Create` and `CreateStructuredAppend` returned a `QRCodeData` whose `Size` had overflowed. Both are now checked at every entry, with Micro QR's and rMQR's bounds and parameter names.
+- An argument checked where it is first used is checked only on the routes that use it. The ECC level was checked by the capacity-table lookup, which threw `ArgumentException` without a parameter name, and the quiet zone's upper bound by the buffer-size arithmetic, which only the sizing and span routes ran, so `Create` and `CreateStructuredAppend` returned a `QRCodeData` whose `Size` had overflowed. The ECI was checked only by the Byte-length count, which Numeric and Alphanumeric text never reaches, so an undefined value was written into the header of a symbol this library could not read back. All three are now checked at every entry, with rMQR's bounds and parameter names.
 
 ### Performance
 

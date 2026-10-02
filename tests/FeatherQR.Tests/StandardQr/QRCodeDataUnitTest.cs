@@ -100,6 +100,18 @@ public class QRCodeDataUnitTest
     }
 
     [Test]
+    [Arguments(0)]
+    [Arguments(41)]
+    [Arguments(-5)]
+    [Arguments(int.MinValue)]
+    public async Task Constructor_UndefinedVersion_Throws(int version)
+    {
+        // Checked before the quiet zone, as the Micro QR and rMQR data do
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() => new QRCodeData(version, -1));
+        await Assert.That(error.ParamName).IsEqualTo("version");
+    }
+
+    [Test]
     public async Task Constructor_QuietZoneAtTheBound_IsAccepted()
     {
         var raw = QRCodeGenerator.Create("123", QREccLevel.L).GetRawData();

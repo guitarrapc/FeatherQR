@@ -78,6 +78,7 @@ public static class QRCodeGenerator
         if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
             throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
         ValidateQuietZoneSize(quietZoneSize);
+        ValidateEciMode(eciMode);
         ValidateEccLevel(eccLevel);
 
         // Prepare configuration
@@ -115,6 +116,7 @@ public static class QRCodeGenerator
         if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
             throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
         ValidateQuietZoneSize(quietZoneSize);
+        ValidateEciMode(eciMode);
         ValidateEccLevel(eccLevel);
 
         // Prepare configuration
@@ -281,13 +283,14 @@ public static class QRCodeGenerator
     /// <param name="size">The size on success, <c>default</c> when the content does not fit.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings.</param>
     /// <returns><c>true</c> when the content fits.</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for a quiet zone outside 0 to 10,000, or an undefined level or segmentation.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for a quiet zone outside 0 to 10,000, or an undefined level, ECI or segmentation.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default)
     {
         size = default;
         ValidateQuietZoneSize(options.QuietZoneSize);
         if (options.Segmentation != QRSegmentation.Single)
             ValidateOptimalEntry(options.Segmentation);
+        ValidateEciMode(options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var analysisResult = TextAnalyzer.Analyze(text, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: options.Segmentation != QRSegmentation.Single);
@@ -351,6 +354,7 @@ public static class QRCodeGenerator
         ValidateQuietZoneSize(options.QuietZoneSize);
         if (options.Segmentation != QRSegmentation.Single)
             ValidateOptimalEntry(options.Segmentation);
+        ValidateEciMode(options.EciMode);
         ValidateEccLevel(eccLevel);
 
         // The charset is decided once, from the whole text: "the bytes of the whole input" has to
@@ -861,6 +865,7 @@ public static class QRCodeGenerator
             return (AutomaticVersion, eccLevel);   // the overload this feeds validates the quiet zone itself
 
         ValidateQuietZoneSize(options.QuietZoneSize);
+        ValidateEciMode(options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options));
@@ -889,6 +894,13 @@ public static class QRCodeGenerator
         // The bound Micro QR and rMQR use; the largest side squared stays below int.MaxValue
         if (quietZoneSize < 0 || quietZoneSize > 10_000)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
+    }
+
+    private static void ValidateEciMode(EciMode eciMode)
+    {
+        // An undefined value would otherwise reach the header of Numeric or Alphanumeric text as written
+        if (eciMode is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
+            throw new ArgumentOutOfRangeException(nameof(eciMode), $"Unsupported ECI mode for QR: {eciMode}");
     }
 
     private static void ValidateEccLevel(QREccLevel eccLevel)
@@ -1380,11 +1392,12 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static QRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        // Quiet zone, then segmentation, then level: the same precedence as
-        // TryGetRequiredBufferSize and the Micro QR and rMQR generators, so every surface
-        // reports the same error first for the same broken arguments.
+        // Quiet zone, segmentation, ECI, then level: the same precedence as
+        // TryGetRequiredBufferSize and the rMQR generator (Micro QR has no ECI), so every
+        // surface reports the same error first for the same broken arguments.
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
+        ValidateEciMode(options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: true);
@@ -1467,6 +1480,7 @@ public static class QRCodeGenerator
     {
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
+        ValidateEciMode(options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options), planKanji: true);
