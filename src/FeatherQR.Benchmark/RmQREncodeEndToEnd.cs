@@ -8,7 +8,7 @@
 ///   Byte_R17x139_M       : largest symbol, 150 bytes (capacity boundary, 4 RS blocks)
 ///   Latin1_Eci_R17x139_M : explicit ECI 3 Byte segment
 ///   Utf8_Eci_R17x139_M   : explicit ECI 26 Byte segment
-///   Kanji_R13x43_M       : Kanji mode, 15 characters (KanjiEncode's payload)
+///   Kanji_R13x43_M       : Kanji mode, 15 characters
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
 ///
 /// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>): it varies content shape rather than version, and every row needs a same-run Single pair, which does not belong in this table.

@@ -3,7 +3,7 @@
 ///
 /// The Ratio column is the end-to-end multiplier a caller actually pays, which is the number worth quoting — but note it is not the planning cost in isolation.
 /// On the rows where the split wins, the Optimal arm lands on a smaller version and therefore also does less ECC, placement and module writing, so the ratio nets planning against a cheaper encode and understates the planning overhead.
-/// Six of the twelve shapes below change version between the two arms.
+/// Seven of the thirteen shapes below change version between the two arms.
 ///
 /// This is a separate class from <see cref="RmQREncodeEndToEnd"/> on purpose.
 /// That one varies version and mode with the version pinned, and ranks everything against one baseline row; this one varies content shape with the version free, and every row is meaningless without its same-run partner.
@@ -30,9 +30,10 @@
 ///   mixed-*    : the common shape; the upper bound accepts without a per-version run
 ///                [2 passes: floor + building the chosen plan]
 ///   url-38     : a realistic payload (R11x77 as one run, R15x43 split) [2 passes]
-///   utf8-60    : Japanese with digits: Single writes UTF-8 behind an ECI prefix
-///                (R13x139), Optimal a Kanji plan, Kanji runs beside Numeric runs
-///                (R17x77); its UTF-8 plan would gain nothing
+///   utf8-60    : Japanese with digits, UTF-8 behind an ECI prefix under both (R13x139):
+///                no split of it is smaller
+///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (R13x139), since
+///                the digits are ASCII; Optimal a Kanji plan, Kanji runs beside Numeric runs (R17x77)
 ///
 /// Every fixture fits under Single too, so no row is comparing a success with a throw.
 /// ECC M only: the H capacities shift which version wins but not the shape of the work.
@@ -45,11 +46,13 @@ public class RmQRSegmentationEncode
         "alnum-120", "byte-150",
         "mixed-20", "mixed-60", "mixed-120", "mixed-150",
         "alt1-120", "alt10-120",
-        "url-38", "utf8-60",
+        "url-38", "utf8-60", "kanji-60",
     ];
 
     private Dictionary<string, string> _contents = default!;
     private string _content = default!;
+    private RmQRCodeGeneratorOptions _single;
+    private RmQRCodeGeneratorOptions _optimal;
     private byte[] _spanDestination = default!;
 
     [ParamsSource(nameof(Shapes))]
@@ -76,9 +79,13 @@ public class RmQRSegmentationEncode
             ["alt10-120"] = string.Concat(Enumerable.Repeat(new string('a', 10) + new string('7', 10), 6)),
             ["url-38"] = "https://example.com/p/1234567890123456",
             ["utf8-60"] = string.Concat(Enumerable.Repeat("日本7777", 10)),
+            ["kanji-60"] = string.Concat(Enumerable.Repeat("日本7777", 10)),
         };
 
         _content = _contents[Shape];
+        var allowKanji = Shape is "kanji-60";
+        _single = new RmQRCodeGeneratorOptions { AllowKanji = allowKanji };
+        _optimal = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // Sized from the largest-area version rather than from any shape's content: with
         // the version pinned, the reported buffer size depends only on that version and the
@@ -90,12 +97,12 @@ public class RmQRSegmentationEncode
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return RmQRCodeGenerator.Create(_content.AsSpan(), RmQREccLevel.M, _spanDestination);
+        return RmQRCodeGenerator.Create(_content.AsSpan(), RmQREccLevel.M, _spanDestination, _single);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return RmQRCodeGenerator.Create(_content.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        return RmQRCodeGenerator.Create(_content.AsSpan(), RmQREccLevel.M, _spanDestination, _optimal);
     }
 }

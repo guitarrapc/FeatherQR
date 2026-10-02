@@ -12,8 +12,8 @@ using System.Text;
 ///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
 ///   Byte_V40_L : version 40-L, byte mode (largest data volume)
 ///   Byte_V40_H : version 40-H, byte mode (81 blocks, max ECC share)
-///   Kanji_Short_V1_M : version 1-M, Kanji mode, 8 characters (KanjiEncode's Short)
-///   Kanji_Long_V15_L : version 15-L, Kanji mode, 320 characters (KanjiEncode's Long)
+///   Kanji_Short_V1_M : version 1-M, Kanji mode (capacity boundary, 8 characters)
+///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
 ///   Image_Byte_Url_V6_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
 /// </summary>
 public class QRCodeDecodeEndToEnd

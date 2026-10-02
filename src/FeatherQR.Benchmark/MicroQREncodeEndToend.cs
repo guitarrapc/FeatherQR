@@ -6,7 +6,7 @@
 ///   Numeric_M2_L : M2-L (numeric capacity boundary)
 ///   Alphanumeric_M3_L : M3-L (alphanumeric capacity boundary)
 ///   Byte_M4_M : M4-M (byte capacity boundary)
-///   Kanji_M3_L : M3-L, Kanji mode (KanjiEncode's Micro)
+///   Kanji_M3_L : M3-L, Kanji mode
 /// </summary>
 public class MicroQREncodeEndToend
 {

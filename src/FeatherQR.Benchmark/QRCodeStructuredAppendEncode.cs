@@ -32,6 +32,14 @@ using System.Text;
 ///   cells-15k-any   : Japanese prose whose every character has a Kanji cell, with AllowKanji: 9 symbols at version 39 as a Kanji
 ///                     set under both segmentations
 ///   cells-15k-utf8  : the same text with UTF-8 asked for, 16 symbols at version 40; cells-15k-any's twin
+///   kanji-1k-max10  : the kanji-15k-any text capped at version 10: Single is its UTF-8 set of 11 symbols, and
+///                     Optimal a Kanji set of 7; the UTF-8 set's floor rules it out, so only the Kanji set is planned
+///   cells-1k-max10  : the cells-15k-any text capped at version 10: a Kanji set of 7 symbols under both segmentations
+///   interleaved-1k-max10 : ASCII and kanji taking turns, capped at version 10, with AllowKanji; the runs change kind
+///                     four times in five characters, so the Kanji set's floor rules it out and Optimal plans only
+///                     the UTF-8 set of 7 symbols
+///   interleaved-1k-utf8  : the same text and cap with UTF-8 asked for; interleaved-1k-max10's twin, so the gap
+///                     between their Optimal rows is what AllowKanji costs where the Kanji set cannot win
 ///   marked-40k-any  : the order lines as concatenated files leave them, a U+FEFF after every line feed; no symbol
 ///                     may begin with one, so cuts are moved off it, and it should cost what mixed-40k-any does
 ///   *-boost         : the same prose and digits with BoostEccLevel, which re-costs every
@@ -48,6 +56,7 @@ public class QRCodeStructuredAppendEncode
         "byte-45k-any", "byte-45k-v40", "byte-4k-max10",
         "numeric-100k-any", "alnum-65k-any", "mixed-40k-any", "uneven-40k-any", "utf8-15k-any", "utf8-15k-mixed", "marked-40k-any",
         "kanji-15k-any", "kanji-15k-mixed", "cells-15k-any", "cells-15k-utf8",
+        "kanji-1k-max10", "cells-1k-max10", "interleaved-1k-max10", "interleaved-1k-utf8",
         "byte-45k-boost", "numeric-100k-boost",
     ];
 
@@ -82,11 +91,14 @@ public class QRCodeStructuredAppendEncode
             "kanji-15k-any" => (Repeat("こんにちは世界、QRコードの分割テストです。", 15_000), QRVersionRange.Any, false),
             "kanji-15k-mixed" => (Repeat("ご注文番号 20260915-0000123456 の商品を 42 個、本日発送いたしました。", 15_000), QRVersionRange.Any, false),
             "cells-15k-any" or "cells-15k-utf8" => (Repeat("こんにちは世界、日本語の分割テストです。", 15_000), QRVersionRange.Any, false),
+            "kanji-1k-max10" => (Repeat("こんにちは世界、QRコードの分割テストです。", 1_000), QRVersionRange.AtMost(10), false),
+            "cells-1k-max10" => (Repeat("こんにちは世界、日本語の分割テストです。", 1_000), QRVersionRange.AtMost(10), false),
+            "interleaved-1k-max10" or "interleaved-1k-utf8" => (Repeat("a日b本c", 1_000), QRVersionRange.AtMost(10), false),
             "numeric-100k-boost" => (Repeat("0123456789", 100_000), QRVersionRange.Any, true),
             _ => throw new ArgumentOutOfRangeException(nameof(Shape), Shape, "unknown shape"),
         };
-        var charset = Shape is "utf8-15k-any" or "utf8-15k-mixed" or "cells-15k-utf8" ? EciMode.Utf8 : EciMode.Default;
-        var allowKanji = Shape is "kanji-15k-any" or "kanji-15k-mixed" or "cells-15k-any";
+        var charset = Shape is "utf8-15k-any" or "utf8-15k-mixed" or "cells-15k-utf8" or "interleaved-1k-utf8" ? EciMode.Utf8 : EciMode.Default;
+        var allowKanji = Shape is "kanji-15k-any" or "kanji-15k-mixed" or "cells-15k-any" or "kanji-1k-max10" or "cells-1k-max10" or "interleaved-1k-max10";
 
         _single = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, AllowKanji = allowKanji };
         _optimal = new QRCodeGeneratorOptions { Version = range, BoostEccLevel = boost, EciMode = charset, Segmentation = QRSegmentation.Optimal, AllowKanji = allowKanji };

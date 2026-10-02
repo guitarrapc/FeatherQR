@@ -6,7 +6,7 @@
 ///   Numeric_R7x43_M      : smallest symbol, single RS block
 ///   Alphanumeric_R11x59_M: mid symbol, single block
 ///   Byte_R17x139_M       : largest symbol, 4 RS blocks
-///   Kanji_R13x43_M       : Kanji mode, 15 characters (KanjiEncode's payload)
+///   Kanji_R13x43_M       : Kanji mode, 15 characters
 ///   *_Corrected         : Numeric_R7x43 and Byte_R17x139 with damage the decoder
 ///                          confirms as exactly N corrected errors, so the
 ///                          Berlekamp-Massey/Chien/Forney correction path runs rather

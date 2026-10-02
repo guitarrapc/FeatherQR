@@ -8,6 +8,7 @@
 ///   byte-12    : the same, in Byte mode (M2 additionally lacks Byte entirely)
 ///   mixed-8    : "A" + 7 digits, wins M3 -> M2 (the version without Byte mode)
 ///   mixed-19   : "AB" + 17 digits, wins M4 -> M3
+///   kanji-8    : "日本語" + 5 digits with AllowKanji, a Kanji plan wins M4 -> M3
 ///
 /// Every fixture fits under Single too, so no row compares a success with a throw.
 /// ECC L only.
@@ -16,11 +17,13 @@ public class MicroQRSegmentationEncode
 {
     private static readonly string[] shapeKeys =
     [
-        "numeric-20", "alnum-15", "byte-12", "mixed-8", "mixed-19",
+        "numeric-20", "alnum-15", "byte-12", "mixed-8", "mixed-19", "kanji-8",
     ];
 
     private Dictionary<string, string> _contents = default!;
     private string _content = default!;
+    private MicroQRCodeGeneratorOptions _single;
+    private MicroQRCodeGeneratorOptions _optimal;
     private byte[] _spanDestination = default!;
 
     [ParamsSource(nameof(Shapes))]
@@ -38,24 +41,28 @@ public class MicroQRSegmentationEncode
             ["byte-12"] = new string('a', 12),
             ["mixed-8"] = "A1234567",
             ["mixed-19"] = "AB" + new string('1', 17),
+            ["kanji-8"] = "日本語12345",
         };
 
         _content = _contents[Shape];
+        var allowKanji = Shape is "kanji-8";
+        _single = new MicroQRCodeGeneratorOptions { AllowKanji = allowKanji };
+        _optimal = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // Sized for the Single arm, which never selects a smaller version than Optimal.
-        MicroQRCodeGenerator.TryGetRequiredBufferSize(_content.AsSpan(), MicroQREccLevel.L, out var size);
+        MicroQRCodeGenerator.TryGetRequiredBufferSize(_content.AsSpan(), MicroQREccLevel.L, out var size, _single);
         _spanDestination = new byte[size.BufferSize];
     }
 
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination);
+        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination, _single);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+        return MicroQRCodeGenerator.Create(_content.AsSpan(), MicroQREccLevel.L, _spanDestination, _optimal);
     }
 }

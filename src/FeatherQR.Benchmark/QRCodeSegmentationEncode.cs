@@ -17,8 +17,12 @@
 ///                not (its 140-bit optimum misses v1-M's 128 bits) and emits the
 ///                Single stream — the priced-but-no-candidate-fits path
 ///   url-58     : a realistic payload (version 4-M as one run, version 3-M split)
-///   utf8-60    : Japanese with digits: Single writes UTF-8 behind an ECI prefix (6-M),
-///                Optimal a Kanji plan, Kanji runs beside Numeric runs (5-M)
+///   utf8-60    : Japanese with digits, UTF-8 behind an ECI prefix under both (6-M):
+///                no split of it is smaller
+///   kanji-60   : the same text with AllowKanji: Single still writes UTF-8 (6-M), since
+///                the digits are ASCII; Optimal a Kanji plan, Kanji runs beside Numeric runs (5-M)
+///   kanji-prose-66 : Japanese prose with two ASCII letters a sentence, with AllowKanji:
+///                Single writes UTF-8 (10-M), Optimal Kanji runs beside the ASCII (7-M)
 ///
 /// Every fixture fits under Single too, so no row compares a success with a throw.
 /// ECC M only: other levels shift which version wins but not the shape of the work.
@@ -31,11 +35,13 @@ public class QRCodeSegmentationEncode
         "alnum-120", "byte-120",
         "mixed-20", "mixed-120", "mixed-1000",
         "alt1-120",
-        "url-58", "utf8-60",
+        "url-58", "utf8-60", "kanji-60", "kanji-prose-66",
     ];
 
     private Dictionary<string, string> _contents = default!;
     private string _content = default!;
+    private QRCodeGeneratorOptions _single;
+    private QRCodeGeneratorOptions _optimal;
     private byte[] _spanDestination = default!;
 
     [ParamsSource(nameof(Shapes))]
@@ -60,23 +66,28 @@ public class QRCodeSegmentationEncode
             ["alt1-120"] = string.Concat(Enumerable.Repeat("a7", 60)),
             ["url-58"] = "https://example.com/item?id=123456789012345678901234567890",
             ["utf8-60"] = string.Concat(Enumerable.Repeat("日本7777", 10)),
+            ["kanji-60"] = string.Concat(Enumerable.Repeat("日本7777", 10)),
+            ["kanji-prose-66"] = string.Concat(Enumerable.Repeat("こんにちは世界、QRコードの分割テストです。", 3)),
         };
 
         _content = _contents[Shape];
+        var allowKanji = Shape is "kanji-60" or "kanji-prose-66";
+        _single = new QRCodeGeneratorOptions { AllowKanji = allowKanji };
+        _optimal = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal, AllowKanji = allowKanji };
 
         // Sized for the Single arm, which never selects a smaller version than Optimal.
-        _spanDestination = new byte[Sizing.Required(_content.AsSpan(), QREccLevel.M).BufferSize];
+        _spanDestination = new byte[Sizing.Required(_content.AsSpan(), QREccLevel.M, _single).BufferSize];
     }
 
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return FeatherQR.QRCodeGenerator.Create(_content.AsSpan(), QREccLevel.M, _spanDestination);
+        return FeatherQR.QRCodeGenerator.Create(_content.AsSpan(), QREccLevel.M, _spanDestination, _single);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return FeatherQR.QRCodeGenerator.Create(_content.AsSpan(), QREccLevel.M, _spanDestination, new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal });
+        return FeatherQR.QRCodeGenerator.Create(_content.AsSpan(), QREccLevel.M, _spanDestination, _optimal);
     }
 }
