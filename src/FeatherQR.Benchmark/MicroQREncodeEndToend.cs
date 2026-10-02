@@ -6,11 +6,13 @@
 ///   Numeric_M2_L : M2-L (numeric capacity boundary)
 ///   Alphanumeric_M3_L : M3-L (alphanumeric capacity boundary)
 ///   Byte_M4_M : M4-M (byte capacity boundary)
-///   Kanji_M3_L : M3-L, Kanji mode
+///   Kanji_M4_M : M4-M, Kanji mode (capacity boundary, 8 characters)
+///
+/// Byte_M4_M and Kanji_M4_M share version and level, so they differ in mode, not in symbol size.
 /// </summary>
 public class MicroQREncodeEndToend
 {
-    // Representative payloads: numeric M2-L, alphanumeric M3-L, byte M4-M, Kanji M3-L.
+    // Representative payloads: numeric M2-L, alphanumeric M3-L, byte M4-M, Kanji M4-M.
     private string _numeric = default!;
     private string _alphanumeric = default!;
     private string _byte = default!;
@@ -23,7 +25,7 @@ public class MicroQREncodeEndToend
         _numeric = "0123456789";        // M2-L (numeric capacity boundary)
         _alphanumeric = "HELLO WORLD 14"; // M3-L (alphanumeric capacity boundary)
         _byte = "bytes m4 mode";        // M4-M (byte capacity boundary)
-        _kanji = "こんにちは";            // M3-L, Kanji mode
+        _kanji = "吾輩は猫である。";      // M4-M (Kanji capacity boundary)
         // Sized for the largest consumer: the Standard QR v1 reference benchmark
         // (29x29 with quiet zone) exceeds every Micro QR buffer size.
         _spanDestination = new byte[Math.Max(
@@ -52,9 +54,9 @@ public class MicroQREncodeEndToend
     }
 
     [Benchmark]
-    public MicroQRCodeData MicroQR_Kanji_M3_Encode()
+    public MicroQRCodeData MicroQR_Kanji_M4_Encode()
     {
-        return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { AllowKanji = true });
+        return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { AllowKanji = true });
     }
 
     // Span destination (zero-allocation) variants
@@ -77,10 +79,10 @@ public class MicroQREncodeEndToend
         return MicroQRCodeGenerator.Create(_byte.AsSpan(), MicroQREccLevel.M, _spanDestination);
     }
 
-    [Benchmark(Description = "MicroQR_Kanji_M3_Encode (Span)")]
-    public int MicroQR_Kanji_M3_EncodeSpan()
+    [Benchmark(Description = "MicroQR_Kanji_M4_Encode (Span)")]
+    public int MicroQR_Kanji_M4_EncodeSpan()
     {
-        return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.L, _spanDestination, new MicroQRCodeGeneratorOptions { AllowKanji = true });
+        return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.M, _spanDestination, new MicroQRCodeGeneratorOptions { AllowKanji = true });
     }
 
     // Standard QR version 1 with the same numeric payload, for scale reference.

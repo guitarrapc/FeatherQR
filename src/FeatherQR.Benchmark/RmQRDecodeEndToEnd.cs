@@ -6,7 +6,7 @@
 ///   Numeric_R7x43_M      : smallest symbol, single RS block
 ///   Alphanumeric_R11x59_M: mid symbol, single block
 ///   Byte_R17x139_M       : largest symbol, 4 RS blocks
-///   Kanji_R13x43_M       : Kanji mode, 15 characters
+///   Kanji_R17x139_M      : largest symbol, Kanji mode (capacity boundary, 92 characters)
 ///   *_Corrected         : Numeric_R7x43 and Byte_R17x139 with damage the decoder
 ///                          confirms as exactly N corrected errors, so the
 ///                          Berlekamp-Massey/Chien/Forney correction path runs rather
@@ -35,7 +35,7 @@ public class RmQRDecodeEndToEnd
         (_numericModules, _numericSize) = Build("012345678901", RmQREccLevel.M, RmQRVersion.R7x43);
         (_alphanumericModules, _alphanumericSize) = Build("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.", RmQREccLevel.M, RmQRVersion.R11x59);
         (_byteModules, _byteSize) = Build(string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150), RmQREccLevel.M, RmQRVersion.R17x139);
-        (_kanjiModules, _kanjiSize) = Build("日本語のテキストです、ようこそ", RmQREccLevel.M, RmQRVersion.R13x43, allowKanji: true);
+        (_kanjiModules, _kanjiSize) = Build(string.Concat(Enumerable.Repeat("吾輩は猫である。名前はまだ無い。", 6)).Substring(0, 92), RmQREccLevel.M, RmQRVersion.R17x139, allowKanji: true);
         _chars = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
 
         // Correctable damage: flip a few modules and keep only a corruption the decoder
@@ -74,7 +74,7 @@ public class RmQRDecodeEndToEnd
     }
 
     [Benchmark]
-    public string RmQR_Kanji_R13x43_Decode()
+    public string RmQR_Kanji_R17x139_Decode()
     {
         RmQRCodeDecoder.TryDecode(_kanjiModules, _kanjiSize.Width, _kanjiSize.Height, out var text, out _);
         return text;
@@ -117,8 +117,8 @@ public class RmQRDecodeEndToEnd
         return written;
     }
 
-    [Benchmark(Description = "RmQR_Kanji_R13x43_Decode (Span)")]
-    public int RmQR_Kanji_R13x43_DecodeSpan()
+    [Benchmark(Description = "RmQR_Kanji_R17x139_Decode (Span)")]
+    public int RmQR_Kanji_R17x139_DecodeSpan()
     {
         RmQRCodeDecoder.TryDecode(_kanjiModules, _kanjiSize.Width, _kanjiSize.Height, _chars, out var written, out _);
         return written;

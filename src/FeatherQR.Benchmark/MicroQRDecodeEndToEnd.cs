@@ -7,7 +7,9 @@
 ///   Numeric_M2_L : M2-L (numeric capacity boundary)
 ///   Alphanumeric_M3_L : M3-L (alphanumeric capacity boundary)
 ///   Byte_M4_M : M4-M (byte capacity boundary)
-///   Kanji_M3_L : M3-L, Kanji mode
+///   Kanji_M4_M : M4-M, Kanji mode (capacity boundary, 8 characters)
+///
+/// Byte_M4_M and Kanji_M4_M share version and level, so they differ in mode, not in symbol size.
 /// </summary>
 public class MicroQRDecodeEndToEnd
 {
@@ -30,7 +32,7 @@ public class MicroQRDecodeEndToEnd
         (_numericModules, _numericSize) = BuildMicro("0123456789", MicroQREccLevel.L);          // M2-L
         (_alphanumericModules, _alphanumericSize) = BuildMicro("HELLO WORLD 14", MicroQREccLevel.L); // M3-L
         (_byteModules, _byteSize) = BuildMicro("bytes m4 mode", MicroQREccLevel.M);             // M4-M
-        (_kanjiModules, _kanjiSize) = BuildMicro("こんにちは", MicroQREccLevel.L, allowKanji: true);    // M3-L
+        (_kanjiModules, _kanjiSize) = BuildMicro("吾輩は猫である。", MicroQREccLevel.M, allowKanji: true);  // M4-M
         _chars = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
 
         var calculated = Sizing.Required("0123456789", QREccLevel.L, 0);
@@ -64,7 +66,7 @@ public class MicroQRDecodeEndToEnd
     }
 
     [Benchmark]
-    public string MicroQR_Kanji_M3_Decode()
+    public string MicroQR_Kanji_M4_Decode()
     {
         MicroQRCodeDecoder.TryDecode(_kanjiModules, _kanjiSize, out var text, out _);
         return text;
@@ -93,8 +95,8 @@ public class MicroQRDecodeEndToEnd
         return written;
     }
 
-    [Benchmark(Description = "MicroQR_Kanji_M3_Decode (Span)")]
-    public int MicroQR_Kanji_M3_DecodeSpan()
+    [Benchmark(Description = "MicroQR_Kanji_M4_Decode (Span)")]
+    public int MicroQR_Kanji_M4_DecodeSpan()
     {
         MicroQRCodeDecoder.TryDecode(_kanjiModules, _kanjiSize, _chars, out var written, out _);
         return written;
