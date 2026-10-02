@@ -15,6 +15,7 @@ using System.Text;
 ///   Byte_V40_H : version 40-H, byte mode (81 blocks, max ECC share)
 ///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
 ///   Image_Byte_Url_V6_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
+///   *_Corrected : Numeric_V1_L (2 errors) and Byte_V40_H (81 errors, one a block on average) with damage the decoder confirms as exactly that many corrected errors, so the correction path runs rather than syndrome generation alone (the clean cases exit early)
 ///
 /// Byte_Url_V6_M and Kanji_V6_M share version and level, so they differ in mode, not in symbol size.
 /// </summary>
@@ -34,6 +35,8 @@ public class QRCodeDecodeEndToEnd
     private int _kanjiSize;
     private byte[] _kanjiLongModules = default!;
     private int _kanjiLongSize;
+    private byte[] _numericDamagedModules = default!;
+    private byte[] _byteLongHDamagedModules = default!;
     private byte[] _microNumericModules = default!;
     private int _microNumericSize;
     private char[] _chars = default!;
@@ -61,6 +64,10 @@ public class QRCodeDecodeEndToEnd
         (_kanjiModules, _kanjiSize) = BuildModules(japanese.Substring(0, 65), QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true });
         (_kanjiLongModules, _kanjiLongSize) = BuildModules(japanese, QREccLevel.L, new QRCodeGeneratorOptions { AllowKanji = true });
         _chars = new char[QRCodeDecoder.GetMaxDecodedLength(40)];
+
+        _numericDamagedModules = CorrectableDamage.Flip(_numericModules, flips: 2, seed: 17, m => Decode(m, _numericSize));
+        // About one error a block, so correction is a measurable share of an 81-block decode.
+        _byteLongHDamagedModules = CorrectableDamage.Flip(_byteLongHModules, flips: 81, seed: 23, m => Decode(m, _byteLongHSize));
 
         (_microNumericModules, _microNumericSize) = BuildMicro("0123456789", MicroQREccLevel.L);
         _microChars = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M2)];
@@ -116,6 +123,20 @@ public class QRCodeDecodeEndToEnd
     public string QR_Kanji_Long_V15_L_Decode()
     {
         QRCodeDecoder.TryDecode(_kanjiLongModules, _kanjiLongSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Numeric_V1_L_CorrectedDecode()
+    {
+        QRCodeDecoder.TryDecode(_numericDamagedModules, _numericSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Byte_V40_H_CorrectedDecode()
+    {
+        QRCodeDecoder.TryDecode(_byteLongHDamagedModules, _byteLongHSize, out var text, out _);
         return text;
     }
 
@@ -177,6 +198,22 @@ public class QRCodeDecodeEndToEnd
         return written;
     }
 
+    // Correctable damage: same symbols, modules flipped within RS capacity.
+
+    [Benchmark(Description = "QR_Numeric_V1_L_Corrected_Decode (Span)")]
+    public int QR_Numeric_V1_L_CorrectedDecodeSpan()
+    {
+        QRCodeDecoder.TryDecode(_numericDamagedModules, _numericSize, _chars, out var written, out _);
+        return written;
+    }
+
+    [Benchmark(Description = "QR_Byte_V40_H_Corrected_Decode (Span)")]
+    public int QR_Byte_V40_H_CorrectedDecodeSpan()
+    {
+        QRCodeDecoder.TryDecode(_byteLongHDamagedModules, _byteLongHSize, _chars, out var written, out _);
+        return written;
+    }
+
     [Benchmark(Description = "Image_Byte_Url_V6_M_Decode (Span)")]
     public int Image_Byte_Url_V6_M_DecodeSpan()
     {
@@ -192,6 +229,9 @@ public class QRCodeDecodeEndToEnd
         MicroQRCodeDecoder.TryDecode(_microNumericModules, _microNumericSize, _microChars, out var written, out _);
         return written;
     }
+
+    private static (bool, string, int) Decode(byte[] modules, int size)
+        => (QRCodeDecoder.TryDecode(modules, size, out var text, out var info), text, info.ErrorsCorrected);
 
     private static (byte[] modules, int size) BuildModules(string content, QREccLevel eccLevel, QRCodeGeneratorOptions options = default)
     {

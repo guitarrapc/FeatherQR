@@ -8,6 +8,7 @@
 ///   Alphanumeric_M3_L : M3-L (alphanumeric capacity boundary)
 ///   Byte_M4_M : M4-M (byte capacity boundary)
 ///   Kanji_M4_M : M4-M, Kanji mode (capacity boundary, 8 characters)
+///   *_Corrected : Numeric_M2_L (1 error) and Byte_M4_M (5 errors), each at its ISO correction capacity, with damage the decoder confirms as exactly that many corrected errors, so the correction path runs rather than syndrome generation alone (the clean cases exit early)
 ///
 /// Byte_M4_M and Kanji_M4_M share version and level, so they differ in mode, not in symbol size.
 /// </summary>
@@ -21,6 +22,8 @@ public class MicroQRDecodeEndToEnd
     private int _byteSize;
     private byte[] _kanjiModules = default!;
     private int _kanjiSize;
+    private byte[] _numericDamagedModules = default!;
+    private byte[] _byteDamagedModules = default!;
     private byte[] _standardModules = default!;
     private int _standardSize;
     private char[] _chars = default!;
@@ -34,6 +37,9 @@ public class MicroQRDecodeEndToEnd
         (_byteModules, _byteSize) = BuildMicro("bytes m4 mode", MicroQREccLevel.M);             // M4-M
         (_kanjiModules, _kanjiSize) = BuildMicro("吾輩は猫である。", MicroQREccLevel.M, allowKanji: true);  // M4-M
         _chars = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
+
+        _numericDamagedModules = CorrectableDamage.Flip(_numericModules, flips: 1, seed: 17, m => Decode(m, _numericSize));
+        _byteDamagedModules = CorrectableDamage.Flip(_byteModules, flips: 5, seed: 23, m => Decode(m, _byteSize));
 
         var calculated = Sizing.Required("0123456789", QREccLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
@@ -72,6 +78,20 @@ public class MicroQRDecodeEndToEnd
         return text;
     }
 
+    [Benchmark]
+    public string MicroQR_Numeric_M2_CorrectedDecode()
+    {
+        MicroQRCodeDecoder.TryDecode(_numericDamagedModules, _numericSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string MicroQR_Byte_M4_CorrectedDecode()
+    {
+        MicroQRCodeDecoder.TryDecode(_byteDamagedModules, _byteSize, out var text, out _);
+        return text;
+    }
+
     // Span destination (zero-allocation) path
 
     [Benchmark(Baseline = true, Description = "MicroQR_Numeric_M2_Decode (Span)")]
@@ -102,6 +122,22 @@ public class MicroQRDecodeEndToEnd
         return written;
     }
 
+    // Correctable damage: same symbols, modules flipped within RS capacity.
+
+    [Benchmark(Description = "MicroQR_Numeric_M2_Corrected_Decode (Span)")]
+    public int MicroQR_Numeric_M2_CorrectedDecodeSpan()
+    {
+        MicroQRCodeDecoder.TryDecode(_numericDamagedModules, _numericSize, _chars, out var written, out _);
+        return written;
+    }
+
+    [Benchmark(Description = "MicroQR_Byte_M4_Corrected_Decode (Span)")]
+    public int MicroQR_Byte_M4_CorrectedDecodeSpan()
+    {
+        MicroQRCodeDecoder.TryDecode(_byteDamagedModules, _byteSize, _chars, out var written, out _);
+        return written;
+    }
+
     // Standard QR version 1 with the same numeric payload, for scale reference.
 
     [Benchmark(Description = "StandardQr_Numeric_V1_Decode (Span)")]
@@ -110,6 +146,9 @@ public class MicroQRDecodeEndToEnd
         QRCodeDecoder.TryDecode(_standardModules, _standardSize, _standardChars, out var written, out _);
         return written;
     }
+
+    private static (bool, string, int) Decode(byte[] modules, int size)
+        => (MicroQRCodeDecoder.TryDecode(modules, size, out var text, out var info), text, info.ErrorsCorrected);
 
     private static (byte[] modules, int size) BuildMicro(string content, MicroQREccLevel eccLevel, bool allowKanji = false)
     {

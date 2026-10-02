@@ -40,8 +40,8 @@ public class RmQRDecodeEndToEnd
 
         // Correctable damage: flip a few modules and keep only a corruption the decoder
         // still recovers, so the measurement covers correction rather than failure.
-        _numericDamagedModules = Damage(_numericModules, _numericSize, RmQRVersion.R7x43, flips: 2, seed: 17);
-        _byteDamagedModules = Damage(_byteModules, _byteSize, RmQRVersion.R17x139, flips: 6, seed: 23);
+        _numericDamagedModules = CorrectableDamage.Flip(_numericModules, flips: 2, seed: 17, m => Decode(m, _numericSize));
+        _byteDamagedModules = CorrectableDamage.Flip(_byteModules, flips: 6, seed: 23, m => Decode(m, _byteSize));
 
         var calculated = Sizing.Required("012345678901", QREccLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
@@ -149,41 +149,8 @@ public class RmQRDecodeEndToEnd
         return written;
     }
 
-    /// <summary>
-    /// Flips <paramref name="flips"/> distinct modules and keeps the draw only when the decoder reports exactly that many corrected errors, so the scenario measures the correction path at its stated strength rather than the failure path.
-    /// </summary>
-    /// <remarks>
-    /// The ErrorsCorrected check is what makes the count honest.
-    /// Drawing from the whole matrix spends flips on function patterns, which carry no codeword, and two flips can land in one codeword byte: either way a nominal 2-flip case injects one actual error and measures a shorter correction than its name promises.
-    /// Rejecting those draws is conservative — every excluded sample is easier than the one kept.
-    /// </remarks>
-    private static byte[] Damage(byte[] modules, (int Width, int Height) size, RmQRVersion version, int flips, int seed)
-    {
-        RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, out var expected, out _);
-
-        for (var attempt = 0; attempt < 4096; attempt++)
-        {
-            var random = new Random(seed + attempt);
-            var damaged = (byte[])modules.Clone();
-            var picked = new HashSet<int>();
-            while (picked.Count < flips)
-                picked.Add(random.Next(damaged.Length));
-            foreach (var index in picked)
-                damaged[index] ^= 1;
-
-            // ErrorsCorrected, not just "it decoded": a flip that lands on a function
-            // pattern carries no codeword, so the symbol still decodes but the scenario
-            // measures a shorter correction than its name promises.
-            if (RmQRCodeDecoder.TryDecode(damaged, size.Width, size.Height, out var text, out var info)
-                && text == expected
-                && info.ErrorsCorrected == flips)
-            {
-                return damaged;
-            }
-        }
-
-        throw new InvalidOperationException($"No {flips}-error correctable damage found for {version} ({size.Width}x{size.Height}).");
-    }
+    private static (bool, string, int) Decode(byte[] modules, (int Width, int Height) size)
+        => (RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, out var text, out var info), text, info.ErrorsCorrected);
 
     private static (byte[] modules, (int Width, int Height) size) Build(string content, RmQREccLevel eccLevel, RmQRVersion version, bool allowKanji = false)
     {
