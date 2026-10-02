@@ -71,13 +71,32 @@ C++ was avoided for test oracles because its builds depend on the machine. That 
 
 A CLI's own loop can be wrong: a batch too short for the clock, a warmup that ends before tiering does, or work the compiler removed. So each CLI also runs N and 2N iterations as whole processes, timed from outside with hyperfine. T(2N) minus T(N) is N iterations of work, and everything fixed (process start, runtime start, corpus load, JIT) cancels if warmup finishes within N. When the difference disagrees with the self-timed median beyond the spread measured in phase 1, the CLI's loop is suspect.
 
+## Protocol
+
+The harness lives in `tools/CrossLanguageBenchmark/`: the Dockerfile, `clis.tsv` (each CLI's name and command), the collector, and one folder per language. FeatherQR's CLI in `dotnet/cli` is the reference implementation of the protocol, and its comments carry the details. Code and XML docs elsewhere never name other libraries, but this folder's code does, because every CLI in it wraps one (decided 2026-10-02, for this folder only).
+
+The collector's `corpus` command writes the inputs and `manifest.tsv`, one line per operation on a case. The cases are the payloads and symbols of the benchmark project's `Simple*` classes: five Standard QR payloads, three Micro QR and three rMQR, each encoded, decoded as a matrix and decoded as an image, 33 entries in all. FeatherQR encodes them, and the corpus command fails if FeatherQR cannot read its own inputs back.
+
+Every CLI is called as `<cli> <mode> <op> <symbology> <input> [--ecc E] [--version V]` and prints one JSON object on stdout.
+
+- `op` is `encode`, `decode-matrix` or `decode-image`, and `symbology` is `qr`, `microqr` or `rmqr`. Encode is pinned to the level and version given (`3`, `M2`, `R7x43`). Decode takes neither.
+- The encode input is the payload's UTF-8 bytes. The matrix input is a binary PGM of the bare symbol, one pixel per module, 0 for dark. The image input is a binary PGM of the symbol drawn at 8 pixels per module inside its specified quiet zone.
+- `run` makes one call and prints its result for verification. It then warms up for 3 s and at least 3 calls, sizes a batch to 20 ms from the warmup's second half, and times 30 batches with a monotonic clock. It prints each batch's nanoseconds and its call count.
+- `fixed` makes N calls and prints only the checksum, for the outside check. `cold` makes one call and prints its result. `noop` loads the input and makes no call. Phase 3 times the last two from outside, and their difference is the cold first call.
+- `status` is `ok`, `failed` (no decode, or the encoder refused) or `unsupported` (the library has no such operation). A decode prints its text as UTF-8 in hex, so no CLI needs a JSON string escaper. An encode prints its matrix as rows of 0 and 1, with whatever quiet zone the library returns.
+- Every call's result is folded into the printed checksum through its content (the text's length and last character, or the matrix size and its centre module), so no compiler can drop the work.
+
+The collector's `run` command launches one process per entry, CLI and round, and rotates which CLI goes first in each round. It rejects a process whose verification fails: a decode must print the payload, and an encoded matrix, cut to its dark modules' bounding box, must decode through FeatherQR's matrix decoder to the payload in the pinned version and level. A process's per-call times are its batches' times over their calls, and an entry's median is the median of its process medians. `outside` sizes N to one second of calls from that median and runs hyperfine with no shell, in rounds whose command order alternates. A measurement is disturbed by other load, and taken again up to three attempts, when its range (the quartiles of T(2N) against those of T(N)) exceeds 20 % of the call, or when its fixed cost, T(N) minus the N calls, is below zero by more than 3 % of T(N). A fixed cost cannot be negative, so a negative one means the longer 2N runs caught more of the load. `compare` holds the self-timed medians against the outside check and BenchmarkDotNet, and judges each CLI by the phase 1 tolerance. An entry still disturbed after its attempts stays out of the verdict, which then reads inconclusive.
+
+The container gets two CPUs (`--cpuset-cpus`), so the runtime's background compiler and GC threads do not take the measured thread's CPU, and 4 GB of memory. .NET runs workstation non-concurrent GC with a 1 GiB heap limit and a 32 MiB generation 0 budget, set in the image so that the container's limits and the CPU's cache size do not choose them.
+
 ## Phases
 
 Each phase appends a Progress log entry with Done / Lessons / numbers.
 
 | # | Priority | Phase | Contents | Exit |
 |---|---|---|---|---|
-| 1 | P0 | Protocol and FeatherQR | The protocol (arguments, JSON), the collector, the corpus, a FeatherQR CLI on the core package, the Docker skeleton, the outside check | The CLI's medians agree with BenchmarkDotNet's `Simple*` rows (same inputs, same machine) and with the outside check, within a spread stated from the runs, which becomes the tolerance for every later CLI |
+| 1 | P0 | Protocol and FeatherQR | The protocol (arguments, JSON), the collector, the corpus, a FeatherQR CLI on the core package, the Docker skeleton, the outside check | The CLI's medians agree with BenchmarkDotNet over the same calls and inputs on the same machine, and with the outside check, within a spread stated from the runs, which becomes the tolerance for every later CLI |
 | 2 | P0 | First outside library | rqrr and fast_qr in Rust, Cargo.lock pinned, both flag columns | Verified, outside check passes, interleaved rows against FeatherQR |
 | 3 | P1 | NativeAOT | FeatherQR as JIT, NativeAOT default and NativeAOT `x86-64-v3`, steady state and cold start. The probe above repeated on linux-x64 and linux-arm64 | The gap between the AOT arms measured per shape, and the kernels behind the default arm's gap listed with the tier they fall to (128-bit or scalar) from the [tier table](../specs/qrcode-simd-tiers.md). A separate change documents `IlcInstructionSet` for NativeAOT users in the README and user docs, with the number behind it. Kernels that fell to scalar got 128-bit tiers for 2.0.0 ([the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round)) |
 | 4 | P1 | zxing-cpp and libzint | Built in the image from pinned commits. All three symbologies. The same inputs through the ZXingCpp NuGet under BenchmarkDotNet, to measure the wrapper's cost | Verified rows for QR, Micro QR and rMQR, and the wrapper's cost stated |
@@ -90,10 +109,62 @@ Phase 1 comes first because it tests the method: if a plain timing loop cannot r
 
 ## Open decisions
 
-- The harness is proposed to live in `tools/CrossLanguageBenchmark/`, with one folder per language plus the Dockerfile and collector, next to `QRImageDecodeSweep`, which already runs non-.NET tools.
-- Code and XML docs under `src/` never name other libraries, but the harness code cannot avoid it. Whether that rule covers `tools/` is undecided.
 - Pushing the image to GHCR by digest makes every result traceable to exact binaries, but publishes an image under the repository. The alternative is to rebuild it in each run from the build cache and record the digest without publishing it.
 
 ## Progress log
 
-(none yet)
+### Phase 1: protocol and FeatherQR (2026-10-02)
+
+Done:
+
+- The harness described under Protocol: FeatherQR's CLI (`dotnet/cli`), the collector (`corpus`, `run`, `outside`, `compare`), a BenchmarkDotNet project over the CLI's calls (`dotnet/reference`), and the Dockerfile with the SDK image pinned by digest and hyperfine by package version. The three projects are in the solution, so CI builds them.
+- The exit compares against that BenchmarkDotNet project instead of the `Simple*` rows. `Simple*`'s image rows start from an RGBA `SKBitmap` and convert it to grey inside the timed call, and `Simple*` needs SkiaSharp's native library, which the image does not carry. The project compiles the CLI's own source over the same corpus files, so a disagreement can come only from the loop or the statistics.
+- Measured on the Windows box (Ryzen 9 7950X3D) in Docker Desktop's WSL2 VM (kernel 6.6.87.2), with two CPUs and 4 GB, .NET 10.0.12 and SDK 10.0.401, at commit 4f4fd4b. Two runs of five rounds each, with BenchmarkDotNet's default job at three launches between them, then the outside check against the first run (N sized to one second of calls, two rounds of five runs per command). Every one of the 33 entries verified in every process.
+
+| Measure, over the 33 entries | Median | Largest |
+|---|---:|---:|
+| Range of an entry's five process medians over their median (run 1, run 2) | 4.0 %, 2.5 % | 19.9 %, 11.5 % |
+| Run 2 against run 1 | 1.3 % | 2.8 % |
+| Self-timed against BenchmarkDotNet (run 1, run 2) | 0.6 %, 0.8 % | 4.8 %, 6.3 % |
+| Outside check against self-timed (run 1) | 1.0 % | 6.5 % |
+
+Every disagreement above 3.6 % was on a call under 0.3 µs: Micro QR's numeric matrix decode, rMQR's numeric encode and matrix decode, and rMQR's alphanumeric encode. The rMQR byte matrix decode sat 3 % below both other measurements in both runs.
+
+The tolerance for every later CLI: each entry's self-timed median is within 7 % of its outside check, and the signed median of those disagreements over a CLI's entries is within 2 % (−0.9 % here). The first bounds a broken loop on one entry, the second a bias over all entries, such as a cost per call. Phase 2 changed the second test from the median of the disagreements' sizes, which measures noise rather than bias. Two runs of the same build differed by up to 2.8 % on an entry, so a smaller difference between two libraries on one entry is not a result on this box. Phase 6 checks the same tolerance on the runners.
+
+Lessons:
+
+- One process is not a measurement. An entry's process medians ranged up to 19.9 % apart within one run, while the median of five agreed with BenchmarkDotNet within 6.3 % and with the next run within 2.8 %.
+- The warmup has to outlast tiering. In a trial with a 300 ms warmup, the median batch ran 61 % of its 20 ms target and the shortest 30 %, because the warmup's second half was still slower than the batches after it. With 3 s, the median batch ran 98 % of the target and nine in ten ran more than 92 %.
+- A process's fixed cost (start, runtime, corpus load, JIT) was 193 to 325 ms. Timed whole, a process running a 1 µs call 300,000 times would measure that fixed cost as much as the calls, which is why the outside check takes the difference of N and 2N.
+- Through Docker Desktop's Windows bind mount (virtiofs), a file written a moment before was intermittently read back as zero bytes: a hyperfine export read by the process that wrote it, and a run's results read by the next container. In phase 2, results copied into the bind mount also arrived with bytes changed. The collector keeps hyperfine's exports on the container's own disk, and on Windows `/out` is a named volume whose results leave through a container's standard output (`tar cf -`), never through a bind mount. Linux runners mount natively.
+- The run took 10 minutes, BenchmarkDotNet at three launches 31 minutes and the outside check 23 minutes, for one CLI and 33 entries. Phase 6 has to budget for that per CLI or narrow the outside check.
+
+### Phase 2: rqrr and fast_qr (2026-10-02 to 2026-10-03)
+
+Done:
+
+- `rust/`: one Cargo package with a binary per library (`rqrr-cli`, `fast_qr-cli`) and the protocol in `src/lib.rs`, ported from FeatherQR's CLI. Both crates are pinned with `=` and by `Cargo.lock`, rqrr without its default `image` feature. The release profile is left at its defaults.
+- The image builds them with Rust 1.99.0 twice: the default target, and `-C target-cpu=x86-64-v3` on x64 only. The collector skips a CLI whose binary is not in the image.
+- rqrr decodes a matrix through its `Grid` over a `BitGrid` that borrows the modules, and an image through its grey entry point (`prepare_from_greyscale`, which copies and binarizes the image), taking the first grid that decodes. fast_qr encodes through `QRBuilder` pinned to the level and version, as its own benchmark calls it.
+- `run.md` gains a table of every CLI against the first, entry by entry. `compare` judges every CLI against the phase 1 tolerance, and `outside` measures a disturbed entry again (see Protocol).
+- Measured on the same box and setup as phase 1, on Standard QR's 15 entries, the only ones either library offers, in five rounds with FeatherQR interleaved. Every process verified, including fast_qr's Unicode payload, which it writes as UTF-8 bytes with no ECI header.
+
+| CLI | Entries | Median µs | Over FeatherQR's |
+|---|---|---:|---:|
+| fast_qr, default and x86-64-v3 | encode | 21.2 to 45.2 | 25 to 33 |
+| rqrr, default and x86-64-v3 | matrix decode | 22.8 to 199.5 | 79 to 329 |
+| rqrr, default | image decode | 2,460 to 3,609 | 221 to 244 |
+| rqrr, x86-64-v3 | image decode | 1,673 to 2,615 | 160 to 166 |
+
+The x86-64-v3 build ran rqrr's image decode 28 to 32 % faster and moved no other entry by more than 3.2 %. The Libraries table expected rqrr at the fast end for clean images. On these 8 pixels per module images it is the slow end by two orders of magnitude, and fast_qr's own README puts its version 3 encode at 82 µs (level H, its machine), the same order as the 36 µs here, so the harness is not the cause.
+
+The outside check ran three times, because the box was busy during this phase (an entry's process medians ranged up to 62 % apart, against 19.9 % in phase 1). Under the final rules, every one of the 30 entry and CLI pairs had at least one undisturbed measurement, every undisturbed measurement was within 6.6 % of its self-timed median, and each CLI's signed median stayed within 1.3 % in every run.
+
+Lessons:
+
+- Load that comes and goes lands on whichever command is running, and moves the fixed cost the other way. The measurements that read 4.5 % or more high had fixed costs of −23 to −523 ms, those that read 4.2 % or more low had +22 to +95 ms, and the 72 that agreed within 3 % had −29 to +54 ms. A fixed cost cannot be negative, so a negative one beyond the noise is now one of the two signs of a disturbed measurement, beside a wide range. The positive side would need the CLI's true fixed cost, which timing the protocol's `noop` mode could give. It was not added, since that side stayed within 6.6 %.
+- The minimum of the process times is not the cure. Differences of minima agreed within 5.1 % for the Rust CLIs, but put FeatherQR's phase 1 entries up to 8.0 % off, against 6.5 % for medians, because a JIT process's speed varies from process to process and minima pair a fast N process with a fast 2N process.
+- The tolerance's second test has to measure bias, not noise. As the median of the disagreements' sizes, it failed CLIs whose two to four undisturbed entries happened to scatter, while no CLI's signed median moved past 1.3 %.
+- A Rust CLI's fixed cost is a few milliseconds of process start, and its estimate lay within the check's noise of zero (−29 to +54 ms where the check agreed within 3 %), against 193 to 325 ms for FeatherQR on the JIT.
+- One run with the outside check took 13.5 minutes for the run and 19 to 24 minutes for each outside check, over five CLIs on 15 entries.

@@ -1,0 +1,7 @@
+# The CLIs in the image: a name, then the command, tab-separated. The collector appends the protocol's arguments,
+# and skips a CLI whose command is not in the image (the x86-64-v3 builds on arm64).
+featherqr-jit	/opt/xlang/featherqr-jit/featherqr-cli
+rqrr-default	/opt/xlang/rust/default/rqrr-cli
+rqrr-v3	/opt/xlang/rust/x86-64-v3/rqrr-cli
+fast_qr-default	/opt/xlang/rust/default/fast_qr-cli
+fast_qr-v3	/opt/xlang/rust/x86-64-v3/fast_qr-cli

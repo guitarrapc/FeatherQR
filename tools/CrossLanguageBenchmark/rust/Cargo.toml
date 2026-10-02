@@ -1,0 +1,20 @@
+# The cross-language benchmark's Rust CLIs, one binary per library, sharing the protocol in src/lib.rs.
+# See .github/docs/plans/cross-language-benchmark-plan.md. The release profile is left at its defaults,
+# so the default build is what `cargo build --release` gives a user, and the image adds an x86-64-v3 build beside it.
+[package]
+name = "xlang-rust"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+fast_qr = { version = "=0.14.0", default-features = false }
+rqrr = { version = "=0.11.0", default-features = false }
+
+[[bin]]
+name = "rqrr-cli"
+path = "src/bin/rqrr.rs"
+
+[[bin]]
+name = "fast_qr-cli"
+path = "src/bin/fast_qr.rs"
