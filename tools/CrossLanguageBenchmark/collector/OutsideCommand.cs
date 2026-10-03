@@ -48,8 +48,7 @@ internal static class OutsideCommand
     {
         var machine = Machine.Capture();
         var results = new List<OutsideResult>();
-        // hyperfine's exports stay on the container's own disk: read back through Docker Desktop's Windows bind mount,
-        // a file just written there came back as zero bytes. Their times are kept in outside.json.
+        // hyperfine's exports stay on the container's own disk (see Hyperfine.Time). Their times are kept in outside.json.
         var scratch = Directory.CreateTempSubdirectory("xlang-hyperfine").FullName;
         Directory.CreateDirectory(outDir);
 
@@ -82,20 +81,9 @@ internal static class OutsideCommand
                 {
                     // The order alternates, so drift during the check does not land on one side of the difference.
                     var order = round % 2 == 0 ? new[] { n, 2 * n } : [2 * n, n];
-                    var export = Path.Combine(scratch, $"{result.Key.Replace('/', '_')}.{result.Cli}.{round}.json");
-                    string[] arguments =
-                    [
-                        "--shell=none", "--style", "none", "--warmup", "1", "--runs", settings.Runs.ToString(CultureInfo.InvariantCulture), "--export-json", export,
-                        .. order.Select(iterations => string.Join(' ', cli.Command.Concat(Arguments(iterations)).Select(Quote))),
-                    ];
-                    var (code, _, error) = Processes.Run("hyperfine", arguments, TimeSpan.FromHours(1));
-                    if (code != 0)
-                        throw new InvalidOperationException($"hyperfine failed on {result.Key} {result.Cli}: {error}");
-
-                    var exported = JsonDocument.Parse(File.ReadAllText(export)).RootElement.GetProperty("results").EnumerateArray().ToArray();
+                    var times = Hyperfine.Time([.. order.Select(iterations => (string[])[.. cli.Command, .. Arguments(iterations)])], 1, settings.Runs, scratch, $"{result.Key} {result.Cli}");
                     for (var i = 0; i < order.Length; i++)
-                        (order[i] == n ? nTimes : twoNTimes).AddRange(exported[i].GetProperty("times").EnumerateArray().Select(t => t.GetDouble()));
-                    File.Delete(export);
+                        (order[i] == n ? nTimes : twoNTimes).AddRange(times[i]);
                 }
 
                 var perCall = (Stats.Median(twoNTimes) - Stats.Median(nTimes)) / n * 1e9;
@@ -114,11 +102,6 @@ internal static class OutsideCommand
         Console.Error.WriteLine($"wrote {Path.Combine(outDir, "outside.json")} and outside.md");
         return results.All(r => r.Rejected is null && !r.Disturbed) ? 0 : 1;
     }
-
-    // hyperfine splits a command without a shell the way a POSIX shell would, so single quotes keep an argument whole.
-    private static string Quote(string argument) => argument.Any(c => char.IsWhiteSpace(c) || c is '\'' or '"' or '\\' or '$')
-        ? $"'{argument.Replace("'", "'\\''")}'"
-        : argument;
 
     private static string Markdown(List<OutsideResult> results, OutsideSettings settings)
     {

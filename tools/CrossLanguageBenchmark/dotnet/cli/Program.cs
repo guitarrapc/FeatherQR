@@ -1,9 +1,12 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 using FeatherQR;
 
@@ -24,7 +27,11 @@ var (mode, op, symbology, input) = (args[0], args[1], args[2], args[3]);
 var json = new StringBuilder("{\"protocol\":1,\"library\":\"FeatherQR\"");
 json.Append(CultureInfo.InvariantCulture, $",\"libraryVersion\":\"{typeof(QRCodeGenerator).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion}\"");
 json.Append(CultureInfo.InvariantCulture, $",\"runtime\":\"{RuntimeInformation.FrameworkDescription} {RuntimeInformation.RuntimeIdentifier}\"");
-json.Append(CultureInfo.InvariantCulture, $",\"build\":\"{(RuntimeFeature.IsDynamicCodeSupported ? "jit" : "nativeaot")}\",\"vector256\":{(Vector256.IsHardwareAccelerated ? "true" : "false")}");
+json.Append(CultureInfo.InvariantCulture, $",\"build\":\"{Build()}\",\"vector256\":{Flag(Vector256.IsHardwareAccelerated)}");
+// What this build's code sees, for the instruction-set probe: under NativeAOT, a set outside the target that is not checked at run time reads false on a CPU that has it.
+json.Append(CultureInfo.InvariantCulture, $",\"isa\":{{\"vector128\":{Flag(Vector128.IsHardwareAccelerated)},\"vectorByteCount\":{Vector<byte>.Count}");
+json.Append(CultureInfo.InvariantCulture, $",\"avx2\":{Flag(Avx2.IsSupported)},\"bmi2X64\":{Flag(Bmi2.X64.IsSupported)},\"gfni\":{Flag(Gfni.IsSupported)},\"avx512f\":{Flag(Avx512F.IsSupported)}");
+json.Append(CultureInfo.InvariantCulture, $",\"advSimd\":{Flag(AdvSimd.IsSupported)},\"dp\":{Flag(Dp.IsSupported)}}}");
 json.Append(CultureInfo.InvariantCulture, $",\"mode\":\"{mode}\"");
 
 Operation operation;
@@ -108,6 +115,13 @@ string? Option(string name)
 }
 
 static long Nanoseconds(long ticks) => (long)(ticks * (1e9 / Stopwatch.Frequency));
+
+static string Flag(bool value) => value ? "true" : "false";
+
+// "jit", or "nativeaot" and the instruction-set target the publish stamped (FeatherQRCli.csproj).
+static string Build() => RuntimeFeature.IsDynamicCodeSupported
+    ? "jit"
+    : $"nativeaot {typeof(Operation).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "IlcInstructionSet")?.Value ?? "default"}";
 
 static int Usage()
 {

@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 /// <summary>A CLI the collector can launch: a line of <c>clis.tsv</c>, a name then the command and its fixed arguments, tab-separated.</summary>
 internal sealed record Cli(string Name, string[] Command)
@@ -38,6 +40,39 @@ internal static class Processes
 
     public static (int ExitCode, string Stdout, string Stderr) Run(Cli cli, IEnumerable<string> arguments, TimeSpan timeout)
         => Run(cli.Command[0], [.. cli.Command[1..], .. arguments], timeout);
+}
+
+/// <summary>Whole-process timing, with no timing code in the process: what the outside check and the cold first call are measured with.</summary>
+internal static class Hyperfine
+{
+    /// <summary>
+    /// Times each command, in the order given, as <paramref name="runs"/> whole processes after <paramref name="warmup"/> untimed ones,
+    /// and returns every run's wall-clock seconds, per command. The export is read back from <paramref name="scratch"/>, which has to be on
+    /// the container's own disk: read back through Docker Desktop's Windows bind mount, a file just written there came back as zero bytes.
+    /// </summary>
+    public static double[][] Time(string[][] commands, int warmup, int runs, string scratch, string what)
+    {
+        var export = Path.Combine(scratch, $"{Guid.NewGuid():N}.json");
+        string[] arguments =
+        [
+            "--shell=none", "--style", "none", "--warmup", warmup.ToString(CultureInfo.InvariantCulture), "--runs", runs.ToString(CultureInfo.InvariantCulture), "--export-json", export,
+            .. commands.Select(command => string.Join(' ', command.Select(Quote))),
+        ];
+        var (code, _, error) = Processes.Run("hyperfine", arguments, TimeSpan.FromHours(1));
+        if (code != 0)
+            throw new InvalidOperationException($"hyperfine failed on {what}: {error}");
+
+        var times = JsonDocument.Parse(File.ReadAllText(export)).RootElement.GetProperty("results").EnumerateArray()
+            .Select(result => result.GetProperty("times").EnumerateArray().Select(t => t.GetDouble()).ToArray())
+            .ToArray();
+        File.Delete(export);
+        return times;
+    }
+
+    // hyperfine splits a command without a shell the way a POSIX shell would, so single quotes keep an argument whole.
+    private static string Quote(string argument) => argument.Any(c => char.IsWhiteSpace(c) || c is '\'' or '"' or '\\' or '$')
+        ? $"'{argument.Replace("'", "'\\''")}'"
+        : argument;
 }
 
 internal static class Stats

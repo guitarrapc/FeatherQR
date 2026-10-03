@@ -7,13 +7,14 @@ using System.Text.Json;
 //   corpus   [--out /opt/xlang/corpus]
 //   run      [--corpus DIR] [--clis FILE] [--cli a,b] [--filter text,text] [--rounds 5] [--warmup-ms 3000] [--batch-ms 20] [--batches 30] [--out /out]
 //   outside  [--corpus DIR] [--clis FILE] [--run FILE] [--cli a,b] [--filter text,text] [--seconds 1] [--runs 5] [--rounds 2] [--attempts 3] [--out /out]
+//   cold     [--corpus DIR] [--clis FILE] [--cli a,b] [--filter text,text] [--runs 10] [--rounds 5] [--warmup 3] [--out /out]
 //   compare  [--run FILE] [--outside FILE] [--bdn FILE,FILE] [--bdn-cli featherqr-jit] [--out /out]
 //
 // --filter keeps the manifest entries whose key contains any of the texts, such as decode-image or qr-url.
 
 if (args.Length == 0)
 {
-    Console.Error.WriteLine("usage: collector <corpus|run|outside|compare> [options]; see Program.cs");
+    Console.Error.WriteLine("usage: collector <corpus|run|outside|cold|compare> [options]; see Program.cs");
     return 2;
 }
 
@@ -32,6 +33,8 @@ switch (args[0])
     case "outside":
         return OutsideCommand.Execute(corpus, Clis(), Entries(), ReadRun(),
             new OutsideSettings(Double("--seconds", 1), Int("--runs", 5), Int("--rounds", 2), Int("--attempts", 3)), outDir);
+    case "cold":
+        return ColdCommand.Execute(corpus, Clis(), Entries(), new ColdSettings(Int("--runs", 10), Int("--rounds", 5), Int("--warmup", 3)), outDir);
     case "compare":
         {
             var outsidePath = Option("--outside");

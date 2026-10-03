@@ -8,7 +8,8 @@ internal sealed record RunSettings(int Rounds, double WarmupMs, double BatchMs, 
 internal sealed record ProcessRun(int Round, string? Rejected, long BatchCalls, long WarmupCalls, double WarmupMs, double[] PerCallNs, double MedianNs, double MinNs, double Q1Ns, double Q3Ns);
 
 /// <summary>Every process of one entry on one CLI, and the statistics over their medians.</summary>
-internal sealed record EntryResult(string Key, string Cli, string? Library, string? LibraryVersion, string? Runtime, string? Build, ProcessRun[] Processes)
+/// <param name="Isa">The CLI's <c>isa</c> member as JSON, if it prints one: the instruction sets its build's code sees.</param>
+internal sealed record EntryResult(string Key, string Cli, string? Library, string? LibraryVersion, string? Runtime, string? Build, string? Isa, ProcessRun[] Processes)
 {
     private IEnumerable<double> Medians => Processes.Where(p => p.Rejected is null).Select(p => p.MedianNs);
 
@@ -75,7 +76,7 @@ internal static class RunCommand
         var results = processes.Select(p =>
         {
             var id = identity.TryGetValue(p.Key, out var o) ? o : default;
-            return new EntryResult(p.Key.Key, p.Key.Cli, Text(id, "library"), Text(id, "libraryVersion"), Text(id, "runtime"), Text(id, "build"), [.. p.Value]);
+            return new EntryResult(p.Key.Key, p.Key.Cli, Text(id, "library"), Text(id, "libraryVersion"), Text(id, "runtime"), Text(id, "build"), Text(id, "isa"), [.. p.Value]);
         }).ToArray();
 
         Directory.CreateDirectory(outDir);
@@ -113,8 +114,21 @@ internal static class RunCommand
 
     private static ProcessRun Rejected(int round, string reason) => new(round, reason, 0, 0, 0, [], double.NaN, double.NaN, double.NaN, double.NaN);
 
-    private static string? Text(JsonElement element, string name)
+    internal static string? Text(JsonElement element, string name)
         => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value.ToString() : null;
+
+    /// <summary>The <c>isa</c> member's true flags, and its numbers as name=value.</summary>
+    private static string IsaCell(string? isa)
+    {
+        if (isa is null)
+            return "";
+        return string.Join(' ', JsonDocument.Parse(isa).RootElement.EnumerateObject().Select(p => p.Value.ValueKind switch
+        {
+            JsonValueKind.True => p.Name,
+            JsonValueKind.Number => $"{p.Name}={p.Value}",
+            _ => null,
+        }).OfType<string>());
+    }
 
     private static string FirstLine(string text) => text.Split('\n', 2)[0].Trim();
 
@@ -122,6 +136,11 @@ internal static class RunCommand
     {
         var md = new StringBuilder();
         md.AppendLine(CultureInfo.InvariantCulture, $"{settings.Rounds} rounds, {settings.WarmupMs} ms warmup, {settings.Batches} batches of {settings.BatchMs} ms. Times per call; the range is that of the process medians.");
+        md.AppendLine();
+        md.AppendLine("| CLI | Library | Runtime | Build | Instruction sets the code sees |");
+        md.AppendLine("|---|---|---|---|---|");
+        foreach (var r in results.Where(r => r.Library is not null).DistinctBy(r => r.Cli))
+            md.AppendLine($"| {r.Cli} | {r.Library} {r.LibraryVersion} | {r.Runtime} | {r.Build} | {IsaCell(r.Isa)} |");
         md.AppendLine();
         md.AppendLine("| Entry | CLI | Median µs | Process medians µs | Spread | Calls per batch | Rejected |");
         md.AppendLine("|---|---|---:|---:|---:|---:|---|");

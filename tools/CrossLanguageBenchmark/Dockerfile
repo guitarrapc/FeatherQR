@@ -17,6 +17,23 @@ RUN cargo build --release --locked --target-dir /build/default \
     && if [ "$(uname -m)" = x86_64 ]; then RUSTFLAGS="-C target-cpu=x86-64-v3" cargo build --release --locked --target-dir /build/x86-64-v3; fi \
     && for dir in /build/*; do mkdir -p /opt/xlang/rust/$(basename $dir) && cp $dir/release/rqrr-cli $dir/release/fast_qr-cli /opt/xlang/rust/$(basename $dir)/; done
 
+# FeatherQR's CLI under NativeAOT: the default target, plus x86-64-v3 on x64. ILC comes with the SDK, pinned below by digest,
+# and clang only links. zlib1g-dev is left to match the base image's zlib1g. The final stage has the same base, so the binaries
+# find the same glibc.
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29 AS aot
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends clang=1:18.0-59~exp2 zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1
+WORKDIR /src
+COPY Directory.Build.props Directory.Packages.props global.json opensource.snk README.md LICENSE ./
+COPY src/FeatherQR/ src/FeatherQR/
+COPY tools/CrossLanguageBenchmark/dotnet/cli/ tools/CrossLanguageBenchmark/dotnet/cli/
+RUN dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -p:XlangNativeAot=true -o /opt/xlang/featherqr-aot/default \
+    && if [ "$(uname -m)" = x86_64 ]; then dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -p:XlangNativeAot=true -p:IlcInstructionSet=x86-64-v3 -o /opt/xlang/featherqr-aot/x86-64-v3; fi \
+    && find /opt/xlang/featherqr-aot -type f ! -name featherqr-cli -delete
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29
 
 RUN apt-get update \
@@ -40,8 +57,10 @@ RUN dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -o /opt/xl
     && cp tools/CrossLanguageBenchmark/clis.tsv /opt/xlang/clis.tsv
 
 COPY --from=rust /opt/xlang/rust/ /opt/xlang/rust/
+COPY --from=aot /opt/xlang/featherqr-aot/ /opt/xlang/featherqr-aot/
 
 # The GC is set explicitly, so neither the container's CPU and memory limits nor the CPU's cache size choose it.
+# NativeAOT reads the same settings.
 ENV DOTNET_gcServer=0 \
     DOTNET_gcConcurrent=0 \
     DOTNET_GCHeapHardLimit=0x40000000 \

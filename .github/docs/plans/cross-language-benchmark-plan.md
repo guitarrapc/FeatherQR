@@ -82,11 +82,12 @@ Every CLI is called as `<cli> <mode> <op> <symbology> <input> [--ecc E] [--versi
 - `op` is `encode`, `decode-matrix` or `decode-image`, and `symbology` is `qr`, `microqr` or `rmqr`. Encode is pinned to the level and version given (`3`, `M2`, `R7x43`). Decode takes neither.
 - The encode input is the payload's UTF-8 bytes. The matrix input is a binary PGM of the bare symbol, one pixel per module, 0 for dark. The image input is a binary PGM of the symbol drawn at 8 pixels per module inside its specified quiet zone.
 - `run` makes one call and prints its result for verification. It then warms up for 3 s and at least 3 calls, sizes a batch to 20 ms from the warmup's second half, and times 30 batches with a monotonic clock. It prints each batch's nanoseconds and its call count.
-- `fixed` makes N calls and prints only the checksum, for the outside check. `cold` makes one call and prints its result. `noop` loads the input and makes no call. Phase 3 times the last two from outside, and their difference is the cold first call.
+- `fixed` makes N calls and prints only the checksum, for the outside check. `cold` makes one call and prints its result. `noop` loads the input and makes no call. The collector times the last two from outside, and their difference is the cold first call.
 - `status` is `ok`, `failed` (no decode, or the encoder refused) or `unsupported` (the library has no such operation). A decode prints its text as UTF-8 in hex, so no CLI needs a JSON string escaper. An encode prints its matrix as rows of 0 and 1, with whatever quiet zone the library returns.
+- `build` names how the CLI was compiled: Rust's flags, or for FeatherQR `jit` or `nativeaot` with its instruction-set target. FeatherQR's CLI also prints `isa`, the instruction sets its code sees, so every run repeats the probe above on the machine it ran on.
 - Every call's result is folded into the printed checksum through its content (the text's length and last character, or the matrix size and its centre module), so no compiler can drop the work.
 
-The collector's `run` command launches one process per entry, CLI and round, and rotates which CLI goes first in each round. It rejects a process whose verification fails: a decode must print the payload, and an encoded matrix, cut to its dark modules' bounding box, must decode through FeatherQR's matrix decoder to the payload in the pinned version and level. A process's per-call times are its batches' times over their calls, and an entry's median is the median of its process medians. `outside` sizes N to one second of calls from that median and runs hyperfine with no shell, in rounds whose command order alternates. A measurement is disturbed by other load, and taken again up to three attempts, when its range (the quartiles of T(2N) against those of T(N)) exceeds 20 % of the call, or when its fixed cost, T(N) minus the N calls, is below zero by more than 3 % of T(N). A fixed cost cannot be negative, so a negative one means the longer 2N runs caught more of the load. `compare` holds the self-timed medians against the outside check and BenchmarkDotNet, and judges each CLI by the phase 1 tolerance. An entry still disturbed after its attempts stays out of the verdict, which then reads inconclusive.
+The collector's `run` command launches one process per entry, CLI and round, and rotates which CLI goes first in each round. It rejects a process whose verification fails: a decode must print the payload, and an encoded matrix, cut to its dark modules' bounding box, must decode through FeatherQR's matrix decoder to the payload in the pinned version and level. A process's per-call times are its batches' times over their calls, and an entry's median is the median of its process medians. `outside` sizes N to one second of calls from that median and runs hyperfine with no shell, in rounds whose command order alternates. A measurement is disturbed by other load, and taken again up to three attempts, when its range (the quartiles of T(2N) against those of T(N)) exceeds 20 % of the call, or when its fixed cost, T(N) minus the N calls, is below zero by more than 3 % of T(N). A fixed cost cannot be negative, so a negative one means the longer 2N runs caught more of the load. `compare` holds the self-timed medians against the outside check and BenchmarkDotNet, and judges each CLI by the phase 1 tolerance. An entry still disturbed after its attempts stays out of the verdict, which then reads inconclusive. `cold` verifies each entry's `cold` output as `run` does, then times the `cold` and `noop` processes with hyperfine, interleaved as `run` is and with their order alternating. Untimed runs first leave the binary and the input in the page cache, so the difference is the runtime's and the library's first call, not the disk's.
 
 The container gets two CPUs (`--cpuset-cpus`), so the runtime's background compiler and GC threads do not take the measured thread's CPU, and 4 GB of memory. .NET runs workstation non-concurrent GC with a 1 GiB heap limit and a 32 MiB generation 0 budget, set in the image so that the container's limits and the CPU's cache size do not choose them.
 
@@ -168,3 +169,53 @@ Lessons:
 - The tolerance's second test has to measure bias, not noise. As the median of the disagreements' sizes, it failed CLIs whose two to four undisturbed entries happened to scatter, while no CLI's signed median moved past 1.3 %.
 - A Rust CLI's fixed cost is a few milliseconds of process start, and its estimate lay within the check's noise of zero (−29 to +54 ms where the check agreed within 3 %), against 193 to 325 ms for FeatherQR on the JIT.
 - One run with the outside check took 13.5 minutes for the run and 19 to 24 minutes for each outside check, over five CLIs on 15 entries.
+
+### Phase 3: NativeAOT, the linux-arm64 half (2026-10-03)
+
+Done:
+
+- The image publishes FeatherQR's CLI under NativeAOT in a stage of its own, from the same SDK digest with clang to link: the default target as `featherqr-aot-default`, and on x64 the `x86-64-v3` target as `featherqr-aot-v3`. The CLI's `build` member names the target, and its `isa` member prints the instruction sets its code sees (see Protocol).
+- The collector's `cold` command measures the cold first call (see Protocol).
+- The probe on linux-arm64 is in the [probe reference](references/nativeaot-instruction-set-probe.md#linux-arm64-2026-10-03). The JIT and default NativeAOT take the same tier in all 28 kernels, so on ARM64 the default arm loses no tier and no kernel is behind its gap. Both runs below recorded the same `isa` for both builds on every entry: AdvSimd and the dot product.
+- Measured on an Apple M2 (MacBook Air, fanless, 4 performance and 4 efficiency cores, on AC power) under Docker Desktop 4.44.3 on macOS 26.6.2. Its VM runs the arm64 image natively (kernel 6.10.14-linuxkit, 8 CPUs, 7.65 GiB), so these are development measurements like phase 1's, and phase 6's ubuntu-24.04-arm runner gives the arm64 rows. The container had two CPUs and 4 GB. The image was built from 3f296bb plus this phase's changes, with .NET 10.0.12 and ILCompiler 10.0.12. Two runs of five rounds with the JIT and default NativeAOT interleaved, and after the first run the outside check and the cold first call. Every one of the 33 entries verified in every process.
+
+Steady state, NativeAOT over the JIT, each entry's ratio taken as the geometric mean of its two runs:
+
+| Operation | Entries | Median | Range |
+|---|---:|---:|---:|
+| Encode | 11 | 1.03 | 0.94 to 1.08 |
+| Matrix decode | 11 | 1.12 | 1.04 to 1.58 |
+| Image decode | 11 | 1.09 | 0.99 to 1.14 |
+
+The Micro QR byte matrix decode read 1.59 and 1.57, and every NativeAOT process was slower than every JIT process (0.525 to 0.580 µs against 0.320 to 0.357 µs in the first run). rMQR's byte matrix decode goes through the same byte payload code and read 1.16 and 1.08, so that code is not the cause on its own. The cause is not known yet. No other single entry's ratio is a result on this box, because two runs of the same image put an entry's ratio up to 22.7 % apart (below).
+
+Cold first call, from five rounds of ten timed runs per command:
+
+| Measure, over the 33 entries | JIT | NativeAOT default |
+|---|---:|---:|
+| Start (`noop`): process, runtime and input load | 17.1 to 19.0 ms | 0.88 to 0.98 ms |
+| First call (`cold` minus `noop`), encode | 9.1 to 20.9 ms | 0.04 to 0.31 ms |
+| First call, matrix decode | 10.6 to 16.8 ms | 0.05 to 0.14 ms |
+| First call, image decode | 25.9 to 33.6 ms | 0.05 to 0.18 ms |
+
+Under the JIT the first call costs as much as the runtime's start or more, and Standard QR's costs more than Micro QR's on every operation (encode 19.0 to 20.9 ms against 9.1 to 9.8 ms). Under NativeAOT, start and first call together take about 1 ms on every entry.
+
+How well this box measures:
+
+| Measure, over the 33 entries | JIT | NativeAOT default |
+|---|---:|---:|
+| Range of an entry's five process medians over their median, median (first run) | 15.0 % | 16.2 % |
+| Second run against the first, median and largest | 4.0 %, 10.9 % | 5.4 %, 13.5 % |
+| Outside check against self-timed, median and largest | 3.6 %, 9.2 % | 3.8 %, 14.1 % |
+| Outside check against self-timed, signed median | −1.4 % | −1.2 % |
+
+Under the phase 1 tolerance, both CLIs fail the outside check on its bound per entry and pass it on bias. The entries beyond 7 % disagreed by about as much as their own processes did. For example, NativeAOT's Standard QR URL encode ran 2.78 µs in three processes and 3.29 to 3.38 µs in two, and the outside check's 3.08 µs fell between. So the loop shows no bias, and this box cannot resolve a single entry to 7 %.
+
+Lessons:
+
+- This Mac measured about four times noisier than the Windows box. An entry's process medians ranged 15 % apart at the median against 4 %, and two runs agreed within 4 to 5 % at the median against 1.3 %. The runs did not separate the causes. Desktop apps took about 1.5 of the 8 cores, and Docker Desktop's VM CPUs are host threads that macOS can move between cores of either kind, so `--cpuset-cpus` pins the measured thread to a VM CPU, not to a core. A box's noise has to be measured on that box before its per-entry ratios are read. Here only ratios over many entries, and gaps beyond about 25 %, are results.
+- On NativeAOT the negative fixed-cost test flags load as intended. Its true fixed cost is about 1 ms, so three of the 66 measurements read −31 to −47 ms, all on NativeAOT, and were measured again. Their per-call times were within 2.3 % of the self-timed medians.
+- `-p:PublishAot=true` on the command line reaches the library's netstandard2.0 build as a global property and fails it (NETSDK1207), so the CLI switches NativeAOT on from a property of its own.
+- The run took 20 minutes, the outside check 46 minutes and the cold first call 2 minutes, for two CLIs on 33 entries.
+
+Left for phase 3: the x64 half on the Windows box. The same Dockerfile built there adds `featherqr-aot-v3`, and `run`, `outside`, `cold` and `compare` over `featherqr-jit`, `featherqr-aot-default` and `featherqr-aot-v3` give the gap per shape between the AOT arms. The kernels behind the default arm's gap then come from the tier table.
