@@ -110,6 +110,7 @@ Phase 1 comes first because it tests the method: if a plain timing loop cannot r
 
 ## Open decisions
 
+- Whether each corpus entry rotates through many inputs in random order instead of one, so that a branch on the data costs what it does on real input. It would change every number, and the phase 3 finding is the only measurement of the effect.
 - Pushing the image to GHCR by digest makes every result traceable to exact binaries, but publishes an image under the repository. The alternative is to rebuild it in each run from the build cache and record the digest without publishing it.
 
 ## Progress log
@@ -187,7 +188,7 @@ Steady state, NativeAOT over the JIT, each entry's ratio taken as the geometric 
 | Matrix decode | 11 | 1.12 | 1.04 to 1.58 |
 | Image decode | 11 | 1.09 | 0.99 to 1.14 |
 
-The Micro QR byte matrix decode read 1.59 and 1.57, and every NativeAOT process was slower than every JIT process (0.525 to 0.580 µs against 0.320 to 0.357 µs in the first run). rMQR's byte matrix decode goes through the same byte payload code and read 1.16 and 1.08, so that code is not the cause on its own. The cause is not known yet. No other single entry's ratio is a result on this box, because two runs of the same image put an entry's ratio up to 22.7 % apart (below).
+The Micro QR byte matrix decode read 1.59 and 1.57, and every NativeAOT process was slower than every JIT process (0.525 to 0.580 µs against 0.320 to 0.357 µs in the first run). rMQR's byte matrix decode goes through the same byte payload code and read 1.16 and 1.08, so that code is not the cause on its own. The cause was Micro QR's codeword extraction, found natively on the same M2 afterwards. Its loop branched on each module's value. Decoding one symbol over and over lets the branch predictor learn that symbol's 192 modules, and ILC laid the loop out with one more taken branch per module than the JIT did with its synthesized profile, which the predictor learned less well. Both compilers emitted the same loop body. The extraction alone took 0.22 to 0.27 µs under the JIT and 0.44 to 0.51 µs under NativeAOT on the repeated symbol, and 0.95 to 1.09 µs under both on 1,024 symbols in random order. It now gathers the bits in a register without that branch. M4's matrix decode went from 0.31 to 0.28 µs under the JIT and from 0.55 to 0.30 µs under NativeAOT on the repeated symbol, and from 0.94 and 1.07 µs to 0.33 µs under both on changing symbols. M2 and M3 decoded changing symbols 2.3 to 2.8 times faster. No other single entry's ratio is a result on this box, because two runs of the same image put an entry's ratio up to 22.7 % apart (below).
 
 Cold first call, from five rounds of ten timed runs per command:
 
@@ -217,5 +218,6 @@ Lessons:
 - On NativeAOT the negative fixed-cost test flags load as intended. Its true fixed cost is about 1 ms, so three of the 66 measurements read −31 to −47 ms, all on NativeAOT, and were measured again. Their per-call times were within 2.3 % of the self-timed medians.
 - `-p:PublishAot=true` on the command line reaches the library's netstandard2.0 build as a global property and fails it (NETSDK1207), so the CLI switches NativeAOT on from a property of its own.
 - The run took 20 minutes, the outside check 46 minutes and the cold first call 2 minutes, for two CLIs on 33 entries.
+- A benchmark that repeats one input lets the branch predictor learn a branch on the data. It can understate that branch's cost several times over, and show a gap between two builds that real input does not have. Micro QR's extraction is the case found here. The corpus has one input per entry, as the BenchmarkDotNet projects do, so a gap on a single entry is worth one run with the inputs rotated before it is read as code generation.
 
 Left for phase 3: the x64 half on the Windows box. The same Dockerfile built there adds `featherqr-aot-v3`, and `run`, `outside`, `cold` and `compare` over `featherqr-jit`, `featherqr-aot-default` and `featherqr-aot-v3` give the gap per shape between the AOT arms. The kernels behind the default arm's gap then come from the tier table.
