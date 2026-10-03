@@ -1,6 +1,9 @@
 # The CLIs in the image: a name, then the command, tab-separated. The collector appends the protocol's arguments,
 # and skips a CLI whose command is not in the image (the x86-64-v3 builds on arm64).
 featherqr-jit	/opt/xlang/featherqr-jit/featherqr-cli
+# x64 only: the JIT with AVX switched off dispatches as a default NativeAOT publish does, so against the JIT it is the cost of the
+# lost tiers, and against default NativeAOT the cost of ahead-of-time code at the same tiers. On arm64 it is the JIT again.
+featherqr-jit-noavx	env	DOTNET_EnableAVX=0	/opt/xlang/featherqr-jit/featherqr-cli
 featherqr-aot-default	/opt/xlang/featherqr-aot/default/featherqr-cli
 featherqr-aot-v3	/opt/xlang/featherqr-aot/x86-64-v3/featherqr-cli
 rqrr-default	/opt/xlang/rust/default/rqrr-cli

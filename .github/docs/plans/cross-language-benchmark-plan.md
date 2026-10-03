@@ -31,7 +31,7 @@ The default target is the OS's minimum instruction set: `IsSupported` for AVX2, 
 
 With AVX but not AVX2 in the target (`x86-64-v2,avx`), `Avx2`, `Bmi2` and `Fma` become run-time checks and read true, so the kernels gated on `Avx2.IsSupported` come back. `Vector256.IsHardwareAccelerated` stays false, so the kernels gated on it do not. The [instruction-set probe](references/nativeaot-instruction-set-probe.md) repeats this on the current code (2026-10-02) and adds the startup check a target triggers on a CPU that lacks it, and each kernel's tier.
 
-A rough first measurement (same box, loaded by other work, median of 21 batches, three interleaved rounds, to be replaced by phase 3) found default NativeAOT 2.6x slower than JIT on a URL-sized Standard QR encode, about 4x on a clean image decode and on rMQR matrix decode, and 1.5 to 2.6x elsewhere. `x86-64-v2,avx` recovers most of the encode gap and almost none of the image decode gap. `x86-64-v3` and `native` are within the box's noise of JIT on every shape. The target is the application's compile setting, so no library-side switch reaches a default publish. The library controls its 128-bit tiers, which default NativeAOT, ARM64 and WebAssembly all run. The README calls NativeAOT fully supported and does not mention this.
+A rough first measurement (same box, loaded by other work, median of 21 batches, three interleaved rounds, before the 128-bit tiers) found default NativeAOT 2.6x slower than JIT on a URL-sized Standard QR encode, about 4x on a clean image decode and on rMQR matrix decode, and 1.5 to 2.6x elsewhere. `x86-64-v2,avx` recovers most of the encode gap and almost none of the image decode gap. `x86-64-v3` and `native` are within the box's noise of JIT on every shape. Phase 3 replaced it (Progress log): with the 128-bit tiers, default NativeAOT runs 1.03 to 2.00 times the JIT by shape, Standard QR encode the most, and `x86-64-v3` 0.99 to 1.23. `x86-64-v2,avx` was not measured again. The target is the application's compile setting, so no library-side switch reaches a default publish. The library controls its 128-bit tiers, which default NativeAOT, ARM64 and WebAssembly all run. The README calls NativeAOT fully supported and does not mention this.
 
 ## Scope
 
@@ -220,4 +220,55 @@ Lessons:
 - The run took 20 minutes, the outside check 46 minutes and the cold first call 2 minutes, for two CLIs on 33 entries.
 - A benchmark that repeats one input lets the branch predictor learn a branch on the data. It can understate that branch's cost several times over, and show a gap between two builds that real input does not have. Micro QR's extraction is the case found here. The corpus has one input per entry, as the BenchmarkDotNet projects do, so a gap on a single entry is worth one run with the inputs rotated before it is read as code generation.
 
-Left for phase 3: the x64 half on the Windows box. The same Dockerfile built there adds `featherqr-aot-v3`, and `run`, `outside`, `cold` and `compare` over `featherqr-jit`, `featherqr-aot-default` and `featherqr-aot-v3` give the gap per shape between the AOT arms. The kernels behind the default arm's gap then come from the tier table.
+### Phase 3: NativeAOT, the linux-x64 half (2026-10-03)
+
+Done:
+
+- `clis.tsv` gains `featherqr-jit-noavx`, the JIT CLI under `DOTNET_EnableAVX=0`, as an x64 diagnostic arm. Its `isa` matched default NativeAOT's on every process (`Vector128`, 16-byte vectors, GFNI, no AVX2, BMI2 or `Vector256`). Against the JIT it is the cost of the tiers default NativeAOT loses. Default NativeAOT against it is the cost of ahead-of-time code at the same tiers. The outside check skips it, since its binary is the JIT arm's.
+- Measured on the Windows box as in phase 1, at 357762d, which includes main's encoder changes up to #448 and so is not the code the arm64 half measured. Two runs of five rounds over the four arms, with the outside check on the three binaries and the cold first call on all four between them. Every one of the 33 entries verified in every process. The NativeAOT `isa` matched the probe's table: the default target sees GFNI and none of AVX2, BMI2 and `Vector256`, and `x86-64-v3` sees all three but not AVX-512.
+
+Steady state, each entry's ratio taken as the geometric mean of its two runs, median and range over the entries of each group:
+
+| Shape | Tier loss (JIT without AVX over JIT) | Ahead-of-time code (default NativeAOT over JIT without AVX) | Default NativeAOT over JIT | x86-64-v3 NativeAOT over JIT | Default over x86-64-v3 |
+|---|---:|---:|---:|---:|---:|
+| Standard QR encode | 1.62 (1.59 to 1.78) | 1.23 | 2.00 (1.95 to 2.18) | 1.23 | 1.61 (1.59 to 1.76) |
+| Standard QR matrix decode | 1.10 | 1.16 | 1.27 | 1.10 | 1.14 |
+| Standard QR image decode | 1.19 | 1.15 | 1.37 | 1.08 | 1.26 |
+| Micro QR encode | 1.22 (1.04 to 1.31) | 1.04 | 1.21 (1.09 to 1.36) | 1.09 | 1.11 |
+| Micro QR matrix decode | 1.09 | 0.93 | 1.03 | 0.99 | 1.03 |
+| Micro QR image decode | 1.17 | 1.14 | 1.34 | 1.10 | 1.21 |
+| rMQR encode | 1.12 (1.05 to 1.27) | 1.04 | 1.17 (1.10 to 1.27) | 1.06 | 1.11 |
+| rMQR matrix decode | 1.16 (1.14 to 1.36) | 1.11 | 1.31 (1.26 to 1.49) | 1.22 | 1.04 (1.04 to 1.33) |
+| rMQR image decode | 1.22 | 1.20 | 1.46 (1.40 to 1.56) | 1.13 | 1.28 |
+
+The two causes multiply: Standard QR encode loses 1.62 to its tiers and 1.23 to ahead-of-time code, and runs at 2.00. The x86-64-v3 publish recovers the tiers, and what stays (0.99 to 1.26 over the JIT by entry, 1.10 at the median) is ahead-of-time code, which has no tiered recompilation or dynamic PGO. The Micro QR byte matrix decode that read 1.58 on arm64 read 1.03 here.
+
+The kernels behind the default arm's gap, by shape, from the kernels each shape's clean path reaches and their cells in the [tier table](../specs/qrcode-simd-tiers.md). Every one falls to a 128-bit tier. None falls to scalar.
+
+| Shape | Kernels that change tier, x86-64-v3 to default |
+|---|---|
+| Standard QR encode | `TextAnalyzer` (`Avx2` to `Sse2`, run twice per encode), `ModulePlacerExpandBits` and `ModulePlacerMaskCode` (`Avx2` to `Ssse3`). `EccBinaryEncoder` (`GfniV256` to `Gfni`) only where a block has more than 16 ECC codewords, here the version 4 Unicode entry |
+| Micro QR encode | `TextAnalyzer`, `MicroQRModulePlacer` (`Avx2Pext` to `Ssse3`), `ModuleBitPacker` (`Avx2` to `Ssse3`) |
+| rMQR encode | `TextAnalyzer`, `RmQRModulePlacer` (`Avx2` to `Ssse3`), `ModuleBitPacker`, and `EccBinaryEncoder` for the four-block R17x139 entry |
+| Matrix decode, all three | `EccBinaryDecoder` (`GfniV256` to `Vector128`), and for rMQR `RmQRExtractCodewords` (`Avx2Pext` to `Vector128`) |
+| Image decode, all three | `Binarizer` and `FinderRowEdges` (`Vector256` to `Vector128`), then the matrix decode's kernels. Standard QR adds `PerspectiveGridSampler` (`Vector256` to `Sse2`) and, from version 2, `AlignmentRowMask` (`Vector256` to `Vector128`) |
+
+Cold first call, from five rounds of ten timed runs per command:
+
+| Measure, over the 33 entries | JIT | JIT without AVX | NativeAOT default | NativeAOT x86-64-v3 |
+|---|---:|---:|---:|---:|
+| Start (`noop`) | 24.8 to 28.4 ms | 25.2 to 29.1 ms | 2.0 to 2.3 ms | 2.0 to 2.3 ms |
+| First call, encode | 11.3 to 25.5 ms | 10.1 to 22.0 ms | 0.05 to 0.27 ms | 0.07 to 0.23 ms |
+| First call, matrix decode | 13.5 to 20.2 ms | 15.0 to 20.1 ms | 0.07 to 0.19 ms | 0.05 to 0.15 ms |
+| First call, image decode | 29.4 to 37.5 ms | 29.4 to 37.3 ms | 0.09 to 0.25 ms | 0.07 to 0.19 ms |
+
+How well this box measured: an entry's process medians ranged 2.9 to 4.0 % apart at the median in the second run. The first run caught load in one round across all arms, which the median of five absorbed. The second run agreed with the first within 1.4 to 1.7 % at the median per arm (8.4 % at most, on the JIT), and the default-over-JIT ratio within 1.1 % (8.7 % at most). The outside check's signed median was −1.3 % for the JIT, −1.5 % for default NativeAOT and −1.4 % for x86-64-v3, and both NativeAOT arms passed with every entry within 4.3 %. The JIT's Micro QR numeric encode read 10.0 % low against the first run, whose median that load had raised. Against the second run, the six JIT entries beyond 4 % all came within 5.0 % on a recheck.
+
+Lessons:
+
+- On x64 the gap has two causes, and only one of them is the library's tiers. The JIT without AVX takes exactly default NativeAOT's tiers, so it separates them without a second compiler: on Standard QR encode the tiers cost 1.62 and ahead-of-time code 1.23. A publish for `x86-64-v3` removes the first and leaves the second.
+- An entry that fails the outside check by its bound is first checked against a second run. The JIT's worst entry failed against a run whose median other load had raised, and agreed against the next. The loop is the same code in every .NET arm, and the two NativeAOT arms passed in the same check.
+- The outside check reads about 1 % below the self-timed median on every .NET arm, on both machines (−0.9 % in phase 1, −1.2 to −1.5 % here and on arm64). The Rust CLIs' signed medians ranged −1.3 to +0.5 % over their three checks. The cause is not known. Every .NET arm shares it, so ratios between them are unaffected.
+- Tracing which kernels each shape reaches found that a Standard QR encode with a pinned version, which every encode entry here is, analyses the text twice: once to resolve the version and once to encode. That is a separate change to the library.
+- Stopping the shell that ran `docker run` leaves its container running, still on the measured CPUs. The measuring scripts name their container, so a stop reaches it.
+- The four arms took 40 minutes per run, the outside check on three of them 64 minutes, and the cold first call 6 minutes.
