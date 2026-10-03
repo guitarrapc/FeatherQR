@@ -18,7 +18,8 @@ namespace FeatherQR.Tests;
 /// </para>
 /// <para>
 /// The early abort is held to its contract: with the bound at or above the score the result is the score, and below it the
-/// result is the score or <see cref="int.MaxValue"/>, never another value. The ARM64 scorers have no abort.
+/// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. The
+/// ARM64 scorers have no abort.
 /// </para>
 /// <para>
 /// Every call gets fresh row buffers: a scorer may use its rows as scratch for the column finder windows.
@@ -270,15 +271,16 @@ public class ModulePlacerMaskScoreParityTest
 
     private static async Task AssertLaneAbortContract(Func<int, Vector128<int>> score, int[] expected, string because)
     {
-        var highest = expected.Max();
-        foreach (var bound in new[] { highest, highest - 1, expected.Min() - 1, 0 })
+        // A lane whose score is at or under the bound can still win or tie, so it reads its exact score whatever the other lanes
+        // do. Each lane's own score, and one under it, put a bound on both sides of every lane.
+        foreach (var bound in expected.SelectMany(e => new[] { e, e - 1 }).Append(0).Distinct())
         {
             var result = score(bound);
             for (var lane = 0; lane < expected.Length; lane++)
             {
                 var value = result.GetElement(lane);
-                if (bound >= highest)
-                    await Assert.That(value).IsEqualTo(expected[lane]).Because($"{because}, lane {lane}, bound {bound} at or above every score");
+                if (bound >= expected[lane])
+                    await Assert.That(value).IsEqualTo(expected[lane]).Because($"{because}, lane {lane}, bound {bound} at or above the lane's score");
                 else if (value != int.MaxValue)
                     await Assert.That(value).IsEqualTo(expected[lane]).Because($"{because}, lane {lane}, bound {bound}: the score or int.MaxValue");
             }

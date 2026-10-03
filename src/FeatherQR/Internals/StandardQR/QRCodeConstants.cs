@@ -737,7 +737,7 @@ internal static class QRCodeConstants
                 blocksInGroup2: baseValues[b + 4],
                 codewordsInGroup2: baseValues[b + 5]);
         }
-        return table.ToArray();
+        return table;
     }
 
     /// <summary>
