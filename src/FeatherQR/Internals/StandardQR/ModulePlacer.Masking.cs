@@ -57,47 +57,84 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Applies one specific mask pattern to the data area, for a caller-pinned pattern (<see cref="QRCodeGeneratorOptions.MaskPattern"/>).
-    /// No scoring: the whole 8-pattern evaluation is skipped, so a plain per-module loop is already far cheaper than the selection path it replaces.
+    /// No scoring: each row takes the pattern's packed template row (the one the selection scores) masked to its unblocked modules, XORed
+    /// into the bytes as the selection applies its winner, so a pinned pattern costs the selection's last step and nothing else.
     /// </summary>
+    /// <remarks>
+    /// The predicate tested per module cost more than the whole eight-pattern selection it skips: 26 µs at version 26, where the selection
+    /// took 9 µs (2026-10-03, Lessons Learned, Performance in specs/standardqr-encoder.md).
+    /// </remarks>
     /// <param name="buffer">QR matrix with data placed and no mask applied; masked in place.</param>
     /// <param name="size">QR code size in modules.</param>
     /// <param name="blockedMask">Blocked-module bitmask (function patterns and format/version areas).</param>
     /// <param name="patternIndex">Mask pattern number (0-7).</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="patternIndex"/> is not 0-7. Without the guard an out-of-range pattern would silently apply no mask (GetMaskBit's default arm) while the caller still writes format information claiming it.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="patternIndex"/> is not 0-7. Without the guard an out-of-range pattern would index past the templates while the caller still writes format information claiming it.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="buffer"/> holds fewer than <paramref name="size"/>² modules: the wide rows are written through unchecked references.</exception>
     public static void ApplyMaskPattern(Span<byte> buffer, int size, ReadOnlySpan<byte> blockedMask, int patternIndex)
     {
         if ((uint)patternIndex > 7)
             throw new ArgumentOutOfRangeException(nameof(patternIndex), $"Mask pattern must be 0-7, but was {patternIndex}");
+        if (buffer.Length < size * size)
+            throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
 
-        for (var y = 0; y < size; y++)
+#if NET8_0_OR_GREATER
+        if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
-            for (var x = 0; x < size; x++)
+            ApplyMaskPatternSimd(buffer, size, blockedMask, patternIndex);
+            return;
+        }
+        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            ApplyMaskPatternAdvSimd(buffer, size, blockedMask, patternIndex);
+            return;
+        }
+#endif
+        ApplyMaskPatternScalar(buffer, size, blockedMask, patternIndex);
+    }
+
+    /// <summary><see cref="ApplyMaskPattern"/> unpacking 8 modules a step (SWAR): the route of every build without AVX2 or ARM64 AdvSimd.</summary>
+    internal static void ApplyMaskPatternScalar(Span<byte> buffer, int size, ReadOnlySpan<byte> blockedMask, int patternIndex)
+    {
+        // The unblocked rows are bit slices of the blocked bitmask; a padded copy keeps every 8-byte slice read inside it.
+        Span<byte> padded = stackalloc byte[blockedMask.Length + 32];
+        blockedMask.CopyTo(padded);
+        padded.Slice(blockedMask.Length).Clear();
+
+        var tplBase = patternIndex * 12;
+        if (size <= 64)
+        {
+            var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
+            for (int y = 0, tplRow = 0; y < size; y++)
             {
-                var index = y * size + x;
-                if (IsModuleBlocked(blockedMask, index))
-                    continue;
-                if (GetMaskBit(patternIndex, y, x))
-                    buffer[index] ^= 1;
+                XorUnpackRow64(buffer.Slice(y * size, size), _maskTemplates64[tplBase + tplRow] & AllowedRow64(padded, y * size, rowMask));
+                if (++tplRow == 12) tplRow = 0;
             }
+            return;
+        }
+
+        var rowMask192 = Row192.MaskLow(size);
+        ref var bufRef = ref MemoryMarshal.GetReference(buffer);
+        for (int y = 0, tplRow = 0; y < size; y++)
+        {
+            XorUnpackRow192(ref Unsafe.Add(ref bufRef, y * size), size, _maskTemplates[tplBase + tplRow] & Row192.FromBitSlice(padded, y * size).AndNot(rowMask192));
+            if (++tplRow == 12) tplRow = 0;
         }
     }
 
     /// <summary>
-    /// Mask predicates (ISO/IEC 18004 7.8.2), row = y, col = x.
-    /// Must agree with the packed mask templates below and with QRMatrixDecoder.GetMaskBit.
+    /// The unblocked modules of the single-word row starting at <paramref name="bitOffset"/> (bit c = column c), from a copy of the blocked
+    /// bitmask padded so both 8-byte reads stay inside it.
     /// </summary>
-    private static bool GetMaskBit(int pattern, int row, int col) => pattern switch
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong AllowedRow64(ReadOnlySpan<byte> padded, int bitOffset, ulong rowMask)
     {
-        0 => ((row + col) & 1) == 0,
-        1 => (row & 1) == 0,
-        2 => col % 3 == 0,
-        3 => (row + col) % 3 == 0,
-        4 => ((row / 2 + col / 3) & 1) == 0,
-        5 => (row * col) % 2 + (row * col) % 3 == 0,
-        6 => ((row * col % 2 + row * col % 3) & 1) == 0,
-        7 => (((row + col) % 2 + row * col % 3) & 1) == 0,
-        _ => false,
-    };
+        var byteOff = bitOffset >> 3;
+        var sh = bitOffset & 7;
+        var u0 = NormalizeEndianness(MemoryMarshal.Read<ulong>(padded.Slice(byteOff)));
+        var u1 = NormalizeEndianness(MemoryMarshal.Read<ulong>(padded.Slice(byteOff + 8)));
+        var blocked = sh == 0 ? u0 : (u0 >> sh) | (u1 << (64 - sh));
+        return ~blocked & rowMask;
+    }
 
     // ---------------------------------
     // Single-word path (versions 1-11)
@@ -141,13 +178,7 @@ internal static partial class ModulePlacer
         var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
         for (var y = 0; y < size; y++)
         {
-            var bitOffset = y * size;
-            var byteOff = bitOffset >> 3;
-            var sh = bitOffset & 7;
-            var u0 = NormalizeEndianness(MemoryMarshal.Read<ulong>(padded.Slice(byteOff)));
-            var u1 = NormalizeEndianness(MemoryMarshal.Read<ulong>(padded.Slice(byteOff + 8)));
-            var blocked = sh == 0 ? u0 : (u0 >> sh) | (u1 << (64 - sh));
-            allowed[y] = ~blocked & rowMask;
+            allowed[y] = AllowedRow64(padded, y * size, rowMask);
         }
 
         var templates = _maskTemplates64;

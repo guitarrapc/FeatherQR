@@ -894,6 +894,35 @@ internal static partial class ModulePlacer
         }
     }
 
+    /// <summary><see cref="ApplyMaskPattern"/> unpacking 16 modules a step, for both row widths.</summary>
+    internal static void ApplyMaskPatternAdvSimd(Span<byte> buffer, int size, ReadOnlySpan<byte> blockedMask, int patternIndex)
+    {
+        // As in ApplyMaskPatternScalar: the unblocked rows are bit slices of a padded copy of the blocked bitmask.
+        Span<byte> padded = stackalloc byte[blockedMask.Length + 32];
+        blockedMask.CopyTo(padded);
+        padded.Slice(blockedMask.Length).Clear();
+
+        var tplBase = patternIndex * 12;
+        if (size <= 64)
+        {
+            var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
+            for (int y = 0, tplRow = 0; y < size; y++)
+            {
+                XorUnpackRow64AdvSimd(buffer.Slice(y * size, size), _maskTemplates64[tplBase + tplRow] & AllowedRow64(padded, y * size, rowMask));
+                if (++tplRow == 12) tplRow = 0;
+            }
+            return;
+        }
+
+        var rowMask192 = Row192.MaskLow(size);
+        ref var bufRef = ref MemoryMarshal.GetReference(buffer);
+        for (int y = 0, tplRow = 0; y < size; y++)
+        {
+            XorUnpackRow192AdvSimd(ref Unsafe.Add(ref bufRef, y * size), size, _maskTemplates[tplBase + tplRow] & Row192.FromBitSlice(padded, y * size).AndNot(rowMask192));
+            if (++tplRow == 12) tplRow = 0;
+        }
+    }
+
     /// <summary>Applies the winning pattern's packed XOR delta to the byte buffer, 16 modules per step.</summary>
     private static void ApplyWinnerAdvSimd(Span<byte> buffer, int size, int bestPatternIndex, ReadOnlySpan<Row192> allowed)
     {

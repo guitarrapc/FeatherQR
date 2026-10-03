@@ -13,7 +13,8 @@ using FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// Mask selection masks in place, so its row restores the unmasked matrix each call and the copy is timed alone beside it.
-/// The forced row applies pattern 3 through the per-module path a pinned <see cref="QRCodeGeneratorOptions.MaskPattern"/> takes.
+/// The forced rows apply pattern 0 or 3 through the path a pinned <see cref="QRCodeGeneratorOptions.MaskPattern"/> takes, and the
+/// <c>e2e-qz0-maskN</c> rows encode with the pattern pinned.
 /// </remarks>
 internal static partial class TierTiming
 {
@@ -29,6 +30,8 @@ internal static partial class TierTiming
         .. QRStageShapes("qr-v6-url-M", () => BenchmarkUrl, QREccLevel.M, 6),
         .. QRStageShapes("qr-v10-alnum-M", () => Pick(300, AlphanumericAlphabet), QREccLevel.M, 10),
         .. QRStageShapes("qr-v19-byte-M", () => DeterministicText(620), QREccLevel.M, 19),
+        // 1,000 characters at M, where a pinned mask once encoded in twice the automatic time (the forced rows below).
+        .. QRStageShapes("qr-v26-byte-M", () => DeterministicText(1000), QREccLevel.M, 26),
         .. QRStageShapes("qr-v40-byte-L", () => DeterministicText(2900), QREccLevel.L, 40),
         .. QRStageShapes("qr-v39-byte-H", () => DeterministicText(1200), QREccLevel.H, 39),
         .. QRStageShapes("qr-v40-alnum-L", () => Pick(4296, AlphanumericAlphabet), QREccLevel.L, 40),
@@ -143,6 +146,18 @@ internal static partial class TierTiming
         }
     }
 
+    /// <summary>
+    /// A pinned pattern applied to the unmasked matrix. The pattern is a captured variable, as the generator passes it: given as a
+    /// literal, the JIT inlined the call into the row and folded the predicate per pattern, which timed the version 26 path at half
+    /// what an encode pays for it.
+    /// </summary>
+    private static Func<int> ForcedMask(QRStages s, int pattern) => () =>
+    {
+        s.Placed.AsSpan().CopyTo(s.Work);
+        ModulePlacer.ApplyMaskPattern(s.Work, s.Layout.Size, s.Layout.BlockedMask, pattern);
+        return s.Work[s.Layout.Size + 1];
+    };
+
     private static Shape[] QRStageShapes(string name, Func<string> text, QREccLevel ecc, int version)
     {
         // One symbol's products for all of its rows, built on first use: the selected rows build only what they time.
@@ -151,6 +166,8 @@ internal static partial class TierTiming
         [
             new($"stage/{name}/e2e", () => { var s = stages.Value; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination), FramedLength(s.Layout.Size, 4)); }),
             new($"stage/{name}/e2e-qz0", () => { var s = stages.Value; var options = new QRCodeGeneratorOptions { QuietZoneSize = 0 }; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), s.Final.Length); }),
+            new($"stage/{name}/e2e-qz0-mask0", () => { var s = stages.Value; var options = new QRCodeGeneratorOptions { QuietZoneSize = 0, MaskPattern = 0 }; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), s.Final.Length); }),
+            new($"stage/{name}/e2e-qz0-mask3", () => { var s = stages.Value; var options = new QRCodeGeneratorOptions { QuietZoneSize = 0, MaskPattern = 3 }; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), s.Final.Length); }),
             new($"stage/{name}/e2e-class", () => { var s = stages.Value; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc).Size, s.Layout.Size + 8); }),
             new($"stage/{name}/analyze", () => { var s = stages.Value; return Checked(() => TextAnalyzer.Analyze(s.Text, EciMode.Default, allowKanji: false).DataLength, s.Analysis.DataLength); }),
             new($"stage/{name}/version", () =>
@@ -172,16 +189,8 @@ internal static partial class TierTiming
                     return ModulePlacer.MaskCode(s.Work, s.Layout.Size, s.Version, s.Layout.BlockedMask, s.Ecc);
                 };
             }),
-            new($"stage/{name}/mask-forced3", () =>
-            {
-                var s = stages.Value;
-                return () =>
-                {
-                    s.Placed.AsSpan().CopyTo(s.Work);
-                    ModulePlacer.ApplyMaskPattern(s.Work, s.Layout.Size, s.Layout.BlockedMask, 3);
-                    return s.Work[s.Layout.Size + 1];
-                };
-            }),
+            new($"stage/{name}/mask-forced0", () => ForcedMask(stages.Value, 0)),
+            new($"stage/{name}/mask-forced3", () => ForcedMask(stages.Value, 3)),
             new($"stage/{name}/format", () => { var s = stages.Value; return () => s.FormatAndVersion(s.Work, 3); }),
             new($"stage/{name}/pack", () =>
             {

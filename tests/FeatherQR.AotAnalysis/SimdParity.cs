@@ -40,6 +40,7 @@ internal static class SimdParity
         failures += Report("LuminanceConverter", LuminanceMismatches);
         failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
         failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
+        failures += Report("ModulePlacer.ApplyMaskPattern", MaskApplyMismatches);
         failures += Report("ModeSegmenter.ComputeCostsLanes", SegmenterLaneMismatches);
         failures += Report("StructuredAppendPlanner.WalkLanes", WalkLaneMismatches);
         failures += Report("EccBinaryDecoder.ComputeSyndromesVector128", SyndromeMismatches);
@@ -721,6 +722,38 @@ internal static class SimdParity
                     if (actualBest != expectedBest || !expected.AsSpan().SequenceEqual(actual))
                         mismatches.Add($"version {version}, data {(fill < 4 ? "random" : fill == 4 ? "light" : "dark")}, {eccLevel}: pattern {actualBest}, expected {expectedBest}");
                 }
+            }
+        }
+        return mismatches;
+    }
+
+    /// <summary>
+    /// A pinned mask through the dispatch, the route this build takes, against the decoder's mask predicate applied module by module
+    /// to the unblocked modules: every version, every pattern, on placed random data.
+    /// </summary>
+    private static List<string> MaskApplyMismatches()
+    {
+        var mismatches = new List<string>();
+        for (var version = 1; version <= 40; version++)
+        {
+            var layout = ModulePlacer.GetLayout(version);
+            var size = layout.Size;
+            var buffer = layout.Template.ToArray();
+            var codewords = new byte[layout.FreeModules / 8];
+            new Random(version * 11).NextBytes(codewords);
+            ModulePlacer.PlaceDataWords(buffer, layout, codewords);
+            for (var pattern = 0; pattern < 8; pattern++)
+            {
+                var expected = (byte[])buffer.Clone();
+                for (var index = 0; index < expected.Length; index++)
+                {
+                    if ((layout.BlockedMask[index >> 3] & (1 << (index & 7))) == 0 && QRMatrixDecoder.GetMaskBit(pattern, index / size, index % size))
+                        expected[index] ^= 1;
+                }
+                var actual = (byte[])buffer.Clone();
+                ModulePlacer.ApplyMaskPattern(actual, size, layout.BlockedMask, pattern);
+                if (!expected.AsSpan().SequenceEqual(actual))
+                    mismatches.Add($"version {version}, pattern {pattern}");
             }
         }
         return mismatches;

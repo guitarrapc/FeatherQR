@@ -241,6 +241,14 @@ internal static partial class TierTiming
         new("kernel/MaskCode-v27-scalar", () => MaskScoring(27, score: true, scalar: true)),
         new("kernel/MaskCode-v28", () => MaskScoring(28, score: true)),
         new("kernel/MaskCode-v28-scalar", () => MaskScoring(28, score: true, scalar: true)),
+        new("kernel/MaskForced-v1", () => MaskScoring(1, score: false, forced: 3)),
+        new("kernel/MaskForced-v6", () => MaskScoring(6, score: false, forced: 3)),
+        new("kernel/MaskForced-v10", () => MaskScoring(10, score: false, forced: 3)),
+        new("kernel/MaskForced-v12", () => MaskScoring(12, score: false, forced: 3)),
+        new("kernel/MaskForced-v20", () => MaskScoring(20, score: false, forced: 3)),
+        new("kernel/MaskForced-v27", () => MaskScoring(27, score: false, forced: 3)),
+        new("kernel/MaskForced-v28", () => MaskScoring(28, score: false, forced: 3)),
+        new("kernel/MaskForced-v40", () => MaskScoring(40, score: false, forced: 3)),
         new("kernel/StructuredAppendParity-byte-45k", () => Parity(Repeat("The quick brown fox jumps over the lazy dog. ", 45_000), EciMode.Iso8859_1)),
         new("kernel/StructuredAppendPlan-mixed-40k-optimal", () => SetPlan(Repeat("order 20260915 item 0000123456 qty 42 ", 40_000))),
         new("kernel/StructuredAppendPlan-utf8-15k-optimal", () => SetPlan(Repeat("ご注文番号 20260915-0000123456 の商品を 42 個、本日発送いたしました。", 15_000))),
@@ -671,8 +679,8 @@ internal static partial class TierTiming
         return new(luminance, side, side);
     }
 
-    /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them; the copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone).</summary>
-    private static Func<int> MaskScoring(int version, bool score, bool scalar = false)
+    /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them; the copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone). With <paramref name="forced"/> 0-7 the pattern is applied as a pinned mask is, with no scoring.</summary>
+    private static Func<int> MaskScoring(int version, bool score, bool scalar = false, int forced = -1)
     {
         var layout = ModulePlacer.GetLayout(version);
         var size = layout.Size;
@@ -682,6 +690,15 @@ internal static partial class TierTiming
         layout.Template.AsSpan().CopyTo(pristine);
         ModulePlacer.PlaceDataWords(pristine, layout, codewords);
         var work = new byte[pristine.Length];
+        if (forced >= 0)
+        {
+            return () =>
+            {
+                pristine.AsSpan().CopyTo(work);
+                ModulePlacer.ApplyMaskPattern(work, size, layout.BlockedMask, forced);
+                return work[size + 1];
+            };
+        }
         if (!score)
         {
             return () =>
