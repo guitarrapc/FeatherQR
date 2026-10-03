@@ -183,7 +183,7 @@ public class ModulePlacerMaskPackedParityTest
     };
 
     /// <summary>Plain ISO/IEC 18004 Section 8.8.2 penalty scoring (two-pass, byte per module).</summary>
-    private static int ReferenceScore(byte[] buffer, int size)
+    internal static int ReferenceScore(byte[] buffer, int size)
     {
         const uint PATTERN_FORWARD = 0b_0000_1011101;
         const uint PATTERN_BACKWARD = 0b_1011101_0000;

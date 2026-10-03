@@ -255,7 +255,7 @@ The pipeline also relies on these symbol facts, all verified (see the record bel
 
 ### 1. Validate the request
 
-The generator rejects an unknown version, an unknown ECC level, a `Height` constraint combined with a `Version` of a different height, and a negative quiet zone. Span sizing and span output also reject dimensions that overflow `int`, as `MicroQRCodeGenerator` does.
+The generator rejects an unknown version, an unknown ECC level, a `Height` constraint combined with a `Version` of a different height, and a quiet zone outside 0 to 10,000. Span sizing and span output also reject dimensions that overflow `int`, as `MicroQRCodeGenerator` does.
 
 ### 2. Analyze text
 

@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="..\FeatherQR.AotAnalysis\SimdReport.cs" Link="SimdReport.cs" />
     <Compile Include="..\FeatherQR.AotAnalysis\TierTiming.cs" Link="TierTiming.cs" />
+    <Compile Include="..\FeatherQR.AotAnalysis\TierTiming.EncodeStages.cs" Link="TierTiming.EncodeStages.cs" />
     <Compile Include="..\FeatherQR.AotAnalysis\SimdParity.cs" Link="SimdParity.cs" />
     <Compile Include="..\FeatherQR.Tests\Shared\NearestNeighbourRenderer.cs" Link="Renderers\NearestNeighbourRenderer.cs" />
     <Compile Include="..\FeatherQR.Tests\Shared\SupersampledRenderer.cs" Link="Renderers\SupersampledRenderer.cs" />

@@ -141,9 +141,10 @@ internal static partial class ModulePlacer
             }
         }
 
-        // rows2[y] = row y of the group's two candidates (masked, format bits in)
+        // rows2[y] = row y of the group's two candidates (masked, format bits in); scratch for the vertical-equality rows. The
+        // complements are computed where they are read: without a third buffer to zero, default NativeAOT and WebAssembly ran
+        // versions 1-10 faster by 2 to 6 %, and the JIT without AVX2 read level end to end.
         Span<Vector128<ulong>> rows2 = stackalloc Vector128<ulong>[64];
-        Span<Vector128<ulong>> nrows2 = stackalloc Vector128<ulong>[64];
         Span<Vector128<ulong>> eq2 = stackalloc Vector128<ulong>[64];
 
         var bestPatternIndex = 0;
@@ -158,7 +159,7 @@ internal static partial class ModulePlacer
             {
                 rows2[y] = (Vector128.Create(packed[y]) ^ Unsafe.Add(ref pre, preBase + y)) | Unsafe.Add(ref fmt, fmtBase + y);
             }
-            var scores = ScoreLanes64Vector128(rows2, nrows2, eq2, size, g == 0 ? int.MaxValue : bestScore);
+            var scores = ScoreLanes64Vector128(rows2, eq2, size, g == 0 ? int.MaxValue : bestScore);
             if (scores.Item1 < bestScore)
             {
                 bestScore = scores.Item1;
@@ -220,9 +221,10 @@ internal static partial class ModulePlacer
     /// <summary>
     /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of two candidates; returns their two ISO/IEC 18004 penalty scores.
     /// The AVX2 tier's <see cref="ScoreLanes64"/> on half the lanes, down to the checkpoint that skips column rule 3 when both lanes already exceed <paramref name="abortAbove"/>.
+    /// <paramref name="rows"/> is used as scratch for the column finder windows: the caller rebuilds it for each group.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static (int, int) ScoreLanes64Vector128(Span<Vector128<ulong>> rows, Span<Vector128<ulong>> nrows, Span<Vector128<ulong>> eq, int size, int abortAbove)
+    internal static (int, int) ScoreLanes64Vector128(Span<Vector128<ulong>> rows, Span<Vector128<ulong>> eq, int size, int abortAbove)
     {
         var rowMaskV = Vector128.Create(size == 64 ? ulong.MaxValue : (1ul << size) - 1);
         var startMaskV = Vector128.Create((1ul << (size - 10)) - 1);
@@ -234,12 +236,11 @@ internal static partial class ModulePlacer
         var accP3 = Vector128<ushort>.Zero;    // rule-3 windows (x40)
         var accBlack = Vector128<ushort>.Zero;
 
-        // Row-direction rules 1 and 3, balance popcount, complements.
+        // Row-direction rules 1 and 3, balance popcount.
         for (var y = 0; y < size; y++)
         {
             var x = rows[y];
             var nx = Vector128.AndNot(rowMaskV, x);
-            nrows[y] = nx;
             accBlack = AddPopCount(accBlack, x);
             var y2 = x & Shr(x, 1);
             var y4 = y2 & Shr(y2, 2);
@@ -252,14 +253,9 @@ internal static partial class ModulePlacer
             // a position is inside a dark 5-run or a light 5-run, never both: one popcount
             accOnes = AddPopCount(accOnes, y5 | n5);
             accTwos = AddPopCount(accTwos, st | nst);
-            var mf = nx & Shr(nx, 1) & Shr(nx, 2) & Shr(nx, 3)
-                   & Shr(x, 4) & Shr(nx, 5) & Shr(x, 6) & Shr(x, 7)
-                   & Shr(x, 8) & Shr(nx, 9) & Shr(x, 10) & startMaskV;
-            var mb = x & Shr(nx, 1) & Shr(x, 2) & Shr(x, 3)
-                   & Shr(x, 4) & Shr(nx, 5) & Shr(x, 6) & Shr(nx, 7)
-                   & Shr(nx, 8) & Shr(nx, 9) & Shr(nx, 10) & startMaskV;
-            // mf needs the window's first module light, mb needs it dark: disjoint
-            accP3 = AddPopCount(accP3, mf | mb);
+            // Rule 3 from the light run and the core (see CalculateScorePacked): the two windows never share a start, one popcount.
+            var core = x & Shr(nx, 1) & Shr(y2, 2) & Shr(x, 4) & Shr(nx, 5) & Shr(x, 6);
+            accP3 = AddPopCount(accP3, ((n4 & Shr(core, 4)) | (core & Shr(n4, 7))) & startMaskV);
         }
 
         // eq[y] = ~(rows[y] ^ rows[y+1]) & rowMask (vertical run continuation), rule 2 in the same pass.
@@ -297,12 +293,22 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Column rule 3: 11-row windows.
+        // Column rule 3 from the same terms, one per row: eq[y] (column rule 1 is done with it) becomes the light run from row y
+        // down, and rows[y] the core from row y down. Ascending, a row is overwritten after its own terms are taken and no later
+        // row reads it. The light run is rows y..y+3 all light: the complement of their OR.
+        var t = 0;
+        for (; t <= size - 7; t++)
+        {
+            eq[t] = Vector128.AndNot(rowMaskV, rows[t] | rows[t + 1] | rows[t + 2] | rows[t + 3]);
+            rows[t] = Vector128.AndNot(rows[t], rows[t + 1]) & rows[t + 2] & rows[t + 3] & rows[t + 4] & Vector128.AndNot(rows[t + 6], rows[t + 5]);
+        }
+        for (; t <= size - 4; t++)
+        {
+            eq[t] = Vector128.AndNot(rowMaskV, rows[t] | rows[t + 1] | rows[t + 2] | rows[t + 3]);
+        }
         for (var b0 = 0; b0 <= size - 11; b0++)
         {
-            var mf = nrows[b0] & nrows[b0 + 1] & nrows[b0 + 2] & nrows[b0 + 3] & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & rows[b0 + 7] & rows[b0 + 8] & nrows[b0 + 9] & rows[b0 + 10];
-            var mb = rows[b0] & nrows[b0 + 1] & rows[b0 + 2] & rows[b0 + 3] & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & nrows[b0 + 7] & nrows[b0 + 8] & nrows[b0 + 9] & nrows[b0 + 10];
-            accP3 = AddPopCount(accP3, mf | mb);
+            accP3 = AddPopCount(accP3, (eq[b0] & rows[b0 + 4]) | (rows[b0] & eq[b0 + 7]));
         }
 
         var p3 = LaneTotals(accP3);

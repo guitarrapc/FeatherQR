@@ -43,7 +43,7 @@ The encoder exposes two output models.
 - flat row-major order.
 - quiet zone included.
 
-`TryGetRequiredBufferSize` returns the required matrix side, byte count and selected version. It returns `false` when the content exceeds every version in range. Argument errors (a negative or overflowing quiet zone) still throw, so `false` only means "does not fit".
+`TryGetRequiredBufferSize` returns the required matrix side, byte count and selected version. It returns `false` when the content exceeds every version in range. Argument errors (an undefined ECC level, a quiet zone outside 0 to 10,000) still throw, so `false` only means "does not fit".
 
 It is the only sizing method. The throwing `GetRequiredBufferSize` released in 1.1.1 was deprecated in 1.2.0 and removed in 2.0.0. [rmqr-encoder.md](rmqr-encoder.md) records why sizing is split this way and why it is a `Try` method rather than a dedicated exception type. Standard QR follows the same rule, so all three symbologies share one surface.
 
@@ -306,12 +306,14 @@ The refusal also states two reasons the set's size does not show: a run of U+FEF
 
 ### 1. Validate the matrix request
 
-All generation overloads reject:
+Every entry point (`Create`, `CreateStructuredAppend`, `TryGetRequiredBufferSize`) rejects, before it reads the content:
 
 - requested versions outside `1..40` (except `-1`, meaning automatic).
-- negative quiet-zone sizes.
+- an undefined ECC level.
+- an `EciMode` other than `Default`, `Iso8859_1` and `Utf8`.
+- quiet-zone sizes outside `0..10,000`, the bound Micro QR and rMQR use. The `QRCodeData` constructors apply it too, after refusing a version outside `1..40`.
 
-`TryGetRequiredBufferSize` and the span-output overload also reject quiet zones whose side or squared byte count exceeds `int.MaxValue`, and the span overload rejects buffers smaller than the matrix. These paths compute dimensions in `long` before narrowing to `int`, so `coreSize + 2 * quietZoneSize` and `totalSize * totalSize` cannot overflow.
+Errors come in the order the other two symbologies report them: quiet zone, segmentation, ECI (rMQR's place for it; Micro QR has none), ECC level, then whether the content fits. At 10,000 the largest side squared still fits `int`, so the size arithmetic needs no overflow check. The span overload also rejects buffers smaller than the matrix.
 
 ### 2. Analyze text and choose mode / ECI
 
@@ -361,6 +363,8 @@ Byte-mode capacity uses the encoded byte count, not the UTF-16 `char` count. A U
 Only UTF-8 is counted. Latin-1 is one byte per `char`, out-of-range ones included (the writer narrows each `char`, and the encoder replaces each one it cannot represent with one byte of its own), and a surrogate pair counts as its two code units, not the one scalar value it spells. So a charset forced over content it cannot represent still gives a well-formed symbol, and the mojibake the caller asked for reads as mojibake, not as a stream a reader takes apart wrongly. The classification pass has just decided which of the two charsets applies and hands that answer over, so the count does not rescan the text.
 
 The version calculation does not reserve the four terminator bits: the terminator may shrink to the remaining capacity, down to zero bits for an exact fit. If no version holds the header and payload bits, generation fails instead of truncating.
+
+Each candidate's capacity is an index into the version × level ECC table, not a search of it. The level was validated on entry (step 1), so the lookup's own range check only keeps an internal caller from reading another level's entry.
 
 A version pinned by `QRCodeGeneratorOptions.Version` bypasses automatic selection. It is meant for callers that need a fixed symbol size and know the payload fits.
 
@@ -555,7 +559,7 @@ Masking and scoring work on packed rows, not byte-per-module loops:
 - versions 1–11 fit each row in one `ulong`.
 - versions 12–40 use a fixed 192-bit row made from three `ulong` values.
 
-The eight formulas are precomputed as 12-row periodic templates. XOR, shifts and popcount implement masking and all four penalty rules with the same result as the reference. On AVX2 the tier for versions 1-11 scores four candidates per vector (one pattern per lane), with per-version tables of pre-masked templates and format-bit overlays, and the tiers for larger versions score four rows per vector. Parity tests compare every representation with straightforward textbook formulas.
+The eight formulas are precomputed as 12-row periodic templates. XOR, shifts and popcount implement masking and all four penalty rules with the same result as the reference. The finder-like rule is built from two shared terms, four light modules and the seven-module core, rather than an 11-module match per window. On AVX2 the tier for versions 1-11 scores four candidates per vector (one pattern per lane), with per-version tables of pre-masked templates and format-bit overlays, and the tiers for larger versions score four rows per vector. Parity tests compare every representation with straightforward textbook formulas, on the scores as well as the chosen patterns.
 
 A mask pinned by `QRCodeGeneratorOptions.MaskPattern` (0-7, `null` = automatic) skips the evaluation and is applied with a scalar per-module loop. Any pattern gives a legal symbol, since the specification only recommends the best scorer, so pinning serves byte-exact reproduction of symbols produced elsewhere (the decoder reports the pattern in `QRCodeDecodeInfo.MaskPattern`) and testing decoders against all eight patterns. Invalid values are rejected when the option is set, as with `Version`. Micro QR offers the same option over its four patterns (`MicroQRCodeGeneratorOptions.MaskPattern`, with an unrelated numbering). See the Micro QR spec map. rMQR has a single fixed mask, so it has no such option.
 
@@ -600,6 +604,7 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - Mask scoring includes format and version information, because scoring a data-only candidate can pick a different winner than scoring the final matrix.
 - Structured Append is one method, with the count taken from the version cap. It has no explicit-count overload, no set sizing API (`TryGetRequiredBufferSize` stays single-symbol) and no combine helper. The first two can come in a minor release on request. A combine helper would fix an irreversible reassembly policy (a missing symbol, a duplicate, a parity mismatch), and the four rules on `QRStructuredAppend` are all a caller needs.
 - A set of one is never written: its header costs 20 bits and tells a reader nothing. The decoder still accepts one.
+- Stack buffers stay zero-initialized: the encoder uses no `[SkipLocalsInit]`. Skipping the zeroing measured 1 to 12 % of a version 1 to 10 encode (2026-10-02) and nothing on larger symbols. Under the memory safety rules C# 15 starts in preview, a `stackalloc` without an initializer in such a member is an unsafe operation, and in an encoder a read before a write would not fail but put stale stack bytes into a symbol that leaves the process. The zeroing's cost is cut instead by allocating less (see Lessons Learned, Performance).
 - The parity follows the bytes, so Kanji encoding changes Japanese text's parity: in Kanji mode (with `AllowKanji`) it is the XOR of Shift_JIS bytes, not UTF-8 ones. A set stays consistent, so no reader breaks, but a pinned value of this encoder's parity for Japanese input depends on the option: 「こんにちは世界、QRコードの分割テストです。」×3 carries 176 as a Kanji set and 6 as the UTF-8 set. `StructuredAppendKanjiTest` checks the Kanji sets' parity, and older tests check ASCII, Latin-1 and UTF-8. The decode corpus holds Japanese sets both ways, since the decoder reports what is on the wire.
 
 ---
@@ -621,6 +626,7 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - Remainder bits must be deterministic though they carry no payload: stack and pooled buffers are not guaranteed zeroed, so an untouched tail makes output depend on prior memory contents.
 - Mask candidates must contain their own format bits: the 30 format modules affect runs, 2×2 blocks, finder-like windows and dark balance, so scoring without them is observably a different algorithm.
 - The quiet zone should not inflate object storage: keeping it virtual cut `QRCodeData` to core bits and kept the public matrix coordinate space.
+- An argument checked where it is first used is checked only on the routes that use it. The ECC level was checked by the capacity-table lookup, which threw `ArgumentException` without a parameter name, and the quiet zone's upper bound by the buffer-size arithmetic, which only the sizing and span routes ran, so `Create` and `CreateStructuredAppend` returned a `QRCodeData` whose `Size` had overflowed. The ECI was checked only by the Byte-length count, which Numeric and Alphanumeric text never reaches, so an undefined value was written into the header of a symbol this library could not read back. All three are now checked at every entry, with rMQR's bounds and parameter names.
 
 ### Performance
 
@@ -633,6 +639,12 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - The data placement stream should stay in a register: refilling a 64-bit MSB-aligned accumulator removes a byte load and a variable shift per module and enables a two-module fast path for the common unblocked case (the reference walk).
 - Everything the placer derives from the version alone belongs in a per-version table. Painting function patterns, building the blocked bit mask and deciding the zigzag order per symbol took ~25-35 % of the encode. A cached template + mask + walk order (built by the reference painters, so correct by construction) reduced the placer to a memcpy, one vector bit expansion and a run/scatter store pass: 9x at version 1 and 4.5x at version 40 in the kernel, -26 % (v1) to -44 % (v40) on the encode E2E. The decoder shares the cached mask. Strided byte scatter is bound by store issue, and wider stores per row do not help (as with the rMQR placer).
 - Reed-Solomon setup is reusable: generator polynomials depend only on the ECC count, so caching their log-domain form removes repeated construction and reduces the scalar inner loop to table lookup and XOR.
+- A lookup that reads as constant can be a scan. `QRCodeConstants.GetEccInfo` walked its 160 entries through `IReadOnlyList<ECCInfo>`, and automatic selection asks once per version it tries, which was 2.35 µs of a version 40 encode, more than the whole interleave. As an index it is 0.1 µs (2026-10-02).
+- On small symbols the zeroing of stack buffers is a visible cost. The single-word mask tier zeroed 6.5 KB per call, sized for 64 rows whatever the symbol, about 50 ns of a 700 ns version 1 encode. A constant 32-row size for versions 1 to 3, and complements computed where they are read instead of kept in a third buffer, took the version 1 to 10 encodes to 0.93 to 0.97 of their time. A size taken from the symbol at run time lost at versions 6 and 10, where a variable-size `stackalloc` zeroes less efficiently than a constant one.
+
+  What a buffer costs depends on the build, so each tier was measured on its own builds (2026-10-03). The Vector128 tier's third buffer went too: without it default NativeAOT and WebAssembly ran versions 1 to 10 faster by 2 to 6 %, and the JIT without AVX2 read level end to end with its mask kernel about 3 % slower. The 32-row size gained nothing measurable on any 128-bit build, nor on the scalar single-word tier, so those keep 64 rows.
+- Rule 3's finder-like windows were 11-term AND chains, forward and backward, in rows and in columns. Each window is four light modules beside the seven-module core, and the light run is a term rule 1 builds anyway, so both orientations are two ANDs over two shared terms, and in the column direction each term is built once per row and read by both windows that use it. The gain follows the cost of a shift (2026-10-03). On two-word rows (versions 12 to 27), where every shifted term costs two shifts and an OR per word, AVX2 mask selection took 0.40 to 0.42 of its time and the version 19 encode 0.52. Three-word rows took 0.69 to 0.71, single-word rows 0.92 to 0.94, the scalar tiers 0.81 to 0.87, and the Vector128 tier 0.89 to 0.93 on default NativeAOT and WebAssembly.
+- A test that compares chosen patterns does not test a scorer. Three faults planted in the vector tiers' scalar tail windows changed scores and never the winner on the selection tests' inputs. Only comparing every tier's scores with the textbook score caught them.
 - Steady-state allocation guarantees need warm-up-aware tests: lazy tables, JIT compilation and `ArrayPool` initialization are one-time effects, so the Release-only allocation test warms them up before measuring the span API.
 
 ### Structured Append
@@ -670,8 +682,8 @@ The encoder is covered at several independent layers:
 | ECC | ISO worked examples and scalar/SIMD parity against naive GF(256) division |
 | Interleaving | unequal block groups, single-block identity, version-40 block counts, naive-reference parity |
 | Placement | binary placement parity against a per-module zigzag reference |
-| Masking | all-zero, all-one, and realistic matrices compared with byte-domain reference formulas |
-| Output APIs | `QRCodeData` and span matrices compared module-for-module, dirty buffers, quiet-zone sizes, overflow checks, allocation test |
+| Masking | all-zero, all-one, and realistic matrices compared with byte-domain reference formulas, and every tier's penalty score, not only its chosen pattern, compared with the textbook score on random, degenerate and planted finder-window matrices |
+| Output APIs | `QRCodeData` and span matrices compared module-for-module, dirty buffers, quiet-zone sizes, argument bounds on every entry route, allocation test |
 | External compatibility | generated images decoded by ZXing |
 | Internal compatibility | encode/decode round trips for all versions and ECC levels |
 

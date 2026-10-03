@@ -9,6 +9,7 @@
 ///   Kanji_M4_M : M4-M, Kanji mode (capacity boundary, 8 characters)
 ///
 /// Byte_M4_M and Kanji_M4_M share version and level, so they differ in mode, not in symbol size.
+/// The "(Span, QZ0)" rows write no quiet zone, so they time what the decode benchmarks read (MicroQRDecodeEndToEnd decodes quiet-zone-free matrices).
 /// </summary>
 public class MicroQREncodeEndToend
 {
@@ -18,6 +19,9 @@ public class MicroQREncodeEndToend
     private string _byte = default!;
     private string _kanji = default!;
     private byte[] _spanDestination = default!;
+
+    private static readonly MicroQRCodeGeneratorOptions NoQuietZone = new() { QuietZoneSize = 0 };
+    private static readonly MicroQRCodeGeneratorOptions KanjiNoQuietZone = new() { AllowKanji = true, QuietZoneSize = 0 };
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -83,6 +87,32 @@ public class MicroQREncodeEndToend
     public int MicroQR_Kanji_M4_EncodeSpan()
     {
         return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.M, _spanDestination, new MicroQRCodeGeneratorOptions { AllowKanji = true });
+    }
+
+    // Span destination without a quiet zone: the matrix the decode benchmarks read.
+
+    [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span, QZ0)")]
+    public int MicroQR_Numeric_M2_EncodeSpanNoQuietZone()
+    {
+        return MicroQRCodeGenerator.Create(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination, NoQuietZone);
+    }
+
+    [Benchmark(Description = "MicroQR_Alphanumeric_M3_Encode (Span, QZ0)")]
+    public int MicroQR_Alphanumeric_M3_EncodeSpanNoQuietZone()
+    {
+        return MicroQRCodeGenerator.Create(_alphanumeric.AsSpan(), MicroQREccLevel.L, _spanDestination, NoQuietZone);
+    }
+
+    [Benchmark(Description = "MicroQR_Byte_M4_Encode (Span, QZ0)")]
+    public int MicroQR_Byte_M4_EncodeSpanNoQuietZone()
+    {
+        return MicroQRCodeGenerator.Create(_byte.AsSpan(), MicroQREccLevel.M, _spanDestination, NoQuietZone);
+    }
+
+    [Benchmark(Description = "MicroQR_Kanji_M4_Encode (Span, QZ0)")]
+    public int MicroQR_Kanji_M4_EncodeSpanNoQuietZone()
+    {
+        return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.M, _spanDestination, KanjiNoQuietZone);
     }
 
     // Standard QR version 1 with the same numeric payload, for scale reference.
