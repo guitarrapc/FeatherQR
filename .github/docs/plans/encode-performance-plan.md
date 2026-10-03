@@ -130,6 +130,17 @@ Lessons.
 - Background load is bursty here. An early three-round A/B read Part A 50 % slower on a mask kernel it does not touch, and five rounds with run medians put it level. A single round decides nothing.
 - Indexing the table left a version-independent cost inside the scan: the payload's bit count was recomputed for every version tried. A loop over versions is read for what does not depend on the version.
 
+### Phase 2 follow-up, the ECC table's build (2026-10-03)
+
+No hot path moved: only the table's one-time build changed, and a lookup still allocates nothing.
+
+Done.
+- `CreateCapacityECCTable` fills its 160-entry array in place. Phase 2 kept the old build, a `List<ECCInfo>` grown by a four-entry collection expression per version, and added `ToArray`, so the table's first use allocated 17,360 B for a 5,144 B array: the list's array, 40 temporary arrays with their wrappers (7,040 B), and the copy. It now allocates the array alone, and the first Standard QR encode in a process went from 90,256 to 78,040 B. The retained memory is that array either way, and the `Lazy<T>`, its delegate and the list that phase 2 removed were about 100 B.
+- `QRCodeConstantsEccInfoTest` fails on each of five planted faults in the new build: the version or the level label one off, the data one version or one level off, and a field read from its neighbour.
+
+Lessons.
+- A table's first-use allocation read against the table's own size shows what its build wastes. Swapping `Lazy<List<T>>` for an array by appending `ToArray` kept the whole list build and added a copy.
+
 ### Phase 3, shared finder-window terms (2026-10-03)
 
 Against the commit before, from the timing mode (seven interleaved rounds per build, each process pinned to one CCD, the median of the run medians, quiet zone 0), end to end on the JIT with AVX2: version 1-L 0.96, 1-M 0.94, 6-M 0.94, 10-M 0.97, 19-M 0.52, 39-H 0.71, 40-L 0.75, 40-L alphanumeric 0.76 and 40-L numeric 0.76. The mask kernel ran at 0.92 to 0.94 at versions 1 to 10, 0.40 to 0.42 at versions 12 to 27 and 0.69 to 0.71 at versions 28 and 40, and the scalar tiers at 0.81 to 0.87. On default NativeAOT versions 1 to 10 ran at 0.90 to 0.92 end to end, 19-M at 0.82 and 40-L at 0.83, and on WebAssembly AOT at 0.93 to 0.95, 0.80 and 0.84. Micro QR and rMQR, which the phase does not touch, read 0.98 to 1.03 on every build. The tables are in the references file ("Phase 3").
