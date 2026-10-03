@@ -187,6 +187,7 @@ internal static partial class ModulePlacer
     /// <summary>
     /// Bit-parallel penalty scoring for single-word rows.
     /// See <see cref="CalculateScorePacked"/> for the rule derivations.
+    /// <paramref name="rows"/> is used as scratch for the column finder windows: the caller rebuilds it for each candidate.
     /// </summary>
     /// <remarks>
     /// Terminates early (returning int.MaxValue) once the running sum of rules 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever accumulate, so a pattern whose partial sum already exceeds the best total can never be selected, the result is provably identical.
@@ -195,7 +196,7 @@ internal static partial class ModulePlacer
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
 #endif
-    private static int CalculateScore64(ReadOnlySpan<ulong> rows, Span<ulong> nrows, int size, int abortAbove)
+    internal static int CalculateScore64(Span<ulong> rows, Span<ulong> nrows, int size, int abortAbove)
     {
         var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
         var startMaskP3 = (1ul << (size - 10)) - 1;
@@ -220,15 +221,7 @@ internal static partial class ModulePlacer
             blackModules += PopCount(x);
 
             score1 += ScoreRuns64(x) + ScoreRuns64(nx);
-
-            // Rule 3 forward window [0,0,0,0,1,0,1,1,1,0,1], backward is its reverse.
-            var mf = nx & (nx >> 1) & (nx >> 2) & (nx >> 3)
-                   & (x >> 4) & (nx >> 5) & (x >> 6) & (x >> 7)
-                   & (x >> 8) & (nx >> 9) & (x >> 10) & startMaskP3;
-            var mb = x & (nx >> 1) & (x >> 2) & (x >> 3)
-                   & (x >> 4) & (nx >> 5) & (x >> 6) & (nx >> 7)
-                   & (nx >> 8) & (nx >> 9) & (nx >> 10) & startMaskP3;
-            score3 += 40 * (PopCount(mf) + PopCount(mb));
+            score3 += MatchFinderRow64(x, nx, startMaskP3);
 
             if (y < size - 1)
             {
@@ -245,7 +238,7 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Column-direction rules 1 and 3
+        // Column-direction rule 1
         ulong eq1 = 0, eq2 = 0, eq3 = 0, prevV5 = 0;
         for (var y = 1; y < size; y++)
         {
@@ -259,26 +252,46 @@ internal static partial class ModulePlacer
             eq3 = eq2;
             eq2 = eq1;
             eq1 = eq0;
+        }
 
-            if (y >= 10)
+        if (score1 + score2 + score3 > abortAbove)
+        {
+            return int.MaxValue;
+        }
+
+        // Column-direction rule 3 from the same terms, one per row: nrows[y] becomes the light run from row y down and rows[y]
+        // the core from row y down. Ascending, a row is overwritten after its own terms are taken and no later row reads it.
+        var t = 0;
+        for (; t <= size - 7; t++)
+        {
+            nrows[t] = nrows[t] & nrows[t + 1] & nrows[t + 2] & nrows[t + 3];
+            rows[t] = rows[t] & nrows[t + 1] & rows[t + 2] & rows[t + 3] & rows[t + 4] & nrows[t + 5] & rows[t + 6];
+        }
+        for (; t <= size - 4; t++)
+        {
+            nrows[t] = nrows[t] & nrows[t + 1] & nrows[t + 2] & nrows[t + 3];
+        }
+        for (var b = 0; b <= size - 11; b++)
+        {
+            score3 += 40 * PopCount((nrows[b] & rows[b + 4]) | (rows[b] & nrows[b + 7]));
+
+            if (score1 + score2 + score3 > abortAbove)
             {
-                var b = y - 10;
-                var mf = nrows[b] & nrows[b + 1] & nrows[b + 2] & nrows[b + 3]
-                       & rows[b + 4] & nrows[b + 5] & rows[b + 6] & rows[b + 7]
-                       & rows[b + 8] & nrows[b + 9] & rows[b + 10];
-                var mb = rows[b] & nrows[b + 1] & rows[b + 2] & rows[b + 3]
-                       & rows[b + 4] & nrows[b + 5] & rows[b + 6] & nrows[b + 7]
-                       & nrows[b + 8] & nrows[b + 9] & nrows[b + 10];
-                score3 += 40 * (PopCount(mf) + PopCount(mb));
-
-                if (score1 + score2 + score3 > abortAbove)
-                {
-                    return int.MaxValue;
-                }
+                return int.MaxValue;
             }
         }
 
         return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
+    }
+
+    /// <summary>Penalty-3 row matches in one single-word row, from the shared light run and core (see <see cref="CalculateScorePacked"/>).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int MatchFinderRow64(ulong x, ulong nx, ulong startMask)
+    {
+        var n2 = nx & (nx >> 1);
+        var n4 = n2 & (n2 >> 2);
+        var core = x & (nx >> 1) & ((x & (x >> 1)) >> 2) & (x >> 4) & (nx >> 5) & (x >> 6);
+        return 40 * PopCount(((n4 & (core >> 4)) | (core & (n4 >> 7))) & startMask);
     }
 
     /// <summary>
@@ -594,18 +607,25 @@ internal static partial class ModulePlacer
     ///   run starts are isolated against the previous v5.
     /// Rule 2 (2x2 blocks): all-equal(a[x], a[x+1], b[x], b[x+1]) ⟺
     ///   eqh_a[x] &amp; eqv[x] &amp; eqv[x+1], eqh = ~(a ^ (a>>1)), eqv = ~(a ^ b).
-    /// Rule 3 (finder windows): bit-sliced 11-wide pattern match, AND together
-    ///   shifted rows, taking x for required-dark offsets {4,6,7,8,10} and ~x for
-    ///   required-light offsets {0,1,2,3,5,9} (forward; backward is the reverse);
-    ///   the column direction applies the same selection over the last 11 packed
-    ///   rows. Matches counted per start position, same as the sliding-window scan.
+    /// Rule 3 (finder windows): the forward window [0,0,0,0,1,0,1,1,1,0,1] is
+    ///   four light modules followed by the 7-module core [1,0,1,1,1,0,1], and the
+    ///   backward window is the core followed by four light modules. With
+    ///   n4 = nx &amp; (nx>>1) &amp; (nx>>2) &amp; (nx>>3), the light run rule 1 already
+    ///   builds, and core = x &amp; (nx>>1) &amp; (x>>2) &amp; (x>>3) &amp; (x>>4) &amp; (nx>>5) &amp; (x>>6),
+    ///   the window starts are n4 &amp; (core>>4) and core &amp; (n4>>7): two ANDs over
+    ///   shared terms instead of two 11-term chains. A forward window starts light
+    ///   and a backward one dark, so the two never share a start and one popcount
+    ///   of their OR counts both. The column direction takes the same two terms
+    ///   once per row (n4 over rows y..y+3, the core over rows y..y+6), so each is
+    ///   built once and read by both windows that use it. Matches are counted per
+    ///   start position, same as the sliding-window scan.
     /// Rule 4 (balance): popcount per row, then the shared closest-multiple-of-5
     ///   deviation formula.
     /// </summary>
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
 #endif
-    private static int CalculateScorePacked(ReadOnlySpan<Row192> rows, Span<Row192> nrows, int size)
+    internal static int CalculateScorePacked(Span<Row192> rows, Span<Row192> nrows, int size)
     {
         var rowMask = Row192.MaskLow(size);
         var startMaskP3 = Row192.MaskLow(size - 10); // rule-3 window starts: 0..n-11
@@ -629,14 +649,7 @@ internal static partial class ModulePlacer
             blackModules += x.PopCount();
 
             score1 += ScoreRuns(x) + ScoreRuns(nx);
-
-            var mf = nx & nx.ShiftRight(1) & nx.ShiftRight(2) & nx.ShiftRight(3)
-                   & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & x.ShiftRight(7)
-                   & x.ShiftRight(8) & nx.ShiftRight(9) & x.ShiftRight(10) & startMaskP3;
-            var mb = x & nx.ShiftRight(1) & x.ShiftRight(2) & x.ShiftRight(3)
-                   & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & nx.ShiftRight(7)
-                   & nx.ShiftRight(8) & nx.ShiftRight(9) & nx.ShiftRight(10) & startMaskP3;
-            score3 += 40 * (mf.PopCount() + mb.PopCount());
+            score3 += MatchFinderRow(x, nx, startMaskP3);
 
             if (y < size - 1)
             {
@@ -663,21 +676,36 @@ internal static partial class ModulePlacer
             eq3 = eq2;
             eq2 = eq1;
             eq1 = eq0;
+        }
 
-            if (y >= 10)
-            {
-                var b = y - 10;
-                var mf = nrows[b] & nrows[b + 1] & nrows[b + 2] & nrows[b + 3]
-                       & rows[b + 4] & nrows[b + 5] & rows[b + 6] & rows[b + 7]
-                       & rows[b + 8] & nrows[b + 9] & rows[b + 10];
-                var mb = rows[b] & nrows[b + 1] & rows[b + 2] & rows[b + 3]
-                       & rows[b + 4] & nrows[b + 5] & rows[b + 6] & nrows[b + 7]
-                       & nrows[b + 8] & nrows[b + 9] & nrows[b + 10];
-                score3 += 40 * (mf.PopCount() + mb.PopCount());
-            }
+        // Column rule 3: nrows[y] becomes the light run from row y down and rows[y] the core from row y down (ascending, as in
+        // CalculateScore64).
+        var t = 0;
+        for (; t <= size - 7; t++)
+        {
+            nrows[t] = nrows[t] & nrows[t + 1] & nrows[t + 2] & nrows[t + 3];
+            rows[t] = rows[t] & nrows[t + 1] & rows[t + 2] & rows[t + 3] & rows[t + 4] & nrows[t + 5] & rows[t + 6];
+        }
+        for (; t <= size - 4; t++)
+        {
+            nrows[t] = nrows[t] & nrows[t + 1] & nrows[t + 2] & nrows[t + 3];
+        }
+        for (var b = 0; b <= size - 11; b++)
+        {
+            score3 += 40 * ((nrows[b] & rows[b + 4]) | (rows[b] & nrows[b + 7])).PopCount();
         }
 
         return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
+    }
+
+    /// <summary>Penalty-3 row matches over a Row192, from the shared light run and core (see <see cref="CalculateScorePacked"/>).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int MatchFinderRow(in Row192 x, in Row192 nx, in Row192 startMask)
+    {
+        var n2 = nx & nx.ShiftRight(1);
+        var n4 = n2 & n2.ShiftRight(2);
+        var core = x & nx.ShiftRight(1) & (x & x.ShiftRight(1)).ShiftRight(2) & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6);
+        return 40 * (((n4 & core.ShiftRight(4)) | (core & n4.ShiftRight(7))) & startMask).PopCount();
     }
 
     /// <summary>Penalty-1 contribution of one color (see <see cref="ScoreRuns64"/> for the derivation).</summary>
@@ -841,7 +869,7 @@ internal static partial class ModulePlacer
     /// 192-bit row register (3 ulongs, LSB = column 0).
     /// Sized for the largest QR matrix (version 40, 177 modules); the fixed width keeps every operation branch-free regardless of the actual size.
     /// </summary>
-    private readonly struct Row192
+    internal readonly struct Row192
     {
         public readonly ulong W0, W1, W2;
 
@@ -858,6 +886,9 @@ internal static partial class ModulePlacer
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Row192 operator ^(in Row192 a, in Row192 b) => new(a.W0 ^ b.W0, a.W1 ^ b.W1, a.W2 ^ b.W2);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Row192 operator |(in Row192 a, in Row192 b) => new(a.W0 | b.W0, a.W1 | b.W1, a.W2 | b.W2);
 
         /// <summary>~(this ^ other), equality bits. High garbage must be masked by the caller.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

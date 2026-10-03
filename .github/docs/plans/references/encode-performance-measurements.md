@@ -163,6 +163,66 @@ Four builds, two interleaved rounds each, on the versions where the single-word 
 
 Skipping the zeroing (B against A) saved 65 to 95 ns end to end at version 1, 8 to 12 % of base, and 17 to 70 ns at versions 6 and 10, 1 to 2 %. Sizing the buffers (C against A) won back 21 and 86 ns of that at version 1 and lost at versions 6 and 10. That fits a variable-size `stackalloc` zeroing less efficiently than a constant-size one, which the disassembly has not confirmed. Two safe options were not tried: a constant 32-row size for versions 1 to 3, and one buffer fewer (the shared windows reuse the equality and row buffers, and the complement rows can be computed where they are read).
 
+## Phase 3: shared finder-window terms in every tier
+
+Taken on 2026-10-03 with the timing mode of `tests/FeatherQR.AotAnalysis`, and of `tests/FeatherQR.WasmReport` for WebAssembly. Base is the commit before (ecb5fc8), change is the phase's tree. Each process was pinned to the first eight cores (one CCD), and the two sides alternated for seven rounds. A cell is the median of the seven run medians. Micro QR M4-M and rMQR R17x139-M, which the phase does not touch, read 0.98 to 1.01 on the JIT and 0.98 to 1.03 on the other builds. A first five-round run on the JIT had two rounds on which every row of one side, the untouched ones included, read up to 58 % slower, so its rows were taken again.
+
+JIT, x86-64-v4 (the AVX2 tiers):
+
+| Shape | E2E base | E2E change | Ratio | Mask base | Mask change | Ratio |
+|---|---|---|---|---|---|---|
+| V1-L, 10 digits | 762 ns | 729 ns | 0.96 | | | |
+| V1-M, 16 alphanumeric | 844 ns | 796 ns | 0.94 | | | |
+| V6-M, URL | 2.07 µs | 1.95 µs | 0.94 | | | |
+| V10-M, 300 alphanumeric | 3.42 µs | 3.32 µs | 0.97 | | | |
+| V19-M, 620 bytes | 22.9 µs | 11.9 µs | 0.52 | 19.5 µs | 8.55 µs | 0.44 |
+| V39-H, 1,200 bytes | 77.9 µs | 55.4 µs | 0.71 | 67.7 µs | 47.9 µs | 0.71 |
+| V40-L, 2,900 bytes | 75.6 µs | 56.8 µs | 0.75 | 64.3 µs | 45.7 µs | 0.71 |
+| V40-L, 4,296 alphanumeric | 83.6 µs | 63.4 µs | 0.76 | | | |
+| V40-L, 7,089 digits | 80.2 µs | 61.2 µs | 0.76 | | | |
+
+The mask kernel alone (`kernel/MaskCode-vN`, selection on a placed matrix), by tier, base to change:
+
+| Version | AVX2 tier | Ratio | Scalar tier | Ratio |
+|---|---|---|---|---|
+| 1 | 646 to 606 ns | 0.94 | 1.90 to 1.66 µs | 0.87 |
+| 6 | 1.25 to 1.15 µs | 0.92 | 3.73 to 3.03 µs | 0.81 |
+| 10 | 1.70 to 1.58 µs | 0.93 | 5.59 to 4.58 µs | 0.82 |
+| 12 | 14.4 to 5.72 µs | 0.40 | 25.1 to 21.1 µs | 0.84 |
+| 20 | 19.6 to 8.05 µs | 0.41 | 38.4 to 32.6 µs | 0.85 |
+| 27 | 27.7 to 11.6 µs | 0.42 | 50.7 to 43.0 µs | 0.85 |
+| 28 | 48.4 to 34.5 µs | 0.71 | 52.4 to 44.5 µs | 0.85 |
+| 40 | 67.8 to 46.7 µs | 0.69 | 75.3 to 63.0 µs | 0.84 |
+
+The two-word tier (versions 12 to 27) gains the most because each shifted term of a row rule costs it two shifts and an OR per word, and the shared terms drop most of those shifts. The three-word tier gains less, and the single-word tiers, where a shift is one instruction, least.
+
+The 128-bit builds run the Vector128 tier for versions 1 to 11 and the scalar tiers above. Three variants of the Vector128 tier were measured, each against the base:
+
+- Shared: the shared terms with the tier's three buffers.
+- One fewer: the shared terms without the complement buffer, the complements computed where they are read. This is the one kept.
+- 32 rows: one fewer, and buffers of 32 rows for versions 1 to 3.
+
+| Build | Shape | Shared | One fewer | 32 rows |
+|---|---|---|---|---|
+| JIT without AVX2 | mask kernel, versions 1, 6, 10 | 0.90 to 0.91 | 0.93 | 0.92 to 0.93 |
+| | E2E, V1-L, V1-M, V6-M, V10-M | 0.92 to 0.95 | 0.92 to 0.99 | 0.92 to 0.95 |
+| Default NativeAOT | mask kernel, versions 1, 6, 10 | 0.93 to 0.94 | 0.89 to 0.90 | 0.88 to 0.91 |
+| | E2E, V1-L, V1-M, V6-M, V10-M | 0.94 to 0.97 | 0.90 to 0.92 | 0.91 to 0.93 |
+| WebAssembly AOT | mask kernel, versions 1, 6, 10 | 0.94 to 0.97 | 0.91 to 0.93 | 0.90 to 0.92 |
+| | E2E, V1-L, V1-M, V6-M, V10-M | 0.96 to 0.99 | 0.93 to 0.95 | 0.93 to 0.97 |
+
+On default NativeAOT and WebAssembly one buffer fewer beat the shared terms alone by 2 to 6 %. On the JIT without AVX2 (`DOTNET_EnableAVX=0`) its mask kernel read about 3 % slower than the shared terms alone (1 to 2 % on the lowest run medians) and its end-to-end rows level, the lowest run medians favouring neither. The 32-row size added nothing on any build. The scalar single-word tier was measured with 32-row buffers too, against the shared terms alone, and showed no difference outside its runs' spread, so it keeps its 64-row buffers. Its complement buffer now holds the light runs, so it has no buffer to drop.
+
+The scalar tiers, which the 128-bit builds run from version 12, read on those builds:
+
+| Build | Mask kernel, versions 20 and 40 | E2E, V19-M | E2E, V40-L |
+|---|---|---|---|
+| JIT without AVX2 | 0.84 | 0.85 | 0.86 |
+| Default NativeAOT | 0.81 | 0.82 | 0.83 |
+| WebAssembly AOT | 0.76 to 0.78 | 0.80 | 0.84 |
+
+Every variant held to the scalar scorer in the timing mode's parity check (`--parity`) on its build before it was timed, and the 7,647-symbol corpus hashed the same before and after under the AVX2 tiers, with AVX off and with hardware intrinsics off (`DOTNET_EnableHWIntrinsic=0`, the scalar tiers everywhere).
+
 ## A transposed scorer for versions 12 to 40
 
 Row-direction penalty rules on rows wider than one word pull bits across words for every shifted term. In the three-word tier each such shift is five shifts and two ORs. Column-direction rules need no shift, because they combine whole row words of neighbouring rows.
