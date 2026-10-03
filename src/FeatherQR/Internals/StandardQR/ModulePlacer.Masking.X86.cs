@@ -475,6 +475,7 @@ internal static partial class ModulePlacer
     /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of four candidates; returns their four ISO/IEC 18004 penalty scores.
     /// Same rule derivations as <see cref="CalculateScorePacked"/>; the accumulators are per lane, so no horizontal reduction happens until the end.
     /// When all four lanes' partials exceed <paramref name="abortAbove"/> at the checkpoint, every lane reports int.MaxValue (pass int.MaxValue to disable, as for the first group).
+    /// <paramref name="rows"/> is used as scratch for the column finder windows: the caller rebuilds it for each group.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> eq, int size, int abortAbove)
@@ -506,14 +507,10 @@ internal static partial class ModulePlacer
             // a position is inside a dark 5-run or a light 5-run, never both: one popcount
             accOnes += Pop256(y5 | n5);
             accTwos += Pop256(st | nst);
-            var mf = nx & Vector256.ShiftRightLogical(nx, 1) & Vector256.ShiftRightLogical(nx, 2) & Vector256.ShiftRightLogical(nx, 3)
-                   & Vector256.ShiftRightLogical(x, 4) & Vector256.ShiftRightLogical(nx, 5) & Vector256.ShiftRightLogical(x, 6) & Vector256.ShiftRightLogical(x, 7)
-                   & Vector256.ShiftRightLogical(x, 8) & Vector256.ShiftRightLogical(nx, 9) & Vector256.ShiftRightLogical(x, 10) & startMaskV;
-            var mb = x & Vector256.ShiftRightLogical(nx, 1) & Vector256.ShiftRightLogical(x, 2) & Vector256.ShiftRightLogical(x, 3)
-                   & Vector256.ShiftRightLogical(x, 4) & Vector256.ShiftRightLogical(nx, 5) & Vector256.ShiftRightLogical(x, 6) & Vector256.ShiftRightLogical(nx, 7)
-                   & Vector256.ShiftRightLogical(nx, 8) & Vector256.ShiftRightLogical(nx, 9) & Vector256.ShiftRightLogical(nx, 10) & startMaskV;
-            // mf needs the window's first module light, mb needs it dark: disjoint
-            accP3 += Pop256(mf | mb);
+            // Rule 3 from the light run and the core (see CalculateScorePacked): the two windows never share a start, one popcount.
+            var core = x & Vector256.ShiftRightLogical(nx, 1) & Vector256.ShiftRightLogical(y2, 2) & Vector256.ShiftRightLogical(x, 4)
+                     & Vector256.ShiftRightLogical(nx, 5) & Vector256.ShiftRightLogical(x, 6);
+            accP3 += Pop256(((n4 & Vector256.ShiftRightLogical(core, 4)) | (core & Vector256.ShiftRightLogical(n4, 7))) & startMaskV);
         }
 
         // eq[y] = ~(rows[y] ^ rows[y+1]) & rowMask (vertical run continuation), rule 2 in the same pass.
@@ -549,17 +546,23 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Column rule 3: 11-row windows, each row's complement taken here rather than kept in a buffer.
+        // Column rule 3 from the same terms, one per row: eq[y] (column rule 1 is done with it) becomes the light run from row y
+        // down, and rows[y] the core from row y down. Ascending, a row is overwritten after its own terms are taken and no later
+        // row reads it. The light run is rows y..y+3 all light: the complement of their OR.
+        var t = 0;
+        for (; t <= size - 7; t++)
+        {
+            var r0 = rows[t]; var r1 = rows[t + 1]; var r2 = rows[t + 2]; var r3 = rows[t + 3];
+            eq[t] = Vector256.AndNot(rowMaskV, r0 | r1 | r2 | r3);
+            rows[t] = Vector256.AndNot(r0, r1) & r2 & r3 & rows[t + 4] & Vector256.AndNot(rows[t + 6], rows[t + 5]);
+        }
+        for (; t <= size - 4; t++)
+        {
+            eq[t] = Vector256.AndNot(rowMaskV, rows[t] | rows[t + 1] | rows[t + 2] | rows[t + 3]);
+        }
         for (var b0 = 0; b0 <= size - 11; b0++)
         {
-            var r0 = rows[b0]; var r1 = rows[b0 + 1]; var r2 = rows[b0 + 2]; var r3 = rows[b0 + 3]; var r4 = rows[b0 + 4]; var r5 = rows[b0 + 5];
-            var r6 = rows[b0 + 6]; var r7 = rows[b0 + 7]; var r8 = rows[b0 + 8]; var r9 = rows[b0 + 9]; var r10 = rows[b0 + 10];
-            var n0 = Vector256.AndNot(rowMaskV, r0); var n1 = Vector256.AndNot(rowMaskV, r1); var n2 = Vector256.AndNot(rowMaskV, r2);
-            var n3 = Vector256.AndNot(rowMaskV, r3); var n5 = Vector256.AndNot(rowMaskV, r5); var n7 = Vector256.AndNot(rowMaskV, r7);
-            var n8 = Vector256.AndNot(rowMaskV, r8); var n9 = Vector256.AndNot(rowMaskV, r9); var n10 = Vector256.AndNot(rowMaskV, r10);
-            var mf = n0 & n1 & n2 & n3 & r4 & n5 & r6 & r7 & r8 & n9 & r10;
-            var mb = r0 & n1 & r2 & r3 & r4 & n5 & r6 & n7 & n8 & n9 & n10;
-            accP3 += Pop256(mf | mb);
+            accP3 += Pop256((eq[b0] & rows[b0 + 4]) | (rows[b0] & eq[b0 + 7]));
         }
 
         Span<int> result = stackalloc int[4];
@@ -771,13 +774,9 @@ internal static partial class ModulePlacer
             accOnes += (y5 | n5).Pop(); // dark and light 5-run markers are disjoint: one popcount
             accTwos += (st | nst).Pop();
 
-            var mf = nx & nx.ShiftRight(1) & nx.ShiftRight(2) & nx.ShiftRight(3)
-                   & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & x.ShiftRight(7)
-                   & x.ShiftRight(8) & nx.ShiftRight(9) & x.ShiftRight(10) & startMaskV;
-            var mb = x & nx.ShiftRight(1) & x.ShiftRight(2) & x.ShiftRight(3)
-                   & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & nx.ShiftRight(7)
-                   & nx.ShiftRight(8) & nx.ShiftRight(9) & nx.ShiftRight(10) & startMaskV;
-            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
+            // Rule 3 from the light run and the core (see CalculateScorePacked): the two windows never share a start, one popcount.
+            var core = x & nx.ShiftRight(1) & y2.ShiftRight(2) & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6);
+            accP3 += (((n4 & core.ShiftRight(4)) | (core & n4.ShiftRight(7))) & startMaskV).Pop();
         }
         for (; y < size; y++)
         {
@@ -785,7 +784,7 @@ internal static partial class ModulePlacer
             var nx = new Row192(nw0[y], nw1[y], 0);
             blackModules += x.PopCount();
             score1 += ScoreRuns(x) + ScoreRuns(nx);
-            score3 += MatchFinderRowSimd(x, nx, startMaskR);
+            score3 += MatchFinderRow(x, nx, startMaskR);
         }
 
         var i = 0;
@@ -863,46 +862,45 @@ internal static partial class ModulePlacer
             }
         }
 
+        // Column rule 3 from the same terms, one per row: v5[y] becomes the core from row y down and eq[y] the light run from
+        // row y down (both are done with here), so each is built once and read by both windows that use it.
+        var t = 0;
+        for (; t + 4 <= size - 6; t += 4)
+        {
+            (RV128.Load(ref rw0R, ref rw1R, t) & RV128.Load(ref nw0R, ref nw1R, t + 1)
+                & RV128.Load(ref rw0R, ref rw1R, t + 2) & RV128.Load(ref rw0R, ref rw1R, t + 3)
+                & RV128.Load(ref rw0R, ref rw1R, t + 4) & RV128.Load(ref nw0R, ref nw1R, t + 5)
+                & RV128.Load(ref rw0R, ref rw1R, t + 6)).Store(ref v50R, ref v51R, t);
+        }
+        for (; t <= size - 7; t++)
+        {
+            v50[t] = rw0[t] & nw0[t + 1] & rw0[t + 2] & rw0[t + 3] & rw0[t + 4] & nw0[t + 5] & rw0[t + 6];
+            v51[t] = rw1[t] & nw1[t + 1] & rw1[t + 2] & rw1[t + 3] & rw1[t + 4] & nw1[t + 5] & rw1[t + 6];
+        }
+        t = 0;
+        for (; t + 4 <= size - 3; t += 4)
+        {
+            (RV128.Load(ref nw0R, ref nw1R, t) & RV128.Load(ref nw0R, ref nw1R, t + 1)
+                & RV128.Load(ref nw0R, ref nw1R, t + 2) & RV128.Load(ref nw0R, ref nw1R, t + 3)).Store(ref eq0R, ref eq1R, t);
+        }
+        for (; t <= size - 4; t++)
+        {
+            eq0[t] = nw0[t] & nw0[t + 1] & nw0[t + 2] & nw0[t + 3];
+            eq1[t] = nw1[t] & nw1[t + 1] & nw1[t + 2] & nw1[t + 3];
+        }
+
         var b0 = 0;
         for (; b0 + 4 <= size - 10; b0 += 4)
         {
-            var r0 = RV128.Load(ref rw0R, ref rw1R, b0);
-            var r2 = RV128.Load(ref rw0R, ref rw1R, b0 + 2);
-            var r3 = RV128.Load(ref rw0R, ref rw1R, b0 + 3);
-            var r4 = RV128.Load(ref rw0R, ref rw1R, b0 + 4);
-            var r6 = RV128.Load(ref rw0R, ref rw1R, b0 + 6);
-            var r7 = RV128.Load(ref rw0R, ref rw1R, b0 + 7);
-            var r8 = RV128.Load(ref rw0R, ref rw1R, b0 + 8);
-            var r10 = RV128.Load(ref rw0R, ref rw1R, b0 + 10);
-            var n0 = RV128.Load(ref nw0R, ref nw1R, b0);
-            var n1 = RV128.Load(ref nw0R, ref nw1R, b0 + 1);
-            var n2c = RV128.Load(ref nw0R, ref nw1R, b0 + 2);
-            var n3 = RV128.Load(ref nw0R, ref nw1R, b0 + 3);
-            var n5c = RV128.Load(ref nw0R, ref nw1R, b0 + 5);
-            var n7 = RV128.Load(ref nw0R, ref nw1R, b0 + 7);
-            var n8 = RV128.Load(ref nw0R, ref nw1R, b0 + 8);
-            var n9 = RV128.Load(ref nw0R, ref nw1R, b0 + 9);
-            var n10 = RV128.Load(ref nw0R, ref nw1R, b0 + 10);
-
-            var mf = n0 & n1 & n2c & n3 & r4 & n5c & r6 & r7 & r8 & n9 & r10;
-            var mb = r0 & n1 & r2 & r3 & r4 & n5c & r6 & n7 & n8 & n9 & n10;
+            var mf = RV128.Load(ref eq0R, ref eq1R, b0) & RV128.Load(ref v50R, ref v51R, b0 + 4);
+            var mb = RV128.Load(ref v50R, ref v51R, b0) & RV128.Load(ref eq0R, ref eq1R, b0 + 7);
             accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
         }
         for (; b0 <= size - 11; b0++)
         {
-            var mfw0 = nw0[b0] & nw0[b0 + 1] & nw0[b0 + 2] & nw0[b0 + 3]
-                     & rw0[b0 + 4] & nw0[b0 + 5] & rw0[b0 + 6] & rw0[b0 + 7]
-                     & rw0[b0 + 8] & nw0[b0 + 9] & rw0[b0 + 10];
-            var mfw1 = nw1[b0] & nw1[b0 + 1] & nw1[b0 + 2] & nw1[b0 + 3]
-                     & rw1[b0 + 4] & nw1[b0 + 5] & rw1[b0 + 6] & rw1[b0 + 7]
-                     & rw1[b0 + 8] & nw1[b0 + 9] & rw1[b0 + 10];
-            var mbw0 = rw0[b0] & nw0[b0 + 1] & rw0[b0 + 2] & rw0[b0 + 3]
-                     & rw0[b0 + 4] & nw0[b0 + 5] & rw0[b0 + 6] & nw0[b0 + 7]
-                     & nw0[b0 + 8] & nw0[b0 + 9] & nw0[b0 + 10];
-            var mbw1 = rw1[b0] & nw1[b0 + 1] & rw1[b0 + 2] & rw1[b0 + 3]
-                     & rw1[b0 + 4] & nw1[b0 + 5] & rw1[b0 + 6] & nw1[b0 + 7]
-                     & nw1[b0 + 8] & nw1[b0 + 9] & nw1[b0 + 10];
-            score3 += 40 * (PopCount(mfw0) + PopCount(mfw1) + PopCount(mbw0) + PopCount(mbw1));
+            var m0 = (eq0[b0] & v50[b0 + 4]) | (v50[b0] & eq0[b0 + 7]);
+            var m1 = (eq1[b0] & v51[b0 + 4]) | (v51[b0] & eq1[b0 + 7]);
+            score3 += 40 * (PopCount(m0) + PopCount(m1));
         }
 
         score1 += (int)Vector256.Sum(accOnes) + 2 * (int)Vector256.Sum(accTwos);
@@ -1043,19 +1041,6 @@ internal static partial class ModulePlacer
         w = value ? w | bit : w & ~bit;
     }
 
-    /// <summary>Penalty-3 row matches over a Row192 (scalar-tail helper; forward = [0,0,0,0,1,0,1,1,1,0,1], backward reversed).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int MatchFinderRowSimd(in Row192 x, in Row192 nx, in Row192 startMask)
-    {
-        var mf = nx & nx.ShiftRight(1) & nx.ShiftRight(2) & nx.ShiftRight(3)
-               & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & x.ShiftRight(7)
-               & x.ShiftRight(8) & nx.ShiftRight(9) & x.ShiftRight(10) & startMask;
-        var mb = x & nx.ShiftRight(1) & x.ShiftRight(2) & x.ShiftRight(3)
-               & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & nx.ShiftRight(7)
-               & nx.ShiftRight(8) & nx.ShiftRight(9) & nx.ShiftRight(10) & startMask;
-        return 40 * (mf.PopCount() + mb.PopCount());
-    }
-
     /// <summary>4 rows x 192 bits in SoA form: word k of rows y..y+3 in one vector.</summary>
     private readonly struct RV192
     {
@@ -1184,13 +1169,9 @@ internal static partial class ModulePlacer
             accOnes += (y5 | n5).Pop(); // dark and light 5-run markers are disjoint: one popcount
             accTwos += (st | nst).Pop();
 
-            var mf = nx & nx.ShiftRight(1) & nx.ShiftRight(2) & nx.ShiftRight(3)
-                   & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & x.ShiftRight(7)
-                   & x.ShiftRight(8) & nx.ShiftRight(9) & x.ShiftRight(10) & startMaskV;
-            var mb = x & nx.ShiftRight(1) & x.ShiftRight(2) & x.ShiftRight(3)
-                   & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & nx.ShiftRight(7)
-                   & nx.ShiftRight(8) & nx.ShiftRight(9) & nx.ShiftRight(10) & startMaskV;
-            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
+            // Rule 3 from the light run and the core (see CalculateScorePacked): the two windows never share a start, one popcount.
+            var core = x & nx.ShiftRight(1) & y2.ShiftRight(2) & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6);
+            accP3 += (((n4 & core.ShiftRight(4)) | (core & n4.ShiftRight(7))) & startMaskV).Pop();
         }
         for (; y < size; y++)
         {
@@ -1198,7 +1179,7 @@ internal static partial class ModulePlacer
             var nx = new Row192(nw0[y], nw1[y], nw2[y]);
             blackModules += x.PopCount();
             score1 += ScoreRuns(x) + ScoreRuns(nx);
-            score3 += MatchFinderRowSimd(x, nx, startMaskR);
+            score3 += MatchFinderRow(x, nx, startMaskR);
         }
 
         var i = 0;
@@ -1283,56 +1264,47 @@ internal static partial class ModulePlacer
             }
         }
 
+        // Column rule 3 from the same terms, one per row: v5[y] becomes the core from row y down and eq[y] the light run from
+        // row y down (both are done with here), so each is built once and read by both windows that use it.
+        var t = 0;
+        for (; t + 4 <= size - 6; t += 4)
+        {
+            (RV192.Load(ref rw0R, ref rw1R, ref rw2R, t) & RV192.Load(ref nw0R, ref nw1R, ref nw2R, t + 1)
+                & RV192.Load(ref rw0R, ref rw1R, ref rw2R, t + 2) & RV192.Load(ref rw0R, ref rw1R, ref rw2R, t + 3)
+                & RV192.Load(ref rw0R, ref rw1R, ref rw2R, t + 4) & RV192.Load(ref nw0R, ref nw1R, ref nw2R, t + 5)
+                & RV192.Load(ref rw0R, ref rw1R, ref rw2R, t + 6)).Store(ref v50R, ref v51R, ref v52R, t);
+        }
+        for (; t <= size - 7; t++)
+        {
+            v50[t] = rw0[t] & nw0[t + 1] & rw0[t + 2] & rw0[t + 3] & rw0[t + 4] & nw0[t + 5] & rw0[t + 6];
+            v51[t] = rw1[t] & nw1[t + 1] & rw1[t + 2] & rw1[t + 3] & rw1[t + 4] & nw1[t + 5] & rw1[t + 6];
+            v52[t] = rw2[t] & nw2[t + 1] & rw2[t + 2] & rw2[t + 3] & rw2[t + 4] & nw2[t + 5] & rw2[t + 6];
+        }
+        t = 0;
+        for (; t + 4 <= size - 3; t += 4)
+        {
+            (RV192.Load(ref nw0R, ref nw1R, ref nw2R, t) & RV192.Load(ref nw0R, ref nw1R, ref nw2R, t + 1)
+                & RV192.Load(ref nw0R, ref nw1R, ref nw2R, t + 2) & RV192.Load(ref nw0R, ref nw1R, ref nw2R, t + 3)).Store(ref eq0R, ref eq1R, ref eq2R, t);
+        }
+        for (; t <= size - 4; t++)
+        {
+            eq0[t] = nw0[t] & nw0[t + 1] & nw0[t + 2] & nw0[t + 3];
+            eq1[t] = nw1[t] & nw1[t + 1] & nw1[t + 2] & nw1[t + 3];
+            eq2[t] = nw2[t] & nw2[t + 1] & nw2[t + 2] & nw2[t + 3];
+        }
+
         var b0 = 0;
         for (; b0 + 4 <= size - 10; b0 += 4)
         {
-            var r0 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0);
-            var r2 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0 + 2);
-            var r3 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0 + 3);
-            var r4 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0 + 4);
-            var r6 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0 + 6);
-            var r7 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0 + 7);
-            var r8 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0 + 8);
-            var r10 = RV192.Load(ref rw0R, ref rw1R, ref rw2R, b0 + 10);
-            var n0 = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0);
-            var n1 = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 1);
-            var n2c = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 2);
-            var n3 = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 3);
-            var n5c = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 5);
-            var n7 = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 7);
-            var n8 = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 8);
-            var n9 = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 9);
-            var n10 = RV192.Load(ref nw0R, ref nw1R, ref nw2R, b0 + 10);
-
-            var mf = n0 & n1 & n2c & n3 & r4 & n5c & r6 & r7 & r8 & n9 & r10;
-            var mb = r0 & n1 & r2 & r3 & r4 & n5c & r6 & n7 & n8 & n9 & n10;
+            var mf = RV192.Load(ref eq0R, ref eq1R, ref eq2R, b0) & RV192.Load(ref v50R, ref v51R, ref v52R, b0 + 4);
+            var mb = RV192.Load(ref v50R, ref v51R, ref v52R, b0) & RV192.Load(ref eq0R, ref eq1R, ref eq2R, b0 + 7);
             accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
         }
         for (; b0 <= size - 11; b0++)
         {
-            var mf = new Row192(nw0[b0], nw1[b0], nw2[b0])
-                   & new Row192(nw0[b0 + 1], nw1[b0 + 1], nw2[b0 + 1])
-                   & new Row192(nw0[b0 + 2], nw1[b0 + 2], nw2[b0 + 2])
-                   & new Row192(nw0[b0 + 3], nw1[b0 + 3], nw2[b0 + 3])
-                   & new Row192(rw0[b0 + 4], rw1[b0 + 4], rw2[b0 + 4])
-                   & new Row192(nw0[b0 + 5], nw1[b0 + 5], nw2[b0 + 5])
-                   & new Row192(rw0[b0 + 6], rw1[b0 + 6], rw2[b0 + 6])
-                   & new Row192(rw0[b0 + 7], rw1[b0 + 7], rw2[b0 + 7])
-                   & new Row192(rw0[b0 + 8], rw1[b0 + 8], rw2[b0 + 8])
-                   & new Row192(nw0[b0 + 9], nw1[b0 + 9], nw2[b0 + 9])
-                   & new Row192(rw0[b0 + 10], rw1[b0 + 10], rw2[b0 + 10]);
-            var mb = new Row192(rw0[b0], rw1[b0], rw2[b0])
-                   & new Row192(nw0[b0 + 1], nw1[b0 + 1], nw2[b0 + 1])
-                   & new Row192(rw0[b0 + 2], rw1[b0 + 2], rw2[b0 + 2])
-                   & new Row192(rw0[b0 + 3], rw1[b0 + 3], rw2[b0 + 3])
-                   & new Row192(rw0[b0 + 4], rw1[b0 + 4], rw2[b0 + 4])
-                   & new Row192(nw0[b0 + 5], nw1[b0 + 5], nw2[b0 + 5])
-                   & new Row192(rw0[b0 + 6], rw1[b0 + 6], rw2[b0 + 6])
-                   & new Row192(nw0[b0 + 7], nw1[b0 + 7], nw2[b0 + 7])
-                   & new Row192(nw0[b0 + 8], nw1[b0 + 8], nw2[b0 + 8])
-                   & new Row192(nw0[b0 + 9], nw1[b0 + 9], nw2[b0 + 9])
-                   & new Row192(nw0[b0 + 10], nw1[b0 + 10], nw2[b0 + 10]);
-            score3 += 40 * (mf.PopCount() + mb.PopCount());
+            var m = (new Row192(eq0[b0], eq1[b0], eq2[b0]) & new Row192(v50[b0 + 4], v51[b0 + 4], v52[b0 + 4]))
+                  | (new Row192(v50[b0], v51[b0], v52[b0]) & new Row192(eq0[b0 + 7], eq1[b0 + 7], eq2[b0 + 7]));
+            score3 += 40 * m.PopCount();
         }
 
         score1 += (int)Vector256.Sum(accOnes) + 2 * (int)Vector256.Sum(accTwos);
