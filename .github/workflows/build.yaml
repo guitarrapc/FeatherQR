@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@74f3c78b2bcb7545e4c4911c5cf34124faecd2d2 # v1.3.2
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
           dotnet-version: |
@@ -112,7 +112,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@74f3c78b2bcb7545e4c4911c5cf34124faecd2d2 # v1.3.2
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: 10.0.x
       # ConsoleApp
@@ -145,7 +145,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@74f3c78b2bcb7545e4c4911c5cf34124faecd2d2 # v1.3.2
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
@@ -219,7 +219,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@74f3c78b2bcb7545e4c4911c5cf34124faecd2d2 # v1.3.2
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: 10.0.x
       - name: Publish AOT analysis gate
@@ -271,7 +271,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@74f3c78b2bcb7545e4c4911c5cf34124faecd2d2 # v1.3.2
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload

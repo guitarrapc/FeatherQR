@@ -10,6 +10,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: guitarrapc/actions/.github/workflows/reusable-dotnet-lint.yaml@74f3c78b2bcb7545e4c4911c5cf34124faecd2d2 # v1.3.2
+    uses: guitarrapc/actions/.github/workflows/reusable-dotnet-lint.yaml@main
     with:
       sln-file: "FeatherQR.slnx"
