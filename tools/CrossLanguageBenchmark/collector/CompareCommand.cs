@@ -48,6 +48,7 @@ internal static class CompareCommand
             var outsideRatios = new List<double>();
             var spreads = new List<double>();
             var disturbed = 0;
+            var rejected = new List<string>();
             foreach (var result in run.Results.Where(r => r.Cli == cli && r.Verified > 0))
             {
                 spreads.Add(result.Spread);
@@ -57,14 +58,25 @@ internal static class CompareCommand
                     bdnRatios.Add(result.MedianNs / b);
                     (bdnCell, bdnRatioCell) = (F(b / 1e3), F(result.MedianNs / b));
                 }
-                if (outside?.Results.FirstOrDefault(o => o.Key == result.Key && o.Cli == cli && o.Rejected is null) is { } o)
+                if (outside?.Results.FirstOrDefault(o => o.Key == result.Key && o.Cli == cli) is { } o)
                 {
-                    // A measurement still disturbed after its attempts says nothing about the loop, so it stays out of the verdict.
-                    if (o.Disturbed)
-                        disturbed++;
+                    // Against this run's median, which can be a later run than the one the outside check sized N from.
+                    var ratio = o.PerCallNs / result.MedianNs;
+                    if (o.Rejected is not null)
+                    {
+                        // A CLI whose fixed mode failed has not been checked at all, so it fails the verdict rather than leaving it.
+                        rejected.Add(result.Key);
+                        (outsideCell, outsideRatioCell) = ($"rejected: {o.Rejected}", "");
+                    }
                     else
-                        outsideRatios.Add(o.Ratio);
-                    (outsideCell, outsideRatioCell) = (F(o.PerCallNs / 1e3), o.Disturbed ? $"{F(o.Ratio)} (disturbed)" : F(o.Ratio));
+                    {
+                        // A measurement still disturbed after its attempts says nothing about the loop, so it stays out of the verdict.
+                        if (o.Disturbed)
+                            disturbed++;
+                        else
+                            outsideRatios.Add(ratio);
+                        (outsideCell, outsideRatioCell) = (F(o.PerCallNs / 1e3), o.Disturbed ? $"{F(ratio)} (disturbed)" : F(ratio));
+                    }
                 }
                 md.AppendLine(CultureInfo.InvariantCulture, $"| {result.Key} | {result.MedianNs / 1e3:F3} | {result.Spread:P1} | {bdnCell} | {bdnRatioCell} | {outsideCell} | {outsideRatioCell} |");
             }
@@ -77,10 +89,13 @@ internal static class CompareCommand
             var deviations = outsideRatios.Select(r => r - 1).ToList();
             Summary("|Outside / self - 1|", deviations.Select(Math.Abs).ToList());
             Summary("Outside / self - 1, signed", deviations);
-            if (deviations.Count > 0 || disturbed > 0)
+            if (deviations.Count > 0 || disturbed > 0 || rejected.Count > 0)
             {
-                var pass = deviations.Count > 0 && deviations.Max(Math.Abs) <= EntryTolerance && Math.Abs(Stats.Median(deviations)) <= MedianTolerance;
-                var verdict = !pass ? "fails" : disturbed > 0 ? $"inconclusive, {disturbed} entries disturbed and the rest pass" : "passes";
+                var pass = rejected.Count == 0 && deviations.Count > 0 && deviations.Max(Math.Abs) <= EntryTolerance && Math.Abs(Stats.Median(deviations)) <= MedianTolerance;
+                var verdict = rejected.Count > 0 ? $"fails, {rejected.Count} entries rejected ({string.Join(", ", rejected)})"
+                    : !pass ? "fails"
+                    : disturbed > 0 ? $"inconclusive, {disturbed} entries disturbed and the rest pass"
+                    : "passes";
                 failed |= verdict != "passes";
                 md.AppendLine();
                 md.AppendLine(CultureInfo.InvariantCulture, $"Outside check: {verdict} (every entry within {EntryTolerance:P0}, the signed median within {MedianTolerance:P0}).");
