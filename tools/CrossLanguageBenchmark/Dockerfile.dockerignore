@@ -1,0 +1,17 @@
+# The build context is the repository root; only what the image builds from is sent.
+*
+!Directory.Build.props
+!Directory.Packages.props
+!global.json
+!opensource.snk
+!README.md
+!LICENSE
+!src/FeatherQR/
+!tests/FeatherQR.Tests/Shared/NearestNeighbourRenderer.cs
+!tools/CrossLanguageBenchmark/
+# Build output of the .NET projects and Cargo. Not **/bin: Cargo keeps sources in src/bin.
+**/obj/
+src/FeatherQR/bin/
+tools/CrossLanguageBenchmark/collector/bin/
+tools/CrossLanguageBenchmark/dotnet/*/bin/
+**/target/

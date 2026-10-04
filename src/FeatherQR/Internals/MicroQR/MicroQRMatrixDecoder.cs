@@ -191,32 +191,48 @@ internal static class MicroQRMatrixDecoder
 
     /// <summary>
     /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="MicroQRModulePlacer.PlaceDataCodewords"/>), unmasking each module on the fly.
-    /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword naturally ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>); ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
+    /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>); ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
     /// </summary>
-    private static void ExtractCodewords<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, int maskPattern, int dataBitCount, int dataCodewords, Span<byte> block)
+    internal static void ExtractCodewords<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, int maskPattern, int dataBitCount, int dataCodewords, Span<byte> block)
         where TModules : struct, IMicroQRModules
     {
         var placement = Placements[(size - 11) >> 1];
         // The stream length always equals the free-module count (ISO tables), but
         // guard the write anyway so a table inconsistency cannot corrupt memory.
         var totalBits = Math.Min(dataBitCount + (block.Length - dataCodewords) * 8, placement.Length);
-        for (var bitIndex = 0; bitIndex < totalBits; bitIndex++)
-        {
-            var module = placement[bitIndex];
-            var dark = modules.IsDark(pixels, module.Row, module.Col) ^ ((module.MaskBits >> maskPattern & 1) != 0);
-            if (!dark)
-                continue;
+        var dataEnd = Math.Min(dataBitCount, totalBits);
+        ReadRun(pixels, modules, placement, maskPattern, 0, dataEnd, block);
+        ReadRun(pixels, modules, placement, maskPattern, dataEnd, totalBits, block.Slice(dataCodewords));
+    }
 
-            if (bitIndex < dataBitCount)
+    /// <summary>
+    /// Reads the modules <c>placement[start..end)</c> into <paramref name="destination"/>, eight to a byte from its high bit, a last partial byte left-aligned.
+    /// </summary>
+    /// <remarks>
+    /// The bits gather in a register with no branch on a module's value. A branch per module mispredicts about half the time on a symbol
+    /// the predictor has not seen, and setting one bit of a stored byte at a time makes every module wait on the store before it.
+    /// On an Apple M2 that made M4's 192 modules about four times slower on symbols that change from call to call, under the JIT and NativeAOT alike.
+    /// A benchmark that decodes one symbol over and over hides most of it, because the predictor learns that symbol's pattern.
+    /// </remarks>
+    private static void ReadRun<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, PlacedModule[] placement, int maskPattern, int start, int end, Span<byte> destination)
+        where TModules : struct, IMicroQRModules
+    {
+        var bits = 0;
+        var o = 0;
+        for (var i = start; i < end; i++)
+        {
+            var module = placement[i];
+            bits = bits << 1 | ((modules.IsDark(pixels, module.Row, module.Col) ? 1 : 0) ^ (module.MaskBits >> maskPattern & 1));
+            if (((i - start) & 7) == 7)
             {
-                block[bitIndex >> 3] |= (byte)(0x80 >> (bitIndex & 7));
-            }
-            else
-            {
-                var eccBit = bitIndex - dataBitCount;
-                block[dataCodewords + (eccBit >> 3)] |= (byte)(0x80 >> (eccBit & 7));
+                destination[o++] = (byte)bits;
+                bits = 0;
             }
         }
+
+        var rest = (end - start) & 7;
+        if (rest != 0)
+            destination[o] = (byte)(bits << (8 - rest));
     }
 
     /// <summary>A data module in placement order, with bit <c>m</c> of <see cref="MaskBits"/> set where mask pattern <c>m</c> inverts it.</summary>

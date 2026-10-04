@@ -21,6 +21,14 @@ Under this target, FeatherQR's 28 kernels compare with the default and `x86-64-v
 
 The other 9 kernels take the same tier in all three builds. So the encode side gets its AVX2 tiers back, and most of the image decode (finder search, binarizer, perspective sampler) stays on 128-bit tiers. The plan's rough timing (2026-09-27: `x86-64-v2,avx` recovers most of the encode gap and almost none of the image decode gap) predates the 128-bit tiers and has not been repeated.
 
+## linux-arm64 (2026-10-03)
+
+Repeated on an Apple M2 under Docker Desktop for Mac, which runs the arm64 image natively in its Linux VM (kernel 6.10.14-linuxkit), with the benchmark image's SDK (10.0.401, runtime and ILCompiler 10.0.12). `tests/FeatherQR.AotAnalysis` ran under the JIT and as a default NativeAOT publish for linux-arm64, with `--simd-class Arm64 --parity`.
+
+Both builds see AdvSimd and the dot product (`Dp`), and none of the x64 sets or `Vector256`. All 28 kernels take the same tier in both builds, both match the table for `Arm64`, and `--parity` matched every tier. So on ARM64 a default NativeAOT publish loses no tier, and its gap to the JIT is code generation alone: the JIT recompiles hot methods with what it learned at run time (tiered compilation and dynamic PGO), and ILC compiles each method once, ahead of time. The benchmark CLI's own `isa` member printed the same sets for both builds.
+
+`DOTNET_EnableArm64Dp=0` moves the JIT's `LuminanceConverter` from `AdvSimdDp` to `Vector128` and leaves NativeAOT on `AdvSimdDp`. NativeAOT ignores the knob, so only a publish for `armv8-a,-dotprod` shows a no-`Dp` CPU's tier under NativeAOT.
+
 ## Open
 
 - `x86-64-v2,avx` has not been timed on the current code.
