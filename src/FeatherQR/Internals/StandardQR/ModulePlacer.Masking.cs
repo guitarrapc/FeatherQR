@@ -851,28 +851,10 @@ internal static partial class ModulePlacer
         {
             for (var r = 0; r < 12; r++)
             {
-                var rm2 = (byte)(r & 1);
-                var rm3 = (byte)(r % 3);
-                var rd2 = (byte)((r >> 1) & 1); // only the parity of row/2 matters (Pattern4)
                 ulong w0 = 0, w1 = 0, w2 = 0;
                 for (var c = 0; c < 192; c++)
                 {
-                    var cm2 = (byte)(c & 1);
-                    var cm3 = (byte)(c % 3);
-                    var cd3 = (byte)(c / 3);
-                    var hit = p switch
-                    {
-                        0 => MaskPattern.Pattern0(rm2, cm2),
-                        1 => MaskPattern.Pattern1(rm2),
-                        2 => MaskPattern.Pattern2(cm3),
-                        3 => MaskPattern.Pattern3(rm3, cm3),
-                        4 => MaskPattern.Pattern4(rd2, cd3),
-                        5 => MaskPattern.Pattern5(rm2, cm2, rm3, cm3),
-                        6 => MaskPattern.Pattern6(rm2, cm2, rm3, cm3),
-                        7 => MaskPattern.Pattern7(rm2, cm2, r, c),
-                        _ => false
-                    };
-                    if (hit)
+                    if (MaskHit(p, r, c))
                     {
                         if (c < 64) w0 |= 1ul << c;
                         else if (c < 128) w1 |= 1ul << (c - 64);
@@ -883,6 +865,29 @@ internal static partial class ModulePlacer
             }
         }
         return templates;
+    }
+
+    /// <summary>Whether pattern <paramref name="p"/> flips the module at (<paramref name="row"/>, <paramref name="col"/>), by the <see cref="MaskPattern"/> formulas.</summary>
+    private static bool MaskHit(int p, int row, int col)
+    {
+        var rm2 = (byte)(row & 1);
+        var rm3 = (byte)(row % 3);
+        var rd2 = (byte)((row >> 1) & 1); // only the parity of row/2 matters (Pattern4)
+        var cm2 = (byte)(col & 1);
+        var cm3 = (byte)(col % 3);
+        var cd3 = (byte)(col / 3);
+        return p switch
+        {
+            0 => MaskPattern.Pattern0(rm2, cm2),
+            1 => MaskPattern.Pattern1(rm2),
+            2 => MaskPattern.Pattern2(cm3),
+            3 => MaskPattern.Pattern3(rm3, cm3),
+            4 => MaskPattern.Pattern4(rd2, cd3),
+            5 => MaskPattern.Pattern5(rm2, cm2, rm3, cm3),
+            6 => MaskPattern.Pattern6(rm2, cm2, rm3, cm3),
+            7 => MaskPattern.Pattern7(rm2, cm2, row, col),
+            _ => false
+        };
     }
 
     private static ulong[] BuildMaskTemplates64()

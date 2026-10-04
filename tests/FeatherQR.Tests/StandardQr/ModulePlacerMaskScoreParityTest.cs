@@ -7,7 +7,8 @@ namespace FeatherQR.Tests;
 /// Every mask scorer against the textbook penalty (<see cref="ModulePlacerMaskPackedParityTest.ReferenceScore"/>), score for score.
 /// The selection tests compare chosen patterns, which a scorer can get right for the wrong reason. These feed each tier's
 /// scorer whole matrices and compare the penalty itself: every single-word size, and the two- and three-word tiers at their
-/// first and last sizes and between.
+/// first and last sizes and between. The AVX2 tier for versions 12-40 packs and transposes its own input, so its scores are
+/// held to the textbook in <see cref="ModulePlacerMaskTransposedParityTest"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -131,58 +132,6 @@ public class ModulePlacerMaskScoreParityTest
                 for (var lane = 0; lane < 2; lane++)
                     await Assert.That(scores.GetElement(lane)).IsEqualTo(expected[lane]).Because($"size {size}, {lanes[lane].Name} in lane {lane}");
                 await AssertLaneAbortContract(abort => Score(abort), expected, $"size {size}, from {lanes[0].Name}");
-            }
-        }
-    }
-
-    [Test]
-    public async Task Score128Vec_MatchesTextbook()
-    {
-        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
-        {
-            Skip.Test("AVX2 not supported on this machine");
-            return;
-        }
-
-        foreach (var size in TwoWordSizes)
-        {
-            foreach (var (name, matrix) in Matrices(size))
-            {
-                var w0 = PackWords(matrix, size, 0);
-                var w1 = PackWords(matrix, size, 1);
-                int Score(int abort)
-                    => ModulePlacer.CalculateScore128Vec(w0.ToArray(), w1.ToArray(), new ulong[size], new ulong[size], new ulong[size], new ulong[size], new ulong[size], new ulong[size], size, abort);
-                var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(matrix, size);
-                await Assert.That(Score(int.MaxValue)).IsEqualTo(expected).Because($"size {size}, {name}");
-                await AssertAbortContract(Score, expected, $"size {size}, {name}");
-            }
-        }
-    }
-
-    [Test]
-    public async Task Score192Vec_MatchesTextbook()
-    {
-        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
-        {
-            Skip.Test("AVX2 not supported on this machine");
-            return;
-        }
-
-        foreach (var size in ThreeWordSizes)
-        {
-            foreach (var (name, matrix) in Matrices(size))
-            {
-                var w0 = PackWords(matrix, size, 0);
-                var w1 = PackWords(matrix, size, 1);
-                var w2 = PackWords(matrix, size, 2);
-                int Score(int abort)
-                    => ModulePlacer.CalculateScore192Vec(w0.ToArray(), w1.ToArray(), w2.ToArray(),
-                        new ulong[size], new ulong[size], new ulong[size],
-                        new ulong[size], new ulong[size], new ulong[size],
-                        new ulong[size], new ulong[size], new ulong[size], size, abort);
-                var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(matrix, size);
-                await Assert.That(Score(int.MaxValue)).IsEqualTo(expected).Because($"size {size}, {name}");
-                await AssertAbortContract(Score, expected, $"size {size}, {name}");
             }
         }
     }

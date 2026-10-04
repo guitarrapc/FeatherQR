@@ -284,6 +284,74 @@ The two-word sizes pay for their tails. Version 27's 125 columns leave 29 module
 
 Output was identical before and after on the 7,647-symbol corpus and on a pinned-mask corpus of 6,504 symbols (versions 1 to 40, every level, every pattern, two contents, quiet zone 0 and 4, the class API), under the AVX2 tiers, with AVX off and with hardware intrinsics off.
 
+## Phase 5: the transposed scorer
+
+Taken on 2026-10-04 the way phase 4's were, with the .NET build servers shut down before each A/B: base is `main` (cbe7e57), change is the phase's tree, nine alternating rounds per build on the JIT with AVX2, each process pinned to one CCD, a cell the median of the run medians. The rows the phase does not touch, Micro QR M4-M, rMQR R17x139-M and the version 1 and 10 encodes (the single-word tier), read 0.96 to 1.01.
+
+Mask selection on a placed matrix (`kernel/MaskCode-vN`), the phase 3 SoA tiers against the transposed tier, at every version it serves:
+
+| Version | Phase 3 | Transposed | Ratio |
+|---|---|---|---|
+| 12 | 5.49 µs | 4.55 µs | 0.83 |
+| 13 | 5.87 µs | 4.85 µs | 0.83 |
+| 14 | 5.39 µs | 4.74 µs | 0.88 |
+| 15 | 6.38 µs | 5.44 µs | 0.85 |
+| 16 | 6.75 µs | 5.64 µs | 0.84 |
+| 17 | 7.38 µs | 6.41 µs | 0.87 |
+| 18 | 7.54 µs | 6.33 µs | 0.84 |
+| 19 | 8.26 µs | 7.32 µs | 0.89 |
+| 20 | 7.89 µs | 7.14 µs | 0.90 |
+| 21 | 8.28 µs | 7.29 µs | 0.88 |
+| 22 | 8.54 µs | 7.16 µs | 0.84 |
+| 23 | 8.88 µs | 7.80 µs | 0.88 |
+| 24 | 9.32 µs | 8.37 µs | 0.90 |
+| 25 | 10.5 µs | 8.86 µs | 0.85 |
+| 26 | 10.2 µs | 8.40 µs | 0.82 |
+| 27 | 11.3 µs | 9.66 µs | 0.85 |
+| 28 | 33.4 µs | 12.4 µs | 0.37 |
+| 29 | 32.8 µs | 13.6 µs | 0.42 |
+| 30 | 34.6 µs | 13.5 µs | 0.39 |
+| 31 | 36.4 µs | 14.4 µs | 0.40 |
+| 32 | 35.4 µs | 13.9 µs | 0.39 |
+| 33 | 35.2 µs | 15.7 µs | 0.44 |
+| 34 | 39.1 µs | 15.3 µs | 0.39 |
+| 35 | 41.8 µs | 16.5 µs | 0.39 |
+| 36 | 39.1 µs | 15.4 µs | 0.39 |
+| 37 | 41.0 µs | 16.7 µs | 0.41 |
+| 38 | 45.0 µs | 16.4 µs | 0.36 |
+| 39 | 43.0 µs | 18.2 µs | 0.42 |
+| 40 | 45.4 µs | 18.3 µs | 0.40 |
+
+The two-word versions (12 to 27) run at 0.82 to 0.90 of the phase 3 tier, the three-word ones (28 to 40) at 0.36 to 0.44. Phase 3's three-word tier cost about three times its two-word one at the boundary (33.4 against 11.3 µs), because every shifted term spans three words, and the transposed tier has no such step (12.4 against 9.66 µs).
+
+End to end, quiet zone 0, with the mask stage alone beside it:
+
+| Shape | E2E base | E2E change | Ratio | Mask base | Mask change | Ratio |
+|---|---|---|---|---|---|---|
+| V19-M, 620 bytes | 12.0 µs | 11.0 µs | 0.92 | 8.17 µs | 7.04 µs | 0.86 |
+| V26-M, 1,000 bytes | 16.1 µs | 14.5 µs | 0.90 | 9.92 µs | 8.16 µs | 0.82 |
+| V39-H, 1,200 bytes | 56.6 µs | 29.0 µs | 0.51 | 45.1 µs | 18.5 µs | 0.41 |
+| V40-L, 2,900 bytes | 56.3 µs | 30.5 µs | 0.54 | 43.2 µs | 17.8 µs | 0.41 |
+| V40-L, 4,296 alphanumeric | 62.7 µs | 38.1 µs | 0.61 | | | |
+| V40-L, 7,089 digits | 60.2 µs | 34.1 µs | 0.57 | | | |
+
+Each design choice was measured against the tier as shipped, on the mask kernel at versions 12, 16, 20, 24 and 27 and at 28, 32, 36 and 40 (seven or nine rounds):
+
+| Variant | Versions 12 to 27 | Versions 28 to 40 |
+|---|---|---|
+| Full per-pattern tables, instead of templates ANDed with the allowed rows | 0.96 to 0.98 | 0.97 to 0.99 |
+| The prototype's scalar 64x64 transpose | 1.07 to 1.16 | 1.08 to 1.14 |
+| No abort checkpoint | 1.02 to 1.07 | 1.00 to 1.02 |
+| The checkpoint after the row planes, instead of before the column planes' finder windows | 1.01 to 1.06 | 1.00 to 1.02 |
+
+Full tables take about eight times the memory for 1 to 4 %, so the periodic form ships. A checkpoint after the row planes almost never fires: a candidate stops there only when its row-plane half alone exceeds the best candidate's whole score. Before the last finder windows only a small term is left, as in phase 3's tiers. An abort check after each row word read level with the single check (0.99 to 1.02 on the lowest run medians).
+
+Two earlier tuning steps, from single-process runs of both tiers. The masking pass first ran over every entry of a plane (128 at version 12, for 65 rows), and limiting it to the rows the rules read, the symbol and nine past it, took versions 12 to 27 from 0.90 to 1.00 of phase 3 to about 0.82. The vector transpose and the periodic tables were in from the first build.
+
+Table memory per version, built on first use: the unblocked modules of each row and each column, two words per row and column for versions 12 to 27 and three for 28 to 40, each plane padded to a whole 64-row block. That is 4,128 bytes for versions 12 to 26, 4,640 at 27, 9,264 for 28 to 39 and 9,456 at 40. The template planes, 12 rows and 12 columns per pattern, are 4,608 bytes once. Each call rents its scratch from the array pool, 12.5 to 25.3 KB, and returns it.
+
+Output was identical before and after on the 7,647-symbol corpus and the 6,504-symbol pinned-mask corpus.
+
 ## A transposed scorer for versions 12 to 40
 
 Row-direction penalty rules on rows wider than one word pull bits across words for every shifted term. In the three-word tier each such shift is five shifts and two ORs. Column-direction rules need no shift, because they combine whole row words of neighbouring rows.

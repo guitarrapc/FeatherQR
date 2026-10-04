@@ -241,6 +241,7 @@ internal static partial class TierTiming
         new("kernel/MaskCode-v27-scalar", () => MaskScoring(27, score: true, scalar: true)),
         new("kernel/MaskCode-v28", () => MaskScoring(28, score: true)),
         new("kernel/MaskCode-v28-scalar", () => MaskScoring(28, score: true, scalar: true)),
+        .. Enumerable.Range(12, 29).Where(v => v is not (12 or 20 or 27 or 28 or 40)).Select(v => new Shape($"kernel/MaskCode-v{v}", () => MaskScoring(v, score: true))),
         new("kernel/MaskForced-v1", () => MaskScoring(1, score: false, forced: 3)),
         new("kernel/MaskForced-v6", () => MaskScoring(6, score: false, forced: 3)),
         new("kernel/MaskForced-v10", () => MaskScoring(10, score: false, forced: 3)),

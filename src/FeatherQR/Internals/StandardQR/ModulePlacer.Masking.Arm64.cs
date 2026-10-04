@@ -496,6 +496,52 @@ internal static partial class ModulePlacer
     }
 
     // ---------------------------------
+    // Format information on SoA word arrays (two- and three-word tiers)
+    // ---------------------------------
+
+    private static void PokeFormatBitsSoA2(Span<ulong> w0, Span<ulong> w1, int size, ushort formatBits)
+    {
+        // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
+        for (var i = 0; i < 15; i++)
+        {
+            var bit = (formatBits & (1 << i)) != 0;
+            SetBitSoA2(w0, w1, FormatYs1[i], FormatXs1[i], bit);
+            var x2 = i < 8 ? size - 1 - i : 8;
+            var y2 = i < 8 ? 8 : size - 15 + i;
+            SetBitSoA2(w0, w1, y2, x2, bit);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SetBitSoA2(Span<ulong> w0, Span<ulong> w1, int y, int x, bool value)
+    {
+        ref var w = ref (x < 64 ? ref w0[y] : ref w1[y]);
+        var bit = 1ul << (x & 63);
+        w = value ? w | bit : w & ~bit;
+    }
+
+    private static void PokeFormatBitsSoA3(Span<ulong> w0, Span<ulong> w1, Span<ulong> w2, int size, ushort formatBits)
+    {
+        // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
+        for (var i = 0; i < 15; i++)
+        {
+            var bit = (formatBits & (1 << i)) != 0;
+            SetBitSoA3(w0, w1, w2, FormatYs1[i], FormatXs1[i], bit);
+            var x2 = i < 8 ? size - 1 - i : 8;
+            var y2 = i < 8 ? 8 : size - 15 + i;
+            SetBitSoA3(w0, w1, w2, y2, x2, bit);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SetBitSoA3(Span<ulong> w0, Span<ulong> w1, Span<ulong> w2, int y, int x, bool value)
+    {
+        ref var w = ref (x < 64 ? ref w0[y] : ref (x < 128 ? ref w1[y] : ref w2[y]));
+        var bit = 1ul << (x & 63);
+        w = value ? w | bit : w & ~bit;
+    }
+
+    // ---------------------------------
     // Two-word SoA tier (versions 12-29, size 65..128)
     // ---------------------------------
 

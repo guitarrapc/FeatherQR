@@ -5,8 +5,8 @@ using FeatherQR.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Verifies that the vectorized mask selection tiers (ModulePlacer.Masking.X86.cs:
-/// single-word, two-word SoA, three-word SoA) select the same pattern and produce a
+/// Verifies that the AVX2 mask selection tiers (the single-word tier in ModulePlacer.Masking.X86.cs and the
+/// transposed tier in ModulePlacer.Masking.Transposed.X86.cs) select the same pattern and produce a
 /// byte-identical matrix as the scalar bit-packed kernels. MaskCode dispatches by
 /// hardware capability, so these tests pin BOTH sides explicitly: the scalar kernels
 /// are called directly, and the SIMD entry point is called directly (skipped on
@@ -16,7 +16,7 @@ public class ModulePlacerMaskSimdParityTest
 {
     // Versions covering every SIMD tier and its boundaries:
     // 1..11 -> single-word (per-version lane-per-pattern tables; 11 = size 61, last one-word version),
-    // 12 -> first two-word (size 65), 20/27 -> two-word interior/last (27 = size 125),
+    // 12 -> transposed, first two-word (size 65), 20/27 -> two-word interior/last (27 = size 125),
     // 28 -> first three-word (size 129), 34/40 -> three-word interior/max.
     public static IEnumerable<int> Versions => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20, 27, 28, 34, 40];
 
