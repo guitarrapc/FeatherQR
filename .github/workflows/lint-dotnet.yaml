@@ -1,15 +1,15 @@
 name: Lint Dotnet
 
 on:
-    workflow_dispatch:
-    schedule:
-        - cron: 0 1 * * 1 # At AM10:00 JST on Monday
+  workflow_dispatch:
+  schedule:
+    - cron: 0 1 * * 1 # At AM10:00 JST on Monday
 
 jobs:
-    lint:
-        permissions:
-            contents: write
-            pull-requests: write
-        uses: guitarrapc/actions/.github/workflows/reusable-dotnet-lint.yaml@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
-        with:
-            sln-file: "FeatherQR.slnx"
+  lint:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: guitarrapc/actions/.github/workflows/reusable-dotnet-lint.yaml@main
+    with:
+      sln-file: "FeatherQR.slnx"

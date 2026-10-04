@@ -1,0 +1,3 @@
+/target
+# The repository ignores every bin/ for .NET output, but Cargo keeps binary sources in src/bin.
+!/src/bin/

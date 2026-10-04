@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- BenchmarkDotNet over the CLI's own calls and the same corpus: the measurement the CLI's loop is held against. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\FeatherQR\FeatherQR.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\cli\Operations.cs" Link="Shared\Operations.cs" />
+    <Compile Include="..\cli\Pgm.cs" Link="Shared\Pgm.cs" />
+    <Compile Include="..\..\collector\Manifest.cs" Link="Shared\Manifest.cs" />
+  </ItemGroup>
+
+</Project>
