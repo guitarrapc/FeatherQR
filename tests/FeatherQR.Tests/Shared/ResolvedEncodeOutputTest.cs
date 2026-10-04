@@ -22,7 +22,9 @@ namespace FeatherQR.Tests;
 /// </para>
 /// <para>
 /// The hashes, versions, levels and messages were captured from the encoder on 2026-10-04, before the
-/// redundant analysis was removed. A difference is an output change, not a refactoring.
+/// redundant analysis was removed. A difference is an output change, not a refactoring. One message has
+/// changed on purpose since: a narrowed Micro QR range that does not hold the content now names itself
+/// ("at-least-too-long"), where it used to offer the largest version of all (VersionRangeTest).
 /// The default path (no range, no boost, single mode) is pinned alongside, since the same pipeline serves it.
 /// </para>
 /// </remarks>
@@ -391,7 +393,7 @@ public class ResolvedEncodeOutputTest
         yield return new("exact-too-long", "1234567890123", MicroQREccLevel.L, new() { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M2) }, nameof(ArgumentException), "requestedVersion", "Content is too long for Micro QR M2 at ECC level L: 13 digits in Numeric mode, but the maximum is 10 digits. Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content. (Parameter 'requestedVersion')");
         yield return new("range-level-unavailable", "AC-42", MicroQREccLevel.Q, new() { Version = MicroQRVersionRange.Between(MicroQRVersion.M2, MicroQRVersion.M3) }, nameof(ArgumentException), "eccLevel", "ECC level Q is not available on any Micro QR version in M2-M3 (M1: ErrorDetectionOnly; M2/M3: L, M; M4: L, M, Q). (Parameter 'eccLevel')");
         yield return new("exact-level-unavailable", "12345", MicroQREccLevel.L, new() { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M1) }, nameof(ArgumentException), "eccLevel", "ECC level L is not available on any Micro QR version in M1 (M1: ErrorDetectionOnly; M2/M3: L, M; M4: L, M, Q). (Parameter 'eccLevel')");
-        yield return new("at-least-too-long", new string('A', 30), MicroQREccLevel.L, new() { Version = MicroQRVersionRange.AtLeast(MicroQRVersion.M2) }, nameof(ArgumentException), null, "Content is too long for Micro QR: 30 characters in Alphanumeric mode, but ECC level L fits at most 21 characters (M4). Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.");
+        yield return new("at-least-too-long", new string('A', 30), MicroQREccLevel.L, new() { Version = MicroQRVersionRange.AtLeast(MicroQRVersion.M2) }, nameof(ArgumentException), null, "Content is too long for Micro QR M2-M4 at ECC level L: 30 characters in Alphanumeric mode, but the maximum in that range is 21 characters (M4). Shorten the content, lower the ECC level, widen the version range, or use Standard QR (QRCodeGenerator) for longer content.");
         yield return new("kanji-exact-too-long", "吾輩は猫である。名前は", MicroQREccLevel.M, new() { AllowKanji = true, Version = MicroQRVersionRange.Exactly(MicroQRVersion.M4) }, nameof(ArgumentException), "requestedVersion", "Content is too long for Micro QR M4 at ECC level M: 11 characters in Kanji mode, but the maximum is 8 characters. Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content. (Parameter 'requestedVersion')");
         yield return new("invalid-level-exact", "12345", (MicroQREccLevel)9, new() { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M2) }, nameof(ArgumentOutOfRangeException), "eccLevel", "Invalid Micro QR ECC level: 9 (Parameter 'eccLevel')");
         yield return new("optimal-exact-too-long", "1234567890123", MicroQREccLevel.L, MicroOptimal with { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M2) }, nameof(ArgumentException), "requestedVersion", "Content is too long for Micro QR M2 at ECC level L: 13 digits in Numeric mode, but the maximum is 10 digits. Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content. (Parameter 'requestedVersion')");

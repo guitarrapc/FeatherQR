@@ -277,7 +277,7 @@ public static class MicroQRCodeGenerator
         if (TrySelectVersion(in analysis, eccLevel, out var version))
             return PrepareConfiguration(in analysis, eccLevel, version);
 
-        throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, requestedVersion: null);
+        throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, MicroQRVersionRange.Any);
     }
 
     /// <summary>
@@ -404,31 +404,39 @@ public static class MicroQRCodeGenerator
 
         var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: options.AllowKanji);
         if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
-            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
+            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
 
         return PrepareConfiguration(in analysis, eccLevel, version);
     }
 
+    /// <summary>The parameter name a pinned version's errors report: the version was a <c>requestedVersion</c> parameter before ranges replaced it, and callers may read the name.</summary>
+    private const string PinnedVersionParamName = "requestedVersion";
+
     /// <summary>
-    /// The actionable "does not fit" error, built off the success path: which constraint binds (mode availability versus length) and what the applicable maximum is.
+    /// The actionable "does not fit" error, built off the success path: which constraint binds (mode availability versus length) and what the applicable maximum is, among the versions <paramref name="range"/> allows.
     /// </summary>
-    private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion)
+    /// <remarks>
+    /// A pinned version and the unconstrained range keep the messages they have always had. A narrowed range names itself and looks only at its own versions, so the version a message offers is one the caller allowed.
+    /// </remarks>
+    private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, MicroQREccLevel eccLevel, MicroQRVersionRange range)
     {
-        if (requestedVersion is { } version)
+        var byteModes = mode == EncodingMode.Kanji ? "+Byte and Kanji" : "+Byte";
+        if (range.IsExact)
         {
+            var version = range.Min;
             if (!MicroQRConstants.IsModeSupported(version, mode))
-                return new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: {(mode == EncodingMode.Kanji ? "+Byte and Kanji" : "+Byte")}).", nameof(requestedVersion));
+                return new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: {byteModes}).", PinnedVersionParamName);
 
             return new ArgumentException(
                 $"Content is too long for Micro QR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
                 $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode), mode)}. " +
                 "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.",
-                nameof(requestedVersion));
+                PinnedVersionParamName);
         }
 
         var bestMax = -1;
-        var bestVersion = MicroQRVersion.M1;
-        for (var candidate = MicroQRVersion.M1; candidate <= MicroQRVersion.M4; candidate++)
+        var bestVersion = range.Min;
+        for (var candidate = range.Min; candidate <= range.Max; candidate++)
         {
             if (!MicroQRConstants.IsValidCombination(candidate, eccLevel) || !MicroQRConstants.IsModeSupported(candidate, mode))
                 continue;
@@ -439,6 +447,24 @@ public static class MicroQRCodeGenerator
                 bestMax = candidateMax;
                 bestVersion = candidate;
             }
+        }
+
+        if (!range.IsAny)
+        {
+            // A range that offers the level nowhere was refused before any fit could fail
+            // (TrySelectVersionInRange), so a range with no best version lacks the mode.
+            if (bestMax < 0)
+            {
+                return new ArgumentException(
+                    $"Encoding mode {mode} is not available at ECC level {eccLevel} on any Micro QR version in {range} " +
+                    $"(modes: M1: Numeric; M2: +Alphanumeric; M3/M4: {byteModes}; levels: M1: ErrorDetectionOnly; M2/M3: L, M; M4: L, M, Q). " +
+                    "Widen the version range, choose another ECC level, or use Standard QR (QRCodeGenerator).");
+            }
+
+            return new ArgumentException(
+                $"Content is too long for Micro QR {range} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
+                $"but the maximum in that range is {FormatDataLength(bestMax, mode)} ({bestVersion}). " +
+                "Shorten the content, lower the ECC level, widen the version range, or use Standard QR (QRCodeGenerator) for longer content.");
         }
 
         // No version supports this mode/ECC combination at any length, a constraint
@@ -541,7 +567,7 @@ public static class MicroQRCodeGenerator
         // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
-            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
+            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
         if (!useSegments)
             return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -551,7 +577,7 @@ public static class MicroQRCodeGenerator
             // The plan that justified this version could not be rebuilt; fall back to
             // the single-mode fit, which owns the error when there is none.
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
-                throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
+                throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
             return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
@@ -576,7 +602,7 @@ public static class MicroQRCodeGenerator
         // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
-            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
+            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
         if (!useSegments)
             return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -584,7 +610,7 @@ public static class MicroQRCodeGenerator
         if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out var segmentCount))
         {
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
-                throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
+                throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
             return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
