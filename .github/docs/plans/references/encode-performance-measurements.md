@@ -223,6 +223,67 @@ The scalar tiers, which the 128-bit builds run from version 12, read on those bu
 
 Every variant held to the scalar scorer in the timing mode's parity check (`--parity`) on its build before it was timed, and the 7,647-symbol corpus hashed the same before and after under the AVX2 tiers, with AVX off and with hardware intrinsics off (`DOTNET_EnableHWIntrinsic=0`, the scalar tiers everywhere).
 
+## Phase 4: the pinned mask
+
+Taken on 2026-10-03 the way phase 3's were: base is `main` (c20906e), change is the phase's tree, seven alternating rounds per build, each process pinned to one CCD, a cell the median of the run medians. Both sides ran the same harness, with the forced rows taking their pattern as a variable (below). Micro QR M4-M and rMQR R17x139-M read 0.98 to 1.02 on every build, and the automatic selection rows, which the phase does not touch, 0.98 to 1.05.
+
+Where F23's time went, at version 26-M (1,000 characters, quiet zone 0, the JIT with AVX2, on `main`). The encode rows are the base side of the A/B below. The stage rows are one process that timed the selection beside the pinned path, with the pattern given both ways:
+
+| Row | Time |
+|---|---|
+| Encode, automatic | 16.0 µs |
+| Encode, pattern 0 pinned | 34.3 µs |
+| Encode, pattern 3 pinned | 33.7 µs |
+| Mask selection alone (eight patterns scored, the winner applied) | 8.8 µs |
+| `ApplyMaskPattern` alone, pattern given as a literal | 10.9 µs (0), 13.7 µs (3) |
+| `ApplyMaskPattern` alone, pattern from a field | 20.6 µs (0), 28.2 µs (3) |
+
+The pinned path was the predicate tested module by module. The stage harness had passed the pattern as a literal, so the JIT inlined the call into the row and folded the predicate for that one pattern, and the row read about half of what an encode pays. That is why phase 1's stage table showed the forced path slower than selection only around version 6. With both patterns in one process the field-fed rows read 26.0 and 26.5 µs, and the encode rows' 18 µs over automatic is that path's cost over the selection's.
+
+JIT, x86-64-v4. The mask kernels on a placed matrix, base to change, and the automatic selection beside them:
+
+| Version | Pinned pattern 3 | Ratio | Automatic selection |
+|---|---|---|---|
+| 1 | 546 to 144 ns | 0.26 | 611 ns |
+| 6 | 2.90 µs to 229 ns | 0.08 | 1.16 µs |
+| 10 | 5.75 µs to 444 ns | 0.08 | 1.57 µs |
+| 12 | 7.61 µs to 531 ns | 0.07 | 5.80 µs |
+| 20 | 17.6 µs to 906 ns | 0.05 | 8.18 µs |
+| 27 | 29.6 to 1.98 µs | 0.07 | 11.7 µs |
+| 28 | 31.1 to 1.50 µs | 0.05 | 33.4 µs |
+| 40 | 59.7 to 3.06 µs | 0.05 | 46.5 µs |
+
+End to end, quiet zone 0:
+
+| Shape | Automatic | Pattern 0, base to change | Pattern 3, base to change |
+|---|---|---|---|
+| V1-L, 10 digits | 736 ns | 736 to 342 ns | 726 to 336 ns |
+| V1-M, 16 alphanumeric | 792 ns | 732 to 331 ns | 719 to 329 ns |
+| V6-M, URL | 1.94 µs | 3.70 µs to 985 ns | 3.61 µs to 985 ns |
+| V10-M, 300 alphanumeric | 3.38 µs | 7.54 to 2.16 µs | 7.34 to 2.17 µs |
+| V19-M, 620 bytes | 12.2 µs | 20.1 to 5.03 µs | 19.7 to 5.10 µs |
+| V26-M, 1,000 bytes (F23) | 16.2 µs | 34.3 to 7.90 µs | 33.7 to 7.86 µs |
+| V39-H, 1,200 bytes | 56.8 µs | 68.8 to 14.1 µs | 67.8 to 14.2 µs |
+| V40-L, 2,900 bytes | 58.2 µs | 74.5 to 16.0 µs | 73.4 to 16.3 µs |
+
+A pinned encode now takes 0.25 to 0.64 of the automatic one. Before, it was slower at every version measured from 6 up and level at version 1.
+
+Default NativeAOT, WebAssembly AOT and the JIT without AVX2 apply the pinned pattern 8 modules a step (SWAR), and select masks with the Vector128 tier for versions 1 to 11 and the scalar tiers above. Pattern 3, base to change:
+
+| Build | Mask kernel, versions 6 to 40 | Mask kernel, version 1 | Pinned encode against base | Pinned encode against automatic |
+|---|---|---|---|---|
+| JIT without AVX2 | 0.11 to 0.14 | 0.28 | 0.29 to 0.48 | 0.18 to 0.52 |
+| Default NativeAOT | 0.09 to 0.12 | 0.22 | 0.24 to 0.41 | 0.16 to 0.47 |
+| WebAssembly AOT | 0.13 to 0.17 | 0.38 | 0.37 to 0.69 | 0.24 to 0.60 |
+
+The version 40 kernel took 6.1 to 6.9 µs on these builds, against 61.7 to 67.2 µs for their automatic selection. Before the change the pinned path on these builds was slower than their selection at versions 6 and 10, faster at versions 1, 20 and 27, and within 11 % either way at version 40.
+
+After phase 5. The transposed prototype ran selection at 7.76 µs (version 20), 10.0 µs (27) and 20.9 µs (40), and versions 1 to 11 keep the lane-per-pattern tier, so the pinned kernel (0.14 to 3.06 µs on the JIT with AVX2) stays under selection there too.
+
+The two-word sizes pay for their tails. Version 27's 125 columns leave 29 modules past the last 32-module step and take 1.98 µs, version 28's 129 leave one and take 1.50 µs.
+
+Output was identical before and after on the 7,647-symbol corpus and on a pinned-mask corpus of 6,504 symbols (versions 1 to 40, every level, every pattern, two contents, quiet zone 0 and 4, the class API), under the AVX2 tiers, with AVX off and with hardware intrinsics off.
+
 ## A transposed scorer for versions 12 to 40
 
 Row-direction penalty rules on rows wider than one word pull bits across words for every shifted term. In the three-word tier each such shift is five shifts and two ORs. Column-direction rules need no shift, because they combine whole row words of neighbouring rows.
