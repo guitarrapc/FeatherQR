@@ -58,14 +58,18 @@ public static class MicroQRCodeGenerator
     /// <summary>The internal mask-pattern value meaning "select the highest edge-score pattern".</summary>
     private const int AutomaticMask = -1;
 
-    private static MicroQRCodeData CreateCore(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, bool allowKanji, MicroQRVersion? requestedVersion, int quietZoneSize, int maskPattern)
+    /// <summary>
+    /// The default path: nothing narrows the version, so the smallest version that holds the content is picked from the one analysis.
+    /// </summary>
+    private static MicroQRCodeData CreateAutomatic(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, bool allowKanji, int quietZoneSize, int maskPattern)
     {
         // Micro QR generation process:
         // ------------------------------------------------
         // 1. Validate input parameters (quiet zone size)
         // 2. Prepare configuration:
         //    - Analyze text to determine the encoding mode (Numeric/Alphanumeric/Byte)
-        //    - Select the version that holds the content, within a pinned version or range
+        //    - Select the version that holds the content (a narrowed range is resolved
+        //      in ResolveConfiguration instead, from the same single analysis)
         //    - Reject combinations the version does not offer (M1 is Numeric at
         //      ErrorDetectionOnly only; level Q needs M4)
         // 3. Encode data codewords:
@@ -85,7 +89,15 @@ public static class MicroQRCodeGenerator
         // 6. Return MicroQRCodeData (quiet zone handled by MicroQRCodeData class)
 
         ValidateQuietZone(quietZoneSize);
-        var config = PrepareConfiguration(textSpan, eccLevel, allowKanji, requestedVersion);
+        var config = PrepareConfiguration(textSpan, eccLevel, allowKanji);
+        return CreateCore(textSpan, in config, quietZoneSize, maskPattern);
+    }
+
+    /// <summary>
+    /// Writes the symbol a prepared configuration describes. The quiet zone was validated by whoever prepared it.
+    /// </summary>
+    private static MicroQRCodeData CreateCore(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, int quietZoneSize, int maskPattern)
+    {
         var size = MicroQRConstants.SizeFromVersion(config.Version);
 
         Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
@@ -98,10 +110,19 @@ public static class MicroQRCodeGenerator
         return result;
     }
 
-    private static int CreateCore(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, bool allowKanji, MicroQRVersion? requestedVersion, int quietZoneSize, int maskPattern)
+    /// <summary>The default path into <paramref name="destination"/>; see <see cref="CreateAutomatic(ReadOnlySpan{char}, MicroQREccLevel, bool, int, int)"/>.</summary>
+    private static int CreateAutomatic(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, bool allowKanji, int quietZoneSize, int maskPattern)
     {
         ValidateQuietZone(quietZoneSize);
-        var config = PrepareConfiguration(textSpan, eccLevel, allowKanji, requestedVersion);
+        var config = PrepareConfiguration(textSpan, eccLevel, allowKanji);
+        return CreateCore(textSpan, in config, destination, quietZoneSize, maskPattern);
+    }
+
+    /// <summary>
+    /// Writes the symbol a prepared configuration describes into <paramref name="destination"/>. The quiet zone was validated by whoever prepared it.
+    /// </summary>
+    private static int CreateCore(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> destination, int quietZoneSize, int maskPattern)
+    {
         var size = MicroQRConstants.SizeFromVersion(config.Version);
         var totalSize = size + quietZoneSize * 2;
         var requiredSize = totalSize * totalSize;
@@ -176,7 +197,10 @@ public static class MicroQRCodeGenerator
         if (options.Segmentation != MicroQRSegmentation.Single)
             return CreateOptimal(textSpan, eccLevel, in options);
 
-        return CreateCore(textSpan, eccLevel, options.AllowKanji, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        if (options.Version.IsAny)
+            return CreateAutomatic(textSpan, eccLevel, options.AllowKanji, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+
+        return CreateCore(textSpan, ResolveConfiguration(textSpan, eccLevel, in options), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
     }
 
     /// <summary>
@@ -197,7 +221,10 @@ public static class MicroQRCodeGenerator
         if (options.Segmentation != MicroQRSegmentation.Single)
             return CreateOptimalTo(textSpan, eccLevel, destination, in options);
 
-        return CreateCore(textSpan, eccLevel, destination, options.AllowKanji, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        if (options.Version.IsAny)
+            return CreateAutomatic(textSpan, eccLevel, destination, options.AllowKanji, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+
+        return CreateCore(textSpan, ResolveConfiguration(textSpan, eccLevel, in options), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
     }
 
     /// <summary>
@@ -236,15 +263,26 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
-    /// Analyzes the text, selects/validates the version, and returns the encode configuration.
+    /// Analyzes the text, selects the smallest version that holds it, and returns the encode configuration.
     /// </summary>
-    private static MicroQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, bool allowKanji, MicroQRVersion? requestedVersion)
+    private static MicroQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, bool allowKanji)
     {
         // Micro QR has no ECI, so analysis runs with the default charset rules,
         // Kanji mode included when the caller asked for it; for Byte mode the analyzer's DataLength is already
         // the encoded byte count (ISO-8859-1 char count or UTF-8 byte count), for
         // Kanji mode the character count.
         var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji);
+        return PrepareConfiguration(in analysis, eccLevel, requestedVersion: null);
+    }
+
+    /// <summary>
+    /// Selects (or, for <paramref name="requestedVersion"/>, validates) the version for an analyzed text and returns the encode configuration.
+    /// </summary>
+    /// <remarks>
+    /// Only the analysis's mode and length are read, so a mixed-mode analysis serves too: it differs from the single-mode one only in <see cref="TextAnalysisResult.KanjiPlannable"/>.
+    /// </remarks>
+    private static MicroQRConfiguration PrepareConfiguration(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion)
+    {
         if (TrySelectVersion(in analysis, eccLevel, requestedVersion, out var version))
             return new MicroQRConfiguration(version, eccLevel, analysis.EncodingMode);
 
@@ -331,7 +369,7 @@ public static class MicroQRCodeGenerator
         return false;
     }
 
-    /// <summary>The resolved version, or <c>null</c> when unconstrained so selection is unchanged.</summary>
+    /// <summary>Single-mode sizing: the version a narrowed range resolves to, or the automatic selection when the range is unconstrained.</summary>
     private static bool TryGetRequiredBufferSizeRanged(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
     {
         if (options.Version.IsAny)
@@ -349,18 +387,18 @@ public static class MicroQRCodeGenerator
         return true;
     }
 
-    private static MicroQRVersion? ResolveVersion(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
+    /// <summary>
+    /// A narrowed version range: validates the quiet zone, analyzes the text once, and returns the configuration of the smallest version in the range that holds it, written from that same analysis.
+    /// </summary>
+    private static MicroQRConfiguration ResolveConfiguration(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
     {
-        if (options.Version.IsAny)
-            return null;   // the overload this feeds validates the quiet zone itself
-
         ValidateQuietZone(options.QuietZoneSize);
 
         var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: options.AllowKanji);
         if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
 
-        return version;
+        return PrepareConfiguration(in analysis, eccLevel, version);
     }
 
     /// <summary>
@@ -497,7 +535,7 @@ public static class MicroQRCodeGenerator
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
-            return CreateCore(textSpan, eccLevel, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
         if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out var segmentCount))
@@ -506,7 +544,7 @@ public static class MicroQRCodeGenerator
             // the single-mode fit, which owns the error when there is none.
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
                 throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
-            return CreateCore(textSpan, eccLevel, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
         var size = MicroQRConstants.SizeFromVersion(version);
@@ -532,14 +570,14 @@ public static class MicroQRCodeGenerator
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
         if (!useSegments)
-            return CreateCore(textSpan, eccLevel, destination, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         Span<ModeSegment> plan = stackalloc ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
         if (!TryBuildPlan(textSpan, in analysis, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, version, eccLevel, plan, out var segmentCount))
         {
             if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out version))
                 throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
-            return CreateCore(textSpan, eccLevel, destination, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, eccLevel, version), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
         var quietZoneSize = options.QuietZoneSize;

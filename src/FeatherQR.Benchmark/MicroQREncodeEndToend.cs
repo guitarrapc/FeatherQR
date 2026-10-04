@@ -22,6 +22,7 @@ public class MicroQREncodeEndToend
 
     private static readonly MicroQRCodeGeneratorOptions NoQuietZone = new() { QuietZoneSize = 0 };
     private static readonly MicroQRCodeGeneratorOptions KanjiNoQuietZone = new() { AllowKanji = true, QuietZoneSize = 0 };
+    private static readonly MicroQRCodeGeneratorOptions KanjiVersionM4 = new() { AllowKanji = true, Version = MicroQRVersion.M4 };
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -61,6 +62,15 @@ public class MicroQREncodeEndToend
     public MicroQRCodeData MicroQR_Kanji_M4_Encode()
     {
         return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { AllowKanji = true });
+    }
+
+    // Version pinned: the same symbol, through the path that resolves the version first (the
+    // cross-language benchmark's call). Kanji is the shape whose analysis costs the most.
+
+    [Benchmark(Description = "MicroQR_Kanji_M4_Encode (Pinned)")]
+    public MicroQRCodeData MicroQR_Kanji_M4_EncodePinned()
+    {
+        return MicroQRCodeGenerator.Create(_kanji.AsSpan(), MicroQREccLevel.M, KanjiVersionM4);
     }
 
     // Span destination (zero-allocation) variants

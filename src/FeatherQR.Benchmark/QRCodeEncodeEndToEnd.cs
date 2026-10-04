@@ -21,6 +21,7 @@ using System.Text;
 /// The "(Span, QZ0)" rows write no quiet zone, so they time what the decode benchmarks read (QRCodeDecodeEndToEnd decodes quiet-zone-free matrices).
 /// The "(Span)" rows keep the default quiet zone of 4, the matrix a caller gets with default options.
 /// The three long alphanumeric and numeric shapes are long enough to time the Alphanumeric and Numeric writers.
+/// The "(Pinned)" and "(Boost)" rows resolve the version or level before the pipeline, the path tools/CrossLanguageBenchmark takes on every encode.
 /// </summary>
 public class QRCodeEncodeEndToEnd
 {
@@ -40,6 +41,10 @@ public class QRCodeEncodeEndToEnd
     private const string AlphanumericAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
     private static readonly QRCodeGeneratorOptions NoQuietZone = new() { QuietZoneSize = 0 };
     private static readonly QRCodeGeneratorOptions KanjiNoQuietZone = new() { AllowKanji = true, QuietZoneSize = 0 };
+    private static readonly QRCodeGeneratorOptions Boost = new() { BoostEccLevel = true };
+    private static readonly QRCodeGeneratorOptions KanjiVersion6 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(6) };
+    private static readonly QRCodeGeneratorOptions KanjiVersion15 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(15) };
+    private static readonly QRCodeGeneratorOptions Version40 = new() { Version = QRVersionRange.Exactly(40) };
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -239,6 +244,40 @@ public class QRCodeEncodeEndToEnd
     public int QR_Numeric_V40_L_EncodeSpanNoQuietZone()
     {
         return QRCodeGenerator.Create(_numericLongL.AsSpan(), QREccLevel.L, _spanDestination, NoQuietZone);
+    }
+
+    // Version or level resolved before the pipeline: a pinned version, or the ECC boost. Each
+    // writes the symbol of the row above it with the same name (the boost raises the numeric
+    // shape to H, which the URL shape has no room for), from the analysis that resolved it.
+
+    [Benchmark(Description = "QR_Numeric_V1_L_Encode (Boost)")]
+    public QRCodeData QR_Numeric_V1_L_EncodeBoost()
+    {
+        return QRCodeGenerator.Create(_numeric.AsSpan(), QREccLevel.L, Boost);
+    }
+
+    [Benchmark(Description = "QR_Byte_Url_V6_M_Encode (Boost)")]
+    public QRCodeData QR_Byte_Url_V6_M_EncodeBoost()
+    {
+        return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M, Boost);
+    }
+
+    [Benchmark(Description = "QR_Kanji_V6_M_Encode (Pinned)")]
+    public QRCodeData QR_Kanji_V6_M_EncodePinned()
+    {
+        return QRCodeGenerator.Create(_kanji.AsSpan(), QREccLevel.M, KanjiVersion6);
+    }
+
+    [Benchmark(Description = "QR_Kanji_Long_V15_L_Encode (Pinned)")]
+    public QRCodeData QR_Kanji_Long_V15_L_EncodePinned()
+    {
+        return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, KanjiVersion15);
+    }
+
+    [Benchmark(Description = "QR_Byte_V40_L_Encode (Pinned)")]
+    public QRCodeData QR_Byte_V40_L_EncodePinned()
+    {
+        return QRCodeGenerator.Create(_byteLongL.AsSpan(), QREccLevel.L, Version40);
     }
 
     // Micro QR M2-L with the same numeric payload, for scale reference.

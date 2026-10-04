@@ -14,6 +14,9 @@ using SkiaSharp;
 ///     Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
 ///
 /// ZXing is configured to match this library's ECI behavior (Latin-1 for the ASCII payloads, UTF-8 for the unicode one) rather than left on its own default.
+///
+/// The "(Pinned)" rows encode each payload with its version pinned to the one every library selects, as tools/CrossLanguageBenchmark does,
+/// so they time the call behind its encode rows: the same symbol, through the path that resolves the version first.
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -27,6 +30,11 @@ public class SimpleEncode
     private byte[] _spanDestination = default!;
     ZXing.BarcodeWriter<SKBitmap> _zxingWriter_ascii = default!;
     ZXing.BarcodeWriter<SKBitmap> _zxingWriter_utf8 = default!;
+
+    private static readonly QRCodeGeneratorOptions Version1 = new() { Version = QRVersionRange.Exactly(1) };
+    private static readonly QRCodeGeneratorOptions Version2 = new() { Version = QRVersionRange.Exactly(2) };
+    private static readonly QRCodeGeneratorOptions Version3 = new() { Version = QRVersionRange.Exactly(3) };
+    private static readonly QRCodeGeneratorOptions Version4 = new() { Version = QRVersionRange.Exactly(4) };
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -133,6 +141,43 @@ public class SimpleEncode
     public int SkiaSharpQrCode_Wifi_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.Create(_textWifi.AsSpan(), QREccLevel.L, _spanDestination);
+    }
+
+    // Version pinned (the cross-language benchmark's call)
+
+    [Benchmark(Description = "SkiaSharpQrCode_Number_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public QRCodeData SkiaSharpQrCode_Number_EncodePinned()
+    {
+        return FeatherQR.QRCodeGenerator.Create(_textNumber.AsSpan(), QREccLevel.L, Version1);
+    }
+
+    [Benchmark(Description = "SkiaSharpQrCode_Alphanumeric_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public QRCodeData SkiaSharpQrCode_Alphanumeric_EncodePinned()
+    {
+        return FeatherQR.QRCodeGenerator.Create(_textAlphanumeric.AsSpan(), QREccLevel.L, Version2);
+    }
+
+    [Benchmark(Description = "SkiaSharpQrCode_Url_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public QRCodeData SkiaSharpQrCode_Url_EncodePinned()
+    {
+        return FeatherQR.QRCodeGenerator.Create(_textUrl.AsSpan(), QREccLevel.L, Version3);
+    }
+
+    [Benchmark(Description = "SkiaSharpQrCode_Unicode_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public QRCodeData SkiaSharpQrCode_Unicode_EncodePinned()
+    {
+        return FeatherQR.QRCodeGenerator.Create(_textUnicode.AsSpan(), QREccLevel.L, Version4);
+    }
+
+    [Benchmark(Description = "SkiaSharpQrCode_Wifi_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public QRCodeData SkiaSharpQrCode_Wifi_EncodePinned()
+    {
+        return FeatherQR.QRCodeGenerator.Create(_textWifi.AsSpan(), QREccLevel.L, Version3);
     }
 
     // Net.Codecrete.QrCodeGenerator

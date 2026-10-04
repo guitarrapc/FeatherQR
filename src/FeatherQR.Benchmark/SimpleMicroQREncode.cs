@@ -13,11 +13,17 @@ using BenchmarkDotNet.Configs;
 ///   FeatherQR picks the encoding mode from the payload, while CodeGlyphX exposes
 ///   one entry point per mode, so each row calls the CodeGlyphX method for the mode this
 ///   library would have chosen.
+///
+/// The "(Pinned)" rows pin each payload's version, as tools/CrossLanguageBenchmark does, so they time the call behind its encode rows.
 /// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleMicroQREncode
 {
+    private static readonly MicroQRCodeGeneratorOptions VersionM2 = new() { Version = MicroQRVersion.M2 };
+    private static readonly MicroQRCodeGeneratorOptions VersionM3 = new() { Version = MicroQRVersion.M3 };
+    private static readonly MicroQRCodeGeneratorOptions VersionM4 = new() { Version = MicroQRVersion.M4 };
+
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Numeric_M2_Encode()
@@ -32,6 +38,21 @@ public class SimpleMicroQREncode
     [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Byte_M4_Encode()
         => MicroQRCodeGenerator.Create(MicroQRPayloads.Byte.AsSpan(), MicroQREccLevel.M);
+
+    [Benchmark(Description = "SkiaSharpQrCode_Numeric_M2_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public MicroQRCodeData SkiaSharpQrCode_Numeric_M2_EncodePinned()
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Numeric.AsSpan(), MicroQREccLevel.L, VersionM2);
+
+    [Benchmark(Description = "SkiaSharpQrCode_Alphanumeric_M3_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public MicroQRCodeData SkiaSharpQrCode_Alphanumeric_M3_EncodePinned()
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Alphanumeric.AsSpan(), MicroQREccLevel.L, VersionM3);
+
+    [Benchmark(Description = "SkiaSharpQrCode_Byte_M4_Encode (Pinned)")]
+    [BenchmarkCategory("FeatherQR")]
+    public MicroQRCodeData SkiaSharpQrCode_Byte_M4_EncodePinned()
+        => MicroQRCodeGenerator.Create(MicroQRPayloads.Byte.AsSpan(), MicroQREccLevel.M, VersionM4);
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("CodeGlyphX")]

@@ -37,9 +37,6 @@ public static class QRCodeGenerator
 
     private const int ModeIndicatorBits = 4;
 
-    /// <summary>The `requestedVersion` value meaning "pick the smallest version that fits".</summary>
-    private const int AutomaticVersion = -1;
-
     /// <summary>The internal mask-pattern value meaning "select the lowest-penalty pattern".</summary>
     private const int AutomaticMask = -1;
 
@@ -49,14 +46,19 @@ public static class QRCodeGenerator
     /// <summary>Whether the analysis may resolve to Kanji mode: the caller asked for it, and no byte order mark asks for UTF-8 instead.</summary>
     private static bool AllowsKanji(in QRCodeGeneratorOptions options) => options.AllowKanji && !options.Utf8Bom;
 
-    private static QRCodeData CreateCore(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, bool allowKanji, int requestedVersion, int quietZoneSize, int maskPattern)
+    /// <summary>
+    /// The default path: nothing narrows the version and nothing boosts the level, so the smallest version that holds the content is picked from the one analysis.
+    /// </summary>
+    private static QRCodeData CreateAutomatic(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, bool allowKanji, int quietZoneSize, int maskPattern)
     {
         // QR code generation process:
         // ------------------------------------------------
-        // 1. Validate input parameters (version range, quiet zone size)
+        // 1. Validate input parameters (quiet zone size, ECI, ECC level)
         // 2. Prepare configuration:
         //    - Analyze text to determine optimal encoding mode (Numeric/Alphanumeric/Byte)
         //    - Select QR code version based on data length and ECC level
+        //      (a narrowed range or a boost resolves it in ResolveConfiguration instead,
+        //      from the same single analysis)
         //    - Get error correction info for the selected version
         // 3. Calculate buffer sizes (data capacity, ECC capacity, interleaved size)
         // 4. Encode data:
@@ -75,15 +77,20 @@ public static class QRCodeGenerator
         //    - Place version information (version 7+ only)
         // 8. Return QRCodeData (quiet zone handled by QRCodeData class)
 
-        if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
-            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
         ValidateQuietZoneSize(quietZoneSize);
         ValidateEciMode(eciMode);
         ValidateEccLevel(eccLevel);
 
         // Prepare configuration
-        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji, requestedVersion);
+        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji);
+        return CreateCore(textSpan, in config, quietZoneSize, maskPattern);
+    }
 
+    /// <summary>
+    /// Writes the symbol a prepared configuration describes. The arguments it came from were validated by whoever prepared it.
+    /// </summary>
+    private static QRCodeData CreateCore(ReadOnlySpan<char> textSpan, in QRConfiguration config, int quietZoneSize, int maskPattern)
+    {
         var result = new QRCodeData(config.Version, quietZoneSize);
         var coreSize = result.GetCoreSize();
         var dataLength = coreSize * coreSize;
@@ -111,17 +118,23 @@ public static class QRCodeGenerator
         }
     }
 
-    private static int CreateCore(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, bool utf8BOM, EciMode eciMode, bool allowKanji, int requestedVersion, int quietZoneSize, int maskPattern)
+    /// <summary>The default path into <paramref name="destination"/>; see <see cref="CreateAutomatic(ReadOnlySpan{char}, QREccLevel, bool, EciMode, bool, int, int)"/>.</summary>
+    private static int CreateAutomatic(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, bool utf8BOM, EciMode eciMode, bool allowKanji, int quietZoneSize, int maskPattern)
     {
-        if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
-            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
         ValidateQuietZoneSize(quietZoneSize);
         ValidateEciMode(eciMode);
         ValidateEccLevel(eccLevel);
 
         // Prepare configuration
-        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji, requestedVersion);
+        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, allowKanji);
+        return CreateCore(textSpan, in config, destination, quietZoneSize, maskPattern);
+    }
 
+    /// <summary>
+    /// Writes the symbol a prepared configuration describes into <paramref name="destination"/>. The arguments it came from were validated by whoever prepared it.
+    /// </summary>
+    private static int CreateCore(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> destination, int quietZoneSize, int maskPattern)
+    {
         var coreSize = QRCodeData.SizeFromVersion(config.Version);
         var (totalSize, requiredSize) = CalculateMatrixSize(coreSize, quietZoneSize);
         if (destination.Length < requiredSize)
@@ -234,8 +247,10 @@ public static class QRCodeGenerator
         if (options.Segmentation != QRSegmentation.Single)
             return CreateOptimal(textSpan, eccLevel, in options);
 
-        var (version, resolvedEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-        return CreateCore(textSpan, resolvedEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        if (options.Version.IsAny && !options.BoostEccLevel)
+            return CreateAutomatic(textSpan, eccLevel, options.Utf8Bom, options.EciMode, options.AllowKanji, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+
+        return CreateResolved(textSpan, eccLevel, in options);
     }
 
     /// <summary>
@@ -266,8 +281,10 @@ public static class QRCodeGenerator
         if (options.Segmentation != QRSegmentation.Single)
             return CreateOptimalTo(textSpan, eccLevel, destination, in options);
 
-        var (version, resolvedEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-        return CreateCore(textSpan, resolvedEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+        if (options.Version.IsAny && !options.BoostEccLevel)
+            return CreateAutomatic(textSpan, eccLevel, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+
+        return CreateResolvedTo(textSpan, eccLevel, destination, in options);
     }
 
     /// <summary>
@@ -852,23 +869,51 @@ public static class QRCodeGenerator
            $"Widen the version range, lower the ECC level, or leave it at QRVersionRange.Any for automatic selection.";
 
     /// <summary>
-    /// The smallest version in the range that holds the content (or the automatic marker when nothing forces a resolution here, so the default path is unchanged), and the error correction level after an optional boost.
-    /// A constrained range or a boost costs one extra text analysis, since the overload this feeds analyses again.
+    /// A narrowed <see cref="QRCodeGeneratorOptions.Version"/> or a boost: the symbol is written from the analysis that resolved its version and level.
+    /// Kept off the entry point, like <see cref="CreateOptimal"/>, so the default path keeps its frame.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static QRCodeData CreateResolved(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
+    {
+        var config = ResolveConfiguration(textSpan, eccLevel, in options);
+        return CreateCore(textSpan, in config, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+    }
+
+    /// <summary><see cref="CreateResolved"/> into <paramref name="destination"/>.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int CreateResolvedTo(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
+    {
+        var config = ResolveConfiguration(textSpan, eccLevel, in options);
+        return CreateCore(textSpan, in config, destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+    }
+
+    /// <summary>
+    /// Validates the arguments, analyzes the text once, and resolves the version and level from that analysis into the configuration the symbol is written from.
     /// </summary>
     /// <remarks>
-    /// The boost never changes the version: the version is chosen for the requested (minimum) level first, then the level is raised while the next one still fits that version.
-    /// Content that fits no version keeps the exact exception of the boost-free path, unconstrained overflow included, so turning boost on cannot reclassify an error.
+    /// The analysis is the one the default path makes in <see cref="PrepareConfiguration(ReadOnlySpan{char}, QREccLevel, bool, EciMode, bool)"/>: Kanji only where no byte order mark asks for UTF-8 (<see cref="AllowsKanji"/>), and no Kanji planning.
     /// </remarks>
-    private static (int Version, QREccLevel EccLevel) ResolveVersionAndEcc(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
+    private static QRConfiguration ResolveConfiguration(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        if (options.Version.IsAny && !options.BoostEccLevel)
-            return (AutomaticVersion, eccLevel);   // the overload this feeds validates the quiet zone itself
-
         ValidateQuietZoneSize(options.QuietZoneSize);
         ValidateEciMode(options.EciMode);
         ValidateEccLevel(eccLevel);
 
         var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode, allowKanji: AllowsKanji(in options));
+        var (version, resolvedEcc) = ResolveVersionAndEcc(in analysisResult, eccLevel, in options);
+        return PrepareConfiguration(in analysisResult, resolvedEcc, options.Utf8Bom, version);
+    }
+
+    /// <summary>
+    /// The smallest version in the range that holds the analyzed content, and the error correction level after an optional boost.
+    /// Over an unconstrained range the scan is the automatic one, so the version and the overflow exception are the default path's.
+    /// </summary>
+    /// <remarks>
+    /// The boost never changes the version: the version is chosen for the requested (minimum) level first, then the level is raised while the next one still fits that version.
+    /// Content that fits no version keeps the exact exception of the boost-free path, unconstrained overflow included, so turning boost on cannot reclassify an error.
+    /// </remarks>
+    private static (int Version, QREccLevel EccLevel) ResolveVersionAndEcc(in TextAnalysisResult analysisResult, QREccLevel eccLevel, in QRCodeGeneratorOptions options)
+    {
         if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8Bom, options.Version.Min, options.Version.Max, out var version))
         {
             if (options.Version.IsAny)
@@ -928,18 +973,28 @@ public static class QRCodeGenerator
     /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
     /// <param name="eciMode">The character encoding to declare, or <see cref="EciMode.Default"/> to choose one from the text.</param>
     /// <param name="allowKanji">Whether the caller asked for Kanji mode (<see cref="QRCodeGeneratorOptions.AllowKanji"/>); a byte order mark overrides it.</param>
-    /// <param name="requestedVersion">The QR code size to use (1 to 40), or -1 to pick the smallest size the text fits in.</param>
-    /// <returns>The version, encoding mode, ECI mode and error correction layout to encode with.</returns>
+    /// <returns>The smallest version that holds the text, and the encoding mode, ECI mode and error correction layout to encode with.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, bool allowKanji, int requestedVersion)
+    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, bool allowKanji)
     {
         var analysisResult = TextAnalyzer.Analyze(textSpan, eciMode, allowKanji: allowKanji && !utf8BOM);
+        var version = GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM);
+        return PrepareConfiguration(in analysisResult, eccLevel, utf8BOM, version);
+    }
 
-        // Select QR code version (auto or manual)
-        var version = requestedVersion == -1
-            ? GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM)
-            : requestedVersion;
-
+    /// <summary>
+    /// The configuration that writes an analyzed text's single-mode stream at a version already chosen.
+    /// </summary>
+    /// <remarks>
+    /// Only the analysis's mode, charset and length are read, so a mixed-mode analysis serves too: it differs from the single-mode one only in <see cref="TextAnalysisResult.KanjiPlannable"/>.
+    /// </remarks>
+    /// <param name="analysisResult">The text's single-mode analysis, made with Kanji allowed only where <paramref name="utf8BOM"/> is off.</param>
+    /// <param name="eccLevel">The level to write, after any boost.</param>
+    /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
+    /// <param name="version">The version to write (1 to 40), one the stream fits.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static QRConfiguration PrepareConfiguration(in TextAnalysisResult analysisResult, QREccLevel eccLevel, bool utf8BOM, int version)
+    {
         // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
@@ -1403,11 +1458,12 @@ public static class QRCodeGenerator
         // The BOM is a stream-level prefix written only into UTF-8 Byte-mode streams:
         // a split would relocate it into the middle of the decoded text, so that
         // combination emits the single-mode stream. Content whose single mode is
-        // Numeric or Alphanumeric never carries a BOM, so it still splits.
+        // Numeric or Alphanumeric never carries a BOM, so it still splits. The mark rules
+        // Kanji out, so this analysis planned nothing and is the single mode's own.
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
-            var (bomVersion, bomEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-            return CreateCore(textSpan, bomEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            var (bomVersion, bomEcc) = ResolveVersionAndEcc(in analysis, eccLevel, in options);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, bomEcc, options.Utf8Bom, bomVersion), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
         byte[]? rentedKanjiTable = null;
@@ -1433,7 +1489,7 @@ public static class QRCodeGenerator
     {
         var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
-            return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), options.Utf8Bom, version), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         // The plan buffer is acquired only once a split is known to pay: content no
         // split can help (all-Numeric included) never rents it.
@@ -1445,7 +1501,7 @@ public static class QRCodeGenerator
         {
             var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
-                return CreateCore(textSpan, resolvedEcc, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+                return CreateCore(textSpan, PrepareConfiguration(in analysis, resolvedEcc, options.Utf8Bom, version), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
             var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, PlanCharset(in analysis, kanjiPlan), false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
             var result = new QRCodeData(version, options.QuietZoneSize);
@@ -1485,8 +1541,8 @@ public static class QRCodeGenerator
 
         if (options.Utf8Bom && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
-            var (bomVersion, bomEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-            return CreateCore(textSpan, bomEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            var (bomVersion, bomEcc) = ResolveVersionAndEcc(in analysis, eccLevel, in options);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, bomEcc, options.Utf8Bom, bomVersion), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
         byte[]? rentedKanjiTable = null;
@@ -1512,7 +1568,7 @@ public static class QRCodeGenerator
     {
         var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, kanjiTable, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits);
         if (!useSegments)
-            return CreateCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+            return CreateCore(textSpan, PrepareConfiguration(in analysis, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), options.Utf8Bom, version), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         ModeSegment[]? rentedPlan = null;
         Span<ModeSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
@@ -1522,7 +1578,7 @@ public static class QRCodeGenerator
         {
             var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, kanjiPlan, kanjiTable, kanjiFinalState, kanjiPlannedBits, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
-                return CreateCore(textSpan, resolvedEcc, destination, options.Utf8Bom, options.EciMode, options.AllowKanji, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+                return CreateCore(textSpan, PrepareConfiguration(in analysis, resolvedEcc, options.Utf8Bom, version), destination, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
             var config = new QRConfiguration(version, resolvedEcc, analysis.EncodingMode, PlanCharset(in analysis, kanjiPlan), false, QRCodeConstants.GetEccInfo(version, resolvedEcc), analysis.DataLength);
             var segments = plan.Slice(0, segmentCount);
