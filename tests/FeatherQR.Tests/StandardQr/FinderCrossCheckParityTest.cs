@@ -165,8 +165,8 @@ public class FinderCrossCheckParityTest
                 {
                     boundedRuns.Clear();
                     referenceRuns.Clear();
-                    var bounded = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, rowShiftSign, referenceWalk: false, out var boundedTotal, out var boundedLike, crispMode ? boundedRuns : default);
-                    var reference = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, rowShiftSign, referenceWalk: true, out var referenceTotal, out var referenceLike, crispMode ? referenceRuns : default);
+                    var bounded = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, rowShiftSign, referenceWalk: false, out var boundedTotal, out var boundedLike, out var boundedCentre, crispMode ? boundedRuns : default);
+                    var reference = FinderPatternFinder.CrossCheck(image, width, height, threshold, grey, x, y, vertical, expected, rowShiftSign, referenceWalk: true, out var referenceTotal, out var referenceLike, out var referenceCentre, crispMode ? referenceRuns : default);
 
                     compared++;
                     if (BitConverter.SingleToInt32Bits(bounded) != BitConverter.SingleToInt32Bits(reference))
@@ -178,8 +178,8 @@ public class FinderCrossCheckParityTest
                         acceptedHandingRunsBack++;
                     if (referenceLike)
                         acceptedByLikeEdges++;
-                    if (boundedTotal != referenceTotal || !boundedRuns.SequenceEqual(referenceRuns) || boundedLike != referenceLike)
-                        return $"centre=({x},{y}), crispMode={crispMode}, row shift {rowShiftSign}: bounded total {boundedTotal} like {boundedLike}, reference {referenceTotal} {referenceLike}";
+                    if (boundedTotal != referenceTotal || boundedCentre != referenceCentre || !boundedRuns.SequenceEqual(referenceRuns) || boundedLike != referenceLike)
+                        return $"centre=({x},{y}), crispMode={crispMode}, row shift {rowShiftSign}: bounded total {boundedTotal} centre {boundedCentre} like {boundedLike}, reference {referenceTotal} {referenceCentre} {referenceLike}";
                 }
             }
         }

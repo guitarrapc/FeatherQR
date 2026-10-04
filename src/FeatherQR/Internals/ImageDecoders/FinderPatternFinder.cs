@@ -611,7 +611,7 @@ internal static partial class FinderPatternFinder
     }
 
     /// <summary>
-    /// The ratio along the column, the row again and the falling diagonal, and the rising diagonal too when the column is past the row's own 40 % or any line was read by like edges (<see cref="IsFinderRatioByLikeEdges"/>).
+    /// The ratio along the column, the row again and the falling diagonal, and the rising diagonal too when the column is past the row's own 40 %, any line was read by like edges (<see cref="IsFinderRatioByLikeEdges"/>), or the falling diagonal's centre is short (<see cref="IsDiagonalCentreShort"/>).
     /// </summary>
     /// <remarks>
     /// A line read by like edges takes a shape the ratio refuses, so the finder it belongs to is held to its rings reading in all four directions: texture that passes three lines that way seldom passes the fourth, and a ring is closed all round.
@@ -620,20 +620,42 @@ internal static partial class FinderPatternFinder
     {
         centerX = rowCenterX;
         refinedTotal = 0;
-        centerY = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, y, vertical: true, total, rowShiftSign, referenceWalk, out var columnTotal, out var columnByLikeEdges, default);
+        centerY = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, y, vertical: true, total, rowShiftSign, referenceWalk, out var columnTotal, out var columnByLikeEdges, out var columnCentre, default);
         if (float.IsNaN(centerY))
             return false;
 
-        centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY, vertical: false, total, rowShiftSign, referenceWalk, out refinedTotal, out var rowByLikeEdges, default);
+        centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY, vertical: false, total, rowShiftSign, referenceWalk, out refinedTotal, out var rowByLikeEdges, out var rowCentre, default);
         if (float.IsNaN(centerX))
             return false;
 
-        if (!CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, rowShiftSign, referenceWalk, rising: false, out var diagonalByLikeEdges))
+        if (!CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, rowShiftSign, referenceWalk, rising: false, out var diagonalByLikeEdges, out var diagonalCentre, out var diagonalTotal))
             return false;
 
         // A column the row's own 40 % refuses is taken only as the finder a perspective stretches: an affine image of the rings, which every line through the centre crosses 1:1:3:1:1, the other diagonal too
-        return (IsTotalInWindow(columnTotal, total, acrossAxes: false) && !(columnByLikeEdges || rowByLikeEdges || diagonalByLikeEdges))
-            || CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, rowShiftSign, referenceWalk, rising: true, out _);
+        return (IsTotalInWindow(columnTotal, total, acrossAxes: false)
+                && !(columnByLikeEdges || rowByLikeEdges || diagonalByLikeEdges)
+                && !IsDiagonalCentreShort(diagonalCentre, diagonalTotal, rowCentre, refinedTotal, columnCentre, columnTotal))
+            || CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, rowShiftSign, referenceWalk, rising: true, out _, out _, out _);
+    }
+
+    /// <summary>Seven modules of 2 px: the shortest row whose centre share <see cref="IsDiagonalCentreShort"/> compares.</summary>
+    internal const int DiagonalCentreShareMinRowTotal = 14;
+
+    /// <summary>
+    /// The falling diagonal's centre run is a smaller share of its line than four fifths of the share the row's and column's centres are of theirs, on a row of 2 px modules or more.
+    /// </summary>
+    /// <remarks>
+    /// Every line through the centre of concentric squares, or of any affine image of them, crosses the rings in the same proportions, so a finder's centre is the same share of its diagonal as of its row and column.
+    /// A pattern whose row and column carry the finder's runs and whose diagonal has a one-module centre (1:1:1:1:1) passes the ratio on that diagonal: equal runs miss its tolerance by a tenth of a module on the centre, and the 45° walk adds the corner pixels beside the centre to it. Its centre share falls under four fifths of the axes' at nearly every scale and offset, so the other diagonal decides.
+    /// A thin or thick print shortens or lengthens every line's centre alike, so it leaves the comparison as it is. Under 2 px a module, the like-edge reading's floor too, one pixel is most of the margin between the two shares.
+    /// </remarks>
+    internal static bool IsDiagonalCentreShort(int diagonalCentre, int diagonalTotal, int rowCentre, int rowTotal, int columnCentre, int columnTotal)
+    {
+        if (rowTotal < DiagonalCentreShareMinRowTotal)
+            return false;
+
+        // diagonalCentre / diagonalTotal < 4/5 · (rowCentre / rowTotal + columnCentre / columnTotal) / 2, multiplied through
+        return 5L * diagonalCentre * rowTotal * columnTotal < 2L * diagonalTotal * ((long)rowCentre * columnTotal + (long)columnCentre * rowTotal);
     }
 
     /// <summary>
@@ -686,13 +708,13 @@ internal static partial class FinderPatternFinder
 
         var rowCenterX = endX - rowRuns[4] - rowRuns[3] - rowRuns[2] / 2f;
         Span<int> columnRuns = stackalloc int[5];
-        centerY = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, y, vertical: true, refinedTotal, rowShiftSign: 0, referenceWalk, out _, out _, columnRuns);
+        centerY = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, y, vertical: true, refinedTotal, rowShiftSign: 0, referenceWalk, out _, out _, out _, columnRuns);
         if (float.IsNaN(centerY))
             return false;
 
         // The row through the column's centre, so both lines cross the centre square
         Span<int> centerRowRuns = stackalloc int[5];
-        centerX = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, (int)centerY, vertical: false, refinedTotal, rowShiftSign: 0, referenceWalk, out refinedTotal, out _, centerRowRuns);
+        centerX = CrossCheck(luminance, width, height, threshold, default, (int)rowCenterX, (int)centerY, vertical: false, refinedTotal, rowShiftSign: 0, referenceWalk, out refinedTotal, out _, out _, centerRowRuns);
         if (float.IsNaN(centerX))
             return false;
 
@@ -732,13 +754,14 @@ internal static partial class FinderPatternFinder
 
     /// <summary>
     /// Walks outwards from a supposed center along one axis and re-validates the 1:1:3:1:1 ratio, or reads the line by like edges (<see cref="IsLikeEdgeLine"/>) when its total is within the row's own 40 %.
-    /// Returns the refined center coordinate on that axis, or NaN.
+    /// Returns the refined center coordinate on that axis, or NaN, with the line's <paramref name="total"/> and <paramref name="centre"/> run.
     /// With <paramref name="nearMissRuns"/> the line only has to read as a small crisp finder's, and its runs are handed back for the whole-pattern check.
     /// </summary>
-    internal static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, int rowShiftSign, bool referenceWalk, out int total, out bool byLikeEdges, Span<int> nearMissRuns)
+    internal static float CrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, bool vertical, int expectedTotal, int rowShiftSign, bool referenceWalk, out int total, out bool byLikeEdges, out int centre, Span<int> nearMissRuns)
     {
         total = 0;
         byLikeEdges = false;
+        centre = 0;
 
         // The walk gives up where the verdict below is already certain to refuse, in either mode
         Span<int> runs = stackalloc int[5];
@@ -770,19 +793,21 @@ internal static partial class FinderPatternFinder
             byLikeEdges = true;
         }
 
+        centre = runs[2];
         return i - runs[4] - runs[3] - runs[2] / 2f;
     }
 
     /// <summary>
     /// Validates the 1:1:3:1:1 ratio along the top-left → bottom-right diagonal, or with <paramref name="rising"/> the bottom-left → top-right one, killing false positives that pass both axis checks (e.g. dense data areas).
+    /// The line's <paramref name="centre"/> run and <paramref name="total"/> come back for <see cref="IsDiagonalCentreShort"/>.
     /// </summary>
     /// <remarks>
-    /// This one takes the second look too, because it is also what reads a real finder's diagonal once the edges are grey, but it is the weakest place to take it: it is reached only after both axes have accepted, so re-measuring can only turn a refusal into an acceptance, and a 45° walk crosses module corners, where a pixel's darkness is not the position of a single edge.
-    /// Below 2.25 px/module that is enough to admit a cross whose axes read 1:1:3:1:1 and whose diagonal does not. Measuring whole pixels here instead removes that class only below 2.05, where this is the route it comes in by, and costs real finders their decode at 2 px/module, so the repair is the corner model rather than the second look.
+    /// This one takes the second look too, because it is also what reads a real finder's diagonal once the edges are grey. A 45° walk crosses module corners, where a pixel's darkness is not the position of a single edge, and it takes the corner pixels beside a one-module centre into that run, so the ratio here admits a diagonal whose centre is one module; <see cref="IsDiagonalCentreShort"/> is what sends that line to the other diagonal.
     /// </remarks>
-    private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, int rowShiftSign, bool referenceWalk, bool rising, out bool byLikeEdges)
+    private static bool CrossCheckDiagonal(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, int centerX, int centerY, int rowShiftSign, bool referenceWalk, bool rising, out bool byLikeEdges, out int centre, out int total)
     {
         byLikeEdges = false;
+        centre = total = 0;
         Span<int> runs = stackalloc int[5];
         int i;
         var stepY = rising ? -1 : 1;
@@ -794,6 +819,8 @@ internal static partial class FinderPatternFinder
         if (!measured)
             return false;
 
+        centre = runs[2];
+        total = runs[0] + runs[1] + runs[2] + runs[3] + runs[4];
         if (IsFinderRatio(runs) || IsFinderRatioByCoverage(luminance, width, height, grey, runs, centerX + i, centerY + stepY * i, 1, stepY))
             return true;
         byLikeEdges = IsLikeEdgeLine(runs[0], runs[1], runs[2], runs[3], runs[4], rowShiftSign);

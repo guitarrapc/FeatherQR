@@ -416,8 +416,8 @@ public class FinderPatternSelectionTest
     /// A keystoned render whose stride pass cannot settle the triple is what reaches the second pass, and its Counts are held here.
     /// </summary>
     [Test]
-    [Arguments("FQR15153", 23, 3.849512f, 217.87996f, 0.18072245f, 7, 7, 6)]
-    [Arguments("FQR35690", 12, 4.889204f, 114.38633f, 0.07109908f, 9, 8, 9)]
+    [Arguments("FQR63475", 19, 4.158568f, 240.23477f, 0.07490237f, 6, 6, 6)]
+    [Arguments("FQR19196", 22, 4.443602f, 339.7293f, 0.18636872f, 8, 9, 12)]
     [Arguments("FQR93829", 25, 3.3416924f, 248.33737f, 0.1592999f, 6, 8, 7)]
     public async Task TryFind_ComplementaryPassScansTheSkippedRowsOnly_CountsAreRowsSeen(string content, int version, float pixelsPerModule, float degrees, float keystone, int first, int second, int third)
     {
@@ -429,7 +429,15 @@ public class FinderPatternSelectionTest
         await Assert.That(FinderPatternFinder.TryFind(luminance, side, side, threshold, patterns, grey)).IsTrue();
 
         // In the order the patterns lie in the image, not the order the scan happened to select them in
-        var counts = patterns.OrderBy(p => p.Y).ThenBy(p => p.X).Select(p => p.Count).ToArray();
+        var ordered = patterns.OrderBy(p => p.Y).ThenBy(p => p.X).ToArray();
+        var counts = ordered.Select(p => p.Count).ToArray();
+
+        // The premise: the stride pass alone counts fewer rows, so these Counts are the second pass's
+        var stride = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        var strideCount = FinderPatternFinder.FindCandidates(luminance, side, side, threshold, stride, grey);
+        var strideCounts = ordered.Select(p => stride.Take(strideCount).Where(c => Math.Abs(c.X - p.X) <= c.ModuleSize && Math.Abs(c.Y - p.Y) <= c.ModuleSize).Select(c => c.Count).FirstOrDefault()).ToArray();
+        await Assert.That(counts.SequenceEqual(strideCounts)).IsFalse().Because($"{content}: the stride pass settled the triple, so the render no longer reaches the complementary pass");
+
         await Assert.That(counts).IsEquivalentTo(new[] { first, second, third }, CollectionOrdering.Matching).Because($"{content}, version {version}");
     }
 }
