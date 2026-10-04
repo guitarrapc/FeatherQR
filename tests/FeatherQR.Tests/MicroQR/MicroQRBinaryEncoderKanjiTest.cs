@@ -174,8 +174,8 @@ public class MicroQRBinaryEncoderKanjiTest
     [MethodDataSource(nameof(KanjiSymbols))]
     public async Task Capacity_MatchesTheStandardsKanjiColumn(MicroQRVersion version, MicroQREccLevel ecc, int capacity)
     {
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(Kanji(capacity), ecc, version, out _)).IsTrue();
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(Kanji(capacity + 1), ecc, version, out _)).IsFalse();
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersionInRange(Kanji(capacity), ecc, MicroQRVersionRange.Exactly(version), out _)).IsTrue();
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersionInRange(Kanji(capacity + 1), ecc, MicroQRVersionRange.Exactly(version), out _)).IsFalse();
     }
 
     [Test]
@@ -187,7 +187,7 @@ public class MicroQRBinaryEncoderKanjiTest
     [Arguments(5, MicroQREccLevel.Q, MicroQRVersion.M4)]   // Q exists on M4 only
     public async Task VersionSelection_PicksTheSmallestKanjiVersion(int count, MicroQREccLevel ecc, MicroQRVersion expected)
     {
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(Kanji(count), ecc, null, out var version)).IsTrue();
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(Kanji(count), ecc, out var version)).IsTrue();
         await Assert.That(version).IsEqualTo(expected);
     }
 
@@ -197,7 +197,7 @@ public class MicroQRBinaryEncoderKanjiTest
     [Arguments(6, MicroQREccLevel.Q)]
     public async Task VersionSelection_PastM4_DoesNotFit(int count, MicroQREccLevel ecc)
     {
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(Kanji(count), ecc, null, out _)).IsFalse();
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(Kanji(count), ecc, out _)).IsFalse();
     }
 
     /// <summary>A range limited to M1-M2 holds no Kanji at all: an ordinary "does not fit", not an argument error.</summary>
@@ -205,7 +205,7 @@ public class MicroQRBinaryEncoderKanjiTest
     public async Task VersionSelection_RangeBelowM3_DoesNotFit()
     {
         await Assert.That(MicroQRCodeGenerator.TrySelectVersionInRange(Kanji(1), MicroQREccLevel.L, MicroQRVersionRange.AtMost(MicroQRVersion.M2), out _)).IsFalse();
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(Kanji(1), MicroQREccLevel.L, MicroQRVersion.M2, out _)).IsFalse();
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersionInRange(Kanji(1), MicroQREccLevel.L, MicroQRVersionRange.Exactly(MicroQRVersion.M2), out _)).IsFalse();
     }
 
     [Test]

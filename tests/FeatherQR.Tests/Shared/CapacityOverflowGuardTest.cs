@@ -38,8 +38,9 @@ public class CapacityOverflowGuardTest
     {
         var analysis = new TextAnalysisResult(EncodingMode.Byte, EciMode.Default, OverflowingByteLength);
 
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(in analysis, MicroQREccLevel.L, version, out _)).IsFalse();
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(in analysis, MicroQREccLevel.L, null, out _)).IsFalse();
+        // A pinned version is fitted as a one-version range, and the automatic choice by the scan over all four.
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersionInRange(in analysis, MicroQREccLevel.L, MicroQRVersionRange.Exactly(version), out _)).IsFalse();
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(in analysis, MicroQREccLevel.L, out _)).IsFalse();
     }
 
     [Test]
@@ -53,14 +54,16 @@ public class CapacityOverflowGuardTest
     public async Task OversizedContent_DoesNotSwallowArgumentErrors()
     {
         // An overflow fast-path placed before the argument checks would answer "does not
-        // fit" for a bad enum, and would then hand an unvalidated version to the error
-        // builder, which indexes the capacity tables by version.
+        // fit" for a bad enum, and, where a fit takes a version (rMQR's does), would then
+        // hand an unvalidated version to the error builder, which indexes the capacity
+        // tables by version.
         var analysis = new TextAnalysisResult(EncodingMode.Byte, EciMode.Default, OverflowingByteLength);
 
-        await Assert.That(() => MicroQRCodeGenerator.TrySelectVersion(in analysis, MicroQREccLevel.L, (MicroQRVersion)0, out _)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => MicroQRCodeGenerator.TrySelectVersion(in analysis, MicroQREccLevel.L, (MicroQRVersion)5, out _)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => MicroQRCodeGenerator.TrySelectVersion(in analysis, (MicroQREccLevel)9, null, out _)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => MicroQRCodeGenerator.TrySelectVersion(in analysis, MicroQREccLevel.L, MicroQRVersion.M1, out _)).Throws<ArgumentException>();
+        // A Micro QR version is validated where its range is built, before any fit sees it
+        // (VersionRangeTest.MicroRange_InvalidBounds_ThrowFromTheFactory), so the fits take no version to check.
+        await Assert.That(() => MicroQRCodeGenerator.TrySelectVersion(in analysis, (MicroQREccLevel)9, out _)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => MicroQRCodeGenerator.TrySelectVersionInRange(in analysis, (MicroQREccLevel)9, MicroQRVersionRange.Exactly(MicroQRVersion.M3), out _)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => MicroQRCodeGenerator.TrySelectVersionInRange(in analysis, MicroQREccLevel.L, MicroQRVersionRange.Exactly(MicroQRVersion.M1), out _)).Throws<ArgumentException>();
 
         // Standard QR validates the ECC level inside the version scan, so an oversized
         // payload must still reach it rather than short-cutting to false.
@@ -99,7 +102,7 @@ public class CapacityOverflowGuardTest
         await Assert.That(RmQRVersionSelector.Fits(RmQRVersion.R17x139, RmQREccLevel.M, EncodingMode.Numeric, 361)).IsTrue();
 
         var micro = new TextAnalysisResult(EncodingMode.Numeric, EciMode.Default, 35);
-        await Assert.That(MicroQRCodeGenerator.TrySelectVersion(in micro, MicroQREccLevel.L, MicroQRVersion.M4, out _)).IsTrue();
+        await Assert.That(MicroQRCodeGenerator.TrySelectVersionInRange(in micro, MicroQREccLevel.L, MicroQRVersionRange.Exactly(MicroQRVersion.M4), out _)).IsTrue();
 
         await Assert.That(QRCodeGenerator.TryGetVersion(2953, EncodingMode.Byte, QREccLevel.L, EciMode.Default, utf8BOM: false, out var v40Byte)).IsTrue();
         await Assert.That(v40Byte).IsEqualTo(40);

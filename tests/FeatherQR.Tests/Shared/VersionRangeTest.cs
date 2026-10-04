@@ -407,6 +407,75 @@ public class VersionRangeTest
         await Assert.That(MicroQRCodeGenerator.Create("1", MicroQREccLevel.Q, new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Any }).Version).IsEqualTo(MicroQRVersion.M4);
     }
 
+    // A narrowed range that does not hold the content names itself and looks only at its own
+    // versions: the largest one there, or the mode none of them carries at that level. A
+    // pinned version and the unconstrained range keep their own messages (ResolvedEncodeOutputTest
+    // and KanjiEligibilityTest pin those), and Between(M1, M4) is the unconstrained range.
+
+    private const string MicroModes = "M1: Numeric; M2: +Alphanumeric; M3/M4: +Byte";
+    private const string MicroLevels = "levels: M1: ErrorDetectionOnly; M2/M3: L, M; M4: L, M, Q";
+
+    public static IEnumerable<(string Text, MicroQREccLevel Ecc, MicroQRVersionRange Range, bool AllowKanji, string Message)> MicroNarrowedRangeErrors()
+    {
+        // Too long, and the versions above the range would have held it
+        yield return ("387080593", MicroQREccLevel.M, MicroQRVersionRange.Between(MicroQRVersion.M1, MicroQRVersion.M2), false,
+            "Content is too long for Micro QR M1-M2 at ECC level M: 9 digits in Numeric mode, but the maximum in that range is 8 digits (M2). " +
+            "Shorten the content, lower the ECC level, widen the version range, or use Standard QR (QRCodeGenerator) for longer content.");
+        // Too long for the range's largest version, which is also the largest there is
+        yield return (new string('A', 30), MicroQREccLevel.L, MicroQRVersionRange.AtLeast(MicroQRVersion.M2), false,
+            "Content is too long for Micro QR M2-M4 at ECC level L: 30 characters in Alphanumeric mode, but the maximum in that range is 21 characters (M4). " +
+            "Shorten the content, lower the ECC level, widen the version range, or use Standard QR (QRCodeGenerator) for longer content.");
+        // No version in the range carries the mode
+        yield return ("hello", MicroQREccLevel.L, MicroQRVersionRange.AtMost(MicroQRVersion.M2), false,
+            $"Encoding mode Byte is not available at ECC level L on any Micro QR version in M1-M2 (modes: {MicroModes}; {MicroLevels}). " +
+            "Widen the version range, choose another ECC level, or use Standard QR (QRCodeGenerator).");
+        // The level leaves only M1 in the range, and M1 carries no Alphanumeric
+        yield return ("AC-42", MicroQREccLevel.ErrorDetectionOnly, MicroQRVersionRange.Between(MicroQRVersion.M1, MicroQRVersion.M2), false,
+            $"Encoding mode Alphanumeric is not available at ECC level ErrorDetectionOnly on any Micro QR version in M1-M2 (modes: {MicroModes}; {MicroLevels}). " +
+            "Widen the version range, choose another ECC level, or use Standard QR (QRCodeGenerator).");
+        // Kanji mode names Kanji beside Byte
+        yield return ("吾輩", MicroQREccLevel.L, MicroQRVersionRange.AtMost(MicroQRVersion.M2), true,
+            $"Encoding mode Kanji is not available at ECC level L on any Micro QR version in M1-M2 (modes: {MicroModes} and Kanji; {MicroLevels}). " +
+            "Widen the version range, choose another ECC level, or use Standard QR (QRCodeGenerator).");
+        // Control: the whole range is the unconstrained one, whose message does not change
+        yield return (new string('1', 36), MicroQREccLevel.L, MicroQRVersionRange.Between(MicroQRVersion.M1, MicroQRVersion.M4), false,
+            "Content is too long for Micro QR: 36 digits in Numeric mode, but ECC level L fits at most 35 digits (M4). " +
+            "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.");
+    }
+
+    [Test]
+    [MethodDataSource(nameof(MicroNarrowedRangeErrors))]
+    public async Task MicroQr_NarrowedRangeThatDoesNotFit_NamesTheRangeOnEveryEntryPoint(string text, MicroQREccLevel ecc, MicroQRVersionRange range, bool allowKanji, string message)
+    {
+        var single = new MicroQRCodeGeneratorOptions { Version = range, AllowKanji = allowKanji };
+        var optimal = single with { Segmentation = MicroQRSegmentation.Optimal };
+
+        foreach (var options in new[] { single, optimal })
+        {
+            await AssertNotFitting(() => MicroQRCodeGenerator.Create(text.AsSpan(), ecc, options), message);
+            await AssertNotFitting(() => MicroQRCodeGenerator.Create(text.AsSpan(), ecc, new byte[10_000], options), message);
+            await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), ecc, out _, options)).IsFalse();
+        }
+    }
+
+    private static async Task AssertNotFitting(Action encode, string message)
+    {
+        ArgumentException? error = null;
+        try
+        {
+            encode();
+        }
+        catch (ArgumentException e)
+        {
+            error = e;
+        }
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error!.GetType()).IsEqualTo(typeof(ArgumentException));
+        await Assert.That(error.ParamName).IsNull();
+        await Assert.That(error.Message).IsEqualTo(message);
+    }
+
     [Test]
     public async Task Ranged_SizingAndEncoding_Agree()
     {
