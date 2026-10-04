@@ -73,7 +73,7 @@ A CLI's own loop can be wrong: a batch too short for the clock, a warmup that en
 
 ## Protocol
 
-The harness lives in `tools/CrossLanguageBenchmark/`: the Dockerfile, `clis.tsv` (each CLI's name and command), the collector, and one folder per language. FeatherQR's CLI in `dotnet/cli` is the reference implementation of the protocol, and its comments carry the details. Code and XML docs elsewhere never name other libraries, but this folder's code does, because every CLI in it wraps one (decided 2026-10-02, for this folder only).
+The harness lives in `tools/CrossLanguageBenchmark/`: the Dockerfile, `clis.tsv` (each CLI's name and command), the collector, and one folder per language. `dotnet/cli/Protocol.cs` is the reference implementation of the protocol, which FeatherQR's CLI and the ZXingCpp package's CLI share, and its comments carry the details. `rust/src/lib.rs` and `cpp/protocol.hpp` port it. Code and XML docs elsewhere never name other libraries, but this folder's code does, because every CLI in it wraps one (decided 2026-10-02, for this folder only).
 
 The collector's `corpus` command writes the inputs and `manifest.tsv`, one line per operation on a case. The cases are the payloads and symbols of the benchmark project's `Simple*` classes: five Standard QR payloads, three Micro QR and three rMQR, each encoded, decoded as a matrix and decoded as an image, 33 entries in all. FeatherQR encodes them, and the corpus command fails if FeatherQR cannot read its own inputs back.
 
@@ -81,7 +81,7 @@ Every CLI is called as `<cli> <mode> <op> <symbology> <input> [--ecc E] [--versi
 
 - `op` is `encode`, `decode-matrix` or `decode-image`, and `symbology` is `qr`, `microqr` or `rmqr`. Encode is pinned to the level and version given (`3`, `M2`, `R7x43`). Decode takes neither.
 - The encode input is the payload's UTF-8 bytes. The matrix input is a binary PGM of the bare symbol, one pixel per module, 0 for dark. The image input is a binary PGM of the symbol drawn at 8 pixels per module inside its specified quiet zone.
-- `run` makes one call and prints its result for verification. It then warms up for 3 s and at least 3 calls, sizes a batch to 20 ms from the warmup's second half, and times 30 batches with a monotonic clock. It prints each batch's nanoseconds and its call count.
+- `run` makes one call and prints its result for verification. A call that fails is reported and not timed, since failing has a cost of its own. It then warms up for 3 s and at least 3 calls, sizes a batch to 20 ms from the warmup's second half, and times 30 batches with a monotonic clock. It prints each batch's nanoseconds and its call count.
 - `fixed` makes N calls and prints only the checksum, for the outside check. `cold` makes one call and prints its result. `noop` loads the input and makes no call. The collector times the last two from outside, and their difference is the cold first call.
 - `status` is `ok`, `failed` (no decode, or the encoder refused) or `unsupported` (the library has no such operation). A decode prints its text as UTF-8 in hex, so no CLI needs a JSON string escaper. An encode prints its matrix as rows of 0 and 1, with whatever quiet zone the library returns.
 - `build` names how the CLI was compiled: Rust's flags, or for FeatherQR `jit` or `nativeaot` with its instruction-set target. FeatherQR's CLI also prints `isa`, the instruction sets its code sees, so every run repeats the probe above on the machine it ran on.
@@ -272,3 +272,46 @@ Lessons:
 - Tracing which kernels each shape reaches found that a Standard QR encode with a pinned version, which every encode entry here is, analyses the text twice: once to resolve the version and once to encode. That is a separate change to the library. Done 2026-10-04: Standard QR and Micro QR, which had the same double analysis, now encode from the analysis that resolved the version, so the entries measured above predate it (see the Performance lessons in [standardqr-encoder.md](../specs/standardqr-encoder.md)).
 - Stopping the shell that ran `docker run` leaves its container running, still on the measured CPUs. The measuring scripts name their container, so a stop reaches it.
 - The four arms took 40 minutes per run, the outside check on three of them 64 minutes, and the cold first call 6 minutes.
+
+### Phase 4: zxing-cpp and libzint (2026-10-04 to 2026-10-05)
+
+Done:
+
+- `cpp/`: `zxingcpp-cli` and `zint-cli` with the protocol in `protocol.hpp`, ported from `Protocol.cs`, which the .NET protocol moved into so that a second .NET CLI shares it. zxing-cpp is pinned to v3.1.0 (885baaf), the commit the ZXingCpp package 0.5.2 ships. libzint is pinned to 2.16.0 (55541e1), the commit zxing-cpp bundles as its writer, and is built from zxing-cpp's submodule. The image builds both with g++ 13.3 on the final stage's base, at CMake's Release defaults and with `-march=x86-64-v3`.
+- zxing-cpp decodes images through `ReadBarcode`, with the formats restricted to the symbology and every other option at its default. It decodes matrices through `QRCode::Decode`, the decoder behind `ReadBarcode`, which is not public API: the public API reads only images. It encodes through `CreateBarcodeFromText`, which writes with the bundled libzint (`ZBarcode_Encode_and_Buffer`), copies the module buffer into a `BitMatrix` and builds a `Barcode` around it. libzint encodes through `ZBarcode_Create`, `ZBarcode_Encode` and `ZBarcode_Delete`, with UTF-8 input, so it inserts an ECI where the text needs one. Every level and version is pinned, and libzint keeps a level it is given.
+- `dotnet/zxingcpp/`: the ZXingCpp package behind the same protocol, as shipped (`zxingcpp-net`) and with its `libZXing.so` replaced by one built here from the same commit and flags (`zxingcpp-net-own`), so that against `zxingcpp-default` the second differs only by the wrapper. Its reader is held to one symbol, as the native `ReadBarcode` is, since the package's reader otherwise looks for every symbol. The package has no matrix decoder. The reference project's `ZXingCppEntries` times the package's binary under BenchmarkDotNet.
+- A call whose verification fails is now reported and not timed in all three protocol implementations, as What has to stay true asks. The package's CLI had crashed by timing a call that throws.
+- Measured on the Windows box as in phase 1, from cbe7e57 plus this phase's changes. Two runs of five rounds over seven CLIs (FeatherQR on the JIT, both zxing-cpp builds, both libzint builds, both package arms), the outside check and the cold first call between them, and BenchmarkDotNet at three launches. Every process verified except one entry, below.
+
+Steady state over FeatherQR on the JIT, each entry's ratio taken as the geometric mean of its two runs, median and range by group:
+
+| Shape | zxing-cpp | libzint | ZXingCpp package |
+|---|---:|---:|---:|
+| Standard QR encode | 45 (37 to 57) | 23 (18 to 30) | 39 (34 to 44) |
+| Standard QR matrix decode | 11 (9.9 to 12) | | |
+| Standard QR image decode | 4.9 (4.6 to 5.2) | | 4.9 (4.8 to 5.3) |
+| Micro QR encode | 26 (25 to 27) | 9.1 (8.9 to 9.9) | 26 (26 to 27) |
+| Micro QR matrix decode | 7.1 (6.7 to 8.3) | | |
+| Micro QR image decode | 5.3 (4.5 to 5.6) | | 5.6 (4.7 to 5.8) |
+| rMQR encode | 25 (24 to 28) | 11 (7.5 to 12) | 25 (24 to 28) |
+| rMQR matrix decode | 16 (15 to 21) | | |
+| rMQR image decode | 7.5 (6.8 to 8.5) | | 7.6 (7.0 to 8.5) |
+
+In absolute terms zxing-cpp decoded the images in 20 to 161 µs and FeatherQR in 3.8 to 19 µs, and libzint encoded in 1.1 to 34 µs and FeatherQR in 0.14 to 1.2 µs.
+
+- zxing-cpp's writer takes 1.9 to 3.2 times libzint's encode (median 2.0 for Standard QR, 2.8 for Micro QR, 2.5 for rMQR), for the buffer, the copy and the `Barcode` it adds. zxing-cpp compiles its bundled libzint with `-Os`, but a libzint built with `-Os` timed within 3 % of the `-O3` one on three payloads, so the compiler setting is not the gap.
+- `-march=x86-64-v3` moved zxing-cpp's image decodes and encodes by 4 % or less, sped its matrix decodes by up to 17 % (Standard QR 4 to 17 %), and slowed libzint by 4 to 8 %.
+- The wrapper's cost: on image decode `zxingcpp-net-own` ran 1.02 to 1.09 times `zxingcpp-default` (median 1.03), 0.7 to 4.8 µs per call (median 1.4). On Micro QR and rMQR encode it ran 0.99 to 1.01, nothing measurable. On Standard QR encode it ran 0.92 to 0.94, the same native code 6 to 8 % faster inside the .NET process. The cause is not known. The package's own binary ran within 6 % of the one built here on every entry and 1.00 at the median, so its build costs nothing either.
+- The package cannot encode non-ASCII text. It passes the string's UTF-16 length as the UTF-8 byte count, so the native writer reads a prefix: on Linux the Unicode payload was encoded silently cut after "Пр", and on Windows the cut fell inside a character and threw "Invalid UTF-8 in input". Verification rejected the entry in every process. The package's byte overload takes the UTF-8 bytes whole, but writes them as binary data (ECI 899) rather than text.
+- Cold first call: zxing-cpp and libzint start in 0.9 to 1.4 ms and make their first call in 0.04 to 0.40 ms. The package starts with the .NET runtime in 21 to 23 ms, and its first call takes 0.6 to 3.3 ms. FeatherQR on the JIT starts in 22 to 25 ms, and its first call takes 11 to 34 ms.
+
+How well this box measured: the second run agreed with the first within 2.1 to 2.8 % at the median per CLI. BenchmarkDotNet over the package agreed with the package's CLI within 1.8 % at the median against the first run (6.0 % at most) and 0.5 % against the second (1.6 % at most). The outside check, run between the two runs, read 1.2 to 2.3 % below the first on every CLI and 0.5 to 1.8 % above the second on every CLI. Against the second run every CLI passed except FeatherQR, whose Micro QR numeric and Standard QR URL matrix decodes, at 0.17 and 0.42 µs, read 7.4 and 7.1 % off. Against the first run, four CLIs had one entry 8.2 to 11.1 % off, and libzint's x86-64-v3 build a signed median of −2.3 %.
+
+Lessons:
+
+- The outside check's offset from the self-timed median is drift between the two measurements, not a property of .NET. Phase 3 read every .NET arm about 1 % low, and phase 2 the Rust CLIs between −1.3 and +0.5 %. Here every CLI, native ones included, read low against the run before the check and high against the run after it. The check is held against the run nearest in time, or against both.
+- A library's writer can be another library. zxing-cpp's encode is libzint's with more work around it, so libzint measured alone is what separates the two.
+- A wrapper's options have to be matched before its cost is read. The package's reader looks for every symbol unless told to stop at one, which the native single-symbol call does by itself.
+- A package's native binary has to be swapped for one built here, from the same commit and flags, before the difference is the wrapper's. Here the swap changed nothing, but that was a measurement, not an assumption.
+- Verification found a wrapper bug that a benchmark would have hidden: the package encodes a cut-off Unicode text without an error on Linux. Encode verification decodes what was written, not only whether the call returned.
+- The seven CLIs took 53 minutes per run, the outside check 112 minutes over all seven, BenchmarkDotNet 21 minutes for 22 entries at three launches, and the cold first call 5 minutes.

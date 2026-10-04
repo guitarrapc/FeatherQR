@@ -27,6 +27,7 @@
     <Project Path="tools/CrossLanguageBenchmark/collector/Collector.csproj" />
     <Project Path="tools/CrossLanguageBenchmark/dotnet/cli/FeatherQRCli.csproj" />
     <Project Path="tools/CrossLanguageBenchmark/dotnet/reference/FeatherQRReference.csproj" />
+    <Project Path="tools/CrossLanguageBenchmark/dotnet/zxingcpp/ZXingCppCli.csproj" />
     <Project Path="tools/QRImageDecodeSweep/QRImageDecodeSweep.csproj" />
     <Project Path="tools/QRInteropFixtures/QRInteropFixtures.csproj" />
   </Folder>

@@ -2,17 +2,6 @@ using System.Text;
 using FeatherQR;
 
 /// <summary>
-/// One case of the protocol made into a call. The input is read and converted here, before any timing, so the timed call does only QR work.
-/// </summary>
-/// <param name="call">The timed unit of work. Its value is folded into the checksum, so the work cannot be dropped.</param>
-/// <param name="describe">Makes one call and returns its result as protocol JSON members: the status, then the decoded text or the encoded matrix.</param>
-internal sealed class Operation(Func<ulong> call, Func<string> describe)
-{
-    public Func<ulong> Call { get; } = call;
-    public Func<string> Describe { get; } = describe;
-}
-
-/// <summary>
 /// The calls FeatherQR makes for each operation and symbology. Shared by the CLI and the BenchmarkDotNet reference project, so both time the same code.
 /// </summary>
 /// <remarks>
