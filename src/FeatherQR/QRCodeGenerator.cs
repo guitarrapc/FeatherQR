@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryEncoders;
@@ -988,13 +989,15 @@ public static class QRCodeGenerator
     /// <remarks>
     /// Only the analysis's mode, charset and length are read, so a mixed-mode analysis serves too: it differs from the single-mode one only in <see cref="TextAnalysisResult.KanjiPlannable"/>.
     /// </remarks>
-    /// <param name="analysisResult">The text's single-mode analysis, made with Kanji allowed only where <paramref name="utf8BOM"/> is off.</param>
+    /// <param name="analysisResult">The text's analysis, made with Kanji allowed only where <paramref name="utf8BOM"/> is off.</param>
     /// <param name="eccLevel">The level to write, after any boost.</param>
     /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
-    /// <param name="version">The version to write (1 to 40), one the stream fits.</param>
+    /// <param name="version">The version to write (1 to 40), one the stream fits: every caller has it from a fit, so it is not checked again.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static QRConfiguration PrepareConfiguration(in TextAnalysisResult analysisResult, QREccLevel eccLevel, bool utf8BOM, int version)
     {
+        Debug.Assert(FitsVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM, version), "The version comes from a fit.");
+
         // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 

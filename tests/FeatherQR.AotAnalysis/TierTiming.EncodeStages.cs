@@ -229,7 +229,7 @@ internal static partial class TierTiming
             Text = text;
             Ecc = ecc;
             Analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: false);
-            if (!MicroQRCodeGenerator.TrySelectVersion(in Analysis, ecc, null, out Version) || Version != expectedVersion)
+            if (!MicroQRCodeGenerator.TrySelectVersion(in Analysis, ecc, out Version) || Version != expectedVersion)
                 throw new InvalidOperationException($"{text} at {ecc} is not {expectedVersion}, the version the shape is named for");
             Size = MicroQRConstants.SizeFromVersion(Version);
             EccCount = MicroQRConstants.GetEccCodewordCount(Version, ecc);
@@ -271,7 +271,7 @@ internal static partial class TierTiming
             new($"stage/{name}/version", () =>
             {
                 var s = stages.Value;
-                return Checked(() => MicroQRCodeGenerator.TrySelectVersion(in s.Analysis, s.Ecc, null, out var version) ? (int)version : -1, (int)s.Version);
+                return Checked(() => MicroQRCodeGenerator.TrySelectVersion(in s.Analysis, s.Ecc, out var version) ? (int)version : -1, (int)s.Version);
             }),
             new($"stage/{name}/data", () => { var s = stages.Value; return Checked(s.WriteData, s.DataCount); }),
             new($"stage/{name}/rs", () => stages.Value.ReedSolomon),

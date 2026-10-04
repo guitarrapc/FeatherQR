@@ -1,13 +1,15 @@
-using TUnit.Assertions.Enums;
+using FeatherQR.Internals;
+using FeatherQR.Internals.MicroQR;
 using System.Security.Cryptography;
+using TUnit.Assertions.Enums;
 
 namespace FeatherQR.Tests;
 
 /// <summary>
 /// The encodes whose version or level is settled before the pipeline runs, frozen as values: a narrowed
 /// <see cref="QRCodeGeneratorOptions.Version"/>, <see cref="QRCodeGeneratorOptions.BoostEccLevel"/>, and the
-/// <see cref="QRSegmentation.Optimal"/> encodes that end up writing the single-mode stream (no split pays, or a
-/// byte order mark rules one out), for Standard QR and Micro QR.
+/// <see cref="QRSegmentation.Optimal"/> encodes that end up writing the single-mode stream (no split pays, a
+/// byte order mark rules one out, or the builder refuses the plan the scan chose), for Standard QR and Micro QR.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,6 +35,8 @@ public class ResolvedEncodeOutputTest
     private const string KanjiText = "日本語のテキスト";      // every character has a JIS X 0208 cell
     private const string MixedKanji = "a日本";               // Kanji-eligible with ASCII: KanjiPlannable under a plan, UTF-8 alone
     private const string Unicode = "FooBar你好🎉";           // the emoji has no cell, so UTF-8 under any option
+    private const string MicroMixedKanji = "a日";            // MixedKanji's class at a Micro QR length
+    private const string Latin1Lookalike = "Ã©123456789012é"; // its Latin-1 run reads as UTF-8, so the Micro QR builder refuses the plan the scan chose
 
     private static readonly string Prose = Repeat("The quick brown fox jumps over the lazy dog. ", 600);
     private static readonly string Oversized = Repeat("The quick brown fox jumps over the lazy dog. ", 3_000);
@@ -88,23 +92,29 @@ public class ResolvedEncodeOutputTest
         yield return new("optimal-bom-exact-boost", Unicode, QREccLevel.L, Optimal with { Utf8Bom = true, Version = QRVersionRange.Exactly(4), BoostEccLevel = true }, 4, QREccLevel.H, "8FAAAB55F5012680BCB5B2504C388D6B015269A089B06C434DD23AF4E576E9C8", "EEE94FCB9E5E30968680A9C8FFA00E0B10553541AD703418D1DA75FC35364A8F");
         yield return new("optimal-bom-kanji", KanjiText, QREccLevel.M, Optimal with { AllowKanji = true, Utf8Bom = true }, 3, QREccLevel.M, "4E440E9C311D57CA50BC684B8194C0F16E5A40B8434782E343B5A4C860F0F7FE", "5B62E6E9D40A7E5FAE77F316DAA5DF49503F43C2FCC00A74C0C56C4126FBB04F");
         yield return new("optimal-bom-numeric", Digits, QREccLevel.M, Optimal with { Utf8Bom = true }, 1, QREccLevel.M, "06A1996CB4EDF1A6AB601AECADC4A5E4E23046F8DD5BB579EAE1F7F4AA594022", "05FEFB15C965C61813DB057F7A96ACD6E35B5C9C9EB64E2A7007ECAC39C26C88");
+        // A pinned mask on each Optimal single-stream site: no split pays, and the byte order mark branch
+        yield return new("optimal-numeric-mask", Digits, QREccLevel.M, Optimal with { MaskPattern = 3 }, 1, QREccLevel.M, "7F7263D211AD7C8E3C63DF8FC442DBF1943838537E105CB17D6A0F6A2D07819D", "B557DDE1A054D32B109EF0541594D852B540F974B6B866635C1B682428FD86B6");
+        yield return new("optimal-bom-mask", Unicode, QREccLevel.M, Optimal with { Utf8Bom = true, MaskPattern = 6 }, 2, QREccLevel.M, "DAEAA9B5F8A2E7B6119E8F7833061E5855FF2871429A1CA5D3542FAE1A8C58D0", "58B1ACE13B22212028178F5A9C56F1DEDFD91383DCAFFCBA46308E1EA967E92A");
     }
+
+    public static IEnumerable<StandardCase> StandardOptimalCases() => StandardCases().Where(c => c.Options.Segmentation == QRSegmentation.Optimal);
 
     [Test]
     [MethodDataSource(nameof(StandardCases))]
     public async Task StandardQr_ResolvedEncode_ReproducesTheCapturedOutput(StandardCase c)
     {
         var data = QRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
-        var fromSpan = QRCodeGenerator.Create(c.Text.AsSpan(), c.Ecc, c.Options);
 
         await Assert.That(data.Version).IsEqualTo(c.Version);
+        await Assert.That(data.Size).IsEqualTo(QRCodeData.SizeFromVersion(c.Version) + 2 * c.Options.QuietZoneSize);
         await Assert.That(Sha(data.GetRawData())).IsEqualTo(c.RawSha);
-        await Assert.That(fromSpan.GetRawData()).IsEquivalentTo(data.GetRawData(), CollectionOrdering.Matching);
 
-        // The level the symbol carries, which is where a boost shows.
+        // The level the symbol carries, which is where a boost shows, and the mask a pinned one shows.
         await Assert.That(QRCodeDecoder.TryDecode(data, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEqualTo(c.Text);
         await Assert.That(info.EccLevel).IsEqualTo(c.Level);
+        if (c.Options.MaskPattern is { } mask)
+            await Assert.That(info.MaskPattern).IsEqualTo(mask);
     }
 
     [Test]
@@ -121,18 +131,20 @@ public class ResolvedEncodeOutputTest
         await Assert.That(written).IsEqualTo(size.BufferSize);
         await Assert.That(Sha(buffer.AsSpan(0, written).ToArray())).IsEqualTo(c.BufferSha);
         await Assert.That(buffer[written]).IsEqualTo((byte)0xA5);
+
+        // The allocating overload's symbol module for module, quiet zone included: the two overloads write one symbol, which the other test decodes.
+        var data = QRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
+        await Assert.That(written).IsEqualTo(data.Size * data.Size);
+        await Assert.That(CountMismatches(buffer, data.Size, (row, col) => data[row, col])).IsEqualTo(0);
     }
 
     /// <summary>
     /// Every Optimal case writes what the single mode writes at the version it chose, so each one reaches the single-mode pipeline from the mixed-mode entry point.
     /// </summary>
     [Test]
-    [MethodDataSource(nameof(StandardCases))]
+    [MethodDataSource(nameof(StandardOptimalCases))]
     public async Task StandardQr_OptimalCases_WriteTheSingleModeStream(StandardCase c)
     {
-        if (c.Options.Segmentation != QRSegmentation.Optimal)
-            return;
-
         var optimal = QRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
         var single = QRCodeGenerator.Create(c.Text, c.Ecc, c.Options with { Segmentation = QRSegmentation.Single, Version = QRVersionRange.Exactly(optimal.Version) });
 
@@ -231,30 +243,37 @@ public class ResolvedEncodeOutputTest
         yield return new("at-least-alphanumeric", "AC-42", MicroQREccLevel.L, new() { Version = MicroQRVersionRange.AtLeast(MicroQRVersion.M3) }, MicroQRVersion.M3, MicroQREccLevel.L, "8ED31E2517EDB2EDEC1BFAC68ECE17211366C0E66155FE53D44B36BC23BC6F17", "CCD45AFA844B2F2853BD80978738ADFE8B32839C98B51A848F57769764E4267E");
         yield return new("between-byte", "hello", MicroQREccLevel.M, new() { Version = MicroQRVersionRange.Between(MicroQRVersion.M3, MicroQRVersion.M4) }, MicroQRVersion.M3, MicroQREccLevel.M, "FC478DAC4E0DC466D0E73F57F5F6AE89AEA4340372E2F05D7D6CF081E66ECCE9", "CC53A582800C171E68094F8DB64F05A51DB9783B54230B2CDAA22AC1CC0412DF");
         yield return new("kanji-exact", "吾輩は猫", MicroQREccLevel.M, new() { AllowKanji = true, Version = MicroQRVersionRange.Exactly(MicroQRVersion.M4) }, MicroQRVersion.M4, MicroQREccLevel.M, "2FD2C27F0967D304E44CFF134B6D3578256D89C862C4802342AB0C528ED6BA16", "47EFB8AE645B3E39E218C04ECFC2A4BD9AC93DFF859B502138195E1178F97205");
-        yield return new("mixed-kanji-exact", "a日", MicroQREccLevel.L, new() { AllowKanji = true, Version = MicroQRVersionRange.Exactly(MicroQRVersion.M4) }, MicroQRVersion.M4, MicroQREccLevel.L, "D3FAA5891E712043F27F13C5C6F85FFCBC31840F20A84C98A3ECF16C4F6F630F", "723238A2B9A8C67371D0B9311CE7F5D1E5D1F88218B9811795CD62C77E50F2A4");
+        yield return new("mixed-kanji-exact", MicroMixedKanji, MicroQREccLevel.L, new() { AllowKanji = true, Version = MicroQRVersionRange.Exactly(MicroQRVersion.M4) }, MicroQRVersion.M4, MicroQREccLevel.L, "D3FAA5891E712043F27F13C5C6F85FFCBC31840F20A84C98A3ECF16C4F6F630F", "723238A2B9A8C67371D0B9311CE7F5D1E5D1F88218B9811795CD62C77E50F2A4");
         yield return new("quiet-zone-0-exact", "AC-42", MicroQREccLevel.M, new() { QuietZoneSize = 0, Version = MicroQRVersionRange.Exactly(MicroQRVersion.M3) }, MicroQRVersion.M3, MicroQREccLevel.M, "062B557EC4CEC0EC8419BEB4D67F78B9C13838A4D0B250E3B81DADF4E8A9B2C4", "02A355D7D6A6F21D47480039E9CE81CC7D5552AC83AD4B9AD47DC57D0BD26293");
         yield return new("default-kanji", "吾輩は猫", MicroQREccLevel.M, new() { AllowKanji = true }, MicroQRVersion.M3, MicroQREccLevel.M, "7ADA331AE154483975C72B3B4F18D231F16960776F7FC3AFF023755EE596CDD8", "4D6045A28EEFFBF42C3F989E4FEEE614ACF43EB9834E1CCFA07DFCC0A3582BAF");
         yield return new("default-numeric", "12345", MicroQREccLevel.ErrorDetectionOnly, new(), MicroQRVersion.M1, MicroQREccLevel.ErrorDetectionOnly, "3BED9754163F7050021953CF7F57A089379BA2EFBF8C446EC5CC92D802AF91A9", "0EAB90455BFCE8E3F1A5CF447534388D962F2831C6C045B769862B7473D869AB");
         yield return new("optimal-numeric-exact", "12345678", MicroQREccLevel.L, MicroOptimal with { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M3) }, MicroQRVersion.M3, MicroQREccLevel.L, "BC842C8063DFC35BE4FC34491F78E73532C6D70A3898217BA7FB005B3E039E93", "D5167CC2EBE30E42924C8400F3CD00D47D3FE2692E9D93D9C84C0CB39CDF3475");
         yield return new("optimal-numeric", "12345", MicroQREccLevel.ErrorDetectionOnly, MicroOptimal, MicroQRVersion.M1, MicroQREccLevel.ErrorDetectionOnly, "3BED9754163F7050021953CF7F57A089379BA2EFBF8C446EC5CC92D802AF91A9", "0EAB90455BFCE8E3F1A5CF447534388D962F2831C6C045B769862B7473D869AB");
-        yield return new("optimal-mixed-kanji", "a日", MicroQREccLevel.L, MicroOptimal with { AllowKanji = true }, MicroQRVersion.M3, MicroQREccLevel.L, "97E127BB6986316AFD0F3C110EAEEBB8F7DA769FC6B63281BAEBA6CA6B190779", "B0CD4E7CF2057C9E19889B2A1E1123F31D100EE5E4A47F26A4C9AB15BDE04713");
+        yield return new("optimal-mixed-kanji", MicroMixedKanji, MicroQREccLevel.L, MicroOptimal with { AllowKanji = true }, MicroQRVersion.M3, MicroQREccLevel.L, "97E127BB6986316AFD0F3C110EAEEBB8F7DA769FC6B63281BAEBA6CA6B190779", "B0CD4E7CF2057C9E19889B2A1E1123F31D100EE5E4A47F26A4C9AB15BDE04713");
         yield return new("optimal-kanji", "吾輩は猫", MicroQREccLevel.M, MicroOptimal with { AllowKanji = true }, MicroQRVersion.M3, MicroQREccLevel.M, "7ADA331AE154483975C72B3B4F18D231F16960776F7FC3AFF023755EE596CDD8", "4D6045A28EEFFBF42C3F989E4FEEE614ACF43EB9834E1CCFA07DFCC0A3582BAF");
+        // A pinned mask where no split pays, and the plan the builder refuses, which falls back to the single-mode fit
+        yield return new("optimal-numeric-mask", "12345678", MicroQREccLevel.L, MicroOptimal with { MaskPattern = 1 }, MicroQRVersion.M2, MicroQREccLevel.L, "02E42387D35B2813AE7C0BA5410553A5DD6095EA96077B9053EAA12EA70A5341", "7298D9AA18AEA4004B8C52ACA642B9E8278A1EF0130AEB2EEC9A0654B287F39B");
+        yield return new("optimal-plan-refused", Latin1Lookalike, MicroQREccLevel.L, MicroOptimal, MicroQRVersion.M4, MicroQREccLevel.L, "A6C901E2383A6E0288417E69AA52456571B9864896050B67F032C6E18DDF67C4", "0D567E11D949F98B9149BE802BB9A5B82E0D2FDBE948F694F4C108D53328FD71");
+        yield return new("optimal-plan-refused-mask-quiet-zone-0", Latin1Lookalike, MicroQREccLevel.L, MicroOptimal with { MaskPattern = 2, QuietZoneSize = 0 }, MicroQRVersion.M4, MicroQREccLevel.L, "656767AD29A61F6504E37E0A2B144A44D9FA3D74B1A7C9008D06911BC134319A", "E988FD47A634F283AB501B9CD678C69B7150428CDF63C4719DBCAD6B5533CBC8");
     }
+
+    public static IEnumerable<MicroCase> MicroOptimalCases() => MicroCases().Where(c => c.Options.Segmentation == MicroQRSegmentation.Optimal);
 
     [Test]
     [MethodDataSource(nameof(MicroCases))]
     public async Task MicroQr_ResolvedEncode_ReproducesTheCapturedOutput(MicroCase c)
     {
         var data = MicroQRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
-        var fromSpan = MicroQRCodeGenerator.Create(c.Text.AsSpan(), c.Ecc, c.Options);
 
         await Assert.That(data.Version).IsEqualTo(c.Version);
+        await Assert.That(data.Size).IsEqualTo(MicroQRConstants.SizeFromVersion(c.Version) + 2 * c.Options.QuietZoneSize);
         await Assert.That(Sha(data.GetRawData())).IsEqualTo(c.RawSha);
-        await Assert.That(fromSpan.GetRawData()).IsEquivalentTo(data.GetRawData(), CollectionOrdering.Matching);
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded, out var info)).IsTrue();
         await Assert.That(decoded).IsEqualTo(c.Text);
         await Assert.That(info.EccLevel).IsEqualTo(c.Level);
+        if (c.Options.MaskPattern is { } mask)
+            await Assert.That(info.MaskPattern).IsEqualTo(mask);
     }
 
     [Test]
@@ -270,15 +289,16 @@ public class ResolvedEncodeOutputTest
         await Assert.That(written).IsEqualTo(size.BufferSize);
         await Assert.That(Sha(buffer.AsSpan(0, written).ToArray())).IsEqualTo(c.BufferSha);
         await Assert.That(buffer[written]).IsEqualTo((byte)0xA5);
+
+        var data = MicroQRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
+        await Assert.That(written).IsEqualTo(data.Size * data.Size);
+        await Assert.That(CountMismatches(buffer, data.Size, (row, col) => data[row, col])).IsEqualTo(0);
     }
 
     [Test]
-    [MethodDataSource(nameof(MicroCases))]
+    [MethodDataSource(nameof(MicroOptimalCases))]
     public async Task MicroQr_OptimalCases_WriteTheSingleModeStream(MicroCase c)
     {
-        if (c.Options.Segmentation != MicroQRSegmentation.Optimal)
-            return;
-
         var optimal = MicroQRCodeGenerator.Create(c.Text, c.Ecc, c.Options);
         var single = MicroQRCodeGenerator.Create(c.Text, c.Ecc, c.Options with { Segmentation = MicroQRSegmentation.Single, Version = MicroQRVersionRange.Exactly(optimal.Version) });
 
@@ -298,6 +318,64 @@ public class ResolvedEncodeOutputTest
         var withoutKanji = MicroQRCodeGenerator.Create(c.Text, c.Ecc, c.Options with { AllowKanji = false }).GetRawData();
 
         await Assert.That(withKanji.AsSpan().SequenceEqual(withoutKanji)).IsEqualTo(sameWithoutKanji);
+    }
+
+    /// <summary>
+    /// The mixed texts are the class where the mixed-mode and single-mode analyses differ: Kanji-plannable under a plan, plain UTF-8 Byte mode alone, and alike in every other field.
+    /// </summary>
+    [Test]
+    [Arguments(MixedKanji)]
+    [Arguments(MicroMixedKanji)]
+    public async Task MixedKanjiTexts_AreKanjiPlannableOnlyUnderAPlan(string text)
+    {
+        var planned = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true, planKanji: true);
+        var single = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: true);
+
+        await Assert.That(planned.KanjiPlannable).IsTrue();
+        await Assert.That(single.KanjiPlannable).IsFalse();
+        await Assert.That(single.EncodingMode).IsEqualTo(EncodingMode.Byte);
+        await Assert.That(planned with { KanjiPlannable = false }).IsEqualTo(single);
+    }
+
+    /// <summary>A pinned mask shows only where the automatic choice would pick another, so each pinned case pins one it would not.</summary>
+    [Test]
+    public async Task PinnedMaskCases_PinAMaskTheAutomaticChoiceWouldNotPick()
+    {
+        var standard = StandardCases().Where(c => c.Options.MaskPattern is not null).ToArray();
+        var micro = MicroCases().Where(c => c.Options.MaskPattern is not null).ToArray();
+        await Assert.That(standard.Length).IsGreaterThan(0);
+        await Assert.That(micro.Length).IsGreaterThan(0);
+
+        foreach (var c in standard)
+        {
+            await Assert.That(QRCodeDecoder.TryDecode(QRCodeGenerator.Create(c.Text, c.Ecc, c.Options with { MaskPattern = null }), out _, out var automatic)).IsTrue().Because($"Standard QR {c.Name}");
+            await Assert.That(automatic.MaskPattern).IsNotEqualTo(c.Options.MaskPattern!.Value).Because($"Standard QR {c.Name}");
+        }
+        foreach (var c in micro)
+        {
+            await Assert.That(MicroQRCodeDecoder.TryDecode(MicroQRCodeGenerator.Create(c.Text, c.Ecc, c.Options with { MaskPattern = null }), out _, out var automatic)).IsTrue().Because($"Micro QR {c.Name}");
+            await Assert.That(automatic.MaskPattern).IsNotEqualTo(c.Options.MaskPattern!.Value).Because($"Micro QR {c.Name}");
+        }
+    }
+
+    /// <summary>
+    /// The plan-refused cases reach the fallback after the builder refuses, not the no-split exit: the scan chose a plan at a smaller version than the symbol written, and the builder refuses to build it.
+    /// </summary>
+    [Test]
+    [Arguments("optimal-plan-refused")]
+    [Arguments("optimal-plan-refused-mask-quiet-zone-0")]
+    public async Task MicroQr_PlanRefusedCases_HadAPlanTheBuilderRefused(string name)
+    {
+        var c = MicroCases().Single(x => x.Name == name);
+        var analysis = TextAnalyzer.Analyze(c.Text, EciMode.Default, allowKanji: c.Options.AllowKanji, planKanji: true);
+        var plan = new ModeSegment[MicroQRSegmentPlanner.MaxPlannableChars];
+
+        // Not Kanji-plannable, so the scan keeps no Kanji table and the overload without one chooses what the encode chose.
+        await Assert.That(analysis.KanjiPlannable).IsFalse();
+        await Assert.That(MicroQRSegmentPlanner.TrySelectVersion(c.Text, in analysis, c.Ecc, c.Options.Version, out var planned, out var useSegments, out _)).IsTrue();
+        await Assert.That(useSegments).IsTrue();
+        await Assert.That((int)planned).IsLessThan((int)c.Version);
+        await Assert.That(MicroQRSegmentPlanner.TryBuildPlan(c.Text, analysis.EciMode, planned, c.Ecc, plan, out _)).IsFalse();
     }
 
     public readonly record struct MicroErrorCase(
@@ -370,6 +448,21 @@ public class ResolvedEncodeOutputTest
     }
 
     private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
+    /// <summary>Modules where a one-byte-per-module destination buffer of <paramref name="size"/> × <paramref name="size"/> disagrees with a matrix.</summary>
+    private static int CountMismatches(byte[] buffer, int size, Func<int, int, bool> isDark)
+    {
+        var mismatches = 0;
+        for (var row = 0; row < size; row++)
+        {
+            for (var col = 0; col < size; col++)
+            {
+                if ((buffer[row * size + col] != 0) != isDark(row, col))
+                    mismatches++;
+            }
+        }
+        return mismatches;
+    }
 
     private static string Repeat(string text, int length)
     {
