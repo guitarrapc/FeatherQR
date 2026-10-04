@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@b9e79bebea40ce159375351b13af8b3c0b530937 # v1.3.1
         with:
           restore-wasm-workload: true
           dotnet-version: |
@@ -112,7 +112,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@b9e79bebea40ce159375351b13af8b3c0b530937 # v1.3.1
         with:
           dotnet-version: 10.0.x
       # ConsoleApp
@@ -145,7 +145,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@b9e79bebea40ce159375351b13af8b3c0b530937 # v1.3.1
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
@@ -219,7 +219,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@b9e79bebea40ce159375351b13af8b3c0b530937 # v1.3.1
         with:
           dotnet-version: 10.0.x
       - name: Publish AOT analysis gate
@@ -271,7 +271,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@758ef555e15e5d390a495fee02a8e31ec8141293 # v1.1.0
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@b9e79bebea40ce159375351b13af8b3c0b530937 # v1.3.1
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
