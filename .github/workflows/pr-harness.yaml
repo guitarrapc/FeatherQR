@@ -11,4 +11,6 @@ jobs:
       pull-requests: read
     uses: guitarrapc/actions/.github/workflows/pr-harness.yaml@ef8a07021b8c9e3cffbfa1e83f437fb179330810 # v1.2.0
     with:
+      license-check: true
       allow-licenses: "Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0,Zlib,Unicode-3.0"
+      exclude-license-input-paths: "tools/"
