@@ -6,20 +6,19 @@ using System.Text;
 ///
 /// Scenarios:
 ///   Numeric_V1_L : version 1, numeric mode (digits only)
+///   Numeric_V40_L : version 40-L, numeric mode (7,089 digits, capacity boundary)
 ///   Alphanumeric_V1_M : version 1, alphanumeric mode (uppercase / punctuation subset)
+///   Alphanumeric_V10_M : version 10-M, alphanumeric mode (300 characters)
+///   Alphanumeric_V40_L : version 40-L, alphanumeric mode (4,296 characters, capacity boundary)
 ///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
-///   Kanji_V6_M : version 6-M, Kanji mode (capacity boundary, 65 characters)
 ///   Byte_V20_M : version 19-M, byte mode (mid-size, exercises the transposed mask tier on two-word rows). Named V20 before 620 bytes was found to fit version 19
 ///   Byte_V40_L : version 40-L, byte mode (largest data blocks)
 ///   Byte_V40_H : version 39-H, byte mode (77 blocks x 30 ecc). Named V40 before 1,200 bytes was found to fit version 39
+///   Kanji_V6_M : version 6-M, Kanji mode (capacity boundary, 65 characters)
 ///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
-///   Alphanumeric_V10_M : version 10-M, alphanumeric mode (300 characters)
-///   Alphanumeric_V40_L : version 40-L, alphanumeric mode (4,296 characters, capacity boundary)
-///   Numeric_V40_L : version 40-L, numeric mode (7,089 digits, capacity boundary)
 ///
 /// Byte_Url_V6_M and Kanji_V6_M share version and level, so they differ in mode, not in symbol size.
-/// The "(Span, QZ0)" rows write no quiet zone, so they time what the decode benchmarks read (QRCodeDecodeEndToEnd decodes quiet-zone-free matrices).
-/// The "(Span)" rows keep the default quiet zone of 4, the matrix a caller gets with default options.
+/// The "(Span)" rows keep the default quiet zone of 4, the matrix a caller gets with default options. Their quiet-zone-free twins are in <see cref="QRCodeQuietZone0Encode"/>.
 /// The three long alphanumeric and numeric shapes are long enough to time the Alphanumeric and Numeric writers.
 /// The "(Pinned)" and "(Boost)" rows resolve the version or level before the pipeline, the path tools/CrossLanguageBenchmark takes on every encode.
 /// </summary>
@@ -38,9 +37,7 @@ public class QRCodeEncodeEndToEnd
     private string _numericLongL = default!;
     private byte[] _spanDestination = default!;
 
-    private const string AlphanumericAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
-    private static readonly QRCodeGeneratorOptions NoQuietZone = new() { QuietZoneSize = 0 };
-    private static readonly QRCodeGeneratorOptions KanjiNoQuietZone = new() { AllowKanji = true, QuietZoneSize = 0 };
+    internal const string AlphanumericAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
     private static readonly QRCodeGeneratorOptions Boost = new() { BoostEccLevel = true };
     private static readonly QRCodeGeneratorOptions KanjiVersion6 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(6) };
     private static readonly QRCodeGeneratorOptions KanjiVersion15 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(15) };
@@ -60,9 +57,7 @@ public class QRCodeEncodeEndToEnd
         _numericLongL = BuildText(7089, "0123456789"); // version 40-L numeric mode (max 7089)
         _kanjiLong = string.Concat(Enumerable.Repeat("吾輩は猫である。名前はまだ無い。", 20)); // version 15-L Kanji mode (max 320)
         _kanji = _kanjiLong.Substring(0, 65); // version 6-M Kanji mode (max 65)
-        _spanDestination = new byte[Math.Max(
-            Sizing.Required(_byteLongL.AsSpan(), QREccLevel.L).BufferSize,
-            Sizing.Required(_numeric.AsSpan(), MicroQREccLevel.L).BufferSize)];
+        _spanDestination = new byte[Sizing.Required(_byteLongL.AsSpan(), QREccLevel.L).BufferSize];
     }
 
     // Class API (allocates the result object only)
@@ -74,21 +69,33 @@ public class QRCodeEncodeEndToEnd
     }
 
     [Benchmark]
+    public QRCodeData QR_Numeric_V40_L_Encode()
+    {
+        return QRCodeGenerator.Create(_numericLongL.AsSpan(), QREccLevel.L);
+    }
+
+    [Benchmark]
     public QRCodeData QR_Alphanumeric_V1_M_Encode()
     {
         return QRCodeGenerator.Create(_alphanumeric.AsSpan(), QREccLevel.M);
     }
 
     [Benchmark]
-    public QRCodeData QR_Byte_Url_V6_M_Encode()
+    public QRCodeData QR_Alphanumeric_V10_M_Encode()
     {
-        return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M);
+        return QRCodeGenerator.Create(_alphanumericMidM.AsSpan(), QREccLevel.M);
     }
 
     [Benchmark]
-    public QRCodeData QR_Kanji_V6_M_Encode()
+    public QRCodeData QR_Alphanumeric_V40_L_Encode()
     {
-        return QRCodeGenerator.Create(_kanji.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true });
+        return QRCodeGenerator.Create(_alphanumericLongL.AsSpan(), QREccLevel.L);
+    }
+
+    [Benchmark]
+    public QRCodeData QR_Byte_Url_V6_M_Encode()
+    {
+        return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M);
     }
 
     [Benchmark]
@@ -110,27 +117,15 @@ public class QRCodeEncodeEndToEnd
     }
 
     [Benchmark]
+    public QRCodeData QR_Kanji_V6_M_Encode()
+    {
+        return QRCodeGenerator.Create(_kanji.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true });
+    }
+
+    [Benchmark]
     public QRCodeData QR_Kanji_Long_V15_L_Encode()
     {
         return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, new QRCodeGeneratorOptions { AllowKanji = true });
-    }
-
-    [Benchmark]
-    public QRCodeData QR_Alphanumeric_V10_M_Encode()
-    {
-        return QRCodeGenerator.Create(_alphanumericMidM.AsSpan(), QREccLevel.M);
-    }
-
-    [Benchmark]
-    public QRCodeData QR_Alphanumeric_V40_L_Encode()
-    {
-        return QRCodeGenerator.Create(_alphanumericLongL.AsSpan(), QREccLevel.L);
-    }
-
-    [Benchmark]
-    public QRCodeData QR_Numeric_V40_L_Encode()
-    {
-        return QRCodeGenerator.Create(_numericLongL.AsSpan(), QREccLevel.L);
     }
 
     // Span destination (zero-allocation) variants
@@ -141,10 +136,28 @@ public class QRCodeEncodeEndToEnd
         return QRCodeGenerator.Create(_numeric.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
+    [Benchmark(Description = "QR_Numeric_V40_L_Encode (Span)")]
+    public int QR_Numeric_V40_L_EncodeSpan()
+    {
+        return QRCodeGenerator.Create(_numericLongL.AsSpan(), QREccLevel.L, _spanDestination);
+    }
+
     [Benchmark(Description = "QR_Alphanumeric_V1_M_Encode (Span)")]
     public int QR_Alphanumeric_V1_M_EncodeSpan()
     {
         return QRCodeGenerator.Create(_alphanumeric.AsSpan(), QREccLevel.M, _spanDestination);
+    }
+
+    [Benchmark(Description = "QR_Alphanumeric_V10_M_Encode (Span)")]
+    public int QR_Alphanumeric_V10_M_EncodeSpan()
+    {
+        return QRCodeGenerator.Create(_alphanumericMidM.AsSpan(), QREccLevel.M, _spanDestination);
+    }
+
+    [Benchmark(Description = "QR_Alphanumeric_V40_L_Encode (Span)")]
+    public int QR_Alphanumeric_V40_L_EncodeSpan()
+    {
+        return QRCodeGenerator.Create(_alphanumericLongL.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "QR_Byte_Url_V6_M_Encode (Span)")]
@@ -153,10 +166,10 @@ public class QRCodeEncodeEndToEnd
         return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M, _spanDestination);
     }
 
-    [Benchmark(Description = "QR_Kanji_V6_M_Encode (Span)")]
-    public int QR_Kanji_V6_M_EncodeSpan()
+    [Benchmark(Description = "QR_Byte_V20_M_Encode (Span)")]
+    public int QR_Byte_V20_M_EncodeSpan()
     {
-        return QRCodeGenerator.Create(_kanji.AsSpan(), QREccLevel.M, _spanDestination, new QRCodeGeneratorOptions { AllowKanji = true });
+        return QRCodeGenerator.Create(_byteMidM.AsSpan(), QREccLevel.M, _spanDestination);
     }
 
     [Benchmark(Description = "QR_Byte_V40_L_Encode (Span)")]
@@ -171,79 +184,16 @@ public class QRCodeEncodeEndToEnd
         return QRCodeGenerator.Create(_byteLongH.AsSpan(), QREccLevel.H, _spanDestination);
     }
 
+    [Benchmark(Description = "QR_Kanji_V6_M_Encode (Span)")]
+    public int QR_Kanji_V6_M_EncodeSpan()
+    {
+        return QRCodeGenerator.Create(_kanji.AsSpan(), QREccLevel.M, _spanDestination, new QRCodeGeneratorOptions { AllowKanji = true });
+    }
+
     [Benchmark(Description = "QR_Kanji_Long_V15_L_Encode (Span)")]
     public int QR_Kanji_Long_V15_L_EncodeSpan()
     {
         return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, _spanDestination, new QRCodeGeneratorOptions { AllowKanji = true });
-    }
-
-    // Span destination without a quiet zone: the matrix the decode benchmarks read, so each row
-    // compares with its decode row like for like. The quiet zone's cost is the gap to the row above.
-
-    [Benchmark(Description = "QR_Numeric_V1_L_Encode (Span, QZ0)")]
-    public int QR_Numeric_V1_L_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_numeric.AsSpan(), QREccLevel.L, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Alphanumeric_V1_M_Encode (Span, QZ0)")]
-    public int QR_Alphanumeric_V1_M_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_alphanumeric.AsSpan(), QREccLevel.M, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Byte_Url_V6_M_Encode (Span, QZ0)")]
-    public int QR_Byte_Url_V6_M_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Kanji_V6_M_Encode (Span, QZ0)")]
-    public int QR_Kanji_V6_M_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_kanji.AsSpan(), QREccLevel.M, _spanDestination, KanjiNoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Byte_V20_M_Encode (Span, QZ0)")]
-    public int QR_Byte_V20_M_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_byteMidM.AsSpan(), QREccLevel.M, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Byte_V40_L_Encode (Span, QZ0)")]
-    public int QR_Byte_V40_L_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_byteLongL.AsSpan(), QREccLevel.L, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Byte_V40_H_Encode (Span, QZ0)")]
-    public int QR_Byte_V40_H_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_byteLongH.AsSpan(), QREccLevel.H, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Kanji_Long_V15_L_Encode (Span, QZ0)")]
-    public int QR_Kanji_Long_V15_L_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, _spanDestination, KanjiNoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Alphanumeric_V10_M_Encode (Span, QZ0)")]
-    public int QR_Alphanumeric_V10_M_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_alphanumericMidM.AsSpan(), QREccLevel.M, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Alphanumeric_V40_L_Encode (Span, QZ0)")]
-    public int QR_Alphanumeric_V40_L_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_alphanumericLongL.AsSpan(), QREccLevel.L, _spanDestination, NoQuietZone);
-    }
-
-    [Benchmark(Description = "QR_Numeric_V40_L_Encode (Span, QZ0)")]
-    public int QR_Numeric_V40_L_EncodeSpanNoQuietZone()
-    {
-        return QRCodeGenerator.Create(_numericLongL.AsSpan(), QREccLevel.L, _spanDestination, NoQuietZone);
     }
 
     // Version or level resolved before the pipeline: a pinned version, or the ECC boost. Each
@@ -262,6 +212,12 @@ public class QRCodeEncodeEndToEnd
         return QRCodeGenerator.Create(_byteUrl.AsSpan(), QREccLevel.M, Boost);
     }
 
+    [Benchmark(Description = "QR_Byte_V40_L_Encode (Pinned)")]
+    public QRCodeData QR_Byte_V40_L_EncodePinned()
+    {
+        return QRCodeGenerator.Create(_byteLongL.AsSpan(), QREccLevel.L, Version40);
+    }
+
     [Benchmark(Description = "QR_Kanji_V6_M_Encode (Pinned)")]
     public QRCodeData QR_Kanji_V6_M_EncodePinned()
     {
@@ -274,20 +230,6 @@ public class QRCodeEncodeEndToEnd
         return QRCodeGenerator.Create(_kanjiLong.AsSpan(), QREccLevel.L, KanjiVersion15);
     }
 
-    [Benchmark(Description = "QR_Byte_V40_L_Encode (Pinned)")]
-    public QRCodeData QR_Byte_V40_L_EncodePinned()
-    {
-        return QRCodeGenerator.Create(_byteLongL.AsSpan(), QREccLevel.L, Version40);
-    }
-
-    // Micro QR M2-L with the same numeric payload, for scale reference.
-
-    [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span)")]
-    public int MicroQR_Numeric_M2_EncodeSpan()
-    {
-        return MicroQRCodeGenerator.Create(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
-    }
-
     // Three "(options)" benchmarks stood here until 2.0.0, pairing each options overload
     // against the parameter list overload it forwarded to so that "the forwarder costs
     // nothing" stayed a measured fact. The parameter list overloads were removed, and
@@ -295,7 +237,7 @@ public class QRCodeEncodeEndToEnd
     // spellings of one call and the pairs were dropped rather than left measuring
     // themselves. The options path is now the only path, and the benchmarks above are on it.
 
-    private static string BuildDeterministicText(int length)
+    internal static string BuildDeterministicText(int length)
     {
         var sb = new StringBuilder(length);
         var rng = new Random(42);
@@ -308,7 +250,7 @@ public class QRCodeEncodeEndToEnd
     }
 
     /// <summary>Characters drawn from <paramref name="alphabet"/> with a fixed seed: one encoding mode for the whole text.</summary>
-    private static string BuildText(int length, string alphabet)
+    internal static string BuildText(int length, string alphabet)
     {
         var rng = new Random(7);
         var chars = new char[length];

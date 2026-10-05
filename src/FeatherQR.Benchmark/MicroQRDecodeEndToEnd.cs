@@ -1,6 +1,6 @@
 /// <summary>
 /// End-to-end Micro QR matrix decoding through the public API (MicroQRCodeDecoder).
-/// Payloads mirror MicroQREncode so encode and decode costs are directly comparable; a Standard QR v1 decode of the same numeric payload gives the scale reference.
+/// Payloads mirror MicroQREncodeEndToEnd so encode and decode costs are directly comparable.
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
 ///
 /// Scenarios:
@@ -24,10 +24,7 @@ public class MicroQRDecodeEndToEnd
     private int _kanjiSize;
     private byte[] _numericDamagedModules = default!;
     private byte[] _byteDamagedModules = default!;
-    private byte[] _standardModules = default!;
-    private int _standardSize;
     private char[] _chars = default!;
-    private char[] _standardChars = default!;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -40,12 +37,6 @@ public class MicroQRDecodeEndToEnd
 
         _numericDamagedModules = CorrectableDamage.Flip(_numericModules, flips: 1, seed: 17, m => Decode(m, _numericSize));
         _byteDamagedModules = CorrectableDamage.Flip(_byteModules, flips: 5, seed: 23, m => Decode(m, _byteSize));
-
-        var calculated = Sizing.Required("0123456789", QREccLevel.L, 0);
-        _standardModules = new byte[calculated.BufferSize];
-        FeatherQR.QRCodeGenerator.Create("0123456789", QREccLevel.L, _standardModules, new QRCodeGeneratorOptions { QuietZoneSize = 0 });
-        _standardSize = calculated.Size;
-        _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
 
     // String path (allocates the result string only)
@@ -135,15 +126,6 @@ public class MicroQRDecodeEndToEnd
     public int MicroQR_Byte_M4_CorrectedDecodeSpan()
     {
         MicroQRCodeDecoder.TryDecode(_byteDamagedModules, _byteSize, _chars, out var written, out _);
-        return written;
-    }
-
-    // Standard QR version 1 with the same numeric payload, for scale reference.
-
-    [Benchmark(Description = "StandardQr_Numeric_V1_Decode (Span)")]
-    public int StandardQr_Numeric_V1_DecodeSpan()
-    {
-        QRCodeDecoder.TryDecode(_standardModules, _standardSize, _standardChars, out var written, out _);
         return written;
     }
 
