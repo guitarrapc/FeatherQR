@@ -41,6 +41,7 @@ internal static class SimdParity
         failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
         failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
         failures += Report("ModulePlacer.ApplyMaskPattern", MaskApplyMismatches);
+        failures += Report("QRBinaryEncoder payload writers", PayloadWriterMismatches);
         failures += Report("ModeSegmenter.ComputeCostsLanes", SegmenterLaneMismatches);
         failures += Report("StructuredAppendPlanner.WalkLanes", WalkLaneMismatches);
         failures += Report("EccBinaryDecoder.ComputeSyndromesVector128", SyndromeMismatches);
@@ -738,6 +739,96 @@ internal static class SimdParity
     /// A pinned mask through the dispatch, the route this build takes, against the decoder's mask predicate applied module by module
     /// to the unblocked modules: every version, every pattern, on placed random data.
     /// </summary>
+    /// <summary>
+    /// The Alphanumeric and Numeric payload writers, every tier this build runs entered directly, against the writers they replaced
+    /// (<see cref="TierTiming.OldAlphanumeric"/>, <see cref="TierTiming.OldNumeric"/>): lengths 0 to 300 and long runs, after 0 to 31 bits
+    /// of a pattern, the whole buffer and the bit position; for Alphanumeric also every character outside the alphabet up to 0xFF, and
+    /// some past it, in the lanes of the vector steps, which must throw after the same bits. The one run of the WebAssembly tier.
+    /// </summary>
+    private static List<string> PayloadWriterMismatches()
+    {
+        var mismatches = new List<string>();
+        var alphanumeric = new List<(string Name, TierTiming.PayloadWriter Write)> { ("scalar", QRBinaryEncoder.WriteAlphanumericScalar) };
+        var numeric = new List<(string Name, TierTiming.PayloadWriter Write)> { ("scalar", QRBinaryEncoder.WriteNumericScalar) };
+        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported && System.Runtime.Intrinsics.X86.Sse41.IsSupported)
+        {
+            alphanumeric.Add(("ssse3", QRBinaryEncoder.WriteAlphanumericSsse3));
+            numeric.Add(("ssse3", QRBinaryEncoder.WriteNumericSsse3));
+        }
+        if (System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported)
+        {
+            alphanumeric.Add(("wasm", QRBinaryEncoder.WriteAlphanumericPackedSimd));
+        }
+
+        const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+        var lengths = Enumerable.Range(0, 301).Concat([511, 512, 513, 4296, 7089]);
+        foreach (var length in lengths)
+        {
+            var random = new Random(length);
+            var text = new string(Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray());
+            var digits = new string(Enumerable.Range(0, length).Select(_ => (char)('0' + random.Next(10))).ToArray());
+            for (var align = 0; align < 32; align += length > 300 ? 7 : 3)
+            {
+                foreach (var (name, write) in alphanumeric)
+                {
+                    if (!SameRun(text, align, TierTiming.OldAlphanumeric, write))
+                        mismatches.Add($"alphanumeric {name}: length {length}, align {align}");
+                }
+                foreach (var (name, write) in numeric)
+                {
+                    if (!SameRun(digits, align, TierTiming.OldNumeric, write))
+                        mismatches.Add($"numeric {name}: length {length}, align {align}");
+                }
+            }
+        }
+
+        // every character outside the alphabet up to 0xFF, and some past it whose low byte is in it, in the lanes of the vector steps
+        var outside = Enumerable.Range(0, 256).Select(c => (char)c).Where(c => alphabet.IndexOf(c) < 0)
+            .Concat(['Ā', 'Ł', 'İ', '翿', '聁', 'Ａ', '￿']);
+        foreach (var bad in outside)
+        {
+            foreach (var (length, position) in new[] { (1, 0), (9, 0), (9, 7), (9, 8), (17, 0), (17, 9), (17, 15), (17, 16), (33, 31) })
+            {
+                var random = new Random(length * 41 + position + bad);
+                var chars = Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray();
+                chars[position] = bad;
+                foreach (var (name, write) in alphanumeric)
+                {
+                    if (!SameRun(new string(chars), 5, TierTiming.OldAlphanumeric, write))
+                        mismatches.Add($"alphanumeric {name}: U+{(int)bad:X4} at {position} of {length}");
+                }
+            }
+        }
+        return mismatches;
+
+        static bool SameRun(string text, int align, TierTiming.PayloadWriter expected, TierTiming.PayloadWriter actual)
+        {
+            var a = Run(text, align, expected);
+            var b = Run(text, align, actual);
+            return a.Bits == b.Bits && a.Error == b.Error && a.Buffer.AsSpan().SequenceEqual(b.Buffer);
+        }
+
+        static (byte[] Buffer, int Bits, string? Error) Run(string text, int align, TierTiming.PayloadWriter write)
+        {
+            var buffer = new byte[(text.Length * 6 + 64) / 8 + 16];
+            var writer = new FeatherQR.Internals.BinaryEncoders.BitWriter(buffer);
+            if (align > 0)
+                writer.Write(unchecked((int)0xA5C3_9E71) >> (32 - align), align);
+            string? error = null;
+            try
+            {
+                write(ref writer, text);
+            }
+            catch (ArgumentException e)
+            {
+                error = e.Message;
+            }
+            var bits = writer.BitPosition;
+            writer.Flush();
+            return (buffer, bits, error);
+        }
+    }
+
     private static List<string> MaskApplyMismatches()
     {
         var mismatches = new List<string>();

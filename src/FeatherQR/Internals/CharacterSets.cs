@@ -147,6 +147,12 @@ internal static class CharacterSets
     }
 
     /// <summary>
+    /// The alphanumeric values of ASCII 0-127, -1 outside the alphabet, for writers that check a step at once: indexed by c &amp; 0x7F, with
+    /// c &gt; 0x7F checked apart, a -1 among a step's values sets every bit above the 6 a value 0-44 uses.
+    /// </summary>
+    internal static ReadOnlySpan<sbyte> AlphanumericValues => alphanumericLookup;
+
+    /// <summary>
     /// Validates if text can be encoded in ISO-8859-1.
     /// ISO-8859-1 supports U+0000 to U+00FF only.
     /// </summary>

@@ -217,6 +217,10 @@ internal static class SimdTiers
         new("ModulePlacerExpandBits", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3)),
         // ModulePlacer.MaskCode: mask scoring and selection; the 128-bit tier scores every version (12-40 transposed), its popcount SSSE3 on x64 and PackedSimd on WebAssembly
         new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Ssse3, Isa.Vector128 && Isa.Ssse3), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
+        // QRBinaryEncoder.WriteAlphanumericData: the Alphanumeric payload writer, sixteen characters a step; the portable writer takes the rest of a run
+        new("QRAlphanumericWriter", (SimdTier.Sse41, Isa.Sse41 && Isa.Ssse3), (SimdTier.PackedSimd, Isa.PackedSimd)),
+        // QRBinaryEncoder.WriteNumericData: the Numeric payload writer, twelve digits a step; the portable writer takes the rest of a run
+        new("QRNumericWriter", (SimdTier.Ssse3, Isa.Ssse3)),
         // AlignmentPatternFinder.ScanRowMask: a row's dark bitmask for the alignment search
         new("AlignmentRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
         // QRImageDecoder.SampleGridPiecewise: the piecewise mesh sampler; the 128-bit tier converts coordinates with SSE2 on x64 and PackedSimd on WebAssembly (VectorCast)
@@ -293,6 +297,10 @@ internal static class SimdTiers
         // WebAssembly stays scalar: the expand is 0.5 % of a version 40 encode AOT-compiled and 0.3 % interpreted
         new("ModulePlacerExpandBits",  [Ssse3],         [Avx2],               [AdvSimd],            [Scalar]),
         new("ModulePlacerMaskCode",    [Ssse3],         [Avx2],               [AdvSimd],            [PackedSimd]),
+        // x64 with AVX2 keeps the SSE4.1 tier: 32 characters a step took 0.90 to 0.97 of its time at 300 and 4,296 characters, level at 40 and slower at 9 and 16, and holding the writer in registers took as much off the sixteen-character loop. ARM64 runs the portable writer: no ARM64 machine was at hand to measure a NEON tier
+        new("QRAlphanumericWriter",    [Sse41],         [Sse41],              [Scalar],             [PackedSimd]),
+        // x64 with AVX2 keeps the SSSE3 tier: 24 digits a step read 0.93 to 1.07 of its time. ARM64 runs the portable writer, as above. WebAssembly too: twelve digits a step on its SIMD took 0.95 to 0.96 of the portable writer's time AOT-compiled and 1.10 to 1.65 interpreted, at 40 to 7,089 digits
+        new("QRNumericWriter",         [Ssse3],         [Ssse3],              [Scalar],             [Scalar]),
         // WebAssembly keeps the 128-bit tier though the interpreter runs it 16-21 % slower than scalar: AOT-compiled it is 1.5x faster, and the search is under 2 % of any shape there
         new("AlignmentRowMask",        [Vector128],     [Vector256],          [AdvSimd],            [Vector128]),
         new("QRSampleGridPiecewise",   [Sse2],          [Avx2],               [AdvSimd],            [PackedSimd]),

@@ -1,13 +1,15 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 using FeatherQR.Internals.BinaryEncoders;
 
 namespace FeatherQR.Internals.StandardQR;
 
-internal ref struct QRBinaryEncoder
+internal ref partial struct QRBinaryEncoder
 {
     // stackalloc threshold for temporary buffers. Avoids stackoverflow for large inputs.
     // if input length exceeds this, ArrayPool<byte> is used instead.
@@ -305,68 +307,199 @@ internal ref struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Writes numeric data (groups of 3 digits as 10 bits, 2 digits as 7 bits, 1 digit as 4 bits)
+    /// Writes numeric data: three digits in 10 bits, a last two in 7, a last one in 4.
     /// </summary>
-    /// <param name="digits"></param>
+    /// <remarks>
+    /// The digits are '0'-'9', found so by the analysis or the plan, as the writer has always taken them: a writer does not check them,
+    /// and a character outside them writes a wrong field, not an exception. A run under sixteen digits, at most five groups, is written
+    /// here (<see cref="WriteNumericTail"/>): a call to a writer cost more than it saved there, 1.12 times the old loop's time at twelve
+    /// digits interpreted on WebAssembly. WebAssembly has no vector tier: twelve digits a step on its SIMD took 0.95 to 0.96 of the portable
+    /// writer's time AOT-compiled and 1.10 to 1.65 interpreted at 40 to 7,089 digits, and one flag gates both (2026-10-05).
+    /// </remarks>
     private void WriteNumericData(ReadOnlySpan<char> digits)
     {
-        var i = 0;
-        var length = digits.Length;
-
-        // Process 3 digits at a time (10 bits)
-        while (i + 2 < length)
+        if (digits.Length < 16)
         {
-            var value = (digits[i] - '0') * 100 + (digits[i + 1] - '0') * 10 + (digits[i + 2] - '0');
-            _writer.Write(value, 10);
-            i += 3;
+            WriteNumericTail(ref _writer, digits, 0);
+            return;
+        }
+#if NET8_0_OR_GREATER
+        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+        {
+            WriteNumericSsse3(ref _writer, digits);
+            return;
+        }
+#endif
+        WriteNumericScalar(ref _writer, digits);
+    }
+
+    /// <summary>The portable Numeric writer: fifteen digits a 50-bit append, then nine a 30-bit one, then the groups left.</summary>
+    internal static void WriteNumericScalar(ref BitWriter writer, ReadOnlySpan<char> digits) => WriteNumericScalar(ref writer, digits, 0);
+
+    /// <summary>
+    /// The portable writer from <paramref name="start"/>, where a vector tier stopped. Each step of fifteen digits comes from five 8-byte
+    /// loads (see <see cref="NumericGroup"/>). Not inlined, as <see cref="WriteAlphanumericScalar(ref BitWriter, ReadOnlySpan{char}, int)"/>.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void WriteNumericScalar(ref BitWriter writer, ReadOnlySpan<char> digits, int start)
+    {
+        var i = start;
+        ref var c = ref MemoryMarshal.GetReference(digits);
+        // the last load of a step reads chars i+12..i+15, so a sixteenth must exist
+        for (; i + 15 < digits.Length; i += 15)
+        {
+            writer.WriteWide((NumericGroup(ref c, i) << 40) | (NumericGroup(ref c, i + 3) << 30) | (NumericGroup(ref c, i + 6) << 20)
+                | (NumericGroup(ref c, i + 9) << 10) | NumericGroup(ref c, i + 12), 50);
+        }
+        WriteNumericTail(ref writer, digits, i);
+    }
+
+    /// <summary>
+    /// The digits from <paramref name="i"/> with no load past the run: nine an append, then the groups left and the 7- or 4-bit rest, the
+    /// per-digit '0' folded into one subtract (5328 = '0' * 111, 528 = '0' * 11).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteNumericTail(ref BitWriter writer, ReadOnlySpan<char> digits, int i)
+    {
+        for (; i + 8 < digits.Length; i += 9)
+        {
+            var g0 = digits[i] * 100 + digits[i + 1] * 10 + digits[i + 2] - 5328;
+            var g1 = digits[i + 3] * 100 + digits[i + 4] * 10 + digits[i + 5] - 5328;
+            var g2 = digits[i + 6] * 100 + digits[i + 7] * 10 + digits[i + 8] - 5328;
+            writer.Write((g0 << 20) | (g1 << 10) | g2, 30);
+        }
+        for (; i + 2 < digits.Length; i += 3)
+            writer.Write(digits[i] * 100 + digits[i + 1] * 10 + digits[i + 2] - 5328, 10);
+        if (i + 1 < digits.Length)
+            writer.Write(digits[i] * 10 + digits[i + 1] - 528, 7);
+        else if (i < digits.Length)
+            writer.Write(digits[i] - '0', 4);
+    }
+
+    /// <summary>
+    /// Three digits from one 8-byte load of four chars (the fourth must exist): with each char's '0' removed, the multiply by
+    /// (100 &lt;&lt; 32 | 10 &lt;&lt; 16 | 1) lands d0 * 100 + d1 * 10 + d2 in bits 32-47, and no lower product carries into them.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong NumericGroup(ref char c, int i)
+    {
+        if (BitConverter.IsLittleEndian)
+        {
+            var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
+            return (((chunk - 0x0030_0030_0030_0030UL) * ((100UL << 32) | (10UL << 16) | 1UL)) >> 32) & 0x3FF;
         }
 
-        // Process remaining 2 digits (7 bits)
-        if (i + 1 < length)
-        {
-            var value = (digits[i] - '0') * 10 + (digits[i + 1] - '0');
-            _writer.Write(value, 7);
-            i += 2;
-        }
+        // A big-endian runtime lays the chars out the other way within the word, so the group is taken char by char there.
+        return (ulong)(Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328);
+    }
 
-        // Process remaining 1 digit (4 bits)
-        if (i < length)
+    /// <summary>
+    /// Encodes alphanumeric data (0-9, A-Z, space, $, %, *, +, -, ., /, :): two characters in 11 bits (first * 45 + second), a last odd
+    /// one in 6.
+    /// </summary>
+    /// <remarks>
+    /// The analysis or the plan has found every character in the alphabet, so the writers check a whole step at once rather than each
+    /// character, and a step with a character outside the alphabet hands the rest of the run to <see cref="WriteAlphanumericChecked"/>,
+    /// which throws at that character as the writer always has. A run under eight characters, shorter than any step, is written here
+    /// (<see cref="WriteAlphanumericTail"/>), with no call to a writer.
+    /// </remarks>
+    private void WriteAlphanumericData(ReadOnlySpan<char> chars)
+    {
+        if (chars.Length < 8)
         {
-            var value = digits[i] - '0';
-            _writer.Write(value, 4);
+            WriteAlphanumericTail(ref _writer, chars, 0);
+            return;
+        }
+#if NET8_0_OR_GREATER
+        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported && System.Runtime.Intrinsics.X86.Sse41.IsSupported)
+        {
+            WriteAlphanumericSsse3(ref _writer, chars);
+            return;
+        }
+        // The WebAssembly tier's step is sixteen characters; a shorter run takes the portable writer.
+        if (System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported && chars.Length >= 16)
+        {
+            WriteAlphanumericPackedSimd(ref _writer, chars);
+            return;
+        }
+#endif
+        WriteAlphanumericScalar(ref _writer, chars);
+    }
+
+    /// <summary>The portable Alphanumeric writer: four pairs a 44-bit append, then pairs and a last odd character.</summary>
+    internal static void WriteAlphanumericScalar(ref BitWriter writer, ReadOnlySpan<char> chars) => WriteAlphanumericScalar(ref writer, chars, 0);
+
+    /// <summary>
+    /// The portable writer from <paramref name="start"/>, where a vector tier stopped. A value is one table load, -1 outside the alphabet
+    /// (<see cref="CharacterSets.AlphanumericValues"/>), and a step's characters and values are checked by one OR: a character past 0x7F,
+    /// or a -1, sets a bit no character or value of the alphabet sets.
+    /// Not inlined: inlined into its two-parameter entry, the method ran out of the JIT's inlining budget before its 8-byte store, which
+    /// was left a call, and held the run in memory: 1.64 times the old writer's time at 16 characters, against 0.77 not inlined (2026-10-05).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void WriteAlphanumericScalar(ref BitWriter writer, ReadOnlySpan<char> chars, int start)
+    {
+        var values = CharacterSets.AlphanumericValues;
+        var i = start;
+        for (; i + 7 < chars.Length; i += 8)
+        {
+            int c0 = chars[i], c1 = chars[i + 1], c2 = chars[i + 2], c3 = chars[i + 3];
+            int c4 = chars[i + 4], c5 = chars[i + 5], c6 = chars[i + 6], c7 = chars[i + 7];
+            int v0 = values[c0 & 0x7F], v1 = values[c1 & 0x7F], v2 = values[c2 & 0x7F], v3 = values[c3 & 0x7F];
+            int v4 = values[c4 & 0x7F], v5 = values[c5 & 0x7F], v6 = values[c6 & 0x7F], v7 = values[c7 & 0x7F];
+            if ((((c0 | c1 | c2 | c3 | c4 | c5 | c6 | c7) >> 7) | ((v0 | v1 | v2 | v3 | v4 | v5 | v6 | v7) >> 6)) != 0)
+                break;
+            var high = (ulong)(uint)(((v0 * 45 + v1) << 11) | (v2 * 45 + v3));
+            var low = (uint)(((v4 * 45 + v5) << 11) | (v6 * 45 + v7));
+            writer.WriteWide((high << 22) | low, 44);
+        }
+        WriteAlphanumericTail(ref writer, chars, i);
+    }
+
+    /// <summary>
+    /// The characters from <paramref name="i"/>: pairs and a last odd character, and the rest of the run to
+    /// <see cref="WriteAlphanumericChecked"/> at a pair with a character outside the alphabet.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteAlphanumericTail(ref BitWriter writer, ReadOnlySpan<char> chars, int i)
+    {
+        var values = CharacterSets.AlphanumericValues;
+        for (; i + 1 < chars.Length; i += 2)
+        {
+            int c0 = chars[i], c1 = chars[i + 1];
+            int v0 = values[c0 & 0x7F], v1 = values[c1 & 0x7F];
+            if ((((c0 | c1) >> 7) | ((v0 | v1) >> 6)) != 0)
+            {
+                WriteAlphanumericChecked(ref writer, chars.Slice(i));
+                return;
+            }
+            writer.Write(v0 * 45 + v1, 11);
+        }
+        if (i < chars.Length)
+        {
+            int c = chars[i];
+            int v = values[c & 0x7F];
+            if (((c >> 7) | (v >> 6)) != 0)
+            {
+                WriteAlphanumericChecked(ref writer, chars.Slice(i));
+                return;
+            }
+            writer.Write(v, 6);
         }
     }
 
     /// <summary>
-    /// Encodes alphanumeric data (0-9, A-Z, space, $, %, *, +, -, ., /, :)
+    /// The writer with a check a character: the path of a run with a character outside the alphabet, which throws there after writing
+    /// the pairs ahead of it. Not inlined: inside a writer's loop it took the inlining budget its appends need.
     /// </summary>
-    /// <param name="chars"></param>
-    /// <remarks>
-    /// Encoding: Groups of 2 chars → 11 bits, 1 char → 6 bits.
-    /// </remarks>
-    private void WriteAlphanumericData(ReadOnlySpan<char> chars)
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void WriteAlphanumericChecked(ref BitWriter writer, ReadOnlySpan<char> chars)
     {
-        var length = chars.Length;
         var i = 0;
-
-        // Pairs of chars = 11bits
-        // Single chars = 6bits
-
-        // Process 2 characters at a time
-        while (i + 1 < length)
-        {
-            var value = CharacterSets.GetAlphanumericValue(chars[i]) * 45
-                + CharacterSets.GetAlphanumericValue(chars[i + 1]);
-            _writer.Write(value, 11);
-            i += 2;
-        }
-
-        // Process remaining 1 character
-        if (i < length)
-        {
-            var value = CharacterSets.GetAlphanumericValue(chars[i]);
-            _writer.Write(value, 6);
-        }
+        for (; i + 1 < chars.Length; i += 2)
+            writer.Write(CharacterSets.GetAlphanumericValue(chars[i]) * 45 + CharacterSets.GetAlphanumericValue(chars[i + 1]), 11);
+        if (i < chars.Length)
+            writer.Write(CharacterSets.GetAlphanumericValue(chars[i]), 6);
     }
 
     /// <summary>

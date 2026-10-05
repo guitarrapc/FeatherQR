@@ -434,7 +434,7 @@ The prototype is not tuned. It transposes 64x64 blocks with scalar code, has no 
 
 ## The Alphanumeric and Numeric writers
 
-These answer phase 1 of [standardqr-binary-encoder-plan.md](../standardqr-binary-encoder-plan.md). The writer row is the whole data codeword stage (mode, count, payload, padding) for single symbols, and the payload writer alone for Structured Append sets.
+These answered phase 1 of `standardqr-binary-encoder-plan.md` before the mask work (2026-10-02); phase 7 below has it re-taken. The writer row is the whole data codeword stage (mode, count, payload, padding) for single symbols, and the payload writer alone for Structured Append sets.
 
 | Shape | Writer | Encode | Share |
 |---|---|---|---|
@@ -446,3 +446,89 @@ These answer phase 1 of [standardqr-binary-encoder-plan.md](../standardqr-binary
 | Structured Append, 50,000 digits (L) | 25.7 µs | 709 µs | 3.6 % |
 
 The Alphanumeric writer ran at about 1.0 ns a character and the Numeric writer at about 0.52 ns a digit. Every share is above that plan's 3 % bar. Each is a ceiling that grows as mask selection shrinks. With the shared windows alone the V40-L alphanumeric share is about 6 %, and with a scorer at the prototype's speed it would be about 10 % (an estimate from the stage rows, not measured).
+
+## Phase 7: the writers (2026-10-05)
+
+The writer plan, run as phase 7. Its phase 1, re-taken after the mask work: the payload row (the writer alone, no mode, count or padding) over the end-to-end row of the stage harness (span API at quiet zone 0, `CreateStructuredAppend` for sets). Five rounds on the JIT and NativeAOT, three on WebAssembly, every shape in one process pinned to one CCD, a cell the median of the run medians:
+
+| Shape | JIT, AVX2 | JIT, no AVX | Default NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 2.9 % | 1.9 % | 1.7 % | 4.4 % | 5.3 % |
+| V10-M, 300 alphanumeric | 10.7 % | 7.4 % | 7.0 % | 15.8 % | 17.8 % |
+| V40-L, 4,296 alphanumeric | 13.0 % | 9.5 % | 8.6 % | 20.0 % | 21.8 % |
+| Set, 30,000 alphanumeric (7 symbols at L) | 6.2 % | 5.5 % | 5.1 % | 11.0 % | 11.2 % |
+| V1-L, 10 digits | 1.2 % | 0.8 % | 0.9 % | 2.0 % | 2.6 % |
+| V40-L, 7,089 digits | 11.2 % | 7.0 % | 6.4 % | 8.1 % | 6.6 % |
+| Set, 50,000 digits (8 symbols at L) | 5.4 % | 4.1 % | 4.0 % | 4.3 % | 3.9 % |
+
+The Alphanumeric writer took 4.81 µs for 4,296 characters on the JIT (1.12 ns a character) and 15.7 µs on WebAssembly AOT (3.66 ns), the Numeric writer 3.96 µs for 7,089 digits (0.56 ns a digit). The payload row read within 1.4 % of the whole data stage at V40-L and 3.8 % at V10-M.
+
+### The variant ladder
+
+BenchmarkDotNet on the JIT with AVX2 (3 warmups, 15 iterations, the process pinned to one CCD), each writer copied verbatim as the baseline with a byte-identical canary beside it, every variant held to the baseline's stream before any timing (lengths 0 to 300 and long runs, every starting alignment, and for Alphanumeric a character outside the alphabet at every position). Ratios to the baseline in the same run, the run starting at a byte boundary (13 bits in read the same):
+
+| Alphanumeric variant | 4,296 | 300 | 40 | 9 |
+|---|---|---|---|---|
+| Baseline | 4.61 µs | 334 ns | 47.7 ns | 12.7 ns |
+| Canary | 1.01 | 1.04 | 0.95 | 1.01 |
+| A value table, validity checked a pair | 1.20 | 0.83 | 0.78 | 0.84 |
+| Two pairs an append | 0.66 | 0.63 | 0.63 | 0.82 |
+| Four pairs a 44-bit append | 0.57 | 0.56 | 0.60 | 0.77 |
+| The same, read through a ref | 0.54 | 0.54 | 0.58 | 0.76 |
+| Five pairs a 55-bit append | 0.56 | 0.55 | 0.58 | 0.85 |
+| SSSE3, 8 characters a step (the rMQR form) | 0.29 | 0.29 | 0.34 | 0.61 |
+| SSSE3, 16 characters a step | 0.23 | 0.24 | 0.29 | 0.55 |
+| AVX2, 32 characters a step | 0.21 | 0.22 | 0.29 | 0.60 |
+| Portable Vector128, 8 characters a step | 0.41 | 0.42 | 0.49 | 0.65 |
+
+| Numeric variant | 7,089 | 500 | 40 | 10 |
+|---|---|---|---|---|
+| Baseline | 4.03 µs | 293 ns | 24.4 ns | 9.33 ns |
+| Canary | 1.03 | 0.98 | 1.00 | 0.92 |
+| Three groups a 30-bit append | 0.69 | 0.66 | 0.72 | 0.76 |
+| Five groups a 50-bit append | 0.58 | 0.52 | 0.70 | 0.82 |
+| The same, each group from one 8-byte load and a multiply | 0.48 | 0.47 | 0.63 | 0.97 |
+| SSE4.1, 12 digits a step from four loads (the rMQR form) | 0.38 | 0.41 | 0.70 | 0.89 |
+| SSSE3, 12 digits a step from one pack and a pshufb layout | 0.30 | 0.29 | 0.48 | 0.93 |
+| AVX2, 24 digits a step | 0.29 | 0.29 | 0.49 | 1.00 |
+| Portable Vector128, 12 digits a step | 0.41 | 0.42 | 0.55 | 0.98 |
+
+A second round each. The sixteen-character loop on a local copy of the writer took 0.89 to 0.93 of its time at 300 and 4,296 characters, and the twelve-digit one 0.86 to 0.92 at 500 and 7,089, against 0.3 to 1.3 ns more at 9 to 16 characters for the copy. The same copy in the scalar four-pair loop read 0.95 to 1.05, inside the noise. Nine digits an append after the fifteen-digit loop took 0.84 to 0.92 of the time at 10 and 12 digits, where the fifteen-digit loop never runs, and read level from 40 up.
+
+The value table alone read slower than the baseline at 4,296 characters only. There the baseline writer that handles a bad character was inlined into its loop, the method grew from about 500 to 1,202 bytes, and `BitWriter.Write` was left a call a pair.
+
+### The shipped tiers against the writer they replaced
+
+The timing mode's `kernel/AlnumWriter` and `kernel/NumericWriter` shapes: each tier entered directly beside a copy of the old writer, 13 bits into a word. Ratios at 4,296 / 300 / 40 / 16 characters and 7,089 / 500 / 40 / 12 digits:
+
+| Build | Alphanumeric, vector tier | Alphanumeric, portable | Numeric, vector tier | Numeric, portable |
+|---|---|---|---|---|
+| JIT, AVX2 | 0.21 / 0.24 / 0.35 / 0.50 | 0.65 / 0.66 / 0.70 / 0.77 | 0.24 / 0.27 / 0.54 / 1.00 | 0.47 / 0.49 / 0.62 / 0.82 |
+| JIT, no AVX | 0.18 / 0.20 / 0.31 / 0.44 | 0.51 / 0.52 / 0.57 / 0.60 | 0.24 / 0.27 / 0.52 / 1.10 | 0.44 / 0.45 / 0.56 / 1.00 |
+| Default NativeAOT | 0.20 / 0.22 / 0.35 / 0.44 | 0.56 / 0.55 / 0.56 / 0.59 | 0.27 / 0.29 / 0.58 / 1.00 | 0.45 / 0.46 / 0.62 / 0.82 |
+| WebAssembly AOT | 0.09 / 0.10 / 0.18 / 0.28 | 0.18 / 0.18 / 0.24 / 0.36 | (0.38 / 0.43 / 0.76 / 1.03) | 0.39 / 0.45 / 0.80 / 1.03 |
+| WebAssembly interpreted | 0.14 / 0.16 / 0.29 / 0.43 | 0.18 / 0.19 / 0.34 / 0.46 | (0.71 / 0.76 / 0.96 / 1.10) | 0.43 / 0.49 / 0.87 / 1.12 |
+
+The vector tiers are SSE4.1 (Alphanumeric) and SSSE3 (Numeric) on x64 and WebAssembly's SIMD for Alphanumeric. The bracketed Numeric step on WebAssembly did not ship: it took 0.95 to 0.96 of the portable writer's time AOT-compiled and 1.10 to 1.65 interpreted, from 40 to 7,089 digits, and one flag gates both builds. A twelve-digit run never reaches a Numeric vector tier, and since this run the dispatch writes runs under sixteen digits, and under eight characters, in place with no call. On WebAssembly AOT the old writer's copy ran slower than the library's own old writer (23.3 µs against 15.7 µs at 4,296 characters, the copy taking the writer by reference), so the A/B below is the measure there.
+
+### End to end
+
+Base `main` (9897279) against the change, the same stage harness on both sides, alternating rounds: seven on the JIT and NativeAOT, five on WebAssembly AOT, three interpreted. The median of the run medians, change over base:
+
+| Shape | JIT, AVX2 | JIT, no AVX | Default NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 1.00 | 0.98 | 0.96 | 0.99 | 0.96 |
+| V1-L, 10 digits | 1.00 | 1.00 | 0.98 | 0.99 | 1.00 |
+| V10-M, 300 alphanumeric | 0.91 | 0.96 | 0.92 | 0.86 | 0.84 |
+| V40-L, 4,296 alphanumeric | 0.93 | 0.93 | 0.92 | 0.83 | 0.86 |
+| V40-L, 7,089 digits | 0.92 | 0.92 | 0.93 | 0.97 | 0.96 |
+| Set, 30,000 alphanumeric | 0.97 | 0.95 | 0.92 | 0.91 | 0.92 |
+| Set, 50,000 digits | 1.00 | 0.97 | 0.95 | 0.99 | 1.00 |
+| Payload, V40-L alphanumeric | 0.20 | 0.18 | 0.19 | 0.12 | 0.14 |
+| Payload, V40-L digits | 0.25 | 0.25 | 0.26 | 0.39 | 0.43 |
+| Payload, V1-M alphanumeric | 0.50 | 0.46 | 0.52 | 0.45 | 0.56 |
+| Payload, V1-L digits | 0.89 | 0.80 | 0.69 | 0.95 | 0.97 |
+
+The rows the change does not touch (V19-M Byte, Micro QR M4, rMQR R17x139) read 0.96 to 1.03. On default NativeAOT the V40-L alphanumeric encode went from 64.9 to 59.8 µs and its payload from 5.63 to 1.06 µs; on WebAssembly AOT from 81.0 to 67.2 µs and from 16.7 to 2.05 µs.
+
+Output was identical before and after on the 7,647-symbol corpus, the 6,504-symbol pinned-mask corpus, and a new pass of 980 symbols: `QRSegmentation.Optimal` encodes of text made of runs of 1 to 40 characters from the three alphabets at every level, and Structured Append sets of one mode and of mixed content under both segmentations. Each was hashed under AVX2, with AVX off and with hardware intrinsics off.
