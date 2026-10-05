@@ -14,20 +14,21 @@ internal static partial class TierTiming
     private static Shape[] WriterShapes() =>
     [
         .. new[] { 4296, 300, 40, 16 }.SelectMany(n => WriterTiers("AlnumWriter", n, Pick(n, AlphanumericAlphabet), OldAlphanumeric,
-            QRBinaryEncoder.WriteAlphanumericScalar, QRBinaryEncoder.WriteAlphanumericSsse3, AlphanumericSsse3Runs, QRBinaryEncoder.WriteAlphanumericPackedSimd)),
+            QRBinaryEncoder.WriteAlphanumericScalar, QRBinaryEncoder.WriteAlphanumericSsse3, AlphanumericSsse3Runs, QRBinaryEncoder.WriteAlphanumericAdvSimd, QRBinaryEncoder.WriteAlphanumericPackedSimd)),
         .. new[] { 7089, 500, 40, 12 }.SelectMany(n => WriterTiers("NumericWriter", n, Pick(n, "0123456789"), OldNumeric,
-            QRBinaryEncoder.WriteNumericScalar, QRBinaryEncoder.WriteNumericSsse3, NumericSsse3Runs, null)),
+            QRBinaryEncoder.WriteNumericScalar, QRBinaryEncoder.WriteNumericSsse3, NumericSsse3Runs, QRBinaryEncoder.WriteNumericAdvSimd, null)),
     ];
 
     // each as its dispatch asks: the Alphanumeric step blends with SSE4.1, the Numeric step needs SSSE3 alone
     private static bool AlphanumericSsse3Runs => System.Runtime.Intrinsics.X86.Ssse3.IsSupported && System.Runtime.Intrinsics.X86.Sse41.IsSupported;
     private static bool NumericSsse3Runs => System.Runtime.Intrinsics.X86.Ssse3.IsSupported;
 
-    private static Shape[] WriterTiers(string name, int length, string text, PayloadWriter old, PayloadWriter scalar, PayloadWriter ssse3, bool ssse3Runs, PayloadWriter? wasm) =>
+    private static Shape[] WriterTiers(string name, int length, string text, PayloadWriter old, PayloadWriter scalar, PayloadWriter ssse3, bool ssse3Runs, PayloadWriter neon, PayloadWriter? wasm) =>
     [
         new($"kernel/{name}-{length}-old", () => TimedWriter(text, old)),
         new($"kernel/{name}-{length}-scalar", () => TimedWriter(text, scalar)),
         new($"kernel/{name}-{length}-ssse3", () => TimedWriter(text, ssse3), ssse3Runs),
+        new($"kernel/{name}-{length}-neon", () => TimedWriter(text, neon), System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported),
         // a writer with no WebAssembly tier has no -wasm shape, which --loop, finding a shape by name alone, would call
         .. wasm is null ? [] : new Shape[] { new($"kernel/{name}-{length}-wasm", () => TimedWriter(text, wasm), System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported) },
     ];

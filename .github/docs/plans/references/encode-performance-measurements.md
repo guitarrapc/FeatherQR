@@ -2,7 +2,7 @@
 
 For [encode-performance-plan.md](../encode-performance-plan.md), these measurements locate where the three encoders spend their time and test the candidate changes before any of them is written into the library. Nothing in the repository was changed to take them.
 
-Unless a section names another machine or build, the numbers are from one Windows box (Ryzen 9 7950X3D, Zen 4) under .NET 10.0.9 JIT (x86-64-v4, so the AVX2 tiers and GFNI run), BenchmarkDotNet 0.15.8. A section that also measures the JIT without AVX2, default NativeAOT or WebAssembly names that build, and the two ARM64 sections are from an Apple M2.
+Unless a section names another machine or build, the numbers are from one Windows box (Ryzen 9 7950X3D, Zen 4) under .NET 10.0.9 JIT (x86-64-v4, so the AVX2 tiers and GFNI run), BenchmarkDotNet 0.15.8. A section that also measures the JIT without AVX2, default NativeAOT or WebAssembly names that build, and the ARM64 sections are from an Apple M2.
 
 ## How they were taken
 
@@ -411,7 +411,44 @@ The rows the phase does not touch, the version 10 encode (the single-word tier),
 
 The timing mode's parity check, which now runs every version 1 to 40 through the dispatch and the 128-bit tier entered directly, matched on all four builds.
 
-These numbers are .NET 10's. On .NET 8 the transpose's one-row lane swap, `Vector128.Shuffle` with its index in a local, was not lowered to an instruction: the .NET 8 JIT does that only for an index it sees as a constant where it imports the call, and called the software `Shuffle` twice a row pair instead (x64, `DOTNET_TieredCompilation=0` disassembly; .NET 10 emits `vpermilpd`). Found in review (2026-10-05) and fixed by writing the index at each call. On .NET 8 x64 without AVX2, where the dispatch takes this tier, a small net8.0 harness (mask selection on a placed matrix, seven alternating rounds of one process per build, pinned) read 0.88 to 0.92 of the time before the fix at versions 12 to 40 through the dispatch; the AVX2 dispatch, which does not run it, read 0.97 to 1.07. ARM64's transposed tier runs the same transpose: .NET 8's ARM64 code generator, as NativeAOT 8.0.28's compiler targeting arm64 emits it, makes the same two calls (`bl Vector128:Shuffle`) with the index in a local and a `tbl` with it written at each call. Its time on ARM64 was not measured.
+These numbers are .NET 10's. On .NET 8 the transpose's one-row lane swap, `Vector128.Shuffle` with its index in a local, was not lowered to an instruction: the .NET 8 JIT does that only for an index it sees as a constant where it imports the call, and called the software `Shuffle` twice a row pair instead (x64, `DOTNET_TieredCompilation=0` disassembly; .NET 10 emits `vpermilpd`). Found in review (2026-10-05) and fixed by writing the index at each call. On .NET 8 x64 without AVX2, where the dispatch takes this tier, a small net8.0 harness (mask selection on a placed matrix, seven alternating rounds of one process per build, pinned) read 0.88 to 0.92 of the time before the fix at versions 12 to 40 through the dispatch; the AVX2 dispatch, which does not run it, read 0.97 to 1.07. ARM64's transposed tier runs the same transpose. Read in the library's own `Transpose64Vector128` on .NET 8.0.31 for ARM64, before the fix and after it (2026-10-05): NativeAOT 8 made the same two calls a row pair (`bl Vector128:Shuffle`), and two `tbl` after the fix. The JIT made no call. Its tier-1 code inlined the software `Shuffle`, storing the vector and its index to the stack and reading each lane back after a check on its index, and after the fix it is two `tbl` as well. Mask selection through the dispatch, the timing mode built for net8.0 on the Apple M2, before the fix against after it, five alternating rounds per build, one process each:
+
+| Version | JIT 8, before | JIT 8, after | NativeAOT 8, before | NativeAOT 8, after |
+|---|---|---|---|---|
+| 1 | 1.9 µs | 0.98 | 1.8 µs | 1.01 |
+| 6 | 3.0 µs | 0.98 | 3.0 µs | 1.01 |
+| 10 | 4.3 µs | 0.96 | 4.3 µs | 0.98 |
+| 12 | 8.2 µs | 0.95 | 8.8 µs | 0.92 |
+| 13 | 9.0 µs | 0.95 | 9.9 µs | 0.91 |
+| 14 | 8.7 µs | 0.93 | 9.3 µs | 0.93 |
+| 15 | 9.7 µs | 0.96 | 10.6 µs | 0.93 |
+| 16 | 9.6 µs | 0.95 | 10.3 µs | 0.95 |
+| 17 | 11.4 µs | 0.95 | 12.5 µs | 0.92 |
+| 18 | 11.2 µs | 0.95 | 11.9 µs | 0.90 |
+| 19 | 12.5 µs | 0.94 | 13.4 µs | 0.93 |
+| 20 | 12.2 µs | 0.98 | 13.3 µs | 0.93 |
+| 21 | 13.7 µs | 0.97 | 15.5 µs | 0.93 |
+| 22 | 13.6 µs | 0.96 | 14.6 µs | 0.94 |
+| 23 | 14.3 µs | 0.95 | 15.3 µs | 0.97 |
+| 24 | 14.0 µs | 0.97 | 15.8 µs | 0.95 |
+| 25 | 16.6 µs | 0.96 | 17.9 µs | 0.95 |
+| 26 | 15.2 µs | 1.00 | 16.8 µs | 0.95 |
+| 27 | 17.5 µs | 0.97 | 19.5 µs | 0.94 |
+| 28 | 24.4 µs | 0.94 | 25.6 µs | 0.94 |
+| 29 | 26.3 µs | 0.98 | 28.0 µs | 0.93 |
+| 30 | 25.5 µs | 0.97 | 27.7 µs | 0.91 |
+| 31 | 27.8 µs | 1.00 | 29.4 µs | 0.93 |
+| 32 | 26.7 µs | 0.99 | 28.7 µs | 0.93 |
+| 33 | 29.7 µs | 1.00 | 31.3 µs | 0.95 |
+| 34 | 28.6 µs | 1.01 | 30.9 µs | 0.95 |
+| 35 | 31.6 µs | 0.99 | 32.9 µs | 0.93 |
+| 36 | 31.2 µs | 0.97 | 32.3 µs | 0.96 |
+| 37 | 32.5 µs | 0.99 | 34.1 µs | 0.98 |
+| 38 | 32.9 µs | 0.98 | 34.8 µs | 0.96 |
+| 39 | 36.9 µs | 0.97 | 38.7 µs | 0.92 |
+| 40 | 34.3 µs | 0.97 | 37.3 µs | 0.93 |
+
+On NativeAOT 8 the fix took 0.90 to 0.98 of the time at versions 12 to 40, the median 0.93, while versions 1, 6 and 10, whose single-word tier has no transpose, read 0.98 to 1.01. On the JIT it read 0.93 to 1.01, the median 0.96 at versions 12 to 27 and 0.98 at 28 to 40, against 0.96 to 0.98 at versions 1, 6 and 10, so its gain there is inside the runs' drift: the inlined fallback cost little beside the calls.
 
 ### ARM64 (2026-10-05)
 
@@ -476,7 +513,19 @@ End to end at quiet zone 0, seven alternating rounds per build:
 
 The rows the change does not touch read 0.97 to 1.02: versions 1, 6 and 10, the pinned-mask encodes at versions 26 and 40, Micro QR M4 and rMQR R17x139. A first NativeAOT run was set aside, since those rows read 0.91 to 0.94 in it, and the table is a second one. The timing mode's parity check matched on both builds, and 4,832 Standard QR symbols (lengths 0 to 64 and 70 to 7,329 of digits, the alphanumeric set and ASCII at every level, quiet zone 0 and 4, the class API, every version forced, every pinned pattern at every version) hashed the same before and after, and with hardware intrinsics off.
 
-With the encode shorter, the writers' share of it grew: the payload is 4.2 to 4.3 % of a version 40 alphanumeric encode, 3.5 to 3.7 % of a numeric one and 2.6 to 3.1 % of the two sets. At version 10, whose single-word tier did not change, it is 3.1 to 3.3 %, the 3.0 to 3.2 % of phase 7's ARM64 table. The NEON step measured in phase 7's ARM64 follow-up would save 2.5 to 2.7 % of the version 40 alphanumeric encode and 1.1 to 2.0 % of the other shapes above, estimated as the share times one less the best step's ratio; the step was not measured again with the transposed scorer.
+With the encode shorter, the writers' share of it grew. The payload row over the end-to-end row with the portable writers, from the base side (`encode4`, 0fda781) of the NEON steps' end-to-end run below (Phase 7, ARM64), nine alternating rounds per build, beside phase 7's ARM64 table, taken with the SoA scorers:
+
+| Shape | JIT, SoA scorers | JIT, transposed | NativeAOT, SoA scorers | NativeAOT, transposed |
+|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 0.7 % | 0.7 % | 0.7 % | 0.7 % |
+| V10-M, 300 alphanumeric | 3.0 % | 2.9 % | 3.2 % | 3.1 % |
+| V40-L, 4,296 alphanumeric | 2.4 % | 4.2 % | 2.6 % | 4.2 % |
+| Set, 30,000 alphanumeric | 2.0 % | 3.0 % | 2.2 % | 3.0 % |
+| V1-L, 10 digits | 0.4 % | 0.4 % | 0.4 % | 0.5 % |
+| V40-L, 7,089 digits | 1.9 % | 3.5 % | 2.1 % | 3.5 % |
+| Set, 50,000 digits | 1.6 % | 2.6 % | 1.7 % | 2.6 % |
+
+At version 10, whose single-word tier did not change, the share did not move. A first run of three rounds, each build in its own process and not alternated, had read 4.2 to 4.3 % at version 40 alphanumeric, 3.5 to 3.7 % numeric, 2.6 to 3.1 % for the sets and 3.1 to 3.3 % at version 10. The version 40 shares are over the 3 % bar, so the NEON steps of phase 7's ARM64 follow-up were measured again, built into the library and end to end ("The NEON steps end to end").
 
 ## A transposed scorer for versions 12 to 40
 
@@ -664,7 +713,7 @@ End to end, change over base:
 | Payload, V1-M alphanumeric | 0.42 | 0.45 |
 | Payload, V1-L digits | 0.73 | 0.75 |
 
-The rows the change does not touch (V19-M Byte, Micro QR M4, rMQR R17x139) read 0.98 to 1.01. At version 1 the payload is under 2 % of the encode, so those rows' 0.94 to 1.01 is the spread, not the writers. ARM64 still runs the SoA scorers for versions 12 to 40 (phase 6), and the stage rows of the change put mask selection at 77 to 79 % of a version 40 encode there (72.6 of 92.3 µs on the JIT, 63.9 of 82.5 µs on NativeAOT) and 68 to 71 % of the version 10 one, so the writers' share is smaller than it will be.
+The rows the change does not touch (V19-M Byte, Micro QR M4, rMQR R17x139) read 0.98 to 1.01. At version 1 the payload is under 2 % of the encode, so those rows' 0.94 to 1.01 is the spread, not the writers. ARM64 then still ran the SoA scorers for versions 12 to 40 (the transposed tier replaced them afterwards, "Phase 6", ARM64), and the stage rows of the change put mask selection at 77 to 79 % of a version 40 encode there (72.6 of 92.3 µs on the JIT, 63.9 of 82.5 µs on NativeAOT) and 68 to 71 % of the version 10 one, so the writers' share was smaller than it became.
 
 #### A NEON step
 

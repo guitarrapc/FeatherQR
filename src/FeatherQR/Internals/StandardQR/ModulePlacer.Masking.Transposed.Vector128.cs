@@ -168,8 +168,9 @@ internal static partial class ModulePlacer
         var m1 = Vector128.Create(0x5555555555555555ul, 0);
         for (nuint k = 0; k < 64; k += 2)
         {
-            // the lane swap's index is written at each Shuffle: the .NET 8 JIT lowers Shuffle to one instruction only for an index it sees
-            // as a constant where it imports the call, which a hoisted local is not, and calls the software Shuffle instead
+            // the lane swap's index is written at each Shuffle: .NET 8 lowers Shuffle to one instruction only for an index it sees as a
+            // constant where it imports the call, which a hoisted local is not, and runs the software Shuffle instead (two calls a row pair
+            // on x64 and from NativeAOT 8 for ARM64, lanes read back through the stack from the ARM64 JIT)
             var v = Vector128.LoadUnsafe(ref a, k);
             var t = (Shr(v, 1) ^ Vector128.Shuffle(v, Vector128.Create(1ul, 0ul))) & m1;
             (v ^ (Shl(t, 1) | Vector128.Shuffle(t, Vector128.Create(1ul, 0ul)))).StoreUnsafe(ref a, k);

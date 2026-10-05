@@ -753,6 +753,11 @@ internal static class SimdParity
             alphanumeric.Add(("ssse3", QRBinaryEncoder.WriteAlphanumericSsse3));
         if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
             numeric.Add(("ssse3", QRBinaryEncoder.WriteNumericSsse3));
+        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            alphanumeric.Add(("neon", QRBinaryEncoder.WriteAlphanumericAdvSimd));
+            numeric.Add(("neon", QRBinaryEncoder.WriteNumericAdvSimd));
+        }
         if (System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported)
         {
             alphanumeric.Add(("wasm", QRBinaryEncoder.WriteAlphanumericPackedSimd));

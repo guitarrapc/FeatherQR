@@ -333,6 +333,11 @@ internal ref partial struct QRBinaryEncoder
             WriteNumericSsse3(ref _writer, digits);
             return;
         }
+        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported && digits.Length >= 40)
+        {
+            WriteNumericAdvSimd(ref _writer, digits);
+            return;
+        }
 #endif
         WriteNumericScalar(ref _writer, digits);
     }
@@ -419,6 +424,11 @@ internal ref partial struct QRBinaryEncoder
         if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported && System.Runtime.Intrinsics.X86.Sse41.IsSupported)
         {
             WriteAlphanumericSsse3(ref _writer, chars);
+            return;
+        }
+        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            WriteAlphanumericAdvSimd(ref _writer, chars);
             return;
         }
         // The WebAssembly tier's step is sixteen characters; a shorter run takes the portable writer.

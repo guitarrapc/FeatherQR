@@ -6,7 +6,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The Alphanumeric and Numeric payload writers of <see cref="QRBinaryEncoder"/>, the portable and x64 tiers entered directly (the
+/// The Alphanumeric and Numeric payload writers of <see cref="QRBinaryEncoder"/>, the portable, x64 and ARM64 tiers entered directly (the
 /// WebAssembly tier is held to the old writers by the timing mode's parity check on its build), against the payload written
 /// from the definition (ISO/IEC 18004 7.4.3 and 7.4.4): the character's index in the alphabet, first * 45 + second in 11 bits and 6 for a
 /// last odd character; three digits in 10 bits, two in 7, one in 4; every field MSB first.
@@ -22,6 +22,7 @@ public class QRBinaryEncoderPayloadParityTest
     {
         Scalar,
         Ssse3,
+        AdvSimd,
     }
 
     public static IEnumerable<Route> Routes() => Enum.GetValues<Route>();
@@ -166,6 +167,7 @@ public class QRBinaryEncoderPayloadParityTest
     {
         Route.Scalar => true,
         Route.Ssse3 => System.Runtime.Intrinsics.X86.Ssse3.IsSupported && (!alphanumeric || System.Runtime.Intrinsics.X86.Sse41.IsSupported),
+        Route.AdvSimd => System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported,
         _ => false,
     };
 
@@ -222,6 +224,8 @@ public class QRBinaryEncoderPayloadParityTest
                 case (Route.Scalar, false): QRBinaryEncoder.WriteNumericScalar(ref writer, run); break;
                 case (Route.Ssse3, true): QRBinaryEncoder.WriteAlphanumericSsse3(ref writer, run); break;
                 case (Route.Ssse3, false): QRBinaryEncoder.WriteNumericSsse3(ref writer, run); break;
+                case (Route.AdvSimd, true): QRBinaryEncoder.WriteAlphanumericAdvSimd(ref writer, run); break;
+                case (Route.AdvSimd, false): QRBinaryEncoder.WriteNumericAdvSimd(ref writer, run); break;
             }
         }
         catch (Exception e)
