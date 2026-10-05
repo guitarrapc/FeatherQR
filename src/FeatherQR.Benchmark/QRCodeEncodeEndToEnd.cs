@@ -38,8 +38,6 @@ public class QRCodeEncodeEndToEnd
     private byte[] _spanDestination = default!;
 
     private const string AlphanumericAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
-    private static readonly QRCodeGeneratorOptions NoQuietZone = new() { QuietZoneSize = 0 };
-    private static readonly QRCodeGeneratorOptions KanjiNoQuietZone = new() { AllowKanji = true, QuietZoneSize = 0 };
     private static readonly QRCodeGeneratorOptions Boost = new() { BoostEccLevel = true };
     private static readonly QRCodeGeneratorOptions KanjiVersion6 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(6) };
     private static readonly QRCodeGeneratorOptions KanjiVersion15 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(15) };

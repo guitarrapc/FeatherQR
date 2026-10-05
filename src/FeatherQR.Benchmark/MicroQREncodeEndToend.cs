@@ -9,7 +9,6 @@
 ///   Kanji_M4_M : M4-M, Kanji mode (capacity boundary, 8 characters)
 ///
 /// Byte_M4_M and Kanji_M4_M share version and level, so they differ in mode, not in symbol size.
-matrices).
 /// </summary>
 public class MicroQREncodeEndToend
 {
@@ -20,8 +19,6 @@ public class MicroQREncodeEndToend
     private string _kanji = default!;
     private byte[] _spanDestination = default!;
 
-    private static readonly MicroQRCodeGeneratorOptions NoQuietZone = new() { QuietZoneSize = 0 };
-    private static readonly MicroQRCodeGeneratorOptions KanjiNoQuietZone = new() { AllowKanji = true, QuietZoneSize = 0 };
     private static readonly MicroQRCodeGeneratorOptions KanjiVersionM4 = new() { AllowKanji = true, Version = MicroQRVersion.M4 };
 
     [GlobalSetup]
