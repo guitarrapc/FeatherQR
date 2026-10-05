@@ -10,7 +10,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON).
 /// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
 ///
-/// Port of the AVX2 architecture in ModulePlacer.Masking.X86.cs to 128-bit vectors: the scorer runs lane-per-row (Vector128&lt;ulong&gt; = 2 rows per iteration) and the same three width tiers apply (1 ulong per row for versions 1-11, 2-word SoA for 12-29, 3-word SoA for 30-40).
+/// Port of the AVX2 tiers' lane-per-row architecture to 128-bit vectors: the scorer runs lane-per-row (Vector128&lt;ulong&gt; = 2 rows per iteration) in three width tiers (1 ulong per row for versions 1-11, 2-word SoA for 12-27, 3-word SoA for 28-40, split at 128 modules as <see cref="MaskCodeAdvSimd"/> does).
+/// The AVX2 tiers have since moved on (four candidates per vector for versions 1-11, the transposed scorer for 12-40); these stay until those designs can be measured on ARM64.
 /// NEON-specific choices:
 /// - Popcount is native (cnt.16b); one uaddlp widens the per-byte counts to
 ///   ushort lanes, which accumulate directly in Vector128&lt;ushort&gt;
@@ -493,6 +494,52 @@ internal static partial class ModulePlacer
         blackModules += SumAcc(accBlack);
 
         return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
+    }
+
+    // ---------------------------------
+    // Format information on SoA word arrays (two- and three-word tiers)
+    // ---------------------------------
+
+    private static void PokeFormatBitsSoA2(Span<ulong> w0, Span<ulong> w1, int size, ushort formatBits)
+    {
+        // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
+        for (var i = 0; i < 15; i++)
+        {
+            var bit = (formatBits & (1 << i)) != 0;
+            SetBitSoA2(w0, w1, FormatYs1[i], FormatXs1[i], bit);
+            var x2 = i < 8 ? size - 1 - i : 8;
+            var y2 = i < 8 ? 8 : size - 15 + i;
+            SetBitSoA2(w0, w1, y2, x2, bit);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SetBitSoA2(Span<ulong> w0, Span<ulong> w1, int y, int x, bool value)
+    {
+        ref var w = ref (x < 64 ? ref w0[y] : ref w1[y]);
+        var bit = 1ul << (x & 63);
+        w = value ? w | bit : w & ~bit;
+    }
+
+    private static void PokeFormatBitsSoA3(Span<ulong> w0, Span<ulong> w1, Span<ulong> w2, int size, ushort formatBits)
+    {
+        // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
+        for (var i = 0; i < 15; i++)
+        {
+            var bit = (formatBits & (1 << i)) != 0;
+            SetBitSoA3(w0, w1, w2, FormatYs1[i], FormatXs1[i], bit);
+            var x2 = i < 8 ? size - 1 - i : 8;
+            var y2 = i < 8 ? 8 : size - 15 + i;
+            SetBitSoA3(w0, w1, w2, y2, x2, bit);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SetBitSoA3(Span<ulong> w0, Span<ulong> w1, Span<ulong> w2, int y, int x, bool value)
+    {
+        ref var w = ref (x < 64 ? ref w0[y] : ref (x < 128 ? ref w1[y] : ref w2[y]));
+        var bit = 1ul << (x & 63);
+        w = value ? w | bit : w & ~bit;
     }
 
     // ---------------------------------

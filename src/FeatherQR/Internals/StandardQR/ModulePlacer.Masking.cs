@@ -33,17 +33,18 @@ internal static partial class ModulePlacer
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
 #if NET8_0_OR_GREATER
-        // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion), see ModulePlacer.Masking.X86.cs. Measured 1.3-2x over the scalar bit-packed paths below (findings log, round 5).
+        // AVX2: four candidates per vector for versions 1-11 (ModulePlacer.Masking.X86.cs), the transposed scorer for 12-40 (ModulePlacer.Masking.Transposed.X86.cs).
+        // 2.5-2.8x the scalar bit-packed paths below at versions 1, 6 and 10, and 2.9-4.9x at 12-40, on the JIT on Zen 4 (2026-10-05).
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // ARM64 NEON port of the same tiers (Vector128 lane-per-row scorer), see ModulePlacer.Masking.Arm64.cs. Measured 2.4-3x (versions 1-11) and 1.15-1.2x (12-40) over the scalar paths below on Apple M2 (MaskCodeArm findings log).
+        // ARM64 NEON: two rows per vector, one candidate at a time, at every version (ModulePlacer.Masking.Arm64.cs; the AVX2 tiers' earlier lane-per-row form). Measured 2.4-3x (versions 1-11) and 1.15-1.2x (12-40) over the scalar paths below on Apple M2 (MaskCodeArm findings log).
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
         {
             return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // x64 without AVX2 and WebAssembly, see ModulePlacer.Masking.Simd.cs
+        // x64 without AVX2 and WebAssembly: two candidates per vector for versions 1-11 (ModulePlacer.Masking.Simd.cs), the transposed scorer for 12-40 (ModulePlacer.Masking.Transposed.Vector128.cs)
         if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
         {
             return MaskCodeVector128(buffer, size, version, blockedMask, eccLevel);
@@ -851,28 +852,10 @@ internal static partial class ModulePlacer
         {
             for (var r = 0; r < 12; r++)
             {
-                var rm2 = (byte)(r & 1);
-                var rm3 = (byte)(r % 3);
-                var rd2 = (byte)((r >> 1) & 1); // only the parity of row/2 matters (Pattern4)
                 ulong w0 = 0, w1 = 0, w2 = 0;
                 for (var c = 0; c < 192; c++)
                 {
-                    var cm2 = (byte)(c & 1);
-                    var cm3 = (byte)(c % 3);
-                    var cd3 = (byte)(c / 3);
-                    var hit = p switch
-                    {
-                        0 => MaskPattern.Pattern0(rm2, cm2),
-                        1 => MaskPattern.Pattern1(rm2),
-                        2 => MaskPattern.Pattern2(cm3),
-                        3 => MaskPattern.Pattern3(rm3, cm3),
-                        4 => MaskPattern.Pattern4(rd2, cd3),
-                        5 => MaskPattern.Pattern5(rm2, cm2, rm3, cm3),
-                        6 => MaskPattern.Pattern6(rm2, cm2, rm3, cm3),
-                        7 => MaskPattern.Pattern7(rm2, cm2, r, c),
-                        _ => false
-                    };
-                    if (hit)
+                    if (MaskHit(p, r, c))
                     {
                         if (c < 64) w0 |= 1ul << c;
                         else if (c < 128) w1 |= 1ul << (c - 64);
@@ -883,6 +866,29 @@ internal static partial class ModulePlacer
             }
         }
         return templates;
+    }
+
+    /// <summary>Whether pattern <paramref name="p"/> flips the module at (<paramref name="row"/>, <paramref name="col"/>), by the <see cref="MaskPattern"/> formulas.</summary>
+    private static bool MaskHit(int p, int row, int col)
+    {
+        var rm2 = (byte)(row & 1);
+        var rm3 = (byte)(row % 3);
+        var rd2 = (byte)((row >> 1) & 1); // only the parity of row/2 matters (Pattern4)
+        var cm2 = (byte)(col & 1);
+        var cm3 = (byte)(col % 3);
+        var cd3 = (byte)(col / 3);
+        return p switch
+        {
+            0 => MaskPattern.Pattern0(rm2, cm2),
+            1 => MaskPattern.Pattern1(rm2),
+            2 => MaskPattern.Pattern2(cm3),
+            3 => MaskPattern.Pattern3(rm3, cm3),
+            4 => MaskPattern.Pattern4(rd2, cd3),
+            5 => MaskPattern.Pattern5(rm2, cm2, rm3, cm3),
+            6 => MaskPattern.Pattern6(rm2, cm2, rm3, cm3),
+            7 => MaskPattern.Pattern7(rm2, cm2, row, col),
+            _ => false
+        };
     }
 
     private static ulong[] BuildMaskTemplates64()

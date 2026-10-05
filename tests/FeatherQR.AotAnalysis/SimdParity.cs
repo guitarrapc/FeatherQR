@@ -691,13 +691,14 @@ internal static class SimdParity
     }
 
     /// <summary>
-    /// Mask selection through the dispatch against the scalar bit-packed kernels: every single-word version and two larger ones, each ECC
-    /// level, random data and all-dark and all-light data (long runs, uniform blocks, an extreme balance). Same pattern, same matrix.
+    /// Mask selection through the dispatch, and the 128-bit transposed tier entered directly, against the scalar bit-packed kernels: every
+    /// version, each ECC level, random data and all-dark and all-light data (long runs, uniform blocks, an extreme balance). Same pattern,
+    /// same matrix.
     /// </summary>
     private static List<string> MaskCodeMismatches()
     {
         var mismatches = new List<string>();
-        foreach (var version in new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 40 })
+        for (var version = 1; version <= 40; version++)
         {
             var layout = ModulePlacer.GetLayout(version);
             var size = layout.Size;
@@ -721,6 +722,12 @@ internal static class SimdParity
                     var actualBest = ModulePlacer.MaskCode(actual, size, version, layout.BlockedMask, eccLevel);
                     if (actualBest != expectedBest || !expected.AsSpan().SequenceEqual(actual))
                         mismatches.Add($"version {version}, data {(fill < 4 ? "random" : fill == 4 ? "light" : "dark")}, {eccLevel}: pattern {actualBest}, expected {expectedBest}");
+                    if (size <= 64)
+                        continue;
+                    var transposed = (byte[])buffer.Clone();
+                    var transposedBest = ModulePlacer.MaskCodeTransposedVector128(transposed, size, version, layout.BlockedMask, eccLevel);
+                    if (transposedBest != expectedBest || !expected.AsSpan().SequenceEqual(transposed))
+                        mismatches.Add($"version {version}, data {(fill < 4 ? "random" : fill == 4 ? "light" : "dark")}, {eccLevel}, 128-bit transposed: pattern {transposedBest}, expected {expectedBest}");
                 }
             }
         }

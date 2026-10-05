@@ -119,7 +119,7 @@ internal sealed class SimdKernel
 /// A probe put the flag behind a property, an aggressively inlined property and a <see langword="static"/> <see langword="readonly"/> field: the JIT inlined the dispatch into its caller only when the dispatch read <c>IsSupported</c> itself. (ILC compiled all of them alike.)
 /// </para>
 /// <para>
-/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>), takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>) or takes a range it does not cover (<c>ModulePlacer.MaskCode</c>, whose 128-bit tier scores versions 1-11), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
+/// A lower tier also finishes the tail of a higher one (<c>ModuleBitPacker</c>), takes inputs too small for it (<c>PerspectiveGridSampler.Sample</c>) or takes inputs it does not pay on (<c>RmQRMatrixDecoder.ExtractCodewords</c> on WebAssembly, under 44 stream bits per eight columns), so a tier listed as runnable is one the dispatch can take, not the only one it takes; <see cref="SimdKernel.Active"/> is the most preferred of them.
 /// </para>
 /// </remarks>
 internal static class SimdTiers
@@ -215,7 +215,7 @@ internal static class SimdTiers
 
         // ModulePlacer.ExpandBits: message bits to module bytes; the SSSE3 step also finishes what the AVX2 step leaves
         new("ModulePlacerExpandBits", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3)),
-        // ModulePlacer.MaskCode: mask scoring and selection; the 128-bit tier scores versions 1-11, its popcount SSSE3 on x64 and PackedSimd on WebAssembly
+        // ModulePlacer.MaskCode: mask scoring and selection; the 128-bit tier scores every version (12-40 transposed), its popcount SSSE3 on x64 and PackedSimd on WebAssembly
         new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Ssse3, Isa.Vector128 && Isa.Ssse3), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // AlignmentPatternFinder.ScanRowMask: a row's dark bitmask for the alignment search
         new("AlignmentRowMask", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),

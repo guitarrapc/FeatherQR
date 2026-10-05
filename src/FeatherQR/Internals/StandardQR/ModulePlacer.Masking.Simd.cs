@@ -10,12 +10,15 @@ namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// 128-bit mask pattern selection for the targets with neither the AVX2 nor the ARM64 tier: x64 without AVX2, and WebAssembly.
-/// Versions 1-11 run the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call. Larger versions keep the
-/// scalar bit-packed paths, which the AVX2 tier's SoA scorers on two rows a vector did not beat on either target.
+/// Versions 1-11 run the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call; versions 12-40 the
+/// transposed scorer (ModulePlacer.Masking.Transposed.Vector128.cs), which took 0.39 to 0.59 of the scalar bit-packed paths' time at
+/// versions 12 to 27 and 0.56 to 0.71 at 28 to 40 on the JIT without AVX2, default NativeAOT, WebAssembly AOT and interpreted
+/// (2026-10-05).
 /// </summary>
 /// <remarks>
-/// Popcounts accumulate in 16-bit lanes and reduce once a group: WebAssembly's byte popcount and pairwise widening add, the nibble-table
-/// popcount and psadbw with SSSE3, a SWAR count of each 16-bit lane elsewhere.
+/// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
+/// candidates in the single-word tier, one candidate in the transposed one): WebAssembly's byte popcount and pairwise widening add, the
+/// nibble-table popcount and psadbw with SSSE3, a SWAR count of each 16-bit lane elsewhere.
 /// </remarks>
 internal static partial class ModulePlacer
 {
@@ -23,7 +26,7 @@ internal static partial class ModulePlacer
     internal static int MaskCodeVector128(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
         => size <= 64
             ? MaskCode64Vector128(buffer, size, version, blockedMask, eccLevel)
-            : MaskCode192(buffer, size, version, blockedMask, eccLevel);
+            : MaskCodeTransposedVector128(buffer, size, version, blockedMask, eccLevel);
 
     /// <summary>Nibble table for the SSSE3 popcount.</summary>
     private static readonly Vector128<byte> PopLut128 = Vector128.Create((byte)0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
