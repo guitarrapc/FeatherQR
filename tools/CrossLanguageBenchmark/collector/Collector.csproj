@@ -15,6 +15,7 @@
   <!-- The corpus is checked through the CLI's own calls, and drawn by the test suite's renderer. -->
   <ItemGroup>
     <Compile Include="..\dotnet\cli\Operations.cs" Link="Shared\Operations.cs" />
+    <Compile Include="..\dotnet\cli\Protocol.cs" Link="Shared\Protocol.cs" />
     <Compile Include="..\dotnet\cli\Pgm.cs" Link="Shared\Pgm.cs" />
     <Compile Include="..\..\..\tests\FeatherQR.Tests\Shared\NearestNeighbourRenderer.cs" Link="Shared\NearestNeighbourRenderer.cs" />
   </ItemGroup>

@@ -1,0 +1,97 @@
+name: Cross-language benchmark
+
+# Times FeatherQR against readers and writers outside .NET, as .github/docs/plans/cross-language-benchmark-plan.md describes.
+# Manual only: a full run takes hours, a hosted runner is noisy, and it answers a question rather than gating a change.
+# Only ratios within one run are results, since a hosted runner's CPU model changes between jobs: hold two runs of one commit
+# against each other with the collector's agree command.
+
+on:
+  workflow_dispatch:
+    inputs:
+      clis:
+        description: "CLIs to run, comma-separated (empty: every CLI in clis.tsv the image has on that architecture)"
+        type: string
+        default: ""
+      filter:
+        description: "Manifest entries to keep, comma-separated key substrings such as decode-image or /qr- (empty: all 33)"
+        type: string
+        default: ""
+      rounds:
+        description: "Rounds of the run"
+        type: string
+        default: "5"
+      cold:
+        description: "Also time the cold first call"
+        type: boolean
+        default: true
+      outside:
+        description: "Also run the outside check, which takes hours with every CLI, so narrow it with clis or filter"
+        type: boolean
+        default: false
+
+jobs:
+  benchmark:
+    name: benchmark (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: linux-x64
+          - os: ubuntu-24.04-arm
+            arch: linux-arm64
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      # The image is built in every run, not cached or published: from pinned sources and toolchains it takes minutes,
+      # against hours of measuring, and every result records the image ID it ran.
+      - name: Build the image
+        shell: bash
+        run: docker build -f tools/CrossLanguageBenchmark/Dockerfile --build-arg "XLANG_COMMIT=${GITHUB_SHA}" -t featherqr-xlang .
+      - name: Measure
+        shell: bash
+        env:
+          CLIS: ${{ inputs.clis }}
+          FILTER: ${{ inputs.filter }}
+          ROUNDS: ${{ inputs.rounds }}
+          COLD: ${{ inputs.cold }}
+          OUTSIDE: ${{ inputs.outside }}
+        run: |
+          set -uo pipefail
+          out="${RUNNER_TEMP}/xlang"
+          mkdir -p "$out"
+          image=$(docker image inspect -f '{{.Id}}' featherqr-xlang)
+          # Two CPUs and fixed memory, as on the development box. lscpu, the kernel and the image land in every result file.
+          d=(docker run --rm --cpuset-cpus 2,3 --memory 4g -e "XLANG_IMAGE=${image}" -v "${out}:/out" featherqr-xlang)
+          select=()
+          if [ -n "$CLIS" ]; then select+=(--cli "$CLIS"); fi
+          if [ -n "$FILTER" ]; then select+=(--filter "$FILTER"); fi
+
+          # The collector exits 1 when an entry fails verification, which is a result (the ZXingCpp package's Unicode encode
+          # always does), and above 1 when it could not measure.
+          worst=0
+          step() {
+            local code=0
+            "${d[@]}" "$@" || code=$?
+            if [ "$code" -eq 1 ]; then echo "::warning::$1: an entry failed verification, see its report"; fi
+            if [ "$code" -gt "$worst" ]; then worst=$code; fi
+          }
+          step run "${select[@]}" --rounds "$ROUNDS" --out /out/run 2> "${out}/run.log"
+          if [ "$COLD" = "true" ]; then step cold "${select[@]}" --out /out/cold 2> "${out}/cold.log"; fi
+          if [ "$OUTSIDE" = "true" ]; then
+            step outside "${select[@]}" --run /out/run/run.json --out /out/outside 2> "${out}/outside.log"
+            step compare --run /out/run/run.json --outside /out/outside/outside.json --out /out/compare > /dev/null
+          fi
+          if [ -f "${out}/run/run.md" ]; then cat "${out}/run/run.md" >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ "$worst" -gt 1 ]; then exit "$worst"; fi
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: ${{ always() }}
+        with:
+          name: xlang-${{ matrix.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/xlang
+          if-no-files-found: error

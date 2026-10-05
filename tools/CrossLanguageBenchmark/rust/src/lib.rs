@@ -73,9 +73,14 @@ pub fn run(
 
     let mut sink: u64 = 0;
     match args.mode.as_str() {
-        "run" => {
+        "run" => 'run: {
+            let described = (operation.describe)();
             json.push(',');
-            json.push_str(&(operation.describe)());
+            json.push_str(&described);
+            // An input the library cannot handle is reported, not timed: a failing call costs what failing costs.
+            if described == FAILED {
+                break 'run;
+            }
             let warmup_ms: f64 = number(&args, "--warmup-ms", 3000.0);
             let batch_ms: f64 = number(&args, "--batch-ms", 20.0);
             let batches = number(&args, "--batches", 30.0) as usize;

@@ -34,6 +34,43 @@ RUN dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -p:XlangNa
     && if [ "$(uname -m)" = x86_64 ]; then dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -p:XlangNativeAot=true -p:IlcInstructionSet=x86-64-v3 -o /opt/xlang/featherqr-aot/x86-64-v3; fi \
     && find /opt/xlang/featherqr-aot -type f ! -name featherqr-cli -delete
 
+# C++: zxing-cpp v3.1.0, the commit the ZXingCpp package 0.5.2 ships, and libzint 2.16.0, the commit zxing-cpp bundles as its
+# writer, so libzint is built from zxing-cpp's own submodule. Built on the final stage's base, so the binaries find the same C++
+# runtime: the default build, plus x86-64-v3 on x64. The default build is also made as a shared libZXing with the C API, which the
+# ZXingCpp package's CLI loads in place of the package's own binary (zxingcpp-net-own), so the two differ only by the wrapper.
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29 AS cpp
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends g++=4:13.2.0-7ubuntu1 cmake=3.28.3-1build7 ninja-build=1.11.1-2 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /deps/zxing-cpp
+RUN git init -q \
+    && git fetch -q --depth 1 https://github.com/zxing-cpp/zxing-cpp.git 885baaf0840335153c1a487fa65f9c1388702c81 \
+    && git checkout -q FETCH_HEAD \
+    && git submodule update -q --init --depth 1 zint \
+    && test "$(git -C zint rev-parse HEAD)" = 55541e139e62b9209b71cd9b0ba9010cec28b1d9
+RUN cmake -S /deps/zxing-cpp -B /build/shared -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DZXING_C_API=ON \
+        -DZXING_READERS=ON -DZXING_WRITERS=NEW -DZXING_EXAMPLES=OFF > /dev/null \
+    && cmake --build /build/shared --target ZXing \
+    && mkdir -p /opt/xlang/cpp/shared && cp -L /build/shared/core/libZXing.so /opt/xlang/cpp/shared/libZXing.so
+COPY tools/CrossLanguageBenchmark/cpp/ /src/cpp/
+RUN for build in default x86-64-v3; do \
+        if [ $build = x86-64-v3 ] && [ "$(uname -m)" != x86_64 ]; then continue; fi; \
+        flags=""; if [ $build = x86-64-v3 ]; then flags="-march=x86-64-v3"; fi; \
+        cmake -S /src/cpp -B /build/$build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags" \
+            "-DXLANG_BUILD=${flags:-default}" -DZXING_SOURCE=/deps/zxing-cpp -DZINT_SOURCE=/deps/zxing-cpp/zint > /dev/null \
+        && cmake --build /build/$build --target zxingcpp-cli zint-cli \
+        && mkdir -p /opt/xlang/cpp/$build && cp /build/$build/zxingcpp-cli /build/$build/zint-cli /opt/xlang/cpp/$build/ \
+        || exit 1; \
+    done
+
+# JVM: BoofCV and ZXing at the exact versions jvm/pom.xml pins, packed into one jar by Maven 3.10.0 on JDK 25.
+# The final stage runs it on the JRE of the same release, copied from its own pinned image.
+FROM maven:3-eclipse-temurin-25-noble@sha256:4020041efbd0e5df7a6727b1c60f449bd59936df94153098c4adddfd88cd3e7a AS jvm
+WORKDIR /src
+COPY tools/CrossLanguageBenchmark/jvm/ ./
+RUN mvn -q -B package \
+    && mkdir -p /opt/xlang/jvm && cp target/xlang-jvm.jar /opt/xlang/jvm/
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29
 
 RUN apt-get update \
@@ -51,6 +88,7 @@ COPY tools/CrossLanguageBenchmark/ tools/CrossLanguageBenchmark/
 
 # The reference project is built here so its packages are restored; BenchmarkDotNet rebuilds it when it runs.
 RUN dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -o /opt/xlang/featherqr-jit \
+    && dotnet publish tools/CrossLanguageBenchmark/dotnet/zxingcpp -c Release -o /opt/xlang/zxingcpp-net \
     && dotnet publish tools/CrossLanguageBenchmark/collector -c Release -o /opt/xlang/collector \
     && dotnet build tools/CrossLanguageBenchmark/dotnet/reference -c Release \
     && dotnet /opt/xlang/collector/collector.dll corpus --out /opt/xlang/corpus \
@@ -58,6 +96,13 @@ RUN dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -o /opt/xl
 
 COPY --from=rust /opt/xlang/rust/ /opt/xlang/rust/
 COPY --from=aot /opt/xlang/featherqr-aot/ /opt/xlang/featherqr-aot/
+COPY --from=cpp /opt/xlang/cpp/ /opt/xlang/cpp/
+COPY --from=eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab /opt/java/openjdk /opt/java/openjdk
+COPY --from=jvm /opt/xlang/jvm/ /opt/xlang/jvm/
+
+# The ZXingCpp package's CLI again, with the package's libZXing replaced by the one built above from the same commit.
+RUN cp -r /opt/xlang/zxingcpp-net /opt/xlang/zxingcpp-net-own \
+    && cp /opt/xlang/cpp/shared/libZXing.so /opt/xlang/zxingcpp-net-own/runtimes/linux-$(dpkg --print-architecture | sed 's/amd64/x64/')/native/libZXing.so
 
 # The GC is set explicitly, so neither the container's CPU and memory limits nor the CPU's cache size choose it.
 # NativeAOT reads the same settings.

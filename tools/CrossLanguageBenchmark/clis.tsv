@@ -10,3 +10,16 @@ rqrr-default	/opt/xlang/rust/default/rqrr-cli
 rqrr-v3	/opt/xlang/rust/x86-64-v3/rqrr-cli
 fast_qr-default	/opt/xlang/rust/default/fast_qr-cli
 fast_qr-v3	/opt/xlang/rust/x86-64-v3/fast_qr-cli
+zxingcpp-default	/opt/xlang/cpp/default/zxingcpp-cli
+zxingcpp-v3	/opt/xlang/cpp/x86-64-v3/zxingcpp-cli
+zint-default	/opt/xlang/cpp/default/zint-cli
+zint-v3	/opt/xlang/cpp/x86-64-v3/zint-cli
+# zxing-cpp's .NET package as shipped, and with its native library swapped for zxingcpp-default's commit and flags built as a
+# shared library: against zxingcpp-default, the second is what the wrapper adds.
+zxingcpp-net	/opt/xlang/zxingcpp-net/zxingcpp-net-cli
+zxingcpp-net-own	/opt/xlang/zxingcpp-net-own/zxingcpp-net-cli
+# The JVM sizes its GC from the container's CPUs and memory, so G1 and a fixed 1 GiB heap are set, as .NET's are in the image.
+# The JVM CLIs also raise the run's warmup and batch length to their own floors (Protocol.java): BoofCV's image decode settled
+# only after 8 to 9 s, and the JVM's per-call time swings by about 5 % from second to second.
+boofcv	/opt/java/openjdk/bin/java	-XX:+UseG1GC	-Xms1g	-Xmx1g	-Dxlang.minWarmupMs=10000	-Dxlang.minBatchMs=100	-cp	/opt/xlang/jvm/xlang-jvm.jar	xlang.BoofCvCli
+zxing-java	/opt/java/openjdk/bin/java	-XX:+UseG1GC	-Xms1g	-Xmx1g	-Dxlang.minWarmupMs=10000	-Dxlang.minBatchMs=100	-cp	/opt/xlang/jvm/xlang-jvm.jar	xlang.ZxingCli

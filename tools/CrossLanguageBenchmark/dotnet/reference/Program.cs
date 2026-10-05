@@ -34,3 +34,29 @@ public class CorpusEntries
     [Benchmark]
     public ulong Run() => _call();
 }
+
+/// <summary>
+/// zxing-cpp's .NET package over the same corpus, through the calls its CLI makes: the wrapper's cost is this against the native zxing-cpp CLI.
+/// The package has no matrix decoder, so only the encode and image decode entries run.
+/// </summary>
+public class ZXingCppEntries
+{
+    private static string CorpusDir => Environment.GetEnvironmentVariable("XLANG_CORPUS") ?? "/opt/xlang/corpus";
+
+    public static IEnumerable<string> Keys() => ManifestEntry.Read(CorpusDir).Where(e => e.Op != "decode-matrix").Select(e => e.Key);
+
+    [ParamsSource(nameof(Keys))]
+    public string Case { get; set; } = "";
+
+    private Func<ulong> _call = default!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        var entry = ManifestEntry.Read(CorpusDir).Single(e => e.Key == Case);
+        _call = ZXingCppOperations.Load(entry.Op, entry.Symbology, Path.Combine(CorpusDir, entry.Input), entry.Ecc, entry.Version).Call;
+    }
+
+    [Benchmark]
+    public ulong Run() => _call();
+}
