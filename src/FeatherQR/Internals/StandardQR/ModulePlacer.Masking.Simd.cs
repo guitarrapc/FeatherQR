@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
 
@@ -18,7 +19,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// <remarks>
 /// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
 /// candidates in the single-word tier, one candidate in the transposed one): WebAssembly's byte popcount and pairwise widening add, the
-/// nibble-table popcount and psadbw with SSSE3, a SWAR count of each 16-bit lane elsewhere.
+/// nibble-table popcount and psadbw with SSSE3, cnt and uadalp on ARM64, a SWAR count of each 16-bit lane elsewhere. ARM64's transposed
+/// tier (ModulePlacer.Masking.Arm64.cs) takes these counts and the rules of ModulePlacer.Masking.Transposed.Vector128.cs.
 /// </remarks>
 internal static partial class ModulePlacer
 {
@@ -33,16 +35,28 @@ internal static partial class ModulePlacer
 
     /// <summary>Adds the set bits of <paramref name="v"/> to <paramref name="acc"/>; each 64-bit lane's total is the sum of its four 16-bit lanes.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<ushort> AddPopCount(Vector128<ushort> acc, Vector128<ulong> v)
+    internal static Vector128<ushort> AddPopCount(Vector128<ushort> acc, Vector128<ulong> v)
     {
         if (PackedSimd.IsSupported)
             return acc + PackedSimd.AddPairwiseWidening(PackedSimd.PopCount(v.AsByte()));
+        if (AdvSimd.Arm64.IsSupported)
+            return AdvSimd.AddPairwiseWideningAndAdd(acc, AdvSimd.PopCount(v.AsByte()));
         if (Ssse3.IsSupported)
         {
             var lowNibbles = Vector128.Create((byte)0x0F);
             var counts = Ssse3.Shuffle(PopLut128, v.AsByte() & lowNibbles) + Ssse3.Shuffle(PopLut128, Vector128.ShiftRightLogical(v, 4).AsByte() & lowNibbles);
             return acc + Sse2.SumAbsoluteDifferences(counts, Vector128<byte>.Zero);
         }
+        return AddPopCountSwar(acc, v);
+    }
+
+    /// <summary>
+    /// <see cref="AddPopCount"/> with none of its instructions: a SWAR count of each 16-bit lane. No CI build reaches it through the
+    /// dispatch (x64 without SSSE3 does), so the tests hold it directly.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static Vector128<ushort> AddPopCountSwar(Vector128<ushort> acc, Vector128<ulong> v)
+    {
         var x = v.AsUInt16();
         x -= (x >> 1) & Vector128.Create((ushort)0x5555);
         x = (x & Vector128.Create((ushort)0x3333)) + ((x >> 2) & Vector128.Create((ushort)0x3333));

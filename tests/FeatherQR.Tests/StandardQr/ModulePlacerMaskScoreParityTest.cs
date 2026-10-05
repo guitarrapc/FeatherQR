@@ -6,9 +6,9 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// Every mask scorer against the textbook penalty (<see cref="ModulePlacerMaskPackedParityTest.ReferenceScore"/>), score for score.
 /// The selection tests compare chosen patterns, which a scorer can get right for the wrong reason. These feed each tier's
-/// scorer whole matrices and compare the penalty itself: every single-word size, and the two- and three-word tiers at their
-/// first and last sizes and between. The AVX2 tier for versions 12-40 packs and transposes its own input, so its scores are
-/// held to the textbook in <see cref="ModulePlacerMaskTransposedParityTest"/>.
+/// scorer whole matrices and compare the penalty itself: every single-word size, and the scalar scorer of two- and three-word rows
+/// (CalculateScorePacked) at its first and last sizes and between. The transposed tiers for versions 12-40 (AVX2, 128-bit and ARM64) pack and transpose their own
+/// input, so their scores are held to the textbook in <see cref="ModulePlacerMaskTransposedParityTest"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,8 +19,8 @@ namespace FeatherQR.Tests;
 /// </para>
 /// <para>
 /// The early abort is held to its contract: with the bound at or above the score the result is the score, and below it the
-/// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. The
-/// ARM64 scorers have no abort.
+/// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. ARM64's
+/// single-word scorer has no abort; its transposed tier's abort is held in <see cref="ModulePlacerMaskTransposedParityTest"/>.
 /// </para>
 /// <para>
 /// Every call gets fresh row buffers: a scorer may use its rows as scratch for the column finder windows.
@@ -152,54 +152,6 @@ public class ModulePlacerMaskScoreParityTest
                 var rows = PackWords(matrix, size, 0);
                 var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(matrix, size);
                 await Assert.That(ModulePlacer.CalculateScore64AdvSimd(rows, new ulong[size], new ulong[64], new ulong[64], size)).IsEqualTo(expected).Because($"size {size}, {name}");
-            }
-        }
-    }
-
-    [Test]
-    public async Task Score128AdvSimd_MatchesTextbook()
-    {
-        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
-        {
-            Skip.Test("AdvSimd.Arm64 not supported on this machine");
-            return;
-        }
-
-        foreach (var size in TwoWordSizes)
-        {
-            foreach (var (name, matrix) in Matrices(size))
-            {
-                var w0 = PackWords(matrix, size, 0);
-                var w1 = PackWords(matrix, size, 1);
-                var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(matrix, size);
-                var score = ModulePlacer.CalculateScore128AdvSimd(w0, w1, new ulong[size], new ulong[size], new ulong[size], new ulong[size], new ulong[size], new ulong[size], size);
-                await Assert.That(score).IsEqualTo(expected).Because($"size {size}, {name}");
-            }
-        }
-    }
-
-    [Test]
-    public async Task Score192AdvSimd_MatchesTextbook()
-    {
-        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
-        {
-            Skip.Test("AdvSimd.Arm64 not supported on this machine");
-            return;
-        }
-
-        foreach (var size in ThreeWordSizes)
-        {
-            foreach (var (name, matrix) in Matrices(size))
-            {
-                var w0 = PackWords(matrix, size, 0);
-                var w1 = PackWords(matrix, size, 1);
-                var w2 = PackWords(matrix, size, 2);
-                var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(matrix, size);
-                var score = ModulePlacer.CalculateScore192AdvSimd(w0, w1, w2,
-                    new ulong[size], new ulong[size], new ulong[size],
-                    new ulong[size], new ulong[size], new ulong[size],
-                    new ulong[size], new ulong[size], new ulong[size], size);
-                await Assert.That(score).IsEqualTo(expected).Because($"size {size}, {name}");
             }
         }
     }

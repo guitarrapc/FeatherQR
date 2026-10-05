@@ -5,7 +5,8 @@ namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Transposed mask selection for versions 12-40: every penalty rule runs between whole words of neighbouring rows. The tables and the
-/// scalar steps both tiers share: AVX2 (ModulePlacer.Masking.Transposed.X86.cs) and 128-bit vectors (ModulePlacer.Masking.Transposed.Vector128.cs).
+/// scalar steps the tiers share: AVX2 (ModulePlacer.Masking.Transposed.X86.cs), 128-bit vectors (ModulePlacer.Masking.Transposed.Vector128.cs),
+/// and ARM64 (ModulePlacer.Masking.Arm64.cs), which masks and scores with the 128-bit tier's code.
 /// </summary>
 /// <remarks>
 /// <para>

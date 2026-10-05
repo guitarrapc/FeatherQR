@@ -19,7 +19,8 @@ public class SimdTiersTest
 {
     /// <summary>
     /// The files whose flag reads are each kernel's dispatch, paths under src/FeatherQR/Internals.
-    /// A kernel added to <see cref="SimdTiers.Report"/> needs its files here.
+    /// A kernel added to <see cref="SimdTiers.Report"/> needs its files here. Two kernels that dispatch in one file can each name their
+    /// dispatch method (<c>file#Method</c>), so a read there belongs to that kernel alone.
     /// </summary>
     private static readonly Dictionary<string, string[]> KernelFiles = new()
     {
@@ -37,6 +38,8 @@ public class SimdTiersTest
         ["PerspectiveGridSampler"] = ["ImageDecoders/PerspectiveGridSampler.cs", "ImageDecoders/VectorCast.Simd.cs"],
         ["ModulePlacerExpandBits"] = ["StandardQR/ModulePlacer.ExpandBits.cs"],
         ["ModulePlacerMaskCode"] = ["StandardQR/ModulePlacer.Masking.cs", "StandardQR/ModulePlacer.Masking.Simd.cs"],
+        ["QRAlphanumericWriter"] = ["StandardQR/QRBinaryEncoder.cs#WriteAlphanumericData"],
+        ["QRNumericWriter"] = ["StandardQR/QRBinaryEncoder.cs#WriteNumericData"],
         ["AlignmentRowMask"] = ["StandardQR/AlignmentPatternFinder.cs", "StandardQR/AlignmentPatternFinder.Simd.cs"],
         ["QRSampleGridPiecewise"] = ["StandardQR/QRImageDecoder.PiecewiseSampling.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.X86.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.Arm64.cs", "StandardQR/QRImageDecoder.PiecewiseSampling.Vector128.cs", "ImageDecoders/VectorCast.Simd.cs"],
         ["StructuredAppendLanes"] = ["StandardQR/StructuredAppendPlanner.Lanes.cs", "StandardQR/StructuredAppendPlanner.Lanes.Arm64.cs", "StandardQR/StructuredAppendPlanner.Lanes.Simd.cs", "StandardQR/StructuredAppendPlanner.Lanes.Vector256.cs"],
@@ -82,9 +85,12 @@ public class SimdTiersTest
 
         await Assert.That(reported.Distinct().Count()).IsEqualTo(reported.Length);
         await Assert.That(KernelFiles.Keys.Order(StringComparer.Ordinal).ToArray()).IsEquivalentTo(reported, CollectionOrdering.Matching);
-        foreach (var file in KernelFiles.Values.SelectMany(f => f).Distinct())
+        foreach (var spec in KernelFiles.Values.SelectMany(f => f).Distinct())
         {
-            await Assert.That(File.Exists(Path.Combine(InternalsRoot(), file))).IsTrue().Because(file);
+            var (file, method) = ParseSpec(spec);
+            await Assert.That(File.Exists(Path.Combine(InternalsRoot(), file))).IsTrue().Because(spec);
+            if (method is not null)
+                await Assert.That(MethodLines(File.ReadAllText(Path.Combine(InternalsRoot(), file)), method)).IsNotNull().Because(spec);
         }
     }
 
@@ -98,20 +104,24 @@ public class SimdTiersTest
     public async Task KernelFiles_ReadOnlyTheFlagsOfTheirDeclaredTiers()
     {
         var root = InternalsRoot();
-        var tiersByFile = SimdTiers.Report()
-            .SelectMany(k => KernelFiles[k.Name].Select(f => (File: f, k.Tiers)))
-            .GroupBy(x => x.File, x => x.Tiers)
-            .ToDictionary(g => g.Key, g => g.SelectMany(t => t).Select(t => t.Tier).ToHashSet());
+        // per file, the reads each kernel's tiers allow, over the whole file or over its dispatch method's lines
+        var scopesByFile = SimdTiers.Report()
+            .SelectMany(k => KernelFiles[k.Name].Select(spec => (Spec: ParseSpec(spec), Allowed: k.Tiers.SelectMany(t => TierReads[t.Tier].Allowed))))
+            .GroupBy(x => x.Spec.File)
+            .ToDictionary(g => g.Key, g => g.ToList());
         var violations = new List<string>();
         foreach (var file in Directory.EnumerateFiles(Path.Combine(root, ".."), "*.cs", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
             if (relative.StartsWith("../obj/", StringComparison.Ordinal) || relative.StartsWith("../bin/", StringComparison.Ordinal) || NonKernelFiles.Contains(relative))
                 continue;
-            var allowed = tiersByFile.TryGetValue(relative, out var tiers) ? tiers.SelectMany(t => TierReads[t].Allowed).ToHashSet() : [];
-            foreach (var (line, read) in FindIsaReads(File.ReadAllText(file)))
+            var source = File.ReadAllText(file);
+            var scopes = scopesByFile.TryGetValue(relative, out var list)
+                ? list.Select(s => (Lines: s.Spec.Method is null ? (0, int.MaxValue) : MethodLines(source, s.Spec.Method) ?? (0, -1), s.Allowed)).ToList()
+                : [];
+            foreach (var (line, read) in FindIsaReads(source))
             {
-                if (!allowed.Contains(read))
+                if (!scopes.Any(s => line >= s.Lines.Item1 && line <= s.Lines.Item2 && s.Allowed.Contains(read)))
                     violations.Add($"{relative}:{line} reads {read}");
             }
         }
@@ -127,7 +137,7 @@ public class SimdTiersTest
         var missing = new List<string>();
         foreach (var kernel in SimdTiers.Report())
         {
-            var reads = KernelFiles[kernel.Name].SelectMany(f => FindIsaReads(File.ReadAllText(Path.Combine(root, f)))).Select(r => r.Read).ToHashSet();
+            var reads = KernelFiles[kernel.Name].SelectMany(spec => ReadsIn(root, spec)).Select(r => r.Read).ToHashSet();
             foreach (var (tier, _) in kernel.Tiers)
             {
                 foreach (var read in TierReads[tier].Required.Where(r => !reads.Contains(r)))
@@ -226,6 +236,68 @@ public class SimdTiersTest
         var source = "/* if (Avx2.IsSupported) */ var a = 1;\n/*\n Vector128.IsHardwareAccelerated\n*/\nif (Sse2.IsSupported) { }";
 
         await Assert.That(FindIsaReads(source).ToArray()).IsEquivalentTo(new[] { (5, "Sse2") }, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task MethodLines_SpanTheDeclarationAndItsBody()
+    {
+        // Other has an expression body and a block-bodied member after it, so its declaration is passed over rather than read through
+        // to Next's braces.
+        var source = "class C\n{\n    // void Run() in a comment\n    internal static void Run() => Run(0);\n    private void Run(int a)\n    {\n        if (a > 0) { a--; }\n    }\n\n    internal static int Other() => 1;\n    private void Next()\n    {\n    }\n}";
+
+        await Assert.That(MethodLines(source, "Run")).IsEqualTo((5, 8));
+        await Assert.That(MethodLines(source, "Other")).IsNull();
+        await Assert.That(MethodLines(source, "Next")).IsEqualTo((11, 13));
+        await Assert.That(MethodLines(source, "Missing")).IsNull();
+    }
+
+    /// <summary>The flag reads of a <see cref="KernelFiles"/> entry: the whole file, or the lines of its dispatch method.</summary>
+    private static IEnumerable<(int Line, string Read)> ReadsIn(string root, string spec)
+    {
+        var (file, method) = ParseSpec(spec);
+        var source = File.ReadAllText(Path.Combine(root, file));
+        var (start, end) = method is null ? (0, int.MaxValue) : MethodLines(source, method) ?? throw new InvalidOperationException($"{spec}: no such method");
+        return FindIsaReads(source).Where(r => r.Line >= start && r.Line <= end);
+    }
+
+    private static (string File, string? Method) ParseSpec(string spec)
+    {
+        var hash = spec.IndexOf('#');
+        return hash < 0 ? (spec, null) : (spec[..hash], spec[(hash + 1)..]);
+    }
+
+    /// <summary>
+    /// The 1-based first and last line of the first member that declares <paramref name="method"/> on a line without <c>=&gt;</c>, through
+    /// the brace that closes its body, or null. Braces are counted as written, so a dispatch method named here has none in a string or
+    /// char literal.
+    /// </summary>
+    private static (int Start, int End)? MethodLines(string source, string method)
+    {
+        var lines = StripComments(source).Split('\n');
+        var declaration = new Regex($@"^\s*(?:(?:private|internal|public|protected|static|unsafe)\s+)+[\w<>\[\],? ]+\s{Regex.Escape(method)}\s*\(", RegexOptions.CultureInvariant);
+        var start = Array.FindIndex(lines, l => declaration.IsMatch(l) && !l.Contains("=>", StringComparison.Ordinal));
+        if (start < 0)
+            return null;
+        var depth = 0;
+        var opened = false;
+        for (var i = start; i < lines.Length; i++)
+        {
+            foreach (var c in lines[i])
+            {
+                if (c == '{')
+                {
+                    depth++;
+                    opened = true;
+                }
+                else if (c == '}')
+                {
+                    depth--;
+                }
+            }
+            if (opened && depth == 0)
+                return (start + 1, i + 1);
+        }
+        return null;
     }
 
     /// <summary>1-based line and flag of every instruction-set read outside a comment: <c>Avx2</c>, <c>Gfni.V256</c>, <c>AdvSimd.Arm64</c>, <c>Vector128</c>, <c>HasFastPext</c>.</summary>

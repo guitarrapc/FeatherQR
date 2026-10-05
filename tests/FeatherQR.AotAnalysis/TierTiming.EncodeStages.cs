@@ -36,6 +36,9 @@ internal static partial class TierTiming
         .. QRStageShapes("qr-v39-byte-H", () => DeterministicText(1200), QREccLevel.H, 39),
         .. QRStageShapes("qr-v40-alnum-L", () => Pick(4296, AlphanumericAlphabet), QREccLevel.L, 40),
         .. QRStageShapes("qr-v40-num-L", () => Pick(7089, "0123456789"), QREccLevel.L, 40),
+        // Structured Append sets of one mode, where the payload writer runs over the whole text: the writer plan's set shapes.
+        .. SetStageShapes("sa-alnum-30000-L", () => Pick(30000, AlphanumericAlphabet), QREccLevel.L, 7),
+        .. SetStageShapes("sa-num-50000-L", () => Pick(50000, "0123456789"), QREccLevel.L, 8),
         .. MicroStageShapes("micro-m2-num", "0123456789", MicroQREccLevel.L, MicroQRVersion.M2),
         .. MicroStageShapes("micro-m3-alnum", "HELLO WORLD 14", MicroQREccLevel.L, MicroQRVersion.M3),
         .. MicroStageShapes("micro-m4-byte", "bytes m4 mode", MicroQREccLevel.M, MicroQRVersion.M4),
@@ -112,6 +115,17 @@ internal static partial class TierTiming
             return encoder.ByteCount;
         }
 
+        /// <summary>The payload writer alone (no mode, count or padding) into <paramref name="target"/>: the writer's own share of the data stage.</summary>
+        public int WritePayload(byte[] target)
+        {
+            var encoder = new QRBinaryEncoder(target);
+            encoder.WriteData(Text, Analysis.EncodingMode, Analysis.EciMode, utf8Bom: false);
+            return encoder.BitPosition;
+        }
+
+        /// <summary>The payload's length in bits by the mode's definition, to check the payload row against.</summary>
+        public int PayloadBits() => PayloadBitsOf(Analysis.EncodingMode, Analysis.DataLength);
+
         public int ReedSolomon()
         {
             ReadOnlySpan<byte> data = Data.AsSpan(0, DataLength);
@@ -176,6 +190,7 @@ internal static partial class TierTiming
                 return Checked(() => QRCodeGenerator.TryGetVersion(s.Analysis.DataLength, s.Analysis.EncodingMode, s.Ecc, s.Analysis.EciMode, utf8BOM: false, out var version) ? version : -1, s.Version);
             }),
             new($"stage/{name}/data", () => { var s = stages.Value; return Checked(s.WriteData, s.DataLength); }),
+            new($"stage/{name}/payload", () => { var s = stages.Value; var target = new byte[s.Data.Length]; return Checked(() => s.WritePayload(target), s.PayloadBits()); }),
             new($"stage/{name}/rs", () => stages.Value.ReedSolomon),
             new($"stage/{name}/interleave", () => stages.Value.Interleave),
             new($"stage/{name}/place", () => { var s = stages.Value; return () => s.Place(s.Work); }),
@@ -206,6 +221,79 @@ internal static partial class TierTiming
     }
 
     private static int FramedLength(int coreSize, int quietZone) => (coreSize + 2 * quietZone) * (coreSize + 2 * quietZone);
+
+    /// <summary>A payload's length in bits: 10 per three digits (7 or 4 for the rest), 11 per two alphanumerics (6 for the last), 8 per byte.</summary>
+    private static int PayloadBitsOf(EncodingMode mode, int count) => mode switch
+    {
+        EncodingMode.Numeric => 10 * (count / 3) + (count % 3 == 2 ? 7 : count % 3 == 1 ? 4 : 0),
+        EncodingMode.Alphanumeric => 11 * (count / 2) + 6 * (count % 2),
+        EncodingMode.Byte => 8 * count,
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "no payload row for this mode"),
+    };
+
+    // ---- Structured Append ----
+
+    /// <summary>
+    /// One Structured Append set's chunks, as the planner splits them under <see cref="QRSegmentation.Single"/>: every chunk is one run
+    /// in the text's mode, so the payload row is the writer over the whole text in the set's chunks.
+    /// </summary>
+    private sealed class SetStages
+    {
+        public readonly string Text;
+        public readonly QREccLevel Ecc;
+        public readonly EncodingMode Mode;
+        public readonly int Count;
+        public readonly int[] ChunkEnds;
+        public readonly byte[] Target;
+
+        public SetStages(string text, QREccLevel ecc, int expectedSymbols)
+        {
+            Text = text;
+            Ecc = ecc;
+            Mode = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: false).EncodingMode;
+            Span<int> ends = stackalloc int[StructuredAppendPlanner.MaxSymbols];
+            if (!StructuredAppendPlanner.TryPlan(text, ecc, EciMode.Default, Mode, utf8Bom: false, QRSegmentation.Single, 1, 40, ends, out Count, out var version, out _)
+                || Count != expectedSymbols)
+                throw new InvalidOperationException($"{text.Length} characters at {ecc} are not a set of {expectedSymbols} symbols, the count the shape is named for");
+            ChunkEnds = ends.Slice(0, Count).ToArray();
+            Target = new byte[QRCodeConstants.GetEccInfo(version, ecc).TotalDataCodewords];
+
+            // The generator's set must be the planner's: as many symbols, each of the planned version.
+            var set = QRCodeGenerator.CreateStructuredAppend(text, ecc);
+            if (set.Length != Count || Array.Exists(set, symbol => symbol.Version != version))
+                throw new InvalidOperationException($"the planner's split no longer reproduces the set of {text.Length} characters at {ecc}");
+        }
+
+        public int WritePayloads()
+        {
+            var bits = 0;
+            for (int i = 0, from = 0; i < Count; from = ChunkEnds[i], i++)
+            {
+                var encoder = new QRBinaryEncoder(Target);
+                encoder.WriteData(Text.AsSpan(from, ChunkEnds[i] - from), Mode, EciMode.Default, utf8Bom: false);
+                bits += encoder.BitPosition;
+            }
+            return bits;
+        }
+
+        public int PayloadBits()
+        {
+            var bits = 0;
+            for (int i = 0, from = 0; i < Count; from = ChunkEnds[i], i++)
+                bits += PayloadBitsOf(Mode, ChunkEnds[i] - from);
+            return bits;
+        }
+    }
+
+    private static Shape[] SetStageShapes(string name, Func<string> text, QREccLevel ecc, int expectedSymbols)
+    {
+        var stages = new Lazy<SetStages>(() => new SetStages(text(), ecc, expectedSymbols));
+        return
+        [
+            new($"stage/{name}/e2e", () => { var s = stages.Value; return Checked(() => QRCodeGenerator.CreateStructuredAppend(s.Text, s.Ecc).Length, s.Count); }),
+            new($"stage/{name}/payload", () => { var s = stages.Value; return Checked(s.WritePayloads, s.PayloadBits()); }),
+        ];
+    }
 
     // ---- Micro QR ----
 

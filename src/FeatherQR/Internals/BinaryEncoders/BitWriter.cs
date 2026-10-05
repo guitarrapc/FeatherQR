@@ -9,7 +9,9 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// Used for QR code data encoding.
 /// </summary>
 /// <remarks>
-/// Bits are staged in a 64-bit accumulator and stored as 32-bit big-endian words once available, so up to 31 bits stay pending between writes.
+/// Bits are staged in a 64-bit accumulator and stored as big-endian words once available, so up to 31 bits stay pending between writes:
+/// 32-bit words from <see cref="Write"/> and from a <see cref="WriteWide"/> that brings 32 to 63 bits pending, 64-bit words from
+/// <see cref="Write64"/> and from a <see cref="WriteWide"/> that fills one.
 /// Buffer contents are only guaranteed after <see cref="Flush"/> (called by <see cref="GetData"/> and <see cref="WritePadBytes"/>); <see cref="BitPosition"/> and <see cref="ByteCount"/> are always valid.
 /// The caller guarantees the buffer is large enough for all writes; exceeding it surfaces as an out-of-range exception from the underlying span access.
 /// </remarks>
@@ -97,6 +99,44 @@ internal ref struct BitWriter
         BinaryPrimitives.WriteUInt64BigEndian(_buffer.Slice(_bytePosition), combined);
         _bytePosition += 8;
         _accumulator = _accumulatorBits == 0 ? 0UL : value << (64 - _accumulatorBits);
+    }
+
+    /// <summary>
+    /// Writes 1 to 56 bits at once (several payload fields in one append).
+    /// </summary>
+    /// <param name="value">The bits, already masked to <paramref name="bitCount"/>; the MSB of the range is written first.</param>
+    /// <param name="bitCount">Number of bits to write (1-56).</param>
+    /// <remarks>
+    /// The pending bits and the value may pass 64 bits. Then the first 64 are stored as one 8-byte word and the rest stays pending (at most
+    /// 23 bits), so, as with <see cref="Write"/>, every store holds written bits only and lands inside a buffer sized for them.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteWide(ulong value, int bitCount)
+    {
+        Debug.Assert(bitCount >= 1 && bitCount <= 56, "bitCount must be between 1 and 56");
+        Debug.Assert(value >> bitCount == 0, "value must be masked to bitCount bits");
+
+        var end = _accumulatorBits + bitCount;
+        if (end < 64)
+        {
+            _accumulator |= value << (64 - end);
+            _accumulatorBits = end;
+            if (end >= 32)
+            {
+                BinaryPrimitives.WriteUInt32BigEndian(_buffer.Slice(_bytePosition), (uint)(_accumulator >> 32));
+                _bytePosition += 4;
+                _accumulator <<= 32;
+                _accumulatorBits = end - 32;
+            }
+        }
+        else
+        {
+            var rest = end - 64;
+            BinaryPrimitives.WriteUInt64BigEndian(_buffer.Slice(_bytePosition), _accumulator | (value >> rest));
+            _bytePosition += 8;
+            _accumulatorBits = rest;
+            _accumulator = rest == 0 ? 0UL : value << (64 - rest);
+        }
     }
 
     /// <summary>

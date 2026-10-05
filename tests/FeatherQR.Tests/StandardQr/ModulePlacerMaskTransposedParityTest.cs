@@ -5,7 +5,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The transposed mask tiers (versions 12-40), on AVX2 and on 128-bit vectors: every candidate's score against the textbook score, the
+/// The transposed mask tiers (versions 12-40), on AVX2, on 128-bit vectors and on ARM64: every candidate's score against the textbook score, the
 /// early abort's contract, and the chosen pattern and masked matrix against the scalar kernel, at every version the tiers serve and every
 /// ECC level.
 /// </summary>
@@ -18,8 +18,10 @@ namespace FeatherQR.Tests;
 /// across the 64-bit word boundaries in both orientations.
 /// </para>
 /// <para>
-/// Each route is entered directly, so an x64 machine with AVX2 runs both: the dispatch takes the 128-bit tier only on x64 without AVX2 and
-/// on WebAssembly, where no test runs (the timing mode's parity check holds those builds).
+/// Each route is entered directly, so an x64 machine with AVX2 runs the AVX2 and 128-bit routes, and an ARM64 machine the 128-bit and ARM64
+/// routes: the dispatch takes the 128-bit tier only on x64 without AVX2 and on WebAssembly, where no test runs (the timing mode's parity
+/// check holds those builds). The ARM64 route scores with the 128-bit tier's rules and its own row packing and winner unpack, and on ARM64
+/// the 128-bit route's popcount is NEON's too.
 /// </para>
 /// </remarks>
 public class ModulePlacerMaskTransposedParityTest
@@ -28,6 +30,7 @@ public class ModulePlacerMaskTransposedParityTest
     {
         Avx2,
         Vector128,
+        AdvSimd,
     }
 
     public static IEnumerable<int> Versions() => Enumerable.Range(12, 29);
@@ -154,7 +157,7 @@ public class ModulePlacerMaskTransposedParityTest
     public async Task Tables_StayUnderTheirBudget()
     {
         // Printed so a growth shows in the log: each version's tables are its unblocked rows and columns, two or three words each, shared by
-        // both tiers.
+        // every transposed tier.
         foreach (var version in Versions())
         {
             var bytes = ModulePlacer.TransposedTableBytes(version);
@@ -167,21 +170,26 @@ public class ModulePlacerMaskTransposedParityTest
     {
         Route.Avx2 => System.Runtime.Intrinsics.X86.Avx2.IsSupported,
         Route.Vector128 => System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated,
+        Route.AdvSimd => System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported,
         _ => false,
     };
 
     private static void Score(Route route, byte[] data, int version, QREccLevel ecc, int abortAbove, int[] scores)
     {
-        if (route == Route.Avx2)
-            ModulePlacer.ScoreCandidatesTransposed(data, version, ecc, abortAbove, scores);
-        else
-            ModulePlacer.ScoreCandidatesTransposedVector128(data, version, ecc, abortAbove, scores);
+        switch (route)
+        {
+            case Route.Avx2: ModulePlacer.ScoreCandidatesTransposed(data, version, ecc, abortAbove, scores); break;
+            case Route.Vector128: ModulePlacer.ScoreCandidatesTransposedVector128(data, version, ecc, abortAbove, scores); break;
+            default: ModulePlacer.ScoreCandidatesTransposedAdvSimd(data, version, ecc, abortAbove, scores); break;
+        }
     }
 
-    private static int Select(Route route, byte[] buffer, int size, int version, byte[] blockedMask, QREccLevel ecc)
-        => route == Route.Avx2
-            ? ModulePlacer.MaskCodeTransposed(buffer, size, version, blockedMask, ecc)
-            : ModulePlacer.MaskCodeTransposedVector128(buffer, size, version, blockedMask, ecc);
+    private static int Select(Route route, byte[] buffer, int size, int version, byte[] blockedMask, QREccLevel ecc) => route switch
+    {
+        Route.Avx2 => ModulePlacer.MaskCodeTransposed(buffer, size, version, blockedMask, ecc),
+        Route.Vector128 => ModulePlacer.MaskCodeTransposedVector128(buffer, size, version, blockedMask, ecc),
+        _ => ModulePlacer.MaskCodeTransposedAdvSimd(buffer, size, version, blockedMask, ecc),
+    };
 
     /// <summary>Candidate <paramref name="pattern"/> as the final symbol: the mask on the data area, its format information, the version information.</summary>
     private static byte[] Candidate(byte[] data, ModulePlacer.PlacementLayout layout, int version, QREccLevel ecc, int pattern)

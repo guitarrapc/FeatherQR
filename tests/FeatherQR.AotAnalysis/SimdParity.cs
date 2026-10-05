@@ -41,6 +41,7 @@ internal static class SimdParity
         failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
         failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
         failures += Report("ModulePlacer.ApplyMaskPattern", MaskApplyMismatches);
+        failures += Report("QRBinaryEncoder payload writers", PayloadWriterMismatches);
         failures += Report("ModeSegmenter.ComputeCostsLanes", SegmenterLaneMismatches);
         failures += Report("StructuredAppendPlanner.WalkLanes", WalkLaneMismatches);
         failures += Report("EccBinaryDecoder.ComputeSyndromesVector128", SyndromeMismatches);
@@ -732,6 +733,116 @@ internal static class SimdParity
             }
         }
         return mismatches;
+    }
+
+    /// <summary>
+    /// The Alphanumeric and Numeric payload writers, every tier this build runs entered directly, against the writers they replaced
+    /// (<see cref="TierTiming.OldAlphanumeric"/>, <see cref="TierTiming.OldNumeric"/>): lengths 0 to 300 and long runs, after 0 to 30 bits
+    /// of a pattern (every third, every seventh past 300 characters), the whole buffer and the bit position, each run alone and as a slice of a longer text whose next characters are in
+    /// the alphabet (as a plan passes a segment, so a step that reads past the run writes it); for Alphanumeric also every character
+    /// outside the alphabet up to 0xFF, and some past it, in the lanes of the vector steps, which must throw after the same bits. The old
+    /// writers read CharacterSets' value table too, so the table is held to the alphabet itself. The one run of the WebAssembly tier.
+    /// </summary>
+    private static List<string> PayloadWriterMismatches()
+    {
+        var mismatches = new List<string>();
+        var alphanumeric = new List<(string Name, TierTiming.PayloadWriter Write)> { ("scalar", QRBinaryEncoder.WriteAlphanumericScalar) };
+        var numeric = new List<(string Name, TierTiming.PayloadWriter Write)> { ("scalar", QRBinaryEncoder.WriteNumericScalar) };
+        // each as its dispatch asks: the Alphanumeric step blends with SSE4.1, the Numeric step needs SSSE3 alone
+        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported && System.Runtime.Intrinsics.X86.Sse41.IsSupported)
+            alphanumeric.Add(("ssse3", QRBinaryEncoder.WriteAlphanumericSsse3));
+        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+            numeric.Add(("ssse3", QRBinaryEncoder.WriteNumericSsse3));
+        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            alphanumeric.Add(("neon", QRBinaryEncoder.WriteAlphanumericAdvSimd));
+            numeric.Add(("neon", QRBinaryEncoder.WriteNumericAdvSimd));
+        }
+        if (System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported)
+        {
+            alphanumeric.Add(("wasm", QRBinaryEncoder.WriteAlphanumericPackedSimd));
+        }
+
+        const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+        var values = CharacterSets.AlphanumericValues;
+        for (var c = 0; c < values.Length; c++)
+        {
+            if (values[c] != alphabet.IndexOf((char)c))
+                mismatches.Add($"alphanumeric value table: U+{c:X4} holds {values[c]}, the alphabet gives {alphabet.IndexOf((char)c)}");
+        }
+
+        var lengths = Enumerable.Range(0, 301).Concat([511, 512, 513, 4296, 7089]);
+        foreach (var length in lengths)
+        {
+            var random = new Random(length);
+            var text = new string(Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray());
+            var digits = new string(Enumerable.Range(0, length).Select(_ => (char)('0' + random.Next(10))).ToArray());
+            var textInLonger = text + "ABCDEFGHIJKLMNOP";
+            var digitsInLonger = digits + "0123456789012345";
+            for (var align = 0; align < 32; align += length > 300 ? 7 : 3)
+            {
+                foreach (var (name, write) in alphanumeric)
+                {
+                    if (!SameRun(text, align, TierTiming.OldAlphanumeric, write))
+                        mismatches.Add($"alphanumeric {name}: length {length}, align {align}");
+                    if (!SameRun(textInLonger.AsSpan(0, length), align, TierTiming.OldAlphanumeric, write))
+                        mismatches.Add($"alphanumeric {name}: length {length} as a slice, align {align}");
+                }
+                foreach (var (name, write) in numeric)
+                {
+                    if (!SameRun(digits, align, TierTiming.OldNumeric, write))
+                        mismatches.Add($"numeric {name}: length {length}, align {align}");
+                    if (!SameRun(digitsInLonger.AsSpan(0, length), align, TierTiming.OldNumeric, write))
+                        mismatches.Add($"numeric {name}: length {length} as a slice, align {align}");
+                }
+            }
+        }
+
+        // every character outside the alphabet up to 0xFF, and some past it whose low byte is in it, in the lanes of the vector steps
+        var outside = Enumerable.Range(0, 256).Select(c => (char)c).Where(c => alphabet.IndexOf(c) < 0)
+            .Concat(['Ā', 'Ł', 'İ', '翿', '聁', 'Ａ', '￿']);
+        foreach (var bad in outside)
+        {
+            foreach (var (length, position) in new[] { (1, 0), (9, 0), (9, 7), (9, 8), (17, 0), (17, 9), (17, 15), (17, 16), (33, 31) })
+            {
+                var random = new Random(length * 41 + position + bad);
+                var chars = Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray();
+                chars[position] = bad;
+                foreach (var (name, write) in alphanumeric)
+                {
+                    if (!SameRun(new string(chars), 5, TierTiming.OldAlphanumeric, write))
+                        mismatches.Add($"alphanumeric {name}: U+{(int)bad:X4} at {position} of {length}");
+                }
+            }
+        }
+        return mismatches;
+
+        static bool SameRun(ReadOnlySpan<char> text, int align, TierTiming.PayloadWriter expected, TierTiming.PayloadWriter actual)
+        {
+            var a = Run(text, align, expected);
+            var b = Run(text, align, actual);
+            return a.Bits == b.Bits && a.Error == b.Error && a.Buffer.AsSpan().SequenceEqual(b.Buffer);
+        }
+
+        static (byte[] Buffer, int Bits, string? Error) Run(ReadOnlySpan<char> text, int align, TierTiming.PayloadWriter write)
+        {
+            var buffer = new byte[(text.Length * 6 + 64) / 8 + 16];
+            var writer = new FeatherQR.Internals.BinaryEncoders.BitWriter(buffer);
+            if (align > 0)
+                writer.Write(unchecked((int)0xA5C3_9E71) >> (32 - align), align);
+            string? error = null;
+            try
+            {
+                write(ref writer, text);
+            }
+            catch (ArgumentException e)
+            {
+                error = e.Message;
+            }
+            var bits = writer.BitPosition;
+            writer.Flush();
+            return (buffer, bits, error);
+        }
     }
 
     /// <summary>

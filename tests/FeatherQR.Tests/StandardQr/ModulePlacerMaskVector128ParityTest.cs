@@ -1,3 +1,4 @@
+using System.Runtime.Intrinsics;
 using TUnit.Assertions.Enums;
 using FeatherQR.Internals.StandardQR;
 
@@ -77,6 +78,32 @@ public class ModulePlacerMaskVector128ParityTest
         await Assert.That(() => ModulePlacer.MaskCode64Vector128(buffer, size, 1, blockedMask, (QREccLevel)4)).Throws<ArgumentOutOfRangeException>();
         var ok = ModulePlacer.MaskCode64Vector128((byte[])buffer.Clone(), size, 1, blockedMask, QREccLevel.M);
         await Assert.That(ok).IsBetween(0, 7);
+    }
+
+    [Test]
+    public async Task AddPopCount_SwarAndThisBuildsCount_AddEachLanesSetBits()
+    {
+        // Every CI leg counts with an instruction (SSSE3, NEON, WebAssembly), so the SWAR count the others fall back to is held here
+        // directly, beside the count this build takes. A lane's total is the sum of its four 16-bit lanes, as LaneTotals reads it.
+        var random = new Random(7);
+        ulong[] edges = [0, ulong.MaxValue, 0x8000000000000001, 0x5555555555555555, 0xAAAAAAAAAAAAAAAA, 0xFFFF0000FFFF0000, 0x00FF00FF00FF00FF];
+        var cases = edges.Select(e => (Low: e, High: ~e)).Concat(Enumerable.Range(0, 200).Select(_ => (Low: (ulong)random.NextInt64(), High: (ulong)random.NextInt64())));
+        var swar = System.Runtime.Intrinsics.Vector128<ushort>.Zero;
+        var build = System.Runtime.Intrinsics.Vector128<ushort>.Zero;
+        ulong expectedLow = 0, expectedHigh = 0;
+        foreach (var (low, high) in cases)
+        {
+            var v = System.Runtime.Intrinsics.Vector128.Create(low, high);
+            swar = ModulePlacer.AddPopCountSwar(swar, v);
+            build = ModulePlacer.AddPopCount(build, v);
+            expectedLow += (ulong)System.Numerics.BitOperations.PopCount(low);
+            expectedHigh += (ulong)System.Numerics.BitOperations.PopCount(high);
+        }
+
+        static ulong Total(System.Runtime.Intrinsics.Vector128<ushort> acc, int lane)
+            => (ulong)acc.GetElement(lane * 4) + acc.GetElement(lane * 4 + 1) + acc.GetElement(lane * 4 + 2) + acc.GetElement(lane * 4 + 3);
+        await Assert.That((Total(swar, 0), Total(swar, 1))).IsEqualTo((expectedLow, expectedHigh));
+        await Assert.That((Total(build, 0), Total(build, 1))).IsEqualTo((expectedLow, expectedHigh));
     }
 
     private static async Task AssertMatches(byte[] buffer, byte[] blockedMask, int size, int version, QREccLevel eccLevel)

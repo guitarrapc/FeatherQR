@@ -2,7 +2,7 @@
 
 For [encode-performance-plan.md](../encode-performance-plan.md), these measurements locate where the three encoders spend their time and test the candidate changes before any of them is written into the library. Nothing in the repository was changed to take them.
 
-All numbers are from one Windows box (Ryzen 9 7950X3D, Zen 4) under .NET 10.0.9 JIT (x86-64-v4, so the AVX2 tiers and GFNI run), BenchmarkDotNet 0.15.8. ARM64, WebAssembly and NativeAOT were not measured.
+Unless a section names another machine or build, the numbers are from one Windows box (Ryzen 9 7950X3D, Zen 4) under .NET 10.0.9 JIT (x86-64-v4, so the AVX2 tiers and GFNI run), BenchmarkDotNet 0.15.8. A section that also measures the JIT without AVX2, default NativeAOT or WebAssembly names that build, and the ARM64 sections are from an Apple M2.
 
 ## How they were taken
 
@@ -411,6 +411,122 @@ The rows the phase does not touch, the version 10 encode (the single-word tier),
 
 The timing mode's parity check, which now runs every version 1 to 40 through the dispatch and the 128-bit tier entered directly, matched on all four builds.
 
+These numbers are .NET 10's. On .NET 8 the transpose's one-row lane swap, `Vector128.Shuffle` with its index in a local, was not lowered to an instruction: the .NET 8 JIT does that only for an index it sees as a constant where it imports the call, and called the software `Shuffle` twice a row pair instead (x64, `DOTNET_TieredCompilation=0` disassembly; .NET 10 emits `vpermilpd`). Found in review (2026-10-05) and fixed by writing the index at each call. On .NET 8 x64 without AVX2, where the dispatch takes this tier, a small net8.0 harness (mask selection on a placed matrix, seven alternating rounds of one process per build, pinned) read 0.88 to 0.92 of the time before the fix at versions 12 to 40 through the dispatch; the AVX2 dispatch, which does not run it, read 0.97 to 1.07. ARM64's transposed tier runs the same transpose. Read in the library's own `Transpose64Vector128` on .NET 8.0.31 for ARM64, before the fix and after it (2026-10-05): NativeAOT 8 made the same two calls a row pair (`bl Vector128:Shuffle`), and two `tbl` after the fix. The JIT made no call. Its tier-1 code inlined the software `Shuffle`, storing the vector and its index to the stack and reading each lane back after a check on its index, and after the fix it is two `tbl` as well. Mask selection through the dispatch, the timing mode built for net8.0 on the Apple M2, before the fix against after it, five alternating rounds per build, one process each:
+
+| Version | JIT 8, before | JIT 8, after | NativeAOT 8, before | NativeAOT 8, after |
+|---|---|---|---|---|
+| 1 | 1.9 µs | 0.98 | 1.8 µs | 1.01 |
+| 6 | 3.0 µs | 0.98 | 3.0 µs | 1.01 |
+| 10 | 4.3 µs | 0.96 | 4.3 µs | 0.98 |
+| 12 | 8.2 µs | 0.95 | 8.8 µs | 0.92 |
+| 13 | 9.0 µs | 0.95 | 9.9 µs | 0.91 |
+| 14 | 8.7 µs | 0.93 | 9.3 µs | 0.93 |
+| 15 | 9.7 µs | 0.96 | 10.6 µs | 0.93 |
+| 16 | 9.6 µs | 0.95 | 10.3 µs | 0.95 |
+| 17 | 11.4 µs | 0.95 | 12.5 µs | 0.92 |
+| 18 | 11.2 µs | 0.95 | 11.9 µs | 0.90 |
+| 19 | 12.5 µs | 0.94 | 13.4 µs | 0.93 |
+| 20 | 12.2 µs | 0.98 | 13.3 µs | 0.93 |
+| 21 | 13.7 µs | 0.97 | 15.5 µs | 0.93 |
+| 22 | 13.6 µs | 0.96 | 14.6 µs | 0.94 |
+| 23 | 14.3 µs | 0.95 | 15.3 µs | 0.97 |
+| 24 | 14.0 µs | 0.97 | 15.8 µs | 0.95 |
+| 25 | 16.6 µs | 0.96 | 17.9 µs | 0.95 |
+| 26 | 15.2 µs | 1.00 | 16.8 µs | 0.95 |
+| 27 | 17.5 µs | 0.97 | 19.5 µs | 0.94 |
+| 28 | 24.4 µs | 0.94 | 25.6 µs | 0.94 |
+| 29 | 26.3 µs | 0.98 | 28.0 µs | 0.93 |
+| 30 | 25.5 µs | 0.97 | 27.7 µs | 0.91 |
+| 31 | 27.8 µs | 1.00 | 29.4 µs | 0.93 |
+| 32 | 26.7 µs | 0.99 | 28.7 µs | 0.93 |
+| 33 | 29.7 µs | 1.00 | 31.3 µs | 0.95 |
+| 34 | 28.6 µs | 1.01 | 30.9 µs | 0.95 |
+| 35 | 31.6 µs | 0.99 | 32.9 µs | 0.93 |
+| 36 | 31.2 µs | 0.97 | 32.3 µs | 0.96 |
+| 37 | 32.5 µs | 0.99 | 34.1 µs | 0.98 |
+| 38 | 32.9 µs | 0.98 | 34.8 µs | 0.96 |
+| 39 | 36.9 µs | 0.97 | 38.7 µs | 0.92 |
+| 40 | 34.3 µs | 0.97 | 37.3 µs | 0.93 |
+
+On NativeAOT 8 the fix took 0.90 to 0.98 of the time at versions 12 to 40, the median 0.93, while versions 1, 6 and 10, whose single-word tier has no transpose, read 0.98 to 1.01. On the JIT it read 0.93 to 1.01, the median 0.96 at versions 12 to 27 and 0.98 at 28 to 40, against 0.96 to 0.98 at versions 1, 6 and 10, so its gain there is inside the runs' drift: the inlined fallback cost little beside the calls.
+
+### ARM64 (2026-10-05)
+
+Phase 6 left ARM64 on its two- and three-word SoA tiers for want of a machine. Taken afterwards on an Apple M2 (osx-arm64, .NET 10.0.12) on the JIT and a default NativeAOT publish, with the .NET build servers shut down and base and change alternating one process each, a cell the median of the run medians. The Mac cannot pin a process.
+
+The 128-bit tier already ran on ARM64 through portable vectors, with a SWAR popcount, movemask packing and the scalar eight-module unpack. Entered directly beside the SoA tiers (the dispatch) in one process, three rounds for the first row and four for the others, at versions 12 to 27 and 28 to 40:
+
+| 128-bit transposed tier | JIT, 12-27 | JIT, 28-40 | NativeAOT, 12-27 | NativeAOT, 28-40 |
+|---|---|---|---|---|
+| As it stands | 1.30 to 1.39 | 0.62 to 0.65 | 1.24 to 1.32 | 0.72 to 0.78 |
+| NEON's cnt and uadalp for the popcount | 0.89 to 0.99 | 0.45 to 0.48 | 0.94 to 1.01 | 0.52 to 0.55 |
+| The same, rows packed and the winner unpacked sixteen modules a step (the NEON tier's helpers) | 0.85 to 0.92 | 0.43 to 0.45 | 0.88 to 0.96 | 0.51 to 0.53 |
+
+The last row shipped as ARM64's tier for versions 12 to 40, in place of the SoA tiers. Mask selection on a placed matrix, base `encode4` (a740295) to change, five alternating rounds per build:
+
+| Version | JIT, SoA tiers | JIT, transposed | NativeAOT, SoA tiers | NativeAOT, transposed |
+|---|---|---|---|---|
+| 12 | 8.2 µs | 0.94 | 8.5 µs | 0.97 |
+| 13 | 9.2 µs | 0.92 | 9.9 µs | 0.90 |
+| 14 | 9.1 µs | 0.91 | 9.7 µs | 0.87 |
+| 15 | 10.5 µs | 0.92 | 11.0 µs | 0.88 |
+| 16 | 10.2 µs | 0.94 | 11.0 µs | 0.90 |
+| 17 | 11.8 µs | 0.95 | 12.3 µs | 0.96 |
+| 18 | 11.5 µs | 0.94 | 11.4 µs | 0.98 |
+| 19 | 13.1 µs | 0.95 | 13.4 µs | 0.94 |
+| 20 | 12.6 µs | 0.92 | 13.1 µs | 0.95 |
+| 21 | 14.2 µs | 0.95 | 14.7 µs | 0.95 |
+| 22 | 14.0 µs | 0.94 | 14.3 µs | 0.95 |
+| 23 | 15.7 µs | 0.90 | 16.2 µs | 0.91 |
+| 24 | 14.9 µs | 0.92 | 15.9 µs | 0.93 |
+| 25 | 16.4 µs | 0.97 | 17.4 µs | 0.98 |
+| 26 | 16.5 µs | 0.91 | 16.9 µs | 0.93 |
+| 27 | 18.2 µs | 0.94 | 19.5 µs | 0.93 |
+| 28 | 53.5 µs | 0.44 | 46.3 µs | 0.52 |
+| 29 | 57.2 µs | 0.44 | 50.2 µs | 0.55 |
+| 30 | 57.0 µs | 0.43 | 48.3 µs | 0.53 |
+| 31 | 60.1 µs | 0.45 | 51.7 µs | 0.56 |
+| 32 | 60.2 µs | 0.42 | 52.3 µs | 0.52 |
+| 33 | 63.9 µs | 0.45 | 55.1 µs | 0.57 |
+| 34 | 63.7 µs | 0.43 | 54.3 µs | 0.53 |
+| 35 | 67.8 µs | 0.45 | 58.8 µs | 0.55 |
+| 36 | 67.8 µs | 0.43 | 58.5 µs | 0.53 |
+| 37 | 70.6 µs | 0.46 | 62.4 µs | 0.56 |
+| 38 | 71.1 µs | 0.45 | 68.9 µs | 0.48 |
+| 39 | 74.9 µs | 0.47 | 65.9 µs | 0.57 |
+| 40 | 73.1 µs | 0.46 | 64.8 µs | 0.53 |
+
+At every version the change took less time, 0.87 to 0.98 at 12 to 27 and 0.42 to 0.57 at 28 to 40. The SoA tiers stepped by 2.9 times from version 27 to 28 (18.2 to 53.5 µs on the JIT), where the three-word tier begins, and the transposed tier by 1.3 to 1.4 times. Versions 1 and 6, the single-word tier, read 1.00 to 1.04.
+
+End to end at quiet zone 0, seven alternating rounds per build:
+
+| Shape | JIT base | JIT change | NativeAOT base | NativeAOT change |
+|---|---|---|---|---|
+| V19-M, 620 bytes | 17.9 µs | 0.89 | 17.6 µs | 0.93 |
+| V26-M, 1,000 bytes | 25.1 µs | 0.88 | 23.9 µs | 0.92 |
+| V39-H, 1,200 bytes | 89.7 µs | 0.55 | 79.0 µs | 0.63 |
+| V40-L, 2,900 bytes | 93.8 µs | 0.56 | 82.2 µs | 0.62 |
+| V40-L, 2,900 bytes, class API | 98.3 µs | 0.58 | 85.5 µs | 0.64 |
+| V40-L, 4,296 alphanumeric | 97.3 µs | 0.55 | 84.4 µs | 0.63 |
+| V40-L, 7,089 digits | 96.6 µs | 0.55 | 84.8 µs | 0.60 |
+| Set, 30,000 alphanumeric | 826.4 µs | 0.64 | 735.9 µs | 0.70 |
+
+The rows the change does not touch read 0.97 to 1.02: versions 1, 6 and 10, the pinned-mask encodes at versions 26 and 40, Micro QR M4 and rMQR R17x139. A first NativeAOT run was set aside, since those rows read 0.91 to 0.94 in it, and the table is a second one. The timing mode's parity check matched on both builds, and 4,832 Standard QR symbols (lengths 0 to 64 and 70 to 7,329 of digits, the alphanumeric set and ASCII at every level, quiet zone 0 and 4, the class API, every version forced, every pinned pattern at every version) hashed the same before and after, and with hardware intrinsics off.
+
+With the encode shorter, the writers' share of it grew. The payload row over the end-to-end row with the portable writers, from the base side (`encode4`, 0fda781) of the NEON steps' end-to-end run below (Phase 7, ARM64), nine alternating rounds per build, beside phase 7's ARM64 table, taken with the SoA scorers:
+
+| Shape | JIT, SoA scorers | JIT, transposed | NativeAOT, SoA scorers | NativeAOT, transposed |
+|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 0.7 % | 0.7 % | 0.7 % | 0.7 % |
+| V10-M, 300 alphanumeric | 3.0 % | 2.9 % | 3.2 % | 3.1 % |
+| V40-L, 4,296 alphanumeric | 2.4 % | 4.2 % | 2.6 % | 4.2 % |
+| Set, 30,000 alphanumeric | 2.0 % | 3.0 % | 2.2 % | 3.0 % |
+| V1-L, 10 digits | 0.4 % | 0.4 % | 0.4 % | 0.5 % |
+| V40-L, 7,089 digits | 1.9 % | 3.5 % | 2.1 % | 3.5 % |
+| Set, 50,000 digits | 1.6 % | 2.6 % | 1.7 % | 2.6 % |
+
+At version 10, whose single-word tier did not change, the share did not move. A first run of three rounds, each build in its own process and not alternated, had read 4.2 to 4.3 % at version 40 alphanumeric, 3.5 to 3.7 % numeric, 2.6 to 3.1 % for the sets and 3.1 to 3.3 % at version 10. The version 40 shares are over the 3 % bar, so the NEON steps of phase 7's ARM64 follow-up were measured again, built into the library and end to end ("The NEON steps end to end").
+
 ## A transposed scorer for versions 12 to 40
 
 Row-direction penalty rules on rows wider than one word pull bits across words for every shifted term. In the three-word tier each such shift is five shifts and two ORs. Column-direction rules need no shift, because they combine whole row words of neighbouring rows.
@@ -434,7 +550,7 @@ The prototype is not tuned. It transposes 64x64 blocks with scalar code, has no 
 
 ## The Alphanumeric and Numeric writers
 
-These answer phase 1 of [standardqr-binary-encoder-plan.md](../standardqr-binary-encoder-plan.md). The writer row is the whole data codeword stage (mode, count, payload, padding) for single symbols, and the payload writer alone for Structured Append sets.
+These answered phase 1 of `standardqr-binary-encoder-plan.md` before the mask work (2026-10-02); phase 7 below has it re-taken. The writer row is the whole data codeword stage (mode, count, payload, padding) for single symbols, and the payload writer alone for Structured Append sets.
 
 | Shape | Writer | Encode | Share |
 |---|---|---|---|
@@ -446,3 +562,234 @@ These answer phase 1 of [standardqr-binary-encoder-plan.md](../standardqr-binary
 | Structured Append, 50,000 digits (L) | 25.7 µs | 709 µs | 3.6 % |
 
 The Alphanumeric writer ran at about 1.0 ns a character and the Numeric writer at about 0.52 ns a digit. Every share is above that plan's 3 % bar. Each is a ceiling that grows as mask selection shrinks. With the shared windows alone the V40-L alphanumeric share is about 6 %, and with a scorer at the prototype's speed it would be about 10 % (an estimate from the stage rows, not measured).
+
+## Phase 7: the writers (2026-10-05)
+
+The writer plan, run as phase 7. Its phase 1, re-taken after the mask work: the payload row (the writer alone, no mode, count or padding) over the end-to-end row of the stage harness (span API at quiet zone 0, `CreateStructuredAppend` for sets). Five rounds on the JIT and NativeAOT, three on WebAssembly, every shape in one process pinned to one CCD, a cell the median of the run medians:
+
+| Shape | JIT, AVX2 | JIT, no AVX | Default NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 2.9 % | 1.9 % | 1.7 % | 4.4 % | 5.3 % |
+| V10-M, 300 alphanumeric | 10.7 % | 7.4 % | 7.0 % | 15.8 % | 17.8 % |
+| V40-L, 4,296 alphanumeric | 13.0 % | 9.5 % | 8.6 % | 20.0 % | 21.8 % |
+| Set, 30,000 alphanumeric (7 symbols at L) | 6.2 % | 5.5 % | 5.1 % | 11.0 % | 11.2 % |
+| V1-L, 10 digits | 1.2 % | 0.8 % | 0.9 % | 2.0 % | 2.6 % |
+| V40-L, 7,089 digits | 11.2 % | 7.0 % | 6.4 % | 8.1 % | 6.6 % |
+| Set, 50,000 digits (8 symbols at L) | 5.4 % | 4.1 % | 4.0 % | 4.3 % | 3.9 % |
+
+The Alphanumeric writer took 4.81 µs for 4,296 characters on the JIT (1.12 ns a character) and 15.7 µs on WebAssembly AOT (3.66 ns), the Numeric writer 3.96 µs for 7,089 digits (0.56 ns a digit). The payload row read within 1.4 % of the whole data stage at V40-L and 3.8 % at V10-M.
+
+### The variant ladder
+
+BenchmarkDotNet on the JIT with AVX2 (3 warmups, 15 iterations, the process pinned to one CCD), each writer copied verbatim as the baseline with a byte-identical canary beside it, every variant held to the baseline's stream before any timing (lengths 0 to 300 and long runs, every starting alignment, and for Alphanumeric a character outside the alphabet at every position). Ratios to the baseline in the same run, the run starting at a byte boundary (13 bits in read the same):
+
+| Alphanumeric variant | 4,296 | 300 | 40 | 9 |
+|---|---|---|---|---|
+| Baseline | 4.61 µs | 334 ns | 47.7 ns | 12.7 ns |
+| Canary | 1.01 | 1.04 | 0.95 | 1.01 |
+| A value table, validity checked a pair | 1.20 | 0.83 | 0.78 | 0.84 |
+| Two pairs an append | 0.66 | 0.63 | 0.63 | 0.82 |
+| Four pairs a 44-bit append | 0.57 | 0.56 | 0.60 | 0.77 |
+| The same, read through a ref | 0.54 | 0.54 | 0.58 | 0.76 |
+| Five pairs a 55-bit append | 0.56 | 0.55 | 0.58 | 0.85 |
+| SSSE3, 8 characters a step (the rMQR form) | 0.29 | 0.29 | 0.34 | 0.61 |
+| SSSE3, 16 characters a step | 0.23 | 0.24 | 0.29 | 0.55 |
+| AVX2, 32 characters a step | 0.21 | 0.22 | 0.29 | 0.60 |
+| Portable Vector128, 8 characters a step | 0.41 | 0.42 | 0.49 | 0.65 |
+
+| Numeric variant | 7,089 | 500 | 40 | 10 |
+|---|---|---|---|---|
+| Baseline | 4.03 µs | 293 ns | 24.4 ns | 9.33 ns |
+| Canary | 1.03 | 0.98 | 1.00 | 0.92 |
+| Three groups a 30-bit append | 0.69 | 0.66 | 0.72 | 0.76 |
+| Five groups a 50-bit append | 0.58 | 0.52 | 0.70 | 0.82 |
+| The same, each group from one 8-byte load and a multiply | 0.48 | 0.47 | 0.63 | 0.97 |
+| SSE4.1, 12 digits a step from four loads (the rMQR form) | 0.38 | 0.41 | 0.70 | 0.89 |
+| SSSE3, 12 digits a step from one pack and a pshufb layout | 0.30 | 0.29 | 0.48 | 0.93 |
+| AVX2, 24 digits a step | 0.29 | 0.29 | 0.49 | 1.00 |
+| Portable Vector128, 12 digits a step | 0.41 | 0.42 | 0.55 | 0.98 |
+
+A second round each. The sixteen-character loop on a local copy of the writer took 0.89 to 0.93 of its time at 300 and 4,296 characters, and the twelve-digit one 0.86 to 0.92 at 500 and 7,089, against 0.3 to 1.3 ns more at 9 to 16 characters for the copy. The same copy in the scalar four-pair loop read 0.95 to 1.05, inside the noise. Nine digits an append after the fifteen-digit loop took 0.84 to 0.92 of the time at 10 and 12 digits, where the fifteen-digit loop never runs, and read level from 40 up.
+
+The value table alone read slower than the baseline at 4,296 characters only. There the baseline writer that handles a bad character was inlined into its loop, the method grew from about 500 to 1,202 bytes, and `BitWriter.Write` was left a call a pair.
+
+### The shipped tiers against the writer they replaced
+
+The timing mode's `kernel/AlnumWriter` and `kernel/NumericWriter` shapes: each tier entered directly beside a copy of the old writer, 13 bits into a word. Ratios at 4,296 / 300 / 40 / 16 characters and 7,089 / 500 / 40 / 12 digits:
+
+| Build | Alphanumeric, vector tier | Alphanumeric, portable | Numeric, vector tier | Numeric, portable |
+|---|---|---|---|---|
+| JIT, AVX2 | 0.21 / 0.24 / 0.35 / 0.50 | 0.65 / 0.66 / 0.70 / 0.77 | 0.24 / 0.27 / 0.54 / 1.00 | 0.47 / 0.49 / 0.62 / 0.82 |
+| JIT, no AVX | 0.18 / 0.20 / 0.31 / 0.44 | 0.51 / 0.52 / 0.57 / 0.60 | 0.24 / 0.27 / 0.52 / 1.10 | 0.44 / 0.45 / 0.56 / 1.00 |
+| Default NativeAOT | 0.20 / 0.22 / 0.35 / 0.44 | 0.56 / 0.55 / 0.56 / 0.59 | 0.27 / 0.29 / 0.58 / 1.00 | 0.45 / 0.46 / 0.62 / 0.82 |
+| WebAssembly AOT | 0.09 / 0.10 / 0.18 / 0.28 | 0.18 / 0.18 / 0.24 / 0.36 | (0.38 / 0.43 / 0.76 / 1.03) | 0.39 / 0.45 / 0.80 / 1.03 |
+| WebAssembly interpreted | 0.14 / 0.16 / 0.29 / 0.43 | 0.18 / 0.19 / 0.34 / 0.46 | (0.71 / 0.76 / 0.96 / 1.10) | 0.43 / 0.49 / 0.87 / 1.12 |
+
+The vector tiers are SSE4.1 (Alphanumeric) and SSSE3 (Numeric) on x64 and WebAssembly's SIMD for Alphanumeric. The bracketed Numeric step on WebAssembly did not ship: it took 0.95 to 0.96 of the portable writer's time AOT-compiled and 1.10 to 1.65 interpreted, from 40 to 7,089 digits, and one flag gates both builds. A twelve-digit run never reaches a Numeric vector tier, and since this run the dispatch writes runs under sixteen digits, and under eight characters, in place with no call. On WebAssembly AOT the old writer's copy ran slower than the library's own old writer (23.3 µs against 15.7 µs at 4,296 characters, the copy taking the writer by reference), so the A/B below is the measure there.
+
+From review (2026-10-05), the timing mode's writer shapes at more lengths, seven rounds of one process per build, SSSE3 Numeric step over the portable writer (the timer reads whole nanoseconds, 9 to 22 ns a call here):
+
+| Build | 16 | 20 | 24 | 28 | 32 | 36 | 40 | 48 | 64 |
+|---|---|---|---|---|---|---|---|---|---|
+| JIT, AVX2 | 1.22 | 1.09 | 1.08 | 0.80 | 1.08 | 1.00 | 0.81 | 0.94 | 0.77 |
+| JIT, no AVX | 1.22 | 1.09 | 1.08 | 0.93 | 1.17 | 1.00 | 0.81 | 1.00 | 0.82 |
+| Default NativeAOT | 1.20 | 1.18 | 1.08 | 0.93 | 1.15 | 1.07 | 0.88 | 1.00 | 0.82 |
+
+The portable writer over the old writer's copy in the same runs:
+
+| Build | 16 | 20 | 24 | 28 | 32 | 36 | 40 | 48 | 64 |
+|---|---|---|---|---|---|---|---|---|---|
+| JIT, AVX2 | 0.69 | 0.79 | 0.71 | 0.79 | 0.62 | 0.65 | 0.64 | 0.57 | 0.56 |
+| JIT, no AVX | 0.64 | 0.73 | 0.71 | 0.70 | 0.55 | 0.67 | 0.62 | 0.52 | 0.55 |
+| Default NativeAOT | 0.77 | 0.73 | 0.71 | 0.70 | 0.62 | 0.62 | 0.62 | 0.57 | 0.56 |
+
+The step reads sixteen chars to write twelve, so below 40 digits it runs once or twice and hands the rest to the portable writer's call. The dispatch now sends a run to it from 40 digits; shorter runs take the portable writer, which took 0.55 to 0.79 of the old writer's time at 16 to 36 digits.
+
+The portable Alphanumeric writer's body compiled on its own and inlined into its two-parameter entry (the shipped body, its throwing path out of the loop, `NoInlining` removed for the second), against the old writer's copy on the JIT with AVX2, seven alternating rounds: 0.71 against 0.81 at 16 characters, 0.67 against 0.71 at 40, 0.64 against 0.65 at 300, 0.63 at 4,296 for both. During the phase an earlier body, with the throwing path still in its loop, read 1.64 inlined against 0.77 on its own at 16 characters, with its 8-byte store left a call; that run was not kept as a table.
+
+What the declined steps would have saved of an encode, from the tables above: in the variant ladder AVX2's 32 characters a step took 0.21 of the old writer's time against 0.23 for its row "SSSE3, 16 characters a step" at 4,296 characters (a ladder variant, before the local writer copy; the shipped SSE4.1 tier reads 0.21 in the table of shipped tiers), 0.02 of a writer that was 13.0 % of a version 40 alphanumeric encode, so about 0.26 %; AVX2's 24 digits a step 0.29 against 0.30, 0.01 of 11.2 %, about 0.11 %; WebAssembly's Numeric step 0.95 of the portable writer AOT-compiled, which took 0.39 of an old writer that was 8.1 % of a version 40 numeric encode, about 0.16 % (and a loss interpreted). So 0.1 to 0.3 %.
+
+### End to end
+
+Base `main` (9897279) against the change, the same stage harness on both sides, alternating rounds: seven on the JIT and NativeAOT, five on WebAssembly AOT, three interpreted. The median of the run medians, change over base:
+
+| Shape | JIT, AVX2 | JIT, no AVX | Default NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 1.00 | 0.98 | 0.96 | 0.99 | 0.96 |
+| V1-L, 10 digits | 1.00 | 1.00 | 0.98 | 0.99 | 1.00 |
+| V10-M, 300 alphanumeric | 0.91 | 0.96 | 0.92 | 0.86 | 0.84 |
+| V40-L, 4,296 alphanumeric | 0.93 | 0.93 | 0.92 | 0.83 | 0.86 |
+| V40-L, 7,089 digits | 0.92 | 0.92 | 0.93 | 0.97 | 0.96 |
+| Set, 30,000 alphanumeric | 0.97 | 0.95 | 0.92 | 0.91 | 0.92 |
+| Set, 50,000 digits | 1.00 | 0.97 | 0.95 | 0.99 | 1.00 |
+| Payload, V40-L alphanumeric | 0.20 | 0.18 | 0.19 | 0.12 | 0.14 |
+| Payload, V40-L digits | 0.25 | 0.25 | 0.26 | 0.39 | 0.43 |
+| Payload, V1-M alphanumeric | 0.50 | 0.46 | 0.52 | 0.45 | 0.56 |
+| Payload, V1-L digits | 0.89 | 0.80 | 0.69 | 0.95 | 0.97 |
+
+The rows the change does not touch (V19-M Byte, Micro QR M4, rMQR R17x139) read 0.96 to 1.03. On default NativeAOT the V40-L alphanumeric encode went from 64.9 to 59.8 µs and its payload from 5.63 to 1.06 µs; on WebAssembly AOT from 81.0 to 67.2 µs and from 16.7 to 2.05 µs.
+
+Output was identical before and after on the 7,647-symbol corpus, the 6,504-symbol pinned-mask corpus, and a new pass of 980 symbols: `QRSegmentation.Optimal` encodes of text made of runs of 1 to 40 characters from the three alphabets at every level, and Structured Append sets of one mode and of mixed content under both segmentations. Each was hashed under AVX2, with AVX off and with hardware intrinsics off.
+
+### ARM64 (2026-10-05)
+
+Phase 7 ran without an ARM64 machine. These were taken afterwards on an Apple M2 (MacBook Air, osx-arm64, .NET 10.0.12) on the JIT and a default NativeAOT publish, with the phase's stage harness on both sides. The Mac cannot pin a process and carries background load, so base `main` (9897279) and the change (e463622) alternated one process each, nine rounds per build, a cell the median of the run medians. Only shapes of the two modes and three controls ran in each process.
+
+The writers' share of an encode (the payload row over the end-to-end row), with the old writers and with the portable ones ARM64 now runs:
+
+| Shape | JIT, old | JIT, portable | NativeAOT, old | NativeAOT, portable |
+|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 1.6 % | 0.7 % | 1.6 % | 0.7 % |
+| V10-M, 300 alphanumeric | 7.9 % | 3.0 % | 8.2 % | 3.2 % |
+| V40-L, 4,296 alphanumeric | 7.0 % | 2.4 % | 7.8 % | 2.6 % |
+| Set, 30,000 alphanumeric | 5.9 % | 2.0 % | 6.3 % | 2.2 % |
+| V1-L, 10 digits | 0.5 % | 0.4 % | 0.6 % | 0.4 % |
+| V40-L, 7,089 digits | 7.4 % | 1.9 % | 8.2 % | 2.1 % |
+| Set, 50,000 digits | 6.2 % | 1.6 % | 6.7 % | 1.7 % |
+
+The timing mode's writer kernels (five rounds, each build in its own process), the portable writer over the old writer's copy at 4,296 / 300 / 40 / 16 characters and 7,089 / 500 / 40 / 12 digits:
+
+| Build | Alphanumeric, portable | Numeric, portable |
+|---|---|---|
+| JIT | 0.33 / 0.34 / 0.35 / 0.39 | 0.24 / 0.27 / 0.44 / 0.83 |
+| Default NativeAOT | 0.33 / 0.36 / 0.37 / 0.44 | 0.24 / 0.28 / 0.45 / 0.83 |
+
+The old Alphanumeric writer took 7.25 µs for 4,296 characters on the JIT (1.69 ns a character, against 1.12 on the x64 JIT) and the old Numeric writer 7.55 µs for 7,089 digits (1.06 ns a digit, against 0.56). The portable writers took 2.36 and 1.84 µs, no more than on x64 (about 3.1 and 1.9 µs there by the ratios above), so against the slower old writers they took a quarter to a third of the time here, where the Alphanumeric one took two thirds on x64.
+
+End to end, change over base:
+
+| Shape | JIT | Default NativeAOT |
+|---|---|---|
+| V1-M, 16 alphanumeric | 0.94 | 1.01 |
+| V1-L, 10 digits | 0.95 | 1.00 |
+| V10-M, 300 alphanumeric | 0.92 | 0.94 |
+| V40-L, 4,296 alphanumeric | 0.96 | 0.96 |
+| V40-L, 7,089 digits | 0.93 | 0.95 |
+| Set, 30,000 alphanumeric | 0.97 | 0.97 |
+| Set, 50,000 digits | 0.96 | 0.97 |
+| Payload, V40-L alphanumeric | 0.32 | 0.33 |
+| Payload, V40-L digits | 0.24 | 0.25 |
+| Payload, V10-M alphanumeric | 0.35 | 0.36 |
+| Payload, V1-M alphanumeric | 0.42 | 0.45 |
+| Payload, V1-L digits | 0.73 | 0.75 |
+
+The rows the change does not touch (V19-M Byte, Micro QR M4, rMQR R17x139) read 0.98 to 1.01. At version 1 the payload is under 2 % of the encode, so those rows' 0.94 to 1.01 is the spread, not the writers. ARM64 then still ran the SoA scorers for versions 12 to 40 (the transposed tier replaced them afterwards, "Phase 6", ARM64), and the stage rows of the change put mask selection at 77 to 79 % of a version 40 encode there (72.6 of 92.3 µs on the JIT, 63.9 of 82.5 µs on NativeAOT) and 68 to 71 % of the version 10 one, so the writers' share was smaller than it became.
+
+#### A NEON step
+
+BenchmarkDotNet on the JIT (3 warmups, 15 iterations), each variant held to the old writers' stream before any timing: lengths 0 to 300 and long runs at every alignment, runs of one repeated character, every character outside the alphabet up to 0x17F and six past it at every position of the first 40, and runs as slices of a longer valid text. Ratios to the portable writer in the same run, two rounds where a variant ran in both:
+
+| Alphanumeric variant | 4,296 | 300 | 40 | 16 |
+|---|---|---|---|---|
+| Portable writer | 2.30 µs | 176 ns | 25.7 ns | 12.3 ns |
+| Canary | 0.98 / 1.00 | 0.96 / 1.02 | 0.96 / 1.03 | 0.97 / 0.99 |
+| Old writer | 4.41 | 4.06 | 3.55 | 3.18 |
+| Sixteen a step: one TBL over 64 bytes of value + 1 does the lookup and the membership, pairs by MLA, fields by USRA | 0.41 / 0.40 | 0.53 / 0.45 | 0.63 / 0.65 | 0.69 / 0.74 |
+| The same, pairs by two UDOT and one SLI (needs the dot product) | 0.39 / 0.38 | 0.40 / 0.42 | 0.63 / 1.25 | 0.72 / 0.70 |
+| Eight a step, one append | 0.55 | 0.53 | 0.67 | 0.80 |
+| Thirty-two a step, one check | 0.42 | 0.43 | 0.64 | 0.71 |
+| Sixteen a step, the writer reached through its reference | 0.52 | 0.60 | 0.67 | 0.69 |
+| Sixteen a step, then one step of eight | 0.40 / 0.41 | 0.41 / 0.48 | 0.59 / 0.60 | 0.68 / 0.72 |
+| The same, pairs by dot product | 0.38 | 0.44 | 0.57 | 0.69 |
+| The same, checked by CMEQ and SHRN rather than UMINV | 0.43 | 0.42 | 0.61 | 0.72 |
+
+| Numeric variant | 7,089 | 500 | 40 | 16 |
+|---|---|---|---|---|
+| Portable writer | 1.83 µs | 143 ns | 15.9 ns | 9.35 ns |
+| Canary | 1.00 / 1.01 | 0.99 / 0.98 | 0.99 / 1.79 | 1.01 / 1.05 |
+| Old writer | 4.06 | 3.64 | 2.32 | 1.64 |
+| Twelve digits from sixteen chars, one 40-bit append (x64's SSSE3 step) | 0.70 | 0.70 | 0.90 | 1.18 |
+| Twenty-four from exactly twenty-four chars, groups by three TBL and UMULL / UMLAL / UADDW, two 40-bit appends | 0.55 / 0.56 | 0.57 / 0.65 | 0.75 / 1.83 | 0.97 / 1.12 |
+| Fifteen from sixteen chars, one 50-bit append | 0.57 / 0.58 | 0.58 / 0.59 | 0.83 / 0.85 | 1.00 / 1.05 |
+| Twenty-four a step, then one of fifteen | 0.56 | 0.58 | 0.69 | 1.01 |
+| Thirty from exactly thirty chars (the last load overlapping), two 50-bit appends | 0.58 | 0.60 | 0.86 | 1.09 |
+| Thirty a step, then one of fifteen | 0.58 | 0.59 | 0.90 | 1.01 |
+
+At 40 and 16 the process decides more than the variant: the canary, the portable writer's own code, read 1.79 at 40 digits in one round, so those columns are read only where both rounds agree. From 300 characters up the best steps took 0.38 to 0.41 of the portable Alphanumeric writer's time and 0.55 to 0.58 of the Numeric one's. Holding the writer in a local copy took 0.41 against 0.52 at 4,296 characters, as it gained on x64. The dot product gained about 5 % at 4,296 characters, and the one check per thirty-two characters nothing, as the check is off the chain.
+
+With the shares above, the best steps would save 1.2 to 2.0 % of an alphanumeric encode and 0.7 to 0.9 % of a numeric one, estimated as the share times one less the step's ratio, and a step taking no time at all would save the share itself, at most 3.2 %. No NEON step shipped then: ARM64 kept the portable writers. With mask selection at the 0.4 of its time the transposed tier reached on AVX2, a version 40 alphanumeric encode would take about 49 µs, and the step would save about 2.8 % of it, again an estimate from the stage rows. The transposed tier came to ARM64 afterwards ("Phase 6", ARM64), a version 40 encode took 52 to 55 µs, and the steps were built into the library and measured end to end (below).
+
+#### The NEON steps end to end (2026-10-05)
+
+With the transposed scorer the payload was over the 3 % bar at version 40 (4.2 % alphanumeric, 3.5 % numeric, "Phase 6", ARM64), so the best steps above went into the library (`QRBinaryEncoder.Arm64.cs`, behind the dispatch): sixteen characters a step and then one of eight, and fifteen digits from sixteen chars. The timing mode's parity check held them to the old writers on the JIT and NativeAOT of .NET 8 and .NET 10 before any timing.
+
+Each step's cut-over: the timing mode's writer shapes, the step entered directly beside the portable writer in one process, five rounds per build, the step's time over the portable writer's. The .NET 8 columns from 48 characters and 64 digits up are a second run of five rounds, averaged with the first where both ran a length.
+
+| Alphanumeric | 8 | 9 | 10 | 12 | 14 | 15 | 16 | 17 | 20 | 24 | 31 | 32 | 40 | 48 | 64 | 128 | 300 | 4,296 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| .NET 10 JIT | 0.89 | 0.90 | 0.92 | 0.93 | 1.00 | 0.95 | 0.69 | 0.71 | 0.71 | 0.71 | 0.75 | 0.59 | 0.60 | - | - | - | 0.42 | 0.40 |
+| .NET 10 NativeAOT | 0.89 | 0.90 | 0.85 | 0.87 | 0.88 | 0.95 | 0.69 | 0.71 | 0.76 | 0.71 | 0.77 | 0.59 | 0.60 | - | - | - | 0.41 | 0.41 |
+| .NET 8 JIT | 0.90 | 0.91 | 1.00 | 1.00 | 1.06 | 1.07 | 1.00 | 1.00 | 0.90 | 0.89 | 1.09 | 0.96 | 0.90 | 0.82 | 0.80 | 0.71 | 0.63 | 0.61 |
+| .NET 8 NativeAOT | 0.89 | 0.82 | 0.85 | 0.97 | 0.94 | 1.05 | 0.93 | 0.93 | 0.89 | 0.85 | 1.07 | 0.94 | 0.86 | 0.82 | 0.77 | 0.70 | 0.63 | 0.60 |
+
+| Numeric | 16 | 20 | 24 | 28 | 30 | 32 | 36 | 40 | 44 | 48 | 64 | 80 | 96 | 128 | 160 | 192 | 256 | 320 | 400 | 500 | 7,089 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| .NET 10 JIT | 1.00 | 0.92 | 0.85 | 1.06 | 1.06 | 0.85 | 0.88 | 0.83 | 0.95 | 0.88 | 0.83 | - | - | - | - | - | - | - | - | 0.61 | 0.57 |
+| .NET 10 NativeAOT | 1.00 | 1.00 | 0.92 | 1.06 | 1.00 | 0.85 | 0.94 | 0.88 | 1.00 | 0.88 | 0.80 | - | - | - | - | - | - | - | - | 0.61 | 0.58 |
+| .NET 8 JIT | 1.45 | 1.31 | 1.23 | 1.41 | 1.39 | 1.23 | 1.12 | 1.06 | 1.29 | 1.06 | 1.00 | 0.93 | 0.91 | 1.02 | 0.88 | 0.90 | 0.86 | 0.74 | 0.79 | 0.71 | 0.80 |
+| .NET 8 NativeAOT | 1.36 | 1.31 | 1.14 | 1.29 | 1.17 | 1.25 | 1.12 | 1.03 | 1.30 | 1.06 | 1.00 | 0.89 | 0.91 | 1.00 | 0.80 | 0.79 | 0.85 | 0.81 | 0.81 | 0.77 | 0.81 |
+
+On .NET 10 the Alphanumeric step wins at every length the dispatch passes it, from eight characters, and the Numeric step from 40 digits, as the SSSE3 step does on x64: below that a step of sixteen chars read for fifteen written runs once or twice, and it read 1.06 at 28 and 30 digits. On .NET 8 both gain less. Its JIT and NativeAOT keep the step's local copy of the writer on the stack (`BitWriter` is a span and three more fields), where .NET 10 keeps it in registers, so every append goes through memory, as with the variant above that reached the writer through its reference. From 300 characters the Alphanumeric step took 0.60 to 0.63 of the portable writer's time there, and 1.05 to 1.10 at 15 and 31 characters, which end in the step of eight and a tail of seven. The Numeric step lost at 16 to 48 digits, drew at 64 to 128 and won from 160. On .NET 8 the dispatch therefore enters the steps from 32 characters and from 160 digits. One length in each second .NET 8 run read an outlier in one build (96 characters at 1.17 on the JIT, 112 digits at 1.16 on NativeAOT, against 0.76 and 0.87 in the other build) and is left out.
+
+End to end, base `encode4` (0fda781) against the change, the stage harness on both sides, alternating one process each, the median of the per-round ratios. .NET 10 ran twice for nine rounds, the first on the same steps in a scratch copy of the library, entered from sixteen digits (every Numeric shape here is 40 digits or more, or under sixteen), and the table gives the eighteen rounds together. .NET 8 ran five rounds with the cut-overs above.
+
+| Shape | .NET 10 JIT | .NET 10 NativeAOT | .NET 8 JIT | .NET 8 NativeAOT |
+|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 1.00 | 1.01 | 1.04 | 1.03 |
+| V10-M, 300 alphanumeric | 0.97 | 0.98 | 0.98 | 0.98 |
+| V40-L, 4,296 alphanumeric | 0.98 | 0.98 | 0.97 | 0.97 |
+| Set, 30,000 alphanumeric | 0.95 | 0.97 | 0.99 | 0.97 |
+| V1-L, 10 digits | 1.01 | 1.00 | 1.02 | 1.00 |
+| V40-L, 7,089 digits | 1.00 | 0.98 | 0.98 | 0.98 |
+| Set, 50,000 digits | 0.99 | 0.99 | 1.01 | 1.00 |
+| Payload, V1-M alphanumeric | 0.71 | 0.79 | 1.00 | 0.94 |
+| Payload, V10-M alphanumeric | 0.46 | 0.52 | 0.66 | 0.65 |
+| Payload, V40-L alphanumeric | 0.41 | 0.41 | 0.61 | 0.60 |
+| Payload, set of 30,000 alphanumeric | 0.41 | 0.42 | 0.61 | 0.63 |
+| Payload, V40-L digits | 0.57 | 0.57 | 0.84 | 0.76 |
+| Payload, set of 50,000 digits | 0.58 | 0.58 | 0.82 | 0.80 |
+| V19-M, 620 bytes | 1.00 | 1.01 | 1.00 | 1.01 |
+| Micro QR M4 | 0.98 | 1.00 | 1.00 | 0.97 |
+| rMQR R17x139 | 1.00 | 1.00 | 1.01 | 1.00 |
+
+From the stage rows the steps save 2.5 % of a version 40 alphanumeric encode on .NET 10, 1.6 % at version 10, 1.8 % of the alphanumeric set and 1.1 to 1.5 % of the numeric shapes, and on .NET 8 1.9 %, 1.1 to 1.2 %, 1.3 % and 0.4 to 0.7 %. That is about what a run of nine rounds resolves here. The two .NET 10 runs read 0.95 to 0.96 and 0.98 to 1.00 at version 40 alphanumeric, and one round's ratio for a shape the change does not touch ranged over 0.03 to 0.04 either way, so the end-to-end rows confirm the direction and the stage rows give the size. The payload is then 1.7 to 1.8 % of a version 40 alphanumeric encode on .NET 10 and 2.8 to 3.0 % on .NET 8. On .NET 8 the version 1 alphanumeric row read 1.03 to 1.04 though a run of sixteen characters takes no step there (its payload row 0.94 to 1.00). Nine rounds of the version 1 and 6 shapes alone read it at 1.01 on both builds, with the shapes beside it at 0.96 to 1.03.
