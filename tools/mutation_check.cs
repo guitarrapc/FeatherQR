@@ -34,6 +34,14 @@ using System.Xml.Linq;
 // runs on files with changes of their own, which a killed run leaves faulted, so copy them aside first. Each run
 // leaves <id>.json (the failed test cases and the logged sub-cases), the TRX and the logs in <out-dir>.
 //
+// A fault can take the test host down instead of failing a test: a read past a protected page is an
+// access violation, which no test can catch, and the host writes no TRX. A test run that ends with an exit
+// code other than 0 (passed), 2 (a test failed) or 8 (no test matched the filter) is taken as such a crash.
+// The fault counts as caught by the test the host was running: in the stack the runtime printed to the
+// run's log, the outermost frame in the namespace named like the test assembly, or `?.?` when the stack
+// names none. The tests the host had not run yet are missing from the counts, so a crash hides what they
+// would have caught; rerun the fault with --only and a --filter that leaves the crashing test out to see them.
+//
 // A test that walks many sub-cases (seeds, versions, budgets) stops at its first failure, which says
 // nothing about the others. To see each, write the helper into the test project with `helper` and wrap
 // each sub-case of the test for the time of the experiment:
@@ -57,6 +65,7 @@ using System.Xml.Linq;
 
 const string LogVariable = "MUTATION_LOG";
 const string Baseline = "BASE";
+const string Crash = "crash";
 
 if (args.Length == 0)
     return Usage();
@@ -177,7 +186,8 @@ static int Run(string mutantsPath, string outDir, string[] options)
         File.WriteAllText(Path.Combine(outDir, mutant.Id + ".json"), JsonSerializer.Serialize(result, ResultJson.Default.Result));
         var methods = result.Catches.Select(c => $"{c.Class}.{c.Method}").Distinct().Count();
         var status = !result.Built ? "BUILD FAILED" : result.TimedOut ? "TIMED OUT" : result.Catches.Count == 0 ? "not caught" : $"caught by {methods} method{(methods == 1 ? "" : "s")}";
-        Console.WriteLine($"{mutant.Id,-10} {status,-24} tests {result.Total}, failed {result.Failed}, logged {result.Catches.Count(c => c.Source == "log")}");
+        var crashed = result.Catches.Count(c => c.Source == Crash);
+        Console.WriteLine($"{mutant.Id,-10} {status,-24} tests {result.Total}, failed {result.Failed}, logged {result.Catches.Count(c => c.Source == "log")}{(crashed > 0 ? $", crashed {crashed}" : "")}");
         if (mutant.Id == Baseline && (!result.Built || result.Catches.Count > 0))
             throw new ToolException("the unchanged suite must build and catch nothing; see the logs in " + outDir);
     }
@@ -205,8 +215,11 @@ static Result RunOne(Mutant mutant, int index, string project, string tfm, strin
             List<string> arguments = [dll, "--no-progress", "--report-trx", "--report-trx-filename", trx, "--results-directory", outDir];
             if (runs[i] is { } filter)
                 arguments.AddRange(["--treenode-filter", filter]);
-            Exec("dotnet", arguments, Path.GetDirectoryName(dll)!, Path.Combine(outDir, $"{mutant.Id}.{i}.log"), new() { [LogVariable] = log }, timeout, out var over);
+            var runLog = Path.Combine(outDir, $"{mutant.Id}.{i}.log");
+            var exitCode = Exec("dotnet", arguments, Path.GetDirectoryName(dll)!, runLog, new() { [LogVariable] = log }, timeout, out var over);
             timedOut |= over;
+            if (!over && exitCode is not (0 or 2 or 8))
+                catches.Add(CrashCatch(runLog, Path.GetFileNameWithoutExtension(project), exitCode));
             var trxPath = Path.Combine(outDir, trx);
             if (File.Exists(trxPath))
             {
@@ -258,6 +271,34 @@ static (int Total, int Failed, List<Catch> Catches) ReadTrx(string path)
     return ((int?)counters?.Attribute("total") ?? 0, (int?)counters?.Attribute("failed") ?? 0, catches);
 }
 
+// The test a crashed host was running: in the last stack the runtime printed, the outermost frame in the test assembly's namespace
+// before the test framework's frames. A frame of a state machine or a lambda (a '<' in its type) is passed over for the method that
+// awaits or calls it.
+static Catch CrashCatch(string logPath, string testAssembly, int exitCode)
+{
+    var frame = new Regex($@"^\s*at {Regex.Escape(testAssembly)}\.(?:\w+\.)*(?<class>[\w+]+)\.(?<method>\w+)\(");
+    var lines = File.Exists(logPath) ? File.ReadAllLines(logPath) : [];
+    var start = Array.FindLastIndex(lines, l => l.StartsWith("Fatal error", StringComparison.Ordinal) || l.StartsWith("Unhandled exception", StringComparison.Ordinal));
+    string cls = "?", method = "?";
+    var inStack = false;
+    for (var i = start + 1; start >= 0 && i < lines.Length; i++)
+    {
+        var line = lines[i].TrimStart();
+        if (!line.StartsWith("at ", StringComparison.Ordinal))
+        {
+            if (inStack)
+                break;
+            continue;
+        }
+        inStack = true;
+        if (line.StartsWith("at TUnit.", StringComparison.Ordinal))
+            break;
+        if (frame.Match(lines[i]) is { Success: true } m)
+            (cls, method) = (m.Groups["class"].Value, m.Groups["method"].Value);
+    }
+    return new Catch(cls, method, $"test host crashed, exit code {exitCode}", Crash);
+}
+
 // ---- report, evaluate, compare --------------------------------------------------------------------
 
 static int Report(string dir)
@@ -268,7 +309,8 @@ static int Report(string dir)
     {
         var methods = caughtBy[r.Id];
         var what = !r.Built ? "build failed" : methods.Count == 0 ? "not caught" : string.Join(", ", methods.OrderByDescending(m => m.Value).Select(m => $"{m.Key} ({m.Value})"));
-        Console.WriteLine($"{r.Id,-10} {what}");
+        var crashed = r.Catches.Count(c => c.Source == Crash);
+        Console.WriteLine($"{r.Id,-10} {what}{(crashed > 0 ? $"; the test host crashed in {crashed} run{(crashed == 1 ? "" : "s")}" : "")}");
     }
     Console.WriteLine();
     Console.WriteLine($"Not caught: {Join(results.Where(r => r.Built && caughtBy[r.Id].Count == 0).Select(r => r.Id))}");
