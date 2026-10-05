@@ -157,7 +157,7 @@ public class ModulePlacerMaskTransposedParityTest
     public async Task Tables_StayUnderTheirBudget()
     {
         // Printed so a growth shows in the log: each version's tables are its unblocked rows and columns, two or three words each, shared by
-        // both tiers.
+        // every transposed tier.
         foreach (var version in Versions())
         {
             var bytes = ModulePlacer.TransposedTableBytes(version);

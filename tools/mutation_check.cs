@@ -35,12 +35,20 @@ using System.Xml.Linq;
 // leaves <id>.json (the failed test cases and the logged sub-cases), the TRX and the logs in <out-dir>.
 //
 // A fault can take the test host down instead of failing a test: a read past a protected page is an
-// access violation, which no test can catch, and the host writes no TRX. A test run that ends with an exit
-// code other than 0 (passed), 2 (a test failed) or 8 (no test matched the filter) is taken as such a crash.
-// The fault counts as caught by the test the host was running: in the stack the runtime printed to the
-// run's log, the outermost frame in the namespace named like the test assembly, or `?.?` when the stack
-// names none. The tests the host had not run yet are missing from the counts, so a crash hides what they
-// would have caught; rerun the fault with --only and a --filter that leaves the crashing test out to see them.
+// access violation, which no test can catch. The run then ends with the system's code for the crash
+// (negative on Windows, 128 and up on Unix, 7 from a host run out of process) and writes no TRX (the
+// testing platform writes one for a crashed host only under --crashdump, which the tool does not pass),
+// so none of its results are read, those of the tests that failed before the crash included. The fault
+// counts as caught by the test the host was running: in the last stack the runtime wrote to stderr, the
+// outermost method in the namespace named like the test assembly, out to the test framework's own frames
+// (an async method by its state machine, so a test that crashed after an await is still found), or `?.?`
+// when the stack names none. An exception the framework threw and did not catch (a filter it cannot
+// parse) stops the tool, as does an exit code that is none of these and not 0 (passed), 2 (a test failed)
+// or 8 (no test matched the filter); a crash in the framework's code that is not its own exception (an
+// access violation on an object a fault overwrote) is a crash like any other. `report` and `compare`
+// mark what only a crash caught, and `evaluate` keeps a crash's catch whatever sub-cases it keeps, as a
+// crash names none. To see what else catches such a fault, rerun it with --only, a --filter that leaves
+// the crashing test out, and a fresh <out-dir>.
 //
 // A test that walks many sub-cases (seeds, versions, budgets) stops at its first failure, which says
 // nothing about the others. To see each, write the helper into the test project with `helper` and wrap
@@ -216,11 +224,17 @@ static Result RunOne(Mutant mutant, int index, string project, string tfm, strin
             if (runs[i] is { } filter)
                 arguments.AddRange(["--treenode-filter", filter]);
             var runLog = Path.Combine(outDir, $"{mutant.Id}.{i}.log");
-            var exitCode = Exec("dotnet", arguments, Path.GetDirectoryName(dll)!, runLog, new() { [LogVariable] = log }, timeout, out var over);
+            var trxPath = Path.Combine(outDir, trx);
+            File.Delete(trxPath); // a crashed run writes none, and an earlier run's file must not stand in for it
+            var errors = new List<string>();
+            var exitCode = Exec("dotnet", arguments, Path.GetDirectoryName(dll)!, runLog, new() { [LogVariable] = log }, timeout, out var over, errors);
             timedOut |= over;
             if (!over && exitCode is not (0 or 2 or 8))
-                catches.Add(CrashCatch(runLog, Path.GetFileNameWithoutExtension(project), exitCode));
-            var trxPath = Path.Combine(outDir, trx);
+            {
+                if (exitCode is not (< 0 or >= 128 or 7))
+                    throw new ToolException($"{mutant.Id}: the test run exited with code {exitCode}, which the testing platform gives a run it could not complete, not a crash; see {runLog}");
+                catches.Add(CrashCatch(errors, Path.GetFileNameWithoutExtension(project), exitCode, runLog));
+            }
             if (File.Exists(trxPath))
             {
                 var (t, f, c) = ReadTrx(trxPath);
@@ -271,32 +285,43 @@ static (int Total, int Failed, List<Catch> Catches) ReadTrx(string path)
     return ((int?)counters?.Attribute("total") ?? 0, (int?)counters?.Attribute("failed") ?? 0, catches);
 }
 
-// The test a crashed host was running: in the last stack the runtime printed, the outermost frame in the test assembly's namespace
-// before the test framework's frames. A frame of a state machine or a lambda (a '<' in its type) is passed over for the method that
-// awaits or calls it.
-static Catch CrashCatch(string logPath, string testAssembly, int exitCode)
+// The test a crashed host was running, from what it wrote to stderr, where the runtime writes the crash and no test result goes: in
+// the last stack after "Fatal error", "Unhandled exception", "Stack overflow" or "Process terminated" (a fail-fast), the outermost
+// method in the test assembly's namespace before the frames of TUnit's engine and of the testing platform. Lines that are not frames
+// (the message, an inner exception's end, a repeat count) and the frames of an assertion are passed over; an async method stands for
+// its state machine's MoveNext, and a lambda's frame for the method that calls it. An unhandled exception whose first frame is the
+// framework's is the framework failing, not a test; an access violation there is a fault's crash that names no test.
+static Catch CrashCatch(IReadOnlyList<string> errors, string testAssembly, int exitCode, string runLog)
 {
-    var frame = new Regex($@"^\s*at {Regex.Escape(testAssembly)}\.(?:\w+\.)*(?<class>[\w+]+)\.(?<method>\w+)\(");
-    var lines = File.Exists(logPath) ? File.ReadAllLines(logPath) : [];
-    var start = Array.FindLastIndex(lines, l => l.StartsWith("Fatal error", StringComparison.Ordinal) || l.StartsWith("Unhandled exception", StringComparison.Ordinal));
-    string cls = "?", method = "?";
-    var inStack = false;
-    for (var i = start + 1; start >= 0 && i < lines.Length; i++)
+    var testNamespace = Regex.Escape(testAssembly);
+    var method = new Regex($@"^at {testNamespace}\.(?:\w+\.)*(?<class>[\w+]+)\.(?<method>\w+)\(");
+    var stateMachine = new Regex($@"^at {testNamespace}\.(?:\w+\.)*(?<class>[\w+]+)\+<(?<method>\w+)>d__\d+\.MoveNext\(");
+    string[] markers = ["Fatal error", "Unhandled exception", "Stack overflow", "Process terminated"];
+    string[] framework = ["at TUnit.Core.", "at TUnit.Engine.", "at TUnit.Generated.", "at Microsoft.Testing."];
+    var start = -1;
+    for (var i = 0; i < errors.Count; i++)
     {
-        var line = lines[i].TrimStart();
-        if (!line.StartsWith("at ", StringComparison.Ordinal))
-        {
-            if (inStack)
-                break;
-            continue;
-        }
-        inStack = true;
-        if (line.StartsWith("at TUnit.", StringComparison.Ordinal))
-            break;
-        if (frame.Match(lines[i]) is { Success: true } m)
-            (cls, method) = (m.Groups["class"].Value, m.Groups["method"].Value);
+        if (markers.Any(m => errors[i].StartsWith(m, StringComparison.Ordinal)))
+            start = i;
     }
-    return new Catch(cls, method, $"test host crashed, exit code {exitCode}", Crash);
+    string cls = "?", name = "?";
+    var firstFrame = true;
+    for (var i = start + 1; start >= 0 && i < errors.Count; i++)
+    {
+        var line = errors[i].TrimStart();
+        if (!line.StartsWith("at ", StringComparison.Ordinal))
+            continue;
+        if (framework.Any(f => line.StartsWith(f, StringComparison.Ordinal)))
+        {
+            if (firstFrame && errors[start].StartsWith("Unhandled exception", StringComparison.Ordinal))
+                throw new ToolException($"the test framework failed, not a test ({errors[start]}); see {runLog}");
+            break;
+        }
+        firstFrame = false;
+        if ((method.Match(line) is { Success: true } m ? m : stateMachine.Match(line)) is { Success: true } frame)
+            (cls, name) = (frame.Groups["class"].Value, frame.Groups["method"].Value);
+    }
+    return new Catch(cls, name, $"test host crashed, exit code {exitCode}", Crash);
 }
 
 // ---- report, evaluate, compare --------------------------------------------------------------------
@@ -312,16 +337,22 @@ static int Report(string dir)
         var crashed = r.Catches.Count(c => c.Source == Crash);
         Console.WriteLine($"{r.Id,-10} {what}{(crashed > 0 ? $"; the test host crashed in {crashed} run{(crashed == 1 ? "" : "s")}" : "")}");
     }
+    // a crashed run reads no results, so a fault only a crash caught may be caught by more methods than these
+    bool ByCrashOnly(Result r) => r.Catches.Count > 0 && r.Catches.All(c => c.Source == Crash);
     Console.WriteLine();
     Console.WriteLine($"Not caught: {Join(results.Where(r => r.Built && caughtBy[r.Id].Count == 0).Select(r => r.Id))}");
-    Console.WriteLine($"Caught by one method only: {Join(results.Where(r => caughtBy[r.Id].Count == 1).Select(r => $"{r.Id} ({caughtBy[r.Id].Keys.Single()})"))}");
+    Console.WriteLine($"Caught by one method only: {Join(results.Where(r => caughtBy[r.Id].Count == 1).Select(r => $"{r.Id} ({caughtBy[r.Id].Keys.Single()}{(ByCrashOnly(r) ? ", by a crash" : "")})"))}");
     Console.WriteLine();
     Console.WriteLine("Per method: faults caught, and caught by no other method");
     foreach (var method in caughtBy.Values.SelectMany(m => m.Keys).Distinct().Order())
     {
         var catching = results.Where(r => caughtBy[r.Id].ContainsKey(method)).ToList();
-        Console.WriteLine($"  {method}: {catching.Count}, alone {catching.Count(r => caughtBy[r.Id].Count == 1)}");
+        var alone = catching.Where(r => caughtBy[r.Id].Count == 1).ToList();
+        var crashes = alone.Count(ByCrashOnly);
+        Console.WriteLine($"  {method}: {catching.Count}, alone {alone.Count}{(crashes > 0 ? $" ({crashes} by a crash)" : "")}");
     }
+    if (results.Any(ByCrashOnly))
+        Console.WriteLine("A crashed run reads no results: a fault caught by a crash alone may be caught by more methods; see `run` in the header.");
     return 0;
 }
 
@@ -339,7 +370,11 @@ static int Evaluate(string dir, string[] options)
         keeps.Add((spec[..eq], new Regex(spec[(eq + 1)..])));
     }
     var results = LoadResults(dir).Where(r => r.Id != Baseline).ToList();
-    bool Kept(Catch c) => keeps.Where(k => Matches(c, k.Method)).All(k => k.Pattern.IsMatch(c.Detail));
+    // a crash names no sub-case, so which kept ones would still crash is unknown: its catch is kept, and listed
+    bool Kept(Catch c) => c.Source == Crash || keeps.Where(k => Matches(c, k.Method)).All(k => k.Pattern.IsMatch(c.Detail));
+    var crashKept = results.Where(r => r.Catches.Any(c => c.Source == Crash && keeps.Any(k => Matches(c, k.Method)))).Select(r => r.Id).ToList();
+    if (crashKept.Count > 0)
+        Console.WriteLine($"kept whatever the sub-cases, as a crash names none: {Join(crashKept)}");
 
     foreach (var (method, pattern) in keeps)
     {
@@ -380,8 +415,11 @@ static int Compare(string beforeDir, string afterDir)
             var b = ids.Where(id => before[id].Catches.Any(c => key(c) == k)).ToList();
             var a = ids.Where(id => after[id].Catches.Any(c => key(c) == k)).ToHashSet();
             var lost = b.Where(id => !a.Contains(id)).ToList();
-            anyLost |= lost.Count > 0;
-            Console.WriteLine($"  {k}: {b.Count} -> {a.Count}{(lost.Count > 0 ? $", lost: {Join(lost)}" : "")}");
+            // a crash is credited to the crashing test the scheduler reached first, which can change between runs: a loss only a crash
+            // caught is marked and does not fail the comparison (the suite level below still does)
+            var crashOnly = lost.Where(id => before[id].Catches.Where(c => key(c) == k).All(c => c.Source == Crash)).ToHashSet();
+            anyLost |= lost.Any(id => !crashOnly.Contains(id));
+            Console.WriteLine($"  {k}: {b.Count} -> {a.Count}{(lost.Count > 0 ? $", lost: {Join(lost.Select(id => crashOnly.Contains(id) ? id + " (by a crash)" : id))}" : "")}");
         }
     }
     Level("Per method:", MethodOf);
@@ -483,7 +521,8 @@ static string Git(string[] arguments)
     return output;
 }
 
-static int Exec(string file, IEnumerable<string> arguments, string workingDirectory, string logPath, Dictionary<string, string>? environment, TimeSpan timeout, out bool timedOut)
+// Runs a process with its stdout and stderr in one log, line by line as they come; stderr's lines also go to errors, in their order.
+static int Exec(string file, IEnumerable<string> arguments, string workingDirectory, string logPath, Dictionary<string, string>? environment, TimeSpan timeout, out bool timedOut, List<string>? errors = null)
 {
     var psi = new ProcessStartInfo(file) { WorkingDirectory = workingDirectory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
     foreach (var a in arguments)
@@ -496,7 +535,16 @@ static int Exec(string file, IEnumerable<string> arguments, string workingDirect
     using var log = new StreamWriter(logPath);
     using var process = new Process { StartInfo = psi };
     process.OutputDataReceived += (_, e) => { if (e.Data is not null) lock (log) log.WriteLine(e.Data); };
-    process.ErrorDataReceived += (_, e) => { if (e.Data is not null) lock (log) log.WriteLine(e.Data); };
+    process.ErrorDataReceived += (_, e) =>
+    {
+        if (e.Data is null)
+            return;
+        lock (log)
+        {
+            log.WriteLine(e.Data);
+            errors?.Add(e.Data);
+        }
+    };
     process.Start();
     process.BeginOutputReadLine();
     process.BeginErrorReadLine();

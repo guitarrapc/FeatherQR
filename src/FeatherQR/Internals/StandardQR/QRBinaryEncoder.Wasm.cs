@@ -9,9 +9,9 @@ using FeatherQR.Internals.BinaryEncoders;
 namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
-/// The Alphanumeric payload writer on WebAssembly SIMD: the SSE4.1 tier's steps (QRBinaryEncoder.X86.cs), with swizzle for its nibble
-/// tables, the saturating narrow for its pack, and the i32x4 dot product of widened lanes for its multiply-adds. The Numeric writer has no
-/// WebAssembly tier (see WriteNumericData).
+/// The Alphanumeric payload writer on WebAssembly SIMD: the SSE4.1 tier's step of sixteen characters (QRBinaryEncoder.X86.cs), without
+/// its one step of eight, so the dispatch enters it from sixteen characters. Swizzle does its nibble tables, the saturating narrow its
+/// pack, and the i32x4 dot product of widened lanes its multiply-adds. The Numeric writer has no WebAssembly tier (see WriteNumericData).
 /// </summary>
 internal ref partial struct QRBinaryEncoder
 {

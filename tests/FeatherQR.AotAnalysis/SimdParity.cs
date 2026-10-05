@@ -736,14 +736,12 @@ internal static class SimdParity
     }
 
     /// <summary>
-    /// A pinned mask through the dispatch, the route this build takes, against the decoder's mask predicate applied module by module
-    /// to the unblocked modules: every version, every pattern, on placed random data.
-    /// </summary>
-    /// <summary>
     /// The Alphanumeric and Numeric payload writers, every tier this build runs entered directly, against the writers they replaced
-    /// (<see cref="TierTiming.OldAlphanumeric"/>, <see cref="TierTiming.OldNumeric"/>): lengths 0 to 300 and long runs, after 0 to 31 bits
-    /// of a pattern, the whole buffer and the bit position; for Alphanumeric also every character outside the alphabet up to 0xFF, and
-    /// some past it, in the lanes of the vector steps, which must throw after the same bits. The one run of the WebAssembly tier.
+    /// (<see cref="TierTiming.OldAlphanumeric"/>, <see cref="TierTiming.OldNumeric"/>): lengths 0 to 300 and long runs, after 0 to 30 bits
+    /// of a pattern (every third, every seventh past 300 characters), the whole buffer and the bit position, each run alone and as a slice of a longer text whose next characters are in
+    /// the alphabet (as a plan passes a segment, so a step that reads past the run writes it); for Alphanumeric also every character
+    /// outside the alphabet up to 0xFF, and some past it, in the lanes of the vector steps, which must throw after the same bits. The old
+    /// writers read CharacterSets' value table too, so the table is held to the alphabet itself. The one run of the WebAssembly tier.
     /// </summary>
     private static List<string> PayloadWriterMismatches()
     {
@@ -761,23 +759,36 @@ internal static class SimdParity
         }
 
         const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+        var values = CharacterSets.AlphanumericValues;
+        for (var c = 0; c < values.Length; c++)
+        {
+            if (values[c] != alphabet.IndexOf((char)c))
+                mismatches.Add($"alphanumeric value table: U+{c:X4} holds {values[c]}, the alphabet gives {alphabet.IndexOf((char)c)}");
+        }
+
         var lengths = Enumerable.Range(0, 301).Concat([511, 512, 513, 4296, 7089]);
         foreach (var length in lengths)
         {
             var random = new Random(length);
             var text = new string(Enumerable.Range(0, length).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray());
             var digits = new string(Enumerable.Range(0, length).Select(_ => (char)('0' + random.Next(10))).ToArray());
+            var textInLonger = text + "ABCDEFGHIJKLMNOP";
+            var digitsInLonger = digits + "0123456789012345";
             for (var align = 0; align < 32; align += length > 300 ? 7 : 3)
             {
                 foreach (var (name, write) in alphanumeric)
                 {
                     if (!SameRun(text, align, TierTiming.OldAlphanumeric, write))
                         mismatches.Add($"alphanumeric {name}: length {length}, align {align}");
+                    if (!SameRun(textInLonger.AsSpan(0, length), align, TierTiming.OldAlphanumeric, write))
+                        mismatches.Add($"alphanumeric {name}: length {length} as a slice, align {align}");
                 }
                 foreach (var (name, write) in numeric)
                 {
                     if (!SameRun(digits, align, TierTiming.OldNumeric, write))
                         mismatches.Add($"numeric {name}: length {length}, align {align}");
+                    if (!SameRun(digitsInLonger.AsSpan(0, length), align, TierTiming.OldNumeric, write))
+                        mismatches.Add($"numeric {name}: length {length} as a slice, align {align}");
                 }
             }
         }
@@ -801,14 +812,14 @@ internal static class SimdParity
         }
         return mismatches;
 
-        static bool SameRun(string text, int align, TierTiming.PayloadWriter expected, TierTiming.PayloadWriter actual)
+        static bool SameRun(ReadOnlySpan<char> text, int align, TierTiming.PayloadWriter expected, TierTiming.PayloadWriter actual)
         {
             var a = Run(text, align, expected);
             var b = Run(text, align, actual);
             return a.Bits == b.Bits && a.Error == b.Error && a.Buffer.AsSpan().SequenceEqual(b.Buffer);
         }
 
-        static (byte[] Buffer, int Bits, string? Error) Run(string text, int align, TierTiming.PayloadWriter write)
+        static (byte[] Buffer, int Bits, string? Error) Run(ReadOnlySpan<char> text, int align, TierTiming.PayloadWriter write)
         {
             var buffer = new byte[(text.Length * 6 + 64) / 8 + 16];
             var writer = new FeatherQR.Internals.BinaryEncoders.BitWriter(buffer);
@@ -829,6 +840,10 @@ internal static class SimdParity
         }
     }
 
+    /// <summary>
+    /// A pinned mask through the dispatch, the route this build takes, against the decoder's mask predicate applied module by module
+    /// to the unblocked modules: every version, every pattern, on placed random data.
+    /// </summary>
     private static List<string> MaskApplyMismatches()
     {
         var mismatches = new List<string>();

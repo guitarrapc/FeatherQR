@@ -19,20 +19,24 @@ namespace FeatherQR.Internals.StandardQR;
 ///   12-27 and 0.42-0.47 at 28-40 on the JIT, 0.87-0.98 and 0.48-0.57 on NativeAOT, and replaced them (2026-10-05). The 128-bit tier as it
 ///   stands, with a SWAR popcount, movemask packing and an eight-module unpack, read 1.24-1.39 at 12-27, and with the NEON popcount alone 0.89-1.01.
 /// NEON-specific choices:
-/// - Popcount is native (cnt.16b); one uaddlp widens the per-byte counts to
-///   ushort lanes, which accumulate directly in Vector128&lt;ushort&gt;
-///   accumulators (2 instructions per popcount vs 3 for a full per-qword
-///   widen). Worst-case lane sums stay far below ushort range, and totals
-///   reduce once per score via uaddlv.
-/// - Byte&lt;-&gt;bit edges run 16 modules per step: packing gathers per-byte bit
+/// - The single-word tier's popcount is native (cnt.16b); one uaddlp widens the
+///   per-byte counts to ushort lanes, which accumulate directly in
+///   Vector128&lt;ushort&gt; accumulators (2 instructions per popcount vs 3 for a
+///   full per-qword widen). Worst-case lane sums stay far below ushort range,
+///   and totals reduce once per score via uaddlv. The transposed tier counts
+///   with cnt and uadalp (AddPopCount) and reduces through LaneTotals, at its
+///   checkpoint and at its end.
+/// - Byte&lt;-&gt;bit edges run 16 modules per step in both tiers: packing gathers per-byte bit
 ///   weights (cmeq+bic) and reduces with a uaddlp chain; unpacking broadcasts
 ///   the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same
 ///   sequence as MicroQRModulePlacer.Unpack16).
 ///
 /// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
 ///
-/// The single-word tier, measured on Apple M2 vs the scalar bit-packed paths (MaskCodeArm findings log): v1 2.4x, v10 3.0x, zero allocations.
-/// The ushort accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD edges beat the SWAR edges by ~5-11%; the scalar scorer's early-exit is intentionally absent (structurally incompatible with vector accumulators, and the vector throughput win dwarfs it, same conclusion as the x64 loop).
+/// The single-word tier against the scalar bit-packed paths on Apple M2: v1 2.4x, v10 3.0x, zero allocations, measured before the rule-3 change of
+/// 2026-10-03 (#448) rewrote both, and not against them since.
+/// The ushort accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD edges beat the SWAR edges by ~5-11%. The single-word tier
+/// has no early exit; the transposed tier has the 128-bit tier's checkpoint.
 /// </summary>
 internal static partial class ModulePlacer
 {

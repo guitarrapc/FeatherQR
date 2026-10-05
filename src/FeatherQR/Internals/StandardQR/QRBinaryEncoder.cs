@@ -311,8 +311,10 @@ internal ref partial struct QRBinaryEncoder
     /// </summary>
     /// <remarks>
     /// The digits are '0'-'9', found so by the analysis or the plan, as the writer has always taken them: a writer does not check them,
-    /// and a character outside them writes a wrong field, not an exception. A run under sixteen digits, at most five groups, is written
-    /// here (<see cref="WriteNumericTail"/>): a call to a writer cost more than it saved there, 1.12 times the old loop's time at twelve
+    /// and a character outside them writes wrong fields, not an exception. Its group can spill into the fields appended with it (the
+    /// 30-bit append of nine digits, the 40-bit step of twelve), where the writer of one field a group spoiled only that field. A run
+    /// under sixteen digits, at most five groups, is written here (<see cref="WriteNumericTail"/>): a call to a writer cost more than it
+    /// saved there, 1.12 times the old loop's time at twelve
     /// digits interpreted on WebAssembly. WebAssembly has no vector tier: twelve digits a step on its SIMD took 0.95 to 0.96 of the portable
     /// writer's time AOT-compiled and 1.10 to 1.65 interpreted at 40 to 7,089 digits, and one flag gates both (2026-10-05).
     /// </remarks>
@@ -324,7 +326,9 @@ internal ref partial struct QRBinaryEncoder
             return;
         }
 #if NET8_0_OR_GREATER
-        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+        // The SSSE3 step runs from 40 digits. It took 1.08 to 1.22 of the portable writer's time at 16 to 24 and at 32 digits, 0.80 to
+        // 0.93 at 28 and 1.00 to 1.07 at 36, and 0.77 to 1.00 from 40, on the JIT with and without AVX2 and on default NativeAOT (2026-10-05).
+        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported && digits.Length >= 40)
         {
             WriteNumericSsse3(ref _writer, digits);
             return;
@@ -399,8 +403,9 @@ internal ref partial struct QRBinaryEncoder
     /// </summary>
     /// <remarks>
     /// The analysis or the plan has found every character in the alphabet, so the writers check a whole step at once rather than each
-    /// character, and a step with a character outside the alphabet hands the rest of the run to <see cref="WriteAlphanumericChecked"/>,
-    /// which throws at that character as the writer always has. A run under eight characters, shorter than any step, is written here
+    /// character. A step with a character outside the alphabet is not written: the pairs ahead of that character are written a pair at
+    /// a time (<see cref="WriteAlphanumericTail"/>), and <see cref="WriteAlphanumericChecked"/> takes the run from the pair that holds it,
+    /// and throws at that character as the writer always has. A run under eight characters, shorter than any step, is written here
     /// (<see cref="WriteAlphanumericTail"/>), with no call to a writer.
     /// </remarks>
     private void WriteAlphanumericData(ReadOnlySpan<char> chars)
@@ -433,8 +438,9 @@ internal ref partial struct QRBinaryEncoder
     /// The portable writer from <paramref name="start"/>, where a vector tier stopped. A value is one table load, -1 outside the alphabet
     /// (<see cref="CharacterSets.AlphanumericValues"/>), and a step's characters and values are checked by one OR: a character past 0x7F,
     /// or a -1, sets a bit no character or value of the alphabet sets.
-    /// Not inlined: inlined into its two-parameter entry, the method ran out of the JIT's inlining budget before its 8-byte store, which
-    /// was left a call, and held the run in memory: 1.64 times the old writer's time at 16 characters, against 0.77 not inlined (2026-10-05).
+    /// Not inlined: inlined into its two-parameter entry, an earlier body, whose throwing path still sat in its loop, ran out of the JIT's
+    /// inlining budget before its 8-byte store, which was left a call: 1.64 times the old writer's time at 16 characters, against 0.77 not
+    /// inlined. This body inlined reads 0.81 against 0.71 at 16 characters and level from 300 (JIT with AVX2, 2026-10-05).
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void WriteAlphanumericScalar(ref BitWriter writer, ReadOnlySpan<char> chars, int start)

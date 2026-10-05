@@ -6,7 +6,8 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The Alphanumeric and Numeric payload writers of <see cref="QRBinaryEncoder"/>, each tier entered directly, against the payload written
+/// The Alphanumeric and Numeric payload writers of <see cref="QRBinaryEncoder"/>, the portable and x64 tiers entered directly (the
+/// WebAssembly tier is held to the old writers by the timing mode's parity check on its build), against the payload written
 /// from the definition (ISO/IEC 18004 7.4.3 and 7.4.4): the character's index in the alphabet, first * 45 + second in 11 bits and 6 for a
 /// last odd character; three digits in 10 bits, two in 7, one in 4; every field MSB first.
 /// </summary>
@@ -73,8 +74,8 @@ public class QRBinaryEncoderPayloadParityTest
             return;
         }
 
-        // Below 0x80 (where a table can hold a sentinel), Latin-1 above it, and past 0xFF, where a narrowing pack saturates or truncates
-        // ('Ł' truncates to 'A', '聁' saturates to 0 and 'Ａ' to 0xFF).
+        // Below 0x80 (where a table can hold a sentinel), Latin-1 above it, and past 0xFF, where the portable writer's table index keeps
+        // the low seven bits ('Ł' and '聁' index 'A', 'Ａ' '!') and the vector step's pack saturates ('Ł' to 0xFF, '聁' and 'Ａ' to 0).
         foreach (var bad in new[] { 'a', '#', '@', '[', '\0', '\u007F', 'Á', 'Ł', '聁', 'Ａ' })
         {
             foreach (var length in new[] { 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 40 })

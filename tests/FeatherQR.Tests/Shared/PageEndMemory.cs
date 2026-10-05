@@ -22,15 +22,27 @@ internal sealed class PageEndMemory : IDisposable
         if (OperatingSystem.IsWindows())
         {
             _address = VirtualAlloc(0, (nuint)(2 * _pageSize), MemCommit | MemReserve, PageReadWrite);
-            if (_address == 0 || !VirtualProtect(_address + _pageSize, (nuint)_pageSize, PageNoAccess, out _))
-                throw new InvalidOperationException($"VirtualAlloc/VirtualProtect failed: {Marshal.GetLastPInvokeError()}");
+            if (_address == 0)
+                throw new InvalidOperationException($"VirtualAlloc failed: {Marshal.GetLastPInvokeError()}");
+            if (!VirtualProtect(_address + _pageSize, (nuint)_pageSize, PageNoAccess, out _))
+            {
+                var error = Marshal.GetLastPInvokeError();
+                VirtualFree(_address, 0, MemRelease);
+                throw new InvalidOperationException($"VirtualProtect failed: {error}");
+            }
         }
         else
         {
             var anonymous = OperatingSystem.IsMacOS() ? 0x1000 : 0x20;
             _address = mmap(0, (nuint)(2 * _pageSize), ProtRead | ProtWrite, MapPrivate | anonymous, -1, 0);
-            if (_address == -1 || mprotect(_address + _pageSize, (nuint)_pageSize, ProtNone) != 0)
-                throw new InvalidOperationException($"mmap/mprotect failed: {Marshal.GetLastPInvokeError()}");
+            if (_address == -1)
+                throw new InvalidOperationException($"mmap failed: {Marshal.GetLastPInvokeError()}");
+            if (mprotect(_address + _pageSize, (nuint)_pageSize, ProtNone) != 0)
+            {
+                var error = Marshal.GetLastPInvokeError();
+                munmap(_address, (nuint)(2 * _pageSize));
+                throw new InvalidOperationException($"mprotect failed: {error}");
+            }
         }
     }
 

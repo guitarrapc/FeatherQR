@@ -166,12 +166,13 @@ internal static partial class ModulePlacer
         TransposeSwapVector128(ref a, 4, 0x0F0F0F0F0F0F0F0Ful);
         TransposeSwapVector128(ref a, 2, 0x3333333333333333ul);
         var m1 = Vector128.Create(0x5555555555555555ul, 0);
-        var swap = Vector128.Create(1ul, 0ul);
         for (nuint k = 0; k < 64; k += 2)
         {
+            // the lane swap's index is written at each Shuffle: the .NET 8 JIT lowers Shuffle to one instruction only for an index it sees
+            // as a constant where it imports the call, which a hoisted local is not, and calls the software Shuffle instead
             var v = Vector128.LoadUnsafe(ref a, k);
-            var t = (Shr(v, 1) ^ Vector128.Shuffle(v, swap)) & m1;
-            (v ^ (Shl(t, 1) | Vector128.Shuffle(t, swap))).StoreUnsafe(ref a, k);
+            var t = (Shr(v, 1) ^ Vector128.Shuffle(v, Vector128.Create(1ul, 0ul))) & m1;
+            (v ^ (Shl(t, 1) | Vector128.Shuffle(t, Vector128.Create(1ul, 0ul)))).StoreUnsafe(ref a, k);
         }
     }
 

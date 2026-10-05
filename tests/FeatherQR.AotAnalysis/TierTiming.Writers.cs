@@ -28,7 +28,8 @@ internal static partial class TierTiming
         new($"kernel/{name}-{length}-old", () => TimedWriter(text, old)),
         new($"kernel/{name}-{length}-scalar", () => TimedWriter(text, scalar)),
         new($"kernel/{name}-{length}-ssse3", () => TimedWriter(text, ssse3), ssse3Runs),
-        new($"kernel/{name}-{length}-wasm", () => TimedWriter(text, wasm!), wasm is not null && System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported),
+        // a writer with no WebAssembly tier has no -wasm shape, which --loop, finding a shape by name alone, would call
+        .. wasm is null ? [] : new Shape[] { new($"kernel/{name}-{length}-wasm", () => TimedWriter(text, wasm), System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported) },
     ];
 
     private static Func<int> TimedWriter(string text, PayloadWriter write)

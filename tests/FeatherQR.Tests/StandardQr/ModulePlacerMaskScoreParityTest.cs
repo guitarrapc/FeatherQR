@@ -6,8 +6,8 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// Every mask scorer against the textbook penalty (<see cref="ModulePlacerMaskPackedParityTest.ReferenceScore"/>), score for score.
 /// The selection tests compare chosen patterns, which a scorer can get right for the wrong reason. These feed each tier's
-/// scorer whole matrices and compare the penalty itself: every single-word size, and the two- and three-word tiers at their
-/// first and last sizes and between. The transposed tiers for versions 12-40 (AVX2, 128-bit and ARM64) pack and transpose their own
+/// scorer whole matrices and compare the penalty itself: every single-word size, and the scalar scorer of two- and three-word rows
+/// (CalculateScorePacked) at its first and last sizes and between. The transposed tiers for versions 12-40 (AVX2, 128-bit and ARM64) pack and transpose their own
 /// input, so their scores are held to the textbook in <see cref="ModulePlacerMaskTransposedParityTest"/>.
 /// </summary>
 /// <remarks>
@@ -19,8 +19,8 @@ namespace FeatherQR.Tests;
 /// </para>
 /// <para>
 /// The early abort is held to its contract: with the bound at or above the score the result is the score, and below it the
-/// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. The
-/// ARM64 scorers have no abort.
+/// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. ARM64's
+/// single-word scorer has no abort; its transposed tier's abort is held in <see cref="ModulePlacerMaskTransposedParityTest"/>.
 /// </para>
 /// <para>
 /// Every call gets fresh row buffers: a scorer may use its rows as scratch for the column finder windows.
