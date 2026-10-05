@@ -747,4 +747,49 @@ BenchmarkDotNet on the JIT (3 warmups, 15 iterations), each variant held to the 
 
 At 40 and 16 the process decides more than the variant: the canary, the portable writer's own code, read 1.79 at 40 digits in one round, so those columns are read only where both rounds agree. From 300 characters up the best steps took 0.38 to 0.41 of the portable Alphanumeric writer's time and 0.55 to 0.58 of the Numeric one's. Holding the writer in a local copy took 0.41 against 0.52 at 4,296 characters, as it gained on x64. The dot product gained about 5 % at 4,296 characters, and the one check per thirty-two characters nothing, as the check is off the chain.
 
-With the shares above, the best steps would save 1.2 to 1.8 % of an alphanumeric encode and 0.7 to 0.9 % of a numeric one, and a step taking no time at all would save the share itself, at most 3.2 %. No NEON step ships: ARM64 keeps the portable writers. The step is worth measuring again once ARM64 has a faster scorer for versions 12 to 40. With mask selection at the 0.4 of its time the transposed tier reached on AVX2, a version 40 alphanumeric encode would take about 49 µs, and the step would save about 2.8 % of it (an estimate from the stage rows, not measured).
+With the shares above, the best steps would save 1.2 to 2.0 % of an alphanumeric encode and 0.7 to 0.9 % of a numeric one, estimated as the share times one less the step's ratio, and a step taking no time at all would save the share itself, at most 3.2 %. No NEON step shipped then: ARM64 kept the portable writers. With mask selection at the 0.4 of its time the transposed tier reached on AVX2, a version 40 alphanumeric encode would take about 49 µs, and the step would save about 2.8 % of it, again an estimate from the stage rows. The transposed tier came to ARM64 afterwards ("Phase 6", ARM64), a version 40 encode took 52 to 55 µs, and the steps were built into the library and measured end to end (below).
+
+#### The NEON steps end to end (2026-10-05)
+
+With the transposed scorer the payload was over the 3 % bar at version 40 (4.2 % alphanumeric, 3.5 % numeric, "Phase 6", ARM64), so the best steps above went into the library (`QRBinaryEncoder.Arm64.cs`, behind the dispatch): sixteen characters a step and then one of eight, and fifteen digits from sixteen chars. The timing mode's parity check held them to the old writers on the JIT and NativeAOT of .NET 8 and .NET 10 before any timing.
+
+Each step's cut-over: the timing mode's writer shapes, the step entered directly beside the portable writer in one process, five rounds per build, the step's time over the portable writer's. The .NET 8 columns from 48 characters and 64 digits up are a second run of five rounds, averaged with the first where both ran a length.
+
+| Alphanumeric | 8 | 9 | 10 | 12 | 14 | 15 | 16 | 17 | 20 | 24 | 31 | 32 | 40 | 48 | 64 | 128 | 300 | 4,296 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| .NET 10 JIT | 0.89 | 0.90 | 0.92 | 0.93 | 1.00 | 0.95 | 0.69 | 0.71 | 0.71 | 0.71 | 0.75 | 0.59 | 0.60 | - | - | - | 0.42 | 0.40 |
+| .NET 10 NativeAOT | 0.89 | 0.90 | 0.85 | 0.87 | 0.88 | 0.95 | 0.69 | 0.71 | 0.76 | 0.71 | 0.77 | 0.59 | 0.60 | - | - | - | 0.41 | 0.41 |
+| .NET 8 JIT | 0.90 | 0.91 | 1.00 | 1.00 | 1.06 | 1.07 | 1.00 | 1.00 | 0.90 | 0.89 | 1.09 | 0.96 | 0.90 | 0.82 | 0.80 | 0.71 | 0.63 | 0.61 |
+| .NET 8 NativeAOT | 0.89 | 0.82 | 0.85 | 0.97 | 0.94 | 1.05 | 0.93 | 0.93 | 0.89 | 0.85 | 1.07 | 0.94 | 0.86 | 0.82 | 0.77 | 0.70 | 0.63 | 0.60 |
+
+| Numeric | 16 | 20 | 24 | 28 | 30 | 32 | 36 | 40 | 44 | 48 | 64 | 80 | 96 | 128 | 160 | 192 | 256 | 320 | 400 | 500 | 7,089 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| .NET 10 JIT | 1.00 | 0.92 | 0.85 | 1.06 | 1.06 | 0.85 | 0.88 | 0.83 | 0.95 | 0.88 | 0.83 | - | - | - | - | - | - | - | - | 0.61 | 0.57 |
+| .NET 10 NativeAOT | 1.00 | 1.00 | 0.92 | 1.06 | 1.00 | 0.85 | 0.94 | 0.88 | 1.00 | 0.88 | 0.80 | - | - | - | - | - | - | - | - | 0.61 | 0.58 |
+| .NET 8 JIT | 1.45 | 1.31 | 1.23 | 1.41 | 1.39 | 1.23 | 1.12 | 1.06 | 1.29 | 1.06 | 1.00 | 0.93 | 0.91 | 1.02 | 0.88 | 0.90 | 0.86 | 0.74 | 0.79 | 0.71 | 0.80 |
+| .NET 8 NativeAOT | 1.36 | 1.31 | 1.14 | 1.29 | 1.17 | 1.25 | 1.12 | 1.03 | 1.30 | 1.06 | 1.00 | 0.89 | 0.91 | 1.00 | 0.80 | 0.79 | 0.85 | 0.81 | 0.81 | 0.77 | 0.81 |
+
+On .NET 10 the Alphanumeric step wins at every length the dispatch passes it, from eight characters, and the Numeric step from 40 digits, as the SSSE3 step does on x64: below that a step of sixteen chars read for fifteen written runs once or twice, and it read 1.06 at 28 and 30 digits. On .NET 8 both gain less. Its JIT and NativeAOT keep the step's local copy of the writer on the stack (`BitWriter` is a span and three more fields), where .NET 10 keeps it in registers, so every append goes through memory, as with the variant above that reached the writer through its reference. From 300 characters the Alphanumeric step took 0.60 to 0.63 of the portable writer's time there, and 1.05 to 1.10 at 15 and 31 characters, which end in the step of eight and a tail of seven. The Numeric step lost at 16 to 48 digits, drew at 64 to 128 and won from 160. On .NET 8 the dispatch therefore enters the steps from 32 characters and from 160 digits. One length in each second .NET 8 run read an outlier in one build (96 characters at 1.17 on the JIT, 112 digits at 1.16 on NativeAOT, against 0.76 and 0.87 in the other build) and is left out.
+
+End to end, base `encode4` (0fda781) against the change, the stage harness on both sides, alternating one process each, the median of the per-round ratios. .NET 10 ran twice for nine rounds, the first on the same steps in a scratch copy of the library, entered from sixteen digits (every Numeric shape here is 40 digits or more, or under sixteen), and the table gives the eighteen rounds together. .NET 8 ran five rounds with the cut-overs above.
+
+| Shape | .NET 10 JIT | .NET 10 NativeAOT | .NET 8 JIT | .NET 8 NativeAOT |
+|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 1.00 | 1.01 | 1.04 | 1.03 |
+| V10-M, 300 alphanumeric | 0.97 | 0.98 | 0.98 | 0.98 |
+| V40-L, 4,296 alphanumeric | 0.98 | 0.98 | 0.97 | 0.97 |
+| Set, 30,000 alphanumeric | 0.95 | 0.97 | 0.99 | 0.97 |
+| V1-L, 10 digits | 1.01 | 1.00 | 1.02 | 1.00 |
+| V40-L, 7,089 digits | 1.00 | 0.98 | 0.98 | 0.98 |
+| Set, 50,000 digits | 0.99 | 0.99 | 1.01 | 1.00 |
+| Payload, V1-M alphanumeric | 0.71 | 0.79 | 1.00 | 0.94 |
+| Payload, V10-M alphanumeric | 0.46 | 0.52 | 0.66 | 0.65 |
+| Payload, V40-L alphanumeric | 0.41 | 0.41 | 0.61 | 0.60 |
+| Payload, set of 30,000 alphanumeric | 0.41 | 0.42 | 0.61 | 0.63 |
+| Payload, V40-L digits | 0.57 | 0.57 | 0.84 | 0.76 |
+| Payload, set of 50,000 digits | 0.58 | 0.58 | 0.82 | 0.80 |
+| V19-M, 620 bytes | 1.00 | 1.01 | 1.00 | 1.01 |
+| Micro QR M4 | 0.98 | 1.00 | 1.00 | 0.97 |
+| rMQR R17x139 | 1.00 | 1.00 | 1.01 | 1.00 |
+
+From the stage rows the steps save 2.5 % of a version 40 alphanumeric encode on .NET 10, 1.6 % at version 10, 1.8 % of the alphanumeric set and 1.1 to 1.5 % of the numeric shapes, and on .NET 8 1.9 %, 1.1 to 1.2 %, 1.3 % and 0.4 to 0.7 %. That is about what a run of nine rounds resolves here. The two .NET 10 runs read 0.95 to 0.96 and 0.98 to 1.00 at version 40 alphanumeric, and one round's ratio for a shape the change does not touch ranged over 0.03 to 0.04 either way, so the end-to-end rows confirm the direction and the stage rows give the size. The payload is then 1.7 to 1.8 % of a version 40 alphanumeric encode on .NET 10 and 2.8 to 3.0 % on .NET 8. On .NET 8 the version 1 alphanumeric row read 1.03 to 1.04 though a run of sixteen characters takes no step there (its payload row 0.94 to 1.00). Nine rounds of the version 1 and 6 shapes alone read it at 1.01 on both builds, with the shapes beside it at 0.96 to 1.03.
