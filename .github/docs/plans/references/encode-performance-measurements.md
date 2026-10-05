@@ -352,6 +352,65 @@ Table memory per version, built on first use: the unblocked modules of each row 
 
 Output was identical before and after on the 7,647-symbol corpus and the 6,504-symbol pinned-mask corpus.
 
+## Phase 6: the transposed scorer on 128-bit builds
+
+Taken on 2026-10-05 the way phase 5's were, with the .NET build servers shut down before each run and each process pinned to one CCD, a cell the median of the run medians. Four builds run the 128-bit tier: the JIT without AVX2 (`DOTNET_EnableAVX=0`), a default NativeAOT publish (its baseline has no AVX), and the WebAssembly report AOT-compiled and interpreted under Node.js. Before this phase all four selected masks for versions 12 to 40 with the scalar bit-packed kernel.
+
+Mask selection on a placed matrix, the scalar kernel (`kernel/MaskCode-vN-scalar`) against the 128-bit transposed tier entered directly (`kernel/MaskCode-vN-v128`), both in one process, five rounds (three interpreted), with the NativeAOT times beside the ratios:
+
+| Version | Scalar, NativeAOT | Transposed, NativeAOT | JIT without AVX2 | Default NativeAOT | WebAssembly AOT | Interpreted |
+|---|---|---|---|---|---|---|
+| 12 | 22.6 µs | 10.6 µs | 0.44 | 0.47 | 0.59 | 0.45 |
+| 13 | 24.1 µs | 10.9 µs | 0.43 | 0.45 | 0.56 | 0.43 |
+| 14 | 25.4 µs | 11.2 µs | 0.41 | 0.44 | 0.52 | 0.41 |
+| 15 | 27.1 µs | 12.2 µs | 0.41 | 0.45 | 0.52 | 0.41 |
+| 16 | 28.5 µs | 13.2 µs | 0.42 | 0.46 | 0.52 | 0.41 |
+| 17 | 30.2 µs | 14.5 µs | 0.43 | 0.48 | 0.54 | 0.43 |
+| 18 | 31.5 µs | 14.7 µs | 0.43 | 0.47 | 0.52 | 0.42 |
+| 19 | 33.2 µs | 15.5 µs | 0.43 | 0.47 | 0.52 | 0.42 |
+| 20 | 34.6 µs | 16.3 µs | 0.43 | 0.47 | 0.53 | 0.41 |
+| 21 | 36.2 µs | 17.2 µs | 0.43 | 0.47 | 0.53 | 0.41 |
+| 22 | 37.5 µs | 17.6 µs | 0.43 | 0.47 | 0.52 | 0.40 |
+| 23 | 39.4 µs | 17.5 µs | 0.41 | 0.44 | 0.50 | 0.39 |
+| 24 | 40.7 µs | 18.9 µs | 0.43 | 0.47 | 0.52 | 0.40 |
+| 25 | 42.5 µs | 20.3 µs | 0.44 | 0.48 | 0.53 | 0.41 |
+| 26 | 43.8 µs | 20.0 µs | 0.42 | 0.46 | 0.50 | 0.39 |
+| 27 | 45.7 µs | 21.3 µs | 0.43 | 0.47 | 0.51 | 0.41 |
+| 28 | 47.1 µs | 31.0 µs | 0.61 | 0.66 | 0.71 | 0.57 |
+| 29 | 48.8 µs | 32.5 µs | 0.63 | 0.67 | 0.71 | 0.58 |
+| 30 | 50.1 µs | 33.2 µs | 0.62 | 0.66 | 0.71 | 0.57 |
+| 31 | 52.1 µs | 33.8 µs | 0.61 | 0.65 | 0.69 | 0.56 |
+| 32 | 53.4 µs | 34.2 µs | 0.61 | 0.64 | 0.69 | 0.56 |
+| 33 | 55.3 µs | 36.4 µs | 0.63 | 0.66 | 0.70 | 0.57 |
+| 34 | 56.7 µs | 36.9 µs | 0.63 | 0.65 | 0.69 | 0.56 |
+| 35 | 58.6 µs | 37.6 µs | 0.62 | 0.64 | 0.68 | 0.56 |
+| 36 | 60.0 µs | 38.8 µs | 0.63 | 0.65 | 0.69 | 0.56 |
+| 37 | 62.1 µs | 39.6 µs | 0.62 | 0.64 | 0.68 | 0.56 |
+| 38 | 63.4 µs | 40.8 µs | 0.62 | 0.64 | 0.69 | 0.56 |
+| 39 | 65.6 µs | 42.4 µs | 0.63 | 0.65 | 0.69 | 0.56 |
+| 40 | 67.1 µs | 43.0 µs | 0.62 | 0.64 | 0.68 | 0.56 |
+
+The tier took 0.39 to 0.59 of the scalar kernel's time at versions 12 to 27 and 0.56 to 0.71 at 28 to 40, on every build at every version. The step at version 28 is the tier's: the scalar kernel works on three words at every version from 12, so its time grows evenly, while the transposed tier pays for the words a row has, two up to version 27 and three from 28. The SoA scorers ported to the same vectors in the 128-bit tiers round (2026-09-30), two rows per vector, took 0.94 to 1.68 of the scalar kernel's time on default NativeAOT and 1.40 to 5.80 on WebAssembly AOT.
+
+End to end at quiet zone 0 and the mask stage alone, base (`main`, 5444c64) to change, seven alternating rounds per build on the JIT and NativeAOT, five on WebAssembly AOT and three interpreted, with the NativeAOT times beside the ratios:
+
+| Shape | NativeAOT base | NativeAOT change | JIT without AVX2 | Default NativeAOT | WebAssembly AOT | Interpreted |
+|---|---|---|---|---|---|---|
+| V19-M, 620 bytes | 37.4 µs | 20.0 µs | 0.49 | 0.54 | 0.61 | 0.50 |
+| V26-M, 1,000 bytes | 50.9 µs | 26.4 µs | 0.49 | 0.52 | 0.59 | 0.48 |
+| V39-H, 1,200 bytes | 78.4 µs | 55.8 µs | 0.68 | 0.71 | 0.76 | 0.64 |
+| V40-L, 2,900 bytes | 81.9 µs | 58.4 µs | 0.67 | 0.71 | 0.77 | 0.64 |
+| V40-L, 4,296 alphanumeric | 87.6 µs | 64.2 µs | 0.70 | 0.73 | 0.80 | 0.69 |
+| V40-L, 7,089 digits | 85.9 µs | 60.9 µs | 0.68 | 0.71 | 0.77 | 0.63 |
+| Mask stage, V19-M | 33.1 µs | 15.6 µs | 0.42 | 0.47 | 0.53 | 0.43 |
+| Mask stage, V26-M | 43.8 µs | 19.3 µs | 0.40 | 0.44 | 0.49 | 0.39 |
+| Mask stage, V39-H | 65.5 µs | 42.4 µs | 0.61 | 0.65 | 0.69 | 0.57 |
+| Mask stage, V40-L | 66.8 µs | 43.0 µs | 0.61 | 0.64 | 0.69 | 0.55 |
+
+The rows the phase does not touch, the version 10 encode (the single-word tier), Micro QR M4 and rMQR R17x139, read 0.99 to 1.04. The pinned-mask encodes at versions 19 and 40 read 1.00 to 1.03 and stay under the automatic ones: 0.31 to 0.47 of their time after the change, against 0.17 to 0.34 before. On default NativeAOT the V40-L encode took 94 µs at phase 1 (mask selection 77.5 µs) and 58.4 µs now (43.0 µs).
+
+The timing mode's parity check, which now runs every version 1 to 40 through the dispatch and the 128-bit tier entered directly, matched on all four builds.
+
 ## A transposed scorer for versions 12 to 40
 
 Row-direction penalty rules on rows wider than one word pull bits across words for every shifted term. In the three-word tier each such shift is five shifts and two ORs. Column-direction rules need no shift, because they combine whole row words of neighbouring rows.

@@ -242,6 +242,9 @@ internal static partial class TierTiming
         new("kernel/MaskCode-v28", () => MaskScoring(28, score: true)),
         new("kernel/MaskCode-v28-scalar", () => MaskScoring(28, score: true, scalar: true)),
         .. Enumerable.Range(12, 29).Where(v => v is not (12 or 20 or 27 or 28 or 40)).Select(v => new Shape($"kernel/MaskCode-v{v}", () => MaskScoring(v, score: true))),
+        .. Enumerable.Range(12, 29).Where(v => v is not (12 or 20 or 27 or 28 or 40)).Select(v => new Shape($"kernel/MaskCode-v{v}-scalar", () => MaskScoring(v, score: true, scalar: true))),
+        // The 128-bit transposed tier entered directly, beside the scalar kernel the 128-bit builds ran before it
+        .. Enumerable.Range(12, 29).Select(v => new Shape($"kernel/MaskCode-v{v}-v128", () => MaskScoring(v, score: true, v128: true))),
         new("kernel/MaskForced-v1", () => MaskScoring(1, score: false, forced: 3)),
         new("kernel/MaskForced-v6", () => MaskScoring(6, score: false, forced: 3)),
         new("kernel/MaskForced-v10", () => MaskScoring(10, score: false, forced: 3)),
@@ -680,8 +683,8 @@ internal static partial class TierTiming
         return new(luminance, side, side);
     }
 
-    /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them; the copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone). With <paramref name="forced"/> 0-7 the pattern is applied as a pinned mask is, with no scoring.</summary>
-    private static Func<int> MaskScoring(int version, bool score, bool scalar = false, int forced = -1)
+    /// <summary>Mask scoring and selection of one symbol, on random codewords placed as the encoder places them; the copy restores the unmasked matrix each call (<paramref name="score"/> false times the copy alone). With <paramref name="forced"/> 0-7 the pattern is applied as a pinned mask is, with no scoring, and with <paramref name="v128"/> the 128-bit transposed tier is entered directly (versions 12-40).</summary>
+    private static Func<int> MaskScoring(int version, bool score, bool scalar = false, int forced = -1, bool v128 = false)
     {
         var layout = ModulePlacer.GetLayout(version);
         var size = layout.Size;
@@ -716,6 +719,14 @@ internal static partial class TierTiming
                 return size <= 64
                     ? ModulePlacer.MaskCode64(work, size, version, layout.BlockedMask, QREccLevel.L)
                     : ModulePlacer.MaskCode192(work, size, version, layout.BlockedMask, QREccLevel.L);
+            };
+        }
+        if (v128)
+        {
+            return () =>
+            {
+                pristine.AsSpan().CopyTo(work);
+                return ModulePlacer.MaskCodeTransposedVector128(work, size, version, layout.BlockedMask, QREccLevel.L);
             };
         }
         return () =>

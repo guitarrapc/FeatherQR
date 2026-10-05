@@ -5,29 +5,47 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The transposed AVX2 mask tier (versions 12-40): every candidate's score against the textbook score, the early abort's contract, and the
-/// chosen pattern and masked matrix against the scalar kernel, at every version the tier serves and every ECC level.
+/// The transposed mask tiers (versions 12-40), on AVX2 and on 128-bit vectors: every candidate's score against the textbook score, the
+/// early abort's contract, and the chosen pattern and masked matrix against the scalar kernel, at every version the tiers serve and every
+/// ECC level.
 /// </summary>
 /// <remarks>
-/// The tier holds each candidate twice, as row words and as column words (the transpose), and scores every rule along the word index, so
-/// what it can get wrong is per version and per word: a block transposed wrongly, a padding row or column read as modules, a format or
+/// <para>
+/// The tiers hold each candidate twice, as row words and as column words (the transpose), and score every rule along the word index, so
+/// what they can get wrong is per version and per word: a block transposed wrongly, a padding row or column read as modules, a format or
 /// version module overlaid in one orientation and not the other, the 2x2 rule's one-bit carry between words. All 29 versions run, on placed
 /// random data, all-light and all-dark data, and data striped along rows and along columns, which put long runs and finder-like windows
 /// across the 64-bit word boundaries in both orientations.
+/// </para>
+/// <para>
+/// Each route is entered directly, so an x64 machine with AVX2 runs both: the dispatch takes the 128-bit tier only on x64 without AVX2 and
+/// on WebAssembly, where no test runs (the timing mode's parity check holds those builds).
+/// </para>
 /// </remarks>
 public class ModulePlacerMaskTransposedParityTest
 {
+    public enum Route
+    {
+        Avx2,
+        Vector128,
+    }
+
     public static IEnumerable<int> Versions() => Enumerable.Range(12, 29);
+
+    public static IEnumerable<(int Version, Route Route)> VersionsAndRoutes()
+        => from route in Enum.GetValues<Route>() from version in Versions() select (version, route);
+
+    public static IEnumerable<Route> Routes() => Enum.GetValues<Route>();
 
     private static readonly QREccLevel[] EccLevels = [QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H];
 
     [Test]
-    [MethodDataSource(nameof(Versions))]
-    public async Task Scores_MatchTextbook(int version)
+    [MethodDataSource(nameof(VersionsAndRoutes))]
+    public async Task Scores_MatchTextbook(int version, Route route)
     {
-        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+        if (!Available(route))
         {
-            Skip.Test("AVX2 not supported on this machine");
+            Skip.Test($"{route} not run on this machine");
             return;
         }
 
@@ -37,7 +55,7 @@ public class ModulePlacerMaskTransposedParityTest
         {
             foreach (var (name, data) in Fixtures(layout))
             {
-                ModulePlacer.ScoreCandidatesTransposed(data, version, ecc, int.MaxValue, scores);
+                Score(route, data, version, ecc, int.MaxValue, scores);
                 for (var pattern = 0; pattern < 8; pattern++)
                 {
                     var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(Candidate(data, layout, version, ecc, pattern), layout.Size);
@@ -48,12 +66,12 @@ public class ModulePlacerMaskTransposedParityTest
     }
 
     [Test]
-    [MethodDataSource(nameof(Versions))]
-    public async Task AbortBound_GivesTheScoreOrMaxValue(int version)
+    [MethodDataSource(nameof(VersionsAndRoutes))]
+    public async Task AbortBound_GivesTheScoreOrMaxValue(int version, Route route)
     {
-        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+        if (!Available(route))
         {
-            Skip.Test("AVX2 not supported on this machine");
+            Skip.Test($"{route} not run on this machine");
             return;
         }
 
@@ -62,13 +80,13 @@ public class ModulePlacerMaskTransposedParityTest
         var scores = new int[8];
         foreach (var (name, data) in Fixtures(layout))
         {
-            ModulePlacer.ScoreCandidatesTransposed(data, version, QREccLevel.M, int.MaxValue, exact);
+            Score(route, data, version, QREccLevel.M, int.MaxValue, exact);
 
             // A bound at a candidate's own score must not abort it, even where the part left after the checkpoint is zero (a candidate
             // with no finder-like window along its rows), and below a score a candidate reads its score or int.MaxValue and nothing else.
             foreach (var bound in exact.Concat(exact.Select(s => s - 1)).Append(0).Distinct())
             {
-                ModulePlacer.ScoreCandidatesTransposed(data, version, QREccLevel.M, bound, scores);
+                Score(route, data, version, QREccLevel.M, bound, scores);
                 for (var pattern = 0; pattern < 8; pattern++)
                 {
                     if (bound >= exact[pattern] || scores[pattern] != int.MaxValue)
@@ -79,57 +97,12 @@ public class ModulePlacerMaskTransposedParityTest
     }
 
     [Test]
-    public async Task MaskCodeTransposed_RejectsMismatchedInput()
+    [MethodDataSource(nameof(VersionsAndRoutes))]
+    public async Task Selection_MatchesScalarKernel(int version, Route route)
     {
-        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+        if (!Available(route))
         {
-            Skip.Test("AVX2 not supported on this machine");
-            return;
-        }
-
-        // The tier caches its tables per version, so a size that does not belong to the version, or a version outside the tier, must
-        // be refused before the cache is touched, and a short buffer before the rows are read.
-        var layout = ModulePlacer.GetLayout(20);
-        var data = Fixtures(layout).First().Data;
-        await Assert.That(() => ModulePlacer.MaskCodeTransposed((byte[])data.Clone(), layout.Size - 4, 20, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
-        await Assert.That(() => ModulePlacer.MaskCodeTransposed((byte[])data.Clone(), layout.Size, 11, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
-        await Assert.That(() => ModulePlacer.MaskCodeTransposed((byte[])data.Clone(), layout.Size, 41, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
-        await Assert.That(() => ModulePlacer.MaskCodeTransposed(data.AsSpan(0, data.Length - 1).ToArray(), layout.Size, 20, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
-        await Assert.That(() => ModulePlacer.MaskCodeTransposed((byte[])data.Clone(), layout.Size, 20, layout.BlockedMask, (QREccLevel)4)).Throws<ArgumentOutOfRangeException>();
-
-        // and a valid call afterwards still matches the scalar kernel (the refused calls did not poison the cache)
-        var expected = (byte[])data.Clone();
-        var expectedBest = ModulePlacer.MaskCode192(expected, layout.Size, 20, layout.BlockedMask, QREccLevel.M);
-        var actual = (byte[])data.Clone();
-        await Assert.That(ModulePlacer.MaskCodeTransposed(actual, layout.Size, 20, layout.BlockedMask, QREccLevel.M)).IsEqualTo(expectedBest);
-        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
-    }
-
-    [Test]
-    public async Task Tables_StayUnderTheirBudget()
-    {
-        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
-        {
-            Skip.Test("AVX2 not supported on this machine");
-            return;
-        }
-
-        // Printed so a growth shows in the log: each version's tables are its unblocked rows and columns, two or three words each.
-        foreach (var version in Versions())
-        {
-            var bytes = ModulePlacer.TransposedTableBytes(version);
-            Console.WriteLine($"transposed mask tables, version {version}: {bytes} bytes");
-            await Assert.That(bytes).IsLessThanOrEqualTo(10 * 1024).Because($"version {version}");
-        }
-    }
-
-    [Test]
-    [MethodDataSource(nameof(Versions))]
-    public async Task MaskCodeTransposed_MatchesScalarKernel(int version)
-    {
-        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
-        {
-            Skip.Test("AVX2 not supported on this machine");
+            Skip.Test($"{route} not run on this machine");
             return;
         }
 
@@ -141,13 +114,74 @@ public class ModulePlacerMaskTransposedParityTest
                 var expected = (byte[])data.Clone();
                 var expectedBest = ModulePlacer.MaskCode192(expected, layout.Size, version, layout.BlockedMask, ecc);
                 var actual = (byte[])data.Clone();
-                var actualBest = ModulePlacer.MaskCodeTransposed(actual, layout.Size, version, layout.BlockedMask, ecc);
+                var actualBest = Select(route, actual, layout.Size, version, layout.BlockedMask, ecc);
 
                 await Assert.That(actualBest).IsEqualTo(expectedBest).Because($"version {version}, {ecc}, {name}");
                 await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching).Because($"version {version}, {ecc}, {name}");
             }
         }
     }
+
+    [Test]
+    [MethodDataSource(nameof(Routes))]
+    public async Task Selection_RejectsMismatchedInput(Route route)
+    {
+        if (!Available(route))
+        {
+            Skip.Test($"{route} not run on this machine");
+            return;
+        }
+
+        // The tiers cache their tables per version, so a size that does not belong to the version, or a version outside the tiers, must
+        // be refused before the cache is touched, and a short buffer before the rows are read.
+        var layout = ModulePlacer.GetLayout(20);
+        var data = Fixtures(layout).First().Data;
+        await Assert.That(() => Select(route, (byte[])data.Clone(), layout.Size - 4, 20, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => Select(route, (byte[])data.Clone(), layout.Size, 11, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => Select(route, (byte[])data.Clone(), layout.Size, 41, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => Select(route, data.AsSpan(0, data.Length - 1).ToArray(), layout.Size, 20, layout.BlockedMask, QREccLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => Select(route, (byte[])data.Clone(), layout.Size, 20, layout.BlockedMask, (QREccLevel)4)).Throws<ArgumentOutOfRangeException>();
+
+        // and a valid call afterwards still matches the scalar kernel (the refused calls did not poison the cache)
+        var expected = (byte[])data.Clone();
+        var expectedBest = ModulePlacer.MaskCode192(expected, layout.Size, 20, layout.BlockedMask, QREccLevel.M);
+        var actual = (byte[])data.Clone();
+        await Assert.That(Select(route, actual, layout.Size, 20, layout.BlockedMask, QREccLevel.M)).IsEqualTo(expectedBest);
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task Tables_StayUnderTheirBudget()
+    {
+        // Printed so a growth shows in the log: each version's tables are its unblocked rows and columns, two or three words each, shared by
+        // both tiers.
+        foreach (var version in Versions())
+        {
+            var bytes = ModulePlacer.TransposedTableBytes(version);
+            Console.WriteLine($"transposed mask tables, version {version}: {bytes} bytes");
+            await Assert.That(bytes).IsLessThanOrEqualTo(10 * 1024).Because($"version {version}");
+        }
+    }
+
+    private static bool Available(Route route) => route switch
+    {
+        Route.Avx2 => System.Runtime.Intrinsics.X86.Avx2.IsSupported,
+        Route.Vector128 => System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated,
+        _ => false,
+    };
+
+    private static void Score(Route route, byte[] data, int version, QREccLevel ecc, int abortAbove, int[] scores)
+    {
+        if (route == Route.Avx2)
+            ModulePlacer.ScoreCandidatesTransposed(data, version, ecc, abortAbove, scores);
+        else
+            ModulePlacer.ScoreCandidatesTransposedVector128(data, version, ecc, abortAbove, scores);
+    }
+
+    private static int Select(Route route, byte[] buffer, int size, int version, byte[] blockedMask, QREccLevel ecc)
+        => route == Route.Avx2
+            ? ModulePlacer.MaskCodeTransposed(buffer, size, version, blockedMask, ecc)
+            : ModulePlacer.MaskCodeTransposedVector128(buffer, size, version, blockedMask, ecc);
 
     /// <summary>Candidate <paramref name="pattern"/> as the final symbol: the mask on the data area, its format information, the version information.</summary>
     private static byte[] Candidate(byte[] data, ModulePlacer.PlacementLayout layout, int version, QREccLevel ecc, int pattern)

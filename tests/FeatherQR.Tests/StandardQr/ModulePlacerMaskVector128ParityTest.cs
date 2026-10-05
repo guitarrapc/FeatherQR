@@ -10,8 +10,9 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class ModulePlacerMaskVector128ParityTest
 {
-    // 1..11 the lane-per-pattern tier (11 = size 61, the last one-word version); 12 and 40 check the larger versions reach the scalar path
-    public static IEnumerable<int> Versions => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 40];
+    // 1..11 the lane-per-pattern tier (11 = size 61, the last one-word version); 12, 27, 28 and 40 the transposed tier at each end of its
+    // two-word and three-word sizes (ModulePlacerMaskTransposedParityTest has every version)
+    public static IEnumerable<int> Versions => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 27, 28, 40];
 
     [Test]
     [MethodDataSource(nameof(Versions))]
