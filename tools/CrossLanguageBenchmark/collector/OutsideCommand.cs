@@ -61,7 +61,11 @@ internal static class OutsideCommand
             if (entry is null || cli is null)
                 continue;
 
-            var n = Math.Max(1L, (long)Math.Round(settings.Seconds * 1e9 / result.MedianNs));
+            // N has to contain the warmup for everything fixed to cancel. A CLI that warmed up longer than the run asked raised the warmup
+            // to its own floor (the JVM CLIs, see clis.tsv), so its N covers that warmup instead of the stated seconds.
+            var warmupMs = Stats.Median(result.Processes.Where(p => p.Rejected is null).Select(p => p.WarmupMs));
+            var seconds = warmupMs > run.Settings.WarmupMs * 1.5 ? Math.Max(settings.Seconds, warmupMs / 1000) : settings.Seconds;
+            var n = Math.Max(1L, (long)Math.Round(seconds * 1e9 / result.MedianNs));
             string[] Arguments(long iterations) => ["fixed", .. entry.Arguments(corpus), "--iterations", iterations.ToString(CultureInfo.InvariantCulture)];
 
             // hyperfine only sees the exit code, so the output is checked once here.
@@ -108,7 +112,7 @@ internal static class OutsideCommand
     private static string Markdown(List<OutsideResult> results, OutsideSettings settings)
     {
         var md = new StringBuilder();
-        md.AppendLine(CultureInfo.InvariantCulture, $"N sized to {settings.Seconds} s of calls; {settings.Rounds} hyperfine rounds of {settings.Runs} runs per command, the order alternating. A range above {MaxRange:P0} of the call, or a fixed cost below -{MaxNegativeFixed:P0} of T(N), is disturbed and measured again, up to {settings.Attempts} attempts.");
+        md.AppendLine(CultureInfo.InvariantCulture, $"N sized to {settings.Seconds} s of calls, or to a CLI's own longer warmup; {settings.Rounds} hyperfine rounds of {settings.Runs} runs per command, the order alternating. A range above {MaxRange:P0} of the call, or a fixed cost below -{MaxNegativeFixed:P0} of T(N), is disturbed and measured again, up to {settings.Attempts} attempts.");
         md.AppendLine();
         md.AppendLine("| Entry | CLI | N | Outside µs | Range µs | Self µs | Outside / self | Fixed ms | Attempts |");
         md.AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---:|");

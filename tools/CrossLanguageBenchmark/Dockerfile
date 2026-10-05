@@ -63,6 +63,14 @@ RUN for build in default x86-64-v3; do \
         || exit 1; \
     done
 
+# JVM: BoofCV and ZXing at the exact versions jvm/pom.xml pins, packed into one jar by Maven 3.10.0 on JDK 25.
+# The final stage runs it on the JRE of the same release, copied from its own pinned image.
+FROM maven:3-eclipse-temurin-25-noble@sha256:4020041efbd0e5df7a6727b1c60f449bd59936df94153098c4adddfd88cd3e7a AS jvm
+WORKDIR /src
+COPY tools/CrossLanguageBenchmark/jvm/ ./
+RUN mvn -q -B package \
+    && mkdir -p /opt/xlang/jvm && cp target/xlang-jvm.jar /opt/xlang/jvm/
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29
 
 RUN apt-get update \
@@ -89,6 +97,8 @@ RUN dotnet publish tools/CrossLanguageBenchmark/dotnet/cli -c Release -o /opt/xl
 COPY --from=rust /opt/xlang/rust/ /opt/xlang/rust/
 COPY --from=aot /opt/xlang/featherqr-aot/ /opt/xlang/featherqr-aot/
 COPY --from=cpp /opt/xlang/cpp/ /opt/xlang/cpp/
+COPY --from=eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab /opt/java/openjdk /opt/java/openjdk
+COPY --from=jvm /opt/xlang/jvm/ /opt/xlang/jvm/
 
 # The ZXingCpp package's CLI again, with the package's libZXing replaced by the one built above from the same commit.
 RUN cp -r /opt/xlang/zxingcpp-net /opt/xlang/zxingcpp-net-own \
