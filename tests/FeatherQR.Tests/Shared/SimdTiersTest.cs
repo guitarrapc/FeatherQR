@@ -241,10 +241,13 @@ public class SimdTiersTest
     [Test]
     public async Task MethodLines_SpanTheDeclarationAndItsBody()
     {
-        var source = "class C\n{\n    // void Run() in a comment\n    internal static void Run() => Run(0);\n    private void Run(int a)\n    {\n        if (a > 0) { a--; }\n    }\n\n    internal static int Other() => 1;\n}";
+        // Other has an expression body and a block-bodied member after it, so its declaration is passed over rather than read through
+        // to Next's braces.
+        var source = "class C\n{\n    // void Run() in a comment\n    internal static void Run() => Run(0);\n    private void Run(int a)\n    {\n        if (a > 0) { a--; }\n    }\n\n    internal static int Other() => 1;\n    private void Next()\n    {\n    }\n}";
 
         await Assert.That(MethodLines(source, "Run")).IsEqualTo((5, 8));
         await Assert.That(MethodLines(source, "Other")).IsNull();
+        await Assert.That(MethodLines(source, "Next")).IsEqualTo((11, 13));
         await Assert.That(MethodLines(source, "Missing")).IsNull();
     }
 

@@ -44,11 +44,14 @@ using System.Xml.Linq;
 // (an async method by its state machine, so a test that crashed after an await is still found), or `?.?`
 // when the stack names none. An exception the framework threw and did not catch (a filter it cannot
 // parse) stops the tool, as does an exit code that is none of these and not 0 (passed), 2 (a test failed)
-// or 8 (no test matched the filter); a crash in the framework's code that is not its own exception (an
-// access violation on an object a fault overwrote) is a crash like any other. `report` and `compare`
-// mark what only a crash caught, and `evaluate` keeps a crash's catch whatever sub-cases it keeps, as a
-// crash names none. To see what else catches such a fault, rerun it with --only, a --filter that leaves
-// the crashing test out, and a fresh <out-dir>.
+// or 8 (no test matched the filter). An access violation in the framework's own code, on an object a
+// fault overwrote, is a crash like any other. A fault that writes zeros over such an object can instead
+// end in an exception the framework catches and logs, and the test it was running then reports nothing
+// while the run exits as usual: a fault run whose tests total fewer than BASE's records a catch that
+// names no test (`?.?`, its source "missing"). Under --only there is no BASE to count against.
+// `report` and `compare` mark what only a crash or a missing result caught, and `evaluate` keeps such a
+// catch whatever sub-cases it keeps, as it names none. To see what else catches such a fault, rerun it
+// with --only, a --filter that leaves the crashing test out, and a fresh <out-dir>.
 //
 // A test that walks many sub-cases (seeds, versions, budgets) stops at its first failure, which says
 // nothing about the others. To see each, write the helper into the test project with `helper` and wrap
@@ -74,6 +77,7 @@ using System.Xml.Linq;
 const string LogVariable = "MUTATION_LOG";
 const string Baseline = "BASE";
 const string Crash = "crash";
+const string Missing = "missing";
 
 if (args.Length == 0)
     return Usage();
@@ -188,14 +192,21 @@ static int Run(string mutantsPath, string outDir, string[] options)
     Console.CancelKeyPress += (_, _) => Pending.Restore();
     var index = 0;
     var sequence = only is null ? mutants.Prepend(new Mutant(Baseline, [])).ToList() : mutants;
+    int? baseTotal = null;
     foreach (var mutant in sequence)
     {
         var result = RunOne(mutant, index++, project, tfm, dll, filters, outDir, timeout);
+        if (mutant.Id == Baseline)
+            baseTotal = result.Total;
+        // a test whose result went missing without a crash (the framework caught what the fault broke) counts against BASE's total
+        else if (baseTotal is { } expected && result.Built && !result.TimedOut && result.Total < expected && !result.Catches.Any(c => c.Source == Crash))
+            result = result with { Catches = [.. result.Catches, new Catch("?", "?", $"{expected - result.Total} of BASE's {expected} tests reported no result", Missing)] };
         File.WriteAllText(Path.Combine(outDir, mutant.Id + ".json"), JsonSerializer.Serialize(result, ResultJson.Default.Result));
         var methods = result.Catches.Select(c => $"{c.Class}.{c.Method}").Distinct().Count();
         var status = !result.Built ? "BUILD FAILED" : result.TimedOut ? "TIMED OUT" : result.Catches.Count == 0 ? "not caught" : $"caught by {methods} method{(methods == 1 ? "" : "s")}";
         var crashed = result.Catches.Count(c => c.Source == Crash);
-        Console.WriteLine($"{mutant.Id,-10} {status,-24} tests {result.Total}, failed {result.Failed}, logged {result.Catches.Count(c => c.Source == "log")}{(crashed > 0 ? $", crashed {crashed}" : "")}");
+        var missing = result.Catches.Any(c => c.Source == Missing) ? $", missing {baseTotal - result.Total}" : "";
+        Console.WriteLine($"{mutant.Id,-10} {status,-24} tests {result.Total}, failed {result.Failed}, logged {result.Catches.Count(c => c.Source == "log")}{(crashed > 0 ? $", crashed {crashed}" : "")}{missing}");
         if (mutant.Id == Baseline && (!result.Built || result.Catches.Count > 0))
             throw new ToolException("the unchanged suite must build and catch nothing; see the logs in " + outDir);
     }
@@ -335,24 +346,25 @@ static int Report(string dir)
         var methods = caughtBy[r.Id];
         var what = !r.Built ? "build failed" : methods.Count == 0 ? "not caught" : string.Join(", ", methods.OrderByDescending(m => m.Value).Select(m => $"{m.Key} ({m.Value})"));
         var crashed = r.Catches.Count(c => c.Source == Crash);
-        Console.WriteLine($"{r.Id,-10} {what}{(crashed > 0 ? $"; the test host crashed in {crashed} run{(crashed == 1 ? "" : "s")}" : "")}");
+        var missing = r.Catches.FirstOrDefault(c => c.Source == Missing)?.Detail;
+        Console.WriteLine($"{r.Id,-10} {what}{(crashed > 0 ? $"; the test host crashed in {crashed} run{(crashed == 1 ? "" : "s")}" : "")}{(missing is null ? "" : $"; {missing}")}");
     }
-    // a crashed run reads no results, so a fault only a crash caught may be caught by more methods than these
-    bool ByCrashOnly(Result r) => r.Catches.Count > 0 && r.Catches.All(c => c.Source == Crash);
+    // a crashed run reads no results, and a missing result names no test, so a fault only they caught may be caught by more methods than these
+    bool ByUnnamedOnly(Result r) => r.Catches.Count > 0 && r.Catches.All(NamesNoTest);
     Console.WriteLine();
     Console.WriteLine($"Not caught: {Join(results.Where(r => r.Built && caughtBy[r.Id].Count == 0).Select(r => r.Id))}");
-    Console.WriteLine($"Caught by one method only: {Join(results.Where(r => caughtBy[r.Id].Count == 1).Select(r => $"{r.Id} ({caughtBy[r.Id].Keys.Single()}{(ByCrashOnly(r) ? ", by a crash" : "")})"))}");
+    Console.WriteLine($"Caught by one method only: {Join(results.Where(r => caughtBy[r.Id].Count == 1).Select(r => $"{r.Id} ({caughtBy[r.Id].Keys.Single()}{(ByUnnamedOnly(r) ? ", by a crash or a missing result" : "")})"))}");
     Console.WriteLine();
     Console.WriteLine("Per method: faults caught, and caught by no other method");
     foreach (var method in caughtBy.Values.SelectMany(m => m.Keys).Distinct().Order())
     {
         var catching = results.Where(r => caughtBy[r.Id].ContainsKey(method)).ToList();
         var alone = catching.Where(r => caughtBy[r.Id].Count == 1).ToList();
-        var crashes = alone.Count(ByCrashOnly);
-        Console.WriteLine($"  {method}: {catching.Count}, alone {alone.Count}{(crashes > 0 ? $" ({crashes} by a crash)" : "")}");
+        var crashes = alone.Count(ByUnnamedOnly);
+        Console.WriteLine($"  {method}: {catching.Count}, alone {alone.Count}{(crashes > 0 ? $" ({crashes} by a crash or a missing result)" : "")}");
     }
-    if (results.Any(ByCrashOnly))
-        Console.WriteLine("A crashed run reads no results: a fault caught by a crash alone may be caught by more methods; see `run` in the header.");
+    if (results.Any(ByUnnamedOnly))
+        Console.WriteLine("A crashed run reads no results and a missing result names no test: a fault caught by them alone may be caught by more methods; see `run` in the header.");
     return 0;
 }
 
@@ -370,11 +382,11 @@ static int Evaluate(string dir, string[] options)
         keeps.Add((spec[..eq], new Regex(spec[(eq + 1)..])));
     }
     var results = LoadResults(dir).Where(r => r.Id != Baseline).ToList();
-    // a crash names no sub-case, so which kept ones would still crash is unknown: its catch is kept, and listed
-    bool Kept(Catch c) => c.Source == Crash || keeps.Where(k => Matches(c, k.Method)).All(k => k.Pattern.IsMatch(c.Detail));
-    var crashKept = results.Where(r => r.Catches.Any(c => c.Source == Crash && keeps.Any(k => Matches(c, k.Method)))).Select(r => r.Id).ToList();
+    // a crash or a missing result names no sub-case, so which kept ones would still catch the fault is unknown: its catch is kept, and listed
+    bool Kept(Catch c) => NamesNoTest(c) || keeps.Where(k => Matches(c, k.Method)).All(k => k.Pattern.IsMatch(c.Detail));
+    var crashKept = results.Where(r => r.Catches.Any(c => NamesNoTest(c) && keeps.Any(k => Matches(c, k.Method)))).Select(r => r.Id).ToList();
     if (crashKept.Count > 0)
-        Console.WriteLine($"kept whatever the sub-cases, as a crash names none: {Join(crashKept)}");
+        Console.WriteLine($"kept whatever the sub-cases, as a crash or a missing result names none: {Join(crashKept)}");
 
     foreach (var (method, pattern) in keeps)
     {
@@ -415,11 +427,11 @@ static int Compare(string beforeDir, string afterDir)
             var b = ids.Where(id => before[id].Catches.Any(c => key(c) == k)).ToList();
             var a = ids.Where(id => after[id].Catches.Any(c => key(c) == k)).ToHashSet();
             var lost = b.Where(id => !a.Contains(id)).ToList();
-            // a crash is credited to the crashing test the scheduler reached first, which can change between runs: a loss only a crash
-            // caught is marked and does not fail the comparison (the suite level below still does)
-            var crashOnly = lost.Where(id => before[id].Catches.Where(c => key(c) == k).All(c => c.Source == Crash)).ToHashSet();
+            // a crash is credited to the crashing test the scheduler reached first, which can change between runs, and a missing result
+            // names no test: a loss only they caught is marked and does not fail the comparison (the suite level below still does)
+            var crashOnly = lost.Where(id => before[id].Catches.Where(c => key(c) == k).All(NamesNoTest)).ToHashSet();
             anyLost |= lost.Any(id => !crashOnly.Contains(id));
-            Console.WriteLine($"  {k}: {b.Count} -> {a.Count}{(lost.Count > 0 ? $", lost: {Join(lost.Select(id => crashOnly.Contains(id) ? id + " (by a crash)" : id))}" : "")}");
+            Console.WriteLine($"  {k}: {b.Count} -> {a.Count}{(lost.Count > 0 ? $", lost: {Join(lost.Select(id => crashOnly.Contains(id) ? id + " (by a crash or a missing result)" : id))}" : "")}");
         }
     }
     Level("Per method:", MethodOf);
@@ -505,6 +517,9 @@ static List<Result> LoadResults(string dir)
     => Directory.GetFiles(dir, "*.json").Select(f => JsonSerializer.Deserialize(File.ReadAllText(f), ResultJson.Default.Result)!).OrderBy(r => r.Index).ToList();
 
 static string MethodOf(Catch c) => $"{c.Class}.{c.Method}";
+
+// a catch that no test's own result gives: a crashed host's, or a test that reported nothing
+static bool NamesNoTest(Catch c) => c.Source is Crash or Missing;
 
 static bool Matches(Catch c, string method) => method.Contains('.') ? MethodOf(c) == method : c.Method == method;
 

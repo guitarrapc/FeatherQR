@@ -286,5 +286,5 @@ Done.
 
 Lessons.
 - A tier taken over by a new build carries the old one's runtime behaviour as well as its rules. The 128-bit transposed code ran its lane swap through a call on .NET 8 since phase 6, a cost no .NET 10 measurement shows, and ARM64 inherited it with the code.
-- A vector step's cut-over is measured where the step runs once or twice. The Numeric step was sent every run from 16 digits on the strength of 500 and 7,089, and lost to the portable writer at 16 to 24 and at 32 digits, won at 28 and drew at 36.
+- A vector step's cut-over is measured where the step runs once or twice. The Numeric step was sent every run from 16 digits on the strength of 500 and 7,089, and lost to the portable writer at 16 to 24 and at 32 digits, won at 28, and at 36 read 1.00 on the JIT and 1.07 on NativeAOT.
 - A parity check over whole strings cannot see a read past the run, because the terminator stops a vector step as a bad character does. A run has to be checked as a plan passes it, as a slice whose next characters the step would accept.
