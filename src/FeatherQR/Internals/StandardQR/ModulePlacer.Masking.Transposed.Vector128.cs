@@ -8,7 +8,8 @@ namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// Transposed mask selection for versions 12-40 on 128-bit vectors, two rows or columns per vector (the design is in
-/// ModulePlacer.Masking.Transposed.cs), for the builds the 128-bit tier serves: x64 without AVX2, and WebAssembly.
+/// ModulePlacer.Masking.Transposed.cs), for the builds the 128-bit tier serves: x64 without AVX2, and WebAssembly. ARM64's transposed tier
+/// (ModulePlacer.Masking.Arm64.cs) masks and scores with this file's code around its own row packing and winner unpack.
 /// </summary>
 /// <remarks>
 /// Same planes, tables, rules and checkpoint as the AVX2 tier. Popcounts accumulate in the 16-bit lanes of <see cref="AddPopCount"/> and

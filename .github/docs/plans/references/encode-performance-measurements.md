@@ -411,6 +411,71 @@ The rows the phase does not touch, the version 10 encode (the single-word tier),
 
 The timing mode's parity check, which now runs every version 1 to 40 through the dispatch and the 128-bit tier entered directly, matched on all four builds.
 
+### ARM64 (2026-10-05)
+
+Phase 6 left ARM64 on its two- and three-word SoA tiers for want of a machine. Taken afterwards on an Apple M2 (osx-arm64, .NET 10.0.12) on the JIT and a default NativeAOT publish, with the .NET build servers shut down and base and change alternating one process each, a cell the median of the run medians. The Mac cannot pin a process.
+
+The 128-bit tier already ran on ARM64 through portable vectors, with a SWAR popcount, movemask packing and the scalar eight-module unpack. Entered directly beside the SoA tiers (the dispatch) in one process, three rounds for the first row and four for the others, at versions 12 to 27 and 28 to 40:
+
+| 128-bit transposed tier | JIT, 12-27 | JIT, 28-40 | NativeAOT, 12-27 | NativeAOT, 28-40 |
+|---|---|---|---|---|
+| As it stands | 1.30 to 1.39 | 0.62 to 0.65 | 1.24 to 1.32 | 0.72 to 0.78 |
+| NEON's cnt and uadalp for the popcount | 0.89 to 0.99 | 0.45 to 0.48 | 0.94 to 1.01 | 0.52 to 0.55 |
+| The same, rows packed and the winner unpacked sixteen modules a step (the NEON tier's helpers) | 0.85 to 0.92 | 0.43 to 0.45 | 0.88 to 0.96 | 0.51 to 0.53 |
+
+The last row shipped as ARM64's tier for versions 12 to 40, in place of the SoA tiers. Mask selection on a placed matrix, base `encode4` (a740295) to change, five alternating rounds per build:
+
+| Version | JIT, SoA tiers | JIT, transposed | NativeAOT, SoA tiers | NativeAOT, transposed |
+|---|---|---|---|---|
+| 12 | 8.2 µs | 0.94 | 8.5 µs | 0.97 |
+| 13 | 9.2 µs | 0.92 | 9.9 µs | 0.90 |
+| 14 | 9.1 µs | 0.91 | 9.7 µs | 0.87 |
+| 15 | 10.5 µs | 0.92 | 11.0 µs | 0.88 |
+| 16 | 10.2 µs | 0.94 | 11.0 µs | 0.90 |
+| 17 | 11.8 µs | 0.95 | 12.3 µs | 0.96 |
+| 18 | 11.5 µs | 0.94 | 11.4 µs | 0.98 |
+| 19 | 13.1 µs | 0.95 | 13.4 µs | 0.94 |
+| 20 | 12.6 µs | 0.92 | 13.1 µs | 0.95 |
+| 21 | 14.2 µs | 0.95 | 14.7 µs | 0.95 |
+| 22 | 14.0 µs | 0.94 | 14.3 µs | 0.95 |
+| 23 | 15.7 µs | 0.90 | 16.2 µs | 0.91 |
+| 24 | 14.9 µs | 0.92 | 15.9 µs | 0.93 |
+| 25 | 16.4 µs | 0.97 | 17.4 µs | 0.98 |
+| 26 | 16.5 µs | 0.91 | 16.9 µs | 0.93 |
+| 27 | 18.2 µs | 0.94 | 19.5 µs | 0.93 |
+| 28 | 53.5 µs | 0.44 | 46.3 µs | 0.52 |
+| 29 | 57.2 µs | 0.44 | 50.2 µs | 0.55 |
+| 30 | 57.0 µs | 0.43 | 48.3 µs | 0.53 |
+| 31 | 60.1 µs | 0.45 | 51.7 µs | 0.56 |
+| 32 | 60.2 µs | 0.42 | 52.3 µs | 0.52 |
+| 33 | 63.9 µs | 0.45 | 55.1 µs | 0.57 |
+| 34 | 63.7 µs | 0.43 | 54.3 µs | 0.53 |
+| 35 | 67.8 µs | 0.45 | 58.8 µs | 0.55 |
+| 36 | 67.8 µs | 0.43 | 58.5 µs | 0.53 |
+| 37 | 70.6 µs | 0.46 | 62.4 µs | 0.56 |
+| 38 | 71.1 µs | 0.45 | 68.9 µs | 0.48 |
+| 39 | 74.9 µs | 0.47 | 65.9 µs | 0.57 |
+| 40 | 73.1 µs | 0.46 | 64.8 µs | 0.53 |
+
+At every version the change took less time, 0.87 to 0.98 at 12 to 27 and 0.42 to 0.57 at 28 to 40. The SoA tiers stepped by 2.9 times from version 27 to 28 (18.2 to 53.5 µs on the JIT), where the three-word tier begins, and the transposed tier by 1.3 to 1.4 times. Versions 1 and 6, the single-word tier, read 1.00 to 1.04.
+
+End to end at quiet zone 0, seven alternating rounds per build:
+
+| Shape | JIT base | JIT change | NativeAOT base | NativeAOT change |
+|---|---|---|---|---|
+| V19-M, 620 bytes | 17.9 µs | 0.89 | 17.6 µs | 0.93 |
+| V26-M, 1,000 bytes | 25.1 µs | 0.88 | 23.9 µs | 0.92 |
+| V39-H, 1,200 bytes | 89.7 µs | 0.55 | 79.0 µs | 0.63 |
+| V40-L, 2,900 bytes | 93.8 µs | 0.56 | 82.2 µs | 0.62 |
+| V40-L, 2,900 bytes, class API | 98.3 µs | 0.58 | 85.5 µs | 0.64 |
+| V40-L, 4,296 alphanumeric | 97.3 µs | 0.55 | 84.4 µs | 0.63 |
+| V40-L, 7,089 digits | 96.6 µs | 0.55 | 84.8 µs | 0.60 |
+| Set, 30,000 alphanumeric | 826.4 µs | 0.64 | 735.9 µs | 0.70 |
+
+The rows the change does not touch read 0.97 to 1.02: versions 1, 6 and 10, the pinned-mask encodes at versions 26 and 40, Micro QR M4 and rMQR R17x139. A first NativeAOT run was set aside, since those rows read 0.91 to 0.94 in it, and the table is a second one. The timing mode's parity check matched on both builds, and 4,832 Standard QR symbols (lengths 0 to 64 and 70 to 7,329 of digits, the alphanumeric set and ASCII at every level, quiet zone 0 and 4, the class API, every version forced, every pinned pattern at every version) hashed the same before and after, and with hardware intrinsics off.
+
+With the encode shorter, the writers' share of it grew: the payload is 4.2 to 4.3 % of a version 40 alphanumeric encode, 3.5 to 3.7 % of a numeric one, 3.1 to 3.3 % at version 10 and 2.6 to 3.1 % of the two sets. The NEON step measured in phase 7's ARM64 follow-up would save 2.5 to 2.6 % of the version 40 alphanumeric encode and 1.1 to 1.9 % elsewhere.
+
 ## A transposed scorer for versions 12 to 40
 
 Row-direction penalty rules on rows wider than one word pull bits across words for every shifted term. In the three-word tier each such shift is five shifts and two ORs. Column-direction rules need no shift, because they combine whole row words of neighbouring rows.

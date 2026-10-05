@@ -10,14 +10,20 @@ namespace FeatherQR.Internals.StandardQR;
 /// Vectorized mask pattern selection for ARM64 with AdvSimd (NEON).
 /// Selected at runtime by <see cref="ModulePlacer.MaskCode"/>; produces byte-identical matrices and identical pattern selections to the scalar bit-packed implementation in ModulePlacer.Masking.cs (verified by ModulePlacerMaskAdvSimdParityTest).
 ///
-/// Port of the AVX2 tiers' lane-per-row architecture to 128-bit vectors: the scorer runs lane-per-row (Vector128&lt;ulong&gt; = 2 rows per iteration) in three width tiers (1 ulong per row for versions 1-11, 2-word SoA for 12-27, 3-word SoA for 28-40, split at 128 modules as <see cref="MaskCodeAdvSimd"/> does).
-/// The AVX2 tiers have since moved on (four candidates per vector for versions 1-11, the transposed scorer for 12-40); these stay until those designs can be measured on ARM64.
+/// Two tiers, split at 64 modules as <see cref="MaskCodeAdvSimd"/> does:
+/// - Versions 1-11: the AVX2 tiers' earlier lane-per-row form on 128-bit vectors (Vector128&lt;ulong&gt; = 2 rows per iteration, one ulong per row).
+///   The AVX2 tier has since moved to four candidates per vector; that design has not been measured on ARM64.
+/// - Versions 12-40: the transposed scorer (the design is in ModulePlacer.Masking.Transposed.cs). It masks and scores with the 128-bit tier's
+///   code (ModulePlacer.Masking.Transposed.Vector128.cs), whose popcount is cnt and uadalp here, and packs rows and applies the winner
+///   with this file's 16-module steps. On Apple M2 it took 0.90-0.97 of the two- and three-word SoA tiers' mask selection time at versions
+///   12-27 and 0.42-0.47 at 28-40 on the JIT, 0.87-0.98 and 0.48-0.57 on NativeAOT, and replaced them (2026-10-05). The 128-bit tier as it
+///   stands, with a SWAR popcount, movemask packing and an eight-module unpack, read 1.24-1.39 at 12-27, and with the NEON popcount alone 0.89-1.01.
 /// NEON-specific choices:
 /// - Popcount is native (cnt.16b); one uaddlp widens the per-byte counts to
 ///   ushort lanes, which accumulate directly in Vector128&lt;ushort&gt;
 ///   accumulators (2 instructions per popcount vs 3 for a full per-qword
-///   widen). Worst-case lane sums stay far below ushort range (&lt; 17k for
-///   version 40), and totals reduce once per score via uaddlv.
+///   widen). Worst-case lane sums stay far below ushort range, and totals
+///   reduce once per score via uaddlv.
 /// - Byte&lt;-&gt;bit edges run 16 modules per step: packing gathers per-byte bit
 ///   weights (cmeq+bic) and reduces with a uaddlp chain; unpacking broadcasts
 ///   the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same
@@ -25,7 +31,7 @@ namespace FeatherQR.Internals.StandardQR;
 ///
 /// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is always little-endian and the SWAR tail reads skip endianness normalization.
 ///
-/// Measured on Apple M2 vs the scalar bit-packed paths (MaskCodeArm findings log): v1 2.4x, v10 3.0x, v20 1.20x, v40 1.14x, zero allocations.
+/// The single-word tier, measured on Apple M2 vs the scalar bit-packed paths (MaskCodeArm findings log): v1 2.4x, v10 3.0x, zero allocations.
 /// The ushort accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD edges beat the SWAR edges by ~5-11%; the scalar scorer's early-exit is intentionally absent (structurally incompatible with vector accumulators, and the vector throughput win dwarfs it, same conclusion as the x64 loop).
 /// </summary>
 internal static partial class ModulePlacer
@@ -33,13 +39,9 @@ internal static partial class ModulePlacer
     /// <summary>Entry point for the NEON tiers. Caller guarantees AdvSimd.Arm64.IsSupported.</summary>
     internal static int MaskCodeAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        if (size <= 64)
-        {
-            return MaskCode64AdvSimd(buffer, size, version, blockedMask, eccLevel);
-        }
-        return size <= 128
-            ? MaskCode128AdvSimd(buffer, size, version, blockedMask, eccLevel)
-            : MaskCode192AdvSimd(buffer, size, version, blockedMask, eccLevel);
+        return size <= 64
+            ? MaskCode64AdvSimd(buffer, size, version, blockedMask, eccLevel)
+            : MaskCodeTransposedAdvSimd(buffer, size, version, blockedMask, eccLevel);
     }
 
     // ---------------------------------
@@ -497,447 +499,125 @@ internal static partial class ModulePlacer
     }
 
     // ---------------------------------
-    // Format information on SoA word arrays (two- and three-word tiers)
+    // Transposed tier (versions 12-40)
     // ---------------------------------
 
-    private static void PokeFormatBitsSoA2(Span<ulong> w0, Span<ulong> w1, int size, ushort formatBits)
+    /// <summary>Mask selection for versions 12-40 on ARM64: scores all eight candidates transposed, applies the winner to <paramref name="buffer"/>, returns it.</summary>
+    internal static int MaskCodeTransposedAdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
-        for (var i = 0; i < 15; i++)
-        {
-            var bit = (formatBits & (1 << i)) != 0;
-            SetBitSoA2(w0, w1, FormatYs1[i], FormatXs1[i], bit);
-            var x2 = i < 8 ? size - 1 - i : 8;
-            var y2 = i < 8 ? 8 : size - 15 + i;
-            SetBitSoA2(w0, w1, y2, x2, bit);
-        }
-    }
+        // The per-version tables come from the version's canonical blocked mask; every production caller passes that mask.
+        var layout = GetTransposedLayout(version, size);
+        System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCodeTransposedAdvSimd requires the version's canonical blocked mask");
+        if (buffer.Length < size * size)
+            throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
+        if ((uint)eccLevel > 3)
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "QREccLevel was out of range");
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void SetBitSoA2(Span<ulong> w0, Span<ulong> w1, int y, int x, bool value)
-    {
-        ref var w = ref (x < 64 ? ref w0[y] : ref w1[y]);
-        var bit = 1ul << (x & 63);
-        w = value ? w | bit : w & ~bit;
-    }
-
-    private static void PokeFormatBitsSoA3(Span<ulong> w0, Span<ulong> w1, Span<ulong> w2, int size, ushort formatBits)
-    {
-        // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
-        for (var i = 0; i < 15; i++)
-        {
-            var bit = (formatBits & (1 << i)) != 0;
-            SetBitSoA3(w0, w1, w2, FormatYs1[i], FormatXs1[i], bit);
-            var x2 = i < 8 ? size - 1 - i : 8;
-            var y2 = i < 8 ? 8 : size - 15 + i;
-            SetBitSoA3(w0, w1, w2, y2, x2, bit);
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void SetBitSoA3(Span<ulong> w0, Span<ulong> w1, Span<ulong> w2, int y, int x, bool value)
-    {
-        ref var w = ref (x < 64 ? ref w0[y] : ref (x < 128 ? ref w1[y] : ref w2[y]));
-        var bit = 1ul << (x & 63);
-        w = value ? w | bit : w & ~bit;
-    }
-
-    // ---------------------------------
-    // Two-word SoA tier (versions 12-29, size 65..128)
-    // ---------------------------------
-
-    internal static int MaskCode128AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
-    {
-        var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
-        var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(8 * size);
+        var plane = layout.Words * layout.Stride;
+        var rent = System.Buffers.ArrayPool<ulong>.Shared.Rent(4 * plane + WorkLength(layout));
         try
         {
-            var packed = packedRent.AsSpan(0, size);
-            var allowed = packedRent.AsSpan(size, size);
+            var all = rent.AsSpan();
+            var r = all.Slice(0, plane);
+            var c = all.Slice(plane, plane);
+            var rp = all.Slice(2 * plane, plane);
+            var cp = all.Slice(3 * plane, plane);
+            var work = all.Slice(4 * plane, WorkLength(layout));
 
-            PackAllAdvSimd(buffer, blockedMask, size, version, packed, allowed);
-
-            // SoA partitions: masked words, ~masked words, eq words, v5 words.
-            var mw0 = wordsRent.AsSpan(0, size);
-            var mw1 = wordsRent.AsSpan(size, size);
-            var nw0 = wordsRent.AsSpan(2 * size, size);
-            var nw1 = wordsRent.AsSpan(3 * size, size);
-            var eq0 = wordsRent.AsSpan(4 * size, size);
-            var eq1 = wordsRent.AsSpan(5 * size, size);
-            var v50 = wordsRent.AsSpan(6 * size, size);
-            var v51 = wordsRent.AsSpan(7 * size, size);
-
-            var templates = _maskTemplates;
-            var bestPatternIndex = 0;
+            PackTransposedAdvSimd(buffer, layout, version, r, c);
+            var bestPattern = 0;
             var bestScore = int.MaxValue;
-            for (var patternIndex = 0; patternIndex < 8; patternIndex++)
+            for (var pattern = 0; pattern < 8; pattern++)
             {
-                var tplBase = patternIndex * 12;
-                for (int y = 0, tplRow = 0; y < size; y++)
-                {
-                    var t = templates[tplBase + tplRow];
-                    var a = allowed[y];
-                    var p = packed[y];
-                    mw0[y] = p.W0 ^ (t.W0 & a.W0);
-                    mw1[y] = p.W1 ^ (t.W1 & a.W1);
-                    if (++tplRow == 12) tplRow = 0;
-                }
-                PokeFormatBitsSoA2(mw0, mw1, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
-
-                var score = CalculateScore128AdvSimd(mw0, mw1, nw0, nw1, eq0, eq1, v50, v51, size);
+                MaskCandidateTransposedVector128(r, c, layout, pattern, eccLevel, rp, cp);
+                var score = ScoreTransposedVector128(rp, cp, layout, work, bestScore);
                 if (score < bestScore)
                 {
-                    bestPatternIndex = patternIndex;
                     bestScore = score;
+                    bestPattern = pattern;
                 }
             }
 
-            ApplyWinnerAdvSimd(buffer, size, bestPatternIndex, allowed);
-            return bestPatternIndex;
+            ApplyWinnerTransposedAdvSimd(buffer, layout, bestPattern);
+            return bestPattern;
         }
         finally
         {
-            System.Buffers.ArrayPool<Row192>.Shared.Return(packedRent);
-            System.Buffers.ArrayPool<ulong>.Shared.Return(wordsRent);
+            System.Buffers.ArrayPool<ulong>.Shared.Return(rent);
         }
     }
 
-    /// <summary>2 rows x 128 bits in SoA form: word k of rows y..y+1 in one vector.</summary>
-    private readonly struct RN128
+    /// <summary>
+    /// Every candidate's score of the unmasked <paramref name="buffer"/> with one abort bound for all, the buffer untouched: the scores
+    /// <see cref="MaskCodeTransposedAdvSimd"/> compares, for the parity tests.
+    /// </summary>
+    internal static void ScoreCandidatesTransposedAdvSimd(ReadOnlySpan<byte> buffer, int version, QREccLevel eccLevel, int abortAbove, Span<int> scores)
     {
-        public readonly Vector128<ulong> A, B;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN128(Vector128<ulong> a, Vector128<ulong> b) { A = a; B = b; }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN128 Load(ref ulong w0, ref ulong w1, int y)
-            => new(Vector128.LoadUnsafe(ref w0, (nuint)y), Vector128.LoadUnsafe(ref w1, (nuint)y));
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Store(ref ulong w0, ref ulong w1, int y)
-        {
-            A.StoreUnsafe(ref w0, (nuint)y);
-            B.StoreUnsafe(ref w1, (nuint)y);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN128 operator &(in RN128 x, in RN128 y) => new(x.A & y.A, x.B & y.B);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN128 operator ^(in RN128 x, in RN128 y) => new(x.A ^ y.A, x.B ^ y.B);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN128 operator |(in RN128 x, in RN128 y) => new(x.A | y.A, x.B | y.B);
-
-        /// <summary>~(this ^ other).</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN128 Xnor(in RN128 o) => new(~(A ^ o.A), ~(B ^ o.B));
-
-        /// <summary>this &amp; ~other (Vector128.AndNot(left, right) == left &amp; ~right; see the operand-order note above).</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN128 AndNotWith(in RN128 o) => new(Vector128.AndNot(A, o.A), Vector128.AndNot(B, o.B));
-
-        /// <summary>Logical shift right by k bits (1..63), pulling neighbor-word bits in at the top of each lane.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN128 ShiftRight(int k)
-            => new(Vector128.ShiftRightLogical(A, k) | Vector128.ShiftLeft(B, 64 - k),
-                   Vector128.ShiftRightLogical(B, k));
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN128 ShiftLeft1()
-            => new(Vector128.ShiftLeft(A, 1),
-                   Vector128.ShiftLeft(B, 1) | Vector128.ShiftRightLogical(A, 63));
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Vector128<ushort> Pop() => Pop16(A) + Pop16(B);
-    }
-
-    /// <summary>Two-word SoA Vector128 penalty scorer (structure mirrors <see cref="CalculateScore64AdvSimd"/>).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static int CalculateScore128AdvSimd(
-        Span<ulong> rw0, Span<ulong> rw1,
-        Span<ulong> nw0, Span<ulong> nw1,
-        Span<ulong> eq0, Span<ulong> eq1,
-        Span<ulong> v50, Span<ulong> v51, int size)
-    {
-        var rowMaskR = Row192.MaskLow(size);
-        var startMaskR = Row192.MaskLow(size - 10);
-        var maskN1R = Row192.MaskLow(size - 1);
-
-        ref var rw0R = ref MemoryMarshal.GetReference(rw0);
-        ref var rw1R = ref MemoryMarshal.GetReference(rw1);
-        ref var nw0R = ref MemoryMarshal.GetReference(nw0);
-        ref var nw1R = ref MemoryMarshal.GetReference(nw1);
-        ref var eq0R = ref MemoryMarshal.GetReference(eq0);
-        ref var eq1R = ref MemoryMarshal.GetReference(eq1);
-        ref var v50R = ref MemoryMarshal.GetReference(v50);
-        ref var v51R = ref MemoryMarshal.GetReference(v51);
-
-        var score1 = 0;
-        var score2 = 0;
-        var score3 = 0;
-        var blackModules = 0;
-
-        var rowMaskV = new RN128(Vector128.Create(rowMaskR.W0), Vector128.Create(rowMaskR.W1));
-        var startMaskV = new RN128(Vector128.Create(startMaskR.W0), Vector128.Create(startMaskR.W1));
-        var maskN1V = new RN128(Vector128.Create(maskN1R.W0), Vector128.Create(maskN1R.W1));
-
-        var accOnes = Vector128<ushort>.Zero;
-        var accTwos = Vector128<ushort>.Zero;
-        var accP2 = Vector128<ushort>.Zero;
-        var accP3 = Vector128<ushort>.Zero;
-        var accBlack = Vector128<ushort>.Zero;
-
-        var y0 = 0;
-        for (; y0 + 2 <= size; y0 += 2)
-        {
-            var x = RN128.Load(ref rw0R, ref rw1R, y0);
-            new RN128(Vector128.AndNot(rowMaskV.A, x.A), Vector128.AndNot(rowMaskV.B, x.B)).Store(ref nw0R, ref nw1R, y0);
-        }
-        for (; y0 < size; y0++)
-        {
-            nw0[y0] = ~rw0[y0] & rowMaskR.W0;
-            nw1[y0] = ~rw1[y0] & rowMaskR.W1;
-        }
-
-        var y = 0;
-        for (; y + 2 <= size; y += 2)
-        {
-            var x = RN128.Load(ref rw0R, ref rw1R, y);
-            var nx = RN128.Load(ref nw0R, ref nw1R, y);
-
-            accBlack += x.Pop();
-
-            var y2 = x & x.ShiftRight(1);
-            var y4 = y2 & y2.ShiftRight(2);
-            var y5 = y4 & x.ShiftRight(4);
-            var st = y5.AndNotWith(y5.ShiftLeft1());
-            var n2 = nx & nx.ShiftRight(1);
-            var n4 = n2 & n2.ShiftRight(2);
-            var n5 = n4 & nx.ShiftRight(4);
-            var nst = n5.AndNotWith(n5.ShiftLeft1());
-            accOnes += y5.Pop() + n5.Pop();
-            accTwos += st.Pop() + nst.Pop();
-
-            // Rule 3 from the light run and the core (see CalculateScorePacked): the two windows never share a start, one popcount.
-            var core = x & nx.ShiftRight(1) & y2.ShiftRight(2) & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6);
-            accP3 += (((n4 & core.ShiftRight(4)) | (core & n4.ShiftRight(7))) & startMaskV).Pop();
-        }
-        for (; y < size; y++)
-        {
-            var x = new Row192(rw0[y], rw1[y], 0);
-            var nx = new Row192(nw0[y], nw1[y], 0);
-            blackModules += x.PopCount();
-            score1 += ScoreRuns(x) + ScoreRuns(nx);
-            score3 += MatchFinderRow(x, nx, startMaskR);
-        }
-
-        var i = 0;
-        for (; i + 2 <= size - 1; i += 2)
-        {
-            var a = RN128.Load(ref rw0R, ref rw1R, i);
-            var b = RN128.Load(ref rw0R, ref rw1R, i + 1);
-            (a.Xnor(b) & rowMaskV).Store(ref eq0R, ref eq1R, i);
-        }
-        for (; i < size - 1; i++)
-        {
-            eq0[i] = ~(rw0[i] ^ rw0[i + 1]) & rowMaskR.W0;
-            eq1[i] = ~(rw1[i] ^ rw1[i + 1]) & rowMaskR.W1;
-        }
-
-        y = 0;
-        for (; y + 2 <= size - 1; y += 2)
-        {
-            var x = RN128.Load(ref rw0R, ref rw1R, y);
-            var eqv = RN128.Load(ref eq0R, ref eq1R, y);
-            var eqh = x.Xnor(x.ShiftRight(1));
-            var m = eqh & eqv & eqv.ShiftRight(1) & maskN1V;
-            accP2 += m.Pop();
-        }
-        for (; y < size - 1; y++)
-        {
-            var x = new Row192(rw0[y], rw1[y], 0);
-            var eqv = new Row192(eq0[y], eq1[y], 0);
-            var eqh = x.Xnor(x.ShiftRight(1));
-            var m = eqh & eqv & eqv.ShiftRight(1) & maskN1R;
-            score2 += 3 * m.PopCount();
-        }
-
-        v50[3] = 0;
-        v51[3] = 0;
-        y = 4;
-        for (; y + 2 <= size; y += 2)
-        {
-            var e1 = RN128.Load(ref eq0R, ref eq1R, y - 4);
-            var e2 = RN128.Load(ref eq0R, ref eq1R, y - 3);
-            var e3 = RN128.Load(ref eq0R, ref eq1R, y - 2);
-            var e4 = RN128.Load(ref eq0R, ref eq1R, y - 1);
-            (e1 & e2 & e3 & e4).Store(ref v50R, ref v51R, y);
-        }
-        for (; y < size; y++)
-        {
-            v50[y] = eq0[y - 4] & eq0[y - 3] & eq0[y - 2] & eq0[y - 1];
-            v51[y] = eq1[y - 4] & eq1[y - 3] & eq1[y - 2] & eq1[y - 1];
-        }
-
-        y = 4;
-        for (; y + 2 <= size; y += 2)
-        {
-            var v5 = RN128.Load(ref v50R, ref v51R, y);
-            var prev = RN128.Load(ref v50R, ref v51R, y - 1);
-            accOnes += v5.Pop();
-            accTwos += v5.AndNotWith(prev).Pop();
-        }
-        for (; y < size; y++)
-        {
-            var v5 = new Row192(v50[y], v51[y], 0);
-            var prev = new Row192(v50[y - 1], v51[y - 1], 0);
-            score1 += v5.PopCount() + 2 * v5.AndNotWith(prev).PopCount();
-        }
-
-        // Column rule 3 from the same terms, one per row: v5[y] becomes the core from row y down and eq[y] the light run from
-        // row y down (both are done with here), so each is built once and read by both windows that use it.
-        var t = 0;
-        for (; t + 2 <= size - 6; t += 2)
-        {
-            (RN128.Load(ref rw0R, ref rw1R, t) & RN128.Load(ref nw0R, ref nw1R, t + 1)
-                & RN128.Load(ref rw0R, ref rw1R, t + 2) & RN128.Load(ref rw0R, ref rw1R, t + 3)
-                & RN128.Load(ref rw0R, ref rw1R, t + 4) & RN128.Load(ref nw0R, ref nw1R, t + 5)
-                & RN128.Load(ref rw0R, ref rw1R, t + 6)).Store(ref v50R, ref v51R, t);
-        }
-        for (; t <= size - 7; t++)
-        {
-            v50[t] = rw0[t] & nw0[t + 1] & rw0[t + 2] & rw0[t + 3] & rw0[t + 4] & nw0[t + 5] & rw0[t + 6];
-            v51[t] = rw1[t] & nw1[t + 1] & rw1[t + 2] & rw1[t + 3] & rw1[t + 4] & nw1[t + 5] & rw1[t + 6];
-        }
-        t = 0;
-        for (; t + 2 <= size - 3; t += 2)
-        {
-            (RN128.Load(ref nw0R, ref nw1R, t) & RN128.Load(ref nw0R, ref nw1R, t + 1)
-                & RN128.Load(ref nw0R, ref nw1R, t + 2) & RN128.Load(ref nw0R, ref nw1R, t + 3)).Store(ref eq0R, ref eq1R, t);
-        }
-        for (; t <= size - 4; t++)
-        {
-            eq0[t] = nw0[t] & nw0[t + 1] & nw0[t + 2] & nw0[t + 3];
-            eq1[t] = nw1[t] & nw1[t + 1] & nw1[t + 2] & nw1[t + 3];
-        }
-
-        var b0 = 0;
-        for (; b0 + 2 <= size - 10; b0 += 2)
-        {
-            var mf = RN128.Load(ref eq0R, ref eq1R, b0) & RN128.Load(ref v50R, ref v51R, b0 + 4);
-            var mb = RN128.Load(ref v50R, ref v51R, b0) & RN128.Load(ref eq0R, ref eq1R, b0 + 7);
-            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
-        }
-        for (; b0 <= size - 11; b0++)
-        {
-            var m0 = (eq0[b0] & v50[b0 + 4]) | (v50[b0] & eq0[b0 + 7]);
-            var m1 = (eq1[b0] & v51[b0 + 4]) | (v51[b0] & eq1[b0 + 7]);
-            score3 += 40 * (PopCount(m0) + PopCount(m1));
-        }
-
-        score1 += SumAcc(accOnes) + 2 * SumAcc(accTwos);
-        score2 += 3 * SumAcc(accP2);
-        score3 += 40 * SumAcc(accP3);
-        blackModules += SumAcc(accBlack);
-
-        return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
-    }
-
-    // ---------------------------------
-    // Three-word SoA tier (versions 30-40, size > 128)
-    // ---------------------------------
-
-    internal static int MaskCode192AdvSimd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
-    {
-        var packedRent = System.Buffers.ArrayPool<Row192>.Shared.Rent(2 * size);
-        var wordsRent = System.Buffers.ArrayPool<ulong>.Shared.Rent(12 * size);
+        var size = QRCodeData.SizeFromVersion(version);
+        var layout = GetTransposedLayout(version, size);
+        var plane = layout.Words * layout.Stride;
+        var rent = System.Buffers.ArrayPool<ulong>.Shared.Rent(4 * plane + WorkLength(layout));
         try
         {
-            var packed = packedRent.AsSpan(0, size);
-            var allowed = packedRent.AsSpan(size, size);
+            var all = rent.AsSpan();
+            var r = all.Slice(0, plane);
+            var c = all.Slice(plane, plane);
+            var rp = all.Slice(2 * plane, plane);
+            var cp = all.Slice(3 * plane, plane);
+            var work = all.Slice(4 * plane, WorkLength(layout));
 
-            PackAllAdvSimd(buffer, blockedMask, size, version, packed, allowed);
-
-            var mw0 = wordsRent.AsSpan(0, size);
-            var mw1 = wordsRent.AsSpan(size, size);
-            var mw2 = wordsRent.AsSpan(2 * size, size);
-            var nw0 = wordsRent.AsSpan(3 * size, size);
-            var nw1 = wordsRent.AsSpan(4 * size, size);
-            var nw2 = wordsRent.AsSpan(5 * size, size);
-            var eq0 = wordsRent.AsSpan(6 * size, size);
-            var eq1 = wordsRent.AsSpan(7 * size, size);
-            var eq2 = wordsRent.AsSpan(8 * size, size);
-            var v50 = wordsRent.AsSpan(9 * size, size);
-            var v51 = wordsRent.AsSpan(10 * size, size);
-            var v52 = wordsRent.AsSpan(11 * size, size);
-
-            var templates = _maskTemplates;
-            var bestPatternIndex = 0;
-            var bestScore = int.MaxValue;
-            for (var patternIndex = 0; patternIndex < 8; patternIndex++)
+            PackTransposedAdvSimd(buffer, layout, version, r, c);
+            for (var pattern = 0; pattern < 8; pattern++)
             {
-                var tplBase = patternIndex * 12;
-                for (int y = 0, tplRow = 0; y < size; y++)
-                {
-                    var t = templates[tplBase + tplRow];
-                    var a = allowed[y];
-                    var p = packed[y];
-                    mw0[y] = p.W0 ^ (t.W0 & a.W0);
-                    mw1[y] = p.W1 ^ (t.W1 & a.W1);
-                    mw2[y] = p.W2 ^ (t.W2 & a.W2);
-                    if (++tplRow == 12) tplRow = 0;
-                }
-                PokeFormatBitsSoA3(mw0, mw1, mw2, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
-
-                var score = CalculateScore192AdvSimd(mw0, mw1, mw2, nw0, nw1, nw2, eq0, eq1, eq2, v50, v51, v52, size);
-                if (score < bestScore)
-                {
-                    bestPatternIndex = patternIndex;
-                    bestScore = score;
-                }
+                MaskCandidateTransposedVector128(r, c, layout, pattern, eccLevel, rp, cp);
+                scores[pattern] = ScoreTransposedVector128(rp, cp, layout, work, abortAbove);
             }
-
-            ApplyWinnerAdvSimd(buffer, size, bestPatternIndex, allowed);
-            return bestPatternIndex;
         }
         finally
         {
-            System.Buffers.ArrayPool<Row192>.Shared.Return(packedRent);
-            System.Buffers.ArrayPool<ulong>.Shared.Return(wordsRent);
+            System.Buffers.ArrayPool<ulong>.Shared.Return(rent);
         }
     }
 
-    /// <summary>Packs buffer rows (NEON 16-module steps), pokes version bits once, and builds allowed rows (bit slices).</summary>
-    private static void PackAllAdvSimd(ReadOnlySpan<byte> buffer, ReadOnlySpan<byte> blockedMask, int size, int version,
-        Span<Row192> packed, Span<Row192> allowed)
+    /// <summary>
+    /// Packs the unmasked symbol into the row planes sixteen modules a step (padding rows zero), adds the version information, and
+    /// transposes it into the column planes with the 128-bit tier's 64x64 block transpose.
+    /// </summary>
+    private static void PackTransposedAdvSimd(ReadOnlySpan<byte> buffer, TransposedLayout layout, int version, Span<ulong> r, Span<ulong> c)
     {
+        var size = layout.Size;
+        var stride = layout.Stride;
+        var words = layout.Words;
         for (var y = 0; y < size; y++)
         {
-            packed[y] = PackRowBits192AdvSimd(buffer.Slice(y * size, size));
+            var row = PackRowBits192AdvSimd(buffer.Slice(y * size, size));
+            r[y] = row.W0;
+            r[stride + y] = row.W1;
+            if (words == 3) r[2 * stride + y] = row.W2;
         }
+        FinishRowPlanes(r, layout, version);
 
-        // This path only serves size > 64, i.e. version >= 12, so always poke.
-        var versionBits = QRCodeConstants.GetVersionBits(version);
-        for (var x = 0; x < 6; x++)
+        for (var kr = 0; kr < words; kr++)
         {
-            for (var y = 0; y < 3; y++)
+            for (var kc = 0; kc < words; kc++)
             {
-                var bit = (versionBits & (1u << (x * 3 + y))) != 0;
-                packed[y + size - 11] = packed[y + size - 11].WithBit(x, bit);
-                packed[x] = packed[x].WithBit(y + size - 11, bit);
+                var block = c.Slice(kr * stride + 64 * kc, 64);
+                r.Slice(kc * stride + 64 * kr, 64).CopyTo(block);
+                Transpose64Vector128(ref MemoryMarshal.GetReference(block));
             }
+            c.Slice(kr * stride + 64 * words, stride - 64 * words).Clear();
         }
+    }
 
-        // Padded copy so the four 8-byte slice reads per row never overrun.
-        Span<byte> padded = stackalloc byte[blockedMask.Length + 32];
-        padded.Clear();
-        blockedMask.CopyTo(padded);
-        var rowMask = Row192.MaskLow(size);
-        for (var y = 0; y < size; y++)
+    /// <summary>Applies the winning pattern's packed XOR delta to the byte buffer, sixteen modules a step.</summary>
+    private static void ApplyWinnerTransposedAdvSimd(Span<byte> buffer, TransposedLayout layout, int bestPattern)
+    {
+        var size = layout.Size;
+        ref var bufRef = ref MemoryMarshal.GetReference(buffer);
+        for (int y = 0, tplRow = 0; y < size; y++)
         {
-            allowed[y] = Row192.FromBitSlice(padded, y * size).AndNot(rowMask);
+            XorUnpackRow192AdvSimd(ref Unsafe.Add(ref bufRef, y * size), size, WinnerDelta(layout, bestPattern, y, tplRow));
+            if (++tplRow == 12) tplRow = 0;
         }
     }
 
@@ -968,276 +648,6 @@ internal static partial class ModulePlacer
             XorUnpackRow192AdvSimd(ref Unsafe.Add(ref bufRef, y * size), size, _maskTemplates[tplBase + tplRow] & Row192.FromBitSlice(padded, y * size).AndNot(rowMask192));
             if (++tplRow == 12) tplRow = 0;
         }
-    }
-
-    /// <summary>Applies the winning pattern's packed XOR delta to the byte buffer, 16 modules per step.</summary>
-    private static void ApplyWinnerAdvSimd(Span<byte> buffer, int size, int bestPatternIndex, ReadOnlySpan<Row192> allowed)
-    {
-        var tplBase = bestPatternIndex * 12;
-        ref var bufRef = ref MemoryMarshal.GetReference(buffer);
-        for (int y = 0, tplRow = 0; y < size; y++)
-        {
-            var delta = _maskTemplates[tplBase + tplRow] & allowed[y];
-            XorUnpackRow192AdvSimd(ref Unsafe.Add(ref bufRef, y * size), size, delta);
-            if (++tplRow == 12) tplRow = 0;
-        }
-    }
-
-    /// <summary>2 rows x 192 bits in SoA form: word k of rows y..y+1 in one vector.</summary>
-    private readonly struct RN192
-    {
-        public readonly Vector128<ulong> A, B, C;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN192(Vector128<ulong> a, Vector128<ulong> b, Vector128<ulong> c) { A = a; B = b; C = c; }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN192 Load(ref ulong w0, ref ulong w1, ref ulong w2, int y)
-            => new(Vector128.LoadUnsafe(ref w0, (nuint)y), Vector128.LoadUnsafe(ref w1, (nuint)y), Vector128.LoadUnsafe(ref w2, (nuint)y));
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Store(ref ulong w0, ref ulong w1, ref ulong w2, int y)
-        {
-            A.StoreUnsafe(ref w0, (nuint)y);
-            B.StoreUnsafe(ref w1, (nuint)y);
-            C.StoreUnsafe(ref w2, (nuint)y);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN192 operator &(in RN192 x, in RN192 y) => new(x.A & y.A, x.B & y.B, x.C & y.C);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN192 operator ^(in RN192 x, in RN192 y) => new(x.A ^ y.A, x.B ^ y.B, x.C ^ y.C);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static RN192 operator |(in RN192 x, in RN192 y) => new(x.A | y.A, x.B | y.B, x.C | y.C);
-
-        /// <summary>~(this ^ other).</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN192 Xnor(in RN192 o) => new(~(A ^ o.A), ~(B ^ o.B), ~(C ^ o.C));
-
-        /// <summary>this &amp; ~other (Vector128.AndNot(left, right) == left &amp; ~right; see the operand-order note above).</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN192 AndNotWith(in RN192 o) => new(Vector128.AndNot(A, o.A), Vector128.AndNot(B, o.B), Vector128.AndNot(C, o.C));
-
-        /// <summary>Logical shift right by k bits (1..63), pulling neighbor-word bits in at the top of each lane.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN192 ShiftRight(int k)
-            => new(Vector128.ShiftRightLogical(A, k) | Vector128.ShiftLeft(B, 64 - k),
-                   Vector128.ShiftRightLogical(B, k) | Vector128.ShiftLeft(C, 64 - k),
-                   Vector128.ShiftRightLogical(C, k));
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public RN192 ShiftLeft1()
-            => new(Vector128.ShiftLeft(A, 1),
-                   Vector128.ShiftLeft(B, 1) | Vector128.ShiftRightLogical(A, 63),
-                   Vector128.ShiftLeft(C, 1) | Vector128.ShiftRightLogical(B, 63));
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Vector128<ushort> Pop() => Pop16(A) + Pop16(B) + Pop16(C);
-    }
-
-    /// <summary>Three-word SoA Vector128 penalty scorer (structure mirrors <see cref="CalculateScore64AdvSimd"/>).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static int CalculateScore192AdvSimd(
-        Span<ulong> rw0, Span<ulong> rw1, Span<ulong> rw2,
-        Span<ulong> nw0, Span<ulong> nw1, Span<ulong> nw2,
-        Span<ulong> eq0, Span<ulong> eq1, Span<ulong> eq2,
-        Span<ulong> v50, Span<ulong> v51, Span<ulong> v52, int size)
-    {
-        var rowMaskR = Row192.MaskLow(size);
-        var startMaskR = Row192.MaskLow(size - 10);
-        var maskN1R = Row192.MaskLow(size - 1);
-
-        ref var rw0R = ref MemoryMarshal.GetReference(rw0);
-        ref var rw1R = ref MemoryMarshal.GetReference(rw1);
-        ref var rw2R = ref MemoryMarshal.GetReference(rw2);
-        ref var nw0R = ref MemoryMarshal.GetReference(nw0);
-        ref var nw1R = ref MemoryMarshal.GetReference(nw1);
-        ref var nw2R = ref MemoryMarshal.GetReference(nw2);
-        ref var eq0R = ref MemoryMarshal.GetReference(eq0);
-        ref var eq1R = ref MemoryMarshal.GetReference(eq1);
-        ref var eq2R = ref MemoryMarshal.GetReference(eq2);
-        ref var v50R = ref MemoryMarshal.GetReference(v50);
-        ref var v51R = ref MemoryMarshal.GetReference(v51);
-        ref var v52R = ref MemoryMarshal.GetReference(v52);
-
-        var score1 = 0;
-        var score2 = 0;
-        var score3 = 0;
-        var blackModules = 0;
-
-        var rowMaskV = new RN192(Vector128.Create(rowMaskR.W0), Vector128.Create(rowMaskR.W1), Vector128.Create(rowMaskR.W2));
-        var startMaskV = new RN192(Vector128.Create(startMaskR.W0), Vector128.Create(startMaskR.W1), Vector128.Create(startMaskR.W2));
-        var maskN1V = new RN192(Vector128.Create(maskN1R.W0), Vector128.Create(maskN1R.W1), Vector128.Create(maskN1R.W2));
-
-        var accOnes = Vector128<ushort>.Zero;
-        var accTwos = Vector128<ushort>.Zero;
-        var accP2 = Vector128<ushort>.Zero;
-        var accP3 = Vector128<ushort>.Zero;
-        var accBlack = Vector128<ushort>.Zero;
-
-        var y0 = 0;
-        for (; y0 + 2 <= size; y0 += 2)
-        {
-            var x = RN192.Load(ref rw0R, ref rw1R, ref rw2R, y0);
-            var nx = new RN192(Vector128.AndNot(rowMaskV.A, x.A), Vector128.AndNot(rowMaskV.B, x.B), Vector128.AndNot(rowMaskV.C, x.C));
-            nx.Store(ref nw0R, ref nw1R, ref nw2R, y0);
-        }
-        for (; y0 < size; y0++)
-        {
-            nw0[y0] = ~rw0[y0] & rowMaskR.W0;
-            nw1[y0] = ~rw1[y0] & rowMaskR.W1;
-            nw2[y0] = ~rw2[y0] & rowMaskR.W2;
-        }
-
-        var y = 0;
-        for (; y + 2 <= size; y += 2)
-        {
-            var x = RN192.Load(ref rw0R, ref rw1R, ref rw2R, y);
-            var nx = RN192.Load(ref nw0R, ref nw1R, ref nw2R, y);
-
-            accBlack += x.Pop();
-
-            var y2 = x & x.ShiftRight(1);
-            var y4 = y2 & y2.ShiftRight(2);
-            var y5 = y4 & x.ShiftRight(4);
-            var st = y5.AndNotWith(y5.ShiftLeft1());
-            var n2 = nx & nx.ShiftRight(1);
-            var n4 = n2 & n2.ShiftRight(2);
-            var n5 = n4 & nx.ShiftRight(4);
-            var nst = n5.AndNotWith(n5.ShiftLeft1());
-            accOnes += y5.Pop() + n5.Pop();
-            accTwos += st.Pop() + nst.Pop();
-
-            // Rule 3 from the light run and the core (see CalculateScorePacked): the two windows never share a start, one popcount.
-            var core = x & nx.ShiftRight(1) & y2.ShiftRight(2) & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6);
-            accP3 += (((n4 & core.ShiftRight(4)) | (core & n4.ShiftRight(7))) & startMaskV).Pop();
-        }
-        for (; y < size; y++)
-        {
-            var x = new Row192(rw0[y], rw1[y], rw2[y]);
-            var nx = new Row192(nw0[y], nw1[y], nw2[y]);
-            blackModules += x.PopCount();
-            score1 += ScoreRuns(x) + ScoreRuns(nx);
-            score3 += MatchFinderRow(x, nx, startMaskR);
-        }
-
-        var i = 0;
-        for (; i + 2 <= size - 1; i += 2)
-        {
-            var a = RN192.Load(ref rw0R, ref rw1R, ref rw2R, i);
-            var b = RN192.Load(ref rw0R, ref rw1R, ref rw2R, i + 1);
-            (a.Xnor(b) & rowMaskV).Store(ref eq0R, ref eq1R, ref eq2R, i);
-        }
-        for (; i < size - 1; i++)
-        {
-            eq0[i] = ~(rw0[i] ^ rw0[i + 1]) & rowMaskR.W0;
-            eq1[i] = ~(rw1[i] ^ rw1[i + 1]) & rowMaskR.W1;
-            eq2[i] = ~(rw2[i] ^ rw2[i + 1]) & rowMaskR.W2;
-        }
-
-        y = 0;
-        for (; y + 2 <= size - 1; y += 2)
-        {
-            var x = RN192.Load(ref rw0R, ref rw1R, ref rw2R, y);
-            var eqv = RN192.Load(ref eq0R, ref eq1R, ref eq2R, y);
-            var eqh = x.Xnor(x.ShiftRight(1));
-            var m = eqh & eqv & eqv.ShiftRight(1) & maskN1V;
-            accP2 += m.Pop();
-        }
-        for (; y < size - 1; y++)
-        {
-            var x = new Row192(rw0[y], rw1[y], rw2[y]);
-            var eqv = new Row192(eq0[y], eq1[y], eq2[y]);
-            var eqh = x.Xnor(x.ShiftRight(1));
-            var m = eqh & eqv & eqv.ShiftRight(1) & maskN1R;
-            score2 += 3 * m.PopCount();
-        }
-
-        v50[3] = 0;
-        v51[3] = 0;
-        v52[3] = 0;
-        y = 4;
-        for (; y + 2 <= size; y += 2)
-        {
-            var e1 = RN192.Load(ref eq0R, ref eq1R, ref eq2R, y - 4);
-            var e2 = RN192.Load(ref eq0R, ref eq1R, ref eq2R, y - 3);
-            var e3 = RN192.Load(ref eq0R, ref eq1R, ref eq2R, y - 2);
-            var e4 = RN192.Load(ref eq0R, ref eq1R, ref eq2R, y - 1);
-            (e1 & e2 & e3 & e4).Store(ref v50R, ref v51R, ref v52R, y);
-        }
-        for (; y < size; y++)
-        {
-            v50[y] = eq0[y - 4] & eq0[y - 3] & eq0[y - 2] & eq0[y - 1];
-            v51[y] = eq1[y - 4] & eq1[y - 3] & eq1[y - 2] & eq1[y - 1];
-            v52[y] = eq2[y - 4] & eq2[y - 3] & eq2[y - 2] & eq2[y - 1];
-        }
-
-        y = 4;
-        for (; y + 2 <= size; y += 2)
-        {
-            var v5 = RN192.Load(ref v50R, ref v51R, ref v52R, y);
-            var prev = RN192.Load(ref v50R, ref v51R, ref v52R, y - 1);
-            accOnes += v5.Pop();
-            accTwos += v5.AndNotWith(prev).Pop();
-        }
-        for (; y < size; y++)
-        {
-            var v5 = new Row192(v50[y], v51[y], v52[y]);
-            var prev = new Row192(v50[y - 1], v51[y - 1], v52[y - 1]);
-            score1 += v5.PopCount() + 2 * v5.AndNotWith(prev).PopCount();
-        }
-
-        // Column rule 3 from the same terms, one per row: v5[y] becomes the core from row y down and eq[y] the light run from
-        // row y down (both are done with here), so each is built once and read by both windows that use it.
-        var t = 0;
-        for (; t + 2 <= size - 6; t += 2)
-        {
-            (RN192.Load(ref rw0R, ref rw1R, ref rw2R, t) & RN192.Load(ref nw0R, ref nw1R, ref nw2R, t + 1)
-                & RN192.Load(ref rw0R, ref rw1R, ref rw2R, t + 2) & RN192.Load(ref rw0R, ref rw1R, ref rw2R, t + 3)
-                & RN192.Load(ref rw0R, ref rw1R, ref rw2R, t + 4) & RN192.Load(ref nw0R, ref nw1R, ref nw2R, t + 5)
-                & RN192.Load(ref rw0R, ref rw1R, ref rw2R, t + 6)).Store(ref v50R, ref v51R, ref v52R, t);
-        }
-        for (; t <= size - 7; t++)
-        {
-            v50[t] = rw0[t] & nw0[t + 1] & rw0[t + 2] & rw0[t + 3] & rw0[t + 4] & nw0[t + 5] & rw0[t + 6];
-            v51[t] = rw1[t] & nw1[t + 1] & rw1[t + 2] & rw1[t + 3] & rw1[t + 4] & nw1[t + 5] & rw1[t + 6];
-            v52[t] = rw2[t] & nw2[t + 1] & rw2[t + 2] & rw2[t + 3] & rw2[t + 4] & nw2[t + 5] & rw2[t + 6];
-        }
-        t = 0;
-        for (; t + 2 <= size - 3; t += 2)
-        {
-            (RN192.Load(ref nw0R, ref nw1R, ref nw2R, t) & RN192.Load(ref nw0R, ref nw1R, ref nw2R, t + 1)
-                & RN192.Load(ref nw0R, ref nw1R, ref nw2R, t + 2) & RN192.Load(ref nw0R, ref nw1R, ref nw2R, t + 3)).Store(ref eq0R, ref eq1R, ref eq2R, t);
-        }
-        for (; t <= size - 4; t++)
-        {
-            eq0[t] = nw0[t] & nw0[t + 1] & nw0[t + 2] & nw0[t + 3];
-            eq1[t] = nw1[t] & nw1[t + 1] & nw1[t + 2] & nw1[t + 3];
-            eq2[t] = nw2[t] & nw2[t + 1] & nw2[t + 2] & nw2[t + 3];
-        }
-
-        var b0 = 0;
-        for (; b0 + 2 <= size - 10; b0 += 2)
-        {
-            var mf = RN192.Load(ref eq0R, ref eq1R, ref eq2R, b0) & RN192.Load(ref v50R, ref v51R, ref v52R, b0 + 4);
-            var mb = RN192.Load(ref v50R, ref v51R, ref v52R, b0) & RN192.Load(ref eq0R, ref eq1R, ref eq2R, b0 + 7);
-            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
-        }
-        for (; b0 <= size - 11; b0++)
-        {
-            var m = (new Row192(eq0[b0], eq1[b0], eq2[b0]) & new Row192(v50[b0 + 4], v51[b0 + 4], v52[b0 + 4]))
-                  | (new Row192(v50[b0], v51[b0], v52[b0]) & new Row192(eq0[b0 + 7], eq1[b0 + 7], eq2[b0 + 7]));
-            score3 += 40 * m.PopCount();
-        }
-
-        score1 += SumAcc(accOnes) + 2 * SumAcc(accTwos);
-        score2 += 3 * SumAcc(accP2);
-        score3 += 40 * SumAcc(accP3);
-        blackModules += SumAcc(accBlack);
-
-        return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
     }
 }
 #endif

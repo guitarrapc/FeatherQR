@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Intrinsics.X86;
 
@@ -18,7 +19,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// <remarks>
 /// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
 /// candidates in the single-word tier, one candidate in the transposed one): WebAssembly's byte popcount and pairwise widening add, the
-/// nibble-table popcount and psadbw with SSSE3, a SWAR count of each 16-bit lane elsewhere.
+/// nibble-table popcount and psadbw with SSSE3, cnt and uadalp on ARM64 (whose transposed tier, ModulePlacer.Masking.Transposed.Arm64.cs,
+/// scores with this file's rules), a SWAR count of each 16-bit lane elsewhere.
 /// </remarks>
 internal static partial class ModulePlacer
 {
@@ -37,6 +39,8 @@ internal static partial class ModulePlacer
     {
         if (PackedSimd.IsSupported)
             return acc + PackedSimd.AddPairwiseWidening(PackedSimd.PopCount(v.AsByte()));
+        if (AdvSimd.Arm64.IsSupported)
+            return AdvSimd.AddPairwiseWideningAndAdd(acc, AdvSimd.PopCount(v.AsByte()));
         if (Ssse3.IsSupported)
         {
             var lowNibbles = Vector128.Create((byte)0x0F);
