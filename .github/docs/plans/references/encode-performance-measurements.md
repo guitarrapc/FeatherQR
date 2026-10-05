@@ -532,3 +532,81 @@ Base `main` (9897279) against the change, the same stage harness on both sides, 
 The rows the change does not touch (V19-M Byte, Micro QR M4, rMQR R17x139) read 0.96 to 1.03. On default NativeAOT the V40-L alphanumeric encode went from 64.9 to 59.8 µs and its payload from 5.63 to 1.06 µs; on WebAssembly AOT from 81.0 to 67.2 µs and from 16.7 to 2.05 µs.
 
 Output was identical before and after on the 7,647-symbol corpus, the 6,504-symbol pinned-mask corpus, and a new pass of 980 symbols: `QRSegmentation.Optimal` encodes of text made of runs of 1 to 40 characters from the three alphabets at every level, and Structured Append sets of one mode and of mixed content under both segmentations. Each was hashed under AVX2, with AVX off and with hardware intrinsics off.
+
+### ARM64 (2026-10-05)
+
+Phase 7 ran without an ARM64 machine. These were taken afterwards on an Apple M2 (MacBook Air, osx-arm64, .NET 10.0.12) on the JIT and a default NativeAOT publish, with the phase's stage harness on both sides. The Mac cannot pin a process and carries background load, so base `main` (9897279) and the change (e463622) alternated one process each, nine rounds per build, a cell the median of the run medians. Only shapes of the two modes and three controls ran in each process.
+
+The writers' share of an encode (the payload row over the end-to-end row), with the old writers and with the portable ones ARM64 now runs:
+
+| Shape | JIT, old | JIT, portable | NativeAOT, old | NativeAOT, portable |
+|---|---|---|---|---|
+| V1-M, 16 alphanumeric | 1.6 % | 0.7 % | 1.6 % | 0.7 % |
+| V10-M, 300 alphanumeric | 7.9 % | 3.0 % | 8.2 % | 3.2 % |
+| V40-L, 4,296 alphanumeric | 7.0 % | 2.4 % | 7.8 % | 2.6 % |
+| Set, 30,000 alphanumeric | 5.9 % | 2.0 % | 6.3 % | 2.2 % |
+| V1-L, 10 digits | 0.5 % | 0.4 % | 0.6 % | 0.4 % |
+| V40-L, 7,089 digits | 7.4 % | 1.9 % | 8.2 % | 2.1 % |
+| Set, 50,000 digits | 6.2 % | 1.6 % | 6.7 % | 1.7 % |
+
+The timing mode's writer kernels (five rounds, each build in its own process), the portable writer over the old writer's copy at 4,296 / 300 / 40 / 16 characters and 7,089 / 500 / 40 / 12 digits:
+
+| Build | Alphanumeric, portable | Numeric, portable |
+|---|---|---|
+| JIT | 0.33 / 0.34 / 0.35 / 0.39 | 0.24 / 0.27 / 0.44 / 0.83 |
+| Default NativeAOT | 0.33 / 0.36 / 0.37 / 0.44 | 0.24 / 0.28 / 0.45 / 0.83 |
+
+The old Alphanumeric writer took 7.25 µs for 4,296 characters on the JIT (1.69 ns a character, against 1.12 on the x64 JIT) and the old Numeric writer 7.55 µs for 7,089 digits (1.06 ns a digit, against 0.56). The portable writers took 2.36 and 1.84 µs, no more than on x64 (about 3.1 and 1.9 µs there by the ratios above), so against the slower old writers they took a quarter to a third of the time here, where the Alphanumeric one took two thirds on x64.
+
+End to end, change over base:
+
+| Shape | JIT | Default NativeAOT |
+|---|---|---|
+| V1-M, 16 alphanumeric | 0.94 | 1.01 |
+| V1-L, 10 digits | 0.95 | 1.00 |
+| V10-M, 300 alphanumeric | 0.92 | 0.94 |
+| V40-L, 4,296 alphanumeric | 0.96 | 0.96 |
+| V40-L, 7,089 digits | 0.93 | 0.95 |
+| Set, 30,000 alphanumeric | 0.97 | 0.97 |
+| Set, 50,000 digits | 0.96 | 0.97 |
+| Payload, V40-L alphanumeric | 0.32 | 0.33 |
+| Payload, V40-L digits | 0.24 | 0.25 |
+| Payload, V10-M alphanumeric | 0.35 | 0.36 |
+| Payload, V1-M alphanumeric | 0.42 | 0.45 |
+| Payload, V1-L digits | 0.73 | 0.75 |
+
+The rows the change does not touch (V19-M Byte, Micro QR M4, rMQR R17x139) read 0.98 to 1.01. At version 1 the payload is under 2 % of the encode, so those rows' 0.94 to 1.01 is the spread, not the writers. ARM64 still runs the SoA scorers for versions 12 to 40 (phase 6), and the stage rows of the change put mask selection at 78 to 80 % of a version 40 encode there (72.6 of 92.3 µs on the JIT, 63.9 of 82.5 µs on NativeAOT) and 68 to 71 % of the version 10 one, so the writers' share is smaller than it will be.
+
+#### A NEON step
+
+BenchmarkDotNet on the JIT (3 warmups, 15 iterations), each variant held to the old writers' stream before any timing: lengths 0 to 300 and long runs at every alignment, runs of one repeated character, every character outside the alphabet up to 0x17F and six past it at every position of the first 40, and runs as slices of a longer valid text. Ratios to the portable writer in the same run, two rounds where a variant ran in both:
+
+| Alphanumeric variant | 4,296 | 300 | 40 | 16 |
+|---|---|---|---|---|
+| Portable writer | 2.30 µs | 176 ns | 25.7 ns | 12.3 ns |
+| Canary | 0.98 / 1.00 | 0.96 / 1.02 | 0.96 / 1.03 | 0.97 / 0.99 |
+| Old writer | 4.41 | 4.06 | 3.55 | 3.18 |
+| Sixteen a step: one TBL over 64 bytes of value + 1 does the lookup and the membership, pairs by MLA, fields by USRA | 0.41 / 0.40 | 0.53 / 0.45 | 0.63 / 0.65 | 0.69 / 0.74 |
+| The same, pairs by two UDOT and one SLI (needs the dot product) | 0.39 / 0.38 | 0.40 / 0.42 | 0.63 / 1.25 | 0.72 / 0.70 |
+| Eight a step, one append | 0.55 | 0.53 | 0.67 | 0.80 |
+| Thirty-two a step, one check | 0.42 | 0.43 | 0.64 | 0.71 |
+| Sixteen a step, the writer reached through its reference | 0.52 | 0.60 | 0.67 | 0.69 |
+| Sixteen a step, then one step of eight | 0.40 / 0.41 | 0.41 / 0.48 | 0.59 / 0.60 | 0.68 / 0.72 |
+| The same, pairs by dot product | 0.38 | 0.44 | 0.57 | 0.69 |
+| The same, checked by CMEQ and SHRN rather than UMINV | 0.43 | 0.42 | 0.61 | 0.72 |
+
+| Numeric variant | 7,089 | 500 | 40 | 16 |
+|---|---|---|---|---|
+| Portable writer | 1.83 µs | 143 ns | 15.9 ns | 9.35 ns |
+| Canary | 1.00 / 1.01 | 0.99 / 0.98 | 0.99 / 1.79 | 1.01 / 1.05 |
+| Old writer | 4.06 | 3.64 | 2.32 | 1.64 |
+| Twelve digits from sixteen chars, one 40-bit append (x64's SSSE3 step) | 0.70 | 0.70 | 0.90 | 1.18 |
+| Twenty-four from exactly twenty-four chars, groups by three TBL and UMULL / UMLAL / UADDW, two 40-bit appends | 0.55 / 0.56 | 0.57 / 0.65 | 0.75 / 1.83 | 0.97 / 1.12 |
+| Fifteen from sixteen chars, one 50-bit append | 0.57 / 0.58 | 0.58 / 0.59 | 0.83 / 0.85 | 1.00 / 1.05 |
+| Twenty-four a step, then one of fifteen | 0.56 | 0.58 | 0.69 | 1.01 |
+| Thirty from exactly thirty chars (the last load overlapping), two 50-bit appends | 0.58 | 0.60 | 0.86 | 1.09 |
+| Thirty a step, then one of fifteen | 0.58 | 0.59 | 0.90 | 1.01 |
+
+At 40 and 16 the process decides more than the variant: the canary, the portable writer's own code, read 1.79 at 40 digits in one round, so those columns are read only where both rounds agree. From 300 characters up the best steps took 0.38 to 0.41 of the portable Alphanumeric writer's time and 0.55 to 0.58 of the Numeric one's. Holding the writer in a local copy took 0.41 against 0.52 at 4,296 characters, as it gained on x64. The dot product gained about 5 % at 4,296 characters, and the one check per thirty-two characters nothing, as the check is off the chain.
+
+With the shares above, the best steps would save 1.2 to 1.8 % of an alphanumeric encode and 0.7 to 0.9 % of a numeric one, and a step taking no time at all would save the share itself, at most 3.2 %. No NEON step ships: ARM64 keeps the portable writers. The step is worth measuring again once ARM64 has a faster scorer for versions 12 to 40. With mask selection at the 0.4 of its time the transposed tier reached on AVX2, a version 40 alphanumeric encode would take about 49 µs, and the step would save about 2.8 % of it (an estimate from the stage rows, not measured).
