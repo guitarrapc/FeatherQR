@@ -33,17 +33,18 @@ internal static partial class ModulePlacer
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
 #if NET8_0_OR_GREATER
-        // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion), see ModulePlacer.Masking.X86.cs. Measured 1.3-2x over the scalar bit-packed paths below (findings log, round 5).
+        // AVX2: four candidates per vector for versions 1-11 (ModulePlacer.Masking.X86.cs), the transposed scorer for 12-40 (ModulePlacer.Masking.Transposed.X86.cs).
+        // 2.5-2.8x the scalar bit-packed paths below at versions 1, 6 and 10, and 2.9-4.9x at 12-40, on the JIT on Zen 4 (2026-10-05).
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // ARM64 NEON port of the same tiers (Vector128 lane-per-row scorer), see ModulePlacer.Masking.Arm64.cs. Measured 2.4-3x (versions 1-11) and 1.15-1.2x (12-40) over the scalar paths below on Apple M2 (MaskCodeArm findings log).
+        // ARM64 NEON: two rows per vector, one candidate at a time, at every version (ModulePlacer.Masking.Arm64.cs; the AVX2 tiers' earlier lane-per-row form). Measured 2.4-3x (versions 1-11) and 1.15-1.2x (12-40) over the scalar paths below on Apple M2 (MaskCodeArm findings log).
         if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
         {
             return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);
         }
-        // x64 without AVX2 and WebAssembly, see ModulePlacer.Masking.Simd.cs
+        // x64 without AVX2 and WebAssembly: two candidates per vector for versions 1-11 (ModulePlacer.Masking.Simd.cs), the transposed scorer for 12-40 (ModulePlacer.Masking.Transposed.Vector128.cs)
         if (System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
         {
             return MaskCodeVector128(buffer, size, version, blockedMask, eccLevel);

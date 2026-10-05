@@ -4,9 +4,9 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The 128-bit mask selection tier (ModulePlacer.Masking.Simd.cs) against the scalar bit-packed kernels, entered directly: the
-/// dispatch takes it only on x64 without AVX2 and on WebAssembly, so this is where an x64 machine with AVX2 runs it at all. Same pattern,
-/// byte-identical matrix.
+/// The 128-bit mask selection tier (ModulePlacer.Masking.Simd.cs, and ModulePlacer.Masking.Transposed.Vector128.cs for versions 12-40)
+/// against the scalar bit-packed kernels, entered directly: the dispatch takes it only on x64 without AVX2 and on WebAssembly, so an x64
+/// machine with AVX2 runs it only here and in ModulePlacerMaskTransposedParityTest. Same pattern, byte-identical matrix.
 /// </summary>
 public class ModulePlacerMaskVector128ParityTest
 {

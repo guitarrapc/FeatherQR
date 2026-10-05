@@ -39,7 +39,10 @@ internal static partial class ModulePlacer
         public readonly int Words;
         /// <summary>Entries per word plane: the symbol's rows (or columns), then zero rows to past every offset read and to a whole 64-row block.</summary>
         public readonly int Stride;
-        /// <summary>Entries of a plane the rules read: the symbol and the nine past it that the farthest offset load reaches, to a multiple of 4.</summary>
+        /// <summary>
+        /// Entries of a plane the rules read, which the masking pass writes: the symbol and the nine past it that the AVX2 tier's farthest
+        /// offset load reaches (the 128-bit tier's reaches seven), to a multiple of 4.
+        /// </summary>
         public readonly int ReadRows;
         /// <summary>[k * Stride + y]: the unblocked modules of row y, word k.</summary>
         public readonly ulong[] AllowedR;

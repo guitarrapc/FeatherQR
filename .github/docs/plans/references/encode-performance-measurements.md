@@ -390,7 +390,7 @@ Mask selection on a placed matrix, the scalar kernel (`kernel/MaskCode-vN-scalar
 | 39 | 65.6 µs | 42.4 µs | 0.63 | 0.65 | 0.69 | 0.56 |
 | 40 | 67.1 µs | 43.0 µs | 0.62 | 0.64 | 0.68 | 0.56 |
 
-The tier took 0.39 to 0.59 of the scalar kernel's time at versions 12 to 27 and 0.56 to 0.71 at 28 to 40, on every build at every version. The step at version 28 is the tier's: the scalar kernel works on three words at every version from 12, so its time grows evenly, while the transposed tier pays for the words a row has, two up to version 27 and three from 28. The SoA scorers ported to the same vectors in the 128-bit tiers round (2026-09-30), two rows per vector, took 0.94 to 1.68 of the scalar kernel's time on default NativeAOT and 1.40 to 5.80 on WebAssembly AOT.
+The tier took 0.39 to 0.59 of the scalar kernel's time at versions 12 to 27 and 0.56 to 0.71 at 28 to 40, on every build at every version. The step at version 28 is the tier's: the scalar kernel works on three words at every version from 12, so its time grows evenly, while the transposed tier pays for the words a row has, two up to version 27 and three from 28. The SoA scorers ported to the same vectors in the 128-bit tiers round (2026-09-30), two rows per vector, took 0.94 to 1.68 of the scalar kernel's time on default NativeAOT and 1.40 to 5.80 on WebAssembly.
 
 End to end at quiet zone 0 and the mask stage alone, base (`main`, 5444c64) to change, seven alternating rounds per build on the JIT and NativeAOT, five on WebAssembly AOT and three interpreted, with the NativeAOT times beside the ratios:
 

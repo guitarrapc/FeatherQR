@@ -16,8 +16,9 @@ namespace FeatherQR.Internals.StandardQR;
 /// (2026-10-05).
 /// </summary>
 /// <remarks>
-/// Popcounts accumulate in 16-bit lanes and reduce once a group: WebAssembly's byte popcount and pairwise widening add, the nibble-table
-/// popcount and psadbw with SSSE3, a SWAR count of each 16-bit lane elsewhere.
+/// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
+/// candidates in the single-word tier, one candidate in the transposed one): WebAssembly's byte popcount and pairwise widening add, the
+/// nibble-table popcount and psadbw with SSSE3, a SWAR count of each 16-bit lane elsewhere.
 /// </remarks>
 internal static partial class ModulePlacer
 {

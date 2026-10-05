@@ -12,8 +12,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// Same planes, tables, rules and checkpoint as the AVX2 tier. Popcounts accumulate in the 16-bit lanes of <see cref="AddPopCount"/> and
-/// reduce once a candidate, and the 64-bit lane shifts go through <see cref="Shr"/> and <see cref="Shl"/>, WebAssembly's own where the
-/// portable ones fall back to software.
+/// reduce only at the checkpoint and at the end of a candidate, and the 64-bit lane shifts go through <see cref="Shr"/> and
+/// <see cref="Shl"/>, WebAssembly's own where the portable ones fall back to software.
 /// </remarks>
 internal static partial class ModulePlacer
 {
@@ -230,7 +230,8 @@ internal static partial class ModulePlacer
         ref var n4 = ref Unsafe.Add(ref eq, 2 * length);
         ref var h = ref Unsafe.Add(ref eq, 3 * length);
 
-        // A 16-bit lane holds a whole candidate: at most 64 a vector (SSSE3's sums), and at most 3 words x 89 vectors x 2 orientations of them.
+        // A 16-bit lane holds a whole candidate. An add puts at most 64 into a lane (SSSE3's byte sums, 16 on the other paths), and an
+        // accumulator takes at most 534 adds (finders: 89 vectors a plane at version 40, 3 words, 2 orientations), so at most 34,176.
         var ones = Vector128<ushort>.Zero;
         var twos = Vector128<ushort>.Zero;
         var finders = Vector128<ushort>.Zero;
