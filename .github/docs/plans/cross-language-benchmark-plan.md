@@ -102,7 +102,7 @@ Each phase appends a Progress log entry with Done / Lessons / numbers.
 | 3 | P1 | NativeAOT | FeatherQR as JIT, NativeAOT default and NativeAOT `x86-64-v3`, steady state and cold start. The probe above repeated on linux-x64 and linux-arm64 | The gap between the AOT arms measured per shape, and the kernels behind the default arm's gap listed with the tier they fall to (128-bit or scalar) from the [tier table](../specs/qrcode-simd-tiers.md). A separate change documents `IlcInstructionSet` for NativeAOT users in the README and user docs, with the number behind it. Kernels that fell to scalar got 128-bit tiers for 2.0.0 ([the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round)) |
 | 4 | P1 | zxing-cpp and libzint | Built in the image from pinned commits. All three symbologies. The same inputs through the ZXingCpp NuGet under BenchmarkDotNet, to measure the wrapper's cost | Verified rows for QR, Micro QR and rMQR, and the wrapper's cost stated |
 | 5 | P2 | JVM | BoofCV and ZXing, Maven-pinned, GC and heap set, warmup long enough for C2 | As phase 2 |
-| 6 | P2 | CI | A `workflow_dispatch` workflow on ubuntu-24.04 and ubuntu-24.04-arm, image cached, results uploaded as artifacts | Two runs of the same commit agree within the phase 1 tolerance on ratios |
+| 6 | P2 | CI | A `workflow_dispatch` workflow on ubuntu-24.04 and ubuntu-24.04-arm, image built in each run, results uploaded as artifacts | Two runs of the same commit agree within the phase 1 tolerance on ratios |
 | 7 | P3 | Others | Go and apt-packaged C libraries, only for a question the first set left open | Per library, as phase 2 |
 | 8 | P2 | Fold | Method, decisions and lessons into a spec. Results stay in CI artifacts and the spec's summary, never the README. This plan deleted | Nothing is only here |
 
@@ -111,7 +111,6 @@ Phase 1 comes first because it tests the method: if a plain timing loop cannot r
 ## Open decisions
 
 - Whether each corpus entry rotates through many inputs in random order instead of one, so that a branch on the data costs what it does on real input. It would change every number, and the phase 3 finding is the only measurement of the effect.
-- Pushing the image to GHCR by digest makes every result traceable to exact binaries, but publishes an image under the repository. The alternative is to rebuild it in each run from the build cache and record the digest without publishing it.
 
 ## Progress log
 
@@ -353,3 +352,13 @@ Lessons:
 - Running anything on the measured CPUs during a run contaminates it. A 35 s experiment during a run doubled to quadrupled the experiment's own times, and the run was stopped and repeated.
 - The first attempt and the redo, hours apart on the same image, put FeatherQR 7 to 8 % apart too, while the redo's two runs agreed within 0.9 %, so a comparison holds only within one run.
 - The three CLIs took 36 minutes per run, the outside check 50 minutes on BoofCV's 8 entries and 93 minutes on ZXing's 15 with N at 10 s, and the cold first call 8 minutes.
+
+### Phase 6: CI (2026-10-05, in progress)
+
+Done:
+
+- `.github/workflows/cross-language-benchmark.yaml`: a `workflow_dispatch` workflow on ubuntu-24.04 and ubuntu-24.04-arm (four vCPUs each, since the repository is public). It builds the image, runs the collector in the container with the development box's two CPUs and 4 GB, and uploads the results as an artifact, with `run.md` in the job summary. Its inputs choose the CLIs, the entries, the rounds, the cold first call and the outside check, which is off by default because it takes hours with every CLI. The collector's exit 1 (an entry failed verification, as the ZXingCpp package's Unicode encode always does) is a warning, and only a failure to measure fails the job. The step script ran under WSL against a Linux path before the workflow was committed.
+- The image is built in every run, neither cached nor published, which settles the open decision on GHCR. A build without cache took 91 s on the development box (8 VM CPUs, base images already pulled) and is expected to take about 5 minutes on a hosted runner, against two to three hours of measuring, and every result records the image ID it ran. Builds of one commit come from pinned sources and toolchains but are not byte-identical, so the image IDs differ.
+- The collector's `agree` command holds two runs against each other on ratios, each CLI's median over FeatherQR's entry by entry, under the phase 1 tolerance. On phase 5's two runs it put ZXing within 6.7 % and BoofCV within 4.1 %.
+
+Left: the exit needs two runs of one commit on the runners, which `workflow_dispatch` allows only once the workflow is on the default branch. A full run with every CLI is estimated at two to three hours per architecture, inside the six-hour job limit.
