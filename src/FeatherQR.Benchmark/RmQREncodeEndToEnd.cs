@@ -12,7 +12,6 @@
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
 ///
 /// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>): it varies content shape rather than version, and every row needs a same-run Single pair, which does not belong in this table.
-/// The "(Span, QZ0)" rows write no quiet zone, so they time what the decode benchmarks read (RmQRDecodeEndToEnd decodes quiet-zone-free matrices).
 /// </summary>
 public class RmQREncodeEndToEnd
 {
@@ -118,38 +117,6 @@ public class RmQREncodeEndToEnd
     public int RmQR_Kanji_R17x139_EncodeSpan()
     {
         return RmQRCodeGenerator.Create(_kanji.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { AllowKanji = true, Version = RmQRVersion.R17x139 });
-    }
-
-    // Span destination without a quiet zone: the matrix the decode benchmarks read.
-
-    [Benchmark(Description = "RmQR_Numeric_R7x43_Encode (Span, QZ0)")]
-    public int RmQR_Numeric_R7x43_EncodeSpanNoQuietZone()
-    {
-        return RmQRCodeGenerator.Create(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, QuietZoneSize = 0 });
-    }
-
-    [Benchmark(Description = "RmQR_Alphanumeric_R11x59_Encode (Span, QZ0)")]
-    public int RmQR_Alphanumeric_R11x59_EncodeSpanNoQuietZone()
-    {
-        return RmQRCodeGenerator.Create(_alphanumeric.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59, QuietZoneSize = 0 });
-    }
-
-    [Benchmark(Description = "RmQR_Byte_R17x139_Encode (Span, QZ0)")]
-    public int RmQR_Byte_R17x139_EncodeSpanNoQuietZone()
-    {
-        return RmQRCodeGenerator.Create(_byte.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139, QuietZoneSize = 0 });
-    }
-
-    [Benchmark(Description = "RmQR_Kanji_R17x139_Encode (Span, QZ0)")]
-    public int RmQR_Kanji_R17x139_EncodeSpanNoQuietZone()
-    {
-        return RmQRCodeGenerator.Create(_kanji.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { AllowKanji = true, Version = RmQRVersion.R17x139, QuietZoneSize = 0 });
-    }
-
-    [Benchmark(Description = "RmQR_Numeric_AutoFit_Encode (Span)")]
-    public int RmQR_Numeric_AutoFit_EncodeSpan()
-    {
-        return RmQRCodeGenerator.Create(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination);
     }
 
     // Standard QR version 1 with the same numeric payload, for scale reference. Also
