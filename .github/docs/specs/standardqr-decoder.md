@@ -385,7 +385,10 @@ The README and the API docs name no other reader for the out-of-scope real-world
   - The axes' share without the 2 px floor: four anti-aliased renders at 1.0-1.25 px/module lost, outside the envelope.
   - Refusing a candidate whose two diagonals both have a centre under 2.5 of 7 modules: the cross with both diagonals dotted from 4,505 to 22, but five anti-aliased renders of a real finder lost.
 
-  A cross with both diagonals dotted still passes in 3,470 of 10,496 renders, because its rising diagonal reads as its falling one does. Like the one-diagonal cross, it is a candidate the three-pattern selection then has to score away, not a wrong read.
+  A cross with both diagonals dotted still passes in 3,470 of 10,496 renders, because its rising diagonal reads as its falling one does. Like the one-diagonal cross, it stays a candidate and does not become a read:
+  - Drawn alone at 2 to 4 px/module, neither cross was read by any of the three decoders, and neither was a lone real finder (0 of 336 renders each).
+  - Beside a symbol, past its quiet zone (to the right, below, off the corner) at 2.5 to 5 px/module, every symbol read correctly with either cross there, as with a real finder there or nothing (720 Standard QR, 360 Micro QR and 360 rMQR renders per shape).
+  - Inside a symbol's data it was not measured on its own. Random data with three planted finders kept every triple right.
 
 - Between 1 and 1.5 px/module a crisp symbol holds all its information, but nothing built on ratios or finder centres reads it. A crisp render at a fractional scale, the builders' own or any nearest-neighbour resize, draws each module 1 or 2 px wide, a whole pixel or more, but two things the decoders rely on stop working. A run is up to a whole module off, so the 1:1:3:1:1 check's half-module tolerance refuses most finders (`NotDetected` on 57-73 % of crisp renders), with no grey to measure instead. A sample has (pitch − 1) / 2 to spare, an eighth of a pixel at 1.25 px/module, while finder centres are good only to half a pixel, so every grid extrapolated from a centre fails in the data. Both repairs read edges instead of measuring sizes.
 
