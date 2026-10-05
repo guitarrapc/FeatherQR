@@ -9,6 +9,7 @@
 ///   Kanji_M4_M : M4-M, Kanji mode (capacity boundary, 8 characters)
 ///
 /// Byte_M4_M and Kanji_M4_M share version and level, so they differ in mode, not in symbol size.
+/// The "(Span)" rows' quiet-zone-free twins are in <see cref="MicroQRQuietZone0Encode"/>.
 /// </summary>
 public class MicroQREncodeEndToEnd
 {

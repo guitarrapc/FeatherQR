@@ -6,7 +6,7 @@
 /// Seven of the thirteen shapes below change version between the two arms.
 ///
 /// This is a separate class from <see cref="RmQREncodeEndToEnd"/> on purpose.
-/// That one varies version and mode with the version pinned, and ranks everything against one baseline row; this one varies content shape with the version free, and every row is meaningless without its same-run partner.
+/// That one varies version and mode, and ranks everything against one baseline row; this one varies content shape, and every row is meaningless without its same-run partner.
 /// Mixing them would make both tables harder to read and both filters slower to run.
 ///
 /// The shapes are chosen to separate the two things that drive planning cost:

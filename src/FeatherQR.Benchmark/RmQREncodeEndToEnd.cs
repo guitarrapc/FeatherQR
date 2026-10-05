@@ -11,6 +11,7 @@
 ///   Kanji_R17x139 : largest symbol, Kanji mode (capacity boundary, 92 characters)
 ///
 /// The "(Pinned)" rows resolve the version before the pipeline, the path tools/CrossLanguageBenchmark takes on every encode.
+/// The "(Span)" rows' quiet-zone-free twins are in <see cref="RmQRQuietZone0Encode"/>.
 /// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>): it varies content shape rather than version, and every row needs a same-run Single pair, which does not belong in this table.
 /// </summary>
 public class RmQREncodeEndToEnd

@@ -18,7 +18,7 @@ using System.Text;
 ///   Kanji_Long_V15_L : version 15-L, Kanji mode (capacity boundary, 320 characters)
 ///
 /// Byte_Url_V6_M and Kanji_V6_M share version and level, so they differ in mode, not in symbol size.
-/// The "(Span)" rows keep the default quiet zone of 4, the matrix a caller gets with default options.
+/// The "(Span)" rows keep the default quiet zone of 4, the matrix a caller gets with default options. Their quiet-zone-free twins are in <see cref="QRCodeQuietZone0Encode"/>.
 /// The three long alphanumeric and numeric shapes are long enough to time the Alphanumeric and Numeric writers.
 /// The "(Pinned)" and "(Boost)" rows resolve the version or level before the pipeline, the path tools/CrossLanguageBenchmark takes on every encode.
 /// </summary>
@@ -37,7 +37,7 @@ public class QRCodeEncodeEndToEnd
     private string _numericLongL = default!;
     private byte[] _spanDestination = default!;
 
-    private const string AlphanumericAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+    internal const string AlphanumericAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
     private static readonly QRCodeGeneratorOptions Boost = new() { BoostEccLevel = true };
     private static readonly QRCodeGeneratorOptions KanjiVersion6 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(6) };
     private static readonly QRCodeGeneratorOptions KanjiVersion15 = new() { AllowKanji = true, Version = QRVersionRange.Exactly(15) };
@@ -237,7 +237,7 @@ public class QRCodeEncodeEndToEnd
     // spellings of one call and the pairs were dropped rather than left measuring
     // themselves. The options path is now the only path, and the benchmarks above are on it.
 
-    private static string BuildDeterministicText(int length)
+    internal static string BuildDeterministicText(int length)
     {
         var sb = new StringBuilder(length);
         var rng = new Random(42);
@@ -250,7 +250,7 @@ public class QRCodeEncodeEndToEnd
     }
 
     /// <summary>Characters drawn from <paramref name="alphabet"/> with a fixed seed: one encoding mode for the whole text.</summary>
-    private static string BuildText(int length, string alphabet)
+    internal static string BuildText(int length, string alphabet)
     {
         var rng = new Random(7);
         var chars = new char[length];
