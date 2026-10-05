@@ -1,6 +1,5 @@
 using TUnit.Assertions.Enums;
 using FeatherQR.Internals;
-using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals.MicroQR;
 using static FeatherQR.Tests.KanjiStreamReference;
 

@@ -1,5 +1,4 @@
 using TUnit.Assertions.Enums;
-using FeatherQR.Internals;
 using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
