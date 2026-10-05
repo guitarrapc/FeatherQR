@@ -74,7 +74,7 @@ Each phase follows the test-first workflow, updates the affected spec in the sam
 | 5 | P1 | Transposed scorer, AVX2 | The transposed scorer for versions 12 to 40, starting from the prototype in [references/encode-performance-transposed-scorer.cs](references/encode-performance-transposed-scorer.cs): per-version tables (the periodic form measured against full tables), a vectorized transpose, the early-abort checkpoint. Versions 1 to 11 keep the lane-per-pattern tier | All eight scores equal the textbook scorer at every version 12 to 40 and every ECC level, on random and degenerate data. A measured win over phase 3 at every version 12 to 40, stated per version. Table memory per version stated |
 | 6 | P1 | Transposed scorer, 128-bit builds | The same scorer on Vector128 (x64 without AVX2, WebAssembly) and ARM64 | Ships per build only where it beats that build's current code. A loss is recorded with its numbers |
 | 7 | P2 | Writers | `standardqr-binary-encoder-plan.md`, run as written, starting from its phase 1 with this plan's numbers | That plan's exits |
-| 8 | P2 | Output edges | `QRCodeData` built from the winner's packed rows. The Standard QR quiet-zone span path without the rent and the full clear. Micro QR written into the strided window as rMQR is | Byte-identical. The class and quiet-zone rows measured against the quiet-zone-free span row before and after, per symbology |
+| 8 | P2 | Output edges | `QRCodeData` built from the winner's packed rows. The Standard QR quiet-zone span path without the rent and the full clear. Micro QR written into the strided window as rMQR is | Byte-identical. The timing mode's class and quiet-zone rows (`stage/*/e2e-class`, `stage/*/e2e`) measured against its quiet-zone-free row (`stage/*/e2e-qz0`) before and after, per symbology |
 | 9 | P3 | Leads | Reed-Solomon across independent blocks (4 % at V40-L). Placement written as bits into the transposed matrix, since the zigzag fills column pairs. For versions 1 to 11, a deferred popcount reduction and a 512-bit lane-per-pattern tier on AVX-512 hardware | Each measured as a ceiling first, and dropped with its number recorded if under about 3 % of its encode |
 | 10 | P2 | Fold | Decisions, measurements and lessons into `specs/standardqr-encoder.md`, the Micro QR spec map and `SimdTiers.cs`. README benchmark images regenerated, encode and decode from one run. This plan and its two references files deleted | Nothing is only here |
 
@@ -101,7 +101,7 @@ Entries are appended per phase: what was done, what was learned, and the benchma
 No hot path moved: the library is unchanged, and only benchmarks, the timing mode and these documents changed.
 
 Done.
-- `QRCodeEncodeEndToEnd`, `MicroQREncodeEndToend` and `RmQREncodeEndToEnd` have a "(Span, QZ0)" row per decode-comparable shape (11, 4 and 4), so each encode row now has a quiet-zone-free twin that compares with its decode row like for like. `QRCodeEncodeEndToEnd` has three new shapes: 300 alphanumeric characters (10-M), 4,296 alphanumeric characters (40-L) and 7,089 digits (40-L), with a class row and a quiet-zone-free row each. They are also the long writer shapes `standardqr-binary-encoder-plan.md` asks for.
+- `QRCodeEncodeEndToEnd`, `MicroQREncodeEndToEnd` and `RmQREncodeEndToEnd` have a "(Span, QZ0)" row per decode-comparable shape (11, 4 and 4), so each encode row now has a quiet-zone-free twin that compares with its decode row like for like. These rows were removed on 2026-10-05 (the entry of 2026-10-06). `QRCodeEncodeEndToEnd` has three new shapes: 300 alphanumeric characters (10-M), 4,296 alphanumeric characters (40-L) and 7,089 digits (40-L), with a class row and a quiet-zone-free row each. They are also the long writer shapes `standardqr-binary-encoder-plan.md` asks for.
 - The stage harness is the `stage/` shapes of the timing mode in `tests/FeatherQR.AotAnalysis` (`--time --shape stage/`), linked into the WebAssembly report too: 180 shapes over nine Standard QR, three Micro QR and three rMQR symbols. Each symbol has its end-to-end rows (default quiet zone, quiet zone 0, class API) and each stage alone on the input the stage before it produced. The open decision went this way because the timing mode already reaches the internals through its `InternalsVisibleTo`, already holds the mask kernel shapes, and runs on the JIT, NativeAOT and WebAssembly builds phase 6 has to measure. The library's `InternalsVisibleTo` list is unchanged.
 - Each symbol's stage composition is checked once against the generator's own matrix, byte for byte, and against the version the shape is named for, and a shape is never built if either fails. A planted fault (version information left out of the composition) stopped the version 40 shapes as it should.
 - On `main` the committed harness reproduced the references file's stage table: every end-to-end and mask selection row within 12 %, placement and interleave within 3 % when run alone. The new BenchmarkDotNet rows all run, checked with a dry job, and their first numbers are in the references file ("Phase 1 baseline").
@@ -313,3 +313,17 @@ Lessons.
 - A gain the size of the spread is sized by the stage rows. Two runs of nine rounds read 0.95 to 0.96 and 0.98 to 1.00 for the same steps at version 40 alphanumeric, while the payload row over the encode gave 2.5 % both times.
 - One fix can cost differently on two compilers of one release. NativeAOT 8 called the software `Shuffle` and the JIT inlined it, so the same fix gained 7 % on one and nothing measurable on the other.
 - A step's cut-over belongs to a runtime, not only to a build class. .NET 10 promotes the writer's copy to registers and .NET 8 keeps it in memory, so the same step won from 40 digits on one and from 160 on the other.
+
+### Benchmark rows aligned across the symbologies (2026-10-06)
+
+No hot path moved: only the benchmark project and this plan changed.
+
+Done.
+- The "(Span, QZ0)" rows left the three encode classes on 2026-10-05. A quiet-zone-free encode is the timing mode's `stage/*/e2e-qz0` row, and phase 8's exit now names it.
+- The rows that ran another symbology for scale left the encode and decode classes.
+- Every encode and decode class orders its rows by mode (numeric, alphanumeric, byte, Kanji) within each group, and its summary the same way. `MicroQREncodeEndToend` is now `MicroQREncodeEndToEnd`.
+- rMQR rows fit their version as the Standard QR and Micro QR rows do, and "(Pinned)" rows (R11x27 numeric, R17x139 byte and Kanji) take the path that resolves it first. The area fit puts 12 digits in R11x27 and 43 alphanumeric characters in R15x43 (297 and 645 modules, against 301 for R7x43 and 649 for R11x59), so those rows and their decode rows are named for the symbols they write. The payloads are unchanged, so they no longer fill their symbols (R11x27-M holds 14 digits, R15x43-M 46 characters).
+- `RmQR_Numeric_AutoFit_Encode` is gone: the fitted numeric row is the same call.
+
+Lessons.
+- A comparison row has to write the symbol of the row it is read against. The automatic-fit row was read against the R7x43 baseline but wrote R11x27, so the difference was never the fit's cost alone.
