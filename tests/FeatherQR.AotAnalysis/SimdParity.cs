@@ -750,11 +750,11 @@ internal static class SimdParity
         var mismatches = new List<string>();
         var alphanumeric = new List<(string Name, TierTiming.PayloadWriter Write)> { ("scalar", QRBinaryEncoder.WriteAlphanumericScalar) };
         var numeric = new List<(string Name, TierTiming.PayloadWriter Write)> { ("scalar", QRBinaryEncoder.WriteNumericScalar) };
+        // each as its dispatch asks: the Alphanumeric step blends with SSE4.1, the Numeric step needs SSSE3 alone
         if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported && System.Runtime.Intrinsics.X86.Sse41.IsSupported)
-        {
             alphanumeric.Add(("ssse3", QRBinaryEncoder.WriteAlphanumericSsse3));
+        if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
             numeric.Add(("ssse3", QRBinaryEncoder.WriteNumericSsse3));
-        }
         if (System.Runtime.Intrinsics.Wasm.PackedSimd.IsSupported)
         {
             alphanumeric.Add(("wasm", QRBinaryEncoder.WriteAlphanumericPackedSimd));

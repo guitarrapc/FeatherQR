@@ -33,7 +33,7 @@ public class QRBinaryEncoderPayloadParityTest
     [MethodDataSource(nameof(Routes))]
     public async Task Alphanumeric_MatchesDefinition(Route route)
     {
-        if (!Available(route))
+        if (!Available(route, alphanumeric: true))
         {
             Skip.Test($"{route} not run on this machine");
             return;
@@ -67,7 +67,7 @@ public class QRBinaryEncoderPayloadParityTest
     [MethodDataSource(nameof(Routes))]
     public async Task Alphanumeric_CharacterOutsideTheAlphabet_ThrowsAfterTheFieldsAheadOfIt(Route route)
     {
-        if (!Available(route))
+        if (!Available(route, alphanumeric: true))
         {
             Skip.Test($"{route} not run on this machine");
             return;
@@ -105,7 +105,7 @@ public class QRBinaryEncoderPayloadParityTest
     [MethodDataSource(nameof(Routes))]
     public async Task Alphanumeric_EveryCharacterOutsideTheAlphabet_Throws(Route route)
     {
-        if (!Available(route))
+        if (!Available(route, alphanumeric: true))
         {
             Skip.Test($"{route} not run on this machine");
             return;
@@ -136,7 +136,7 @@ public class QRBinaryEncoderPayloadParityTest
     [MethodDataSource(nameof(Routes))]
     public async Task Numeric_MatchesDefinition(Route route)
     {
-        if (!Available(route))
+        if (!Available(route, alphanumeric: false))
         {
             Skip.Test($"{route} not run on this machine");
             return;
@@ -160,10 +160,11 @@ public class QRBinaryEncoderPayloadParityTest
         }
     }
 
-    private static bool Available(Route route) => route switch
+    /// <summary>Whether the route's writer of that kind runs here, as its dispatch asks: the Alphanumeric step blends with SSE4.1, the Numeric step needs SSSE3 alone.</summary>
+    private static bool Available(Route route, bool alphanumeric) => route switch
     {
         Route.Scalar => true,
-        Route.Ssse3 => System.Runtime.Intrinsics.X86.Ssse3.IsSupported && System.Runtime.Intrinsics.X86.Sse41.IsSupported,
+        Route.Ssse3 => System.Runtime.Intrinsics.X86.Ssse3.IsSupported && (!alphanumeric || System.Runtime.Intrinsics.X86.Sse41.IsSupported),
         _ => false,
     };
 
@@ -171,7 +172,8 @@ public class QRBinaryEncoderPayloadParityTest
     [MethodDataSource(nameof(Routes))]
     public async Task Writers_ReadNothingPastTheRun(Route route)
     {
-        if (!Available(route) || !PageEndMemory.IsSupported)
+        // the Numeric writer asks the least, so a route without it has neither
+        if (!Available(route, alphanumeric: false) || !PageEndMemory.IsSupported)
         {
             Skip.Test($"{route} or protected pages not available on this machine");
             return;
@@ -184,6 +186,8 @@ public class QRBinaryEncoderPayloadParityTest
         {
             foreach (var alphanumeric in new[] { true, false })
             {
+                if (!Available(route, alphanumeric))
+                    continue;
                 var text = Pick(length, alphanumeric ? Alphabet : "0123456789", length * 7 + 3);
                 var (actual, bits, error) = Write(route, alphanumeric, memory.AtPageEnd(text), 0);
                 var fields = alphanumeric ? AlphanumericFields(text, text.Length) : NumericFields(text);
