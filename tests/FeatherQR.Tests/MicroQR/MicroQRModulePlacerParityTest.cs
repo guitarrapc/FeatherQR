@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity guard for the optimized Micro QR placement pipeline
-/// (<see cref="MicroQRModulePlacer.PlaceSymbol"/>): the fused implementation
+/// (<see cref="MicroQRModulePlacer.PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>): the fused implementation
 /// (bulk stream pack, static segments, packed-edge mask scoring, size-dispatched
 /// apply, packed-row pipeline for sizes 13/15/17) must produce a byte-identical
 /// matrix AND the same selected mask as the naive per-module reference below,
@@ -73,7 +73,7 @@ public class MicroQRModulePlacerParityTest
         var expected = new byte[size * size];
         var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
 
-        var actual = new byte[size * size];
+        var actual = Dirty(size * size);
         var actualMask = MicroQRModulePlacer.PlaceSymbol(actual, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
@@ -113,8 +113,8 @@ public class MicroQRModulePlacerParityTest
         var expected = new byte[size * size];
         var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
 
-        var actual = new byte[size * size];
-        var actualMask = MicroQRModulePlacer.PlaceSymbolScalar(actual, size, data, eccBytes, dataBitCount, version, ecc);
+        var actual = Dirty(size * size);
+        var actualMask = MicroQRModulePlacer.PlaceSymbolScalar(actual, size, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
         await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
@@ -168,8 +168,8 @@ public class MicroQRModulePlacerParityTest
         var expected = new byte[size * size];
         var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
 
-        var actual = new byte[size * size];
-        var actualMask = MicroQRModulePlacer.PlaceSymbolBmi2(actual, size, data, eccBytes, dataBitCount, version, ecc);
+        var actual = Dirty(size * size);
+        var actualMask = MicroQRModulePlacer.PlaceSymbolBmi2(actual, size, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
         await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
@@ -219,8 +219,8 @@ public class MicroQRModulePlacerParityTest
         var expected = new byte[size * size];
         var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
 
-        var actual = new byte[size * size];
-        var actualMask = MicroQRModulePlacer.PlaceSymbolSsse3(actual, size, data, eccBytes, dataBitCount, version, ecc);
+        var actual = Dirty(size * size);
+        var actualMask = MicroQRModulePlacer.PlaceSymbolSsse3(actual, size, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
         await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
@@ -270,8 +270,8 @@ public class MicroQRModulePlacerParityTest
         var expected = new byte[size * size];
         var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
 
-        var actual = new byte[size * size];
-        var actualMask = MicroQRModulePlacer.PlaceSymbolAdvSimd(actual, size, data, eccBytes, dataBitCount, version, ecc);
+        var actual = Dirty(size * size);
+        var actualMask = MicroQRModulePlacer.PlaceSymbolAdvSimd(actual, size, size, data, eccBytes, dataBitCount, version, ecc);
 
         await Assert.That(actualMask).IsEqualTo(expectedMask);
         await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
@@ -318,7 +318,7 @@ public class MicroQRModulePlacerParityTest
             var expected = new byte[size * size];
             ReferencePlaceForced(expected, size, data, eccBytes, dataBitCount, version, ecc, mask);
 
-            var actual = new byte[size * size];
+            var actual = Dirty(size * size);
             var actualMask = MicroQRModulePlacer.PlaceSymbol(actual, size, data, eccBytes, dataBitCount, version, ecc, mask);
 
             await Assert.That(actualMask).IsEqualTo(mask);
@@ -356,12 +356,124 @@ public class MicroQRModulePlacerParityTest
             var expected = new byte[size * size];
             ReferencePlaceForced(expected, size, data, eccBytes, dataBitCount, version, ecc, mask);
 
-            var actual = new byte[size * size];
-            var actualMask = MicroQRModulePlacer.PlaceSymbolScalar(actual, size, data, eccBytes, dataBitCount, version, ecc, mask);
+            var actual = Dirty(size * size);
+            var actualMask = MicroQRModulePlacer.PlaceSymbolScalar(actual, size, size, data, eccBytes, dataBitCount, version, ecc, mask);
 
             await Assert.That(actualMask).IsEqualTo(mask);
             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
+    }
+
+    public enum Tier { Dispatch, Scalar, Bmi2, Ssse3, AdvSimd }
+
+    // Every tier at every size, with rows 1, 2, 4 and 50 bytes apart past the core width: a quiet zone's margins are 2q bytes, and the
+    // vector tiers' overrun past a row (up to 15 bytes at size 17, a 32-byte store on the BMI2 tier) lands in them or in the next row.
+    public static IEnumerable<(Tier tier, MicroQRVersion version, MicroQREccLevel ecc, int seed, int gap)> StridedCases()
+    {
+        foreach (var tier in Enum.GetValues<Tier>())
+        {
+            foreach (var (version, ecc, seed) in AllCombinationsAndSeeds())
+            {
+                if (seed is -1 or 1 or 2)
+                    continue;
+                foreach (var gap in new[] { 1, 2, 4, 50 })
+                    yield return (tier, version, ecc, seed, gap);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The strided entry writes the core into a wider matrix, rows <c>stride</c> bytes apart: every core module as the reference
+    /// places it, nothing past the last row's last module, and between rows nothing but light modules, so margins cleared before
+    /// the call stay light.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(StridedCases))]
+    public async Task PlaceSymbol_Strided_WritesEveryCoreModule_AndNothingPastTheLastRow(Tier tier, MicroQRVersion version, MicroQREccLevel ecc, int seed, int gap)
+    {
+#if NET8_0_OR_GREATER
+        var supported = tier switch
+        {
+            Tier.Bmi2 => System.Runtime.Intrinsics.X86.Bmi2.X64.IsSupported && System.Runtime.Intrinsics.X86.Avx2.IsSupported,
+            Tier.Ssse3 => System.Runtime.Intrinsics.X86.Ssse3.IsSupported,
+            Tier.AdvSimd => System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported,
+            _ => true,
+        };
+#else
+        var supported = tier is Tier.Dispatch or Tier.Scalar;
+#endif
+        if (!supported)
+        {
+            Skip.Test($"{tier} not supported on this machine.");
+            return;
+        }
+
+        var size = MicroQRConstants.SizeFromVersion(version);
+        var dataBitCount = MicroQRConstants.GetDataBitCapacity(version, ecc);
+        var data = new byte[MicroQRConstants.GetDataCodewordCount(version, ecc)];
+        var eccBytes = new byte[MicroQRConstants.GetEccCodewordCount(version, ecc)];
+        if (seed == -2)
+        {
+            Array.Fill(data, (byte)0xFF);
+            Array.Fill(eccBytes, (byte)0xFF);
+        }
+        else
+        {
+            new Random(seed).NextBytes(data);
+            new Random(seed + 100).NextBytes(eccBytes);
+        }
+
+        var expected = new byte[size * size];
+        var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
+
+        var stride = size + gap;
+        var windowEnd = (size - 1) * stride + size;
+        var buffer = Dirty(windowEnd + 40);
+        var destination = buffer.AsSpan(0, windowEnd);
+        var actualMask = tier switch
+        {
+            Tier.Dispatch => MicroQRModulePlacer.PlaceSymbol(destination, size, stride, data, eccBytes, dataBitCount, version, ecc),
+            Tier.Scalar => MicroQRModulePlacer.PlaceSymbolScalar(destination, size, stride, data, eccBytes, dataBitCount, version, ecc),
+#if NET8_0_OR_GREATER
+            Tier.Bmi2 => MicroQRModulePlacer.PlaceSymbolBmi2(destination, size, stride, data, eccBytes, dataBitCount, version, ecc),
+            Tier.Ssse3 => MicroQRModulePlacer.PlaceSymbolSsse3(destination, size, stride, data, eccBytes, dataBitCount, version, ecc),
+            Tier.AdvSimd => MicroQRModulePlacer.PlaceSymbolAdvSimd(destination, size, stride, data, eccBytes, dataBitCount, version, ecc),
+#endif
+            _ => throw new ArgumentOutOfRangeException(nameof(tier)),
+        };
+
+        await Assert.That(actualMask).IsEqualTo(expectedMask);
+        for (var row = 0; row < size; row++)
+        {
+            if (!buffer.AsSpan(row * stride, size).SequenceEqual(expected.AsSpan(row * size, size)))
+                Assert.Fail($"{tier}, {version}-{ecc}, gap {gap}: core row {row} differs from the reference");
+            if (row == size - 1)
+                continue;
+            foreach (var between in buffer.AsSpan(row * stride + size, gap))
+            {
+                if (between is not (0xA5 or 0))
+                    Assert.Fail($"{tier}, {version}-{ecc}, gap {gap}: 0x{between:X2} written between rows {row} and {row + 1}");
+            }
+        }
+        await Assert.That(buffer.AsSpan(windowEnd).ToArray()).IsEquivalentTo(Enumerable.Repeat((byte)0xA5, 40).ToArray(), CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task PlaceSymbol_StrideUnderSize_Throws()
+    {
+        var matrix = new byte[13 * 13];
+        await Assert.That(() => MicroQRModulePlacer.PlaceSymbol(matrix, 13, 12, new byte[5], new byte[5], 40, MicroQRVersion.M2, MicroQREccLevel.L))
+            .Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task PlaceSymbol_StridedMatrixShortOfTheLastRow_Throws()
+    {
+        // The last row ends at (size - 1) x stride + size; one byte short must be refused, not written past.
+        var matrix = new byte[12 * 20 + 13 - 1];
+        await Assert.That(() => MicroQRModulePlacer.PlaceSymbol(matrix, 13, 20, new byte[5], new byte[5], 40, MicroQRVersion.M2, MicroQREccLevel.L))
+            .Throws<ArgumentException>();
+        await Assert.That(MicroQRModulePlacer.PlaceSymbol(new byte[12 * 20 + 13], 13, 20, new byte[5], new byte[5], 40, MicroQRVersion.M2, MicroQREccLevel.L)).IsBetween(0, 3);
     }
 
     [Test]
@@ -415,6 +527,14 @@ public class MicroQRModulePlacerParityTest
     // ---------------------------------------------------------------
     // Naive reference (independent of the production fast path)
     // ---------------------------------------------------------------
+
+    // The placer writes every module of the matrix, so its callers clear nothing: each tier starts from a dirty one.
+    private static byte[] Dirty(int length)
+    {
+        var matrix = new byte[length];
+        matrix.AsSpan().Fill(0xA5);
+        return matrix;
+    }
 
     private static int ReferencePlace(Span<byte> matrix, int size, ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel)
     {

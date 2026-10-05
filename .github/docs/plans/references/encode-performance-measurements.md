@@ -793,3 +793,117 @@ End to end, base `encode4` (0fda781) against the change, the stage harness on bo
 | rMQR R17x139 | 1.00 | 1.00 | 1.01 | 1.00 |
 
 From the stage rows the steps save 2.5 % of a version 40 alphanumeric encode on .NET 10, 1.6 % at version 10, 1.8 % of the alphanumeric set and 1.1 to 1.5 % of the numeric shapes, and on .NET 8 1.9 %, 1.1 to 1.2 %, 1.3 % and 0.4 to 0.7 %. That is about what a run of nine rounds resolves here. The two .NET 10 runs read 0.95 to 0.96 and 0.98 to 1.00 at version 40 alphanumeric, and one round's ratio for a shape the change does not touch ranged over 0.03 to 0.04 either way, so the end-to-end rows confirm the direction and the stage rows give the size. The payload is then 1.7 to 1.8 % of a version 40 alphanumeric encode on .NET 10 and 2.8 to 3.0 % on .NET 8. On .NET 8 the version 1 alphanumeric row read 1.03 to 1.04 though a run of sixteen characters takes no step there (its payload row 0.94 to 1.00). Nine rounds of the version 1 and 6 shapes alone read it at 1.01 on both builds, with the shapes beside it at 0.96 to 1.03.
+
+## Phase 8: output edges (2026-10-06)
+
+Base `main` (1df5b10) against the change, the stage harness on both sides. The kernel rows are BenchmarkDotNet (3 warmups, 15 iterations, the process pinned to one CCD) on the JIT with AVX2.
+
+### The class API's pack
+
+`QRCodeData.SetCoreData` packed eight modules a step with a multiply-gather. It now goes through `ModuleBitPacker.Pack`, the vector packer of the Micro QR and rMQR data models (32 modules a step with AVX2), which writes the same bytes, since all three data models hold one MSB-first stream in row-major order. The stage harness's pack row and the class API's end-to-end row over the quiet-zone-free one, JIT with AVX2, five alternating rounds, the median of the run medians:
+
+| Symbol | Pack, base | Pack, change | Ratio | Class over QZ0, base | Class over QZ0, change |
+|---|---|---|---|---|---|
+| V1-L, 10 digits | 49 ns | 18 ns | 0.37 | 1.09 | 1.07 |
+| V6-M URL | 166 ns | 42 ns | 0.25 | 1.11 | 1.03 |
+| V10-M, 300 alphanumeric | 305 ns | 77 ns | 0.25 | 1.11 | 1.05 |
+| V19-M bytes | 789 ns | 181 ns | 0.23 | 1.07 | 1.02 |
+| V40-L bytes | 2.87 µs | 0.66 µs | 0.23 | 1.10 | 0.99 |
+
+Building `QRCodeData` from the winner's packed rows, the plan's other form of this item, would save at most the pack that is left: 1.6 to 2.5 % of the quiet-zone-free encode. The scorers hold a row with column c at bit c of its words, in one, two or three words or as transposed planes depending on the tier, and the data model is one MSB-first stream without row padding, so each tier would still convert its winner row by row, and every tier would have to hand its rows out. It was not done.
+
+### The quiet zone, kernel
+
+Each variant writes the same destination, checked byte for byte against the old form at quiet zones 1 to 5, 7 to 9 and 25 before timing. The placer is stood in for by one copy of the core into the destination, or one copy per row for the strided forms. The old form is the Micro QR span path before the change: the whole destination cleared, the core built in a zeroed stack buffer and its rows copied (Standard QR's also rented the buffer, which this leaves out). The in-place forms build the core at the destination's start and move the rows, the last first. The strided forms are rMQR's: the margins cleared, the core written into the window.
+
+| Shape | Old | In place, a clear per gap | In place, 8-byte stores | Strided, a clear per gap | Strided, 8-byte stores |
+|---|---|---|---|---|---|
+| M1, quiet zone 2 | 34.5 ns | 41.0 ns | 30.4 ns | 44.7 ns | 34.2 ns |
+| M2 | 41.3 ns | 49.9 ns | 34.5 ns | 50.3 ns | 39.0 ns |
+| M4 | 48.7 ns | 60.9 ns | 42.5 ns | 65.2 ns | 49.5 ns |
+| V1, quiet zone 4 | 68.3 ns | 76.5 ns | 52.0 ns | 82.7 ns | 62.4 ns |
+| V6 | 223 ns | 160 ns | 108 ns | 162 ns | 124 ns |
+| V19 | 926 ns | 418 ns | 301 ns | 389 ns | 296 ns |
+| V40 | 2.63 µs | 1.17 µs | 0.96 µs | 0.91 µs | 0.71 µs |
+| R7x43, quiet zone 2 | 30.3 ns | 32.1 ns | 24.6 ns | 31.4 ns | 25.5 ns |
+| R17x139 | 239 ns | 90.9 ns | 71.1 ns | 86.9 ns | 62.6 ns |
+
+As first written, with one `Span.Clear` of 2q bytes per gap between rows, the in-place move was slower than the old form from M1 to V1 (1.12 to 1.25), and the strided form slower still (1.21 to 1.34). The calls were the cost: one or two 8-byte stores ending where the gap ends, which also zero up to 6 bytes of the row in front, took the in-place move to 0.76 to 0.88 of the old form on the small symbols and 0.33 to 0.48 from V6. A 16-byte vector store, written through an unchecked reference, measured the same where it applied, and could not serve M1, whose row and gap make 15 bytes.
+
+The strided forms pay their per-row copies here, which a strided placer does as part of its unpack. Measured apart in another run, one copy of the core took 2.7 to 4.9 ns on M1 to M4 and the margins alone 11.0 to 13.8 ns, so a strided placer would add 11 to 14 ns to the quiet-zone-free encode, against 28 to 41 ns for the moves and the margins of the in-place form. Micro QR therefore writes the window directly, as rMQR does. Its vector unpack runs past a row's end, but only with the row's packed bits past the core, which are zero, so the margins are cleared first and stay light.
+
+Stores that zero exactly the gap and nothing in front of it, which would let the margins be cleared after the placer, were slower on the margins alone: 15.6 to 19.8 ns against 11.2 to 16.5 on M1 to M4 as 8-, 4- and 2-byte stores in turn, 14.3 to 20.7 against 11.4 to 16.1 as two overlapping stores of one width, and 187 and 193 ns against 140 and 146 at V40, in two runs.
+
+The library writes each gap as a `Span.Clear` of the constant 8 or 16 bytes, which the JIT writes as one store, and of the 2q bytes past 16. On the margins alone, in one run, it took 0.87 to 0.99 of the time of the stores through `BinaryPrimitives` the table above used: 9.9 against 11.3 ns on M1, 13.9 against 14.4 on M4, 18.3 against 19.2 on V1 and 134 against 141 at V40. On WebAssembly AOT and interpreted, three alternating rounds of the small symbols, the two forms read within 0.03 of each other end to end.
+
+Two more costs came from moving code, not from the kernels. The gap clear is a method of its own shared by the three symbologies, and the WebAssembly interpreter called it once a row: the quiet-zone encodes of Micro QR and rMQR there took 1.13 to 1.15 and 1.05 to 1.11 of their time before the change, where the JIT inlined it. Marked `AggressiveInlining`, they took 0.96 to 0.99 and 1.00 to 1.03 (three rounds, base, the call and the inlined clear in one run). And once the Micro QR placer's entry took the stride, the JIT stopped inlining it into the generator's core writers, which its disassembly showed for the contiguous entry before. Without AVX2 the quiet-zone-free encodes of M2 and M3 then took 1.08 and 1.02 of their time; marked `AggressiveInlining`, 1.00 and 0.98 (seven rounds of the three builds).
+
+On default NativeAOT the M4 placer stage took 1.09 to 1.16 of its time in two runs of seven rounds, its quiet-zone-free encode 1.03 and its class encode 1.02 to 1.03, while M2 and M3 gained (0.92 to 0.95 on the same rows in the second run). ILC's unpack loops are the base's instructions, the rest of the method differing in register names, a few moves and a frame 16 bytes smaller, and the inner loop, which runs twice a row only at M4, starts at another offset (0x35D against 0x374), so the loss is taken to be code placement and was left.
+
+### End to end
+
+The shipped code against base, alternating one process each, pinned to one CCD with the .NET build servers shut down, the median of the run medians, change over base: five rounds on the JIT and NativeAOT, three on WebAssembly. The JIT without AVX2 column's Micro QR rows are a run of seven rounds of the Micro QR shapes alone. In the five-round run of every shape they read 0.99 to 1.05, its quiet-zone-free and class rows included, which run the same code as in the two runs of seven rounds, where they read 0.97 to 1.00.
+
+| Shape | JIT, AVX2 | JIT, no AVX | Default NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|---|
+| V1-L span, quiet zone 4 | 0.99 | 0.99 | 0.99 | 0.87 | 1.00 |
+| V1-L span, quiet zone 0 | 1.00 | 0.99 | 0.98 | 0.97 | 1.00 |
+| V1-L class | 0.98 | 0.99 | 0.97 | 0.99 | 0.99 |
+| V6-M span, quiet zone 4 | 1.00 | 0.99 | 0.98 | 0.89 | 1.00 |
+| V6-M span, quiet zone 0 | 1.01 | 0.99 | 1.00 | 0.99 | 1.02 |
+| V6-M class | 0.94 | 0.98 | 0.96 | 0.97 | 1.01 |
+| V10-M span, quiet zone 4 | 1.00 | 0.99 | 0.98 | 0.89 | 1.00 |
+| V10-M span, quiet zone 0 | 1.01 | 0.98 | 0.99 | 1.00 | 1.01 |
+| V10-M class | 0.95 | 0.98 | 0.96 | 0.99 | 1.00 |
+| V19-M span, quiet zone 4 | 1.01 | 0.99 | 0.96 | 0.95 | 1.01 |
+| V19-M span, quiet zone 0 | 1.00 | 0.98 | 0.96 | 1.00 | 0.99 |
+| V19-M class | 0.96 | 0.96 | 0.95 | 0.98 | 1.00 |
+| V40-L span, quiet zone 4 | 0.98 | 0.98 | 0.96 | 0.96 | 1.01 |
+| V40-L span, quiet zone 0 | 1.00 | 1.00 | 0.98 | 0.99 | 1.01 |
+| V40-L class | 0.90 | 0.97 | 0.97 | 0.98 | 1.00 |
+| M2 span, quiet zone 2 | 0.84 | 0.90 | 0.84 | 0.88 | 0.98 |
+| M2 span, quiet zone 0 | 1.00 | 1.00 | 0.93 | 1.01 | 1.06 |
+| M2 class | 0.96 | 0.99 | 0.92 | 0.99 | 1.01 |
+| M3 span, quiet zone 2 | 0.86 | 0.89 | 0.85 | 0.88 | 1.02 |
+| M3 span, quiet zone 0 | 1.00 | 0.99 | 0.95 | 1.01 | 1.01 |
+| M3 class | 0.95 | 1.00 | 0.94 | 0.94 | 1.03 |
+| M4 span, quiet zone 2 | 0.86 | 0.88 | 0.94 | 0.87 | 0.98 |
+| M4 span, quiet zone 0 | 0.99 | 0.97 | 1.04 | 0.99 | 1.02 |
+| M4 class | 0.96 | 0.99 | 1.04 | 0.97 | 1.01 |
+| R7x43 span, quiet zone 2 | 0.96 | 1.02 | 0.97 | 0.95 | 1.01 |
+| R7x43 span, quiet zone 0 | 0.98 | 1.01 | 0.98 | 0.98 | 1.00 |
+| R7x43 class | 0.98 | 0.98 | 0.99 | 1.02 | 1.01 |
+| R11x59 span, quiet zone 2 | 0.98 | 0.97 | 0.96 | 0.95 | 1.09 |
+| R11x59 span, quiet zone 0 | 1.00 | 0.99 | 0.99 | 0.97 | 1.06 |
+| R11x59 class | 1.02 | 1.00 | 0.95 | 0.99 | 1.00 |
+| R17x139 span, quiet zone 2 | 0.99 | 0.99 | 1.00 | 0.97 | 1.02 |
+| R17x139 span, quiet zone 0 | 1.03 | 0.98 | 0.99 | 1.00 | 1.00 |
+| R17x139 class | 0.99 | 0.99 | 0.98 | 0.99 | 0.99 |
+
+The interpreted run's R11x59 rows read 1.06 to 1.09 with its quiet-zone-free row among them, which the change does not touch there, and 1.00 to 1.03 in the three-round run of the small symbols above.
+
+Each span row with a quiet zone, and each class row, over its symbol's quiet-zone-free span row, base and change, from the same runs:
+
+| Symbol | JIT, AVX2 | JIT, no AVX | Default NativeAOT | WebAssembly AOT | WebAssembly interpreted |
+|---|---|---|---|---|---|
+| V1-L, quiet zone | 1.08, 1.07 | 1.06, 1.05 | 1.05, 1.05 | 1.20, 1.07 | 1.05, 1.05 |
+| V1-L, class | 1.09, 1.07 | 1.05, 1.04 | 1.07, 1.05 | 1.06, 1.07 | 1.07, 1.07 |
+| V6-M, quiet zone | 1.05, 1.03 | 1.05, 1.05 | 1.06, 1.04 | 1.21, 1.08 | 1.07, 1.05 |
+| V6-M, class | 1.11, 1.03 | 1.06, 1.06 | 1.09, 1.05 | 1.07, 1.05 | 1.07, 1.06 |
+| V10-M, quiet zone | 1.06, 1.05 | 1.03, 1.04 | 1.06, 1.04 | 1.20, 1.07 | 1.05, 1.03 |
+| V10-M, class | 1.11, 1.05 | 1.06, 1.06 | 1.09, 1.06 | 1.07, 1.06 | 1.06, 1.04 |
+| V19-M, quiet zone | 1.01, 1.01 | 1.01, 1.02 | 1.02, 1.02 | 1.08, 1.02 | 1.02, 1.03 |
+| V19-M, class | 1.07, 1.02 | 1.04, 1.03 | 1.04, 1.03 | 1.04, 1.02 | 1.03, 1.03 |
+| V40-L, quiet zone | 1.03, 1.01 | 1.02, 1.00 | 1.03, 1.02 | 1.06, 1.02 | 1.01, 1.01 |
+| V40-L, class | 1.10, 0.99 | 1.06, 1.03 | 1.05, 1.04 | 1.04, 1.03 | 1.03, 1.01 |
+| M2, quiet zone | 1.26, 1.06 | 1.23, 1.11 | 1.19, 1.08 | 1.24, 1.07 | 1.11, 1.03 |
+| M2, class | 1.16, 1.11 | 1.13, 1.12 | 1.19, 1.18 | 1.13, 1.11 | 1.22, 1.15 |
+| M3, quiet zone | 1.23, 1.06 | 1.19, 1.06 | 1.19, 1.07 | 1.24, 1.08 | 1.10, 1.11 |
+| M3, class | 1.16, 1.10 | 1.10, 1.10 | 1.16, 1.16 | 1.18, 1.10 | 1.17, 1.19 |
+| M4, quiet zone | 1.25, 1.09 | 1.18, 1.07 | 1.18, 1.06 | 1.23, 1.08 | 1.10, 1.05 |
+| M4, class | 1.15, 1.12 | 1.09, 1.11 | 1.15, 1.14 | 1.14, 1.12 | 1.16, 1.15 |
+| R7x43, quiet zone | 1.18, 1.16 | 1.19, 1.20 | 1.19, 1.17 | 1.19, 1.15 | 1.07, 1.09 |
+| R11x59, quiet zone | 1.20, 1.18 | 1.24, 1.21 | 1.25, 1.21 | 1.20, 1.17 | 1.07, 1.10 |
+| R17x139, quiet zone | 1.12, 1.07 | 1.07, 1.08 | 1.08, 1.09 | 1.15, 1.12 | 1.03, 1.06 |
+
+rMQR's class rows did not change, its pack being the vector packer before and after; over the quiet-zone-free row they read 1.07 to 1.31 on both sides.

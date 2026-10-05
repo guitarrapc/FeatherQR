@@ -1,7 +1,6 @@
 using System.Buffers;
-using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+using FeatherQR.Internals;
 
 namespace FeatherQR;
 
@@ -497,33 +496,9 @@ public sealed class QRCodeData
         if (source.Length != totalModules)
             throw new ArgumentException($"Source span size mismatch: expected {totalModules} bytes (baseSize={_baseSize}), got {source.Length} bytes");
 
-        // The payload bit stream is flat row-major module order, the same
-        // order as the source buffer, so pack 8 modules per byte via the
-        // MSB multiply-gather (byte k of a ulong of 0/1 bytes lands at bit
-        // 56+(7-k) after * 0x8040...01). The gather constant assumes
-        // little-endian byte order (source[m+k] = ulong byte k); reverse on
-        // big-endian targets, the check is a JIT-time constant, so
-        // little-endian codegen is unaffected.
-        ref var srcRef = ref MemoryMarshal.GetReference(source);
-        var m = 0;
-        for (; m + 8 <= totalModules; m += 8)
-        {
-            var u = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref srcRef, m));
-            if (!BitConverter.IsLittleEndian)
-            {
-                u = BinaryPrimitives.ReverseEndianness(u);
-            }
-            _bits[m >> 3] = (byte)((u * 0x8040201008040201UL) >> 56);
-        }
-        if (m < totalModules)
-        {
-            byte b = 0;
-            for (var i = 0; m + i < totalModules; i++)
-            {
-                if (source[m + i] != 0) b |= (byte)(1 << (7 - i));
-            }
-            _bits[m >> 3] = b;
-        }
+        // The payload bit stream is flat row-major module order, the same order as the source buffer, so the vector packer of the
+        // Micro QR and rMQR data models writes it: every payload byte, its padding bits zero, so a second call replaces the first.
+        ModuleBitPacker.Pack(source, _bits);
     }
 
     private static void ValidateQuietZone(int quietZoneSize)

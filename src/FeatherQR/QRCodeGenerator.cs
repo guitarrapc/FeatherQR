@@ -151,29 +151,10 @@ public static class QRCodeGenerator
         }
         else
         {
-            target.Clear();
-            // The placement pipeline requires a contiguous coreSize-stride matrix,
-            // so build the core in a rented buffer and center it in the destination.
-            byte[]? rentedWorkBuffer = null;
-            try
-            {
-                var dataLength = coreSize * coreSize;
-                rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
-                var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
-
-                WriteCoreModules(textSpan, config, workBuffer, coreSize, maskPattern);
-
-                for (var row = 0; row < coreSize; row++)
-                {
-                    var destOffset = (row + quietZoneSize) * totalSize + quietZoneSize;
-                    workBuffer.Slice(row * coreSize, coreSize).CopyTo(target.Slice(destOffset, coreSize));
-                }
-            }
-            finally
-            {
-                if (rentedWorkBuffer is not null)
-                    ArrayPool<byte>.Shared.Return(rentedWorkBuffer, clearArray: false);
-            }
+            // The placement pipeline needs a contiguous coreSize-stride matrix: it is built at the start of the destination and moved
+            // into the quiet zone's window there, with only the margins cleared.
+            WriteCoreModules(textSpan, config, target.Slice(0, coreSize * coreSize), coreSize, maskPattern);
+            QuietZoneWindow.CenterCore(target, coreSize, coreSize, quietZoneSize);
         }
 
         return requiredSize;
@@ -1600,27 +1581,8 @@ public static class QRCodeGenerator
             }
             else
             {
-                target.Clear();
-                byte[]? rentedWorkBuffer = null;
-                try
-                {
-                    var dataLength = coreSize * coreSize;
-                    rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
-                    var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
-
-                    WriteCoreModulesPlanned(textSpan, in config, segments, workBuffer, coreSize, maskPattern);
-
-                    for (var row = 0; row < coreSize; row++)
-                    {
-                        var destOffset = (row + quietZoneSize) * totalSize + quietZoneSize;
-                        workBuffer.Slice(row * coreSize, coreSize).CopyTo(target.Slice(destOffset, coreSize));
-                    }
-                }
-                finally
-                {
-                    if (rentedWorkBuffer is not null)
-                        ArrayPool<byte>.Shared.Return(rentedWorkBuffer, clearArray: false);
-                }
+                WriteCoreModulesPlanned(textSpan, in config, segments, target.Slice(0, coreSize * coreSize), coreSize, maskPattern);
+                QuietZoneWindow.CenterCore(target, coreSize, coreSize, quietZoneSize);
             }
 
             return requiredSize;

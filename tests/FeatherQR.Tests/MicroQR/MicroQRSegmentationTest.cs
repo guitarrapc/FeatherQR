@@ -199,7 +199,9 @@ public class MicroQRSegmentationTest
             var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal, QuietZoneSize = quietZone };
             await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out var size, options)).IsTrue();
 
+            // A dirty destination: the placer and the quiet-zone window write every byte, so nothing of the fill may survive.
             var buffer = new byte[size.BufferSize];
+            buffer.AsSpan().Fill(0xA5);
             var written = MicroQRCodeGenerator.Create(content.AsSpan(), MicroQREccLevel.L, buffer, options);
             await Assert.That(written).IsEqualTo(size.BufferSize);
 
