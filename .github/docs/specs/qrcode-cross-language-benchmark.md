@@ -209,7 +209,7 @@ A JVM library's warmup is a property of the library, not of the JVM: ZXing's enc
 | Go | Static binaries without cgo, Go's GC defaults | Go does not size its collector from the container |
 | The image in CI | Built in every run, neither cached nor published | It takes 2 to 4 minutes against hours of measuring, and every result records the image ID it ran |
 | CI workflow | Manual dispatch only, outside check off by default, a failed verification a warning, only a failure to measure fails the job | A full run takes hours, a runner answers a question rather than gating a change, and the ZXingCpp package's Unicode encode always fails verification |
-| Results | Kept in CI artifacts and this record's summary, never the README | The README states what the library does. A ratio holds for one CPU model |
+| Comparisons with other libraries | Kept in CI artifacts and this record's summary, never the README | The README states what the library does. A ratio holds for one CPU model. What NativeAOT's target costs this library is in the README, since the application chooses the target |
 
 ## Lessons learned
 

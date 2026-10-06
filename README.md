@@ -593,6 +593,20 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
+#### x64 instruction set
+
+On x64, a default NativeAOT publish targets the minimum instruction set the OS requires, which has no AVX. .NET then reports AVX2, BMI2 and 256-bit vectors as unavailable even on CPUs that have them, so FeatherQR runs its 128-bit SIMD paths instead of its AVX2 ones. Measured against the JIT on the same machine, a default publish takes 1.0 to 2.0 times as long depending on the operation: about 2 times for a Standard QR encode, and 1.3 to 1.5 times for an image decode.
+
+If every machine your app runs on supports AVX2 (the `x86-64-v3` level: Intel Core since Haswell, AMD since Excavator), target it:
+
+```xml
+<PropertyGroup>
+  <IlcInstructionSet>x86-64-v3</IlcInstructionSet>
+</PropertyGroup>
+```
+
+FeatherQR then runs close to the JIT's speed, 10 % slower at the median. The trade-off is that on a CPU without AVX2, such as some Pentium, Celeron and Atom models, the app exits at startup with "The required instruction sets are not supported by the current CPU." On ARM64 nothing needs setting: the default target loses no SIMD path there. The measurements are in the [design record](.github/docs/specs/qrcode-symbologies.md#nativeaots-instruction-set-target).
+
 ## Performance
 
 FeatherQR is designed with performance as a top priority. The library minimizes memory allocations and maximizes throughput for QR code generation.
@@ -653,7 +667,7 @@ Yes, FeatherQR works in Blazor WebAssembly & Pure WebAssembly.
 
 ### What about NativeAOT and trimming?
 
-Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and every change publishes a NativeAOT analysis gate ([tests/FeatherQR.AotAnalysis](tests/FeatherQR.AotAnalysis)) that treats trim/AOT warnings as errors. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
+Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and every change publishes a NativeAOT analysis gate ([tests/FeatherQR.AotAnalysis](tests/FeatherQR.AotAnalysis)) that treats trim/AOT warnings as errors. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets. On x64, a default publish runs slower than the JIT, and [x64 instruction set](#x64-instruction-set) says when to target `x86-64-v3`.
 
 ### Are ISO-8859-2 and other encodings supported?
 

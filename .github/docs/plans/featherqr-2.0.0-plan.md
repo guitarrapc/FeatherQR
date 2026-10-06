@@ -19,7 +19,7 @@ A public API is added in a minor and removed only in a major. 2.0.0 is the only 
 | Structured Append, encode and decode (Standard QR only) | `EciMode` as a value type (decided against, see D7) |
 | Kanji encoding for all three symbologies | Additional renderer packages |
 | Migration table and a mechanical replacement script | Readability heuristics for styled output |
-| 128-bit tiers where x64 without AVX or WebAssembly runs scalar | The instruction set a NativeAOT publish targets, and README guidance on it |
+| 128-bit tiers where x64 without AVX or WebAssembly runs scalar | The instruction set a NativeAOT publish targets, which is the application's choice. The README states what the default costs and when to target `x86-64-v3` (2026-10-06) |
 | | Decoder options on the decode overloads (decided against, see D8) |
 
 Features are additive and could ship in 2.1.0 without breaking anyone. They are in 2.0.0 because the maintainer chose a feature-complete major over a rename-only one. Kanji encoding is the largest and last of them. It was placed last so it could move to 2.1.0 if it slipped, but on 2026-09-29 it was decided that Kanji encoding ships in 2.0.0 and does not move to 2.1.0. It changes the default output for Japanese text, which D5 accepts only in a major, so a slip delays 2.0.0 instead of demoting the phase.
