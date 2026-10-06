@@ -12,5 +12,6 @@ jobs:
     uses: guitarrapc/actions/.github/workflows/pr-harness.yaml@main
     with:
       license-check: true
-      allow-licenses: "Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0,Zlib,Unicode-3.0"
+      allow-licenses: "Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0,Zlib"
+      allow-dependencies-licenses: Unicode-3.0,LicenseRef-scancode-google-patent-license-golang
       exclude-license-input-paths: "tools/"
