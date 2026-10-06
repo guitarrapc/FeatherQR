@@ -464,12 +464,13 @@ public class QRSegmentationTest
     [MethodDataSource(nameof(Corpus))]
     public async Task Optimal_SpanDestination_WithQuietZone_MatchesTheAllocatingOverload(string content)
     {
-        // The quiet-zone branch of the span path (clear + centered row copies) must
-        // agree with the allocating overload module for module, quiet zone included.
+        // The quiet-zone branch of the span path (the core built at the start of the destination, moved into the window, the margins
+        // cleared) must agree with the allocating overload module for module, quiet zone included, on a dirty destination.
         var options = new QRCodeGeneratorOptions { Segmentation = QRSegmentation.Optimal, QuietZoneSize = 4 };
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, QREccLevel.M, out var size, options)).IsTrue();
 
         var buffer = new byte[size.BufferSize];
+        buffer.AsSpan().Fill(0xA5);
         var written = QRCodeGenerator.Create(content, QREccLevel.M, buffer, options);
         await Assert.That(written).IsEqualTo(size.BufferSize);
 

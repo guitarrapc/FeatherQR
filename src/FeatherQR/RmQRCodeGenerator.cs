@@ -152,15 +152,8 @@ public static class RmQRCodeGenerator
         // Quiet zone: light rows above and below, light margins on every core row; the
         // placer writes the core straight into the strided window in between (no
         // intermediate core buffer, no row copies).
-        var margin = quietZoneSize * totalWidth;
-        target.Slice(0, margin + quietZoneSize).Clear();                          // top rows + first row's left margin
-        for (var row = 1; row < coreHeight; row++)
-        {
-            // right margin of row - 1 and left margin of row are contiguous
-            target.Slice(margin + row * totalWidth - quietZoneSize, 2 * quietZoneSize).Clear();
-        }
-        target.Slice(margin + coreHeight * totalWidth - quietZoneSize).Clear();     // last row's right margin + bottom rows
-        WriteCoreModules(textSpan, in config, target.Slice(margin + quietZoneSize), totalWidth);
+        QuietZoneWindow.ClearMargins(target, coreWidth, coreHeight, quietZoneSize);
+        WriteCoreModules(textSpan, in config, target.Slice(quietZoneSize * totalWidth + quietZoneSize), totalWidth);
 
         return requiredSize;
     }
@@ -373,12 +366,8 @@ public static class RmQRCodeGenerator
             return requiredSize;
         }
 
-        var margin = quietZoneSize * totalWidth;
-        target.Slice(0, margin + quietZoneSize).Clear();
-        for (var row = 1; row < coreHeight; row++)
-            target.Slice(margin + row * totalWidth - quietZoneSize, 2 * quietZoneSize).Clear();
-        target.Slice(margin + coreHeight * totalWidth - quietZoneSize).Clear();
-        WriteCoreModulesPlanned(textSpan, in config, planCharset, segments, target.Slice(margin + quietZoneSize), totalWidth);
+        QuietZoneWindow.ClearMargins(target, coreWidth, coreHeight, quietZoneSize);
+        WriteCoreModulesPlanned(textSpan, in config, planCharset, segments, target.Slice(quietZoneSize * totalWidth + quietZoneSize), totalWidth);
         return requiredSize;
     }
 

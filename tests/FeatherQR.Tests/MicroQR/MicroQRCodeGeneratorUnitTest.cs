@@ -246,6 +246,56 @@ public class MicroQRCodeGeneratorUnitTest
         }
     }
 
+    // Every version, and quiet zones around a core the placer writes into the destination's window: none, one column of margin, the
+    // default, and a margin wider than an M1 core. The margins are cleared before the placer, whose vector unpack runs past a row into
+    // them with light modules. Between two rows they (2q bytes) are zeroed by a clear of a constant 8 bytes up to q = 4, of 16 up to
+    // q = 8 and of the 2q bytes from q = 9. Below q = 4 and from q = 5 to 7 that also zeroes the end of the row in front, which the placer
+    // writes over.
+    public static IEnumerable<(string Text, MicroQREccLevel Ecc, MicroQRVersion Version, int QuietZone)> DirtyDestinationCases()
+    {
+        (string, MicroQREccLevel, MicroQRVersion)[] symbols =
+        [
+            ("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRVersion.M1),
+            ("0123456789", MicroQREccLevel.L, MicroQRVersion.M2),
+            ("HELLO WORLD 14", MicroQREccLevel.L, MicroQRVersion.M3),
+            ("bytes m4 mode", MicroQREccLevel.M, MicroQRVersion.M4),
+        ];
+        foreach (var (text, ecc, version) in symbols)
+        {
+            foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9, 25 })
+                yield return (text, ecc, version, quietZone);
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(DirtyDestinationCases))]
+    public async Task Create_SpanApi_DirtyBuffer_MatchesClassApi_AndLeavesTheTail(string text, MicroQREccLevel ecc, MicroQRVersion version, int quietZone)
+    {
+        var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZone };
+        var data = MicroQRCodeGenerator.Create(text, ecc, options);
+        await Assert.That(data.Version).IsEqualTo(version);
+        var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
+
+        foreach (var fill in new byte[] { 0xFF, 0xA5, 0x01 })
+        {
+            var buffer = new byte[calculated.BufferSize + 7];
+            buffer.AsSpan().Fill(fill);
+            var written = MicroQRCodeGenerator.Create(text.AsSpan(), ecc, buffer, options);
+            await Assert.That(written).IsEqualTo(calculated.BufferSize);
+            for (var row = 0; row < data.Size; row++)
+            {
+                for (var col = 0; col < data.Size; col++)
+                {
+                    var module = buffer[row * data.Size + col];
+                    if (module != (data[row, col] ? 1 : 0))
+                        Assert.Fail($"{version}, quiet zone {quietZone}, fill 0x{fill:X2}: module ({row},{col}) is {module}, the class API has {data[row, col]}");
+                }
+            }
+            for (var i = written; i < buffer.Length; i++)
+                await Assert.That(buffer[i]).IsEqualTo(fill);
+        }
+    }
+
     [Test]
     public async Task Create_SpanApi_ThrowsWhenBufferTooSmall()
     {

@@ -748,15 +748,19 @@ public class RmQRSegmentationTest
     [MethodDataSource(nameof(Corpus))]
     public async Task Optimal_SpanOverload_MatchesTheDataOverload(string content)
     {
-        foreach (var quietZone in new[] { 0, 2, 5 })
+        // A dirty destination with a tail: the span path clears only the margins, before the placer writes the window. The quiet
+        // zones reach each form of the gap between two rows (2q bytes: up to 8, up to 16, wider), and the tail must stay as it was.
+        foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9 })
         {
-            var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
-            var buffer = new byte[size.BufferSize];
-            var written = RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
+            var options = new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal };
+            var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, options);
+            var buffer = new byte[size.BufferSize + 4];
+            buffer.AsSpan().Fill(0xA5);
+            var written = RmQRCodeGenerator.Create(content.AsSpan(), RmQREccLevel.M, buffer, options);
 
             await Assert.That(written).IsEqualTo(size.BufferSize);
 
-            var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
+            var data = RmQRCodeGenerator.Create(content, RmQREccLevel.M, options);
             await Assert.That(size.Version).IsEqualTo(data.Version);
             await Assert.That(size.Width).IsEqualTo(data.Width);
             await Assert.That(size.Height).IsEqualTo(data.Height);
@@ -764,8 +768,13 @@ public class RmQRSegmentationTest
             for (var row = 0; row < data.Height; row++)
             {
                 for (var col = 0; col < data.Width; col++)
-                    await Assert.That(buffer[row * data.Width + col] != 0).IsEqualTo(data[row, col]);
+                {
+                    var module = buffer[row * data.Width + col];
+                    if (module != (data[row, col] ? 1 : 0))
+                        Assert.Fail($"quiet zone {quietZone}: module ({row},{col}) is {module}, the data overload has {data[row, col]}");
+                }
             }
+            await Assert.That(buffer.AsSpan(size.BufferSize).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 }, CollectionOrdering.Matching);
         }
     }
 

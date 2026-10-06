@@ -101,10 +101,10 @@ public static class MicroQRCodeGenerator
     {
         var size = MicroQRConstants.SizeFromVersion(config.Version);
 
+        // The placer writes every module, so the core needs no clear.
         Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
         core = core.Slice(0, size * size);
-        core.Clear();
-        WriteCoreModules(textSpan, config, core, size, maskPattern);
+        WriteCoreModules(textSpan, config, core, size, size, maskPattern);
 
         var result = new MicroQRCodeData(config.Version, quietZoneSize);
         result.SetCoreData(core);
@@ -130,26 +130,13 @@ public static class MicroQRCodeGenerator
         if (destination.Length < requiredSize)
             throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(TryGetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
+        // The placer writes every core module straight into the window, rows totalSize apart, so with no quiet zone the core is the
+        // destination. With one, the margins are cleared first, and what the placer writes between rows is light.
         var target = destination.Slice(0, requiredSize);
-        target.Clear();
-
-        if (quietZoneSize == 0)
-        {
-            WriteCoreModules(textSpan, config, target, size, maskPattern);
-        }
-        else
-        {
-            Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
-            core = core.Slice(0, size * size);
-            core.Clear();
-            WriteCoreModules(textSpan, config, core, size, maskPattern);
-
-            for (var row = 0; row < size; row++)
-            {
-                var destOffset = (row + quietZoneSize) * totalSize + quietZoneSize;
-                core.Slice(row * size, size).CopyTo(target.Slice(destOffset, size));
-            }
-        }
+        var first = quietZoneSize * totalSize + quietZoneSize;
+        if (quietZoneSize > 0)
+            QuietZoneWindow.ClearMargins(target, size, size, quietZoneSize);
+        WriteCoreModules(textSpan, config, target.Slice(first), size, totalSize, maskPattern);
 
         return requiredSize;
     }
@@ -582,10 +569,10 @@ public static class MicroQRCodeGenerator
         }
 
         var size = MicroQRConstants.SizeFromVersion(version);
+        // The placer writes every module, so the core needs no clear.
         Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
         core = core.Slice(0, size * size);
-        core.Clear();
-        WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, plan.Slice(0, segmentCount), core, size, options.MaskPattern ?? AutomaticMask);
+        WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, plan.Slice(0, segmentCount), core, size, size, options.MaskPattern ?? AutomaticMask);
 
         var result = new MicroQRCodeData(version, options.QuietZoneSize);
         result.SetCoreData(core);
@@ -621,28 +608,13 @@ public static class MicroQRCodeGenerator
         if (destination.Length < requiredSize)
             throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(TryGetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
+        // As in CreateCore: the margins cleared, then the core straight into the window.
         var target = destination.Slice(0, requiredSize);
-        target.Clear();
-
+        var first = quietZoneSize * totalSize + quietZoneSize;
         var segments = plan.Slice(0, segmentCount);
-        var maskPattern = options.MaskPattern ?? AutomaticMask;
-        if (quietZoneSize == 0)
-        {
-            WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, segments, target, size, maskPattern);
-        }
-        else
-        {
-            Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
-            core = core.Slice(0, size * size);
-            core.Clear();
-            WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, segments, core, size, maskPattern);
-
-            for (var row = 0; row < size; row++)
-            {
-                var destOffset = (row + quietZoneSize) * totalSize + quietZoneSize;
-                core.Slice(row * size, size).CopyTo(target.Slice(destOffset, size));
-            }
-        }
+        if (quietZoneSize > 0)
+            QuietZoneWindow.ClearMargins(target, size, size, quietZoneSize);
+        WriteCoreModulesPlanned(textSpan, version, eccLevel, kanjiPlan ? EciMode.Default : analysis.EciMode, segments, target.Slice(first), size, totalSize, options.MaskPattern ?? AutomaticMask);
 
         return requiredSize;
     }
@@ -700,7 +672,7 @@ public static class MicroQRCodeGenerator
     /// <summary>
     /// <see cref="WriteCoreModules"/> for a planned mixed-mode split: identical pipeline, with the segmented data stream in place of the single-mode one.
     /// </summary>
-    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, MicroQRVersion version, MicroQREccLevel eccLevel, EciMode charset, ReadOnlySpan<ModeSegment> segments, Span<byte> core, int size, int maskPattern)
+    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, MicroQRVersion version, MicroQREccLevel eccLevel, EciMode charset, ReadOnlySpan<ModeSegment> segments, Span<byte> core, int size, int stride, int maskPattern)
     {
         var eccCount = MicroQRConstants.GetEccCodewordCount(version, eccLevel);
         var dataBitCount = MicroQRConstants.GetDataBitCapacity(version, eccLevel);
@@ -711,14 +683,14 @@ public static class MicroQRCodeGenerator
         Span<byte> eccCodewords = stackalloc byte[14]; // max ECC codewords (M4-Q)
         EccBinaryEncoder.CalculateECC(dataCodewords.Slice(0, dataCount), eccCodewords, eccCount);
 
-        MicroQRModulePlacer.PlaceSymbol(core, size, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, version, eccLevel, maskPattern);
+        MicroQRModulePlacer.PlaceSymbol(core, size, stride, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, version, eccLevel, maskPattern);
     }
 
     /// <summary>
-    /// Runs the encode → ECC → placement → masking → format pipeline into a zeroed byte-per-module core buffer.
+    /// Runs the encode → ECC → placement → masking → format pipeline into a byte-per-module core buffer, every module of which it writes.
     /// Allocation-free: all intermediates are stackalloc.
     /// </summary>
-    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> core, int size, int maskPattern)
+    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> core, int size, int stride, int maskPattern)
     {
         var eccCount = MicroQRConstants.GetEccCodewordCount(config.Version, config.EccLevel);
         var dataBitCount = MicroQRConstants.GetDataBitCapacity(config.Version, config.EccLevel);
@@ -731,7 +703,7 @@ public static class MicroQRCodeGenerator
         Span<byte> eccCodewords = stackalloc byte[14]; // max ECC codewords (M4-Q)
         EccBinaryEncoder.CalculateECC(dataCodewords.Slice(0, dataCount), eccCodewords, eccCount);
 
-        MicroQRModulePlacer.PlaceSymbol(core, size, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, config.Version, config.EccLevel, maskPattern);
+        MicroQRModulePlacer.PlaceSymbol(core, size, stride, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, config.Version, config.EccLevel, maskPattern);
     }
 
     private readonly record struct MicroQRConfiguration(MicroQRVersion Version, MicroQREccLevel EccLevel, EncodingMode Mode);

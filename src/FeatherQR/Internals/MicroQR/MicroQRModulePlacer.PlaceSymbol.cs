@@ -10,7 +10,7 @@ using System.Runtime.Intrinsics.X86;
 namespace FeatherQR.Internals.MicroQR;
 
 /// <summary>
-/// Fused fast-path placement pipeline for Micro QR (<see cref="PlaceSymbol"/>): function patterns, data placement, mask selection/application and format information in one pass over bit-packed rows, unpacked to the byte matrix once at the end.
+/// Fused fast-path placement pipeline for Micro QR (<see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/> and its contiguous overload): function patterns, data placement, mask selection/application and format information in one pass over bit-packed rows, unpacked to the byte matrix once at the end.
 ///
 /// Produces matrices byte-identical to the per-module reference methods in MicroQRModulePlacer.cs (guarded by MicroQRModulePlacerParityTest).
 /// Four runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP permutation, 32-module unpack; gated on fast-PEXT hardware, Intel or AMD Zen 3+), SSSE3 and ARM64 NEON (serial packed placement, 16-module unpack sharing one pipeline, only the bit-expand idiom differs), and portable scalar (SWAR spreads).
@@ -34,10 +34,10 @@ namespace FeatherQR.Internals.MicroQR;
 internal static partial class MicroQRModulePlacer
 {
     /// <summary>
-    /// Runs the full placement pipeline into a zeroed core matrix: function patterns, data/ECC codeword placement, mask selection and application, and format information.
-    /// Returns the selected mask pattern (0-3).
+    /// Runs the full placement pipeline into a core matrix: function patterns, data/ECC codeword placement, mask selection and application, and format information.
+    /// Every module of the matrix is written, so it need not be cleared. Returns the selected mask pattern (0-3).
     /// </summary>
-    /// <param name="matrix">Zeroed core matrix, at least size*size bytes.</param>
+    /// <param name="matrix">Core matrix, at least size*size bytes; its contents are overwritten.</param>
     /// <param name="size">Core side length in modules (11/13/15/17).</param>
     /// <param name="dataCodewords">Data codewords including padding.</param>
     /// <param name="eccCodewords">Error correction codewords.</param>
@@ -46,8 +46,30 @@ internal static partial class MicroQRModulePlacer
     /// <param name="eccLevel">ECC level (drives the format information).</param>
     /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection. The fused pipeline is mask-index-driven throughout (templates, format bits), so a pinned pattern rides the same tiers.</param>
     public static int PlaceSymbol(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
+        => PlaceSymbol(matrix, size, size, dataCodewords, eccCodewords, dataBitCount, version, eccLevel, forcedMask);
+
+    /// <summary>
+    /// Strided variant of <see cref="PlaceSymbol(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>:
+    /// writes the symbol into a wider matrix whose rows are <paramref name="stride"/> bytes apart (a quiet-zoned destination, with
+    /// <paramref name="destination"/> starting at the top-left core module). Every core module is written. The bytes between two rows
+    /// may be written too, always light (0): a row's vector unpack runs past the row's end only with its packed bits past the core, which
+    /// are zero, so margins cleared before the call stay light. Nothing past the last row's last module is written.
+    /// </summary>
+    /// <param name="destination">At least (size − 1) × stride + size bytes.</param>
+    /// <param name="size">Core side length in modules (11/13/15/17).</param>
+    /// <param name="stride">Row pitch in bytes, at least <paramref name="size"/>.</param>
+    /// <param name="dataCodewords">Data codewords including padding.</param>
+    /// <param name="eccCodewords">Error correction codewords.</param>
+    /// <param name="dataBitCount">Number of DATA bits to emit (see the contiguous overload).</param>
+    /// <param name="version">Micro QR version (drives the format information).</param>
+    /// <param name="eccLevel">ECC level (drives the format information).</param>
+    /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection.</param>
+    // Once the entry took the stride, the JIT stopped inlining it into the generator's core writers, where it had inlined the
+    // contiguous one: on x64 without AVX2 the quiet-zone-free M2 and M3 encodes took 1.08 and 1.04 times as long as with it inlined.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int PlaceSymbol(Span<byte> destination, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
+        ValidateArguments(destination, size, stride, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
@@ -55,72 +77,75 @@ internal static partial class MicroQRModulePlacer
 #if NET8_0_OR_GREATER
         if (Avx2.IsSupported && HardwareCapabilities.HasFastPext)
         {
-            return PlaceCoreBmi2(matrix, size, stream, version, eccLevel, forcedMask);
+            return PlaceCoreBmi2(destination, size, stride, stream, version, eccLevel, forcedMask);
         }
         if (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported)
         {
-            return PlaceCoreVector(matrix, size, stream, version, eccLevel, forcedMask);
+            return PlaceCoreVector(destination, size, stride, stream, version, eccLevel, forcedMask);
         }
 #endif
-        return PlaceCoreScalar(matrix, size, stream, version, eccLevel, forcedMask);
+        return PlaceCoreScalar(destination, size, stride, stream, version, eccLevel, forcedMask);
     }
 
     /// <summary>
-    /// Scalar-unpack variant of <see cref="PlaceSymbol"/>, the code path taken at runtime when neither SSSE3 nor NEON is available, exposed as a named entry point so parity tests exercise it on SIMD-capable machines too.
+    /// Scalar-unpack variant of <see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>, the code path taken at runtime when neither SSSE3 nor NEON is available, exposed as a named entry point so parity tests exercise it on SIMD-capable machines too.
     /// </summary>
-    internal static int PlaceSymbolScalar(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
+    internal static int PlaceSymbolScalar(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
+        ValidateArguments(matrix, size, stride, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreScalar(matrix, size, stream, version, eccLevel, forcedMask);
+        return PlaceCoreScalar(matrix, size, stride, stream, version, eccLevel, forcedMask);
     }
 
 #if NET8_0_OR_GREATER
     /// <summary>
-    /// BMI2+AVX2 fast-path variant of <see cref="PlaceSymbol"/>, exposed as a named entry point for parity tests (the public dispatch additionally requires <see cref="HardwareCapabilities.HasFastPext"/>).
+    /// BMI2+AVX2 fast-path variant of <see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>, exposed as a named entry point for parity tests (the public dispatch additionally requires <see cref="HardwareCapabilities.HasFastPext"/>).
     /// </summary>
-    internal static int PlaceSymbolBmi2(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
+    internal static int PlaceSymbolBmi2(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
+        ValidateArguments(matrix, size, stride, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreBmi2(matrix, size, stream, version, eccLevel, forcedMask);
+        return PlaceCoreBmi2(matrix, size, stride, stream, version, eccLevel, forcedMask);
     }
 
     /// <summary>
-    /// SSSE3 mid-tier variant of <see cref="PlaceSymbol"/>, the code path taken at runtime when BMI2/AVX2 (or fast PEXT) are absent, exposed as a named entry point so it stays covered on machines whose dispatch prefers the BMI2 kernel.
+    /// SSSE3 mid-tier variant of <see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>, the code path taken at runtime when BMI2/AVX2 (or fast PEXT) are absent, exposed as a named entry point so it stays covered on machines whose dispatch prefers the BMI2 kernel.
     /// </summary>
-    internal static int PlaceSymbolSsse3(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
+    internal static int PlaceSymbolSsse3(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
+        ValidateArguments(matrix, size, stride, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreVector(matrix, size, stream, version, eccLevel, forcedMask);
+        return PlaceCoreVector(matrix, size, stride, stream, version, eccLevel, forcedMask);
     }
 
     /// <summary>
-    /// ARM64 NEON mid-tier variant of <see cref="PlaceSymbol"/>, the code path taken at runtime on ARM64 (same <see cref="PlaceCoreVector"/> pipeline as the SSSE3 tier; only the 16-module unpack idiom differs inside <see cref="WriteExpand16"/>), exposed as a named entry point for parity tests.
+    /// ARM64 NEON mid-tier variant of <see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>, the code path taken at runtime on ARM64 (same <see cref="PlaceCoreVector"/> pipeline as the SSSE3 tier; only the 16-module unpack idiom differs inside <see cref="WriteExpand16"/>), exposed as a named entry point for parity tests.
     /// Caller must ensure AdvSimd.Arm64 support.
     /// </summary>
-    internal static int PlaceSymbolAdvSimd(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
+    internal static int PlaceSymbolAdvSimd(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
+        ValidateArguments(matrix, size, stride, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreVector(matrix, size, stream, version, eccLevel, forcedMask);
+        return PlaceCoreVector(matrix, size, stride, stream, version, eccLevel, forcedMask);
     }
 #endif
 
-    private static void ValidateArguments(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, int forcedMask)
+    // Not inlined: through the AggressiveInlining entry its interpolated messages went into the generator's span CreateCore on .NET 10
+    // with AVX2, 5.4 KB of code against 3.4 KB with this a call, its prolog zeroing 584 bytes a call against 344.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ValidateArguments(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, int forcedMask)
     {
         // The fast paths below index by arithmetic the JIT cannot bounds-prove
         // (flat zigzag indices, 8/16-byte unaligned unpack writes), so the
@@ -131,8 +156,10 @@ internal static partial class MicroQRModulePlacer
         // and silently write another symbol number's format information.
         if (forcedMask is < -1 or > 3)
             throw new ArgumentOutOfRangeException(nameof(forcedMask), $"Mask pattern must be 0-3, or -1 for automatic selection, but was {forcedMask}");
-        if (matrix.Length < size * size)
-            throw new ArgumentException($"matrix too small: required {size * size}, got {matrix.Length}", nameof(matrix));
+        if (stride < size)
+            throw new ArgumentOutOfRangeException(nameof(stride), $"stride must be at least the size ({size}), got {stride}");
+        if (matrix.Length < WindowEnd(size, stride))
+            throw new ArgumentException($"matrix too small: required {WindowEnd(size, stride)}, got {matrix.Length}", nameof(matrix));
         if (dataBitCount < 0 || dataCodewords.Length * 8 < dataBitCount)
             throw new ArgumentException($"dataCodewords too small: required {dataBitCount} bits, got {dataCodewords.Length * 8}", nameof(dataCodewords));
 
@@ -144,6 +171,9 @@ internal static partial class MicroQRModulePlacer
         if (totalBits != freeModules)
             throw new ArgumentException($"stream length mismatch: {totalBits} bits for {freeModules} free modules (size {size})", nameof(eccCodewords));
     }
+
+    /// <summary>One past the last row's last module: the bytes the placer may write. In <see cref="long"/>, so a huge stride cannot wrap past the length check.</summary>
+    private static long WindowEnd(int size, int stride) => (long)(size - 1) * stride + size;
 
     /// <summary>
     /// Packs the transmission stream (data bits MSB-first, cut at <paramref name="dataBitCount"/>, then ECC bits) into three MSB-aligned ulongs.
@@ -265,7 +295,7 @@ internal static partial class MicroQRModulePlacer
         return _maskTemplates12[mask * 12 + tplRow] & allowed;
     }
 
-    private static int PlaceCoreScalar(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
+    private static int PlaceCoreScalar(Span<byte> matrix, int size, int stride, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
         Span<ulong> rows = stackalloc ulong[17];
         rows = rows.Slice(0, size);
@@ -274,11 +304,11 @@ internal static partial class MicroQRModulePlacer
         // Unpack with the mask applied on the fly: full 8-byte write steps; a
         // tail of >= 4 bytes becomes one overlapped spread ending at the row
         // edge (write-mode overlap is idempotent, unlike XOR), a tail of <= 3
-        // bytes is cheaper as scalar stores. ValidateArguments guaranteed
-        // matrix.Length >= size*size, so every write stays inside the matrix.
+        // bytes is cheaper as scalar stores. Every write stays inside its row,
+        // and ValidateArguments guaranteed the rows inside the matrix.
         ref var buf = ref MemoryMarshal.GetReference(matrix);
         var rowOffset = 0;
-        for (var y = 0; y < size; y++, rowOffset += size)
+        for (var y = 0; y < size; y++, rowOffset += stride)
         {
             var bits = rows[y] ^ MaskDelta(mask, y, size);
             var c = 0;

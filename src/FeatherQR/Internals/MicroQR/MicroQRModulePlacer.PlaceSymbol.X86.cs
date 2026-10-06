@@ -12,7 +12,7 @@ internal static partial class MicroQRModulePlacer
     /// BMI2+AVX2 pipeline: placement is a static per-row PEXT/PDEP permutation of the packed stream words (the zigzag is a fixed bit permutation per size, so each row's data bits are gathered/scattered branch-free with no cross-row dependency), the stream word count is dispatched per size (M1 fits one word, M2 two), and the unpack expands 32 modules per AVX2 step.
     /// Measured over the SSSE3 pipeline: M4 -29%, M3 -22%, M2 -10%, M1 -5% (kernel benchmark rounds 8-11).
     /// </summary>
-    private static int PlaceCoreBmi2(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
+    private static int PlaceCoreBmi2(Span<byte> matrix, int size, int stride, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
         var w0 = stream[0];
         var w1 = stream[1];
@@ -74,16 +74,18 @@ internal static partial class MicroQRModulePlacer
         }
 
         // Unpack with the mask applied on the fly: one 32-module AVX2 step per
-        // row while the store fits inside size*size (overrun into following
-        // rows is self-healing in ascending order), 16-module steps for the
-        // last rows, scalar-safe tail for the final row.
+        // row while the store ends at or before the last row's last module
+        // (bits >= size are zero, so the overrun writes light modules: the
+        // bytes between rows stay light, and following rows are rewritten in
+        // ascending order), 16-module steps for the last rows, scalar-safe tail
+        // for the final row.
         ref var buf = ref MemoryMarshal.GetReference(matrix);
-        var sizeSq = size * size;
+        var windowEnd = (size - 1) * stride + size;
         var rowOffset = 0;
-        for (var y = 0; y < last; y++, rowOffset += size)
+        for (var y = 0; y < last; y++, rowOffset += stride)
         {
             var bits = rows[y] ^ MaskDelta(mask, y, size);
-            if (rowOffset + 32 <= sizeSq)
+            if (rowOffset + 32 <= windowEnd)
             {
                 WriteExpand32(ref Unsafe.Add(ref buf, rowOffset), (uint)bits);
             }
