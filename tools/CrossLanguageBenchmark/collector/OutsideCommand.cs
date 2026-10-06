@@ -21,11 +21,11 @@ internal sealed record OutsideResult(string Key, string Cli, string? Rejected, l
     /// Whether something else on the machine took time during the measurement. First, a per-call time that is not positive: load that makes
     /// median T(N) reach median T(2N) leaves a time no call can have, and turns the range negative and the fixed cost large, past both signs below.
     /// Then either of two signs.
-    /// The range: undisturbed, none exceeded 14 % (phase 1, 33 entries), while other load put single 2N runs at 2.5 times the rest and the range at 41 to 96 %.
+    /// The range: undisturbed, none exceeded 14 % (2026-10-02, 33 entries), while other load put single 2N runs at 2.5 times the rest and the range at 41 to 96 %.
     /// The fixed cost, which cannot be negative: one below zero by more than the timing noise means the longer 2N runs caught more of the load
-    /// than the N runs. In phase 2, the measurements that read 4.5 % or more above their self-timed median had -23 to -523 ms, and the 72 that
+    /// than the N runs. On 2026-10-03, the measurements that read 4.5 % or more above their self-timed median had -23 to -523 ms, and the 72 that
     /// agreed within 3 % had -29 to +54 ms. Load on the N runs instead reads low with a fixed cost above the CLI's true one, which is not
-    /// known here, so that side is not flagged. It stayed within 6.6 % in phase 2.
+    /// known here, so that side is not flagged. It stayed within 6.6 % then.
     /// </summary>
     public bool Disturbed => !(PerCallNs > 0) || !(Range <= OutsideCommand.MaxRange) || FixedMs < -OutsideCommand.MaxNegativeFixed * Stats.Median(NSeconds) * 1e3;
 }

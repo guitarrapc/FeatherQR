@@ -1016,7 +1016,7 @@ internal static partial class TierTiming
         var bits = MicroQRConstants.GetDataBitCapacity(Version, Ecc);
         var matrix = new byte[size * size];
         return scalar
-            ? () => MicroQRModulePlacer.PlaceSymbolScalar(matrix, size, data, ecc, bits, Version, Ecc)
+            ? () => MicroQRModulePlacer.PlaceSymbolScalar(matrix, size, size, data, ecc, bits, Version, Ecc)
             : () => MicroQRModulePlacer.PlaceSymbol(matrix, size, data, ecc, bits, Version, Ecc);
     }
 

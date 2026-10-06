@@ -1,5 +1,5 @@
 // The cross-language benchmark's Go CLIs, one command per library under cmd/, sharing the protocol in protocol/.
-// See .github/docs/plans/cross-language-benchmark-plan.md. Each library is pinned to the version `go get` resolves for it,
+// See .github/docs/specs/qrcode-cross-language-benchmark.md. Each library is pinned to the version `go get` resolves for it,
 // and go.sum pins every module's content.
 module xlang-go
 

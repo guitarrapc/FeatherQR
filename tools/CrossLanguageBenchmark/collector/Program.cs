@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 
 // The cross-language benchmark's collector: it writes the corpus, launches every CLI, verifies what each printed, and computes every statistic,
-// so every row uses the same formula. See .github/docs/plans/cross-language-benchmark-plan.md.
+// so every row uses the same formula. See .github/docs/specs/qrcode-cross-language-benchmark.md.
 //
 //   corpus   [--out /opt/xlang/corpus]
 //   run      [--corpus DIR] [--clis FILE] [--cli a,b] [--filter text,text] [--rounds 5] [--warmup-ms 3000] [--batch-ms 20] [--batches 30] [--out /out]

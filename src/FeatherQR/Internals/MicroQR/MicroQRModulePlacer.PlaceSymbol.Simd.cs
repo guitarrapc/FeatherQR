@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.MicroQR;
 
 internal static partial class MicroQRModulePlacer
 {
-    private static int PlaceCoreVector(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
+    private static int PlaceCoreVector(Span<byte> matrix, int size, int stride, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
         Span<ulong> rows = stackalloc ulong[17];
         rows = rows.Slice(0, size);
@@ -17,14 +17,16 @@ internal static partial class MicroQRModulePlacer
 
         // Unpack with the mask applied on the fly, 16 modules per SIMD step
         // (SSSE3 or NEON, see WriteExpand16).
-        // Rows 0..size-2 may overrun into the following row: bits >= size are
-        // zero and rows unpack in ascending order, so the overwritten zeros are
-        // immediately replaced by that row's own unpack. The last row (buffer
-        // edge) uses the scalar-safe tail instead.
+        // Rows 0..size-2 may overrun past their end, by at most 15 bytes (size
+        // 17), which is less than the stride. Bits >= size are zero, so the
+        // overrun writes light modules: into the bytes between the rows, which
+        // stay light, and into the following row, whose own unpack comes next
+        // in ascending order and replaces them. The last row (buffer edge) uses
+        // the scalar-safe tail instead.
         ref var buf = ref MemoryMarshal.GetReference(matrix);
         var last = size - 1;
         var rowOffset = 0;
-        for (var y = 0; y < last; y++, rowOffset += size)
+        for (var y = 0; y < last; y++, rowOffset += stride)
         {
             var bits = rows[y] ^ MaskDelta(mask, y, size);
             for (var c = 0; c < size; c += 16)

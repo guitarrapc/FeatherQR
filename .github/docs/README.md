@@ -22,6 +22,7 @@ This folder holds design records and spec-to-code maps for shipped behavior, org
 | [standardqr-encoder.md](specs/standardqr-encoder.md) | Design record | Standard QR encoder scope and decisions (single segment per input, Kanji on request for text that JIS X 0208 holds, ECI policy) |
 | [standardqr-decoder.md](specs/standardqr-decoder.md) | Design record | Standard QR decoder scope, input tiers, lessons learned |
 | [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md) | Design record | Committed fixture corpus, manifest schema, external-oracle capability matrix, image decode sweep and real-image corpus measured against other readers |
+| [qrcode-cross-language-benchmark.md](specs/qrcode-cross-language-benchmark.md) | Design record | Speed against readers and writers outside .NET (zxing-cpp, libzint, quirc, zbar, libqrencode, the Rust crates, the JVM readers, Go): one protocol and collector for every language's CLI, whole-process timing as an outside check, one Docker image for linux-x64 and linux-arm64, the CI workflow, a results summary and lessons on measuring |
 | [microqr-spec-map.md](specs/microqr-spec-map.md) | Spec-to-code map | Micro QR encoding and decoding pipelines vs ISO/IEC 18004 |
 | [microqr-decoder.md](specs/microqr-decoder.md) | Design record | Micro QR decoder scope (matrix and image level), single-finder image path, decode figures, decisions, lessons learned |
 | [rmqr-spec-map.md](specs/rmqr-spec-map.md) | Spec-to-code map | rMQR pipeline vs ISO/IEC 23941 (encoder, rendering, matrix decoder and image detection implemented) |
@@ -34,7 +35,6 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 
 | Document | Covers |
 |---|---|
-| [cross-language-benchmark-plan.md](plans/cross-language-benchmark-plan.md) | Speed against readers and writers outside .NET (zxing-cpp, libzint, quirc, zbar, libqrencode, the Rust crates, the JVM readers, Go): one protocol and collector for every language's CLI, whole-process timing as an outside check, one Docker image for linux-x64 and linux-arm64, NativeAOT's default build against `x86-64-v3` |
 | [encode-performance-plan.md](plans/encode-performance-plan.md) | Encode speed after the decoders' 2.0.0 gains: mask selection measured as 55 to 83 % of a Standard QR encode, small changes first (an index for the ECC table, shared finder-window terms, smaller stack buffers by safe means only), then a transposed scorer for versions 12 to 40, the forced mask path, the output edges, and the writer plan ordered after the scorer |
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, release checklist |
 
@@ -70,3 +70,10 @@ The Kanji encoding plan (Kanji mode written by all three generators on request t
 - `docs/migration.md`, the README, and the Kanji columns of `docs/data-capacity.md`.
 
 It left out per-phase narration, step timings and benchmark tables, and the code inventory the plan was written from.
+
+The cross-language benchmark plan (a protocol, collector and outside check, then FeatherQR on the JIT and NativeAOT, zxing-cpp, libzint, the ZXingCpp package, rqrr, fast_qr, BoofCV, ZXing, quirc, zbar, libqrencode, the qrcode crate, gozxing and go-qrcode, and a CI workflow on linux-x64 and linux-arm64) completed on 2026-10-06 and was folded into:
+- [qrcode-cross-language-benchmark.md](specs/qrcode-cross-language-benchmark.md): what the harness measures and how its numbers are checked, why each library is there and how it is called, the decisions, a results summary from one CI run of every library on both architectures with the findings across runs, how well each machine measures, and lessons on measuring, runtimes, wrappers and machines.
+- [qrcode-symbologies.md](specs/qrcode-symbologies.md): NativeAOT's instruction-set target under the SIMD tier inventory (the probe, the gap split into lost tiers and ahead-of-time code, the kernels behind it, what the library can and cannot change) and the scope row, which keeps the README and user guidance on `IlcInstructionSet` open.
+- [microqr-decoder.md](specs/microqr-decoder.md) and [standardqr-encoder.md](specs/standardqr-encoder.md), which already held the codeword extraction and the double analysis the benchmark found.
+
+It left out per-phase narration and per-entry tables, the first rough NativeAOT timing that the measured gap replaced, and each library's absolute times outside the summary run. A CI run's results stay in its artifacts for as long as GitHub keeps them.

@@ -1,7 +1,7 @@
 name: Cross-language benchmark
 
-# Times FeatherQR against readers and writers outside .NET, as .github/docs/plans/cross-language-benchmark-plan.md describes.
-# Manual only: a full run takes hours, a hosted runner is noisy, and it answers a question rather than gating a change.
+# Times FeatherQR against readers and writers outside .NET, as .github/docs/specs/qrcode-cross-language-benchmark.md describes.
+# Manual only: a full run takes hours, and it answers a question rather than gating a change.
 # Only ratios within one run are results, since a hosted runner's CPU model changes between jobs: hold two runs of one commit
 # against each other with the collector's agree command.
 

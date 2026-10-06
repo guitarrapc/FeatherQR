@@ -88,7 +88,7 @@ internal static class Verify
 
     /// <summary>
     /// Null when every timed call succeeded. <see cref="Check"/> sees one call, and a library can fail the calls after it: ZXing's matrix
-    /// decoder unmasks the matrix it is given and leaves it so, and decoding the same matrix again failed (phase 7).
+    /// decoder unmasks the matrix it is given and leaves it so, and decoding the same matrix again failed (2026-10-05).
     /// </summary>
     public static string? FailedCalls(JsonElement output)
     {

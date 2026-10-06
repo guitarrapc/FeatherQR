@@ -15,7 +15,7 @@ internal sealed class Operation(Func<ulong> call, Func<string> describe)
 
 /// <summary>
 /// The protocol's modes, timing loop and JSON for the .NET CLIs: every library's CLI speaks the same protocol and runs the same loop,
-/// described in .github/docs/plans/cross-language-benchmark-plan.md ("Protocol"), so this file is the one to port.
+/// described in .github/docs/specs/qrcode-cross-language-benchmark.md ("Protocol"), so this file is the one to port.
 /// </summary>
 /// <remarks>
 ///   &lt;cli&gt; &lt;mode&gt; &lt;op&gt; &lt;symbology&gt; &lt;input&gt; [--ecc E] [--version V] [options]

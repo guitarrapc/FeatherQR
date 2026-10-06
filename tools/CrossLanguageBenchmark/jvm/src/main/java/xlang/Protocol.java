@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 /**
  * The cross-language benchmark's protocol for the JVM CLIs: the same arguments, timing loop and JSON as FeatherQR's
  * (tools/CrossLanguageBenchmark/dotnet/cli/Protocol.cs), which is the reference implementation.
- * See .github/docs/plans/cross-language-benchmark-plan.md ("Protocol").
+ * See .github/docs/specs/qrcode-cross-language-benchmark.md ("Protocol").
  */
 public final class Protocol {
     private Protocol() {
