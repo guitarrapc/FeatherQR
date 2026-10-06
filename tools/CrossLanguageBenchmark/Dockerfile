@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # The cross-language benchmark's image: every CLI, the collector and the corpus, built once from pinned toolchains,
-# for linux/amd64 and linux/arm64. See .github/docs/plans/cross-language-benchmark-plan.md.
+# for linux/amd64 and linux/arm64. See .github/docs/specs/qrcode-cross-language-benchmark.md.
 #
 #   docker build -f tools/CrossLanguageBenchmark/Dockerfile --build-arg XLANG_COMMIT=$(git rev-parse HEAD) -t featherqr-xlang .
 #   docker run --rm --cpuset-cpus 2,3 --memory 4g -e XLANG_IMAGE=$(docker image inspect -f '{{.Id}}' featherqr-xlang) -v xlang-out:/out featherqr-xlang run

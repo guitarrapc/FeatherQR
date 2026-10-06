@@ -3,7 +3,8 @@
 //
 // The image scanner is made once, with every symbology off but QR Code and every other option at its default, and reused, as a caller
 // scanning frames reuses it. Each call wraps the pixels in a zbar image without a copy (Y800, zbar's grey format), scans it, takes the
-// first symbol's text and destroys the image. zbar turns a symbol's bytes into UTF-8 text by its own guess at their character set.
+// first symbol's text and destroys the image. zbar turns a symbol's bytes into UTF-8 text by its ECI, or without one by its own guess
+// at their character set.
 
 #include "protocol.hpp"
 

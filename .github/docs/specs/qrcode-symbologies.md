@@ -546,7 +546,7 @@ Each build also reports what it runs: `tests/FeatherQR.AotAnalysis` (native buil
 
 A cell gives one tier, or, where an instruction set depends on the CPU in that build class, the tiers the CPU chooses between, of which exactly one runs on any one machine. When the table was first drawn (2026-09-28), 11 of the 28 kernels ran scalar on x64 without AVX, 2 on x64 with AVX2, 1 on ARM64 and 19 on WebAssembly, and more on CPUs without GFNI, fast PEXT or the ARM64 dot-product instructions (`Dp`).
 
-Since the 128-bit round below (2026-10-01), only the Structured Append parity and scanner on x64, the rMQR value writers and (since the Standard QR payload writers of 2026-10-05) those writers on ARM64, and seven kernels on WebAssembly (six before them) run scalar, each with its measured reason next to its row, and no cell drops to scalar because the CPU lacks a feature. The netstandard builds have no intrinsics, so they run scalar everywhere. Which instruction set a NativeAOT publish should target is a separate decision, to which the table is an input.
+Since the 128-bit round below (2026-10-01), only the Structured Append parity and scanner on x64, the rMQR value writers and (since the Standard QR payload writers of 2026-10-05) those writers on ARM64, and seven kernels on WebAssembly (six before them) run scalar, each with its measured reason next to its row, and no cell drops to scalar because the CPU lacks a feature. The netstandard builds have no intrinsics, so they run scalar everywhere. Which instruction set a NativeAOT publish should target is a separate decision, to which the table is an input ([NativeAOT's instruction-set target](#nativeaots-instruction-set-target)).
 
 These keep the table accurate:
 
@@ -608,6 +608,51 @@ The ARM64 optimization queue is closed. Four components were measured and left o
 - Also on 2026-09-22, after the fill's tier, the profile pointed to the finder search's mask walk (10 to 50 % of a version 40 decode, 46 % of an image with no symbol, bound by its branches as on x64), and then to the mesh sampler's column-table tier (45 µs of a 138 µs decode). Both now have ARM64 tiers: the row kernel builds its word from the NEON fold, eight windows per step, and the sampler runs on four lanes, two steps per loop body. The x64 round's findings carried over as structure, not as instructions, and each tier was tuned again on the M2 against its own reference.
 
 The details are in the Performance lessons of [standardqr-decoder.md](standardqr-decoder.md). WebAssembly and x64 without AVX ran the scalar fill, the column table and the 128-bit mask walk until the 128-bit round gave them 128-bit tiers for the fill, the mesh sampler and the edge list, each measured on those builds.
+
+#### NativeAOT's instruction-set target
+
+A NativeAOT publish compiles for the instruction sets its target names, and the default target is the OS's minimum, so on x64 it runs the tiers of a CPU without AVX on every CPU. [What .NET gives each build](qrcode-simd-tiers.md#what-net-gives-each-build) lists what each target gives. A probe through `tests/FeatherQR.AotAnalysis` found the following, on the development box (Ryzen 9 7950X3D, win-x64, ILCompiler 10.0.9, 2026-10-02) and on an Apple M2 (linux-arm64, SDK 10.0.401 with ILCompiler 10.0.12, 2026-10-03):
+
+- A targeted instruction set is required, not checked per use. On a CPU without it the NativeAOT runtime prints "The required instruction sets are not supported by the current CPU." at startup and exits non-zero before any user code runs (probed with `x86-64-v3,avx10v1` on a Zen 4, which has no AVX10).
+- Sets outside the target are checked at run time: GFNI under `x86-64-v3`, and SSSE3 to SSE4.2 and GFNI under the default. A target of `x86-64-v4` or `native` also makes AVX-512 read true.
+- With AVX in the target (`x86-64-v2,avx`, the comma passed as `%2C` on a command line), `Avx2`, `Bmi2` and `Gfni` become run-time checks, but `Vector256.IsHardwareAccelerated` reads false. The 11 kernels gated on `Avx2`, `Avx2Pext` or `GfniV256` (`TextAnalyzer`, `ModuleBitPacker`, `EccBinaryEncoder`, `EccBinaryDecoder`, `LuminanceConverter`, `ModulePlacerExpandBits`, `ModulePlacerMaskCode`, `QRSampleGridPiecewise`, `MicroQRModulePlacer`, `RmQRModulePlacer`, `RmQRExtractCodewords`) then take their `x86-64-v3` tiers. The 8 gated on `Vector256` (`ModeSegmenterLanes`, `LuminanceInverter`, `Binarizer`, `FinderRowMask`, `FinderRowEdges`, `PerspectiveGridSampler`, `AlignmentRowMask`, `StructuredAppendLanes`) keep their 128-bit tiers, and the other 9 take the same tier in all three targets. So the encode side gets its AVX2 tiers back and most of the image decode does not.
+- On ARM64 the JIT and a default NativeAOT publish see the same sets (AdvSimd and the dot product) and take the same tier in all 28 kernels, so a default publish loses no tier. NativeAOT ignores `DOTNET_EnableArm64Dp`, so only a publish for `armv8-a,-dotprod` shows a CPU without the dot product.
+
+The [cross-language benchmark](qrcode-cross-language-benchmark.md) measured the gap on the development box (linux-x64 in Docker, 2026-10-03, two runs of five rounds), each entry's ratio the geometric mean of its two runs, median and range by shape. The JIT without AVX takes exactly default NativeAOT's tiers (both printed the same instruction sets in every process), so it separates what the lost tiers cost from what ahead-of-time code costs, without a second compiler:
+
+| Shape | Lost tiers (JIT without AVX over JIT) | Ahead-of-time code (default NativeAOT over JIT without AVX) | Default NativeAOT over JIT | `x86-64-v3` NativeAOT over JIT | Default over `x86-64-v3` |
+|---|---:|---:|---:|---:|---:|
+| Standard QR encode | 1.62 (1.59 to 1.78) | 1.23 | 2.00 (1.95 to 2.18) | 1.23 | 1.61 (1.59 to 1.76) |
+| Standard QR matrix decode | 1.10 | 1.16 | 1.27 | 1.10 | 1.14 |
+| Standard QR image decode | 1.19 | 1.15 | 1.37 | 1.08 | 1.26 |
+| Micro QR encode | 1.22 (1.04 to 1.31) | 1.04 | 1.21 (1.09 to 1.36) | 1.09 | 1.11 |
+| Micro QR matrix decode | 1.09 | 0.93 | 1.03 | 0.99 | 1.03 |
+| Micro QR image decode | 1.17 | 1.14 | 1.34 | 1.10 | 1.21 |
+| rMQR encode | 1.12 (1.05 to 1.27) | 1.04 | 1.17 (1.10 to 1.27) | 1.06 | 1.11 |
+| rMQR matrix decode | 1.16 (1.14 to 1.36) | 1.11 | 1.31 (1.26 to 1.49) | 1.22 | 1.04 (1.04 to 1.33) |
+| rMQR image decode | 1.22 | 1.20 | 1.46 (1.40 to 1.56) | 1.13 | 1.28 |
+
+The two causes multiply: Standard QR encode loses 1.62 to its tiers and 1.23 to ahead-of-time code, and runs at 2.00. A publish for `x86-64-v3` removes the first and leaves the second, 0.99 to 1.26 over the JIT by entry and 1.10 at the median, which is code compiled once without the JIT's tiered recompilation and dynamic PGO. The table's encodes predate the change that stopped a pinned encode from analysing its text twice ([standardqr-encoder.md](standardqr-encoder.md)), and the runners' figures below include it. On hosted runners (2026-10-06, one run of five rounds) default NativeAOT ran 1.0 to 1.9 times the JIT by shape on an EPYC 7763 (Standard QR encode 1.9) and `x86-64-v3` 1.0 to 1.2. On a Neoverse-N2, and on the Apple M2, where no tier is lost, default NativeAOT ran 1.0 to 1.2 times the JIT.
+
+The kernels behind the default arm's gap, by shape, are those each shape's clean path reaches that change tier between the two targets. Every one falls to a 128-bit tier, and none to scalar:
+
+| Shape | Kernels that change tier, `x86-64-v3` to default |
+|---|---|
+| Standard QR encode | `TextAnalyzer` (`Avx2` to `Sse2`), `ModulePlacerExpandBits` and `ModulePlacerMaskCode` (`Avx2` to `Ssse3`). `EccBinaryEncoder` (`GfniV256` to `Gfni`) only where a block has more than 16 ECC codewords |
+| Micro QR encode | `TextAnalyzer`, `MicroQRModulePlacer` (`Avx2Pext` to `Ssse3`), `ModuleBitPacker` (`Avx2` to `Ssse3`) |
+| rMQR encode | `TextAnalyzer`, `RmQRModulePlacer` (`Avx2` to `Ssse3`), `ModuleBitPacker`, and `EccBinaryEncoder` where a block has more than 16 ECC codewords, here the R17x139 entry |
+| Matrix decode, all three | `EccBinaryDecoder` (`GfniV256` to `Vector128`), and for rMQR `RmQRExtractCodewords` (`Avx2Pext` to `Vector128`) |
+| Image decode, all three | `Binarizer` and `FinderRowEdges` (`Vector256` to `Vector128`), then the matrix decode's kernels. Standard QR adds `PerspectiveGridSampler` (`Vector256` to `Sse2`) and, from version 2, `AlignmentRowMask` (`Vector256` to `Vector128`) |
+
+On the machines measured, NativeAOT starts and makes its first call in about 1 to 4 ms, against 17 to 45 ms to start and 9 to 68 ms for the first call under the JIT.
+
+The library can change some of this and not the rest:
+
+- The target is the application's compile setting, so no library-side switch reaches a default publish. What the library controls is its 128-bit tiers, which default NativeAOT, ARM64 and WebAssembly all run ([The 128-bit round](#the-128-bit-round)).
+- Gating the eight `Vector256` kernels on `Avx2.IsSupported` instead might let an `x86-64-v2,avx` target run them at 256 bits. How ILC compiles portable `Vector256` operations when `Vector256` is not accelerated is unknown, so the disassembly comes first. Nothing was switched (2026-10-02).
+- `x86-64-v2,avx` has not been timed on the current code. A rough timing before the 128-bit tiers found that it recovered most of the encode gap and almost none of the image decode gap. It is in none of `SimdTiers.cs`'s build classes, so `--simd-class` cannot check it.
+- Selecting AVX and `Vector256` at run time needs the JIT (ReadyToRun included), or an application that ships a default and an `x86-64-v3` build and picks one at launch. Both are the application's choice.
+
 ## Scope decisions
 
 | Decision | Choice | Revisit when |
@@ -629,7 +674,7 @@ The details are in the Performance lessons of [standardqr-decoder.md](standardqr
 | Interoperability runs against external encoders/decoders | Manual, not a CI job: `tools/QRInteropFixtures` spot-checks (`spot-check-rmqr`, `spot-check-microqr`) are run by hand before a release, and pull-request CI stays self-contained on the committed fixture corpus | A regression the committed corpus cannot catch, or an external oracle that installs cleanly enough for scheduled CI under the pinning policy in [qrcode-test-fixtures.md](qrcode-test-fixtures.md) |
 | Physical scanner acceptance | Not automated and never a conformance gate: a disagreeing phone scanner proves an interoperability problem, never a specification violation. Run ad hoc against a representative print/screen set before a symbology's first release | A field report that the committed corpus and the image-degradation tests both pass but real scanners fail |
 | SIMD tier table | One table in `Internals/SimdTiers.cs`, per kernel and build class, checked by source and table tests and by every build class in CI. The dispatch keeps its own flag reads. Tiers move between files only as whole methods. Six are kept inline and listed | A JIT that inlines a dispatch through a property, which would let the dispatch read the table. A kept-inline tier rewritten as a method of its own for another reason |
-| NativeAOT instruction-set target | Not decided: the tier table is what the decision reads, and no public API or README text says anything about `IlcInstructionSet` | A plan for it |
+| NativeAOT instruction-set target | Measured, not yet stated for users. On x64 the default target costs 1.03 to 2.00 times the JIT's time by shape and `x86-64-v3` 0.99 to 1.23, and on ARM64 the default loses no tier ([NativeAOT's instruction-set target](#nativeaots-instruction-set-target)). The target is the application's setting, and no public API, README or user document text says anything about `IlcInstructionSet` | A change that writes the guidance into the README and the user docs, with these numbers behind it |
 | 128-bit tiers where x64 without AVX or WebAssembly runs scalar | Done for 2.0.0 (2026-10-01, the 128-bit round under the SIMD tier inventory), where one beats what the build ran, measured on that build. The Structured Append parity and scanner on x64, six kernels on WebAssembly and the rMQR value writers on ARM64 stay scalar (with the Standard QR Numeric writer of 2026-10-05, seven on WebAssembly), each with its reason beside its row | A new kernel or build class, or a profile that puts a scalar cell's kernel over the bar |
 
 ## Lessons learned

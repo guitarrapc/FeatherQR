@@ -5,11 +5,11 @@ using System.Text.Json;
 /// <summary>
 /// Holds each CLI's self-timed medians against the outside check (whole processes, no timing code in the CLI), and the BenchmarkDotNet CLI's
 /// also against BenchmarkDotNet's reference project (same code, its own harness and statistics). A CLI passes the outside check under the
-/// tolerance phase 1 measured: every entry within <see cref="EntryTolerance"/>, and the signed median over its entries within <see cref="MedianTolerance"/>.
+/// tolerance the first measurement set (2026-10-02): every entry within <see cref="EntryTolerance"/>, and the signed median over its entries within <see cref="MedianTolerance"/>.
 /// </summary>
 /// <remarks>
 /// The second test is for a bias, such as a cost per call the loop adds, which moves every entry the same way. The median of the
-/// disagreements' sizes measures noise instead: in phase 2 it exceeded 2 % on CLIs with two to four undisturbed entries,
+/// disagreements' sizes measures noise instead: on 2026-10-03 it exceeded 2 % on CLIs with two to four undisturbed entries,
 /// while the signed median stayed within 1.3 % on every CLI in every run.
 /// </remarks>
 internal static class CompareCommand

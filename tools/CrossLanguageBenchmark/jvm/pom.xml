@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The cross-language benchmark's JVM CLIs, one main class per library, sharing the protocol in xlang/Protocol.java.
-     See .github/docs/plans/cross-language-benchmark-plan.md. Every library and plugin is pinned to an exact version,
+     See .github/docs/specs/qrcode-cross-language-benchmark.md. Every library and plugin is pinned to an exact version,
      and the shade plugin packs them into one jar the image runs with its pinned JRE. -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">

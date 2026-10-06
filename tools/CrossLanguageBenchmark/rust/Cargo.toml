@@ -1,5 +1,5 @@
 # The cross-language benchmark's Rust CLIs, one binary per library, sharing the protocol in src/lib.rs.
-# See .github/docs/plans/cross-language-benchmark-plan.md. The release profile is left at its defaults,
+# See .github/docs/specs/qrcode-cross-language-benchmark.md. The release profile is left at its defaults,
 # so the default build is what `cargo build --release` gives a user, and the image adds an x86-64-v3 build beside it.
 [package]
 name = "xlang-rust"

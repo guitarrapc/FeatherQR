@@ -1,6 +1,6 @@
 // Package protocol is the cross-language benchmark's protocol for the Go CLIs: the same arguments, timing loop and JSON as FeatherQR's
 // CLI (tools/CrossLanguageBenchmark/dotnet/cli/Protocol.cs), which is the reference implementation.
-// See .github/docs/plans/cross-language-benchmark-plan.md ("Protocol").
+// See .github/docs/specs/qrcode-cross-language-benchmark.md ("Protocol").
 package protocol
 
 import (

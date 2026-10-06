@@ -3,6 +3,7 @@
 featherqr-jit	/opt/xlang/featherqr-jit/featherqr-cli
 # x64 only: the JIT with AVX switched off dispatches as a default NativeAOT publish does, so against the JIT it is the cost of the
 # lost tiers, and against default NativeAOT the cost of ahead-of-time code at the same tiers. On arm64 it is the JIT again.
+# Its binary is featherqr-jit's, so the outside check need not run it.
 featherqr-jit-noavx	env	DOTNET_EnableAVX=0	/opt/xlang/featherqr-jit/featherqr-cli
 featherqr-aot-default	/opt/xlang/featherqr-aot/default/featherqr-cli
 featherqr-aot-v3	/opt/xlang/featherqr-aot/x86-64-v3/featherqr-cli
@@ -23,7 +24,7 @@ zxingcpp-net-own	/opt/xlang/zxingcpp-net-own/zxingcpp-net-cli
 # only after 8 to 9 s, and the JVM's per-call time swings by about 5 % from second to second.
 boofcv	/opt/java/openjdk/bin/java	-XX:+UseG1GC	-Xms1g	-Xmx1g	-Dxlang.minWarmupMs=10000	-Dxlang.minBatchMs=100	-cp	/opt/xlang/jvm/xlang-jvm.jar	xlang.BoofCvCli
 zxing-java	/opt/java/openjdk/bin/java	-XX:+UseG1GC	-Xms1g	-Xmx1g	-Dxlang.minWarmupMs=10000	-Dxlang.minBatchMs=100	-cp	/opt/xlang/jvm/xlang-jvm.jar	xlang.ZxingCli
-# Phase 7. quirc is the C library rqrr ports, built from source as zxing-cpp is. zbar and libqrencode are Ubuntu's packages, so each has
+# quirc is the C library rqrr ports, built from source as zxing-cpp is. zbar and libqrencode are Ubuntu's packages, so each has
 # one build. The Go CLIs keep Go's defaults (GOGC=100, GOMAXPROCS from the container's two CPUs): unlike .NET and the JVM, Go does not
 # size its collector from the container's memory.
 quirc-default	/opt/xlang/cpp/default/quirc-cli

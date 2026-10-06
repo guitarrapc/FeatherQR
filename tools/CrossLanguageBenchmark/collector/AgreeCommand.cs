@@ -3,7 +3,7 @@ using System.Text;
 
 /// <summary>
 /// Holds two runs of the same commit against each other on ratios, the only numbers a hosted runner's changing CPU leaves comparable:
-/// each CLI's median over the baseline CLI's on every entry, in one run against the other. The tolerance is phase 1's, the one the
+/// each CLI's median over the baseline CLI's on every entry, in one run against the other. The tolerance is the one the
 /// outside check uses: every entry within <see cref="CompareCommand.EntryTolerance"/>, the signed median within <see cref="CompareCommand.MedianTolerance"/>.
 /// </summary>
 internal static class AgreeCommand
@@ -19,7 +19,7 @@ internal static class AgreeCommand
         // toolchains. Different commits are different code.
         if (first.Machine.Commit != second.Machine.Commit)
             md.AppendLine("- The two runs are of different commits, so a disagreement can be the code, not the machine.");
-        // A hosted x64 runner's CPU model changes between jobs, and ratios change with it: on phase 6's first pair, from Zen 3 to Zen 5,
+        // A hosted x64 runner's CPU model changes between jobs, and ratios change with it: on the first two CI runs (2026-10-05), from Zen 3 to Zen 5,
         // entries moved by up to 45 %. Such a pair compares the CPUs, not the noise.
         if (Cpu(first.Machine) != Cpu(second.Machine))
             md.AppendLine("- The two runs ran on different CPU models, so a disagreement can be the CPU, not the noise.");
