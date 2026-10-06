@@ -496,9 +496,10 @@ public sealed class QRCodeData
         if (source.Length != totalModules)
             throw new ArgumentException($"Source span size mismatch: expected {totalModules} bytes (baseSize={_baseSize}), got {source.Length} bytes");
 
-        // The payload bit stream is flat row-major module order, the same order as the source buffer, so the vector packer of the
-        // Micro QR and rMQR data models writes it: every payload byte, its padding bits zero, so a second call replaces the first.
-        ModuleBitPacker.Pack(source, _bits);
+        // The payload bit stream is flat row-major module order, the same order as the source buffer, so the packer of the Micro QR and
+        // rMQR data models writes it, through its entry for modules that are 0 or 1, as the placer's are: every payload byte, its
+        // padding bits zero, so a second call replaces the first.
+        ModuleBitPacker.PackZeroOrOne(source, _bits);
     }
 
     private static void ValidateQuietZone(int quietZoneSize)

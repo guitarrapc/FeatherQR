@@ -65,7 +65,7 @@ internal static partial class MicroQRModulePlacer
     /// <param name="eccLevel">ECC level (drives the format information).</param>
     /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection.</param>
     // Once the entry took the stride, the JIT stopped inlining it into the generator's core writers, where it had inlined the
-    // contiguous one, and on x64 without AVX2 the call cost the quiet-zone-free M2 and M3 encodes 3 to 8 %.
+    // contiguous one: on x64 without AVX2 the quiet-zone-free M2 and M3 encodes took 1.08 and 1.04 times as long as with it inlined.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int PlaceSymbol(Span<byte> destination, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
@@ -142,6 +142,9 @@ internal static partial class MicroQRModulePlacer
     }
 #endif
 
+    // Not inlined: through the AggressiveInlining entry its interpolated messages went into the generator's span CreateCore on .NET 10
+    // with AVX2, 5.4 KB of code against 3.4 KB with this a call, its prolog zeroing 584 bytes a call against 344.
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ValidateArguments(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, int forcedMask)
     {
         // The fast paths below index by arithmetic the JIT cannot bounds-prove

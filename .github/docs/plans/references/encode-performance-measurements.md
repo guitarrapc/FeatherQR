@@ -796,7 +796,11 @@ From the stage rows the steps save 2.5 % of a version 40 alphanumeric encode on 
 
 ## Phase 8: output edges (2026-10-06)
 
-Base `main` (1df5b10) against the change, the stage harness on both sides. The kernel rows are BenchmarkDotNet (3 warmups, 15 iterations, the process pinned to one CCD) on the JIT with AVX2.
+Base `main` (1df5b10) against the change, the stage harness on both sides. The kernel rows are BenchmarkDotNet (3 warmups, 15 iterations) on the JIT with AVX2, from these runs:
+
+- the table, the in-place form clearing each gap by a call as the row after it moved and the 16-byte vector store: 2026-10-05, not pinned
+- the copies, the margins measured apart and the in-place 8-byte stores they are set against: a run from 23:55 that day, pinned to one CCD
+- the exact-gap stores and the constant clear, with the 8-byte stores' margins each is set against: runs on 2026-10-06, each pinned to one CCD
 
 ### The class API's pack
 
@@ -814,9 +818,9 @@ Building `QRCodeData` from the winner's packed rows, the plan's other form of th
 
 ### The quiet zone, kernel
 
-Each variant writes the same destination, checked byte for byte against the old form at quiet zones 1 to 5, 7 to 9 and 25 before timing. The placer is stood in for by one copy of the core into the destination, or one copy per row for the strided forms. The old form is the Micro QR span path before the change: the whole destination cleared, the core built in a zeroed stack buffer and its rows copied (Standard QR's also rented the buffer, which this leaves out). The in-place forms build the core at the destination's start and move the rows, the last first. The strided forms are rMQR's: the margins cleared, the core written into the window.
+Each variant writes the same destination, checked byte for byte against the old form at quiet zones 1 to 5, 7 to 9 and 25 before timing. The placer is stood in for by one copy of the core into the destination, or one copy per row for the strided forms. The old form clears the destination and builds the core in a zeroed 1,024-byte stack buffer, or above 1,024 modules in a new array. It clears the core's part of the buffer again and copies the core's rows. Neither symbology's path before the change had that buffer: Micro QR's did the same in a 289-byte stack buffer, and Standard QR's rented its core and did not clear it. The review timed the forms against those paths (its subsection below). The in-place forms build the core at the destination's start and move the rows, the last first. The strided forms are rMQR's: the margins cleared, the core written into the window.
 
-| Shape | Old | In place, a clear per gap | In place, 8-byte stores | Strided, a clear per gap | Strided, 8-byte stores |
+| Shape | Old | In place, as first written | In place, 8-byte stores | Strided, a clear per gap | Strided, 8-byte stores |
 |---|---|---|---|---|---|
 | M1, quiet zone 2 | 34.5 ns | 41.0 ns | 30.4 ns | 44.7 ns | 34.2 ns |
 | M2 | 41.3 ns | 49.9 ns | 34.5 ns | 50.3 ns | 39.0 ns |
@@ -828,21 +832,21 @@ Each variant writes the same destination, checked byte for byte against the old 
 | R7x43, quiet zone 2 | 30.3 ns | 32.1 ns | 24.6 ns | 31.4 ns | 25.5 ns |
 | R17x139 | 239 ns | 90.9 ns | 71.1 ns | 86.9 ns | 62.6 ns |
 
-As first written, with one `Span.Clear` of 2q bytes per gap between rows, the in-place move was slower than the old form from M1 to V1 (1.12 to 1.25), and the strided form slower still (1.21 to 1.34). The calls were the cost: one or two 8-byte stores ending where the gap ends, which also zero up to 6 bytes of the row in front, took the in-place move to 0.76 to 0.88 of the old form on the small symbols and 0.33 to 0.48 from V6. A 16-byte vector store, written through an unchecked reference, measured the same where it applied, and could not serve M1, whose row and gap make 15 bytes.
+As first written, the in-place form moved every row and then cleared each gap between rows with one `Span.Clear` of 2q bytes. It was slower than the old form from M1 to V1 (1.12 to 1.25), and the strided form slower still (1.21 to 1.34). The calls were most of the cost. With each gap cleared as the row after it moved, still by the call, the in-place move read 1.07 to 1.20 there, and an 8-byte store through `BinaryPrimitives` ending where the gap ends, which at quiet zone 2 also zeroes the 4 bytes of the row in front, took it to 0.76 to 0.88 of this old form on the small symbols and 0.33 to 0.48 from V6. Against each symbology's own path, in two pinned runs of the review, the first form took 1.30 to 1.44 from M1 to V6 and the move with the call made as each row moved 1.21 to 1.32. The stores took 0.95 to 1.04 there, 0.91 at V19 and 0.73 at V40. Those runs read the stores at 0.87 to 0.94 of this old form to V1 and 0.51 to 0.71 from V6, so part of the difference from this run is between runs, this one not pinned. Every shape here has a gap of 4 or 8 bytes, so the forms for a gap of 9 to 16 bytes, two 8-byte stores or a clear of 16, were not timed. In place of the 8-byte store, a 16-byte vector store written through an unchecked reference measured the same where it applied, and could not serve M1, whose row and gap make 15 bytes.
 
-The strided forms pay their per-row copies here, which a strided placer does as part of its unpack. Measured apart in another run, one copy of the core took 2.7 to 4.9 ns on M1 to M4 and the margins alone 11.0 to 13.8 ns, so a strided placer would add 11 to 14 ns to the quiet-zone-free encode, against 28 to 41 ns for the moves and the margins of the in-place form. Micro QR therefore writes the window directly, as rMQR does. Its vector unpack runs past a row's end, but only with the row's packed bits past the core, which are zero, so the margins are cleared first and stay light.
+The strided forms pay their per-row copies here, which a strided placer does as part of its unpack. Measured apart in another run, one copy of the core took 2.7 to 4.9 ns on M1 to M4 and the margins alone 11.0 to 13.8 ns, so a strided placer would add 11 to 14 ns to the quiet-zone-free encode, against 28 to 41 ns in that run for the moves and the margins of the in-place form, its 8-byte stores less the copy. Micro QR therefore writes the window directly, as rMQR does. Its vector unpack runs past a row's end, but only with the row's packed bits past the core, which are zero, so the margins are cleared first and stay light.
 
 Stores that zero exactly the gap and nothing in front of it, which would let the margins be cleared after the placer, were slower on the margins alone: 15.6 to 19.8 ns against 11.2 to 16.5 on M1 to M4 as 8-, 4- and 2-byte stores in turn, 14.3 to 20.7 against 11.4 to 16.1 as two overlapping stores of one width, and 187 and 193 ns against 140 and 146 at V40, in two runs.
 
-The library writes each gap as a `Span.Clear` of the constant 8 or 16 bytes, which the JIT writes as one store, and of the 2q bytes past 16. On the margins alone, in one run, it took 0.87 to 0.99 of the time of the stores through `BinaryPrimitives` the table above used: 9.9 against 11.3 ns on M1, 13.9 against 14.4 on M4, 18.3 against 19.2 on V1 and 134 against 141 at V40. On WebAssembly AOT and interpreted, three alternating rounds of the small symbols, the two forms read within 0.03 of each other end to end.
+On .NET 10 the library writes each gap as a `Span.Clear` of the constant 8 or 16 bytes, which that JIT writes as one store, and of the 2q bytes past 16. Builds before .NET 10 write 8-byte stores (from the review, below). On the margins alone, in one run, it took 0.87 to 0.99 of the time of the stores through `BinaryPrimitives` the table above used: 9.9 against 11.3 ns on M1, 13.9 against 14.4 on M4, 18.3 against 19.2 on V1 and 134 against 141 at V40. On WebAssembly AOT and interpreted, three alternating rounds of the small symbols, the two forms read within 0.03 of each other end to end.
 
-Two more costs came from moving code, not from the kernels. The gap clear is a method of its own shared by the three symbologies, and the WebAssembly interpreter called it once a row: the quiet-zone encodes of Micro QR and rMQR there took 1.13 to 1.15 and 1.05 to 1.11 of their time before the change, where the JIT inlined it. Marked `AggressiveInlining`, they took 0.96 to 0.99 and 1.00 to 1.03 (three rounds, base, the call and the inlined clear in one run). And once the Micro QR placer's entry took the stride, the JIT stopped inlining it into the generator's core writers, which its disassembly showed for the contiguous entry before. Without AVX2 the quiet-zone-free encodes of M2 and M3 then took 1.08 and 1.02 of their time; marked `AggressiveInlining`, 1.00 and 0.98 (seven rounds of the three builds).
+Two more costs came from moving code, not from the kernels. The gap clear is a method of its own shared by the three symbologies, and the WebAssembly interpreter called it once a row: the quiet-zone encodes of Standard QR at versions 1 and 6, of Micro QR M2 to M4 and of three rMQR sizes there took 1.03 to 1.04, 1.13 to 1.15 and 1.05 to 1.11 of their time before the change, and marked `AggressiveInlining` they took 0.98 to 1.00, 0.96 to 0.99 and 1.00 to 1.03 there (three rounds, base, the call and the inlined clear in one run). The JIT inlined it without the attribute. And once the Micro QR placer's entry took the stride, the JIT stopped inlining it into the generator's core writers, which its disassembly showed for the contiguous entry before. Without AVX2 the quiet-zone-free encodes of M2 and M3 then took 1.08 and 1.01 of their time. Marked `AggressiveInlining`, they took 1.00 and 0.98 (seven rounds of the three builds).
 
-On default NativeAOT the M4 placer stage took 1.09 to 1.16 of its time in two runs of seven rounds, its quiet-zone-free encode 1.03 and its class encode 1.02 to 1.03, while M2 and M3 gained (0.92 to 0.95 on the same rows in the second run). ILC's unpack loops are the base's instructions, the rest of the method differing in register names, a few moves and a frame 16 bytes smaller, and the inner loop, which runs twice a row only at M4, starts at another offset (0x35D against 0x374), so the loss is taken to be code placement and was left.
+On default NativeAOT the M4 placer stage took 1.11 to 1.16 of its time in two runs of seven rounds, its quiet-zone-free encode 1.03 and its class encode 1.02 to 1.03, while M2 and M3 gained (0.92 to 0.95 on the same rows in the second run). ILC's unpack loops are the base's instructions, the rest of the method differing in register names, a few moves and a frame 16 bytes smaller, and the inner loop, which runs twice a row only at M4, starts at another offset (0x35D against 0x374), so the loss is taken to be code placement and was left.
 
 ### End to end
 
-The shipped code against base, alternating one process each, pinned to one CCD with the .NET build servers shut down, the median of the run medians, change over base: five rounds on the JIT and NativeAOT, three on WebAssembly. The JIT without AVX2 column's Micro QR rows are a run of seven rounds of the Micro QR shapes alone. In the five-round run of every shape they read 0.99 to 1.05, its quiet-zone-free and class rows included, which run the same code as in the two runs of seven rounds, where they read 0.97 to 1.00.
+The shipped code against base, alternating one process each, pinned to one CCD with the .NET build servers shut down, the median of the run medians, change over base: five rounds on the JIT and NativeAOT, three on WebAssembly. The JIT without AVX2 column's Micro QR rows are a run of seven rounds of the Micro QR shapes alone. In the five-round run of every shape they read 0.99 to 1.06, its quiet-zone-free and class rows at 1.01 to 1.06, which run the same code as in the two runs of seven rounds, where they read 0.97 to 1.00. The quiet zone over the quiet-zone-free row there read 1.21, 1.20 and 1.15 at M2 to M4, against base 1.22, 1.20 and 1.19. The review of the phase found this again in runs of every shape and not its cause (below).
 
 | Shape | JIT, AVX2 | JIT, no AVX | Default NativeAOT | WebAssembly AOT | WebAssembly interpreted |
 |---|---|---|---|---|---|
@@ -906,4 +910,94 @@ Each span row with a quiet zone, and each class row, over its symbol's quiet-zon
 | R11x59, quiet zone | 1.20, 1.18 | 1.24, 1.21 | 1.25, 1.21 | 1.20, 1.17 | 1.07, 1.10 |
 | R17x139, quiet zone | 1.12, 1.07 | 1.07, 1.08 | 1.08, 1.09 | 1.15, 1.12 | 1.03, 1.06 |
 
-rMQR's class rows did not change, its pack being the vector packer before and after; over the quiet-zone-free row they read 1.07 to 1.31 on both sides.
+rMQR's class rows did not change, its pack being the vector packer before and after. Over the quiet-zone-free row they read 1.07 to 1.31 on both sides.
+
+### From the review (2026-10-06)
+
+The reviewed code against base `main` (1df5b10) in the BenchmarkDotNet encode classes, .NET 10 x64, the process pinned to one CCD: ShortRun, two alternating rounds a side, the mean of the two runs' means, and for Micro QR two rounds of 5 warmups and 15 iterations, where ShortRun had put two of its class rows at 1.07 and 1.08. A process whose standard deviation passed 10 % of its mean was left out whole, which left base one run in two rows: V19-M's class row, whose first round read 10.8 to 15.1 µs against 10.7 to 10.8 in the second, and Kanji_Long_V15_L's "(Pinned)" row, whose second round read 9.2 to 11.4 µs against 9.4 to 9.5 in the first. Change over base, then each row over its shape's quiet-zone-free row, base and change:
+
+| Row | Class | Span, quiet zone | Span, QZ0 | Class over QZ0 | Quiet zone over QZ0 |
+|---|---|---|---|---|---|
+| Numeric_V1_L | 0.96 | 1.02 | 1.02 | 1.10, 1.03 | 1.08, 1.07 |
+| Numeric_V40_L | 0.88 | 0.95 | 1.01 | 1.14, 1.00 | 1.04, 0.99 |
+| Alphanumeric_V1_M | 0.99 | 0.99 | 1.00 | 1.07, 1.06 | 1.07, 1.06 |
+| Alphanumeric_V10_M | 0.91 | 0.96 | 1.01 | 1.16, 1.04 | 1.08, 1.03 |
+| Alphanumeric_V40_L | 0.92 | 0.97 | 1.03 | 1.12, 1.00 | 1.04, 0.98 |
+| Byte_Url_V6_M | 0.96 | 1.02 | 1.00 | 1.13, 1.09 | 1.08, 1.10 |
+| Byte_V20_M (V19-M) | 0.94 | 1.00 | 1.00 | 1.09, 1.02 | 1.02, 1.02 |
+| Byte_V40_L | 0.93 | 0.98 | 1.01 | 1.11, 1.03 | 1.05, 1.02 |
+| Byte_V40_H (V39-H) | 0.93 | 0.98 | 1.01 | 1.12, 1.03 | 1.05, 1.02 |
+| Kanji_V6_M | 0.96 | 0.95 | 1.02 | 1.12, 1.05 | 1.14, 1.06 |
+| Kanji_Long_V15_L | 0.93 | 1.00 | 1.02 | 1.10, 1.00 | 1.03, 1.00 |
+| Numeric_R11x27 | 0.99 | 0.96 | 1.00 | 1.18, 1.17 | 1.40, 1.33 |
+| Alphanumeric_R15x43 | 1.00 | 0.94 | 0.98 | 1.13, 1.16 | 1.44, 1.39 |
+| Byte_R17x139 | 1.02 | 0.96 | 1.01 | 1.11, 1.12 | 1.18, 1.12 |
+| Latin1Eci_R15x139 | 1.02 | 1.00 | 1.07 | 1.11, 1.06 | 1.14, 1.06 |
+| Utf8Eci_R13x139 | 0.99 | 0.97 | 1.02 | 1.14, 1.11 | 1.15, 1.09 |
+| Kanji_R17x139 | 1.00 | 1.01 | 0.99 | 1.09, 1.10 | 1.11, 1.13 |
+| Numeric_M2 | 0.98 | 0.87 | 0.98 | 1.12, 1.13 | 1.24, 1.11 |
+| Alphanumeric_M3 | 1.00 | 0.91 | 1.01 | 1.10, 1.09 | 1.23, 1.12 |
+| Byte_M4 | 1.02 | 0.88 | 0.99 | 1.11, 1.14 | 1.25, 1.11 |
+| Kanji_M4 | 1.02 | 0.87 | 0.99 | 1.08, 1.10 | 1.22, 1.07 |
+
+Standard QR's "(Boost)" and "(Pinned)" rows took 0.92 to 0.98 of their time, rMQR's "(Pinned)" rows 0.98 to 1.02, and Micro QR's 0.98. rMQR's quiet-zone-free Latin-1 row read 1.07 with its span and class rows at 1.00 and 1.02, which the change does not touch on that path.
+
+On .NET 8 its profile decides which of the two constant gap clears is a store: the form it saw run is, and the other stays a call to `SpanHelpers.ClearWithoutReferences`, for as long as the process runs. A probe of its own on .NET 8.0.28 warmed a process for 1.5 s with Micro QR M2, Standard QR version 10 and rMQR R11x27 (12 digits) at the quiet zones given, then timed each at 6, 2 and 4 (Micro QR M2 below, the fastest iteration of each run, three runs a side, ns):
+
+| Warm-up, timed at | Base | Commit | 8-byte stores |
+|---|---|---|---|
+| 6, at 6 | 164.7 to 166.1 | 138.6 to 141.7 | 146.5 to 149.5 |
+| 6, at 2 and 4 | 164.1 to 172.1 | 171.0 to 177.2 | 145.4 to 150.2 |
+| 2 and 4, at 2 and 4 | 165.5 to 169.7 | 140.0 to 149.7 | 141.0 to 147.0 |
+| 2 and 4, at 6 | 164.1 to 170.6 | 166.1 to 166.4 | 149.2 to 167.1 |
+
+rMQR R11x27 in the same processes lost the same way at the commit, 229.7 to 232.9 ns after a warm-up of the other form against base 214.9 to 224.0, and read 204.1 to 216.6 in every case with the stores. Standard QR at version 10 read 3,284 to 3,547 ns with the stores, against base's 3,363 to 3,537 and the commit's 3,327 to 3,687. .NET 10 wrote both forms as stores in every case.
+
+On .NET Framework 4.8 (the netstandard2.0 build, three or four alternating runs, each the median of nine rounds of the fastest of fifteen batches, µs):
+
+| Path | Base | Commit | Shipped |
+|---|---|---|---|
+| Class, version 1 | 4.63 to 4.66 | 4.65 to 4.70 | 4.62 to 4.65 |
+| Class, version 10 | 20.4 to 20.6 | 20.6 to 20.9 | 19.7 |
+| Class, version 23 | 382 to 383 | 383 to 386 | 384 to 391 |
+| Class, version 39 | 671 to 673 | 672 to 677 | 663 to 668 |
+| Span, quiet zone 4, version 1 | 4.78 to 4.82 | 4.90 to 4.93 | 4.78 to 4.86 |
+| Span, quiet zone 4, version 10 | 19.8 to 20.4 | 21.3 | 20.4 to 20.6 |
+
+The span rows' commit column is from an earlier alternation of three runs with base, where base read 4.78 to 4.80 and 19.9 to 20.0. Base's and the shipped build's span columns are from a later alternation of four. The class rows' shipped build packs with the multiply-gather the model had, base's loop, so its version 10 reading is not the pack's: at versions 1, 23 and 39 it reads 1.00, 1.01 and 0.99 of base. The span rows' shipped build takes the old path, a pooled core copied into the cleared destination. That path is base's copy loop moved into a helper, yet it read 1.03 of base at version 10, for no cause measured. The commit's excess there came with the move: in another alternation of three runs, a build of the commit with base's `QRCodeGenerator.cs` read 19.97 to 20.10 µs at version 10 and 4.84 to 4.85 at version 1, against base's 20.02 to 20.05 and 4.85 to 4.86 and the commit's 21.37 to 21.78 and 4.93 to 4.96. The kernel that follows puts the move's own work, a clear a gap, only 0.18 µs over the old path at version 10 and quiet zone 4, 825 against 642 ns. In that kernel, on .NET Framework 4.8, one process of a Stopwatch harness (each form the median of nine rounds of its fastest batch over 60 ms, at versions 1, 10, 20 and 40 and quiet zones 4 and 6), the move in place had taken 1.13 to 1.14 times that path's time at versions 1 to 20 with one store a gap (quiet zone 4), 1.15 to 1.26 with two (quiet zone 6) and 1.17 to 1.29 with a clear a gap, and 0.99 to 1.09 at version 40. A form writing the same two stores at quiet zone 6 behind one test fewer read 1.05 to 1.14 at versions 1 to 20 in that process, 0.10 to 0.14 below them. The pack was timed in a second Stopwatch harness of the same kind, one process with each pack the median of nine rounds of its fastest batch over 80 ms, on random 0 and 1 modules at versions 1, 10, 20 and 40. There the packer's scalar loop, as netstandard2.0 compiles it, took 1.43 to 1.60 times the gather's time, and 2.02 to 2.10 on .NET 8 with hardware intrinsics off.
+
+Micro QR's and rMQR's quiet-zone span paths are the rewritten ones on every build. Two runs of the review timed them on .NET Framework 4.8 against base with the netstandard2.0 build, in alternating processes pinned to one CCD: three a build in the first run and two in the second, each process giving the median of nine rounds of the fastest of fifteen batches. A process a disturbance slowed was left out whole, one of each build in the first run and one of base's in the second, so the second run's base is one process. Current over base, the median of each build's processes:
+
+| Shape | Current over base |
+|---|---|
+| Micro QR M2, quiet zone 2 | 0.74 |
+| Micro QR M2, quiet zone 6 | 0.79 |
+| Micro QR M4, quiet zone 2 | 0.80 to 0.81 |
+| rMQR R11x27, quiet zone 2 | 0.97 to 0.99 |
+| rMQR R11x27, quiet zone 6 | 1.00 to 1.01 |
+| rMQR, 150 alphanumeric characters, quiet zone 2 | 1.00 to 1.01 |
+| The same, quiet zone 0, code unchanged | 1.01 to 1.03 |
+
+Without AVX2, the stage harness's shapes of every symbology in one process (three alternating rounds of base, the build at the commit and the reviewed build, the median of the run medians, with base's third round left out, which ran 1.7 to 2.1 times as long on every shape), the commit read Micro QR's quiet-zone-free and class rows at M3 and M4 1.05 to 1.07 of base, and the reviewed build those rows at M2 to M4 0.98 to 1.01, with its quiet-zone rows at 0.86 to 0.91. The harness runs on .NET 10, where both builds' Tier1 span `CreateCore` without AVX2 is 3,140 bytes with `ValidateArguments` a call, so the difference is not that inline, and its cause was not found.
+
+The phase's kernel run timed its forms against an old form neither symbology had (Phase 8, the quiet zone, kernel). Two runs of the review timed them against each symbology's own path before the change, line for line from 1df5b10, on .NET 10 with AVX2 (BenchmarkDotNet, 3 warmups and 15 iterations, the process pinned to one CCD, 2026-10-06):
+
+- the M rows against Micro QR's, which zeroed a 289-byte stack buffer and cleared the core's part of it again, a clear of a length known only at run time
+- the V rows against Standard QR's, which rented its core and did not clear it
+- the R rows against rMQR's, which cleared the margins a row at a time and wrote the window
+
+The in-place form as first written moves every row and then clears the margins in a second pass. The other in-place forms zero each gap as the row after it moves. Each form over that path, the two runs:
+
+| Shape | In place, as first written | In place, a clear as each row moves | In place, 8-byte stores | In place, a constant clear | Strided, a clear per gap | Strided, 8-byte stores | Strided, a constant clear | The phase's old form |
+|---|---|---|---|---|---|---|---|---|
+| M1, quiet zone 2 | 1.31, 1.30 | 1.21, 1.23 | 0.95, 0.97 | 0.94, 0.96 | 1.22, 1.29 | 1.04 | 1.01, 1.02 | 1.08, 1.12 |
+| M2 | 1.37, 1.34 | 1.27, 1.26 | 1.04, 0.99 | 1.02, 0.98 | 1.30, 1.27 | 1.08 | 1.07, 1.05 | 1.12, 1.11 |
+| M4 | 1.38 | 1.27, 1.29 | 0.99, 0.98 | 0.99 | 1.31, 1.32 | 1.08, 1.07 | 1.09, 1.07 | 1.10, 1.11 |
+| V1, quiet zone 4 | 1.44 | 1.32 | 1.01, 1.02 | 1.01 | 1.33, 1.34 | 1.12, 1.13 | 1.12 | 1.11, 1.08 |
+| V6 | 1.39 | 1.29, 1.30 | 1.01, 1.00 | 1.01 | 1.27, 1.31 | 1.08, 1.06 | 1.08, 1.04 | 1.43, 1.42 |
+| V19 | 1.57, 1.21 | 1.12, 1.11 | 0.91 | 0.91 | 1.04, 1.03 | 0.86, 0.84 | 0.83, 0.84 | 1.64, 1.63 |
+| V40 | 0.91, 0.90 | 0.83, 0.82 | 0.73 | 0.74, 0.73 | 0.67, 0.65 | 0.56 | 0.55, 0.56 | 1.42, 1.41 |
+| R7x43, quiet zone 2 | 1.16, 1.18 | 1.01, 1.02 | 0.85, 0.86 | 0.83, 0.87 | 0.98, 0.99 | 0.86 | 0.83, 0.85 | 1.12, 1.14 |
+| R17x139 | 1.24 | 1.14, 1.16 | 1.03, 0.99 | 1.17, 0.99 | 1.00, 1.01 | 0.85, 0.87 | 0.84, 0.86 | 1.92, 2.01 |
+
+The runs differ by more than 0.07 only at V19 as first written, and at R17x139 with the constant clear and in the phase's old form. The R rows' strided form with a clear per gap is rMQR's own path, so its 0.98 to 1.01 is what the same code reads against itself within a run. The phase's old form allocated 1,712 to 31,360 bytes a call from V6 and 2,392 at R17x139. The strided forms pay a copy per row here, which a strided placer does as part of its unpack.

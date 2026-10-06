@@ -73,6 +73,12 @@ using System.Xml.Linq;
 // What this does not do: it knows only the faults it is given, so an axis that carries meaning (a count
 // indicator band, a surrogate edge) is worth keeping even where no planted fault needs it; and it runs
 // one target framework on one machine, so code that only another architecture runs is not measured.
+// Nor is code only the netstandard builds compile: it builds the test project alone, which leaves those
+// builds older than the faulted file, so the tests that read them (NetStandardBuildParityTest and the
+// two dependency tests that call SkipIfStale) skip, and a fault there comes out not caught. With CI=true
+// those tests fail instead, for the builds' age and not the fault, and a run whose results are read
+// counts those failures as catches. The builds stay stale after the run until the core is built in the
+// configuration the tests run in, as the skip message says.
 
 const string LogVariable = "MUTATION_LOG";
 const string Baseline = "BASE";

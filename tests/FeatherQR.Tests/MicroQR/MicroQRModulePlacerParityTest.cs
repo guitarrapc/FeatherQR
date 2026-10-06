@@ -366,8 +366,9 @@ public class MicroQRModulePlacerParityTest
 
     public enum Tier { Dispatch, Scalar, Bmi2, Ssse3, AdvSimd }
 
-    // Every tier at every size, with rows 1, 2, 4 and 50 bytes apart past the core width: a quiet zone's margins are 2q bytes, and the
-    // vector tiers' overrun past a row (up to 15 bytes at size 17, a 32-byte store on the BMI2 tier) lands in them or in the next row.
+    // Every tier at every size, with rows 1, 2, 4 and 50 bytes apart past the core width: a quiet zone's margins are 2q bytes. The
+    // 16-module steps run up to 15 bytes past a row (size 17), into the bytes between rows and the next row; the BMI2 tier's 32-module
+    // store runs 32 - size bytes past, which with rows under 16 bytes apart (sizes 11 and 13 here) reaches the row after the next.
     public static IEnumerable<(Tier tier, MicroQRVersion version, MicroQREccLevel ecc, int seed, int gap)> StridedCases()
     {
         foreach (var tier in Enum.GetValues<Tier>())

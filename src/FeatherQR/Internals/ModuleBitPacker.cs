@@ -11,7 +11,7 @@ namespace FeatherQR.Internals;
 
 /// <summary>
 /// Conversion between the byte-per-module matrix (0 = light, non-zero = dark) and the MSB-first bit-packed storage of the data models: bit 7 of byte 0 is module 0, the padding bits of the final byte are zero.
-/// All three pack through it; the Micro QR and rMQR models also unpack through it, and Standard QR's <see cref="QRCodeData"/> unpacks through its placer's bit expansion.
+/// All three pack through it, the Micro QR and rMQR models with <see cref="Pack"/> and Standard QR's <see cref="QRCodeData"/> with <see cref="PackZeroOrOne"/>; the Micro QR and rMQR models also unpack through it, and <see cref="QRCodeData"/> unpacks through its placer's bit expansion.
 /// </summary>
 /// <remarks>
 /// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+ — pack: non-zero compare, lane reversal within each byte group (pshufb / tbl / WebAssembly swizzle), move-mask; unpack: per-lane byte broadcast, bit mask, compare — with a SWAR / unrolled scalar tail, and a portable scalar path on netstandard.
@@ -19,6 +19,53 @@ namespace FeatherQR.Internals;
 /// </remarks>
 internal static class ModuleBitPacker
 {
+    /// <summary>Whether <see cref="Pack"/> takes a vector step on this machine.</summary>
+    private static bool HasVectorPack =>
+#if NET8_0_OR_GREATER
+        Avx2.IsSupported || Ssse3.IsSupported || AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported;
+#else
+        false;
+#endif
+
+    /// <summary>
+    /// Packs <paramref name="modules"/>, each 0 or 1, into <paramref name="bits"/> as <see cref="Pack"/> does: through it where it takes a
+    /// vector step, and otherwise through <see cref="PackZeroOrOneScalar"/>. Any other byte packs by the route: <see cref="Pack"/> makes it
+    /// dark, and the gather, whose multiply assumes 0 or 1, can turn any module of the byte's group of eight light or dark, its own
+    /// included. The last count % 8 modules, and every module on a big-endian host, pack as <see cref="Pack"/> does on both routes.
+    /// Modules where any non-zero byte is dark go to <see cref="Pack"/>.
+    /// </summary>
+    public static void PackZeroOrOne(ReadOnlySpan<byte> modules, Span<byte> bits)
+    {
+        if (HasVectorPack)
+            Pack(modules, bits);
+        else
+            PackZeroOrOneScalar(modules, bits);
+    }
+
+    /// <summary>
+    /// Packs modules that are each 0 or 1, eight a step, without the fold <see cref="Pack"/>'s scalar loop makes so that any non-zero
+    /// byte is dark. Without a vector step this ran 1.4 to 1.6 times as fast as that loop on .NET Framework 4.8 and about twice as fast on
+    /// .NET 8 with hardware intrinsics off (2026-10-06). Internal so tests run it on any machine.
+    /// </summary>
+    internal static void PackZeroOrOneScalar(ReadOnlySpan<byte> modules, Span<byte> bits)
+    {
+        var count = modules.Length;
+        var byteCount = (count + 7) >> 3;
+        if (bits.Length < byteCount)
+            throw new ArgumentException($"Bit buffer too small: required {byteCount} bytes for {count} modules, got {bits.Length}.", nameof(bits));
+
+        ref var src = ref MemoryMarshal.GetReference(modules);
+        ref var dst = ref MemoryMarshal.GetReference(bits);
+        var i = 0;
+        if (BitConverter.IsLittleEndian)
+        {
+            // Every byte is 0 or 1, so multiplying by 0x8040201008040201 places module i (byte i) at bit 63 - i with no carries.
+            for (; i + 8 <= count; i += 8)
+                Unsafe.Add(ref dst, i >> 3) = (byte)((Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref src, i)) * 0x8040201008040201UL) >> 56);
+        }
+        PackTail(ref src, ref dst, i, count);
+    }
+
     /// <summary>Packs <paramref name="modules"/> into <paramref name="bits"/> (at least ceil(n / 8) bytes; exactly that many are written).</summary>
     public static void Pack(ReadOnlySpan<byte> modules, Span<byte> bits)
     {
@@ -86,6 +133,12 @@ internal static class ModuleBitPacker
                 Unsafe.Add(ref dst, i >> 3) = (byte)((x * 0x8040201008040201UL) >> 56);
             }
         }
+        PackTail(ref src, ref dst, i, count);
+    }
+
+    /// <summary>Packs modules <paramref name="i"/> to <paramref name="count"/> one at a time, the last byte's padding bits zero.</summary>
+    private static void PackTail(ref byte src, ref byte dst, int i, int count)
+    {
         for (; i < count; i += 8)
         {
             var b = 0;
