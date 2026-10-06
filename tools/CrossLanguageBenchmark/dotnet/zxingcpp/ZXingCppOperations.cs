@@ -77,7 +77,7 @@ internal static class ZXingCppOperations
             {
                 using var barcode = new Barcode(text, creator);
                 // The package exposes no module matrix, so the fold reads what it does expose. A call into native code is never dropped.
-                return (ulong)(int)barcode.Format + (barcode.IsValid ? 1UL : 0);
+                return barcode.IsValid ? (ulong)(int)barcode.Format + 1 : 0;
             },
             () =>
             {

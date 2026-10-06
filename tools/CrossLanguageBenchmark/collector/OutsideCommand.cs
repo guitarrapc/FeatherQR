@@ -68,11 +68,12 @@ internal static class OutsideCommand
             var n = Math.Max(1L, (long)Math.Round(seconds * 1e9 / result.MedianNs));
             string[] Arguments(long iterations) => ["fixed", .. entry.Arguments(corpus), "--iterations", iterations.ToString(CultureInfo.InvariantCulture)];
 
-            // hyperfine only sees the exit code, so the output is checked once here.
-            var (exitCode, stdout, stderr) = Processes.Run(cli, Arguments(1), TimeSpan.FromMinutes(1));
-            if (exitCode != 0 || !stdout.Contains("\"status\":\"ok\"", StringComparison.Ordinal))
+            // hyperfine only sees the exit code, so the output is checked once here, over a few calls so that a call failing after the first shows.
+            var (exitCode, stdout, stderr) = Processes.Run(cli, Arguments(3), TimeSpan.FromMinutes(1));
+            var failed = exitCode != 0 ? $"exit {exitCode} {stderr.Split('\n')[0]}" : FixedFailure(stdout);
+            if (failed is not null)
             {
-                results.Add(new(result.Key, result.Cli, $"fixed mode failed: exit {exitCode} {stderr.Split('\n')[0]}", n, 0, [], [], double.NaN, double.NaN, double.NaN, double.NaN, result.MedianNs));
+                results.Add(new(result.Key, result.Cli, $"fixed mode failed: {failed}", n, 0, [], [], double.NaN, double.NaN, double.NaN, double.NaN, result.MedianNs));
                 continue;
             }
 
@@ -107,6 +108,21 @@ internal static class OutsideCommand
         File.WriteAllText(Path.Combine(outDir, "outside.md"), Markdown(results, settings));
         Console.Error.WriteLine($"wrote {Path.Combine(outDir, "outside.json")} and outside.md");
         return results.All(r => r.Rejected is null && !r.Disturbed) ? 0 : 1;
+    }
+
+    private static string? FixedFailure(string stdout)
+    {
+        JsonElement output;
+        try
+        {
+            output = JsonDocument.Parse(stdout).RootElement.Clone();
+        }
+        catch (JsonException e)
+        {
+            return $"output is not JSON: {e.Message}";
+        }
+        var status = RunCommand.Text(output, "status");
+        return status != "ok" ? $"status {status}" : Verify.FailedCalls(output);
     }
 
     private static string Markdown(List<OutsideResult> results, OutsideSettings settings)

@@ -5,7 +5,7 @@ using System.Text;
 /// <summary>
 /// One case of the protocol made into a call. The input is read and converted here, before any timing, so the timed call does only QR work.
 /// </summary>
-/// <param name="call">The timed unit of work. Its value is folded into the checksum, so the work cannot be dropped.</param>
+/// <param name="call">The timed unit of work. Its value is folded into the checksum, so the work cannot be dropped. It is never 0 for a call that succeeds and always 0 for one that fails, so the loop counts the calls that failed.</param>
 /// <param name="describe">Makes one call and returns its result as protocol JSON members: the status, then the decoded text or the encoded matrix.</param>
 internal sealed class Operation(Func<ulong> call, Func<string> describe)
 {
@@ -49,7 +49,10 @@ internal static class Protocol
             return 0;
         }
 
+        // Verification checks one call. A library can still fail the calls after it, for example by changing its input, so every timed call
+        // that fails is counted, and the collector rejects a process with any.
         ulong sink = 0;
+        long failed = 0;
         switch (mode)
         {
             case "run":
@@ -70,7 +73,10 @@ internal static class Protocol
                     var start = Stopwatch.GetTimestamp();
                     do
                     {
-                        sink += call();
+                        var value = call();
+                        sink += value;
+                        if (value == 0)
+                            failed++;
                         calls++;
                         elapsed = Stopwatch.GetTimestamp() - start;
                         if (halfCalls == 0 && elapsed >= warmupTicks / 2)
@@ -84,14 +90,19 @@ internal static class Protocol
                     {
                         var t0 = Stopwatch.GetTimestamp();
                         for (var k = 0L; k < batchCalls; k++)
-                            sink += call();
+                        {
+                            var value = call();
+                            sink += value;
+                            if (value == 0)
+                                failed++;
+                        }
                         samples[b] = Stopwatch.GetTimestamp() - t0;
                     }
 
                     json.Append(CultureInfo.InvariantCulture, $",\"warmupCalls\":{calls},\"warmupNs\":{Nanoseconds(elapsed)},\"batchCalls\":{batchCalls},\"batchNs\":[");
                     for (var b = 0; b < batches; b++)
                         json.Append(CultureInfo.InvariantCulture, $"{(b == 0 ? "" : ",")}{Nanoseconds(samples[b])}");
-                    json.Append(']');
+                    json.Append(CultureInfo.InvariantCulture, $"],\"failedCalls\":{failed}");
                     break;
                 }
             case "fixed":
@@ -99,8 +110,13 @@ internal static class Protocol
                     var iterations = long.Parse(Option("--iterations") ?? throw new ArgumentException("fixed needs --iterations."), CultureInfo.InvariantCulture);
                     var call = operation.Call;
                     for (var k = 0L; k < iterations; k++)
-                        sink += call();
-                    json.Append(CultureInfo.InvariantCulture, $",\"status\":\"ok\",\"iterations\":{iterations}");
+                    {
+                        var value = call();
+                        sink += value;
+                        if (value == 0)
+                            failed++;
+                    }
+                    json.Append(CultureInfo.InvariantCulture, $",\"status\":\"ok\",\"iterations\":{iterations},\"failedCalls\":{failed}");
                     break;
                 }
             case "cold":

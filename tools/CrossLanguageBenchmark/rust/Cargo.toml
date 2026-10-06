@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 fast_qr = { version = "=0.14.0", default-features = false }
+qrcode = { version = "=0.14.1", default-features = false }
 rqrr = { version = "=0.11.0", default-features = false }
 
 [[bin]]
@@ -18,3 +19,7 @@ path = "src/bin/rqrr.rs"
 [[bin]]
 name = "fast_qr-cli"
 path = "src/bin/fast_qr.rs"
+
+[[bin]]
+name = "qrcode-cli"
+path = "src/bin/qrcode.rs"

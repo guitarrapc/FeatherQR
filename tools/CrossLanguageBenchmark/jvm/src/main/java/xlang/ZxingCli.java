@@ -23,7 +23,9 @@ import java.util.Map;
  * <ul>
  * <li>encode: {@code Encoder.encode} to the module matrix, the encoder behind {@code QRCodeWriter} without its scaling to
  * pixels, pinned to the level and version. Text ISO-8859-1 cannot hold goes as UTF-8 with an ECI, as a caller sets it.</li>
- * <li>decode-matrix: {@code Decoder.decode} over a {@code BitMatrix} of the bare symbol.</li>
+ * <li>decode-matrix: {@code Decoder.decode} over a {@code BitMatrix} of the bare symbol. It unmasks the matrix it is given in place and
+ * leaves it unmasked when it succeeds, so a second decode of the same matrix fails. Each call decodes its own copy, as a caller's matrix
+ * from a detector is new each time, and the copy, a few dozen words, is part of the call.</li>
  * <li>decode-image: {@code QRCodeReader}, the Standard QR reader, over the grey pixels as a luminance plane through
  * {@code HybridBinarizer}, the binarizer ZXing's own clients use, with no hints.</li>
  * </ul>
@@ -88,14 +90,14 @@ public final class ZxingCli {
         return new Protocol.Operation(
                 () -> {
                     try {
-                        return Protocol.fold(decoder.decode(holder.value).getText());
+                        return Protocol.fold(decoder.decode(holder.value.clone()).getText());
                     } catch (ReaderException e) {
                         return 0;
                     }
                 },
                 () -> {
                     try {
-                        return Protocol.decoded(decoder.decode(bits).getText());
+                        return Protocol.decoded(decoder.decode(bits.clone()).getText());
                     } catch (ReaderException e) {
                         return Protocol.FAILED;
                     }

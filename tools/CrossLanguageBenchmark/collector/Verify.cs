@@ -86,6 +86,17 @@ internal static class Verify
         return null;
     }
 
+    /// <summary>
+    /// Null when every timed call succeeded. <see cref="Check"/> sees one call, and a library can fail the calls after it: ZXing's matrix
+    /// decoder unmasks the matrix it is given and leaves it so, and decoding the same matrix again failed (phase 7).
+    /// </summary>
+    public static string? FailedCalls(JsonElement output)
+    {
+        if (!output.TryGetProperty("failedCalls", out var failed))
+            return "no failedCalls";
+        return failed.GetInt64() == 0 ? null : $"{failed.GetInt64()} timed calls failed";
+    }
+
     private static string Describe(string? hex)
     {
         if (hex is null)

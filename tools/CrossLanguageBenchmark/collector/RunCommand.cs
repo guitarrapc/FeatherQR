@@ -102,7 +102,7 @@ internal static class RunCommand
             return (Rejected(round, $"output is not JSON: {e.Message}"), null);
         }
 
-        var rejected = Verify.Check(entry, output);
+        var rejected = Verify.Check(entry, output) ?? Verify.FailedCalls(output);
         if (rejected is not null)
             return (Rejected(round, rejected), output);
 

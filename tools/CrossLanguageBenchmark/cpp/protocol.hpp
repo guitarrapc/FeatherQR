@@ -35,7 +35,8 @@ struct Args
 };
 
 // One case made into a call. The input is read and converted before any timing, so the timed call does only QR work.
-// call is the timed unit of work, and its value is folded into the checksum, so the work cannot be dropped.
+// call is the timed unit of work, and its value is folded into the checksum, so the work cannot be dropped. It is never 0 for a call
+// that succeeds and always 0 for one that fails, so the loop counts the calls that failed.
 // describe makes one call and returns its result as protocol JSON members: the status, then the decoded text or the encoded matrix.
 struct Operation
 {
@@ -168,7 +169,9 @@ inline int Run(const std::string& library, const std::string& libraryVersion, in
     }
     auto& operation = *loaded;
 
-    uint64_t sink = 0;
+    // Verification checks one call. A library can still fail the calls after it, for example by changing its input, so every timed call
+    // that fails is counted, and the collector rejects a process with any.
+    uint64_t sink = 0, failed = 0;
     bool timed = false;
     if (args.mode == "run") {
         const auto described = operation.describe();
@@ -191,7 +194,9 @@ inline int Run(const std::string& library, const std::string& libraryVersion, in
         Clock::duration halfElapsed{}, elapsed{};
         const auto start = Clock::now();
         do {
-            sink += call();
+            const uint64_t value = call();
+            sink += value;
+            failed += value == 0;
             ++calls;
             elapsed = Clock::now() - start;
             if (halfCalls == 0 && elapsed >= warmup / 2) {
@@ -206,8 +211,11 @@ inline int Run(const std::string& library, const std::string& libraryVersion, in
         std::vector<int64_t> samples(batches);
         for (auto& sample : samples) {
             const auto t0 = Clock::now();
-            for (uint64_t k = 0; k < batchCalls; ++k)
-                sink += call();
+            for (uint64_t k = 0; k < batchCalls; ++k) {
+                const uint64_t value = call();
+                sink += value;
+                failed += value == 0;
+            }
             sample = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - t0).count();
         }
 
@@ -215,16 +223,19 @@ inline int Run(const std::string& library, const std::string& libraryVersion, in
                 + ",\"batchCalls\":" + std::to_string(batchCalls) + ",\"batchNs\":[";
         for (size_t b = 0; b < samples.size(); ++b)
             json += (b == 0 ? "" : ",") + std::to_string(samples[b]);
-        json += "]";
+        json += "],\"failedCalls\":" + std::to_string(failed);
     } else if (args.mode == "fixed") {
-        const auto value = args.option("--iterations");
-        if (!value)
+        const auto option = args.option("--iterations");
+        if (!option)
             return Usage();
-        const uint64_t iterations = std::stoull(*value);
+        const uint64_t iterations = std::stoull(*option);
         auto& call = operation.call;
-        for (uint64_t k = 0; k < iterations; ++k)
-            sink += call();
-        json += ",\"status\":\"ok\",\"iterations\":" + std::to_string(iterations);
+        for (uint64_t k = 0; k < iterations; ++k) {
+            const uint64_t value = call();
+            sink += value;
+            failed += value == 0;
+        }
+        json += ",\"status\":\"ok\",\"iterations\":" + std::to_string(iterations) + ",\"failedCalls\":" + std::to_string(failed);
     } else if (args.mode == "cold") {
         json += "," + operation.describe();
     } else if (args.mode == "noop") {

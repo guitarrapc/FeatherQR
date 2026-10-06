@@ -7,6 +7,7 @@ fn main() {
     for (crate_name, variable) in [
         ("rqrr", "XLANG_RQRR_VERSION"),
         ("fast_qr", "XLANG_FAST_QR_VERSION"),
+        ("qrcode", "XLANG_QRCODE_VERSION"),
     ] {
         // Matched by line, since a Windows checkout may give the lock file CRLF endings.
         let name = format!("name = \"{crate_name}\"");

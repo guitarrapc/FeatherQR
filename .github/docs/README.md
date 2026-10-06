@@ -34,7 +34,7 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 
 | Document | Covers |
 |---|---|
-| [cross-language-benchmark-plan.md](plans/cross-language-benchmark-plan.md) | Speed against readers and writers outside .NET (zxing-cpp, libzint, the Rust crates, the JVM readers): one protocol and collector for every language's CLI, whole-process timing as an outside check, one Docker image for linux-x64 and linux-arm64, NativeAOT's default build against `x86-64-v3` |
+| [cross-language-benchmark-plan.md](plans/cross-language-benchmark-plan.md) | Speed against readers and writers outside .NET (zxing-cpp, libzint, quirc, zbar, libqrencode, the Rust crates, the JVM readers, Go): one protocol and collector for every language's CLI, whole-process timing as an outside check, one Docker image for linux-x64 and linux-arm64, NativeAOT's default build against `x86-64-v3` |
 | [encode-performance-plan.md](plans/encode-performance-plan.md) | Encode speed after the decoders' 2.0.0 gains: mask selection measured as 55 to 83 % of a Standard QR encode, small changes first (an index for the ECC table, shared finder-window terms, smaller stack buffers by safe means only), then a transposed scorer for versions 12 to 40, the forced mask path, the output edges, and the writer plan ordered after the scorer |
 | [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, release checklist |
 

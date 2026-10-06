@@ -23,3 +23,16 @@ zxingcpp-net-own	/opt/xlang/zxingcpp-net-own/zxingcpp-net-cli
 # only after 8 to 9 s, and the JVM's per-call time swings by about 5 % from second to second.
 boofcv	/opt/java/openjdk/bin/java	-XX:+UseG1GC	-Xms1g	-Xmx1g	-Dxlang.minWarmupMs=10000	-Dxlang.minBatchMs=100	-cp	/opt/xlang/jvm/xlang-jvm.jar	xlang.BoofCvCli
 zxing-java	/opt/java/openjdk/bin/java	-XX:+UseG1GC	-Xms1g	-Xmx1g	-Dxlang.minWarmupMs=10000	-Dxlang.minBatchMs=100	-cp	/opt/xlang/jvm/xlang-jvm.jar	xlang.ZxingCli
+# Phase 7. quirc is the C library rqrr ports, built from source as zxing-cpp is. zbar and libqrencode are Ubuntu's packages, so each has
+# one build. The Go CLIs keep Go's defaults (GOGC=100, GOMAXPROCS from the container's two CPUs): unlike .NET and the JVM, Go does not
+# size its collector from the container's memory.
+quirc-default	/opt/xlang/cpp/default/quirc-cli
+quirc-v3	/opt/xlang/cpp/x86-64-v3/quirc-cli
+zbar	/opt/xlang/cpp/default/zbar-cli
+libqrencode	/opt/xlang/cpp/default/qrencode-cli
+qrcode-default	/opt/xlang/rust/default/qrcode-cli
+qrcode-v3	/opt/xlang/rust/x86-64-v3/qrcode-cli
+gozxing-default	/opt/xlang/go/default/gozxing-cli
+gozxing-v3	/opt/xlang/go/x86-64-v3/gozxing-cli
+go-qrcode-default	/opt/xlang/go/default/go-qrcode-cli
+go-qrcode-v3	/opt/xlang/go/x86-64-v3/go-qrcode-cli

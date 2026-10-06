@@ -24,7 +24,8 @@ impl Args {
 
 /// One case made into a call. The input is read and converted before any timing, so the timed call does only QR work.
 pub struct Operation {
-    /// The timed unit of work. Its value is folded into the checksum, so the work cannot be dropped.
+    /// The timed unit of work. Its value is folded into the checksum, so the work cannot be dropped. It is never 0 for a call that
+    /// succeeds and always 0 for one that fails, so the loop counts the calls that failed.
     pub call: Box<dyn FnMut() -> u64>,
     /// Makes one call and returns its result as protocol JSON members: the status, then the decoded text or the encoded matrix.
     pub describe: Box<dyn FnMut() -> String>,
@@ -71,7 +72,13 @@ pub fn run(
         }
     };
 
-    let mut sink: u64 = 0;
+    // Verification checks one call. A library can still fail the calls after it, for example by changing its input, so every timed
+    // call that fails is counted, and the collector rejects a process with any.
+    let (mut sink, mut failed) = (0u64, 0u64);
+    let mut tally = |value: u64| {
+        sink = sink.wrapping_add(value);
+        failed += u64::from(value == 0);
+    };
     match args.mode.as_str() {
         "run" => 'run: {
             let described = (operation.describe)();
@@ -91,7 +98,7 @@ pub fn run(
             let (mut calls, mut half_calls, mut half_elapsed) = (0u64, 0u64, Duration::ZERO);
             let start = Instant::now();
             let elapsed = loop {
-                sink = sink.wrapping_add(call());
+                tally(call());
                 calls += 1;
                 let elapsed = start.elapsed();
                 if half_calls == 0 && elapsed >= warmup / 2 {
@@ -112,14 +119,14 @@ pub fn run(
             for sample in samples.iter_mut() {
                 let t0 = Instant::now();
                 for _ in 0..batch_calls {
-                    sink = sink.wrapping_add(call());
+                    tally(call());
                 }
                 *sample = t0.elapsed().as_nanos();
             }
 
             let samples: Vec<String> = samples.iter().map(u128::to_string).collect();
             json.push_str(&format!(
-                ",\"warmupCalls\":{calls},\"warmupNs\":{},\"batchCalls\":{batch_calls},\"batchNs\":[{}]",
+                ",\"warmupCalls\":{calls},\"warmupNs\":{},\"batchCalls\":{batch_calls},\"batchNs\":[{}],\"failedCalls\":{failed}",
                 elapsed.as_nanos(),
                 samples.join(",")
             ));
@@ -133,9 +140,11 @@ pub fn run(
             };
             let call = &mut operation.call;
             for _ in 0..iterations {
-                sink = sink.wrapping_add(call());
+                tally(call());
             }
-            json.push_str(&format!(",\"status\":\"ok\",\"iterations\":{iterations}"));
+            json.push_str(&format!(
+                ",\"status\":\"ok\",\"iterations\":{iterations},\"failedCalls\":{failed}"
+            ));
         }
         "cold" => {
             json.push(',');

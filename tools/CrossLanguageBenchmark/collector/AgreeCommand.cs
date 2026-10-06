@@ -19,6 +19,10 @@ internal static class AgreeCommand
         // toolchains. Different commits are different code.
         if (first.Machine.Commit != second.Machine.Commit)
             md.AppendLine("- The two runs are of different commits, so a disagreement can be the code, not the machine.");
+        // A hosted x64 runner's CPU model changes between jobs, and ratios change with it: on phase 6's first pair, from Zen 3 to Zen 5,
+        // entries moved by up to 45 %. Such a pair compares the CPUs, not the noise.
+        if (Cpu(first.Machine) != Cpu(second.Machine))
+            md.AppendLine("- The two runs ran on different CPU models, so a disagreement can be the CPU, not the noise.");
 
         var failed = false;
         foreach (var cli in first.Results.Select(r => r.Cli).Distinct().Where(c => c != baseline))
@@ -45,11 +49,13 @@ internal static class AgreeCommand
                 md.AppendLine(CultureInfo.InvariantCulture, $"| {key} | {a:F3} | {b:F3} | {b / a:F3} |");
 
             var signed = deviations.Select(d => d.Second / d.First - 1).ToList();
-            var pass = signed.Max(Math.Abs) <= CompareCommand.EntryTolerance && Math.Abs(Stats.Median(signed)) <= CompareCommand.MedianTolerance;
+            var median = Stats.Median(signed);
+            var pass = signed.Max(Math.Abs) <= CompareCommand.EntryTolerance && Math.Abs(median) <= CompareCommand.MedianTolerance;
             failed |= !pass;
             md.AppendLine();
+            // Rounded before formatting: a small negative median would print as "-+0.0%".
             md.AppendLine(CultureInfo.InvariantCulture,
-                $"{(pass ? "Agrees" : "Disagrees")}: largest {signed.Max(Math.Abs):P1}, signed median {Stats.Median(signed):+0.0%;-0.0%} (every entry within {CompareCommand.EntryTolerance:P0}, the signed median within {CompareCommand.MedianTolerance:P0}).");
+                $"{(pass ? "Agrees" : "Disagrees")}: largest {signed.Max(Math.Abs):P1}, signed median {Math.Round(median, 3) + 0.0:+0.0%;-0.0%;0.0%} (every entry within {CompareCommand.EntryTolerance:P0}, the signed median within {CompareCommand.MedianTolerance:P0}).");
         }
 
         Directory.CreateDirectory(outDir);
@@ -59,8 +65,8 @@ internal static class AgreeCommand
     }
 
     private static string Describe(Machine machine)
-    {
-        var cpu = machine.Lscpu?.Split('\n').FirstOrDefault(l => l.StartsWith("Model name:", StringComparison.Ordinal))?["Model name:".Length..].Trim();
-        return $"{cpu ?? "unknown CPU"}, kernel {machine.Kernel ?? "unknown"}, image {machine.Image ?? "unknown"}, commit {machine.Commit ?? "unknown"}";
-    }
+        => $"{Cpu(machine) ?? "unknown CPU"}, kernel {machine.Kernel ?? "unknown"}, image {machine.Image ?? "unknown"}, commit {machine.Commit ?? "unknown"}";
+
+    private static string? Cpu(Machine machine)
+        => machine.Lscpu?.Split('\n').FirstOrDefault(l => l.StartsWith("Model name:", StringComparison.Ordinal))?["Model name:".Length..].Trim();
 }

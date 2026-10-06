@@ -50,10 +50,12 @@ A rough first measurement (same box, loaded by other work, median of 21 batches,
 | C++ | zxing-cpp | decode, encode | QR, Micro QR, rMQR | The usual reference reader and the accuracy yardstick |
 | C | libzint | encode | QR, Micro QR, rMQR | One of few Micro QR and rMQR writers |
 | Rust | rqrr | decode | QR | A quirc port: the fast end for clean images |
-| Rust | fast_qr, qrcode | encode | QR (qrcode also Micro QR) | Speed-focused writers |
+| Rust | fast_qr, qrcode | encode | QR (qrcode also Micro QR) | fast_qr is speed-focused, and qrcode is the most downloaded (phase 7) |
 | Java | BoofCV | decode | QR, Micro QR | Strong reader. JIT against JIT |
 | Java | ZXing | decode, encode | QR | The original, widely deployed |
-| Go, C | gozxing, go-qrcode, libqrencode, zbar | as listed | QR (libqrencode also Micro QR) | Only if the first set leaves a question |
+| C | quirc | decode | QR | rqrr's original, built from source: whether rqrr's speed is quirc's method or the port (phase 7) |
+| C | zbar, libqrencode | zbar decode, libqrencode encode | QR (libqrencode also Micro QR) | The reader and writer Linux distributions ship, linked against Ubuntu's packages (phase 7) |
+| Go | gozxing, go-qrcode | gozxing decode and encode, go-qrcode encode | QR | A garbage-collected runtime compiled ahead of time. gozxing ports ZXing, so against ZXing it separates the language from the code (phase 7) |
 
 C++ was avoided for test oracles because its builds depend on the machine. That does not apply inside the image, where the build runs once, on a pinned base, from a pinned commit.
 
@@ -63,7 +65,7 @@ C++ was avoided for test oracles because its builds depend on the machine. That 
 - An encode row counts only when every library chose the same symbol version for that payload.
 - Each CLI prints its results for verification before timing: the decoded text, or the encoded matrix, which the collector reads back with FeatherQR's matrix decoder. An input a library cannot read is reported as unreadable and not timed, because a failure path has a different cost. The loop folds each result into a printed checksum, so no compiler can drop the work.
 - Multi-format readers are restricted to the symbology under test, as this library's decoders are per symbology. Other options stay at their defaults.
-- Build flags are stated in two columns: the shipped defaults (Rust and Go target baseline x86-64, NativeAOT the OS minimum), and every native build at `x86-64-v3`. .NET JIT and the JVM pick instructions on the host and have one column.
+- Build flags are stated in two columns: the shipped defaults (Rust and Go target baseline x86-64, NativeAOT the OS minimum), and every native build at `x86-64-v3`. .NET JIT and the JVM pick instructions on the host and have one column, and so do libraries linked from a distribution's packages (zbar, libqrencode), whose shipped build is the distribution's.
 - .NET and the JVM size their GC from the container's CPU and memory limits (the JVM picks SerialGC on one CPU), so both get an explicit GC mode and heap, and the container gets a fixed CPU set and memory limit.
 - Only ratios within one run are used, because hosted runners change CPU model between jobs. Libraries run interleaved (A, B, C, A, B, C) in one container on one CPU set, and each result records the image digest, `lscpu` and the kernel.
 
@@ -73,7 +75,7 @@ A CLI's own loop can be wrong: a batch too short for the clock, a warmup that en
 
 ## Protocol
 
-The harness lives in `tools/CrossLanguageBenchmark/`: the Dockerfile, `clis.tsv` (each CLI's name and command), the collector, and one folder per language. `dotnet/cli/Protocol.cs` is the reference implementation of the protocol, which FeatherQR's CLI and the ZXingCpp package's CLI share, and its comments carry the details. `rust/src/lib.rs`, `cpp/protocol.hpp` and `jvm/src/main/java/xlang/Protocol.java` port it. Code and XML docs elsewhere never name other libraries, but this folder's code does, because every CLI in it wraps one (decided 2026-10-02, for this folder only).
+The harness lives in `tools/CrossLanguageBenchmark/`: the Dockerfile, `clis.tsv` (each CLI's name and command), the collector, and one folder per language. `dotnet/cli/Protocol.cs` is the reference implementation of the protocol, which FeatherQR's CLI and the ZXingCpp package's CLI share, and its comments carry the details. `rust/src/lib.rs`, `cpp/protocol.hpp`, `jvm/src/main/java/xlang/Protocol.java` and `go/protocol/protocol.go` port it. Code and XML docs elsewhere never name other libraries, but this folder's code does, because every CLI in it wraps one (decided 2026-10-02, for this folder only).
 
 The collector's `corpus` command writes the inputs and `manifest.tsv`, one line per operation on a case. The cases are the payloads and symbols of the benchmark project's `Simple*` classes: five Standard QR payloads, three Micro QR and three rMQR, each encoded, decoded as a matrix and decoded as an image, 33 entries in all. FeatherQR encodes them, and the corpus command fails if FeatherQR cannot read its own inputs back.
 
@@ -86,8 +88,9 @@ Every CLI is called as `<cli> <mode> <op> <symbology> <input> [--ecc E] [--versi
 - `status` is `ok`, `failed` (no decode, or the encoder refused) or `unsupported` (the library has no such operation). A decode prints its text as UTF-8 in hex, so no CLI needs a JSON string escaper. An encode prints its matrix as rows of 0 and 1, with whatever quiet zone the library returns.
 - `build` names how the CLI was compiled: Rust's flags, or for FeatherQR `jit` or `nativeaot` with its instruction-set target. FeatherQR's CLI also prints `isa`, the instruction sets its code sees, so every run repeats the probe above on the machine it ran on.
 - Every call's result is folded into the printed checksum through its content (the text's length and last character, or the matrix size and its centre module), so no compiler can drop the work.
+- A call's fold is 0 only when the call fails, so `run` and `fixed` count those calls and print the count as `failedCalls`. Verification sees one call, and a library can fail the calls after it: ZXing's matrix decoder unmasks the matrix it is given and leaves it so, and decoding the same matrix again failed (phase 7).
 
-The collector's `run` command launches one process per entry, CLI and round, and rotates which CLI goes first in each round. It rejects a process whose verification fails: a decode must print the payload, and an encoded matrix, cut to its dark modules' bounding box, must decode through FeatherQR's matrix decoder to the payload in the pinned version and level. A process's per-call times are its batches' times over their calls, and an entry's median is the median of its process medians. `outside` sizes N to one second of calls from that median, or to the CLI's whole warmup where the CLI raised it, and runs hyperfine with no shell, in rounds whose command order alternates. A measurement is disturbed by other load, and taken again up to three attempts, when its per-call time is not positive, when its range (the quartiles of T(2N) against those of T(N)) exceeds 20 % of the call, or when its fixed cost, T(N) minus the N calls, is below zero by more than 3 % of T(N). A fixed cost cannot be negative, so a negative one means the longer 2N runs caught more of the load. `compare` holds the self-timed medians of the run it is given against the outside check and BenchmarkDotNet, and judges each CLI by the phase 1 tolerance. An entry whose fixed mode failed fails the verdict. An entry still disturbed after its attempts stays out of it, and the verdict then reads inconclusive. `cold` verifies each entry's `cold` output as `run` does, then times the `cold` and `noop` processes with hyperfine, interleaved as `run` is and with their order alternating. Untimed runs first leave the binary and the input in the page cache, so the difference is the runtime's and the library's first call, not the disk's.
+The collector's `run` command launches one process per entry, CLI and round, and rotates which CLI goes first in each round. It rejects a process whose verification fails, or any of whose timed calls failed: a decode must print the payload, and an encoded matrix, cut to its dark modules' bounding box, must decode through FeatherQR's matrix decoder to the payload in the pinned version and level. A process's per-call times are its batches' times over their calls, and an entry's median is the median of its process medians. `outside` checks that three calls of `fixed` succeed, sizes N to one second of calls from that median, or to the CLI's whole warmup where the CLI raised it, and runs hyperfine with no shell, in rounds whose command order alternates. A measurement is disturbed by other load, and taken again up to three attempts, when its per-call time is not positive, when its range (the quartiles of T(2N) against those of T(N)) exceeds 20 % of the call, or when its fixed cost, T(N) minus the N calls, is below zero by more than 3 % of T(N). A fixed cost cannot be negative, so a negative one means the longer 2N runs caught more of the load. `compare` holds the self-timed medians of the run it is given against the outside check and BenchmarkDotNet, and judges each CLI by the phase 1 tolerance. An entry whose fixed mode failed fails the verdict. An entry still disturbed after its attempts stays out of it, and the verdict then reads inconclusive. `cold` verifies each entry's `cold` output as `run` does, then times the `cold` and `noop` processes with hyperfine, interleaved as `run` is and with their order alternating. Untimed runs first leave the binary and the input in the page cache, so the difference is the runtime's and the library's first call, not the disk's.
 
 The container gets two CPUs (`--cpuset-cpus`), so the runtime's background compiler and GC threads do not take the measured thread's CPU, and 4 GB of memory. .NET runs workstation non-concurrent GC with a 1 GiB heap limit and a 32 MiB generation 0 budget, set in the image so that the container's limits and the CPU's cache size do not choose them.
 
@@ -334,7 +337,9 @@ Over FeatherQR on the JIT, each entry's ratio the geometric mean of its two runs
 | Standard QR image decode | 29 (27 to 31) | 11 (9.1 to 12) |
 | Micro QR image decode | 40 (34 to 45) | |
 
-In absolute terms BoofCV decoded the Standard QR images in 299 to 462 µs and the Micro QR images in 162 to 224 µs, and ZXing encoded in 26 to 82 µs, decoded matrices in 11 to 32 µs and images in 88 to 185 µs. The JVM starts in 60 to 64 ms for ZXing and 114 to 140 ms for BoofCV, against 27 to 29 ms for FeatherQR on the JIT, and makes its first call in 2.6 to 20 ms for ZXing and 21 to 33 ms for BoofCV, against 12 to 38 ms.
+In absolute terms BoofCV decoded the Standard QR images in 299 to 462 µs and the Micro QR images in 162 to 224 µs, and ZXing encoded in 26 to 82 µs, decoded matrices in 11 to 32 µs and images in 88 to 185 µs.
+
+Correction (phase 7): the matrix decode row timed ZXing's failure path, not its decode. ZXing's `Decoder.decode` unmasks the matrix it is given and leaves it so, the CLI passed the same matrix to every call, and every call after the first failed. Decoding a copy per call, ZXing decodes matrices in 1.4 to 9.6 µs, 12 (5.1 to 18) times FeatherQR (phase 7). The JVM starts in 60 to 64 ms for ZXing and 114 to 140 ms for BoofCV, against 27 to 29 ms for FeatherQR on the JIT, and makes its first call in 2.6 to 20 ms for ZXing and 21 to 33 ms for BoofCV, against 12 to 38 ms.
 
 How well this box measured: the second run agreed with the first within 0.9 % at the median for FeatherQR, 1.5 % for ZXing and 3.0 % for BoofCV, and an entry's process medians ranged 3.8 to 4.5 % apart at the median in the second run. BoofCV passed the outside check against both runs (every entry within 5.5 %, signed medians +1.7 and +0.3 %). ZXing had no bias (signed medians −0.9 and −1.1 %), but its image decodes read low beyond the bound: one entry against the first run (7.1 %) and two against the second (8.1 and 10.7 %). That fits a 30 s trace in which ZXing's image decode dropped about 10 % around 11 s, after the 10 s floor. Its image decode rows may read up to 10 % slow. A 20 s floor for ZXing would put its window past that drop, at about three more hours of outside check.
 
@@ -353,7 +358,7 @@ Lessons:
 - The first attempt and the redo, hours apart on the same image, put FeatherQR 7 to 8 % apart too, while the redo's two runs agreed within 0.9 %, so a comparison holds only within one run.
 - The three CLIs took 36 minutes per run, the outside check 50 minutes on BoofCV's 8 entries and 93 minutes on ZXing's 15 with N at 10 s, and the cold first call 8 minutes.
 
-### Phase 6: CI (2026-10-05, in progress)
+### Phase 6: CI (2026-10-05 to 2026-10-06)
 
 Done:
 
@@ -361,4 +366,61 @@ Done:
 - The image is built in every run, neither cached nor published, which settles the open decision on GHCR. A build without cache took 91 s on the development box (8 VM CPUs, base images already pulled) and is expected to take about 5 minutes on a hosted runner, against two to three hours of measuring, and every result records the image ID it ran. Builds of one commit come from pinned sources and toolchains but are not byte-identical, so the image IDs differ.
 - The collector's `agree` command holds two runs against each other on ratios, each CLI's median over FeatherQR's entry by entry, under the phase 1 tolerance. On phase 5's two runs it put ZXing within 6.7 % and BoofCV within 4.1 %.
 
-Left: the exit needs two runs of one commit on the runners, which `workflow_dispatch` allows only once the workflow is on the default branch. A full run with every CLI is estimated at two to three hours per architecture, inside the six-hour job limit.
+- Two runs of the workflow, both with three rounds, every CLI and the cold first call: [37321094156](https://github.com/guitarrapc/FeatherQR/actions/runs/37321094156) at 1df5b10 and [37340573682](https://github.com/guitarrapc/FeatherQR/actions/runs/37340573682) at 08c4b48. Between the two commits only `src/FeatherQR.Benchmark` changed, which the image does not contain, so both measured the same code. Every process verified except the ZXingCpp package's Unicode encode, as in phase 4. Building the image took 1.8 to 3.5 minutes and measuring 69 minutes on arm64 and 84 to 92 minutes on x64.
+- The runners were ubuntu-24.04-arm on a Neoverse-N2 both times (4 cores, AdvSimd and the dot product), and ubuntu-24.04 on an AMD EPYC 7763 (Zen 3: AVX2 and BMI2, no GFNI or AVX-512) for the first run and an AMD EPYC 9V45 (Zen 5, which adds GFNI and AVX-512) for the second, each with 2 cores of 2 threads.
+
+| Measure | arm64, first and second | x64, first (Zen 3) and second (Zen 5) |
+|---|---:|---:|
+| Range of an entry's three process medians over their median, median over the entries | 0.5 %, 0.4 % | 0.8 %, 3.2 % |
+| `agree`: largest entry deviation over all CLIs | 3.4 % | 45.4 % |
+| `agree`: signed medians of the CLIs | −0.1 to +0.3 % | −6.4 to +33.5 % |
+
+On arm64 every CLI agreed under the phase 1 tolerance, so the exit holds there: the second run reproduced every CLI's ratio to FeatherQR within 3.4 % on every entry. On x64 every CLI disagreed, because the CPU changed. The ratios moved in both directions and by CLI, as medians over a shape's entries: default NativeAOT's Standard QR encode over the JIT went from 1.93 to 2.19, libzint's Standard QR encode over FeatherQR from 21 to 17, zxing-cpp's from 43 to 33, rqrr's matrix decode from 206 to 290. The x64 exit needs a second run that lands on the same CPU model as one of these.
+
+Lessons:
+
+- A ratio between two libraries is a property of the CPU as well as of the libraries. Zen 3 and Zen 5 put the same entry up to 45 % apart, so an x64 result names its CPU model, and two runs are held against each other only on the same model. `agree` now says when the models differ. The design's premise, ratios within one run, holds: what does not hold is comparing ratios across runs on different models.
+- A hosted runner can measure as quietly as the development box or more so. On the Neoverse-N2 and the EPYC 7763, the process medians of an entry ranged under 1 % at the median, against 2.9 to 4.0 % on the development box. The EPYC 9V45 ranged 3.2 %.
+- Phase 7 found that zxing-java's matrix decode timed ZXing's failure path in every run, both of these included. Their zxing-java matrix decode rows are not ZXing's decode.
+
+### Phase 7: quirc, zbar, libqrencode, the qrcode crate and Go (2026-10-05 to 2026-10-06)
+
+The questions the first set left: whether rqrr's slow decode is quirc's method or the port, whether a reader sits at the fast end for clean images as rqrr was expected to, whether libzint is the fast end of the native writers, and the Rust row's qrcode crate, which phase 2 never built. Go was added beside them as a garbage-collected runtime compiled ahead of time, with gozxing against ZXing to separate the language from the code.
+
+Done:
+
+- `cpp/`: `quirc-cli`, `zbar-cli` and `qrencode-cli`. quirc is pinned to v1.2 (542848d) and built from its four library sources, at CMake's Release defaults and at `x86-64-v3`, as zxing-cpp is. zbar 0.23.93 and libqrencode 4.1.1 are Ubuntu noble's packages, pinned by package version, which their CLIs link against, so they have the shipped column only.
+- `rust/`: `qrcode-cli`, the qrcode crate 0.14.1 without its default features, in both columns.
+- `go/`: the protocol in `protocol/protocol.go`, `gozxing-cli` (gozxing 0.1.1) and `go-qrcode-cli` (skip2/go-qrcode at its last commit, from 2020), each at the version `go get` resolves, with go.sum checking their content. Go 1.27.1 builds them without cgo, at the default level and at `GOAMD64=v3`, and the collector keeps Go's defaults (`GOGC=100`, `GOMAXPROCS` from the container's two CPUs).
+- How each is called. quirc decodes an image through its README's loop on one `struct quirc` sized before timing: a copy of the pixels into its buffer, `quirc_end`, then `quirc_extract` and `quirc_decode` until a code decodes. It decodes a matrix through `quirc_decode` over a `quirc_code` filled with the bare symbol. zbar's image scanner is made once with every symbology but QR Code off, and each call wraps the pixels in a Y800 image without a copy. libqrencode writes through `QRcode_encodeString` or `QRcode_encodeStringMQR` with the `QR_MODE_8` hint, then `QRcode_free`. The qrcode crate writes through `QrCode::with_version`. gozxing is called as ZXing is. go-qrcode writes through `NewWithForcedVersion` and `Bitmap`, where it adds the error correction and picks the mask.
+- The protocol's `failedCalls`, and `outside`'s check of three `fixed` calls (see Protocol). Every CLI and entry of the phase 6 image was run with 1 and 200 calls in `fixed`, holding the checksums against each other: only ZXing's matrix decode failed calls after the first, decoding once in 200 calls on four entries and 50 times on the numeric one. `ZxingCli` and `gozxing-cli` now decode a copy of the matrix in every call, which gozxing makes with `BitMatrix.Xor` onto an empty matrix since it has no `Clone`.
+- Measured on the Windows box as in phase 1, from 08c4b48 plus this phase's changes: two runs of five rounds over FeatherQR on the JIT, the ten new CLIs and the default builds of the four earlier CLIs they answer to (rqrr, libzint, fast_qr, ZXing), the outside check on the new CLIs and on ZXing's matrix decode, and the cold first call between them. Every process verified except two of the qrcode crate's entries (below), and no timed call failed.
+
+Over FeatherQR on the JIT, default builds, each entry's ratio the geometric mean of its two runs, median and range by shape:
+
+| Shape | quirc | zbar | libqrencode | qrcode crate | gozxing | go-qrcode |
+|---|---:|---:|---:|---:|---:|---:|
+| Standard QR encode | | | 22 (18 to 27) | 134 (107 to 146) | 83 (55 to 132) | 138 (79 to 232) |
+| Standard QR matrix decode | 9.7 (5.5 to 12) | | | | 18 (9.2 to 24) | |
+| Standard QR image decode | 38 (36 to 39) | 54 (47 to 61) | | | 13 (11 to 15) | |
+| Micro QR encode | | | 6.7 (5.6 to 8.8) | 17 (14 to 20) | | |
+
+In the same runs the earlier CLIs read: rqrr 238 on image decode and 231 on matrix decode, libzint 22 (18 to 28) on Standard QR encode and 9.0 on Micro QR encode, fast_qr 32, ZXing 45 on encode, 12 (5.1 to 18) on matrix decode and 10 on image decode. The qrcode crate's Standard QR column is four entries and its Micro QR column two.
+
+- quirc against rqrr: quirc decodes the images in 0.16 of rqrr's time and the matrices in 0.03 to 0.07, so rqrr's slow decode is mostly the port's. quirc itself decodes the images in 369 to 551 µs, 38 times FeatherQR and slower than zxing-cpp (4.9 in phase 4), and zbar in 451 to 952 µs. No reader measured sits at a fast end for clean images.
+- libqrencode against libzint: 0.98 (0.95 to 1.00) on Standard QR encode and 0.74 (0.64 to 0.91) on Micro QR. The two are the fast end of the native writers, at 22 times FeatherQR on Standard QR. fast_qr takes 1.44 times libzint's time, ZXing 2.05, gozxing 3.78, go-qrcode 6.24 and the qrcode crate 6.29.
+- gozxing against ZXing: 1.28 on image decode, 1.50 on matrix decode and 1.84 on encode, so the same code runs faster on the JVM than compiled ahead of time by Go.
+- `x86-64-v3` sped quirc's image decode by 18 % and moved every other new CLI by 5 % or less at the median.
+- The qrcode crate, the most downloaded Rust QR crate, wrote two of its eight entries wrong, and verification kept them out of the timing. Its segment optimiser takes byte pairs in Shift JIS's double-byte ranges for Kanji, so it wrote the Unicode payload's UTF-8 Chinese and Japanese as Kanji: zxing-cpp read the symbol as other text and FeatherQR did not decode it. Its M3-L symbol for `HELLO WORLD 14` decodes in neither zxing-cpp nor FeatherQR, while libzint's and libqrencode's symbols for the same case decode in both.
+- ZXing's matrix decode, decoding a copy per call: 1.4 to 9.6 µs, 12 (5.1 to 18) times FeatherQR. Phase 5's failure path took 11 to 32 µs, longer than the decode.
+- Cold first call: the Go CLIs start in 1.3 to 1.5 ms and make their first call in 0.5 ms or less, quirc starts in 1.0 to 1.2 ms and makes its first image decode in 0.34 to 0.60 ms (about one call), libqrencode and the qrcode crate make theirs in 0.24 ms or less, and zbar, which loads more shared libraries, starts in 2.2 to 2.3 ms and makes its first call in 0.7 to 1.2 ms. FeatherQR on the JIT starts in 23 to 25 ms and makes its first call in 12 to 35 ms.
+
+How well this box measured: run 2 ran 4 to 6 % faster than run 1 on every CLI (FeatherQR 4.7 %), while each CLI's ratios agreed: every CLI but the qrcode crate's `x86-64-v3` build within the phase 1 tolerance, at most 6.1 % on an entry and 1.4 % on a signed median. The outside check, run between the two, read 1 to 5 % below run 1 and 1 to 5 % above run 2 on every CLI. Against the geometric mean of the two runs, every CLI but the qrcode crate had every entry within 7 % (at most 6.9 %, ZXing's alphanumeric matrix decode) and a signed median within 1.8 %. The qrcode crate's Micro QR entries agreed within 2 %, and its Standard QR encodes read up to 10.6 % (default) and 16.1 % (`x86-64-v3`) low. Its time per call switches between two levels about 20 % apart, holding each for 100 to 400 ms, in every process: on the Wi-Fi payload, 127 to 131 µs against 155 to 170 µs. Measured as the largest over the smallest median of five consecutive batches, it shifted 24 to 26 % within a process at the 90th percentile, against 3 to 14 % for the other CLIs. Switching off glibc's heap trimming and its dynamic mmap threshold left it unchanged, and the cause is not known, so the crate's Standard QR rows are good to about 10 %.
+
+Lessons:
+
+- Verifying one call does not verify the timed ones. A library can change its input: ZXing's matrix decoder unmasks the matrix in place, and phase 5's runs and both of phase 6's timed its failure path. The failure took longer than the decode, so the numbers looked plausible. Counting the calls that fail costs one comparison per call and found it on its first run.
+- When the box drifts between two runs, an outside check run between them falls between them too. Its offset against either run is the drift, so it is held against both, here their geometric mean, as phase 4 suggested.
+- A library's own speed can switch between levels. Then neither the self-timed median nor the outside check resolves it to 7 %, and its rows carry the width of the switch.
+- Through Docker Desktop's bind mount, a source file just written on the host was read in the container with NUL bytes, as phase 1 found for output files. Sources now go into a container as a tar stream on standard input.
+- Each run took 62 to 63 minutes over 15 CLIs, the outside check 56 minutes on the new CLIs' 85 entries and 32 minutes on ZXing's five matrix entries with N at 10 s, and the cold first call 3 minutes.

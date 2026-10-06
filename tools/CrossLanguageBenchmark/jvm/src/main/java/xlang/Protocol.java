@@ -22,7 +22,8 @@ public final class Protocol {
 
     /**
      * One case made into a call. The input is read and converted before any timing, so the timed call does only QR work.
-     * {@code call} is the timed unit of work, and its value is folded into the checksum, so the work cannot be dropped.
+     * {@code call} is the timed unit of work, and its value is folded into the checksum, so the work cannot be dropped. It is never 0 for a
+     * call that succeeds and always 0 for one that fails, so the loop counts the calls that failed.
      * {@code describe} makes one call and returns its result as protocol JSON members: the status, then the decoded text or the encoded matrix.
      */
     public record Operation(LongSupplier call, Supplier<String> describe) {
@@ -76,7 +77,9 @@ public final class Protocol {
             return 0;
         }
 
-        long sink = 0;
+        // Verification checks one call. A library can still fail the calls after it, for example by changing its input, so every timed call
+        // that fails is counted, and the collector rejects a process with any.
+        long sink = 0, failed = 0;
         switch (mode) {
             case "run" -> {
                 String described = operation.describe().get();
@@ -96,7 +99,10 @@ public final class Protocol {
                 long calls = 0, halfCalls = 0, halfNs = 0, elapsed;
                 long start = System.nanoTime();
                 do {
-                    sink += call.getAsLong();
+                    long value = call.getAsLong();
+                    sink += value;
+                    if (value == 0)
+                        failed++;
                     calls++;
                     elapsed = System.nanoTime() - start;
                     if (halfCalls == 0 && elapsed >= warmupNs / 2) {
@@ -110,8 +116,12 @@ public final class Protocol {
                 long[] samples = new long[batches];
                 for (int b = 0; b < batches; b++) {
                     long t0 = System.nanoTime();
-                    for (long k = 0; k < batchCalls; k++)
-                        sink += call.getAsLong();
+                    for (long k = 0; k < batchCalls; k++) {
+                        long value = call.getAsLong();
+                        sink += value;
+                        if (value == 0)
+                            failed++;
+                    }
                     samples[b] = System.nanoTime() - t0;
                 }
 
@@ -119,17 +129,21 @@ public final class Protocol {
                         .append(",\"batchCalls\":").append(batchCalls).append(",\"batchNs\":[");
                 for (int b = 0; b < batches; b++)
                     json.append(b == 0 ? "" : ",").append(samples[b]);
-                json.append(']');
+                json.append("],\"failedCalls\":").append(failed);
             }
             case "fixed" -> {
-                String value = option(args, "--iterations");
-                if (value == null)
+                String option = option(args, "--iterations");
+                if (option == null)
                     return usage();
-                long iterations = Long.parseLong(value);
+                long iterations = Long.parseLong(option);
                 LongSupplier call = operation.call();
-                for (long k = 0; k < iterations; k++)
-                    sink += call.getAsLong();
-                json.append(",\"status\":\"ok\",\"iterations\":").append(iterations);
+                for (long k = 0; k < iterations; k++) {
+                    long value = call.getAsLong();
+                    sink += value;
+                    if (value == 0)
+                        failed++;
+                }
+                json.append(",\"status\":\"ok\",\"iterations\":").append(iterations).append(",\"failedCalls\":").append(failed);
             }
             case "cold" -> json.append(',').append(operation.describe().get());
             case "noop" -> json.append(",\"status\":\"ok\"");
