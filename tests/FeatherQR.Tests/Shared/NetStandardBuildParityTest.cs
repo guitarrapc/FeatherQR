@@ -7,8 +7,8 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The netstandard builds' span outputs against this host's, on a dirty destination: each symbology, both segmentations, quiet zones
-/// from 0 up. No test host runs a netstandard build, and Standard QR's quiet-zone span path there is code of its
-/// own (a pooled core copied into the cleared destination, where .NET 8 and later move the core in place), so this loads the build
+/// from 0 up. No test host runs a netstandard build, and Standard QR's quiet-zone span path on netstandard2.0 is code of its
+/// own (a pooled core copied into the cleared destination, where the other builds move the core in place), so this loads the build
 /// beside the core project into a load context of its own and calls its public span API.
 /// </summary>
 /// <remarks>
@@ -23,29 +23,46 @@ public class NetStandardBuildParityTest
     // Lazy, so that cases starting together load a build once: a load context is not unloaded.
     private static readonly ConcurrentDictionary<string, Lazy<Assembly>> Builds = new();
 
+    public static IEnumerable<Func<string>> Frameworks() =>
+        CoreAssemblyDependencyTest.CoreTargetFrameworks().Select(f => f()).Where(f => f.StartsWith("netstandard", StringComparison.Ordinal)).Select(f => (Func<string>)(() => f));
+
     public static IEnumerable<Func<(string TargetFramework, string Symbology)>> Cases()
     {
-        foreach (var framework in CoreAssemblyDependencyTest.CoreTargetFrameworks().Select(f => f()).Where(f => f.StartsWith("netstandard", StringComparison.Ordinal)))
+        foreach (var framework in Frameworks().Select(f => f()))
         {
             foreach (var symbology in new[] { "QR", "MicroQR", "RmQR" })
                 yield return () => (framework, symbology);
         }
     }
 
+    /// <summary>
+    /// Which netstandard build keeps Standard QR's old quiet-zone path. netstandard2.0, which .NET Framework runs, keeps the pooled core
+    /// copied into the cleared destination, since the move in place measured slower on .NET Framework 4.8. netstandard2.1, which .NET 6
+    /// and 7 run, moves the core in place as .NET 8 and later do. The old path's row copy, <c>CopyIntoWindow</c>, is compiled only into a
+    /// build that keeps the path, so its presence tells the two apart; <see cref="SpanCreate_DirtyDestination_MatchesThisHostsBuild"/>
+    /// holds either path's output to this host's.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Frameworks))]
+    public async Task StandardQRQuietZone_KeepsTheOldPathOnNetStandard20Only(string targetFramework)
+    {
+        var (build, _) = await LoadBuild(targetFramework);
+        var copyIntoWindow = build.GetType("FeatherQR.QRCodeGenerator", throwOnError: true)!.GetMethod("CopyIntoWindow", BindingFlags.NonPublic | BindingFlags.Static);
+
+        await Assert.That(copyIntoWindow is not null).IsEqualTo(targetFramework == "netstandard2.0")
+            .Because($"{targetFramework}: only the netstandard2.0 build keeps the pooled core copied into the cleared destination; the others move the core in place");
+    }
+
     [Test]
     [MethodDataSource(nameof(Cases))]
     public async Task SpanCreate_DirtyDestination_MatchesThisHostsBuild(string targetFramework, string symbology)
     {
-        var path = CoreAssemblyDependencyTest.FindCoreBuild(targetFramework);
-        await Assert.That(path).IsNotNull()
-            .Because($"no FeatherQR.dll for {targetFramework} under src/FeatherQR/bin; build the solution (dotnet build) before running the tests");
-        CoreAssemblyDependencyTest.SkipIfStale(path!);
-        var build = Builds.GetOrAdd(path!, p => new Lazy<Assembly>(() => new AssemblyLoadContext("FeatherQR " + targetFramework).LoadFromStream(new MemoryStream(File.ReadAllBytes(p))))).Value;
+        var (build, path) = await LoadBuild(targetFramework);
 
         // Texts of one to many versions, and of mixed modes that Optimal segments into a smaller symbol, so that the generator's planned
         // path runs: the URL for Standard QR (its planned span site), "a1234567890" for Micro QR, and the mixed text for rMQR. Standard QR's and
-        // Micro QR's quiet zones bracket a margin of one module and one wider than a version 1 or M1 core, and Micro QR's and rMQR's
-        // reach each form of the gap between two rows.
+        // Micro QR's quiet zones bracket a margin of one module and one wider than a version 1 or M1 core, and each symbology's reach
+        // each form of the gap between two rows (Standard QR's on the builds that move its core in place).
         var (texts, quietZones, eccLevel, host) = symbology switch
         {
             "QR" => (new[] { "HELLO WORLD", new string('A', 40), "https://example.com/item?id=123456789012345678901234567890", "HELLO WORLD 1234567890123456789012345678901234567890", new string('7', 300), new string('z', 500) },
@@ -58,7 +75,7 @@ public class NetStandardBuildParityTest
         await Assert.That(texts.Count(text => host(text, 0, true).Length < host(text, 0, false).Length)).IsGreaterThan(0)
             .Because($"a {symbology} text must segment under Optimal into a smaller symbol than Single, so that the planned path runs");
 
-        var create = BindSpanCreate(build, symbology, path!);
+        var create = BindSpanCreate(build, symbology, path);
         var optionsType = build.GetType($"FeatherQR.{symbology}CodeGeneratorOptions", throwOnError: true)!;
         var segmentationType = build.GetType($"FeatherQR.{symbology}Segmentation", throwOnError: true)!;
 
@@ -91,6 +108,16 @@ public class NetStandardBuildParityTest
                 }
             }
         }
+    }
+
+    /// <summary>The core's build for <paramref name="targetFramework"/>, loaded once into a load context of its own; a stale build skips the case.</summary>
+    private static async Task<(Assembly Build, string Path)> LoadBuild(string targetFramework)
+    {
+        var path = CoreAssemblyDependencyTest.FindCoreBuild(targetFramework);
+        await Assert.That(path).IsNotNull()
+            .Because($"no FeatherQR.dll for {targetFramework} under src/FeatherQR/bin; build the solution (dotnet build) before running the tests");
+        CoreAssemblyDependencyTest.SkipIfStale(path!);
+        return (Builds.GetOrAdd(path!, p => new Lazy<Assembly>(() => new AssemblyLoadContext("FeatherQR " + targetFramework).LoadFromStream(new MemoryStream(File.ReadAllBytes(p))))).Value, path!);
     }
 
     private static byte[] HostQR(string text, int quietZone, bool optimal)
