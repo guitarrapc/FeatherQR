@@ -63,7 +63,7 @@ public class NetStandardBuildParityTest
         // path runs: the URL for Standard QR (its planned span site), "a1234567890" for Micro QR, and the mixed text for rMQR. Standard QR's and
         // Micro QR's quiet zones bracket a margin of one module and one wider than a version 1 or M1 core, and each symbology's reach
         // each form of the gap between two rows (Standard QR's on the builds that move its core in place). From q = 9 the netstandard builds
-        // clear a gap in one call where the host's writes 16-byte stores, two up to q = 16 and three from q = 17.
+        // clear a gap in one call where the host's writes two 16-byte stores up to q = 16, and from q = 17 both clear it.
         var (texts, quietZones, eccLevel, host) = symbology switch
         {
             "QR" => (new[] { "HELLO WORLD", new string('A', 40), "https://example.com/item?id=123456789012345678901234567890", "HELLO WORLD 1234567890123456789012345678901234567890", new string('7', 300), new string('z', 500) },

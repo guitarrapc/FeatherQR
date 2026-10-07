@@ -1052,7 +1052,7 @@ A gap is one 8-byte store at quiet zone 4, two at 6, and at 9 a `Span.Clear` of 
 
 From quiet zone 9 a gap between two core rows is more than 16 bytes, and `ClearGap` cleared it with a `Span.Clear` of its length, a call a row. The kernel above timed that form only through the netstandard2.1 build, and no run had timed the net8.0 and net10.0 builds there. Base `main` (d32274b) against the change, on .NET 8.0.28 and 10.0.9 x64, from a console harness of its own built for net8.0 and net10.0. It references the Release build by path under the timing mode's assembly name and key, so its kernel calls the loaded build's own `QuietZoneWindow`. Each process was pinned to one CCD, with the .NET build servers shut down before each. The harness warmed each row for 300 ms, then timed nine rounds, in each the rows in turn, a row's time the fastest of fifteen batches of about 1 ms (kernel) or 2 ms (end to end), and gave each row the median of its rounds.
 
-The kernel: the library's `CenterCore` on Standard QR's sizes, the core not written, and its `ClearMargins` on Micro QR's and rMQR's, against copies of both with the gap clear as a type argument. Every form keeps the library's stores up to 16 bytes. Over 16, the 8-byte form stores 8 bytes at a time back from the gap's end until the gap is covered, zeroing up to 6 bytes in front of it. The 16-byte form does the same 16 bytes at a time, up to 14 bytes in front. The shipped form stores 16 bytes back from the end with the last at the gap's start, nothing in front. A 16-byte store is a constant `Span.Clear` of 16 on .NET 10 and `Vector128<byte>.Zero.CopyTo` on .NET 8, and the store forms' Tier1 row loops have no call. Before timing, `CenterCore`'s forms wrote exactly the expected matrix into a destination of 0xA5, `ClearMargins`'s left no margin byte dirty, and none wrote past the matrix. Three processes a runtime at quiet zones 8 to 16. The library's time, the median over the processes, and each form over it, the range of the processes' ratios:
+The kernel: the library's `CenterCore` on Standard QR's sizes, the core not written, and its `ClearMargins` on Micro QR's and rMQR's, against copies of both with the gap clear as a type argument. Every form keeps the library's stores up to 16 bytes. Over 16, the 8-byte form stores 8 bytes at a time back from the gap's end until the gap is covered, zeroing up to 6 bytes in front of it. The 16-byte form does the same 16 bytes at a time, up to 14 bytes in front. The shipped form stores 16 bytes back from the end with the last at the gap's start, nothing in front; the review below bounded it at 32 bytes. A 16-byte store is a constant `Span.Clear` of 16 on .NET 10 and `Vector128<byte>.Zero.CopyTo` on .NET 8, and the store forms' Tier1 row loops have no call. Before timing, `CenterCore`'s forms wrote exactly the expected matrix into a destination of 0xA5, `ClearMargins`'s left no margin byte dirty, and none wrote past the matrix. Three processes a runtime at quiet zones 8 to 16. The library's time, the median over the processes, and each form over it, the range of the processes' ratios:
 
 | Shape | .NET 8, the library's (ns) | 8-byte stores | 16-byte stores | Shipped | .NET 10, the library's (ns) | 8-byte stores | 16-byte stores | Shipped |
 |---|---|---|---|---|---|---|---|---|
@@ -1167,3 +1167,82 @@ Default NativeAOT (no AVX2 at compile time) of the same harness, ILC 8.0.28 and 
 On .NET 8 the rows the change reaches read 0.92 to 0.98 for Micro QR, 0.94 to 1.00 for rMQR and 0.98 to 1.00 for Standard QR, against 0.96 to 1.01 for the rows it does not reach. On .NET 10 they read 0.95 to 0.98 for Micro QR, 1.00 to 1.01 for Standard QR and 0.97 to 1.00 for R7x43 and R11x59, against 0.96 to 1.02 for the rows it does not reach on those symbols. Every quiet-zone row of R17x139 read 1.04 to 1.06 there, those the change does not reach included, and its quiet-zone-free row 0.96, in all six processes of each build. Published again with ILC's map file, the two .NET 10 images differ in two methods, `QuietZoneWindow.CenterCore` (366 against 435 bytes) and `ClearMargins` (243 against 293). The other 5,038 have the same code in the same order, so every method laid out after those two moved. This is taken to be code placement, as for the M4 placer above, and was left. The build with `Clear16` moved to `QuietZoneWindow.Vector128.cs` lists the same methods, sizes and code as the build timed, on both runtimes.
 
 Not measured: ARM64; Mono outside the browser (Android, iOS) and WASI, which take the stores; the netstandard builds with the stores, which keep the clear.
+
+#### From the review (2026-10-08)
+
+The review found that the store loop had no upper bound and lost to the clear on wide gaps, and that on 32-bit x86 under .NET 10 each 16-byte store was a call. The reviewed code writes two 16-byte stores for a gap of 17 to 32 bytes only, clears a wider gap as before, and writes each store as `Vector128<byte>.Zero.CopyTo` on .NET 10 too. Base `main` (d32274b), the committed form (2cd9135) and the reviewed code ran in the harness above, on x64 and, through the 32-bit host, on x86, on .NET 8.0.28 and 10.0.9. Each process was pinned to one CCD, with the .NET build servers shut down.
+
+The kernel: the library's own `CenterCore` and `ClearMargins` on the eight shapes above, two alternating processes per build and runtime. Each cell is the shapes' range of each build over base, from the median of the two processes. The kernel times quiet zone 9 first, so on .NET 8 the reviewed code's wider clear is compiled in a block its profile had not seen run (the plan's review entry). Warmed at quiet zone 8 alone, base's wide-gap clear and the reviewed code's are the same call to `SpanHelpers.ClearWithoutReferences` on .NET 8. Warmed at 12, the reviewed code's is that call, where base's had been expanded.
+
+| Runtime, quiet zone | Committed over base | Fix over base |
+|---|---|---|
+| x64 .NET 8, 9 | 0.65 to 0.86 | 0.59 to 0.81 |
+| x64 .NET 8, 16 | 0.70 to 0.89 | 0.63 to 0.81 |
+| x64 .NET 8, 17 | 0.68 to 0.86 | 1.10 to 1.27 |
+| x64 .NET 8, 32 | 0.73 to 0.97 | 1.08 to 1.17 |
+| x64 .NET 8, 64 | 1.01 to 1.18 | 1.04 to 1.11 |
+| x64 .NET 8, 128 | 1.03 to 1.43 | 1.01 to 1.07 |
+| x64 .NET 10, 9 | 0.66 to 0.91 | 0.58 to 0.87 |
+| x64 .NET 10, 16 | 0.72 to 0.87 | 0.67 to 0.86 |
+| x64 .NET 10, 17 | 0.81 to 0.93 | 1.03 to 1.08 |
+| x64 .NET 10, 32 | 0.87 to 1.00 | 0.97 to 1.16 |
+| x64 .NET 10, 64 | 1.03 to 1.18 | 1.00 to 1.05 |
+| x64 .NET 10, 128 | 1.03 to 1.34 | 1.00 to 1.02 |
+| x86 .NET 8, 9 | 0.75 to 0.88 | 0.76 to 0.91 |
+| x86 .NET 8, 16 | 0.65 to 0.81 | 0.62 to 0.78 |
+| x86 .NET 8, 17 | 0.74 to 0.90 | 0.96 to 1.05 |
+| x86 .NET 8, 32 | 0.75 to 0.85 | 0.94 to 1.08 |
+| x86 .NET 8, 64 | 0.86 to 0.93 | 1.01 to 1.03 |
+| x86 .NET 8, 128 | 0.92 to 1.00 | 1.00 to 1.03 |
+| x86 .NET 10, 9 | 1.27 to 1.79 | 0.77 to 1.36 |
+| x86 .NET 10, 16 | 1.22 to 1.66 | 0.79 to 0.98 |
+| x86 .NET 10, 17 | 1.35 to 2.15 | 1.02 to 1.12 |
+| x86 .NET 10, 32 | 1.35 to 1.85 | 0.96 to 1.09 |
+| x86 .NET 10, 64 | 1.28 to 2.25 | 0.93 to 1.07 |
+| x86 .NET 10, 128 | 1.40 to 2.89 | 0.98 to 1.06 |
+
+End to end: the span `Create` at quiet zones 0, the default, 8, 9, 16, 17, 32, 64 and 128. Six alternating rounds ran on the x64 JIT, four on x86 and four on default NativeAOT. Each row is the median of each build's process medians, reviewed code over base, and each cell is the range over the symbology's symbols (six Standard QR, three Micro QR, three rMQR). Every process of both builds wrote the same 108 outputs.
+
+Micro QR:
+
+| Quiet zone | JIT x64, .NET 8 | JIT x64, .NET 10 | JIT x86, .NET 8 | JIT x86, .NET 10 | NativeAOT x64, .NET 8 | NativeAOT x64, .NET 10 |
+|---|---|---|---|---|---|---|
+| 0 | 1.00 to 1.01 | 0.99 to 1.00 | 0.99 to 1.00 | 0.99 to 1.00 | 0.98 to 1.04 | 1.00 to 1.01 |
+| default | 1.00 to 1.01 | 0.99 to 1.00 | 0.99 to 1.00 | 0.99 to 1.00 | 0.96 to 1.04 | 1.00 |
+| 8 | 1.01 | 1.00 | 0.99 to 1.00 | 1.00 | 0.96 to 1.04 | 1.01 to 1.12 |
+| 9 | 0.88 | 0.91 to 0.93 | 0.96 | 0.96 to 0.97 | 0.92 to 0.98 | 0.95 to 0.96 |
+| 16 | 0.88 to 0.89 | 0.94 | 0.92 to 0.94 | 0.96 to 0.98 | 0.93 to 0.99 | 0.96 to 0.97 |
+| 17 | 0.99 to 1.00 | 1.00 to 1.02 | 0.99 to 1.00 | 0.99 to 1.00 | 0.97 to 1.03 | 1.00 to 1.02 |
+| 32 | 1.00 to 1.02 | 0.99 to 1.01 | 0.96 to 1.00 | 0.99 to 1.00 | 0.97 to 1.03 | 0.99 to 1.00 |
+| 64 | 0.99 to 1.01 | 1.01 | 1.00 to 1.01 | 1.00 to 1.01 | 0.99 to 1.00 | 1.00 to 1.01 |
+| 128 | 1.00 | 1.00 to 1.02 | 1.00 | 0.99 to 1.02 | 0.99 to 1.00 | 0.99 |
+
+rMQR:
+
+| Quiet zone | JIT x64, .NET 8 | JIT x64, .NET 10 | JIT x86, .NET 8 | JIT x86, .NET 10 | NativeAOT x64, .NET 8 | NativeAOT x64, .NET 10 |
+|---|---|---|---|---|---|---|
+| 0 | 0.98 to 0.99 | 1.00 to 1.03 | 0.98 to 1.00 | 1.00 to 1.01 | 0.98 to 1.00 | 0.96 to 1.00 |
+| default | 0.99 to 1.00 | 0.99 to 1.02 | 0.99 to 1.00 | 1.00 to 1.03 | 0.99 to 1.00 | 1.01 to 1.04 |
+| 8 | 0.99 to 1.00 | 0.99 to 1.03 | 0.99 to 1.00 | 1.00 to 1.01 | 0.98 to 1.00 | 1.01 to 1.02 |
+| 9 | 0.94 to 0.95 | 0.97 to 1.00 | 0.98 | 0.97 to 0.99 | 0.96 to 1.00 | 0.98 to 1.03 |
+| 16 | 0.94 to 0.97 | 0.96 to 0.99 | 0.95 to 0.97 | 0.97 to 0.99 | 0.97 to 0.98 | 0.96 to 1.00 |
+| 17 | 0.99 to 1.00 | 1.00 to 1.01 | 0.99 to 1.00 | 1.00 to 1.01 | 0.99 to 1.01 | 0.97 to 1.01 |
+| 32 | 0.98 to 1.00 | 1.00 to 1.01 | 0.98 to 1.00 | 0.99 to 1.01 | 0.99 to 1.01 | 1.00 to 1.01 |
+| 64 | 0.98 to 1.00 | 1.01 | 1.00 | 1.00 to 1.08 | 0.99 to 1.01 | 0.97 to 1.01 |
+| 128 | 0.99 to 1.00 | 0.98 to 1.03 | 0.99 to 1.01 | 1.00 | 1.00 to 1.02 | 0.97 to 0.99 |
+
+Standard QR:
+
+| Quiet zone | JIT x64, .NET 8 | JIT x64, .NET 10 | JIT x86, .NET 8 | JIT x86, .NET 10 | NativeAOT x64, .NET 8 | NativeAOT x64, .NET 10 |
+|---|---|---|---|---|---|---|
+| 0 | 0.99 to 1.01 | 1.01 to 1.02 | 0.97 to 1.16 | 0.99 to 1.12 | 0.98 to 1.00 | 1.00 to 1.02 |
+| default | 0.99 to 1.01 | 1.01 to 1.03 | 0.97 to 1.17 | 0.99 to 1.09 | 0.99 to 1.01 | 1.00 to 1.03 |
+| 8 | 0.99 to 1.01 | 1.01 to 1.03 | 0.98 to 1.17 | 0.98 to 1.09 | 0.98 to 1.00 | 1.00 to 1.03 |
+| 9 | 0.95 to 0.99 | 0.98 to 1.02 | 0.97 to 1.15 | 0.98 to 1.07 | 0.98 to 1.01 | 0.99 to 1.02 |
+| 16 | 0.95 to 0.99 | 0.98 to 1.01 | 0.97 to 1.15 | 0.97 to 1.07 | 0.98 to 1.01 | 0.99 to 1.02 |
+| 17 | 0.99 to 1.01 | 1.00 to 1.03 | 0.98 to 1.17 | 0.98 to 1.08 | 0.99 to 1.00 | 1.00 to 1.03 |
+| 32 | 0.99 to 1.01 | 1.00 to 1.03 | 0.98 to 1.17 | 0.99 to 1.08 | 0.99 to 1.00 | 1.00 to 1.03 |
+| 64 | 0.99 to 1.01 | 1.00 to 1.03 | 0.98 to 1.16 | 0.99 to 1.09 | 0.99 to 1.01 | 0.99 to 1.03 |
+| 128 | 0.99 to 1.01 | 1.00 to 1.02 | 0.98 to 1.14 | 0.98 to 1.06 | 0.99 to 1.01 | 0.99 to 1.01 |
+
+On x86, Standard QR's version 6 read 1.14 to 1.17 on .NET 8 and version 10 1.06 to 1.12 on .NET 10, on every row, the quiet-zone-free one included, so those ranges carry the two symbols' offsets. On .NET 10 NativeAOT, rMQR R17x139 again read its quiet-zone-free row low (0.96) and its default row high (1.04), as for the committed form above.

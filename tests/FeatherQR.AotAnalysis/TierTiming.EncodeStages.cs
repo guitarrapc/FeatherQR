@@ -14,7 +14,9 @@ using FeatherQR.Internals.StandardQR;
 /// <remarks>
 /// Mask selection masks in place, so its row restores the unmasked matrix each call and the copy is timed alone beside it.
 /// The forced rows apply pattern 0 or 3 through the path a pinned <see cref="QRCodeGeneratorOptions.MaskPattern"/> takes, and the
-/// <c>e2e-qz0-maskN</c> rows encode with the pattern pinned.
+/// <c>e2e-qz0-maskN</c> rows encode with the pattern pinned. The <c>e2e-qzN</c> rows encode at quiet zones 8, 9, 16 and 17, on both
+/// sides of the bounds of <c>QuietZoneWindow.ClearGap</c>'s forms for the gap between two rows (the 16-byte form at 8, two 16-byte
+/// stores from 9 to 16 outside the browser, the clear of the gap from 17). The forms write the same bytes, so no test tells which one a build takes; these rows time it.
 /// </remarks>
 internal static partial class TierTiming
 {
@@ -180,6 +182,7 @@ internal static partial class TierTiming
         [
             new($"stage/{name}/e2e", () => { var s = stages.Value; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination), FramedLength(s.Layout.Size, 4)); }),
             new($"stage/{name}/e2e-qz0", () => { var s = stages.Value; var options = new QRCodeGeneratorOptions { QuietZoneSize = 0 }; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), s.Final.Length); }),
+            .. new[] { 8, 9, 16, 17 }.Select(q => new Shape($"stage/{name}/e2e-qz{q}", () => { var s = stages.Value; var options = new QRCodeGeneratorOptions { QuietZoneSize = q }; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), FramedLength(s.Layout.Size, q)); })),
             new($"stage/{name}/e2e-qz0-mask0", () => { var s = stages.Value; var options = new QRCodeGeneratorOptions { QuietZoneSize = 0, MaskPattern = 0 }; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), s.Final.Length); }),
             new($"stage/{name}/e2e-qz0-mask3", () => { var s = stages.Value; var options = new QRCodeGeneratorOptions { QuietZoneSize = 0, MaskPattern = 3 }; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), s.Final.Length); }),
             new($"stage/{name}/e2e-class", () => { var s = stages.Value; return Checked(() => QRCodeGenerator.Create(s.Text, s.Ecc).Size, s.Layout.Size + 8); }),
@@ -310,7 +313,7 @@ internal static partial class TierTiming
         public readonly int EccCount;
         public readonly int DataBits;
         public readonly byte[] Core;
-        public readonly byte[] Destination = new byte[1 << 10];
+        public readonly byte[] Destination = new byte[1 << 12];
 
         public MicroStages(string text, MicroQREccLevel ecc, MicroQRVersion expectedVersion)
         {
@@ -354,6 +357,7 @@ internal static partial class TierTiming
         [
             new($"stage/{name}/e2e", () => { var s = stages.Value; return Checked(() => MicroQRCodeGenerator.Create(s.Text, s.Ecc, s.Destination), FramedLength(s.Size, 2)); }),
             new($"stage/{name}/e2e-qz0", () => { var s = stages.Value; var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 }; return Checked(() => MicroQRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), s.Core.Length); }),
+            .. new[] { 8, 9, 16, 17 }.Select(q => new Shape($"stage/{name}/e2e-qz{q}", () => { var s = stages.Value; var options = new MicroQRCodeGeneratorOptions { QuietZoneSize = q }; return Checked(() => MicroQRCodeGenerator.Create(s.Text, s.Ecc, s.Destination, options), FramedLength(s.Size, q)); })),
             new($"stage/{name}/e2e-class", () => { var s = stages.Value; return Checked(() => MicroQRCodeGenerator.Create(s.Text, s.Ecc).Size, s.Size + 4); }),
             new($"stage/{name}/analyze", () => { var s = stages.Value; return Checked(() => TextAnalyzer.Analyze(s.Text, EciMode.Default, allowKanji: false).DataLength, s.Analysis.DataLength); }),
             new($"stage/{name}/version", () =>
@@ -389,7 +393,7 @@ internal static partial class TierTiming
         public readonly byte[] FinalMessage;
         public readonly int Width;
         public readonly byte[] Core;
-        public readonly byte[] Destination = new byte[1 << 13];
+        public readonly byte[] Destination = new byte[1 << 14];
         public readonly RmQRCodeGeneratorOptions Options;
 
         public RmQRStages(string text, RmQRVersion version)
@@ -434,6 +438,7 @@ internal static partial class TierTiming
         [
             new($"stage/{name}/e2e", () => { var s = stages.Value; return Checked(() => RmQRCodeGenerator.Create(s.Text, RmQREccLevel.M, s.Destination, s.Options), (s.Width + 4) * (s.Core.Length / s.Width + 4)); }),
             new($"stage/{name}/e2e-qz0", () => { var s = stages.Value; var options = s.Options with { QuietZoneSize = 0 }; return Checked(() => RmQRCodeGenerator.Create(s.Text, RmQREccLevel.M, s.Destination, options), s.Core.Length); }),
+            .. new[] { 8, 9, 16, 17 }.Select(q => new Shape($"stage/{name}/e2e-qz{q}", () => { var s = stages.Value; var options = s.Options with { QuietZoneSize = q }; return Checked(() => RmQRCodeGenerator.Create(s.Text, RmQREccLevel.M, s.Destination, options), (s.Width + 2 * q) * (s.Core.Length / s.Width + 2 * q)); })),
             new($"stage/{name}/e2e-class", () => { var s = stages.Value; return Checked(() => RmQRCodeGenerator.Create(s.Text, RmQREccLevel.M, s.Options).Width, s.Width + 4); }),
             new($"stage/{name}/analyze", () => { var s = stages.Value; return Checked(() => TextAnalyzer.Analyze(s.Text, EciMode.Default, allowKanji: false).DataLength, s.Analysis.DataLength); }),
             new($"stage/{name}/version", () =>

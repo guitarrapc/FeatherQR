@@ -694,8 +694,8 @@ public class QRCodeGeneratorUnitTest
         ];
         // 1 and 25 bracket a quiet zone the core moves through in place: one column of margin, and a margin wider than a version 1 core.
         // Between them, the margins between two rows (2q bytes) are zeroed by a clear of a constant 8 bytes up to q = 4, of 16 up to
-        // q = 8, and from q = 9 by 16-byte stores back from the gap's end, the last at its start: two up to q = 16, three from q = 17.
-        // Below q = 4 and from q = 5 to 7 the clear also zeroes the end of the row in front, which moves after.
+        // q = 8, from q = 9 to 16 by two 16-byte stores, one ending where the gap ends and one starting where it starts, and from q = 17
+        // by a clear of the 2q bytes. Below q = 4 and from q = 5 to 7 the clear also zeroes the end of the row in front, which moves after.
         foreach (var text in texts)
         {
             foreach (var quietZone in new[] { 0, 1, 3, 4, 5, 8, 9, 16, 17, 25 })
