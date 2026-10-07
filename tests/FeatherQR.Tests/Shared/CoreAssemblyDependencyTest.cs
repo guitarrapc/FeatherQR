@@ -201,7 +201,8 @@ public class CoreAssemblyDependencyTest
     /// <summary>
     /// Skips the case when <paramref name="build"/> is older than a source of the core, naming both: building the test project
     /// alone builds the core for the test's frameworks only and leaves the other builds as they were, as a run of
-    /// tools/mutation_check.cs does for each fault. On CI, which builds the solution first, a stale build fails the case instead.
+    /// tools/mutation_check.cs does for each fault. On CI (CI=true), which builds the solution first, a stale build fails the case
+    /// instead. tools/mutation_check.cs sets CI to another value, so that SimdTiersDocTest only asserts while these cases still skip.
     /// </summary>
     internal static void SkipIfStale(string build)
     {

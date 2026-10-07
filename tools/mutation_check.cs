@@ -79,6 +79,14 @@ using System.Xml.Linq;
 // those tests fail instead, for the builds' age and not the fault, and a run whose results are read
 // counts those failures as catches. The builds stay stale after the run until the core is built in the
 // configuration the tests run in, as the skip message says.
+//
+// The tests run with CI set (to mutation_check, unless the caller set it), so a test that rewrites the
+// file it checks when run outside CI only asserts. Otherwise SimdTiersDocTest would rewrite
+// qrcode-simd-tiers.md from a faulted SimdTiers.cs, a file the tool does not put back: the next fault would
+// fail it and count as its catch, and a run that ended on the SimdTiers.cs fault would leave the file
+// changed. A SimdTiers.cs fault that changes a rendered table still counts as caught by SimdTiersDocTest,
+// which checks the document, not the kernels. The value is not "true", which SkipIfStale takes for CI, so
+// the tests above still skip.
 
 const string LogVariable = "MUTATION_LOG";
 const string Baseline = "BASE";
@@ -244,7 +252,7 @@ static Result RunOne(Mutant mutant, int index, string project, string tfm, strin
             var trxPath = Path.Combine(outDir, trx);
             File.Delete(trxPath); // a crashed run writes none, and an earlier run's file must not stand in for it
             var errors = new List<string>();
-            var exitCode = Exec("dotnet", arguments, Path.GetDirectoryName(dll)!, runLog, new() { [LogVariable] = log }, timeout, out var over, errors);
+            var exitCode = Exec("dotnet", arguments, Path.GetDirectoryName(dll)!, runLog, TestEnvironment(log), timeout, out var over, errors);
             timedOut |= over;
             if (!over && exitCode is not (0 or 2 or 8))
             {
@@ -275,6 +283,15 @@ static Result RunOne(Mutant mutant, int index, string project, string tfm, strin
     {
         Pending.Restore();
     }
+}
+
+// The test host's variables: the sub-case log, and CI set but not to "true" (see the header). A CI the caller set is kept.
+static Dictionary<string, string> TestEnvironment(string log)
+{
+    Dictionary<string, string> environment = new() { [LogVariable] = log };
+    if (Environment.GetEnvironmentVariable("CI") is null)
+        environment["CI"] = "mutation_check";
+    return environment;
 }
 
 static (int Total, int Failed, List<Catch> Catches) ReadTrx(string path)
