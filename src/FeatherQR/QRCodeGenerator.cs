@@ -1054,34 +1054,8 @@ public static class QRCodeGenerator
     /// <param name="eccBuffer">Output buffer for ECC codewords <c>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock</c> bytes.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CalculateErrorCorrection(ReadOnlySpan<byte> encodedBytes, in ECCInfo eccInfo, Span<byte> eccBuffer)
-    {
-        var dataOffset = 0;
-        var eccOffset = 0;
-
-        // Process group 1 blocks
-        for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
-        {
-            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup1);
-            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
-
-            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
-
-            dataOffset += eccInfo.CodewordsInGroup1;
-            eccOffset += eccInfo.ECCPerBlock;
-        }
-
-        // Process group 2 blocks
-        for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
-        {
-            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup2);
-            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
-
-            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
-
-            dataOffset += eccInfo.CodewordsInGroup2;
-            eccOffset += eccInfo.ECCPerBlock;
-        }
-    }
+        => EccBinaryEncoder.CalculateECCBlocks(encodedBytes, eccBuffer, eccInfo.ECCPerBlock,
+            eccInfo.BlocksInGroup1, eccInfo.CodewordsInGroup1, eccInfo.BlocksInGroup2, eccInfo.CodewordsInGroup2);
 
     /// <summary>
     /// Interleaves data and error correction codewords according to QR code specification.
@@ -1111,26 +1085,31 @@ public static class QRCodeGenerator
     private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel, int maskPattern)
     {
         // Function patterns, the blocked-module bitmask and the zigzag order all come
-        // from the version's cached placement tables (ModulePlacer.PlacementLayout):
-        // the template copy paints every function module and zeros the rest, the data
-        // placement writes only the stream bits, and mask selection reads the cached
-        // blocked mask directly (no per-call bitmask build).
-        var layout = ModulePlacer.GetLayout(version);
-        layout.Template.AsSpan().CopyTo(buffer);
-
-        // Place data
-        ModulePlacer.PlaceDataWords(buffer, layout, interleavedData);
-
-        // Apply mask and format
+        // from the version's cached placement tables (ModulePlacer.PlacementLayout).
+        // On AVX2 from version 12, automatic selection takes the interleaved stream
+        // into its own bit planes and writes every module but the format information.
+        // Otherwise the template copy paints every function module and zeros the rest,
+        // the data placement writes only the stream bits, and mask selection reads the
+        // cached blocked mask directly (no per-call bitmask build).
         int maskVersion;
-        if (maskPattern != AutomaticMask)
+        if (maskPattern != AutomaticMask || !ModulePlacer.TryMaskCodeFromStream(buffer, version, interleavedData, eccLevel, out maskVersion))
         {
-            ModulePlacer.ApplyMaskPattern(buffer, size, layout.BlockedMask, maskPattern);
-            maskVersion = maskPattern;
-        }
-        else
-        {
-            maskVersion = ModulePlacer.MaskCode(buffer, size, version, layout.BlockedMask, eccLevel);
+            var layout = ModulePlacer.GetLayout(version);
+            layout.Template.AsSpan().CopyTo(buffer);
+
+            // Place data
+            ModulePlacer.PlaceDataWords(buffer, layout, interleavedData);
+
+            // Apply mask
+            if (maskPattern != AutomaticMask)
+            {
+                ModulePlacer.ApplyMaskPattern(buffer, size, layout.BlockedMask, maskPattern);
+                maskVersion = maskPattern;
+            }
+            else
+            {
+                maskVersion = ModulePlacer.MaskCode(buffer, size, version, layout.BlockedMask, eccLevel);
+            }
         }
         var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(buffer, size, formatBit);

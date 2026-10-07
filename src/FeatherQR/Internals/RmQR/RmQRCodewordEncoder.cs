@@ -36,20 +36,8 @@ internal static class RmQRCodewordEncoder
 
         // Group 1 (shorter blocks) then group 2 (one more data codeword each); every
         // block has the same ECC codeword count.
-        var dataOffset = 0;
-        var eccOffset = 0;
-        for (var b = 0; b < info.BlocksInGroup1; b++)
-        {
-            EccBinaryEncoder.CalculateECC(dataCodewords.Slice(dataOffset, info.CodewordsInGroup1), ecc.Slice(eccOffset, info.ECCPerBlock), info.ECCPerBlock);
-            dataOffset += info.CodewordsInGroup1;
-            eccOffset += info.ECCPerBlock;
-        }
-        for (var b = 0; b < info.BlocksInGroup2; b++)
-        {
-            EccBinaryEncoder.CalculateECC(dataCodewords.Slice(dataOffset, info.CodewordsInGroup2), ecc.Slice(eccOffset, info.ECCPerBlock), info.ECCPerBlock);
-            dataOffset += info.CodewordsInGroup2;
-            eccOffset += info.ECCPerBlock;
-        }
+        EccBinaryEncoder.CalculateECCBlocks(dataCodewords, ecc, info.ECCPerBlock,
+            info.BlocksInGroup1, info.CodewordsInGroup1, info.BlocksInGroup2, info.CodewordsInGroup2);
 
         // Interleave into exactly the final-message window so the remainder tail is
         // the only byte beyond data + ECC and gets zeroed by the interleaver.

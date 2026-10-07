@@ -70,6 +70,65 @@ internal static partial class EccBinaryEncoder
     }
 
     /// <summary>
+    /// Calculates the error correction codewords of a symbol's blocks: <paramref name="blocks1"/> blocks of <paramref name="length1"/> data codewords, then <paramref name="blocks2"/> blocks of <paramref name="length2"/>, one after another in <paramref name="data"/>.
+    /// Each block's <paramref name="eccCount"/> codewords go one block after another into <paramref name="ecc"/>.
+    /// </summary>
+    /// <remarks>
+    /// The output is <see cref="CalculateECC"/> per block. A block's remainder is one serial chain, each step's division factors read from the register the step before left,
+    /// and the blocks of a group have one length and one generator, so the x86 kernels advance two or four blocks' chains in one loop, where they overlap.
+    /// A block alone in its group goes to <see cref="CalculateECC"/> from this inlined entry. With that test inside a call of its own, the codeword
+    /// assembly of a one-block rMQR symbol (R7x43) read 0.038 to 0.044 µs against 0.035 to 0.036 on the SSSE3 kernel, and 0.035 to 0.037 inlined (2026-10-07).
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void CalculateECCBlocks(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks1, int length1, int blocks2, int length2)
+    {
+        if (blocks1 < 2 && blocks2 < 2)
+        {
+            if (blocks1 == 1)
+                CalculateECC(data.Slice(0, length1), ecc, eccCount);
+            if (blocks2 == 1)
+                CalculateECC(data.Slice(blocks1 * length1, length2), ecc.Slice(blocks1 * eccCount), eccCount);
+            return;
+        }
+        CalculateEccGroups(data, ecc, eccCount, blocks1, length1, blocks2, length2);
+    }
+
+    private static void CalculateEccGroups(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks1, int length1, int blocks2, int length2)
+    {
+        if (eccCount < 1 || eccCount > 255)
+            throw new ArgumentOutOfRangeException(nameof(eccCount), $"ECC count must be 1-255, got {eccCount}");
+        var dataLength1 = blocks1 * length1;
+        if (data.Length < dataLength1 + blocks2 * length2)
+            throw new ArgumentException($"Data buffer too small: required {dataLength1 + blocks2 * length2}, got {data.Length}", nameof(data));
+        if (ecc.Length < (blocks1 + blocks2) * eccCount)
+            throw new ArgumentException($"ECC buffer too small: required {(blocks1 + blocks2) * eccCount}, got {ecc.Length}", nameof(ecc));
+
+        CalculateEccGroup(data.Slice(0, dataLength1), ecc.Slice(0, blocks1 * eccCount), eccCount, blocks1, length1);
+        CalculateEccGroup(data.Slice(dataLength1, blocks2 * length2), ecc.Slice(blocks1 * eccCount, blocks2 * eccCount), eccCount, blocks2, length2);
+    }
+
+    /// <summary><paramref name="blocks"/> blocks of <paramref name="length"/> codewords, through a multi-block kernel where this build has one, one block at a time otherwise.</summary>
+    private static void CalculateEccGroup(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks, int length)
+    {
+#if NET8_0_OR_GREATER
+        if (blocks > 1 && eccCount <= 32 && System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+        {
+#if NET10_0_OR_GREATER
+            if (System.Runtime.Intrinsics.X86.Gfni.IsSupported)
+            {
+                CalculateEccGfniGroup(data, ecc, eccCount, blocks, length);
+                return;
+            }
+#endif
+            CalculateEccSsse3Group(data, ecc, eccCount, blocks, length);
+            return;
+        }
+#endif
+        for (var b = 0; b < blocks; b++)
+            CalculateECC(data.Slice(b * length, length), ecc.Slice(b * eccCount, eccCount), eccCount);
+    }
+
+    /// <summary>
     /// Portable scalar kernel.
     /// Runs on every target (netstandard2.0+, old x86, pre-NEON ARM).
     /// </summary>

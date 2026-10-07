@@ -271,6 +271,107 @@ internal static partial class EccBinaryEncoder
         tmp.Slice(0, eccCount).CopyTo(ecc);
     }
 
+    /// <summary>
+    /// <paramref name="blocks"/> blocks of <paramref name="length"/> codewords through the SSSE3 kernels: two blocks a loop where the remainder fits one register
+    /// (eccCount ≤ 16), one at a time otherwise. Caller guarantees Ssse3.IsSupported and eccCount ≤ 32.
+    /// </summary>
+    /// <remarks>
+    /// Two blocks' chains in one loop took 0.72 of one at a time at version 6-M (16 codewords). With 17 to 30, a pair that read its sixteen generator vectors from
+    /// the nibble table at every step took 0.90 to 1.06 at versions 10-M to 40-L, so those go one at a time; a pair holding them in registers was not tried
+    /// (.NET 10 on Zen 4, the kernels called directly, one run, 2026-10-07).
+    /// </remarks>
+    internal static void CalculateEccSsse3Group(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks, int length)
+    {
+        var b = 0;
+        if (eccCount <= 16)
+        {
+            for (; b + 1 < blocks; b += 2)
+                Ssse3Pair128(data.Slice(b * length, 2 * length), length, ecc.Slice(b * eccCount, 2 * eccCount), eccCount);
+        }
+        for (; b < blocks; b++)
+            CalculateEccSsse3(data.Slice(b * length, length), ecc.Slice(b * eccCount, eccCount), eccCount);
+    }
+
+    /// <summary><see cref="Ssse3Core128"/> for two blocks of <paramref name="length"/> codewords, one after the other in <paramref name="data"/>, their chains in one loop.</summary>
+    private static void Ssse3Pair128(ReadOnlySpan<byte> data, int length, Span<byte> ecc, int eccCount)
+    {
+        var nib = GetNibbleTables(eccCount);
+        ref var nibRef = ref MemoryMarshal.GetArrayDataReference(nib);
+        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(GetNibbleMulTable());
+        ref var qf = ref MemoryMarshal.GetArrayDataReference(GetQuadFactorTables(eccCount));
+        ref var tu = ref MemoryMarshal.GetArrayDataReference(GetComposedTUTables(eccCount));
+        ref var a = ref MemoryMarshal.GetReference(data);
+        ref var b = ref Unsafe.Add(ref a, length);
+
+        var genLo = Vector128.LoadUnsafe(ref nibRef, NibGenLoA);
+        var genHi = Vector128.LoadUnsafe(ref nibRef, NibGenHiA);
+        var genS1Lo = Vector128.LoadUnsafe(ref nibRef, NibGenS1LoA);
+        var genS1Hi = Vector128.LoadUnsafe(ref nibRef, NibGenS1HiA);
+        var genS2Lo = Vector128.LoadUnsafe(ref nibRef, NibGenS2LoA);
+        var genS2Hi = Vector128.LoadUnsafe(ref nibRef, NibGenS2HiA);
+        var genS3Lo = Vector128.LoadUnsafe(ref nibRef, NibGenS3LoA);
+        var genS3Hi = Vector128.LoadUnsafe(ref nibRef, NibGenS3HiA);
+
+        var ra = Vector128<byte>.Zero;
+        var rb = Vector128<byte>.Zero;
+        var i = 0;
+        if (length >= 4)
+        {
+            var fa = QuadLookup(ref qf, Unsafe.ReadUnaligned<uint>(ref a));
+            var fb = QuadLookup(ref qf, Unsafe.ReadUnaligned<uint>(ref b));
+            for (i = 4; i + 3 < length; i += 4)
+            {
+                var ya = QuadLookup(ref qf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref a, i)) ^ ra.AsUInt32().GetElement(1));
+                var yb = QuadLookup(ref qf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref b, i)) ^ rb.AsUInt32().GetElement(1));
+                ra = Ssse3Step128(ra, fa, ref mulBase, genLo, genHi, genS1Lo, genS1Hi, genS2Lo, genS2Hi, genS3Lo, genS3Hi);
+                rb = Ssse3Step128(rb, fb, ref mulBase, genLo, genHi, genS1Lo, genS1Hi, genS2Lo, genS2Hi, genS3Lo, genS3Hi);
+                fa = QuadLookup(ref tu, fa) ^ ya;
+                fb = QuadLookup(ref tu, fb) ^ yb;
+            }
+            ra = Ssse3Step128(ra, fa, ref mulBase, genLo, genHi, genS1Lo, genS1Hi, genS2Lo, genS2Hi, genS3Lo, genS3Hi);
+            rb = Ssse3Step128(rb, fb, ref mulBase, genLo, genHi, genS1Lo, genS1Hi, genS2Lo, genS2Hi, genS3Lo, genS3Hi);
+        }
+        for (; i < length; i++)
+        {
+            ra = Ssse3Single128(ra, Unsafe.Add(ref a, i), ref mulBase, genLo, genHi);
+            rb = Ssse3Single128(rb, Unsafe.Add(ref b, i), ref mulBase, genLo, genHi);
+        }
+
+        Span<byte> tmp = stackalloc byte[32];
+        ra.StoreUnsafe(ref MemoryMarshal.GetReference(tmp));
+        rb.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 16);
+        tmp.Slice(0, eccCount).CopyTo(ecc);
+        tmp.Slice(16, eccCount).CopyTo(ecc.Slice(eccCount));
+    }
+
+    /// <summary>One 4-byte step of <see cref="Ssse3Core128"/>: reg = (reg >> 4 bytes) ^ (gen>>3)·f0 ^ (gen>>2)·f1 ^ (gen>>1)·f2 ^ gen·f3.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<byte> Ssse3Step128(Vector128<byte> reg, uint f, ref byte mulBase,
+        Vector128<byte> genLo, Vector128<byte> genHi, Vector128<byte> genS1Lo, Vector128<byte> genS1Hi,
+        Vector128<byte> genS2Lo, Vector128<byte> genS2Hi, Vector128<byte> genS3Lo, Vector128<byte> genS3Hi)
+    {
+        ref var t0 = ref Unsafe.Add(ref mulBase, (nint)((f & 0xFF) * 32));
+        ref var t1 = ref Unsafe.Add(ref mulBase, (nint)(((f >> 8) & 0xFF) * 32));
+        ref var t2 = ref Unsafe.Add(ref mulBase, (nint)(((f >> 16) & 0xFF) * 32));
+        ref var t3 = ref Unsafe.Add(ref mulBase, (nint)((f >> 24) * 32));
+        return Sse2.ShiftRightLogical128BitLane(reg, 4)
+            ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t0), genS3Lo) ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t0, 16), genS3Hi)
+            ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t1), genS2Lo) ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t1, 16), genS2Hi)
+            ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t2), genS1Lo) ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t2, 16), genS1Hi)
+            ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t3), genLo) ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t3, 16), genHi);
+    }
+
+    /// <summary>One single-byte step of <see cref="Ssse3Core128"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<byte> Ssse3Single128(Vector128<byte> reg, byte d, ref byte mulBase, Vector128<byte> genLo, Vector128<byte> genHi)
+    {
+        var f = (uint)(d ^ reg.ToScalar());
+        ref var t = ref Unsafe.Add(ref mulBase, (nint)(f * 32));
+        return Sse2.ShiftRightLogical128BitLane(reg, 1)
+            ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t), genLo)
+            ^ Ssse3.Shuffle(Vector128.LoadUnsafe(ref t, 16), genHi);
+    }
+
 #if NET10_0_OR_GREATER
     // ---------------------------------------------------------------------------
     // GFNI kernel (gf2p8affineqb: whole-vector GF multiply in one instruction)
@@ -427,6 +528,295 @@ internal static partial class EccBinaryEncoder
         Span<byte> tmp = stackalloc byte[32];
         reg.StoreUnsafe(ref MemoryMarshal.GetReference(tmp));
         tmp.Slice(0, eccCount).CopyTo(ecc);
+    }
+
+    /// <summary>
+    /// <paramref name="blocks"/> blocks of <paramref name="length"/> codewords through the GFNI kernels: four blocks a loop, then two, then one. Above
+    /// 16 codewords the multi-block kernels are 256-bit only, so without 256-bit GFNI and AVX2 every block goes one at a time.
+    /// Caller guarantees Gfni.IsSupported and eccCount ≤ 32.
+    /// </summary>
+    /// <remarks>
+    /// One block's chain waits on its own register every step. Four chains in one loop took 0.68 to 0.80 of one block at a time over the blocks of
+    /// versions 6-M, 10-M, 19-M, 26-M, 39-H and 40-L in three runs, but for 0.86 at 39-H in one, and two chains 0.72 to 0.81 (.NET 10 on Zen 4, the
+    /// kernels called directly, 2026-10-07).
+    /// </remarks>
+    internal static void CalculateEccGfniGroup(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks, int length)
+    {
+        var b = 0;
+        if (eccCount <= 16)
+        {
+            for (; b + 3 < blocks; b += 4)
+                GfniQuad128(data.Slice(b * length, 4 * length), length, ecc.Slice(b * eccCount, 4 * eccCount), eccCount);
+            for (; b + 1 < blocks; b += 2)
+                GfniPair128(data.Slice(b * length, 2 * length), length, ecc.Slice(b * eccCount, 2 * eccCount), eccCount);
+        }
+        else if (Gfni.V256.IsSupported && Avx2.IsSupported)
+        {
+            for (; b + 3 < blocks; b += 4)
+                GfniQuad256(data.Slice(b * length, 4 * length), length, ecc.Slice(b * eccCount, 4 * eccCount), eccCount);
+            for (; b + 1 < blocks; b += 2)
+                GfniPair256(data.Slice(b * length, 2 * length), length, ecc.Slice(b * eccCount, 2 * eccCount), eccCount);
+        }
+        for (; b < blocks; b++)
+            CalculateEccGfni(data.Slice(b * length, length), ecc.Slice(b * eccCount, eccCount), eccCount);
+    }
+
+    /// <summary><see cref="GfniCore128"/> for two blocks of <paramref name="length"/> codewords, one after the other in <paramref name="data"/>, their chains in one loop.</summary>
+    private static void GfniPair128(ReadOnlySpan<byte> data, int length, Span<byte> ecc, int eccCount)
+    {
+        ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
+        ref var gm = ref MemoryMarshal.GetReference(GfniMatrix);
+        ref var a = ref MemoryMarshal.GetReference(data);
+        ref var b = ref Unsafe.Add(ref a, length);
+        var g0 = Vector128.LoadUnsafe(ref blob, BlobGen);
+        var g1 = Vector128.LoadUnsafe(ref blob, BlobGen + 1);
+        var g2 = Vector128.LoadUnsafe(ref blob, BlobGen + 2);
+        var g3 = Vector128.LoadUnsafe(ref blob, BlobGen + 3);
+        var ra = Vector128<byte>.Zero;
+        var rb = Vector128<byte>.Zero;
+        var i = 0;
+        if (length >= 4)
+        {
+            var fa = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref a));
+            var fb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref b));
+            for (i = 4; i + 3 < length; i += 4)
+            {
+                var ya = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref a, i)) ^ ra.AsUInt32().GetElement(1));
+                var yb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref b, i)) ^ rb.AsUInt32().GetElement(1));
+                ra = GfniStep128(ra, fa, ref gm, g0, g1, g2, g3);
+                rb = GfniStep128(rb, fb, ref gm, g0, g1, g2, g3);
+                fa = BlobQuadLookup(ref blob, BlobTu, fa) ^ ya;
+                fb = BlobQuadLookup(ref blob, BlobTu, fb) ^ yb;
+            }
+            ra = GfniStep128(ra, fa, ref gm, g0, g1, g2, g3);
+            rb = GfniStep128(rb, fb, ref gm, g0, g1, g2, g3);
+        }
+        for (; i < length; i++)
+        {
+            ra = GfniSingle128(ra, Unsafe.Add(ref a, i), ref gm, g0);
+            rb = GfniSingle128(rb, Unsafe.Add(ref b, i), ref gm, g0);
+        }
+        Span<byte> tmp = stackalloc byte[32];
+        ra.StoreUnsafe(ref MemoryMarshal.GetReference(tmp));
+        rb.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 16);
+        tmp.Slice(0, eccCount).CopyTo(ecc);
+        tmp.Slice(16, eccCount).CopyTo(ecc.Slice(eccCount));
+    }
+
+    /// <summary><see cref="GfniCore128"/> for four blocks of <paramref name="length"/> codewords, one after another in <paramref name="data"/>, their chains in one loop.</summary>
+    private static void GfniQuad128(ReadOnlySpan<byte> data, int length, Span<byte> ecc, int eccCount)
+    {
+        ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
+        ref var gm = ref MemoryMarshal.GetReference(GfniMatrix);
+        ref var a = ref MemoryMarshal.GetReference(data);
+        ref var b = ref Unsafe.Add(ref a, length);
+        ref var c = ref Unsafe.Add(ref a, 2 * length);
+        ref var d = ref Unsafe.Add(ref a, 3 * length);
+        var g0 = Vector128.LoadUnsafe(ref blob, BlobGen);
+        var g1 = Vector128.LoadUnsafe(ref blob, BlobGen + 1);
+        var g2 = Vector128.LoadUnsafe(ref blob, BlobGen + 2);
+        var g3 = Vector128.LoadUnsafe(ref blob, BlobGen + 3);
+        var ra = Vector128<byte>.Zero;
+        var rb = Vector128<byte>.Zero;
+        var rc = Vector128<byte>.Zero;
+        var rd = Vector128<byte>.Zero;
+        var i = 0;
+        if (length >= 4)
+        {
+            var fa = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref a));
+            var fb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref b));
+            var fc = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref c));
+            var fd = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref d));
+            for (i = 4; i + 3 < length; i += 4)
+            {
+                var ya = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref a, i)) ^ ra.AsUInt32().GetElement(1));
+                var yb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref b, i)) ^ rb.AsUInt32().GetElement(1));
+                var yc = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref c, i)) ^ rc.AsUInt32().GetElement(1));
+                var yd = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref d, i)) ^ rd.AsUInt32().GetElement(1));
+                ra = GfniStep128(ra, fa, ref gm, g0, g1, g2, g3);
+                rb = GfniStep128(rb, fb, ref gm, g0, g1, g2, g3);
+                rc = GfniStep128(rc, fc, ref gm, g0, g1, g2, g3);
+                rd = GfniStep128(rd, fd, ref gm, g0, g1, g2, g3);
+                fa = BlobQuadLookup(ref blob, BlobTu, fa) ^ ya;
+                fb = BlobQuadLookup(ref blob, BlobTu, fb) ^ yb;
+                fc = BlobQuadLookup(ref blob, BlobTu, fc) ^ yc;
+                fd = BlobQuadLookup(ref blob, BlobTu, fd) ^ yd;
+            }
+            ra = GfniStep128(ra, fa, ref gm, g0, g1, g2, g3);
+            rb = GfniStep128(rb, fb, ref gm, g0, g1, g2, g3);
+            rc = GfniStep128(rc, fc, ref gm, g0, g1, g2, g3);
+            rd = GfniStep128(rd, fd, ref gm, g0, g1, g2, g3);
+        }
+        for (; i < length; i++)
+        {
+            ra = GfniSingle128(ra, Unsafe.Add(ref a, i), ref gm, g0);
+            rb = GfniSingle128(rb, Unsafe.Add(ref b, i), ref gm, g0);
+            rc = GfniSingle128(rc, Unsafe.Add(ref c, i), ref gm, g0);
+            rd = GfniSingle128(rd, Unsafe.Add(ref d, i), ref gm, g0);
+        }
+        Span<byte> tmp = stackalloc byte[64];
+        ra.StoreUnsafe(ref MemoryMarshal.GetReference(tmp));
+        rb.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 16);
+        rc.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 32);
+        rd.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 48);
+        tmp.Slice(0, eccCount).CopyTo(ecc);
+        tmp.Slice(16, eccCount).CopyTo(ecc.Slice(eccCount));
+        tmp.Slice(32, eccCount).CopyTo(ecc.Slice(2 * eccCount));
+        tmp.Slice(48, eccCount).CopyTo(ecc.Slice(3 * eccCount));
+    }
+
+    /// <summary><see cref="GfniCore256"/> for two blocks of <paramref name="length"/> codewords, one after the other in <paramref name="data"/>, their chains in one loop.</summary>
+    private static void GfniPair256(ReadOnlySpan<byte> data, int length, Span<byte> ecc, int eccCount)
+    {
+        ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
+        ref var gm = ref MemoryMarshal.GetReference(GfniMatrix);
+        ref var a = ref MemoryMarshal.GetReference(data);
+        ref var b = ref Unsafe.Add(ref a, length);
+        var g0 = Vector256.LoadUnsafe(ref blob, BlobGen);
+        var g1 = Vector256.LoadUnsafe(ref blob, BlobGen + 1);
+        var g2 = Vector256.LoadUnsafe(ref blob, BlobGen + 2);
+        var g3 = Vector256.LoadUnsafe(ref blob, BlobGen + 3);
+        var ra = Vector256<byte>.Zero;
+        var rb = Vector256<byte>.Zero;
+        var i = 0;
+        if (length >= 4)
+        {
+            var fa = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref a));
+            var fb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref b));
+            for (i = 4; i + 3 < length; i += 4)
+            {
+                var ya = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref a, i)) ^ ra.AsUInt32().GetElement(1));
+                var yb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref b, i)) ^ rb.AsUInt32().GetElement(1));
+                ra = GfniStep256(ra, fa, ref gm, g0, g1, g2, g3);
+                rb = GfniStep256(rb, fb, ref gm, g0, g1, g2, g3);
+                fa = BlobQuadLookup(ref blob, BlobTu, fa) ^ ya;
+                fb = BlobQuadLookup(ref blob, BlobTu, fb) ^ yb;
+            }
+            ra = GfniStep256(ra, fa, ref gm, g0, g1, g2, g3);
+            rb = GfniStep256(rb, fb, ref gm, g0, g1, g2, g3);
+        }
+        for (; i < length; i++)
+        {
+            ra = GfniSingle256(ra, Unsafe.Add(ref a, i), ref gm, g0);
+            rb = GfniSingle256(rb, Unsafe.Add(ref b, i), ref gm, g0);
+        }
+        Span<byte> tmp = stackalloc byte[64];
+        ra.StoreUnsafe(ref MemoryMarshal.GetReference(tmp));
+        rb.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 32);
+        tmp.Slice(0, eccCount).CopyTo(ecc);
+        tmp.Slice(32, eccCount).CopyTo(ecc.Slice(eccCount));
+    }
+
+    /// <summary><see cref="GfniCore256"/> for four blocks of <paramref name="length"/> codewords, one after another in <paramref name="data"/>, their chains in one loop.</summary>
+    private static void GfniQuad256(ReadOnlySpan<byte> data, int length, Span<byte> ecc, int eccCount)
+    {
+        ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
+        ref var gm = ref MemoryMarshal.GetReference(GfniMatrix);
+        ref var a = ref MemoryMarshal.GetReference(data);
+        ref var b = ref Unsafe.Add(ref a, length);
+        ref var c = ref Unsafe.Add(ref a, 2 * length);
+        ref var d = ref Unsafe.Add(ref a, 3 * length);
+        var g0 = Vector256.LoadUnsafe(ref blob, BlobGen);
+        var g1 = Vector256.LoadUnsafe(ref blob, BlobGen + 1);
+        var g2 = Vector256.LoadUnsafe(ref blob, BlobGen + 2);
+        var g3 = Vector256.LoadUnsafe(ref blob, BlobGen + 3);
+        var ra = Vector256<byte>.Zero;
+        var rb = Vector256<byte>.Zero;
+        var rc = Vector256<byte>.Zero;
+        var rd = Vector256<byte>.Zero;
+        var i = 0;
+        if (length >= 4)
+        {
+            var fa = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref a));
+            var fb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref b));
+            var fc = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref c));
+            var fd = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref d));
+            for (i = 4; i + 3 < length; i += 4)
+            {
+                var ya = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref a, i)) ^ ra.AsUInt32().GetElement(1));
+                var yb = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref b, i)) ^ rb.AsUInt32().GetElement(1));
+                var yc = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref c, i)) ^ rc.AsUInt32().GetElement(1));
+                var yd = BlobQuadLookup(ref blob, BlobQf, Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref d, i)) ^ rd.AsUInt32().GetElement(1));
+                ra = GfniStep256(ra, fa, ref gm, g0, g1, g2, g3);
+                rb = GfniStep256(rb, fb, ref gm, g0, g1, g2, g3);
+                rc = GfniStep256(rc, fc, ref gm, g0, g1, g2, g3);
+                rd = GfniStep256(rd, fd, ref gm, g0, g1, g2, g3);
+                fa = BlobQuadLookup(ref blob, BlobTu, fa) ^ ya;
+                fb = BlobQuadLookup(ref blob, BlobTu, fb) ^ yb;
+                fc = BlobQuadLookup(ref blob, BlobTu, fc) ^ yc;
+                fd = BlobQuadLookup(ref blob, BlobTu, fd) ^ yd;
+            }
+            ra = GfniStep256(ra, fa, ref gm, g0, g1, g2, g3);
+            rb = GfniStep256(rb, fb, ref gm, g0, g1, g2, g3);
+            rc = GfniStep256(rc, fc, ref gm, g0, g1, g2, g3);
+            rd = GfniStep256(rd, fd, ref gm, g0, g1, g2, g3);
+        }
+        for (; i < length; i++)
+        {
+            ra = GfniSingle256(ra, Unsafe.Add(ref a, i), ref gm, g0);
+            rb = GfniSingle256(rb, Unsafe.Add(ref b, i), ref gm, g0);
+            rc = GfniSingle256(rc, Unsafe.Add(ref c, i), ref gm, g0);
+            rd = GfniSingle256(rd, Unsafe.Add(ref d, i), ref gm, g0);
+        }
+        Span<byte> tmp = stackalloc byte[128];
+        ra.StoreUnsafe(ref MemoryMarshal.GetReference(tmp));
+        rb.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 32);
+        rc.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 64);
+        rd.StoreUnsafe(ref MemoryMarshal.GetReference(tmp), 96);
+        tmp.Slice(0, eccCount).CopyTo(ecc);
+        tmp.Slice(32, eccCount).CopyTo(ecc.Slice(eccCount));
+        tmp.Slice(64, eccCount).CopyTo(ecc.Slice(2 * eccCount));
+        tmp.Slice(96, eccCount).CopyTo(ecc.Slice(3 * eccCount));
+    }
+
+    /// <summary>One 4-byte step of <see cref="GfniCore128"/>: reg = (reg >> 4 bytes) ^ (gen>>3)·f0 ^ (gen>>2)·f1 ^ (gen>>1)·f2 ^ gen·f3.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<byte> GfniStep128(Vector128<byte> reg, uint f, ref ulong gm, Vector128<byte> g0, Vector128<byte> g1, Vector128<byte> g2, Vector128<byte> g3)
+    {
+        var m0 = Vector128.Create(ReadMatrix(ref gm, f & 0xFF)).AsByte();
+        var m1 = Vector128.Create(ReadMatrix(ref gm, (f >> 8) & 0xFF)).AsByte();
+        var m2 = Vector128.Create(ReadMatrix(ref gm, (f >> 16) & 0xFF)).AsByte();
+        var m3 = Vector128.Create(ReadMatrix(ref gm, f >> 24)).AsByte();
+        return Sse2.ShiftRightLogical128BitLane(reg, 4)
+            ^ Gfni.GaloisFieldAffineTransform(g3, m0, 0)
+            ^ Gfni.GaloisFieldAffineTransform(g2, m1, 0)
+            ^ Gfni.GaloisFieldAffineTransform(g1, m2, 0)
+            ^ Gfni.GaloisFieldAffineTransform(g0, m3, 0);
+    }
+
+    /// <summary>One single-byte step of <see cref="GfniCore128"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<byte> GfniSingle128(Vector128<byte> reg, byte d, ref ulong gm, Vector128<byte> g0)
+    {
+        var f = (uint)(d ^ reg.ToScalar());
+        var m = Vector128.Create(ReadMatrix(ref gm, f)).AsByte();
+        return Sse2.ShiftRightLogical128BitLane(reg, 1) ^ Gfni.GaloisFieldAffineTransform(g0, m, 0);
+    }
+
+    /// <summary>One 4-byte step of <see cref="GfniCore256"/>, the 32-byte register shifted across its lane boundary.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<byte> GfniStep256(Vector256<byte> reg, uint f, ref ulong gm, Vector256<byte> g0, Vector256<byte> g1, Vector256<byte> g2, Vector256<byte> g3)
+    {
+        var m0 = Vector256.Create(ReadMatrix(ref gm, f & 0xFF)).AsByte();
+        var m1 = Vector256.Create(ReadMatrix(ref gm, (f >> 8) & 0xFF)).AsByte();
+        var m2 = Vector256.Create(ReadMatrix(ref gm, (f >> 16) & 0xFF)).AsByte();
+        var m3 = Vector256.Create(ReadMatrix(ref gm, f >> 24)).AsByte();
+        var carry = Avx2.Permute2x128(reg, reg, 0x81);
+        return Avx2.AlignRight(carry, reg, 4)
+            ^ Gfni.V256.GaloisFieldAffineTransform(g3, m0, 0)
+            ^ Gfni.V256.GaloisFieldAffineTransform(g2, m1, 0)
+            ^ Gfni.V256.GaloisFieldAffineTransform(g1, m2, 0)
+            ^ Gfni.V256.GaloisFieldAffineTransform(g0, m3, 0);
+    }
+
+    /// <summary>One single-byte step of <see cref="GfniCore256"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector256<byte> GfniSingle256(Vector256<byte> reg, byte d, ref ulong gm, Vector256<byte> g0)
+    {
+        var f = (uint)(d ^ reg.ToScalar());
+        var m = Vector256.Create(ReadMatrix(ref gm, f)).AsByte();
+        var carry = Avx2.Permute2x128(reg, reg, 0x81);
+        return Avx2.AlignRight(carry, reg, 1) ^ Gfni.V256.GaloisFieldAffineTransform(g0, m, 0);
     }
 #endif // NET10_0_OR_GREATER
 

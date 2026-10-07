@@ -57,6 +57,25 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
+    /// Data placement and mask selection in one, from the interleaved stream, where this build has the form: places the stream, selects the
+    /// pattern as <see cref="MaskCode"/> does and writes the masked symbol to <paramref name="buffer"/>, all but the format information.
+    /// Returns false, the buffer untouched, where the caller places the template and the data and calls <see cref="MaskCode"/>.
+    /// </summary>
+    internal static bool TryMaskCodeFromStream(Span<byte> buffer, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel, out int pattern)
+    {
+#if NET8_0_OR_GREATER
+        // AVX2, versions 12-40: the stream goes straight into the transposed scorer's column planes (ModulePlacer.Masking.Transposed.X86.cs).
+        if (System.Runtime.Intrinsics.X86.Avx2.IsSupported && version >= 12)
+        {
+            pattern = MaskCodeTransposedFromStream(buffer, version, interleavedData, eccLevel);
+            return true;
+        }
+#endif
+        pattern = 0;
+        return false;
+    }
+
+    /// <summary>
     /// Applies one specific mask pattern to the data area, for a caller-pinned pattern (<see cref="QRCodeGeneratorOptions.MaskPattern"/>).
     /// No scoring: each row takes the pattern's packed template row (the one the selection scores) masked to its unblocked modules, XORed
     /// into the bytes as the selection applies its winner, so a pinned pattern costs the selection's last step and nothing else.

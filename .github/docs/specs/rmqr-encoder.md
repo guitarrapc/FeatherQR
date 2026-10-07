@@ -367,7 +367,7 @@ The stream is written straight into the caller's buffer with no intermediate cop
 
 ### 5. Reed-Solomon per block, 6. interleave
 
-The data codewords are split into blocks as the table gives (smaller blocks first, sizes differing by at most one), and the shared `EccBinaryEncoder` computes each block's ECC. Interleaving follows Standard QR: all data codewords column-wise across the blocks, then all ECC codewords. The remainder bits (free modules − 8 × total codewords, 0..7 per version) are light.
+The data codewords are split into blocks as the table gives (smaller blocks first, sizes differing by at most one), and the shared `EccBinaryEncoder` computes each block's ECC, through the block entry Standard QR uses. Interleaving follows Standard QR: all data codewords column-wise across the blocks, then all ECC codewords. The remainder bits (free modules − 8 × total codewords, 0..7 per version) are light.
 
 ### 7. Place function patterns and data
 
