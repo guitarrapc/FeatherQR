@@ -1148,3 +1148,88 @@ The other builds, five rounds unless stated, change over base:
 - WebAssembly, where neither multi-block kernel nor the stream form runs. Interpreted, three rounds: 0.98 to 1.02. AOT-compiled, three rounds: 0.96 to 1.08, with V19-M at 1.07 and the untouched Micro QR M4 at 1.08. A second AOT run of five rounds: V6-M 1.00, V19-M 1.00, V40-L 1.04, R11x59 1.00, the untouched Micro QR M2 to M4 0.94 to 1.00. V40-L's processes there read 62.97 to 67.33 µs on base and 63.03 to 67.61 on the change.
 
 Not measured: ARM64, where neither change runs.
+
+## Phase 9 follow-up: scalar mask selection on .NET Framework 4.8 (2026-10-07)
+
+Base dceb2aa against the change, .NET Framework 4.8 (4.8.9345, x64) with the netstandard2.0 build, on the Ryzen 9 7950X3D (Zen 4). A Stopwatch harness built for net48, named and signed so it reaches the internals, times the stage harness's Standard QR shapes as the timing mode does (300 ms of warm-up, batches sized to 20 ms, 11 rounds, the median). Each shape runs alone in its own process pinned to one CCD, with the .NET build servers shut down. A/B rounds alternate the builds and reverse their order every other round, and a ratio is the median of each build's process medians, change over base.
+
+### Where the time goes
+
+Each stage alone in its own pinned process, one run, base. Stages timed alone need not sum to the encode.
+
+| Symbol | Encode | RS | Placement | Mask selection | One candidate's score |
+|---|---|---|---|---|---|
+| V10-M, 300 alphanumeric | 19.4 µs | 3.95 µs (20 %) | 1.08 µs (5.6 %) | 12.7 µs (65 %) | 1.50 µs |
+| V12-M bytes | 217 µs | 5.68 µs (2.6 %) | 1.47 µs (0.7 %) | 218 µs (100 %) | 25.6 µs |
+| V19-M bytes | 329 µs | 14.3 µs (4.4 %) | 2.80 µs (0.9 %) | 309 µs (94 %) | 36.9 µs |
+| V40-L bytes | 676 µs | 76.9 µs (11 %) | 10.4 µs (1.5 %) | 602 µs (89 %) | 70.0 µs |
+
+The score column is the scorer alone over one candidate's packed rows, eight a selection: 26 ns a row at version 10 (one word a row) and 394 to 397 ns at versions 12, 19 and 40. On .NET Framework 4.8 the base scorer compiles to 13,083 bytes, 840 of its instructions with a stack operand, and calls the span's indexer at 10 sites and `Row192`'s AND, OR and popcount at 7, 1 and 1, all in the last loops of the column finder windows. The popcount is the SWAR count, since netstandard has no `BitOperations`. On .NET 10 with hardware intrinsics off the same method compiles to 4,919 bytes with 308 instructions with a stack operand, every operator and indexer inlined, and 30 calls to the popcount's software fallback.
+
+### The variant ladder
+
+Mask selection with its copy of the unmasked matrix, each variant over its parent, two runs, every variant of a run in one pinned process. Before any timing, each variant's eight scores, chosen pattern and masked matrix were checked against V1 at versions 12 to 40, all four levels and seven streams (random, all 0, all 1, 0xAA, 0xCC, 0xF0, sparse), 812 symbols a variant. A dropped carry planted in V5's run starts failed 652 of them.
+
+| Variant | Over | V12-M | V19-M | V26-M | V40-L |
+|---|---|---|---|---|---|
+| V1, a copy of the shipped selection | the library | 1.00, 1.00 | 0.99, 0.99 | 0.98, 0.99 | 1.00, 0.99 |
+| V2, the same rules over words, three a row in one rented `ulong[]` | V1 | 0.23, 0.22 | 0.23, 0.23 | 0.23, 0.23 | 0.24, 0.24 |
+| V3, V2 without the column rules of a word that holds no module | V2 | 0.91, 0.91 | 0.91, 0.91 | 0.91, 0.91 | 0.99, 1.00 |
+| V4, rule 1 along a row from the equalities | V2 | 0.73, 0.72 | 0.73, 0.73 | 0.73, 0.73 | 0.74, 0.74 |
+| V5, two words a row up to version 27 (shipped) | V4 | 0.75, 0.75 | 0.76, 0.76 | 0.76, 0.77 | 0.99, 0.99 |
+| V6a, a row's popcounts summed before one reduction | V5 | 1.00, 1.00 | 1.00, 1.00 | 1.00, 1.00 | 0.98, 0.98 |
+| V6b, one loop for every word's column rules | V5 | 1.07, 1.09 | 1.09, 1.07 | 1.07, 1.06 | 1.08, 1.06 |
+| V6, both | V5 | 1.09, 1.07 | 1.07, 1.09 | 1.06, 1.06 | 1.05, 1.04 |
+| V7, an early abort before the column rules | V5 | 1.00, 1.00 | 1.01, 1.00 | 1.00, 1.01 | 1.00, 1.01 |
+| V8, no AND with the low words' row and equality masks | V5 | 1.02, 1.02 | 1.02, 1.02 | 1.01, 1.02 | 1.03, 1.02 |
+
+V5 took 26.1 to 26.2 µs at version 12, 38.8 to 39.3 at 19, 52.1 to 52.8 at 26 and 104 to 105 at 40, 0.12 to 0.13 of V1 at versions 12 to 26 and 0.18 at 40. V3 is part of V5, whose two-word path has no third word. V8 drops masks that are all ones from size 65, and as run it also left the two-word rows' second light word without its row mask, which no count reads past the symbol. A first run set each variant's scorer in a static field as its shape was built, so every variant ran the last one set, and it was discarded.
+
+### End to end
+
+Run 1 is the change against base, five rounds. Run 2 adds a build of the change with one unused method in `ModulePlacer` and a build of base with the same method (the canary), five rounds. Times are run 2's medians.
+
+| Shape | Base | Change | Change, run 1 | Change, run 2 | Change with the unused method | Canary |
+|---|---|---|---|---|---|---|
+| V1-L encode | 4.68 µs | 4.62 µs | 1.01 | 0.99 | 1.00 | 0.98 |
+| V6-M encode | | | 1.00 | | | |
+| V10-M encode | 19.0 µs | 19.4 µs | 1.02 | 1.02 | 1.06 | 1.00 |
+| V10-M RS | 4.04 µs | 5.01 µs | | 1.24 | 0.98 | 0.99 |
+| V12-M encode | 221 µs | 34.9 µs | 0.16 | 0.16 | 0.15 | 1.00 |
+| V12-M mask selection | | | 0.12 | | | |
+| V19-M encode | 327 µs | 58.6 µs | 0.18 | 0.18 | 0.17 | 1.01 |
+| V19-M class API | | | 0.17 | | | |
+| V19-M mask selection | 309 µs | 39.2 µs | 0.13 | 0.13 | 0.12 | 1.00 |
+| V19-M RS | 14.1 µs | 11.3 µs | | 0.80 | 0.78 | 1.00 |
+| V26-M encode | 434 µs | 85.1 µs | 0.20 | 0.20 | 0.19 | 1.01 |
+| V26-M mask selection | | | 0.13 | | | |
+| V40-L encode | 680 µs | 199 µs | 0.29 | 0.29 | 0.27 | 1.00 |
+| V40-L class API | | | 0.27 | | | |
+| V40-L mask selection | 597 µs | 110 µs | 0.19 | 0.18 | 0.18 | 1.00 |
+| V40-L RS | 74.1 µs | 57.5 µs | | 0.78 | 0.76 | 1.00 |
+
+The RS kernel compiles to the same 808 bytes on base and the change, call targets aside, and the change does not touch it. Two more runs checked the rows it does not reach. Seven rounds on versions 1, 6 and 10 put V10's RS stage at 1.26, its placement at 1.04, its mask selection at 0.98 and the three encodes at 0.99 to 1.02. A three-way run with the canary put V10's RS stage at 1.28 on the change and 1.01 on the canary, and V19's and V40's at 0.80 and 0.77 on the change and 1.02 and 0.98 on the canary. With the RS stage's difference timed alone added to the change's encode (2.8 and 3.1 µs at version 19, 16.6 and 17.5 at version 40), run 2's encodes read 0.19 and 0.18 at version 19 and 0.32 and 0.30 at version 40.
+
+### The other builds that take the path
+
+.NET 8 and later reach this selection only without accelerated vectors, so these run with hardware intrinsics off, five rounds. .NET 10 runs the stage harness's own timing mode and .NET 8 the Stopwatch harness built for net8.0, since the stage harness compiles for .NET 10 only.
+
+| Shape | .NET 10.0.9 | .NET 8.0.28 |
+|---|---|---|
+| V10-M encode, untouched | 1.00 | 1.00 |
+| V12-M encode | 0.58 | 0.62 |
+| V19-M encode | 0.61 | 0.65 |
+| V26-M encode | 0.63 | 0.66 |
+| V40-L encode | 0.85 | 0.88 |
+| V12-M mask selection | 0.54 | 0.57 |
+| V19-M mask selection | 0.54 | 0.57 |
+| V26-M mask selection | 0.54 | 0.57 |
+| V40-L mask selection | 0.79 | 0.83 |
+
+Base's version 19 mask selection took 67.4 µs on .NET 10 and 58.2 on .NET 8 there, against 309 on .NET Framework 4.8.
+
+On the JIT with AVX2, which does not run the changed code, five rounds of the stage harness read the quiet-zone-free encodes at V1-L, V10-M, V19-M and V40-L at 0.98 to 1.01 and V40-L's framed encode at 1.00. The V19-M class row read 1.29, with both builds' processes at three levels (about 11.1, 15.3 and 19.8 µs), the levels phase 9 recorded on that row and did not explain. In the three rounds where both builds landed on one level it read 1.00, 1.00 and 0.99.
+
+The corpus hashes are the same on base and the change: on .NET Framework 4.8, and on .NET 10 with AVX2, with AVX off and with hardware intrinsics off, the 7,647 symbols hash to 28E8DED2 and the 6,504 pinned-mask symbols to 795A3C5D (the first eight hex digits of each SHA-256).
+
+Not measured: .NET Framework on 32-bit x86, and the runtimes that load the netstandard2.1 build.

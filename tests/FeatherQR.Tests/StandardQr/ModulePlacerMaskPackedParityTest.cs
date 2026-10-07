@@ -72,6 +72,50 @@ public class ModulePlacerMaskPackedParityTest
         }
     }
 
+    /// <summary>Versions 12-40: two words a row to version 27 (size 125), three from version 28 (size 129).</summary>
+    public static IEnumerable<int> MultiWordVersions => Enumerable.Range(12, 29);
+
+    /// <summary>
+    /// The scalar selection of versions 12-40, which the netstandard builds take, called directly at every version. Through
+    /// <see cref="ModulePlacer.MaskCode"/> the tests reach it only where no vector tier runs (hardware intrinsics off).
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(MultiWordVersions))]
+    public async Task MaskCode192_MatchesByteDomainReference(int version)
+    {
+        foreach (var eccLevel in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+        {
+            for (var seed = 0; seed < 2; seed++)
+            {
+                var (buffer, blockedMask, size) = BuildFixture(version, seed);
+                await AssertMaskCode192(buffer, blockedMask, size, version, eccLevel, $"version {version}-{eccLevel}, seed {seed}");
+            }
+        }
+
+        foreach (var fill in new byte[] { 0, 1 })
+        {
+            var (buffer, blockedMask, size) = BuildFixture(version, seed: 0);
+            for (var i = 0; i < buffer.Length; i++)
+            {
+                if ((blockedMask[i >> 3] & (1 << (i & 7))) == 0)
+                    buffer[i] = fill;
+            }
+            await AssertMaskCode192(buffer, blockedMask, size, version, QREccLevel.M, $"version {version}-M, data all {fill}");
+        }
+    }
+
+    private static async Task AssertMaskCode192(byte[] buffer, byte[] blockedMask, int size, int version, QREccLevel eccLevel, string because)
+    {
+        var expectedBuffer = (byte[])buffer.Clone();
+        var expectedBest = ReferenceMaskCode(expectedBuffer, size, version, blockedMask, eccLevel);
+
+        var actualBuffer = (byte[])buffer.Clone();
+        var actualBest = ModulePlacer.MaskCode192(actualBuffer, size, version, blockedMask, eccLevel);
+
+        await Assert.That(actualBest).IsEqualTo(expectedBest).Because(because);
+        await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer, CollectionOrdering.Matching).Because(because);
+    }
+
     /// <summary>
     /// Builds realistic MaskCode inputs the same way QRCodeGenerator.WriteQRMatrix
     /// does: all function patterns placed via ModulePlacer, blocked bitmask built,
