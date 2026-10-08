@@ -31,6 +31,8 @@ internal static partial class TierTiming
         .. QRStageShapes("qr-v1-alnum-M", () => "HELLO WORLD 2026", QREccLevel.M, 1),
         .. QRStageShapes("qr-v6-url-M", () => BenchmarkUrl, QREccLevel.M, 6),
         .. QRStageShapes("qr-v10-alnum-M", () => Pick(300, AlphanumericAlphabet), QREccLevel.M, 10),
+        // The smallest version the transposed scorer takes.
+        .. QRStageShapes("qr-v12-byte-M", () => DeterministicText(270), QREccLevel.M, 12),
         .. QRStageShapes("qr-v19-byte-M", () => DeterministicText(620), QREccLevel.M, 19),
         // 1,000 characters at M, where a pinned mask once encoded in twice the automatic time (the forced rows below).
         .. QRStageShapes("qr-v26-byte-M", () => DeterministicText(1000), QREccLevel.M, 26),
@@ -130,13 +132,7 @@ internal static partial class TierTiming
 
         public int ReedSolomon()
         {
-            ReadOnlySpan<byte> data = Data.AsSpan(0, DataLength);
-            Span<byte> ecc = Ecc2;
-            int d = 0, e = 0;
-            for (var i = 0; i < EccInfo.BlocksInGroup1; i++, d += EccInfo.CodewordsInGroup1, e += EccInfo.ECCPerBlock)
-                EccBinaryEncoder.CalculateECC(data.Slice(d, EccInfo.CodewordsInGroup1), ecc.Slice(e, EccInfo.ECCPerBlock), EccInfo.ECCPerBlock);
-            for (var i = 0; i < EccInfo.BlocksInGroup2; i++, d += EccInfo.CodewordsInGroup2, e += EccInfo.ECCPerBlock)
-                EccBinaryEncoder.CalculateECC(data.Slice(d, EccInfo.CodewordsInGroup2), ecc.Slice(e, EccInfo.ECCPerBlock), EccInfo.ECCPerBlock);
+            EccBinaryEncoder.CalculateECCBlocks(Data.AsSpan(0, DataLength), Ecc2, EccInfo);
             return Ecc2[0];
         }
 
@@ -153,6 +149,8 @@ internal static partial class TierTiming
             return target[^1];
         }
 
+        // The placed route's last step. The stream route (the mask-stream row) writes the version information with the winner, so
+        // at versions 12 to 40 on AVX2 this row also times a PlaceVersion the encoder skips.
         public int FormatAndVersion(byte[] target, int mask)
         {
             ModulePlacer.PlaceFormat(target, Layout.Size, QRCodeConstants.GetFormatBits(Ecc, mask));
@@ -207,6 +205,23 @@ internal static partial class TierTiming
                     return ModulePlacer.MaskCode(s.Work, s.Layout.Size, s.Version, s.Layout.BlockedMask, s.Ecc);
                 };
             }),
+            // Placement and selection together, the two routes the generator can take: the template copy, the placed bytes and the
+            // selection on them, and where the stream form runs (TryMaskCodeFromStream's gate: AVX2, versions 12-40), the stream placed
+            // straight into the selection's column words. Elsewhere that row would time only the gate, so it is left out.
+            new($"stage/{name}/place-mask", () =>
+            {
+                var s = stages.Value;
+                return () =>
+                {
+                    s.Place(s.Work);
+                    return ModulePlacer.MaskCode(s.Work, s.Layout.Size, s.Version, s.Layout.BlockedMask, s.Ecc);
+                };
+            }),
+            new($"stage/{name}/mask-stream", () =>
+            {
+                var s = stages.Value;
+                return () => ModulePlacer.TryMaskCodeFromStream(s.Work, s.Version, s.Interleaved, s.Ecc, out var pattern) ? pattern : -1;
+            }, System.Runtime.Intrinsics.X86.Avx2.IsSupported && version >= 12),
             new($"stage/{name}/mask-forced0", () => ForcedMask(stages.Value, 0)),
             new($"stage/{name}/mask-forced3", () => ForcedMask(stages.Value, 3)),
             new($"stage/{name}/format", () => { var s = stages.Value; return () => s.FormatAndVersion(s.Work, 3); }),

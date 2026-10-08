@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// <summary>
 /// Bit-packed mask pattern selection.
 ///
-/// QR modules are 1-bit values, so the whole evaluation pipeline operates on rows packed into ulongs instead of one byte per module: a row is 1 word for matrices up to 64 modules (versions 1-11) or 3 words (a <see cref="Row192"/>) for larger ones.
+/// QR modules are 1-bit values, so the whole evaluation pipeline operates on rows packed into ulongs instead of one byte per module: a row needs 1 word for matrices up to 64 modules (versions 1-11), and 2 or 3 words for larger ones (versions 12-27 and 28-40).
 /// Per pattern, applying the mask is a handful of XOR/AND word operations per row and all four ISO/IEC 18004 penalty rules are computed bit-parallel with shifts and popcounts.
 ///
 /// Measured against the previous byte-per-module implementation (see the micro-optimization findings log): version 1 ~8x, version 10 ~44x, version 40 ~30-40x, zero allocations.
@@ -34,7 +34,7 @@ internal static partial class ModulePlacer
     {
 #if NET8_0_OR_GREATER
         // AVX2: four candidates per vector for versions 1-11 (ModulePlacer.Masking.X86.cs), the transposed scorer for 12-40 (ModulePlacer.Masking.Transposed.X86.cs).
-        // 2.5-2.8x the scalar bit-packed paths below at versions 1, 6 and 10, and 2.9-4.9x at 12-40, on the JIT on Zen 4 (2026-10-05).
+        // 2.5-2.8x the scalar bit-packed paths below at versions 1, 6 and 10 (2026-10-05), and 2.3-2.9x the scalar path at versions 12, 20, 27, 28 and 40 (2026-10-08), on the JIT on Zen 4.
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
@@ -54,6 +54,26 @@ internal static partial class ModulePlacer
         return size <= 64
             ? MaskCode64(buffer, size, version, blockedMask, eccLevel)
             : MaskCode192(buffer, size, version, blockedMask, eccLevel);
+    }
+
+    /// <summary>
+    /// Data placement and mask selection in one, from the interleaved stream, where this build has the form: places the stream, selects the
+    /// pattern as <see cref="MaskCode"/> does and writes the masked symbol to <paramref name="buffer"/>: every module, the version
+    /// information included and the format modules light, for the caller to place the format information. Returns false, the buffer
+    /// untouched, where the caller places the template and the data, calls <see cref="MaskCode"/> and places the version information.
+    /// </summary>
+    internal static bool TryMaskCodeFromStream(Span<byte> buffer, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel, out int pattern)
+    {
+#if NET8_0_OR_GREATER
+        // AVX2, versions 12-40: the stream goes straight into the transposed scorer's column planes (ModulePlacer.Masking.Transposed.X86.cs).
+        if (System.Runtime.Intrinsics.X86.Avx2.IsSupported && version >= 12)
+        {
+            pattern = MaskCodeTransposedFromStream(buffer, version, interleavedData, eccLevel);
+            return true;
+        }
+#endif
+        pattern = 0;
+        return false;
     }
 
     /// <summary>
@@ -223,7 +243,7 @@ internal static partial class ModulePlacer
     /// </summary>
     /// <remarks>
     /// Terminates early (returning int.MaxValue) once the running sum of rules 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever accumulate, so a pattern whose partial sum already exceeds the best total can never be selected, the result is provably identical.
-    /// Measured ~5-10% on this single-word path; the triple-word scorer intentionally has no abort because no win was measurable there (see the findings log).
+    /// Measured ~5-10% on this single-word path. The multi-word scorer intentionally has no abort: a per-row abort gave no measurable win on the <see cref="Row192"/> scorer it replaced, at version 40 (see the findings log, 2026-07-10), and on .NET Framework 4.8, with a checkpoint before the multi-word scorer's column rules, mask selection took 1.00 to 1.01 of its time without one (2026-10-07).
     /// </remarks>
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -417,23 +437,37 @@ internal static partial class ModulePlacer
     }
 
     // ---------------------------------
-    // Triple-word path (versions 12-40)
+    // Multi-word path (versions 12-40)
     // ---------------------------------
 
+    /// <summary>
+    /// Mask selection for versions 12-40 without vectors, the route of the netstandard builds. It holds three words a row, and its scorer
+    /// reads two up to version 27 (size 125) and three from version 28.
+    /// </summary>
+    /// <remarks>
+    /// The rows are plain words in one array, three a row, rather than a <see cref="Row192"/> each in a <see cref="Span{T}"/>: on .NET
+    /// Framework 4.8 that form took 4.2 to 4.5 times as long as the same rules over words. There the operators' 24-byte results went
+    /// through the stack, the portable span's indexer tested its pinned object at each access, and in the last loops of the column
+    /// finder windows the operators and the indexer were calls (2026-10-07, Lessons Learned, Performance in specs/standardqr-encoder.md).
+    /// </remarks>
     internal static int MaskCode192(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // One rent, partitioned four ways (packed / allowed / masked / ~masked).
-        var rent = ArrayPool<Row192>.Shared.Rent(4 * size);
+        // One rent, partitioned four ways, three words a row (entry 3y + k holds columns 64k.. of row y): packed, allowed, masked and the
+        // scorer's scratch.
+        var n3 = 3 * size;
+        var words = ArrayPool<ulong>.Shared.Rent(4 * n3);
         try
         {
-            var packed = rent.AsSpan(0, size);
-            var allowed = rent.AsSpan(size, size);
-            var masked = rent.AsSpan(2 * size, size);
-            var nmasked = rent.AsSpan(3 * size, size);
+            var allowed = n3;
+            var masked = 2 * n3;
+            var scratch = 3 * n3;
 
             for (var y = 0; y < size; y++)
             {
-                packed[y] = Row192.PackRowBits(buffer.Slice(y * size, size));
+                var row = Row192.PackRowBits(buffer.Slice(y * size, size));
+                words[3 * y] = row.W0;
+                words[3 * y + 1] = row.W1;
+                words[3 * y + 2] = row.W2;
             }
 
             // Version bits sit in blocked areas, hence identical for every pattern.
@@ -444,8 +478,8 @@ internal static partial class ModulePlacer
                 for (var y = 0; y < 3; y++)
                 {
                     var bit = (versionBits & (1u << (x * 3 + y))) != 0;
-                    packed[y + size - 11] = packed[y + size - 11].WithBit(x, bit);
-                    packed[x] = packed[x].WithBit(y + size - 11, bit);
+                    SetWordBit(words, 3 * (y + size - 11), x, bit);
+                    SetWordBit(words, 3 * x, y + size - 11, bit);
                 }
             }
 
@@ -456,7 +490,10 @@ internal static partial class ModulePlacer
             var rowMask = Row192.MaskLow(size);
             for (var y = 0; y < size; y++)
             {
-                allowed[y] = Row192.FromBitSlice(padded, y * size).AndNot(rowMask);
+                var row = Row192.FromBitSlice(padded, y * size).AndNot(rowMask);
+                words[allowed + 3 * y] = row.W0;
+                words[allowed + 3 * y + 1] = row.W1;
+                words[allowed + 3 * y + 2] = row.W2;
             }
 
             var templates = _maskTemplates;
@@ -467,12 +504,16 @@ internal static partial class ModulePlacer
                 var tplBase = patternIndex * 12;
                 for (int y = 0, tplRow = 0; y < size; y++)
                 {
-                    masked[y] = packed[y] ^ (templates[tplBase + tplRow] & allowed[y]);
+                    ref readonly var template = ref templates[tplBase + tplRow];
+                    var o = 3 * y;
+                    words[masked + o] = words[o] ^ (template.W0 & words[allowed + o]);
+                    words[masked + o + 1] = words[o + 1] ^ (template.W1 & words[allowed + o + 1]);
+                    words[masked + o + 2] = words[o + 2] ^ (template.W2 & words[allowed + o + 2]);
                     if (++tplRow == 12) tplRow = 0;
                 }
-                PokeFormatBits192(masked, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
+                PokeFormatBitsWords(words, masked, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
 
-                var score = CalculateScorePacked(masked, nmasked, size);
+                var score = CalculateScorePacked(words, masked, scratch, size);
                 if (score < bestScore)
                 {
                     bestPatternIndex = patternIndex;
@@ -486,7 +527,9 @@ internal static partial class ModulePlacer
                 ref var bufRef = ref MemoryMarshal.GetReference(buffer);
                 for (int y = 0, tplRow = 0; y < size; y++)
                 {
-                    var delta = templates[tplBase + tplRow] & allowed[y];
+                    ref readonly var template = ref templates[tplBase + tplRow];
+                    var o = allowed + 3 * y;
+                    var delta = new Row192(template.W0 & words[o], template.W1 & words[o + 1], template.W2 & words[o + 2]);
                     XorUnpackRow192(ref Unsafe.Add(ref bufRef, y * size), size, delta);
                     if (++tplRow == 12) tplRow = 0;
                 }
@@ -496,8 +539,17 @@ internal static partial class ModulePlacer
         }
         finally
         {
-            ArrayPool<Row192>.Shared.Return(rent);
+            ArrayPool<ulong>.Shared.Return(words);
         }
+    }
+
+    /// <summary>Sets bit <paramref name="x"/> of the row whose three words start at <paramref name="rowAt"/> to <paramref name="value"/>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SetWordBit(ulong[] words, int rowAt, int x, bool value)
+    {
+        ref var word = ref words[rowAt + (x >> 6)];
+        var bit = 1ul << (x & 63);
+        word = value ? word | bit : word & ~bit;
     }
 
     // ---------------------------------
@@ -633,6 +685,12 @@ internal static partial class ModulePlacer
     ///   contributes popcount L-4 and its total penalty is 3+(L-5) = L-2, so
     ///   score = popcount(y5) + 2 * runs, runs isolated via y5 &amp; ~(y5&lt;&lt;1).
     ///   Computed for dark bits and for light bits (~x within the row).
+    ///   This scorer takes both colours at once, from the equalities rule 2 needs:
+    ///   eqh[c] = (x[c] == x[c+1]) for c up to n-2, and v5 = eqh &amp; (eqh>>1) &amp;
+    ///   (eqh>>2) &amp; (eqh>>3) marks five equal modules from c, dark or light. A
+    ///   dark and a light run never share a position, nor their starts, so
+    ///   popcount(v5) + 2 * popcount(v5 &amp; ~(v5&lt;&lt;1)) is the two colours' sum, in two
+    ///   popcounts a word where the colours take four.
     /// Rule 1 (columns): eq[y] = ~(row[y] ^ row[y-1]) marks columns whose
     ///   vertical run continues at row y; v5[y] = eq[y] &amp; eq[y-1] &amp; eq[y-2] &amp; eq[y-3]
     ///   is the vertical analog of y5, kept in a 4-deep rolling window; vertical
@@ -642,8 +700,8 @@ internal static partial class ModulePlacer
     /// Rule 3 (finder windows): the forward window [0,0,0,0,1,0,1,1,1,0,1] is
     ///   four light modules followed by the 7-module core [1,0,1,1,1,0,1], and the
     ///   backward window is the core followed by four light modules. With
-    ///   n4 = nx &amp; (nx>>1) &amp; (nx>>2) &amp; (nx>>3), the light run rule 1 already
-    ///   builds, and core = x &amp; (nx>>1) &amp; (x>>2) &amp; (x>>3) &amp; (x>>4) &amp; (nx>>5) &amp; (x>>6),
+    ///   n4 = nx &amp; (nx>>1) &amp; (nx>>2) &amp; (nx>>3), the light run rule 1's per-colour
+    ///   form builds, and core = x &amp; (nx>>1) &amp; (x>>2) &amp; (x>>3) &amp; (x>>4) &amp; (nx>>5) &amp; (x>>6),
     ///   the window starts are n4 &amp; (core>>4) and core &amp; (n4>>7): two ANDs over
     ///   shared terms instead of two 11-term chains. A forward window starts light
     ///   and a backward one dark, so the two never share a start and one popcount
@@ -654,104 +712,225 @@ internal static partial class ModulePlacer
     /// Rule 4 (balance): popcount per row, then the shared closest-multiple-of-5
     ///   deviation formula.
     /// </summary>
+    /// <param name="words">
+    /// The rows from <paramref name="rows"/>, three words a row (entry <paramref name="rows"/> + 3y + k holds columns 64k.. of row y), with
+    /// every bit at or past <paramref name="size"/> clear; the rows are overwritten. From <paramref name="scratch"/>, 3 * <paramref name="size"/>
+    /// entries the scorer writes before it reads them.
+    /// </param>
+    /// <param name="rows">The first row's entry.</param>
+    /// <param name="scratch">The scratch's first entry.</param>
+    /// <param name="size">QR code size in modules, 65 to 177: two words a row up to 128, three above.</param>
+    internal static int CalculateScorePacked(ulong[] words, int rows, int scratch, int size)
+        => size <= 128 ? ScoreTwoWords(words, rows, scratch, size) : ScoreThreeWords(words, rows, scratch, size);
+
+    /// <summary>Word k of a value shifted right by <paramref name="s"/> (1-63), from its words k (<paramref name="lo"/>) and k + 1 (<paramref name="hi"/>).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong ShrAcross(ulong lo, ulong hi, int s) => (lo >> s) | (hi << (64 - s));
+
+    /// <summary><see cref="CalculateScorePacked"/> for sizes 65-125 (versions 12-27), whose rows' third words are zero.</summary>
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
 #endif
-    internal static int CalculateScorePacked(Span<Row192> rows, Span<Row192> nrows, int size)
+    private static int ScoreTwoWords(ulong[] words, int rows, int scratch, int size)
     {
         var rowMask = Row192.MaskLow(size);
         var startMaskP3 = Row192.MaskLow(size - 10); // rule-3 window starts: 0..n-11
-        var maskN1 = Row192.MaskLow(size - 1);       // rule-2 block positions: 0..n-2
+        var maskN1 = Row192.MaskLow(size - 1);       // rule-2 block positions and the row equalities: 0..n-2
+        var rm0 = rowMask.W0;
+        var rm1 = rowMask.W1;
+        var s0 = startMaskP3.W0;
+        var s1 = startMaskP3.W1;
+        var q0 = maskN1.W0;
+        var q1 = maskN1.W1;
 
-        var score1 = 0;
-        var score2 = 0;
-        var score3 = 0;
+        var score = 0;
         var blackModules = 0;
-
         for (var y = 0; y < size; y++)
         {
-            nrows[y] = rows[y].AndNot(rowMask); // ~rows[y] & rowMask
-        }
+            var o = rows + 3 * y;
+            var x0 = words[o];
+            var x1 = words[o + 1];
+            var n0 = ~x0 & rm0;
+            var n1 = ~x1 & rm1;
+            var p = scratch + 3 * y;
+            words[p] = n0;
+            words[p + 1] = n1;
 
-        for (var y = 0; y < size; y++)
-        {
-            var x = rows[y];
-            var nx = nrows[y];
+            blackModules += PopCount(x0) + PopCount(x1);
 
-            blackModules += x.PopCount();
+            // Rule 1 from the row's equalities.
+            var h0 = ~(x0 ^ ShrAcross(x0, x1, 1)) & q0;
+            var h1 = ~(x1 ^ (x1 >> 1)) & q1;
+            var g0 = h0 & ShrAcross(h0, h1, 1);
+            var g1 = h1 & (h1 >> 1);
+            var v0 = g0 & ShrAcross(g0, g1, 2);
+            var v1 = g1 & (g1 >> 2);
+            score += PopCount(v0) + PopCount(v1) + 2 * (PopCount(v0 & ~(v0 << 1)) + PopCount(v1 & ~((v1 << 1) | (v0 >> 63))));
 
-            score1 += ScoreRuns(x) + ScoreRuns(nx);
-            score3 += MatchFinderRow(x, nx, startMaskP3);
+            // Rule 3 from the light run and the core.
+            var a0 = x0 & ShrAcross(x0, x1, 1);
+            var a1 = x1 & (x1 >> 1);
+            var na0 = n0 & ShrAcross(n0, n1, 1);
+            var na1 = n1 & (n1 >> 1);
+            var nb0 = na0 & ShrAcross(na0, na1, 2);
+            var nb1 = na1 & (na1 >> 2);
+            var k0 = x0 & ShrAcross(n0, n1, 1) & ShrAcross(a0, a1, 2) & ShrAcross(x0, x1, 4) & ShrAcross(n0, n1, 5) & ShrAcross(x0, x1, 6);
+            var k1 = x1 & (n1 >> 1) & (a1 >> 2) & (x1 >> 4) & (n1 >> 5) & (x1 >> 6);
+            score += 40 * (PopCount(((nb0 & ShrAcross(k0, k1, 4)) | (k0 & ShrAcross(nb0, nb1, 7))) & s0)
+                + PopCount(((nb1 & (k1 >> 4)) | (k1 & (nb1 >> 7))) & s1));
 
+            // Rule 2 with the next row.
             if (y < size - 1)
             {
-                var eqv = x.Xnor(rows[y + 1]);
-                var eqh = x.Xnor(x.ShiftRight(1));
-                var m = eqh & eqv & eqv.ShiftRight(1) & maskN1;
-                score2 += 3 * m.PopCount();
+                var e0 = ~(x0 ^ words[o + 3]);
+                var e1 = ~(x1 ^ words[o + 4]);
+                score += 3 * (PopCount(h0 & e0 & ShrAcross(e0, e1, 1)) + PopCount(h1 & e1 & (e1 >> 1)));
             }
         }
 
-        var eq1 = default(Row192);
-        var eq2 = default(Row192);
-        var eq3 = default(Row192);
-        var prevV5 = default(Row192);
-        for (var y = 1; y < size; y++)
+        return score + ScoreColumnWords(words, rows, scratch, size, 2) + CalculateBalanceScore(blackModules, size);
+    }
+
+    /// <summary><see cref="CalculateScorePacked"/> for sizes 129-177 (versions 28-40).</summary>
+#if NET6_0_OR_GREATER
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+#endif
+    private static int ScoreThreeWords(ulong[] words, int rows, int scratch, int size)
+    {
+        var rowMask = Row192.MaskLow(size);
+        var startMaskP3 = Row192.MaskLow(size - 10);
+        var maskN1 = Row192.MaskLow(size - 1);
+        var rm0 = rowMask.W0;
+        var rm1 = rowMask.W1;
+        var rm2 = rowMask.W2;
+        var s0 = startMaskP3.W0;
+        var s1 = startMaskP3.W1;
+        var s2 = startMaskP3.W2;
+        var q0 = maskN1.W0;
+        var q1 = maskN1.W1;
+        var q2 = maskN1.W2;
+
+        var score = 0;
+        var blackModules = 0;
+        for (var y = 0; y < size; y++)
         {
-            var eq0 = rows[y].Xnor(rows[y - 1]) & rowMask;
-            if (y >= 4)
+            var o = rows + 3 * y;
+            var x0 = words[o];
+            var x1 = words[o + 1];
+            var x2 = words[o + 2];
+            var n0 = ~x0 & rm0;
+            var n1 = ~x1 & rm1;
+            var n2 = ~x2 & rm2;
+            var p = scratch + 3 * y;
+            words[p] = n0;
+            words[p + 1] = n1;
+            words[p + 2] = n2;
+
+            blackModules += PopCount(x0) + PopCount(x1) + PopCount(x2);
+
+            // Rule 1 from the row's equalities.
+            var h0 = ~(x0 ^ ShrAcross(x0, x1, 1)) & q0;
+            var h1 = ~(x1 ^ ShrAcross(x1, x2, 1)) & q1;
+            var h2 = ~(x2 ^ (x2 >> 1)) & q2;
+            var g0 = h0 & ShrAcross(h0, h1, 1);
+            var g1 = h1 & ShrAcross(h1, h2, 1);
+            var g2 = h2 & (h2 >> 1);
+            var v0 = g0 & ShrAcross(g0, g1, 2);
+            var v1 = g1 & ShrAcross(g1, g2, 2);
+            var v2 = g2 & (g2 >> 2);
+            score += PopCount(v0) + PopCount(v1) + PopCount(v2)
+                + 2 * (PopCount(v0 & ~(v0 << 1)) + PopCount(v1 & ~((v1 << 1) | (v0 >> 63))) + PopCount(v2 & ~((v2 << 1) | (v1 >> 63))));
+
+            // Rule 3 from the light run and the core.
+            var a0 = x0 & ShrAcross(x0, x1, 1);
+            var a1 = x1 & ShrAcross(x1, x2, 1);
+            var a2 = x2 & (x2 >> 1);
+            var na0 = n0 & ShrAcross(n0, n1, 1);
+            var na1 = n1 & ShrAcross(n1, n2, 1);
+            var na2 = n2 & (n2 >> 1);
+            var nb0 = na0 & ShrAcross(na0, na1, 2);
+            var nb1 = na1 & ShrAcross(na1, na2, 2);
+            var nb2 = na2 & (na2 >> 2);
+            var k0 = x0 & ShrAcross(n0, n1, 1) & ShrAcross(a0, a1, 2) & ShrAcross(x0, x1, 4) & ShrAcross(n0, n1, 5) & ShrAcross(x0, x1, 6);
+            var k1 = x1 & ShrAcross(n1, n2, 1) & ShrAcross(a1, a2, 2) & ShrAcross(x1, x2, 4) & ShrAcross(n1, n2, 5) & ShrAcross(x1, x2, 6);
+            var k2 = x2 & (n2 >> 1) & (a2 >> 2) & (x2 >> 4) & (n2 >> 5) & (x2 >> 6);
+            score += 40 * (PopCount(((nb0 & ShrAcross(k0, k1, 4)) | (k0 & ShrAcross(nb0, nb1, 7))) & s0)
+                + PopCount(((nb1 & ShrAcross(k1, k2, 4)) | (k1 & ShrAcross(nb1, nb2, 7))) & s1)
+                + PopCount(((nb2 & (k2 >> 4)) | (k2 & (nb2 >> 7))) & s2));
+
+            // Rule 2 with the next row.
+            if (y < size - 1)
             {
-                var v5 = eq0 & eq1 & eq2 & eq3;
-                score1 += v5.PopCount() + 2 * v5.AndNotWith(prevV5).PopCount();
-                prevV5 = v5;
+                var e0 = ~(x0 ^ words[o + 3]);
+                var e1 = ~(x1 ^ words[o + 4]);
+                var e2 = ~(x2 ^ words[o + 5]);
+                score += 3 * (PopCount(h0 & e0 & ShrAcross(e0, e1, 1)) + PopCount(h1 & e1 & ShrAcross(e1, e2, 1)) + PopCount(h2 & e2 & (e2 >> 1)));
             }
-            eq3 = eq2;
-            eq2 = eq1;
-            eq1 = eq0;
         }
 
-        // Column rule 3: nrows[y] becomes the light run from row y down and rows[y] the core from row y down (ascending, as in
-        // CalculateScore64).
-        var t = 0;
-        for (; t <= size - 7; t++)
-        {
-            nrows[t] = nrows[t] & nrows[t + 1] & nrows[t + 2] & nrows[t + 3];
-            rows[t] = rows[t] & nrows[t + 1] & rows[t + 2] & rows[t + 3] & rows[t + 4] & nrows[t + 5] & rows[t + 6];
-        }
-        for (; t <= size - 4; t++)
-        {
-            nrows[t] = nrows[t] & nrows[t + 1] & nrows[t + 2] & nrows[t + 3];
-        }
-        for (var b = 0; b <= size - 11; b++)
-        {
-            score3 += 40 * ((nrows[b] & rows[b + 4]) | (rows[b] & nrows[b + 7])).PopCount();
-        }
-
-        return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
+        return score + ScoreColumnWords(words, rows, scratch, size, 3) + CalculateBalanceScore(blackModules, size);
     }
 
-    /// <summary>Penalty-3 row matches over a Row192, from the shared light run and core (see <see cref="CalculateScorePacked"/>).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int MatchFinderRow(in Row192 x, in Row192 nx, in Row192 startMask)
+    /// <summary>
+    /// Column rules 1 and 3 of <see cref="CalculateScorePacked"/>, one word column at a time: whole words of neighbouring rows, as in
+    /// <see cref="CalculateScore64"/>. The scratch holds the rows' light modules; it becomes the light run from row t down and the rows
+    /// the core from row t down (ascending, as in CalculateScore64).
+    /// </summary>
+    /// <remarks>
+    /// Left to tiered compilation, unlike its callers, so on the x64 JIT of .NET 8 and later its first calls run Tier0 code. With
+    /// <c>AggressiveOptimization</c> mask selection with hardware intrinsics off took 1.10 times its time without
+    /// it on .NET 10 and 1.05 to 1.06 on .NET 8 (x64, 2026-10-08): on .NET 10 the Tier1 code inlines the software popcount and <see cref="Row192.MaskLow"/>,
+    /// which the fully optimized first compile leaves as calls. The callers keep the attribute, so with hardware intrinsics off on x64 their row
+    /// loops hold 10 or 15 calls to the software popcount. Leaving them to tiering, or a popcount of the file's own where the hardware
+    /// has none, was not measured. On 32-bit x86 with hardware intrinsics off, .NET 8 and 10 compiled this method fully optimized at its
+    /// first call, and neither it nor its callers called the software popcount (2026-10-08).
+    /// </remarks>
+    private static int ScoreColumnWords(ulong[] words, int rows, int scratch, int size, int wordCount)
     {
-        var n2 = nx & nx.ShiftRight(1);
-        var n4 = n2 & n2.ShiftRight(2);
-        var core = x & nx.ShiftRight(1) & (x & x.ShiftRight(1)).ShiftRight(2) & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6);
-        return 40 * (((n4 & core.ShiftRight(4)) | (core & n4.ShiftRight(7))) & startMask).PopCount();
+        var score = 0;
+        for (var k = 0; k < wordCount; k++)
+        {
+            var rowMask = Row192.MaskLow(size - 64 * k).W0;
+
+            ulong eq1 = 0, eq2 = 0, eq3 = 0, prevV5 = 0;
+            for (var y = 1; y < size; y++)
+            {
+                var eq0 = ~(words[rows + 3 * y + k] ^ words[rows + 3 * y - 3 + k]) & rowMask;
+                if (y >= 4)
+                {
+                    var v5 = eq0 & eq1 & eq2 & eq3;
+                    score += PopCount(v5) + 2 * PopCount(v5 & ~prevV5);
+                    prevV5 = v5;
+                }
+                eq3 = eq2;
+                eq2 = eq1;
+                eq1 = eq0;
+            }
+
+            var r = rows + k;
+            var n = scratch + k;
+            var t = 0;
+            for (; t <= size - 7; t++)
+            {
+                var i = 3 * t;
+                words[n + i] = words[n + i] & words[n + i + 3] & words[n + i + 6] & words[n + i + 9];
+                words[r + i] = words[r + i] & words[n + i + 3] & words[r + i + 6] & words[r + i + 9] & words[r + i + 12] & words[n + i + 15] & words[r + i + 18];
+            }
+            for (; t <= size - 4; t++)
+            {
+                var i = 3 * t;
+                words[n + i] = words[n + i] & words[n + i + 3] & words[n + i + 6] & words[n + i + 9];
+            }
+            for (var b = 0; b <= size - 11; b++)
+            {
+                var i = 3 * b;
+                score += 40 * PopCount((words[n + i] & words[r + i + 12]) | (words[r + i] & words[n + i + 21]));
+            }
+        }
+        return score;
     }
 
-    /// <summary>Penalty-1 contribution of one color (see <see cref="ScoreRuns64"/> for the derivation).</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int ScoreRuns(in Row192 x)
-    {
-        var y2 = x & x.ShiftRight(1);
-        var y4 = y2 & y2.ShiftRight(2);
-        var y5 = y4 & x.ShiftRight(4);
-        var starts = y5.AndNotWith(y5.ShiftLeft1());
-        return y5.PopCount() + 2 * starts.PopCount();
-    }
-
-    private static void PokeFormatBits192(Span<Row192> rows, int size, ushort formatBits)
+    private static void PokeFormatBitsWords(ulong[] words, int rows, int size, ushort formatBits)
     {
         // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
         for (var i = 0; i < 15; i++)
@@ -759,8 +938,8 @@ internal static partial class ModulePlacer
             var bit = (formatBits & (1 << i)) != 0;
             var x2 = i < 8 ? size - 1 - i : 8;
             var y2 = i < 8 ? 8 : size - 15 + i;
-            rows[FormatYs1[i]] = rows[FormatYs1[i]].WithBit(FormatXs1[i], bit);
-            rows[y2] = rows[y2].WithBit(x2, bit);
+            SetWordBit(words, rows + 3 * FormatYs1[i], FormatXs1[i], bit);
+            SetWordBit(words, rows + 3 * y2, x2, bit);
         }
     }
 
@@ -903,8 +1082,9 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// 192-bit row register (3 ulongs, LSB = column 0).
-    /// Sized for the largest QR matrix (version 40, 177 modules); the fixed width keeps every operation branch-free regardless of the actual size.
+    /// 192-bit row (3 ulongs, LSB = column 0), sized for the largest QR matrix (version 40, 177 modules): a packed row as the pack, the
+    /// allowed-module slice and the unpack of every multi-word tier take or give it. The scalar scorer holds its rows as plain words
+    /// (<see cref="MaskCode192"/>).
     /// </summary>
     internal readonly struct Row192
     {
@@ -924,59 +1104,12 @@ internal static partial class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Row192 operator ^(in Row192 a, in Row192 b) => new(a.W0 ^ b.W0, a.W1 ^ b.W1, a.W2 ^ b.W2);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Row192 operator |(in Row192 a, in Row192 b) => new(a.W0 | b.W0, a.W1 | b.W1, a.W2 | b.W2);
-
-        /// <summary>~(this ^ other), equality bits. High garbage must be masked by the caller.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Row192 Xnor(in Row192 other) => new(~(W0 ^ other.W0), ~(W1 ^ other.W1), ~(W2 ^ other.W2));
-
         /// <summary>~this &amp; mask.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Row192 AndNot(in Row192 mask) => new(~W0 & mask.W0, ~W1 & mask.W1, ~W2 & mask.W2);
 
-        /// <summary>this &amp; ~other.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Row192 AndNotWith(in Row192 other) => new(W0 & ~other.W0, W1 & ~other.W1, W2 & ~other.W2);
-
-        /// <summary>Logical shift right by k bits (1..63 only), pulling zeros in at the top.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Row192 ShiftRight(int k)
-            => new((W0 >> k) | (W1 << (64 - k)), (W1 >> k) | (W2 << (64 - k)), W2 >> k);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Row192 ShiftLeft1()
-            => new(W0 << 1, (W1 << 1) | (W0 >> 63), (W2 << 1) | (W1 >> 63));
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int PopCount()
-            => ModulePlacer.PopCount(W0) + ModulePlacer.PopCount(W1) + ModulePlacer.PopCount(W2);
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ulong WordAt(int i) => i == 0 ? W0 : i == 1 ? W1 : W2;
-
-        /// <summary>Returns a copy with bit x set to the given value.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Row192 WithBit(int x, bool value)
-        {
-            var w0 = W0;
-            var w1 = W1;
-            var w2 = W2;
-            var bit = 1ul << (x & 63);
-            if (x < 64)
-            {
-                w0 = value ? w0 | bit : w0 & ~bit;
-            }
-            else if (x < 128)
-            {
-                w1 = value ? w1 | bit : w1 & ~bit;
-            }
-            else
-            {
-                w2 = value ? w2 | bit : w2 & ~bit;
-            }
-            return new Row192(w0, w1, w2);
-        }
 
         /// <summary>Mask with bits 0..n-1 set (n in 0..192).</summary>
         public static Row192 MaskLow(int n)

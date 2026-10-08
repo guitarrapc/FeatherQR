@@ -65,7 +65,7 @@ A tier is named after the minimum it requires, and some kernels require more: `E
 | `AdvSimdDp` | ARM64 AdvSimd plus the ARMv8.2 dot-product `Dp` instructions |
 | `PackedSimd` | WebAssembly SIMD instructions, used where the portable `Vector128` code compiles poorly |
 
-There is no AVX-512 (`Vector512`) tier, I've tried but it gained nothing. 512-bit versions of the rMQR codeword extraction and the Standard QR mask scoring were measured on Zen 4, which runs a 512-bit operation as two 256-bit halves, and neither beat the 256-bit tier beyond noise. A default NativeAOT publish can't use AVX-512 anyway. The JIT on an AVX-512 CPU still uses some AVX-512 instructions inside the 256-bit tiers, such as vector compares through mask registers.
+There is no AVX-512 (`Vector512`) tier, I've tried but it gained nothing. 512-bit versions of the rMQR codeword extraction and the Standard QR mask scoring were measured on Zen 4, which runs a 512-bit operation as two 256-bit halves, and neither beat the 256-bit tier beyond noise. Scoring all eight Standard QR candidates of versions 1-11 in one 512-bit pass, without the 256-bit tier's early abort, took 1.05 to 1.15 times that tier's time in one run (2026-10-07). A default NativeAOT publish can't use AVX-512 anyway. The JIT on an AVX-512 CPU still uses some AVX-512 instructions inside the 256-bit tiers, such as vector compares through mask registers.
 
 ## Kernels
 
