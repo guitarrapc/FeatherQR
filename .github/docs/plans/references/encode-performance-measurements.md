@@ -1002,6 +1002,52 @@ The in-place form as first written moves every row and then clears the margins i
 
 The runs differ by more than 0.07 only at V19 as first written, and at R17x139 with the constant clear and in the phase's old form. The R rows' strided form with a clear per gap is rMQR's own path, so its 0.98 to 1.01 is what the same code reads against itself within a run. The phase's old form allocated 1,712 to 31,360 bytes a call from V6 and 2,392 at R17x139. The strided forms pay a copy per row here, which a strided placer does as part of its unpack.
 
+### netstandard2.1 on .NET 6 and 7 (2026-10-07)
+
+The review left the netstandard2.1 build, which kept Standard QR's old quiet-zone path, untimed. .NET 6 and 7 load that build. .NET 6.0.36 and 7.0.20 x64 were installed for this run with `dotnet-install` into a folder of their own, and ran the Release netstandard2.1 builds of `main` (5b666aa) and of the change from a console harness built for net6.0 and net7.0, and for net8.0 to run the kernel on .NET 8.0.28. The harness referenced the build by path, under the timing mode's assembly name and key, so its kernel called the loaded build's own `QuietZoneWindow`. Each process was pinned to one CCD, with the .NET build servers shut down before each run. It warmed each row for 300 ms, then timed nine rounds, in each the rows in turn, a row's time the fastest of fifteen batches, and gave each row the median of its rounds.
+
+End to end: the span `QRCodeGenerator.Create` into a destination of exactly the matrix, in batches of about 2 ms, on the stage harness's texts at quiet zones 0 and 4, and at 6 and 9 for two of them. Six alternating rounds of base and change a runtime, the build that went first alternating by round. Every process of both builds wrote the same 16 outputs, hashed after an encode into a destination filled with 0xA5. One .NET 7 process of the change is left out whole: its two version 40 rows, the quiet-zone-free one included, read 446 to 452 µs in all nine rounds, 2.7 times the other processes, while its other rows matched theirs. Change over base, the median of each build's process medians, and the quiet zone over its symbol's quiet-zone-free row in the same process, the median over the processes, base then change:
+
+| Row | .NET 6, change over base | .NET 6, quiet zone over QZ0, base and change | .NET 7, change over base | .NET 7, quiet zone over QZ0, base and change |
+|---|---|---|---|---|
+| V1-L numeric, quiet zone 0 | 0.995 | | 0.988 | |
+| V1-L numeric, quiet zone 4 | 0.989 | 2.53 %, 1.86 % | 0.984 | 2.64 %, 2.04 % |
+| V1-M alphanumeric, quiet zone 0 | 0.995 | | 0.989 | |
+| V1-M alphanumeric, quiet zone 4 | 0.989 | 2.10 %, 1.45 % | 0.977 | 2.57 %, 1.73 % |
+| V1-M alphanumeric, quiet zone 6 | 0.993 | 2.14 %, 2.07 % | 0.976 | 2.65 %, 1.93 % |
+| V1-M alphanumeric, quiet zone 9 | 1.002 | 2.20 %, 2.88 % | 0.983 | 2.94 %, 2.59 % |
+| V6-M URL, quiet zone 0 | 0.997 | | 0.987 | |
+| V6-M URL, quiet zone 4 | 0.996 | 1.65 %, 1.61 % | 0.981 | 1.78 %, 1.36 % |
+| V10-M alphanumeric, quiet zone 0 | 0.998 | | 0.985 | |
+| V10-M alphanumeric, quiet zone 4 | 0.995 | 1.54 %, 1.25 % | 0.983 | 1.53 %, 1.34 % |
+| V10-M alphanumeric, quiet zone 6 | 0.996 | 1.60 %, 1.34 % | 0.984 | 1.57 %, 1.42 % |
+| V10-M alphanumeric, quiet zone 9 | 1.003 | 1.62 %, 2.09 % | 0.991 | 1.60 %, 2.04 % |
+| V19-M byte, quiet zone 0 | 1.005 | | 0.990 | |
+| V19-M byte, quiet zone 4 | 1.002 | 0.51 %, 0.28 % | 0.991 | 0.51 %, 0.39 % |
+| V40-L byte, quiet zone 0 | 1.004 | | 0.993 | |
+| V40-L byte, quiet zone 4 | 1.000 | 0.81 %, 0.44 % | 0.989 | 0.76 %, 0.54 % |
+
+The quiet-zone-free rows run code the change does not touch. On .NET 7 the change's build read them at 0.985 to 0.993, so its quiet-zone rows over base carry that offset, and the quiet zone over the same process's quiet-zone-free row is what the change moved.
+
+The kernel: the old path line for line from 5b666aa (clear the destination, rent the core, copy its rows into the window, return the core) against the netstandard2.1 build's `QuietZoneWindow.CenterCore`, each form a call the JIT does not inline and neither writing the core, on a destination of the version's matrix and quiet zone, in batches of about 1 ms, the two forms in turn. Three processes a runtime, on base's build, whose `QuietZoneWindow` is the change's. The median of the three processes' medians, and the range of the processes' ratios:
+
+| Shape | .NET 6, old and in place (ns) | .NET 6, in place over old | .NET 7, old and in place (ns) | .NET 7, in place over old | .NET 8, old and in place (ns) | .NET 8, in place over old |
+|---|---|---|---|---|---|---|
+| V1, quiet zone 4 | 74, 60 | 0.80 | 74, 58 | 0.74 to 0.79 | 74, 58 | 0.78 |
+| V1, quiet zone 6 | 75, 82 | 1.07 to 1.09 | 75, 63 | 0.83 to 0.84 | 75, 67 | 0.88 to 0.89 |
+| V1, quiet zone 9 | 76, 111 | 1.46 | 76, 87 | 1.14 to 1.15 | 77, 109 | 1.42 to 1.45 |
+| V10, quiet zone 4 | 188, 185 | 0.97 to 0.99 | 178, 158 | 0.88 to 0.89 | 187, 168 | 0.90 |
+| V10, quiet zone 6 | 193, 207 | 1.07 to 1.08 | 180, 171 | 0.94 to 0.95 | 190, 192 | 1.01 |
+| V10, quiet zone 9 | 197, 292 | 1.46 to 1.48 | 187, 237 | 1.25 to 1.27 | 197, 307 | 1.55 to 1.58 |
+| V20, quiet zone 4 | 370, 339 | 0.90 to 0.92 | 378, 316 | 0.83 to 0.84 | 353, 303 | 0.84 to 0.86 |
+| V20, quiet zone 6 | 377, 380 | 0.99 to 1.01 | 388, 361 | 0.93 to 0.94 | 358, 351 | 0.98 |
+| V20, quiet zone 9 | 385, 527 | 1.36 to 1.37 | 405, 483 | 1.18 to 1.23 | 368, 554 | 1.50 to 1.52 |
+| V40, quiet zone 4 | 1196, 872 | 0.72 to 0.73 | 1104, 779 | 0.71 | 1060, 739 | 0.69 to 0.71 |
+| V40, quiet zone 6 | 1223, 1002 | 0.82 to 0.84 | 1152, 954 | 0.78 to 0.84 | 1120, 912 | 0.80 to 0.82 |
+| V40, quiet zone 9 | 1252, 1246 | 0.98 to 1.00 | 1189, 1122 | 0.91 to 1.01 | 1139, 1249 | 1.08 to 1.11 |
+
+A gap is one 8-byte store at quiet zone 4, two at 6, and at 9 a `Span.Clear` of its 18 bytes, a call on every build. .NET 8 ran the same netstandard2.1 build, whose gap stores are the net8.0 build's source. The review's .NET Framework kernel copied a prepared core in both forms and ran its own copy of the move, the gap form given as an argument, so its ratios and these are not one series.
+
 ## Phase 9: leads (2026-10-07)
 
 Base b47ee9b against the change, the stage harness on both sides (base's copy given the version 12 shape), .NET 10.0.9 on a Ryzen 9 7950X3D (Zen 4) unless a row says otherwise. Each shape runs alone in its own process pinned to one CCD, with the .NET build servers shut down. Rounds alternate base and change, and a ratio is the median of the run medians, change over base.

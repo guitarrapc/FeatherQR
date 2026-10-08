@@ -10,7 +10,7 @@ namespace FeatherQR.Internals;
 /// A core matrix centred in a byte-per-module destination with a quiet zone around it, written in the destination itself: no second
 /// buffer, no clear of the whole destination. A placer that writes the core into the strided window needs only the margins cleared
 /// (Micro QR, rMQR); one that needs a contiguous core builds it at the destination's start, and <see cref="CenterCore"/> moves it
-/// into the window (Standard QR on .NET 8 and later).
+/// into the window (Standard QR on every build but netstandard2.0).
 /// </summary>
 /// <remarks>
 /// Between two core rows the margins are one gap: the right margin of one row and the left margin of the next, 2q bytes. A gap of up
