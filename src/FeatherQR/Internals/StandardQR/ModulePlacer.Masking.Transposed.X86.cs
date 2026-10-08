@@ -63,6 +63,115 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
+    /// <see cref="MaskCodeTransposed"/> from the interleaved stream instead of a placed buffer: the stream is placed straight into the column
+    /// planes, the row planes are their transpose, and the winner is written to <paramref name="buffer"/> whole: every module of the symbol,
+    /// the version information included and the format modules light, for the caller to place the format information. The buffer needs no
+    /// template or placement before.
+    /// </summary>
+    internal static int MaskCodeTransposedFromStream(Span<byte> buffer, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel)
+    {
+        var size = QRCodeData.SizeFromVersion(version);
+        var layout = GetTransposedLayout(version, size);
+        if (buffer.Length < size * size)
+            throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
+        if ((uint)eccLevel > 3)
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "QREccLevel was out of range");
+
+        var plane = layout.Words * layout.Stride;
+        var rent = ArrayPool<ulong>.Shared.Rent(4 * plane + WorkLength(layout));
+        try
+        {
+            var all = rent.AsSpan();
+            var r = all.Slice(0, plane);
+            var c = all.Slice(plane, plane);
+            var rp = all.Slice(2 * plane, plane);
+            var cp = all.Slice(3 * plane, plane);
+            var work = all.Slice(4 * plane, WorkLength(layout));
+
+            PlaceStreamColumns(interleavedData, GetStreamPlacement(version, layout), layout.Stride, c);
+            TransposeColumnsToRows(c, layout, r);
+            var bestPattern = 0;
+            var bestScore = int.MaxValue;
+            for (var pattern = 0; pattern < 8; pattern++)
+            {
+                MaskCandidateTransposed(r, c, layout, pattern, eccLevel, rp, cp);
+                var score = ScoreTransposed(rp, cp, layout, work, bestScore);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestPattern = pattern;
+                }
+            }
+
+            WriteWinnerTransposed(buffer, r, layout, bestPattern);
+            return bestPattern;
+        }
+        finally
+        {
+            ArrayPool<ulong>.Shared.Return(rent);
+        }
+    }
+
+    /// <summary>The row planes as the transpose of the column planes, one 64x64 block at a time (the inverse of <see cref="PackTransposed"/>'s step), padding rows zero.</summary>
+    private static void TransposeColumnsToRows(ReadOnlySpan<ulong> c, TransposedLayout layout, Span<ulong> r)
+    {
+        var stride = layout.Stride;
+        var words = layout.Words;
+        for (var kc = 0; kc < words; kc++)
+        {
+            for (var kr = 0; kr < words; kr++)
+            {
+                var block = r.Slice(kc * stride + 64 * kr, 64);
+                c.Slice(kr * stride + 64 * kc, 64).CopyTo(block);
+                Transpose64(ref MemoryMarshal.GetReference(block));
+            }
+            r.Slice(kc * stride + 64 * words, stride - 64 * words).Clear();
+        }
+    }
+
+    /// <summary>Writes every row of the winning candidate, the unmasked row planes XOR the winner's delta, to the byte buffer, 32 modules per step.</summary>
+    private static void WriteWinnerTransposed(Span<byte> buffer, ReadOnlySpan<ulong> r, TransposedLayout layout, int bestPattern)
+    {
+        var size = layout.Size;
+        var stride = layout.Stride;
+        var three = layout.Words == 3;
+        ref var bufRef = ref MemoryMarshal.GetReference(buffer);
+        for (int y = 0, tplRow = 0; y < size; y++)
+        {
+            var row = new Row192(r[y], r[stride + y], three ? r[2 * stride + y] : 0);
+            UnpackRow192Simd(ref Unsafe.Add(ref bufRef, y * size), size, row ^ WinnerDelta(layout, bestPattern, y, tplRow));
+            if (++tplRow == 12) tplRow = 0;
+        }
+    }
+
+    /// <summary>Triple-word unpack of a row's bits to 0/1 bytes (32-aligned chunks never straddle words), SWAR and scalar tails.</summary>
+    private static void UnpackRow192Simd(ref byte rowRef, int len, in Row192 bits)
+    {
+        var c = 0;
+        var ones = Vector256.Create((byte)1);
+        for (; c + 32 <= len; c += 32)
+        {
+            var chunk = (uint)(bits.WordAt(c >> 6) >> (c & 63));
+            var repl = Avx2.Shuffle(Vector256.Create(chunk).AsByte(), UnpackShuffle);
+            (Vector256.Equals(repl & UnpackBitSel, UnpackBitSel) & ones).StoreUnsafe(ref Unsafe.Add(ref rowRef, c));
+        }
+        for (; c + 8 <= len; c += 8)
+        {
+            var b = (bits.WordAt(c >> 6) >> (c & 63)) & 0xFF;
+            var spread = (b * 0x0101010101010101UL) & 0x8040201008040201UL;
+            spread |= spread >> 4;
+            spread |= spread >> 2;
+            spread |= spread >> 1;
+            spread &= 0x0101010101010101UL;
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref rowRef, c), spread);
+        }
+        for (; c < len; c++)
+        {
+            Unsafe.Add(ref rowRef, c) = (byte)((bits.WordAt(c >> 6) >> (c & 63)) & 1);
+        }
+    }
+
+    /// <summary>
     /// Every candidate's score of the unmasked <paramref name="buffer"/> with one abort bound for all, the buffer untouched: the scores
     /// <see cref="MaskCodeTransposed"/> compares, for the parity tests.
     /// </summary>

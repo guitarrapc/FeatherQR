@@ -192,7 +192,7 @@ internal static class SimdTiers
         new("ModuleBitPacker", (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // ModeSegmenter.ComputeCostsLanes: the mixed-mode cost walk over eight pieces at once; the 128-bit tier's four-lane groups narrow their parent entries with SSE2 on x64 and PackedSimd on WebAssembly
         new("ModeSegmenterLanes", (SimdTier.Vector256, Isa.Vector256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Sse2, Isa.Vector128 && Isa.Sse2), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
-        // EccBinaryEncoder.CalculateEcc: Reed-Solomon remainder; GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2; WebAssembly runs the NEON kernel with its swizzle for the table lookup
+        // EccBinaryEncoder.CalculateEcc / CalculateECCBlocks: Reed-Solomon remainder, a group's blocks side by side in one loop on x86 (from .NET 8 two with SSSE3 up to 16 codewords; on .NET 10 up to four with GFNI, above 16 codewords only with 256-bit GFNI and AVX2); GFNI runs inside the SSSE3 entry, and its 256-bit form, for blocks over 16 codewords, also asks for AVX2; WebAssembly runs the NEON kernel with its swizzle for the table lookup
         new("EccBinaryEncoder", (SimdTier.GfniV256, Isa.GfniV256 && Isa.Avx2), (SimdTier.Gfni, Isa.Gfni), (SimdTier.Ssse3, Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),
         // EccBinaryDecoder.ComputeSyndromes: the syndrome pass; the 128-bit tier multiplies by each lane's constant through its bit planes, with no platform instruction
         new("EccBinaryDecoder", (SimdTier.GfniV256, Isa.GfniV256), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Vector128, Isa.Vector128)),
@@ -215,7 +215,7 @@ internal static class SimdTiers
 
         // ModulePlacer.ExpandBits: message bits to module bytes; the SSSE3 step also finishes what the AVX2 step leaves
         new("ModulePlacerExpandBits", (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Avx2, Isa.Avx2), (SimdTier.Ssse3, Isa.Ssse3)),
-        // ModulePlacer.MaskCode: mask scoring and selection; the 128-bit tier scores every version (12-40 transposed), its popcount SSSE3 on x64 and PackedSimd on WebAssembly; ARM64 scores 12-40 with the same transposed tier on its own popcount, packing and unpack
+        // ModulePlacer.MaskCode: mask scoring and selection; at 12-40 the AVX2 tier's automatic selection also places the interleaved stream (TryMaskCodeFromStream); the 128-bit tier scores every version (12-40 transposed), its popcount SSSE3 on x64 and PackedSimd on WebAssembly; ARM64 scores 12-40 with the same transposed tier on its own popcount, packing and unpack
         new("ModulePlacerMaskCode", (SimdTier.Avx2, Isa.Avx2), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.Ssse3, Isa.Vector128 && Isa.Ssse3), (SimdTier.PackedSimd, Isa.Vector128 && Isa.PackedSimd), (SimdTier.Vector128, Isa.Vector128)),
         // QRBinaryEncoder.WriteAlphanumericData: the Alphanumeric payload writer, sixteen characters a step (then one step of eight on x64 and ARM64); the portable writer takes the rest of a run
         new("QRAlphanumericWriter", (SimdTier.Sse41, Isa.Sse41 && Isa.Ssse3), (SimdTier.AdvSimd, Isa.AdvSimd), (SimdTier.PackedSimd, Isa.PackedSimd)),

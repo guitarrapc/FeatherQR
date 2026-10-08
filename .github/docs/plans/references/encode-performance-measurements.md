@@ -1047,3 +1047,150 @@ The kernel: the old path line for line from 5b666aa (clear the destination, rent
 | V40, quiet zone 9 | 1252, 1246 | 0.98 to 1.00 | 1189, 1122 | 0.91 to 1.01 | 1139, 1249 | 1.08 to 1.11 |
 
 A gap is one 8-byte store at quiet zone 4, two at 6, and at 9 a `Span.Clear` of its 18 bytes, a call on every build. .NET 8 ran the same netstandard2.1 build, whose gap stores are the net8.0 build's source. The review's .NET Framework kernel copied a prepared core in both forms and ran its own copy of the move, the gap form given as an argument, so its ratios and these are not one series.
+
+## Phase 9: leads (2026-10-07)
+
+Base b47ee9b against the change, the stage harness on both sides (base's copy given the version 12 shape), .NET 10.0.9 on a Ryzen 9 7950X3D (Zen 4) unless a row says otherwise. Each shape runs alone in its own process pinned to one CCD, with the .NET build servers shut down. Rounds alternate base and change, and a ratio is the median of the run medians, change over base.
+
+### Ceilings
+
+Each stage alone in its own pinned process, one run, on the JIT with AVX2, as a share of the quiet-zone-free encode. Stages timed alone need not sum to the encode.
+
+| Symbol | Encode | RS | Placement | Mask selection |
+|---|---|---|---|---|
+| V1-L, 10 digits | 0.743 µs | 3.2 % | 8.5 % | 74.7 % |
+| V1-M, 16 alphanumeric | 0.758 µs | 2.8 % | 8.0 % | 82.5 % |
+| V6-M URL | 1.813 µs | 6.2 % | 16.6 % | 61.8 % |
+| V10-M, 300 alphanumeric | 2.904 µs | 7.4 % | 21.6 % | 53.4 % |
+| V19-M bytes | 10.63 µs | 6.1 % | 17.4 % | 74.5 % |
+| V26-M bytes | 14.49 µs | 8.0 % | 20.5 % | 57.7 % |
+| V39-H bytes | 29.86 µs | 4.7 % | 19.9 % | 55.8 % |
+| V40-L alphanumeric | 34.82 µs | 8.6 % | 18.6 % | 50.6 % |
+| V40-L bytes | 33.97 µs | 8.4 % | 18.3 % | 52.1 % |
+| V40-L numeric | 33.87 µs | 8.7 % | 18.4 % | 49.1 % |
+
+RS is 2.8 to 3.2 % at version 1 and 4.7 to 8.7 % from version 6, placement 8.0 % or more everywhere, so both were built. The two leads for versions 1 to 11 sit inside mask selection and were measured as kernels.
+
+### Versions 1 to 11: the popcount reduction and a 512-bit pass
+
+BenchmarkDotNet (3 warmups, 15 iterations, pinned to one CCD), the AVX2 single-word scorer selecting among all eight candidates, two groups of four lanes, against the shipped selection at the sizes of versions 1, 2, 6, 10 and 11. The deferred form sums the popcounts as bytes and folds them every 31 rows. The ceiling drops the reduction (`vpsadbw`) outright, so its scores are wrong and it bounds what any deferral could save; it runs without the early abort and is set against the shipped scorer without it. The 512-bit pass holds the eight candidates in one `Vector512`, with the same nibble-table popcount and no early abort. `VPOPCNTQ` was not tried. Two runs of the deferred form, two of the ceiling, one of the 512-bit pass:
+
+| Size | Shipped (run 3) | Deferred over shipped | Ceiling over shipped without abort | Shipped without abort over shipped | 512-bit over shipped |
+|---|---|---|---|---|---|
+| 21 | 478 ns | 1.12, 1.11 | 1.00, 0.98 | 1.00, 1.00 | 1.15 |
+| 25 | 574 ns | 1.12, 1.11 | 0.99, 1.00 | 1.01, 0.98 | 1.11 |
+| 41 | 923 ns | 1.10, 1.15 | 1.01, 0.98 | 1.01, 1.03 | 1.06 |
+| 57 | 1,299 ns | 1.10, 1.13 | 0.97, 0.95 | 1.02, 1.05 | 1.05 |
+| 61 | 1,524 ns | 1.26, 1.04 | 1.00, 1.03 | 1.02, 0.90 | 1.07 |
+
+The most a deferred reduction could save is inside the runs' spread, and the 512-bit pass lost at every size, so both were dropped.
+
+### Reed-Solomon across blocks
+
+BenchmarkDotNet as above, each variant over a symbol's blocks against the shipped GFNI kernel one block at a time. The two- and four-chain kernels hold their blocks' remainders in registers of their own and run the chains in one loop, at 128 bits up to 16 ECC codewords and 256 bits above. The lane kernel puts one block in each byte lane of a 256-bit vector, 32 blocks a vector, from a lane-major copy of the data. Its second form, for 30 ECC codewords only (and the first form elsewhere), keeps the remainders in locals. Three runs of the chains, two of the lanes; the one-at-a-time column is run 2's time:
+
+| Symbol (blocks, ECC codewords) | One at a time | Two chains | Four chains | Lanes | Lanes, second form | Lanes, second form, data copied into lanes |
+|---|---|---|---|---|---|---|
+| V6-M (4, 16) | 116 ns | 0.74 to 0.76 | 0.68 to 0.71 | 2.00 to 2.16 | 2.01 to 2.11 | 2.80 to 2.81 |
+| V10-M (5, 26) | 216 ns | 0.80 to 0.81 | 0.79 to 0.80 | 2.52 to 2.57 | 2.53 to 2.57 | 3.29 to 3.33 |
+| V19-M (14, 26) | 629 ns | 0.77 to 0.78 | 0.75 to 0.76 | 0.88 | 0.87 to 0.88 | 1.63 to 1.67 |
+| V26-M (23, 28) | 1,066 ns | 0.76 to 0.78 | 0.73 to 0.75 | 0.60 to 0.62 | 0.60 to 0.61 | 1.28 to 1.32 |
+| V39-H (77, 30) | 1,467 ns | 0.78 to 0.79 | 0.73 to 0.86 | 0.55 | 0.71 to 0.72 | 1.30 to 1.32 |
+| V40-L (25, 30) | 2,873 ns | 0.72 to 0.75 | 0.72 to 0.73 | 0.58 to 0.59 | 0.73 to 0.74 | 1.43 to 1.44 |
+
+The 0.86 at V39-H is run 3's; runs 1 and 2 read 0.73 there. The lanes win only with the data already lane-major: copied in a byte at a time, the second form lost everywhere, and their output was left in lanes. A vector transpose in and out was not tried. At V6-M and V10-M the blocks fill 4 and 5 of the 32 lanes. The chains shipped, four then two then one: from 17 ECC codewords only on 256-bit GFNI with AVX2, since there are no 128-bit chains for 32-byte remainders.
+
+With GFNI off, an SSSE3 pair (one run) took 0.72 of one block at a time at V6-M and 0.90 to 1.06 at V10-M to V40-L. That pair read its sixteen generator vectors from the nibble table at every step (the JIT's fully optimized code on this machine: all 72 shuffles take a memory operand, with no vector spills), where the 16-codeword pair's 36 shuffles all take registers. A 32-byte pair holding its vectors in registers was not tried. SSSE3 groups therefore pair only up to 16 ECC codewords.
+
+End to end, five rounds, change over base, the RS change alone on the JIT with AVX2, with GFNI and with GFNI off (`DOTNET_EnableGFNI=0`, the SSSE3 kernels). The multi-block rows are from the first form of the entry, whose block path is the shipped one. The one-block rows are from the shipped entry (below):
+
+| Shape | RS, GFNI | Encode, GFNI | RS, SSSE3 | Encode, SSSE3 |
+|---|---|---|---|---|
+| V1-L, 10 digits (1 block) | 0.88 | 1.02 | 0.89 | 1.02 |
+| V1-M, 16 alphanumeric (1 block) | 0.91 | 1.01 | 0.93 | 1.01 |
+| V6-M URL | 0.70 | 1.00 | 0.72 | 0.97 |
+| V10-M, 300 alphanumeric | 0.79 | 1.00 | 1.00 | 0.99 |
+| V19-M bytes | 0.75 | 0.99 | 0.99 | 1.02 |
+| V26-M bytes | 0.70 | 0.98 | 0.99 | 0.98 |
+| V39-H bytes | 0.67 | 0.99 | 0.98 | 0.98 |
+| V40-L alphanumeric | 0.70 | 0.95 | 1.00 | 0.99 |
+| V40-L bytes | 0.70 | 0.97 | 1.00 | 0.99 |
+| V40-L numeric | 0.69 | 0.97 | 1.00 | 0.99 |
+| R7x43 numeric (1 block) | 1.03 | 1.01 | 1.03 | 1.02 |
+| R11x59 alphanumeric (1 block) | 1.00 | 1.00 | 0.99 | 0.98 |
+| R17x139 bytes | 0.85 | 0.92 | 0.98 | 0.99 |
+| Micro QR M4, untouched (both runs) | | 1.01, 1.01 | | 0.98, 1.01 |
+
+The rMQR RS row is the codeword assembly, RS and interleave. A second run of V6-M, V40-L bytes and R17x139 read the RS rows at 0.70, 0.71 and 0.87 with GFNI, the encodes at 0.97, 0.96 and 0.92, and the run of the shipped entry R17x139 at 0.82 and 0.93.
+
+The entry as first written checked its arguments and dispatched both groups in calls of its own for every symbol. The one-block RS rows read 1.13 and 1.14 at version 1 and 1.21 at R7x43 with GFNI, and 1.03, 1.07 and 1.14 with SSSE3. A path for single blocks brought version 1 to 0.83 to 0.97, while R7x43 still read 1.11 with SSSE3 (0.038 to 0.044 µs a round against base's 0.035 to 0.036). With the single-block test in an inlined entry and the checks moved behind it, R7x43 reads 0.035 to 0.037 µs, 1.03.
+
+Default NativeAOT (its 128-bit GFNI tier, no AVX2), the RS change alone: the RS rows read 0.73 to 0.76 at V6-M, 0.94 at V40-L and R17x139 and 0.97 to 1.00 elsewhere, in two runs of five rounds. Its encode rows took two or more levels on both builds, process by process (V10-M base 5.35 to 5.79 µs, change 5.34 to 5.82 and one process at 8.96), and read 0.95 to 1.06 across three runs, V10-M 0.96 in one and 1.05 in another. The fastest process of ten a build: V1-M 1.468 against 1.470 µs, V6-M 3.374 against 3.424, V10-M 5.338 against 5.345, V19-M 19.37 against 19.57, M4 0.289 against 0.293. V40-L and R17x139 have 30 and 20 ECC codewords a block, above the 16 this build's chains take, so there both builds run the same kernel a block at a time. Their 0.94 was not explained.
+
+### Placement into the column words
+
+The change build alone, the template copy, byte placement and selection (the placed route) against the stream placed into the column words and the same selection (the stream route), five rounds a run. The first run's versions 1 to 10 are a stream form for the single-word tier, since removed:
+
+| Symbol | Stream over placed, run 1 | Run 2 |
+|---|---|---|
+| V1-L, 10 digits | 1.14 | |
+| V1-M, 16 alphanumeric | 1.12 | |
+| V6-M URL | 1.03 | |
+| V10-M, 300 alphanumeric | 0.97 | |
+| V12-M bytes | | 0.97 |
+| V19-M bytes | 0.86 | 0.93 |
+| V26-M bytes | 0.93 | 0.91 |
+| V39-H bytes | 0.92 | 0.89 |
+| V40-L bytes | 0.94 | 0.91 |
+| V40-L alphanumeric | | 0.91 |
+| V40-L numeric | | 0.89 |
+
+The stream form's tables (the column template, the walk's runs and the scattered modules' places) take 3,944 bytes at version 12 to 13,352 at version 40, built on first use.
+
+### End to end, the shipped code
+
+Both changes against base, five rounds, the JIT with AVX2:
+
+| Shape | Quiet-zone-free span | Class |
+|---|---|---|
+| V1-L, 10 digits | 0.99 | 0.98 |
+| V1-M, 16 alphanumeric | 0.98 | 0.97 |
+| V6-M URL | 0.99 | 0.94 |
+| V10-M, 300 alphanumeric | 0.98 | 0.98 |
+| V12-M bytes | 0.94 | 0.90 |
+| V19-M bytes | 0.89 | 1.39 |
+| V26-M bytes | 0.88 | 0.90 |
+| V39-H bytes | 0.95 | 0.87 |
+| V40-L alphanumeric | 0.84 | 0.87 |
+| V40-L bytes | 0.84 | 0.88 |
+| V40-L numeric | 0.85 | 0.89 |
+| R7x43 numeric | 0.99 | |
+| R11x59 alphanumeric | 1.00 | |
+| R17x139 bytes | 0.92 | |
+| Micro QR M2, untouched | 1.04 | |
+| Micro QR M4, untouched | 0.99 | |
+
+The V19-M class row read 1.38 again in ten rounds. Over both runs the change's processes took three levels, 10.5, 14.8 to 15.3 and 18.1 to 19.0 µs, against base's 12.8 to 13.8. A Stopwatch harness of the class API alone, eight alternating processes a build, each the median of nine rounds of the fastest batch, took V18-M, V19-M and V20-M to 0.91, 0.90 and 0.89 of base's time, every process of the change below every one of base, and V26-M and V40-L to 0.87 and 0.85. The level the stage harness reads was not explained.
+
+BenchmarkDotNet's `QRCodeEncodeEndToEnd` rows (3 launches, 3 warmups, 15 iterations, pinned to one CCD, two alternating rounds a build), change over base:
+
+| Row | Round 1 | Round 2 |
+|---|---|---|
+| V6-M URL, class | 0.97 | 0.97 |
+| V6-M URL, span | 0.98 | 0.98 |
+| V6-M URL, boost | 0.98 | 0.98 |
+| V20-M bytes, class | 0.90 | 0.94 |
+| V20-M bytes, span | 0.90 | 0.91 |
+| V40-L bytes, class | 0.88 | 0.89 |
+| V40-L bytes, span | 0.88 | 0.90 |
+| V40-L bytes, pinned version | 0.90 | 0.90 |
+
+The class rows allocate 280, 1,152 and 3,984 bytes on both builds, the span rows nothing.
+
+The other builds, five rounds unless stated, change over base:
+
+- The JIT without AVX (`DOTNET_EnableAVX=0`): encodes 0.97 to 1.02, R17x139 0.99 in a second run of ten rounds after 1.04 in the first, Micro QR M4 0.94 and 0.99. The RS rows read 0.71 at V6-M, 0.88 at V1-L and 0.97 to 1.03 elsewhere.
+- .NET Framework 4.8, the netstandard2.0 build (no intrinsics; the block entry goes one block at a time), four alternating processes a build in a Stopwatch harness: 0.99 to 1.00 over V1-L to V40-L, R7x43, R17x139 and Micro QR M4.
+- WebAssembly, where neither multi-block kernel nor the stream form runs. Interpreted, three rounds: 0.98 to 1.02. AOT-compiled, three rounds: 0.96 to 1.08, with V19-M at 1.07 and the untouched Micro QR M4 at 1.08. A second AOT run of five rounds: V6-M 1.00, V19-M 1.00, V40-L 1.04, R11x59 1.00, the untouched Micro QR M2 to M4 0.94 to 1.00. V40-L's processes there read 62.97 to 67.33 µs on base and 63.03 to 67.61 on the change.
+
+Not measured: ARM64, where the block entry goes a block at a time through the NEON kernel and the stream form does not run.
