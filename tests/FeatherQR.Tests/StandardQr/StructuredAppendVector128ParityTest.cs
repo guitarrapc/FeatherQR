@@ -53,6 +53,44 @@ public class StructuredAppendVector128ParityTest
             }
     }
 
+    public static IEnumerable<string> MarkRuns() => StructuredAppendLaneWalkTest.MarkRuns();
+
+    [Test]
+    [MethodDataSource(nameof(MarkRuns))]
+    public async Task Walk_ACutKeptOffARunOfMarks_LeavesTheLaneAStepBehind(string name)
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        var text = StructuredAppendLaneWalkTest.MarkRun(name);
+        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
+        const int version = 40;
+        var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
+        var budgets = Enumerable.Range(0, 8).Select(lane => capacity - 6 * (7 - lane)).ToArray();
+        var limit = StructuredAppendPlanner.MaxSymbols;
+        var counts = new int[8];
+        var laneEnds = new int[8 * limit];
+        var scalarEnds = new int[limit];
+
+        await Assert.That(StructuredAppendPlanner.WalkLanesVector128(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out var apart)).IsTrue().Because(name);
+        var closes = 0;
+        for (var lane = 0; lane < 8; lane++)
+        {
+            var because = $"{name} budget {budgets[lane]}";
+            var expected = StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], limit, scalarEnds);
+            await Assert.That(counts[lane]).IsEqualTo(expected > limit ? limit + 1 : expected).Because(because);
+            for (var k = 0; k < Math.Min(expected, limit); k++)
+                await Assert.That(laneEnds[lane * limit + k]).IsEqualTo(scalarEnds[k]).Because($"{because}, chunk {k}");
+            closes += StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], 64, scalarEnds) - 1;
+        }
+
+        // As in the 32-bit lanes: a close sets its lane a step back, two at a pair.
+        await Assert.That(apart).IsGreaterThan(0).Because(name);
+        await Assert.That(apart).IsLessThanOrEqualTo(2 * closes).Because(name);
+    }
+
     [Test]
     [Arguments(32)]
     [Arguments(65_553)]

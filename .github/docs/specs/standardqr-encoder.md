@@ -183,11 +183,21 @@ Planning time, as a multiple of the unmarked twin's, changed as follows (version
 
 Twenty marks at L stays at 2.8, the gate's cost: the capacity leaves its second batch two budgets, one of which would decide the count, and taking it regardless would plan with no scalar walk instead of three. Whether a batch cut that short decides the count is not known before it is walked, and the gate favours sets whose count is one more than the bound's. Spreading the first batch by the run instead cost a third more on texts whose answer stays near the floor (four and ten marks at L), which the retry leaves unchanged. Text without marks never reaches the retry.
 
+Runs of U+FEFF also cost every batch, at each cut kept off a run. The lane that closed re-read the run from the character ahead of it while the other lanes waited. On runs of 200 marks after forty digits (15,000 characters, level L, versions 1 to 40), a batch cost about five scalar walks, and planning with lanes took 1.9 times as long as the scalar search, 3.6 times at level H on 6,000 characters. Up to the character that did not fit, the new chunk is one Byte run of the character ahead and the marks, since no run opens at a mark past a chunk's head. So the lane now takes that cost in closed form and is a step behind, as after any close. Its budget always holds that cost: the chunk that closed held the same run from that character or an earlier one. Measured on 2026-10-09 (net10.0 JIT, AVX2), as lanes over scalar search:
+
+- 200 marks at L: 1.9 → 0.8. The whole set: 2.1 → 1.2 ms.
+- 300 marks at L: 2.5 → 0.8.
+- 200 marks at H (6,000 characters): 3.6 → 1.0.
+- Texts sixteen symbols do not hold: 1.7 to 2.9 → 1.1 to 1.2, for one batch the scalar search does not walk, 10 to 20 µs on the refusal path.
+- Text without long runs, including one run among ordinary lines: unchanged.
+
+Switching to the scalar search when the longest run is a large share of the budget was the first proposal. It needed a threshold, and lanes against scalar did not move monotonically with that share. It would also have sent a text with one long run among ordinary lines to the scalar search, where the lanes take 0.46 of its time.
+
 A byte order mark from `Utf8Bom` keeps the scalar walks, since its chunk is priced by another rule. So does content whose chunks average under the backend's threshold (128 characters for the 256-bit path, 20 for NEON), where chunks close so often, a step or two apart, that the lanes are rarely together. With lanes, 78-character chunks took half as long again, and 267-character chunks were nearly twice as fast.
 
 A surrogate pair needs no stepping rule of its own: it is priced whole on its first half, so a budget it breaks is broken on both halves, and the chunk ends before the pair either way. A mutation that dropped the rule and changed no plan showed this.
 
-The scalar probes run on the netstandard builds, on targets without accelerated 128-bit vectors, and on content whose chunks average under the backend's threshold: 128 characters for the 256-bit path, 20 for NEON, 40 for portable vectors on x64 and 80 on WebAssembly. NEON keeps native vectors in registers and tests whether any budget overflowed before extracting lane bits. Wrapping the vector state in another struct caused costly stack traffic. NEON's shorter threshold follows measurements around the old boundary and on small symbols: the compact state wins below 128 characters, while very short chunks still favor scalar probes. `StructuredAppendNeonParityTest` checks saturation, long text offsets and the budget representation boundary against the scalar walk.
+The scalar probes run on the netstandard builds, on targets without accelerated 128-bit vectors, and on content whose chunks average under the backend's threshold: 128 characters for the 256-bit path, 20 for NEON, 40 for portable vectors on x64 and 80 on WebAssembly. NEON keeps native vectors in registers and tests whether any budget overflowed before extracting lane bits. Wrapping the vector state in another struct caused costly stack traffic. NEON's shorter threshold follows measurements around the old boundary and on small symbols: the compact state wins below 128 characters, while very short chunks still favor scalar probes. `StructuredAppendNeonParityTest` checks saturation, long text offsets, the budget representation boundary and runs of marks against the scalar walk.
 
 `StructuredAppendLaneWalkTest` checks the lanes against the scalar walk, lane by lane, covering:
 
@@ -196,7 +206,7 @@ The scalar probes run on the netstandard builds, on targets without accelerated 
 - four versions (9, 26, 27 and 40: below the 9/10 edge, both sides of the 26/27 edge, and the largest).
 - eight lanes, and two.
 - every charset.
-- pairs, lone surrogates and U+FEFF inside the text (one on every line, after digits, after a pair, at the head).
+- pairs, lone surrogates and U+FEFF inside the text (one on every line, after digits, after a pair, at the head, and runs a cut lands inside, after a digit, a pair and a space).
 
 It also requires the same plan with and without the lanes.
 
@@ -281,7 +291,7 @@ At first the rule kept the lanes from stepping together: a cut moved off a mark 
 
 The wait is needed for correctness on marked text, not only for speed. A lane that moves while the lanes are apart is at the head of its chunk: one character, then the marks its cut was kept off. There, continuing that character's run never costs more than opening another, so that step needs no mark rule, but only while the wait works.
 
-The walk counts the steps it takes apart, and `StructuredAppendLaneWalkTest` bounds that count below and above, by the text's length, since a failed lane keeps closing chunks to the end of the text. A wait that half works changes plans, which the parity tests catch, and a wait that stops changes the count.
+The walk counts the steps it takes apart, and `StructuredAppendLaneWalkTest` bounds that count below and above, by the text's length, since a failed lane keeps closing chunks to the end of the text. A wait that half works changes plans, which the parity tests catch, and a wait that stops changes the count. On runs of 200 marks after five kinds of character, the lane tests bound the count by the walks' closes, two steps a close, in every lane form: a lane that re-read a run its cut was kept off is apart for the run's length.
 
 `StructuredAppendStreamTest` walks the cut across the mark one character at a time at three versions, with and without a pair ahead of it, and checks:
 

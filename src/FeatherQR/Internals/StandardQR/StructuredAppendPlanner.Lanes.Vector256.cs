@@ -1,4 +1,5 @@
 #if NET8_0_OR_GREATER
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -28,6 +29,8 @@ internal static partial class StructuredAppendPlanner
         Span<int> chunkStart = stackalloc int[Lanes];
         Span<int> chunks = stackalloc int[Lanes];
         Span<bool> failed = stackalloc bool[Lanes];
+        Span<int> reopenByte = stackalloc int[Lanes]; // a closing lane's next states
+        Span<int> reopenCheapest = stackalloc int[Lanes];
         for (var lane = 0; lane < Lanes; lane++)
         {
             budget[lane] = budgets[lane < used ? lane : used - 1] - HeaderBits - charset.GetStandardQrHeaderBits();
@@ -143,7 +146,7 @@ internal static partial class StructuredAppendPlanner
                 nb = Vector256.Min(b, cheapest + vOpenByte) + byteBits;
                 next = Vector256.Min(Vector256.Min(Vector256.Min(nn0, nn1), Vector256.Min(nn2, na0)), Vector256.Min(na1, nb));
 
-                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this character again, so the lanes are back at one character a few steps after a close, whatever the close cost each of them (a pair is two characters back, a cut kept off a mark more).
+                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this character again, so the lanes are back at one character a few steps after a close, whatever the close cost each of them (a pair is two characters back).
                 var lowest = Math.Min(Math.Min(Math.Min(s0, s1), Math.Min(s2, s3)), Math.Min(Math.Min(s4, s5), Math.Min(s6, s7)));
                 var hold = Vector256.GreaterThan(Vector256.Create(s0, s1, s2, s3, s4, s5, s6, s7), Vector256.Create(lowest));
                 nn0 = Vector256.ConditionalSelect(hold, n0, nn0);
@@ -187,7 +190,7 @@ internal static partial class StructuredAppendPlanner
                 continue;
             }
 
-            // Some lane's chunk closes before this character, which starts its next chunk: the lane re-reads it on the next step, with fresh states.
+            // Some lane's chunk closes before this character, which starts its next chunk or follows a run its cut was kept off: the lane re-reads it on the next step.
             for (var lane = 0; lane < Lanes; lane++)
             {
                 if ((overBits & (1u << lane)) == 0)
@@ -213,7 +216,21 @@ internal static partial class StructuredAppendPlanner
                     budget[lane] = int.MaxValue;
                 }
                 chunkStart[lane] = end;
-                offset[lane] -= 1 + (position - end);
+                // Re-reading the run the cut was kept off held the other lanes for its length, at every such close.
+                var kept = TWidth.Utf8 ? KeptOffRunBits(text, charset, end, position, openByte) : -1;
+                if (kept >= 0)
+                {
+                    // The closing chunk held the same run from this character or an earlier one, within its budget.
+                    Debug.Assert(kept <= budget[lane]);
+                    reopenByte[lane] = reopenCheapest[lane] = kept;
+                    offset[lane] -= 1;
+                }
+                else
+                {
+                    reopenByte[lane] = unreachableCost;
+                    reopenCheapest[lane] = 0;
+                    offset[lane] -= 1 + (position - end);
+                }
             }
 
             vBudget = Vector256.Create(budget[0], budget[1], budget[2], budget[3], budget[4], budget[5], budget[6], budget[7]);
@@ -222,8 +239,8 @@ internal static partial class StructuredAppendPlanner
             n2 = Vector256.ConditionalSelect(over, unreachable, nn2);
             a0 = Vector256.ConditionalSelect(over, unreachable, na0);
             a1 = Vector256.ConditionalSelect(over, unreachable, na1);
-            b = Vector256.ConditionalSelect(over, unreachable, nb);
-            cheapest = Vector256.ConditionalSelect(over, Vector256<int>.Zero, next);
+            b = Vector256.ConditionalSelect(over, Vector256.Create(reopenByte[0], reopenByte[1], reopenByte[2], reopenByte[3], reopenByte[4], reopenByte[5], reopenByte[6], reopenByte[7]), nb);
+            cheapest = Vector256.ConditionalSelect(over, Vector256.Create(reopenCheapest[0], reopenCheapest[1], reopenCheapest[2], reopenCheapest[3], reopenCheapest[4], reopenCheapest[5], reopenCheapest[6], reopenCheapest[7]), next);
             s0 = offset[0];
             s1 = offset[1];
             s2 = offset[2];

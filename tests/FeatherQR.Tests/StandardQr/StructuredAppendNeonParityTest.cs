@@ -23,6 +23,10 @@ public class StructuredAppendNeonParityTest
             foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
                 yield return (text.ToString(), charset);
         }
+
+        // Runs of marks a cut lands inside, after digits and after a pair; two hundred marks are more than a small version holds.
+        yield return (string.Concat(Enumerable.Repeat("0123456789012345678901234567890123456789" + new string((char)0xFEFF, 200), 60)), EciMode.Utf8);
+        yield return (string.Concat(Enumerable.Repeat("1234" + char.ConvertFromUtf32(0x1F389) + new string((char)0xFEFF, 60), 100)), EciMode.Utf8);
     }
 
     [Test]
