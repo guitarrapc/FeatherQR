@@ -5,7 +5,7 @@ using FeatherQR.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Verifies that the bit-packed MaskCode (single-word and triple-word paths)
+/// Verifies that the bit-packed MaskCode (single-word and multi-word paths)
 /// selects the same mask pattern and produces a byte-identical matrix as a
 /// naive byte-per-module reference implementation of ISO/IEC 18004
 /// Section 7.8 (data masking) + Section 8.8.2 (penalty scoring).
@@ -14,10 +14,13 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class ModulePlacerMaskPackedParityTest
 {
-    // Versions covering all structural cases:
+    // Versions covering the structural cases:
     // 1 (no alignment patterns), 2/5/6 (alignment, no version info),
-    // 7/10 (version info), 11/12 (61 -> 65 modules: single-word/triple-word
-    // boundary), 20/40 (large matrices, multiple alignment rows).
+    // 7/10 (version info), 11/12 (61 -> 65 modules: single-word/multi-word
+    // boundary), 20/40 (large matrices, multiple alignment rows). The
+    // multi-word scorer's split at 27/28 (125 -> 129 modules: it reads two
+    // words a row, then three) is held by ModulePlacerMaskScoreParityTest,
+    // since a wrong score there need not change the selection.
     public static IEnumerable<int> Versions => [1, 2, 5, 6, 7, 10, 11, 12, 13, 20, 40];
 
     [Test]
@@ -72,12 +75,13 @@ public class ModulePlacerMaskPackedParityTest
         }
     }
 
-    /// <summary>Versions 12-40: two words a row to version 27 (size 125), three from version 28 (size 129).</summary>
+    /// <summary>Versions 12-40, whose rows need two words to version 27 (size 125) and three from version 28 (size 129).</summary>
     public static IEnumerable<int> MultiWordVersions => Enumerable.Range(12, 29);
 
     /// <summary>
-    /// The scalar selection of versions 12-40, which the netstandard builds take, called directly at every version. Through
-    /// <see cref="ModulePlacer.MaskCode"/> the tests reach it only where no vector tier runs (hardware intrinsics off).
+    /// The scalar selection of versions 12-40, which the netstandard builds take, held to the textbook selection at every version, on
+    /// random data at all four levels and on all-light and all-dark data at M. The vector tiers' selection tests take it as their
+    /// reference, and through <see cref="ModulePlacer.MaskCode"/> the other tests here reach it only where no vector tier runs.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(MultiWordVersions))]

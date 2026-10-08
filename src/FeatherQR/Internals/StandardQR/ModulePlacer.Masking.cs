@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// <summary>
 /// Bit-packed mask pattern selection.
 ///
-/// QR modules are 1-bit values, so the whole evaluation pipeline operates on rows packed into ulongs instead of one byte per module: a row is 1 word for matrices up to 64 modules (versions 1-11), and 2 or 3 words for larger ones (versions 12-27 and 28-40).
+/// QR modules are 1-bit values, so the whole evaluation pipeline operates on rows packed into ulongs instead of one byte per module: a row needs 1 word for matrices up to 64 modules (versions 1-11), and 2 or 3 words for larger ones (versions 12-27 and 28-40).
 /// Per pattern, applying the mask is a handful of XOR/AND word operations per row and all four ISO/IEC 18004 penalty rules are computed bit-parallel with shifts and popcounts.
 ///
 /// Measured against the previous byte-per-module implementation (see the micro-optimization findings log): version 1 ~8x, version 10 ~44x, version 40 ~30-40x, zero allocations.
@@ -34,7 +34,7 @@ internal static partial class ModulePlacer
     {
 #if NET8_0_OR_GREATER
         // AVX2: four candidates per vector for versions 1-11 (ModulePlacer.Masking.X86.cs), the transposed scorer for 12-40 (ModulePlacer.Masking.Transposed.X86.cs).
-        // 2.5-2.8x the scalar bit-packed paths below at versions 1, 6 and 10, and 2.9-4.9x at 12-40, on the JIT on Zen 4 (2026-10-05).
+        // 2.5-2.8x the scalar bit-packed paths below at versions 1, 6 and 10 (2026-10-05), and 2.3-2.9x the scalar path at versions 12, 20, 27, 28 and 40 (2026-10-08), on the JIT on Zen 4.
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
@@ -242,7 +242,7 @@ internal static partial class ModulePlacer
     /// </summary>
     /// <remarks>
     /// Terminates early (returning int.MaxValue) once the running sum of rules 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever accumulate, so a pattern whose partial sum already exceeds the best total can never be selected, the result is provably identical.
-    /// Measured ~5-10% on this single-word path; the multi-word scorer intentionally has no abort because no win was measurable there (see the findings log), nor on .NET Framework 4.8, where a checkpoint before its column rules read 1.00 to 1.01 of its time (2026-10-07).
+    /// Measured ~5-10% on this single-word path. The multi-word scorer intentionally has no abort: a per-row abort gave no measurable win on the <see cref="Row192"/> scorer it replaced, at version 40 (see the findings log, 2026-07-10), and on .NET Framework 4.8, with a checkpoint before the multi-word scorer's column rules, mask selection took 1.00 to 1.01 of its time without one (2026-10-07).
     /// </remarks>
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
@@ -440,8 +440,8 @@ internal static partial class ModulePlacer
     // ---------------------------------
 
     /// <summary>
-    /// Mask selection for versions 12-40 without vectors, the route of the netstandard builds. A row is two words up to version 27
-    /// (size 125) and three from version 28.
+    /// Mask selection for versions 12-40 without vectors, the route of the netstandard builds. It holds three words a row, and its scorer
+    /// reads two up to version 27 (size 125) and three from version 28.
     /// </summary>
     /// <remarks>
     /// The rows are plain words in one array, three a row, rather than a <see cref="Row192"/> each in a <see cref="Span{T}"/>: on .NET
@@ -875,6 +875,15 @@ internal static partial class ModulePlacer
     /// <see cref="CalculateScore64"/>. The scratch holds the rows' light modules; it becomes the light run from row t down and the rows
     /// the core from row t down (ascending, as in CalculateScore64).
     /// </summary>
+    /// <remarks>
+    /// Left to tiered compilation, unlike its callers, so on the x64 JIT of .NET 8 and later its first calls run Tier0 code. With
+    /// <c>AggressiveOptimization</c> mask selection with hardware intrinsics off took 1.10 times its time without
+    /// it on .NET 10 and 1.05 to 1.06 on .NET 8 (x64, 2026-10-08): on .NET 10 the Tier1 code inlines the software popcount and <see cref="Row192.MaskLow"/>,
+    /// which the fully optimized first compile leaves as calls. The callers keep the attribute, so with hardware intrinsics off on x64 their row
+    /// loops hold 10 or 15 calls to the software popcount. Leaving them to tiering, or a popcount of the file's own where the hardware
+    /// has none, was not measured. On 32-bit x86 with hardware intrinsics off, .NET 8 and 10 compiled this method fully optimized at its
+    /// first call, and neither it nor its callers called the software popcount (2026-10-08).
+    /// </remarks>
     private static int ScoreColumnWords(ulong[] words, int rows, int scratch, int size, int wordCount)
     {
         var score = 0;
