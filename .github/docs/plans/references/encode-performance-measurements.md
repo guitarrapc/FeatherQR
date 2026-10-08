@@ -1246,3 +1246,105 @@ Standard QR:
 | 128 | 0.99 to 1.01 | 1.00 to 1.02 | 0.98 to 1.14 | 0.98 to 1.06 | 0.99 to 1.01 | 0.99 to 1.01 |
 
 On x86, Standard QR's version 6 read 1.14 to 1.17 on .NET 8 and version 10 1.06 to 1.12 on .NET 10, on every row, the quiet-zone-free one included, so those ranges carry the two symbols' offsets. On .NET 10 NativeAOT, rMQR R17x139 again read its quiet-zone-free row low (0.96) and its default row high (1.04), as for the committed form above.
+
+#### To 64 bytes (2026-10-08)
+
+The review stopped the stores at 32 bytes, the range timed until then. The step after it measured two forms for a gap of 33 to 64 bytes, quiet zones 17 to 32, against base `main` (d32274b) and the reviewed code (69316e4), in the harness above:
+
+- L64: the review's loop of 16-byte stores back from the gap's end, the last at its start, bounded at 64 bytes.
+- S64: the reviewed two stores up to 32 bytes, and four from 33 to 64. Two end where the gap ends and 16 bytes before it, and two start where it starts and 16 bytes after it.
+
+The kernel: the library's own `CenterCore` and `ClearMargins` on the eight shapes, two alternating processes per build and runtime. Each cell is the shapes' range of each build over base, from the median of the two processes. At 9 and 16 all three forms write the same two stores. The column of the reviewed code, which clears every gap over 32 bytes, repeats its profile caveat above.
+
+| Runtime, quiet zone | Two stores to 32 bytes | L64 | S64 |
+|---|---|---|---|
+| x64 .NET 8, 9 | 0.59 to 0.82 | 0.66 to 0.87 | 0.58 to 0.82 |
+| x64 .NET 8, 16 | 0.65 to 0.86 | 0.70 to 0.89 | 0.61 to 0.86 |
+| x64 .NET 8, 17 | 1.09 to 1.25 | 0.69 to 0.85 | 0.70 to 0.85 |
+| x64 .NET 8, 20 | 1.04 to 1.50 | 0.64 to 0.85 | 0.64 to 0.87 |
+| x64 .NET 8, 24 | 1.05 to 1.23 | 0.44 to 0.87 | 0.42 to 0.90 |
+| x64 .NET 8, 28 | 0.93 to 1.27 | 0.64 to 0.90 | 0.58 to 0.92 |
+| x64 .NET 8, 32 | 1.04 to 1.18 | 0.77 to 0.94 | 0.70 to 0.94 |
+| x64 .NET 8, 33 | 0.96 to 1.18 | 0.96 to 1.20 | 0.98 to 1.18 |
+| x64 .NET 8, 64 | 1.01 to 1.14 | 0.99 to 1.12 | 1.03 to 1.11 |
+| x64 .NET 10, 9 | 0.59 to 0.85 | 0.69 to 0.92 | 0.58 to 0.86 |
+| x64 .NET 10, 16 | 0.63 to 0.88 | 0.76 to 0.92 | 0.65 to 0.89 |
+| x64 .NET 10, 17 | 1.01 to 1.06 | 0.81 to 1.23 | 0.79 to 0.93 |
+| x64 .NET 10, 20 | 1.00 to 1.07 | 0.84 to 0.99 | 0.83 to 1.17 |
+| x64 .NET 10, 24 | 1.00 to 1.06 | 0.86 to 0.98 | 0.88 to 1.00 |
+| x64 .NET 10, 28 | 1.02 to 1.08 | 0.96 to 1.13 | 0.89 to 1.12 |
+| x64 .NET 10, 32 | 1.00 to 1.06 | 0.98 to 1.04 | 0.92 to 1.00 |
+| x64 .NET 10, 33 | 1.02 to 1.08 | 0.93 to 1.07 | 0.93 to 1.07 |
+| x64 .NET 10, 64 | 0.96 to 1.03 | 0.94 to 1.07 | 0.93 to 1.06 |
+| x86 .NET 8, 9 | 0.75 to 0.90 | 0.78 to 1.03 | 0.80 to 0.94 |
+| x86 .NET 8, 16 | 0.63 to 0.78 | 0.64 to 0.81 | 0.68 to 0.83 |
+| x86 .NET 8, 17 | 1.01 to 1.08 | 0.76 to 0.86 | 0.76 to 0.98 |
+| x86 .NET 8, 20 | 1.00 to 1.06 | 0.73 to 0.91 | 0.77 to 0.94 |
+| x86 .NET 8, 24 | 1.02 to 1.13 | 0.70 to 0.90 | 0.73 to 1.06 |
+| x86 .NET 8, 28 | 1.01 to 1.09 | 0.79 to 1.15 | 0.74 to 0.85 |
+| x86 .NET 8, 32 | 1.01 to 1.13 | 0.77 to 1.13 | 0.71 to 0.85 |
+| x86 .NET 8, 33 | 0.97 to 1.07 | 0.95 to 1.20 | 0.97 to 1.06 |
+| x86 .NET 8, 64 | 1.01 to 1.04 | 0.95 to 1.13 | 1.01 to 1.04 |
+| x86 .NET 10, 9 | 0.66 to 0.92 | 0.90 to 0.99 | 0.78 to 0.95 |
+| x86 .NET 10, 16 | 0.80 to 1.29 | 0.95 to 1.01 | 0.79 to 0.97 |
+| x86 .NET 10, 17 | 0.98 to 1.14 | 1.03 to 1.26 | 0.92 to 1.01 |
+| x86 .NET 10, 20 | 0.96 to 1.06 | 1.00 to 1.25 | 0.87 to 1.05 |
+| x86 .NET 10, 24 | 1.00 to 1.08 | 1.01 to 1.10 | 0.91 to 1.12 |
+| x86 .NET 10, 28 | 0.98 to 1.13 | 1.11 to 1.21 | 0.89 to 1.03 |
+| x86 .NET 10, 32 | 0.95 to 1.13 | 0.94 to 1.18 | 0.88 to 1.01 |
+| x86 .NET 10, 33 | 0.95 to 1.17 | 0.96 to 1.03 | 0.91 to 1.10 |
+| x86 .NET 10, 64 | 0.99 to 1.04 | 0.98 to 1.01 | 0.96 to 1.00 |
+
+L64 lost on x86 .NET 10 at quiet zones 17 to 28 (1.00 to 1.26), and on .NET 10 x64 `CenterCore` at 32 read 1.03 to 1.04 against S64's 0.92 to 0.95, so S64 ships. Two S64 cells lost in both processes: R7x43 at 28 on .NET 10 x64 (1.12) and M2 at 24 on x86 .NET 10 (1.12). End to end those rows read 1.00 and 0.97.
+
+End to end: base against S64 at quiet zones 0, the default, 8, 16, 17, 20, 24, 28, 32, 33 and 64. Six alternating rounds ran on the x64 JIT, four on x86 and four on default NativeAOT. Each row is the median of each build's process medians, S64 over base, and each cell is the range over the symbology's symbols. Every process of both builds wrote the same 132 outputs.
+
+Micro QR:
+
+| Quiet zone | JIT x64, .NET 8 | JIT x64, .NET 10 | JIT x86, .NET 8 | JIT x86, .NET 10 | NativeAOT x64, .NET 8 | NativeAOT x64, .NET 10 |
+|---|---|---|---|---|---|---|
+| 0 | 1.00 to 1.01 | 0.99 to 1.00 | 1.00 | 0.99 to 1.00 | 0.97 to 1.01 | 0.98 to 1.01 |
+| default | 1.00 to 1.02 | 0.98 to 1.00 | 1.00 to 1.01 | 0.99 to 1.00 | 0.95 to 1.02 | 0.98 to 1.01 |
+| 8 | 1.01 to 1.03 | 0.99 to 1.01 | 1.00 to 1.02 | 0.99 to 1.00 | 0.96 to 1.00 | 0.97 to 1.02 |
+| 16 | 0.89 to 0.90 | 0.93 to 0.96 | 0.95 | 0.96 to 0.99 | 0.93 to 0.96 | 0.96 to 0.97 |
+| 17 | 0.88 to 0.90 | 0.96 to 0.97 | 0.96 to 0.97 | 0.98 | 0.90 to 0.95 | 0.98 to 1.00 |
+| 20 | 0.84 to 0.85 | 0.95 to 0.96 | 0.96 | 0.98 to 0.99 | 0.88 to 0.92 | 0.98 to 1.01 |
+| 24 | 0.88 to 0.89 | 0.95 to 0.97 | 0.95 to 0.96 | 0.97 to 0.98 | 0.89 to 0.93 | 0.94 to 0.98 |
+| 28 | 0.81 to 0.88 | 0.95 to 0.97 | 0.95 to 0.96 | 0.97 to 0.99 | 0.89 to 0.92 | 0.98 to 0.99 |
+| 32 | 0.90 | 0.95 to 0.99 | 0.95 | 0.98 to 0.99 | 0.90 to 0.94 | 0.99 to 1.00 |
+| 33 | 1.00 to 1.02 | 1.00 to 1.02 | 1.00 to 1.02 | 0.98 to 1.00 | 0.99 to 1.04 | 1.01 |
+| 64 | 1.02 to 1.04 | 1.01 to 1.02 | 1.00 to 1.02 | 0.99 to 1.00 | 0.99 to 1.03 | 0.99 to 1.02 |
+
+rMQR:
+
+| Quiet zone | JIT x64, .NET 8 | JIT x64, .NET 10 | JIT x86, .NET 8 | JIT x86, .NET 10 | NativeAOT x64, .NET 8 | NativeAOT x64, .NET 10 |
+|---|---|---|---|---|---|---|
+| 0 | 0.97 to 1.00 | 1.00 to 1.01 | 0.97 to 1.00 | 0.99 to 1.03 | 0.99 to 1.00 | 0.99 to 1.02 |
+| default | 1.01 to 1.02 | 0.98 to 1.00 | 1.01 to 1.02 | 0.99 to 1.08 | 0.99 | 1.00 to 1.05 |
+| 8 | 0.99 to 1.01 | 0.97 to 1.00 | 1.00 to 1.01 | 0.99 | 0.99 to 1.00 | 1.01 to 1.05 |
+| 16 | 0.96 to 0.98 | 0.95 to 0.98 | 0.96 to 0.99 | 0.97 to 0.99 | 0.97 to 0.99 | 0.94 to 1.02 |
+| 17 | 0.96 to 0.98 | 0.97 to 0.98 | 0.98 to 0.99 | 0.96 to 0.99 | 0.95 to 0.98 | 0.90 to 1.01 |
+| 20 | 0.94 to 0.98 | 0.98 to 0.99 | 0.96 to 0.99 | 0.99 to 1.00 | 0.95 to 0.99 | 0.98 to 1.03 |
+| 24 | 0.96 to 0.97 | 0.97 to 1.02 | 0.97 to 0.98 | 0.98 to 1.01 | 0.95 to 0.96 | 0.98 to 1.03 |
+| 28 | 0.97 | 0.97 to 1.00 | 0.96 to 0.98 | 0.98 to 1.00 | 0.93 to 0.97 | 0.98 to 1.02 |
+| 32 | 0.95 to 0.97 | 0.97 to 0.99 | 0.95 to 0.97 | 0.98 to 1.01 | 0.96 to 0.97 | 0.97 to 1.02 |
+| 33 | 1.00 | 0.99 to 1.01 | 0.99 to 1.02 | 0.99 to 1.00 | 0.97 to 1.00 | 1.00 to 1.03 |
+| 64 | 0.99 to 1.02 | 1.00 to 1.01 | 0.99 to 1.01 | 0.99 to 1.00 | 0.98 to 1.01 | 0.96 to 1.01 |
+
+Standard QR:
+
+| Quiet zone | JIT x64, .NET 8 | JIT x64, .NET 10 | JIT x86, .NET 8 | JIT x86, .NET 10 | NativeAOT x64, .NET 8 | NativeAOT x64, .NET 10 |
+|---|---|---|---|---|---|---|
+| 0 | 1.00 to 1.01 | 1.00 to 1.02 | 0.97 to 1.17 | 0.98 to 1.17 | 0.99 to 1.00 | 0.98 to 1.02 |
+| default | 0.99 to 1.01 | 0.99 to 1.01 | 0.99 to 1.17 | 0.98 to 1.14 | 0.99 to 1.01 | 0.99 to 1.02 |
+| 8 | 1.00 to 1.02 | 0.99 to 1.02 | 0.99 to 1.17 | 0.99 to 1.14 | 1.00 to 1.01 | 0.98 to 1.02 |
+| 16 | 0.96 to 1.02 | 0.97 to 1.00 | 0.97 to 1.17 | 0.97 to 1.15 | 0.99 to 1.00 | 0.98 to 1.01 |
+| 17 | 0.96 to 1.01 | 0.98 to 1.02 | 0.98 to 1.14 | 0.98 to 1.14 | 0.97 to 1.00 | 0.98 to 1.02 |
+| 20 | 0.94 to 0.99 | 0.99 to 1.01 | 0.98 to 1.14 | 0.98 to 1.14 | 0.96 to 1.00 | 0.98 to 1.02 |
+| 24 | 0.91 to 1.01 | 0.99 to 1.01 | 0.98 to 1.14 | 0.98 to 1.14 | 0.95 to 0.99 | 0.98 to 1.02 |
+| 28 | 0.92 to 1.01 | 0.99 to 1.00 | 0.98 to 1.13 | 0.98 to 1.14 | 0.96 to 0.99 | 0.98 to 1.01 |
+| 32 | 0.95 to 1.01 | 0.99 to 1.00 | 0.98 to 1.16 | 0.98 to 1.15 | 0.97 to 0.99 | 0.98 to 1.01 |
+| 33 | 1.00 to 1.02 | 1.00 to 1.02 | 0.98 to 1.16 | 0.98 to 1.16 | 1.00 to 1.01 | 0.98 to 1.02 |
+| 64 | 0.99 to 1.03 | 0.99 to 1.02 | 0.99 to 1.15 | 0.99 to 1.15 | 1.00 to 1.01 | 0.98 to 1.02 |
+
+On x86, two of the four S64 processes ran Standard QR's version 1 (.NET 8) and version 10 (.NET 10) about 30 % slower on every row, the quiet-zone-free one included (1.12 to 1.17), and the ranges carry that. On NativeAOT .NET 10, rMQR R11x59 read 1.02 to 1.03 from quiet zone 20 to 33, 33 included, where both builds clear. Its quiet-zone-free row read 0.989 and its rows at the default and at 8 read 1.010 and 1.015. Over each symbol's quiet-zone-free row on .NET 8 x64, Micro QR's quiet zone at 17 to 32 went from 44.2 to 70.4 % to 27.4 to 45.6 %, and version 1's from 16.8 to 23.7 % to 12.7 to 15.8 %.

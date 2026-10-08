@@ -14,11 +14,11 @@ namespace FeatherQR.Internals;
 /// </summary>
 /// <remarks>
 /// Between two core rows the margins are one gap: the right margin of one row and the left margin of the next, 2q bytes. A gap of up
-/// to 16 bytes is zeroed as the 8 or 16 bytes that end where the gap ends, one or two stores, a gap of 17 to 32 bytes as two 16-byte
-/// stores, one ending where it ends and one starting where it starts, and a wider one by a clear of its length (see
-/// <see cref="ClearGap"/>). A clear of the 2q bytes themselves, a length known only at run time, is a call: with one per row, moving a
-/// small symbol's core in place took longer than clearing the whole destination and copying the rows. The stores of a gap of up to 16 bytes also zero up to 6 bytes in front of it, the end of the row before it, so that row is
-/// written after them; every core is wider than that.
+/// to 16 bytes is zeroed as the 8 or 16 bytes that end where the gap ends, one or two stores, a gap of 17 to 64 bytes as two or four
+/// 16-byte stores from its two ends, and a wider one by a clear of its length (see <see cref="ClearGap"/>). A clear of the 2q bytes
+/// themselves, a length known only at run time, is a call: with one per row, moving a small symbol's core in place took longer than
+/// clearing the whole destination and copying the rows. The stores of a gap of up to 16 bytes also zero up to 6 bytes in front of it,
+/// the end of the row before it, so that row is written after them; every core is wider than that.
 /// </remarks>
 internal static partial class QuietZoneWindow
 {
@@ -80,11 +80,12 @@ internal static partial class QuietZoneWindow
     /// each (2026-10-06).
     /// <para>
     /// A gap of 17 to 32 bytes, quiet zones 9 to 16, is two 16-byte stores, one ending where the gap ends and one starting where it starts,
-    /// so nothing in front of it is zeroed. Its clear was a call a row, and the stores took the span encodes at quiet zones 9 and 16 to 0.88
-    /// to 0.89 of their time for Micro QR, 0.95 to 0.99 for Standard QR and 0.94 to 0.97 for rMQR on .NET 8 x64, and to 0.91 to 0.94, 0.98
-    /// to 1.02 and 0.96 to 1.00 on .NET 10 x64, where the rows they do not reach read 0.98 to 1.03 (2026-10-08). A wider gap keeps the
-    /// clear: a loop of 16-byte stores lost to it on x64 between quiet zones 32 and 64, and at 64 and 128 took 1.01 to 1.43 of its time
-    /// in the kernel (2026-10-07). The browser keeps the clear: with the stores the WebAssembly interpreter took 1.01 to 1.05 times as long
+    /// and a gap of 33 to 64 bytes, quiet zones 17 to 32, four, two from each end, so nothing in front of the gap is zeroed. Its clear was a
+    /// call a row. The two stores took the span encodes at quiet zones 9 and 16 to 0.88 to 0.89 of their time for Micro QR, 0.95 to 0.99
+    /// for Standard QR and 0.94 to 0.97 for rMQR on .NET 8 x64, and to 0.91 to 0.94, 0.98 to 1.02 and 0.96 to 1.00 on .NET 10 x64. The
+    /// four took them at quiet zones 17 to 32 to 0.81 to 0.90, 0.91 to 1.01 and 0.94 to 0.98 on .NET 8 x64, and to 0.95 to 0.99, 0.98 to
+    /// 1.02 and 0.97 to 1.02 on .NET 10 x64 (2026-10-08). A wider gap keeps the clear: a loop of 16-byte stores lost to it on x64 between
+    /// quiet zones 32 and 64, and at 64 and 128 took 1.01 to 1.43 of its time in the kernel (2026-10-07). The browser keeps the clear: with the stores the WebAssembly interpreter took 1.01 to 1.05 times as long
     /// at quiet zones 9 and 16 and AOT-compiled WebAssembly 0.90 to 0.98, and one test serves both WebAssembly builds. The netstandard
     /// builds keep it too, not timed with the stores.
     /// </para>
@@ -118,6 +119,13 @@ internal static partial class QuietZoneWindow
             if (!OperatingSystem.IsBrowser() && gap <= 32)
             {
                 Clear16(target, gapEnd - 16);
+                Clear16(target, gapEnd - gap);
+            }
+            else if (!OperatingSystem.IsBrowser() && gap <= 64)
+            {
+                Clear16(target, gapEnd - 16);
+                Clear16(target, gapEnd - 32);
+                Clear16(target, gapEnd - gap + 16);
                 Clear16(target, gapEnd - gap);
             }
             else

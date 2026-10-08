@@ -749,9 +749,9 @@ public class RmQRSegmentationTest
     public async Task Optimal_SpanOverload_MatchesTheDataOverload(string content)
     {
         // A dirty destination with a tail: the span path clears only the margins, before the placer writes the window. The quiet
-        // zones reach each form of the gap between two rows (2q bytes: up to 8, up to 16, two 16-byte stores up to 32, a clear from 34), and
+        // zones reach each form of the gap between two rows (2q bytes: up to 8, up to 16, two 16-byte stores up to 32, four up to 64, a clear from 66), and
         // the tail must stay as it was.
-        foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9, 16, 17 })
+        foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9, 16, 17, 32, 33 })
         {
             var options = new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal };
             var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, options);

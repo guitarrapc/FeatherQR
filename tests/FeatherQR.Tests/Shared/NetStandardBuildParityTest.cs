@@ -63,15 +63,15 @@ public class NetStandardBuildParityTest
         // path runs: the URL for Standard QR (its planned span site), "a1234567890" for Micro QR, and the mixed text for rMQR. Standard QR's and
         // Micro QR's quiet zones bracket a margin of one module and one wider than a version 1 or M1 core, and each symbology's reach
         // each form of the gap between two rows (Standard QR's on the builds that move its core in place). From q = 9 the netstandard builds
-        // clear a gap in one call where the host's writes two 16-byte stores up to q = 16, and from q = 17 both clear it.
+        // clear a gap in one call where the host's writes two 16-byte stores up to q = 16 and four up to q = 32, and from q = 33 both clear it.
         var (texts, quietZones, eccLevel, host) = symbology switch
         {
             "QR" => (new[] { "HELLO WORLD", new string('A', 40), "https://example.com/item?id=123456789012345678901234567890", "HELLO WORLD 1234567890123456789012345678901234567890", new string('7', 300), new string('z', 500) },
-                new[] { 0, 1, 2, 4, 7, 16, 17, 25 }, (int)QREccLevel.M, (Func<string, int, bool, byte[]>)HostQR),
+                new[] { 0, 1, 2, 4, 7, 16, 17, 25, 32, 33 }, (int)QREccLevel.M, (Func<string, int, bool, byte[]>)HostQR),
             "MicroQR" => (new[] { "12345", "HELLO", "a1234567890", "0123456789012345678901234567890" },
-                new[] { 0, 1, 2, 4, 5, 8, 9, 16, 17, 25 }, (int)MicroQREccLevel.L, HostMicroQR),
+                new[] { 0, 1, 2, 4, 5, 8, 9, 16, 17, 25, 32, 33 }, (int)MicroQREccLevel.L, HostMicroQR),
             _ => (new[] { "HELLO WORLD", "1234567890123", "HELLO WORLD 1234567890123456789012345678901234567890", new string('k', 120) },
-                new[] { 0, 1, 2, 4, 5, 8, 9, 16, 17 }, (int)RmQREccLevel.M, (Func<string, int, bool, byte[]>)HostRmQR),
+                new[] { 0, 1, 2, 4, 5, 8, 9, 16, 17, 32, 33 }, (int)RmQREccLevel.M, (Func<string, int, bool, byte[]>)HostRmQR),
         };
         await Assert.That(texts.Count(text => host(text, 0, true).Length < host(text, 0, false).Length)).IsGreaterThan(0)
             .Because($"a {symbology} text must segment under Optimal into a smaller symbol than Single, so that the planned path runs");
