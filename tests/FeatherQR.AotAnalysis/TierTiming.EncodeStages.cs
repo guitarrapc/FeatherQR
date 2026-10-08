@@ -203,7 +203,8 @@ internal static partial class TierTiming
                 };
             }),
             // Placement and selection together, the two routes the generator can take: the template copy, the placed bytes and the
-            // selection on them, and on a build with the stream form, the stream placed straight into the selection's column words.
+            // selection on them, and where the stream form runs (TryMaskCodeFromStream's gate: AVX2, versions 12-40), the stream placed
+            // straight into the selection's column words. Elsewhere that row would time only the gate, so it is left out.
             new($"stage/{name}/place-mask", () =>
             {
                 var s = stages.Value;
@@ -217,7 +218,7 @@ internal static partial class TierTiming
             {
                 var s = stages.Value;
                 return () => ModulePlacer.TryMaskCodeFromStream(s.Work, s.Version, s.Interleaved, s.Ecc, out var pattern) ? pattern : -1;
-            }),
+            }, System.Runtime.Intrinsics.X86.Avx2.IsSupported && version >= 12),
             new($"stage/{name}/mask-forced0", () => ForcedMask(stages.Value, 0)),
             new($"stage/{name}/mask-forced3", () => ForcedMask(stages.Value, 3)),
             new($"stage/{name}/format", () => { var s = stages.Value; return () => s.FormatAndVersion(s.Work, 3); }),

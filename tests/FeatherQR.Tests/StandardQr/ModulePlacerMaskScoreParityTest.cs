@@ -55,13 +55,23 @@ public class ModulePlacerMaskScoreParityTest
         {
             foreach (var (name, matrix) in Matrices(size))
             {
+                // Three words a row from an offset into the array, the scratch after a gap, and every other entry dirty: the scorer
+                // reads only the rows it is given, and writes its scratch before it reads it.
                 var w0 = PackWords(matrix, size, 0);
                 var w1 = PackWords(matrix, size, 1);
                 var w2 = PackWords(matrix, size, 2);
-                var rows = new ModulePlacer.Row192[size];
-                for (var y = 0; y < size; y++) rows[y] = new ModulePlacer.Row192(w0[y], w1[y], w2[y]);
+                const int rowsAt = 5;
+                var scratchAt = rowsAt + 3 * size + 3;
+                var words = new ulong[scratchAt + 3 * size + 4];
+                words.AsSpan().Fill(0xA5A5_A5A5_A5A5_A5A5);
+                for (var y = 0; y < size; y++)
+                {
+                    words[rowsAt + 3 * y] = w0[y];
+                    words[rowsAt + 3 * y + 1] = w1[y];
+                    words[rowsAt + 3 * y + 2] = w2[y];
+                }
                 var expected = ModulePlacerMaskPackedParityTest.ReferenceScore(matrix, size);
-                await Assert.That(ModulePlacer.CalculateScorePacked(rows, new ModulePlacer.Row192[size], size)).IsEqualTo(expected).Because($"size {size}, {name}");
+                await Assert.That(ModulePlacer.CalculateScorePacked(words, rowsAt, scratchAt, size)).IsEqualTo(expected).Because($"size {size}, {name}");
             }
         }
     }

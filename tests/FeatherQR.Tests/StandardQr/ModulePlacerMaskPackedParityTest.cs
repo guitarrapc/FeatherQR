@@ -5,7 +5,7 @@ using FeatherQR.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Verifies that the bit-packed MaskCode (single-word and triple-word paths)
+/// Verifies that the bit-packed MaskCode (single-word and multi-word paths)
 /// selects the same mask pattern and produces a byte-identical matrix as a
 /// naive byte-per-module reference implementation of ISO/IEC 18004
 /// Section 7.8 (data masking) + Section 8.8.2 (penalty scoring).
@@ -14,10 +14,13 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class ModulePlacerMaskPackedParityTest
 {
-    // Versions covering all structural cases:
+    // Versions covering the structural cases:
     // 1 (no alignment patterns), 2/5/6 (alignment, no version info),
-    // 7/10 (version info), 11/12 (61 -> 65 modules: single-word/triple-word
-    // boundary), 20/40 (large matrices, multiple alignment rows).
+    // 7/10 (version info), 11/12 (61 -> 65 modules: single-word/multi-word
+    // boundary), 20/40 (large matrices, multiple alignment rows). The
+    // multi-word scorer's split at 27/28 (125 -> 129 modules: it reads two
+    // words a row, then three) is held by ModulePlacerMaskScoreParityTest,
+    // since a wrong score there need not change the selection.
     public static IEnumerable<int> Versions => [1, 2, 5, 6, 7, 10, 11, 12, 13, 20, 40];
 
     [Test]
@@ -70,6 +73,51 @@ public class ModulePlacerMaskPackedParityTest
             await Assert.That(actualBest).IsEquivalentTo(expectedBest);
             await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer, CollectionOrdering.Matching);
         }
+    }
+
+    /// <summary>Versions 12-40, whose rows need two words to version 27 (size 125) and three from version 28 (size 129).</summary>
+    public static IEnumerable<int> MultiWordVersions => Enumerable.Range(12, 29);
+
+    /// <summary>
+    /// The scalar selection of versions 12-40, which the netstandard builds take, held to the textbook selection at every version, on
+    /// random data at all four levels and on all-light and all-dark data at M. The vector tiers' selection tests take it as their
+    /// reference, and through <see cref="ModulePlacer.MaskCode"/> the other tests here reach it only where no vector tier runs.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(MultiWordVersions))]
+    public async Task MaskCode192_MatchesByteDomainReference(int version)
+    {
+        foreach (var eccLevel in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
+        {
+            for (var seed = 0; seed < 2; seed++)
+            {
+                var (buffer, blockedMask, size) = BuildFixture(version, seed);
+                await AssertMaskCode192(buffer, blockedMask, size, version, eccLevel, $"version {version}-{eccLevel}, seed {seed}");
+            }
+        }
+
+        foreach (var fill in new byte[] { 0, 1 })
+        {
+            var (buffer, blockedMask, size) = BuildFixture(version, seed: 0);
+            for (var i = 0; i < buffer.Length; i++)
+            {
+                if ((blockedMask[i >> 3] & (1 << (i & 7))) == 0)
+                    buffer[i] = fill;
+            }
+            await AssertMaskCode192(buffer, blockedMask, size, version, QREccLevel.M, $"version {version}-M, data all {fill}");
+        }
+    }
+
+    private static async Task AssertMaskCode192(byte[] buffer, byte[] blockedMask, int size, int version, QREccLevel eccLevel, string because)
+    {
+        var expectedBuffer = (byte[])buffer.Clone();
+        var expectedBest = ReferenceMaskCode(expectedBuffer, size, version, blockedMask, eccLevel);
+
+        var actualBuffer = (byte[])buffer.Clone();
+        var actualBest = ModulePlacer.MaskCode192(actualBuffer, size, version, blockedMask, eccLevel);
+
+        await Assert.That(actualBest).IsEqualTo(expectedBest).Because(because);
+        await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer, CollectionOrdering.Matching).Because(because);
     }
 
     /// <summary>

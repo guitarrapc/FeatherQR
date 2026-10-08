@@ -60,12 +60,13 @@ public class NetStandardBuildParityTest
         var (build, path) = await LoadBuild(targetFramework);
 
         // Texts of one to many versions, and of mixed modes that Optimal segments into a smaller symbol, so that the generator's planned
-        // path runs: the URL for Standard QR (its planned span site), "a1234567890" for Micro QR, and the mixed text for rMQR. Standard QR's and
-        // Micro QR's quiet zones bracket a margin of one module and one wider than a version 1 or M1 core, and each symbology's reach
-        // each form of the gap between two rows (Standard QR's on the builds that move its core in place).
+        // path runs: the URL for Standard QR (its planned span site), "a1234567890" for Micro QR, and the mixed text for rMQR. Standard QR's
+        // longest texts take the scalar mask selection's two-word rows (500 bytes, version 17) and three-word rows (1,200 bytes, version 29).
+        // Standard QR's and Micro QR's quiet zones bracket a margin of one module and one wider than a version 1 or M1 core, and each
+        // symbology's reach each form of the gap between two rows (Standard QR's on the builds that move its core in place).
         var (texts, quietZones, eccLevel, host) = symbology switch
         {
-            "QR" => (new[] { "HELLO WORLD", new string('A', 40), "https://example.com/item?id=123456789012345678901234567890", "HELLO WORLD 1234567890123456789012345678901234567890", new string('7', 300), new string('z', 500) },
+            "QR" => (new[] { "HELLO WORLD", new string('A', 40), "https://example.com/item?id=123456789012345678901234567890", "HELLO WORLD 1234567890123456789012345678901234567890", new string('7', 300), new string('z', 500), new string('z', 1200) },
                 new[] { 0, 1, 2, 4, 7, 25 }, (int)QREccLevel.M, (Func<string, int, bool, byte[]>)HostQR),
             "MicroQR" => (new[] { "12345", "HELLO", "a1234567890", "0123456789012345678901234567890" },
                 new[] { 0, 1, 2, 4, 5, 8, 9, 25 }, (int)MicroQREccLevel.L, HostMicroQR),

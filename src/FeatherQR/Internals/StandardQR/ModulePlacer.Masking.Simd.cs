@@ -14,7 +14,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// Versions 1-11 run the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call; versions 12-40 the
 /// transposed scorer (ModulePlacer.Masking.Transposed.Vector128.cs), which took 0.39 to 0.59 of the scalar bit-packed paths' time at
 /// versions 12 to 27 and 0.56 to 0.71 at 28 to 40 on the JIT without AVX2, default NativeAOT, WebAssembly AOT and interpreted
-/// (2026-10-05).
+/// (2026-10-05), and 0.67 to 0.73 of the scalar path rewritten on 2026-10-07 at versions 12, 20, 27, 28 and 40 on the JIT with AVX off
+/// (2026-10-08).
 /// </summary>
 /// <remarks>
 /// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
