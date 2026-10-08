@@ -73,111 +73,74 @@ public class SimpleEncode
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Number_Encode()
+    public QRCodeData FeatherQR_Number_Encode()
     {
         return FeatherQR.QRCodeGenerator.Create(_textNumber.AsSpan(), QREccLevel.L);
     }
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Alphanumeric_Encode()
+    public QRCodeData FeatherQR_Alphanumeric_Encode()
     {
         return FeatherQR.QRCodeGenerator.Create(_textAlphanumeric.AsSpan(), QREccLevel.L);
     }
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Url_Encode()
+    public QRCodeData FeatherQR_Url_Encode()
     {
         return FeatherQR.QRCodeGenerator.Create(_textUrl.AsSpan(), QREccLevel.L);
     }
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Unicode_Encode()
+    public QRCodeData FeatherQR_Unicode_Encode()
     {
         return FeatherQR.QRCodeGenerator.Create(_textUnicode.AsSpan(), QREccLevel.L);
     }
 
     [Benchmark]
     [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Wifi_Encode()
+    public QRCodeData FeatherQR_Wifi_Encode()
     {
         return FeatherQR.QRCodeGenerator.Create(_textWifi.AsSpan(), QREccLevel.L);
     }
 
     // Span-destination (zero-allocation) variants
 
-    [Benchmark(Description = "SkiaSharpQrCode_Number_Encode (Span)")]
-    [BenchmarkCategory("FeatherQR")]
-    public int SkiaSharpQrCode_Number_EncodeSpan()
+    [Benchmark]
+    [BenchmarkCategory("FeatherQR_Span")]
+    public int FeatherQR_Number_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.Create(_textNumber.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
-    [Benchmark(Description = "SkiaSharpQrCode_Alphanumeric_Encode (Span)")]
-    [BenchmarkCategory("FeatherQR")]
-    public int SkiaSharpQrCode_Alphanumeric_EncodeSpan()
+    [Benchmark]
+    [BenchmarkCategory("FeatherQR_Span")]
+    public int FeatherQR_Alphanumeric_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.Create(_textAlphanumeric.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
-    [Benchmark(Description = "SkiaSharpQrCode_Url_Encode (Span)")]
-    [BenchmarkCategory("FeatherQR")]
-    public int SkiaSharpQrCode_Url_EncodeSpan()
+    [Benchmark]
+    [BenchmarkCategory("FeatherQR_Span")]
+    public int FeatherQR_Url_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.Create(_textUrl.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
-    [Benchmark(Description = "SkiaSharpQrCode_Unicode_Encode (Span)")]
-    [BenchmarkCategory("FeatherQR")]
-    public int SkiaSharpQrCode_Unicode_EncodeSpan()
+    [Benchmark]
+    [BenchmarkCategory("FeatherQR_Span")]
+    public int FeatherQR_Unicode_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.Create(_textUnicode.AsSpan(), QREccLevel.L, _spanDestination);
     }
 
-    [Benchmark(Description = "SkiaSharpQrCode_Wifi_Encode (Span)")]
-    [BenchmarkCategory("FeatherQR")]
-    public int SkiaSharpQrCode_Wifi_EncodeSpan()
+    [Benchmark]
+    [BenchmarkCategory("FeatherQR_Span")]
+    public int FeatherQR_Wifi_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.Create(_textWifi.AsSpan(), QREccLevel.L, _spanDestination);
-    }
-
-    // Version pinned (the cross-language benchmark's call)
-
-    [Benchmark(Description = "SkiaSharpQrCode_Number_Encode (Pinned)")]
-    [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Number_EncodePinned()
-    {
-        return FeatherQR.QRCodeGenerator.Create(_textNumber.AsSpan(), QREccLevel.L, Version1);
-    }
-
-    [Benchmark(Description = "SkiaSharpQrCode_Alphanumeric_Encode (Pinned)")]
-    [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Alphanumeric_EncodePinned()
-    {
-        return FeatherQR.QRCodeGenerator.Create(_textAlphanumeric.AsSpan(), QREccLevel.L, Version2);
-    }
-
-    [Benchmark(Description = "SkiaSharpQrCode_Url_Encode (Pinned)")]
-    [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Url_EncodePinned()
-    {
-        return FeatherQR.QRCodeGenerator.Create(_textUrl.AsSpan(), QREccLevel.L, Version3);
-    }
-
-    [Benchmark(Description = "SkiaSharpQrCode_Unicode_Encode (Pinned)")]
-    [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Unicode_EncodePinned()
-    {
-        return FeatherQR.QRCodeGenerator.Create(_textUnicode.AsSpan(), QREccLevel.L, Version4);
-    }
-
-    [Benchmark(Description = "SkiaSharpQrCode_Wifi_Encode (Pinned)")]
-    [BenchmarkCategory("FeatherQR")]
-    public QRCodeData SkiaSharpQrCode_Wifi_EncodePinned()
-    {
-        return FeatherQR.QRCodeGenerator.Create(_textWifi.AsSpan(), QREccLevel.L, Version3);
     }
 
     // Net.Codecrete.QrCodeGenerator

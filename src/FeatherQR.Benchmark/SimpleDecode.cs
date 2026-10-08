@@ -29,9 +29,9 @@ using SkiaSharp;
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleDecode
 {
-    private const string SkiaMatrix = "FeatherQR (matrix)";
+    private const string FeatherQRMatrix = "FeatherQR (matrix)";
     private const string GlyphMatrix = "CodeGlyphX (matrix)";
-    private const string SkiaImage = "FeatherQR (image)";
+    private const string FeatherQRImage = "FeatherQR (image)";
     private const string GlyphImage = "CodeGlyphX (image)";
     private const string ZxingImage = "Zxing (image)";
 
@@ -101,24 +101,24 @@ public class SimpleDecode
     // FeatherQR, matrix
 
     [Benchmark(Baseline = true)]
-    [BenchmarkCategory(SkiaMatrix)]
-    public string SkiaSharpQrCode_Number_MatrixDecode() => DecodeMatrix(Number);
+    [BenchmarkCategory(FeatherQRMatrix)]
+    public string FeatherQR_Number_MatrixDecode() => DecodeMatrix(Number);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaMatrix)]
-    public string SkiaSharpQrCode_Alphanumeric_MatrixDecode() => DecodeMatrix(Alphanumeric);
+    [BenchmarkCategory(FeatherQRMatrix)]
+    public string FeatherQR_Alphanumeric_MatrixDecode() => DecodeMatrix(Alphanumeric);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaMatrix)]
-    public string SkiaSharpQrCode_Url_MatrixDecode() => DecodeMatrix(Url);
+    [BenchmarkCategory(FeatherQRMatrix)]
+    public string FeatherQR_Url_MatrixDecode() => DecodeMatrix(Url);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaMatrix)]
-    public string SkiaSharpQrCode_Unicode_MatrixDecode() => DecodeMatrix(Unicode);
+    [BenchmarkCategory(FeatherQRMatrix)]
+    public string FeatherQR_Unicode_MatrixDecode() => DecodeMatrix(Unicode);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaMatrix)]
-    public string SkiaSharpQrCode_Wifi_MatrixDecode() => DecodeMatrix(Wifi);
+    [BenchmarkCategory(FeatherQRMatrix)]
+    public string FeatherQR_Wifi_MatrixDecode() => DecodeMatrix(Wifi);
 
     // CodeGlyphX, matrix
 
@@ -145,24 +145,24 @@ public class SimpleDecode
     // FeatherQR, image
 
     [Benchmark(Baseline = true)]
-    [BenchmarkCategory(SkiaImage)]
-    public string SkiaSharpQrCode_Number_ImageDecode() => DecodeImage(Number);
+    [BenchmarkCategory(FeatherQRImage)]
+    public string FeatherQR_Number_ImageDecode() => DecodeImage(Number);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaImage)]
-    public string SkiaSharpQrCode_Alphanumeric_ImageDecode() => DecodeImage(Alphanumeric);
+    [BenchmarkCategory(FeatherQRImage)]
+    public string FeatherQR_Alphanumeric_ImageDecode() => DecodeImage(Alphanumeric);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaImage)]
-    public string SkiaSharpQrCode_Url_ImageDecode() => DecodeImage(Url);
+    [BenchmarkCategory(FeatherQRImage)]
+    public string FeatherQR_Url_ImageDecode() => DecodeImage(Url);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaImage)]
-    public string SkiaSharpQrCode_Unicode_ImageDecode() => DecodeImage(Unicode);
+    [BenchmarkCategory(FeatherQRImage)]
+    public string FeatherQR_Unicode_ImageDecode() => DecodeImage(Unicode);
 
     [Benchmark]
-    [BenchmarkCategory(SkiaImage)]
-    public string SkiaSharpQrCode_Wifi_ImageDecode() => DecodeImage(Wifi);
+    [BenchmarkCategory(FeatherQRImage)]
+    public string FeatherQR_Wifi_ImageDecode() => DecodeImage(Wifi);
 
     // CodeGlyphX, image
 

@@ -15,7 +15,7 @@ namespace FeatherQR.Internals.RmQR;
 /// Four consecutive clean pairs — eight consecutive columns — are turned inside out in registers (UZP1/UZP2 to separate a pair's two column vectors, TBL to flip the upward-walked ones back into row order, a three-stage ZIP network to leave symbol row <c>i</c> in 64-bit lane <c>i &amp; 1</c> of vector <c>i / 2</c>), so one symbol row is one 8-byte store.
 /// <para>
 /// What the eight columns cannot cover falls to row RUNS rather than to per-module scatter: stretches of rows where both columns of a pair are ordinary data keep the 16-bit pair store, and only the genuinely isolated modules are scattered a byte at a time.
-/// Ref-based loads and stores throughout, because LD2/ST1-lane would need <c>AllowUnsafeBlocks</c> across the library.
+/// Ref-based loads and stores throughout, because LD2/ST1-lane take pointers, and the library keeps unsafe code to one alignment hint (<c>ModulePlacer.ExpandBitsAdvSimd</c>).
 /// </para>
 /// <para>
 /// Measured ratios and the designs that were rejected are recorded in .github/docs/specs/rmqr-encoder.md.

@@ -901,7 +901,7 @@ internal static partial class ModeSegmenter
         return Encoding.UTF8.GetByteCount(text);
 #else
         // netstandard2.0 has no span overload, and the pointer overload would mean
-        // enabling unsafe across the library, which this project has declined. Rent
+        // unsafe code, which the library keeps to one alignment hint. Rent
         // rather than ToString(), so planning stays allocation-free on every target.
         var rented = ArrayPool<char>.Shared.Rent(Math.Max(text.Length, 1));
         try

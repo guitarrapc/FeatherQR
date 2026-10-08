@@ -86,7 +86,7 @@ internal static partial class QuietZoneWindow
     /// for Standard QR and 0.94 to 0.97 for rMQR on .NET 8 x64, and to 0.91 to 0.94, 0.98 to 1.02 and 0.96 to 1.00 on .NET 10 x64. The
     /// four took them at quiet zones 17 to 32 to 0.81 to 0.90, 0.91 to 1.01 and 0.94 to 0.98 on .NET 8 x64, and to 0.95 to 0.99, 0.98 to
     /// 1.02 and 0.97 to 1.02 on .NET 10 x64 (2026-10-08). A wider gap keeps the clear: a loop of 16-byte stores lost to it on x64 between
-    /// quiet zones 32 and 64, and at 64 and 128 took 1.01 to 1.43 of its time in the kernel (2026-10-07). The browser keeps the clear:
+    /// quiet zones 32 and 64, and at 64 and 128 took 1.01 to 1.43 of its time in the kernel (2026-10-08). The browser keeps the clear:
     /// with the stores the WebAssembly interpreter took 1.01 to 1.05 times as long at quiet zones 9 and 16 and AOT-compiled WebAssembly
     /// 0.90 to 0.98, and one test serves both WebAssembly builds. The netstandard builds keep it too, not timed with the stores.
     /// </para>
