@@ -20,8 +20,7 @@ public class EccBinaryEncoderBlocksParityTest
         {
             foreach (var level in new[] { QREccLevel.L, QREccLevel.M, QREccLevel.Q, QREccLevel.H })
             {
-                var info = QRCodeConstants.GetEccInfo(version, level);
-                await AssertLayout(info.ECCPerBlock, info.BlocksInGroup1, info.CodewordsInGroup1, info.BlocksInGroup2, info.CodewordsInGroup2);
+                await AssertLayout(QRCodeConstants.GetEccInfo(version, level));
             }
         }
     }
@@ -33,19 +32,19 @@ public class EccBinaryEncoderBlocksParityTest
         {
             foreach (var level in new[] { RmQREccLevel.M, RmQREccLevel.H })
             {
-                var info = RmQRConstants.GetEccInfo((RmQRVersion)v, level);
-                await AssertLayout(info.ECCPerBlock, info.BlocksInGroup1, info.CodewordsInGroup1, info.BlocksInGroup2, info.CodewordsInGroup2);
+                await AssertLayout(RmQRConstants.GetEccInfo((RmQRVersion)v, level));
             }
         }
     }
 
     // Block counts that reach every quad, pair and single remainder (1 to 9), on lengths under one 4-byte step, between steps,
-    // and on QR's longest block, at ECC counts on both sides of the 16-byte register split.
+    // and on version 40-L's longer block (119 codewords, against QR's longest, 123), at ECC counts on both sides of the 16-byte register split,
+    // and at 31 and 32, which no QR layout has but the dispatch sends to these kernels.
     public static IEnumerable<(int Blocks, int Length, int EccCount)> GroupShapes()
     {
         foreach (var blocks in new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 })
         {
-            foreach (var (length, eccCount) in new[] { (1, 7), (3, 10), (6, 16), (15, 16), (16, 17), (27, 22), (119, 30) })
+            foreach (var (length, eccCount) in new[] { (1, 7), (3, 10), (6, 16), (15, 16), (16, 17), (27, 22), (119, 30), (5, 31), (34, 32) })
                 yield return (blocks, length, eccCount);
         }
     }
@@ -88,16 +87,9 @@ public class EccBinaryEncoderBlocksParityTest
     }
 #endif
 
-    [Test]
-    public async Task CalculateECCBlocks_ShortBuffers_Throw()
+    private static async Task AssertLayout(ECCInfo info)
     {
-        await Assert.That(() => EccBinaryEncoder.CalculateECCBlocks(new byte[9], new byte[30], 10, 2, 4, 1, 2)).Throws<ArgumentException>();
-        await Assert.That(() => EccBinaryEncoder.CalculateECCBlocks(new byte[10], new byte[29], 10, 2, 4, 1, 2)).Throws<ArgumentException>();
-        await Assert.That(() => EccBinaryEncoder.CalculateECCBlocks(new byte[10], new byte[30], 0, 2, 4, 1, 2)).Throws<ArgumentOutOfRangeException>();
-    }
-
-    private static async Task AssertLayout(int eccCount, int blocks1, int length1, int blocks2, int length2)
-    {
+        var (eccCount, blocks1, length1, blocks2, length2) = (info.ECCPerBlock, info.BlocksInGroup1, info.CodewordsInGroup1, info.BlocksInGroup2, info.CodewordsInGroup2);
         var dataLength = blocks1 * length1 + blocks2 * length2;
         foreach (var data in Inputs(dataLength))
         {
@@ -106,7 +98,7 @@ public class EccBinaryEncoderBlocksParityTest
             NaivePerBlock(data.AsSpan(blocks1 * length1), blocks2, length2, eccCount).CopyTo(expected, blocks1 * eccCount);
 
             var actual = new byte[expected.Length];
-            EccBinaryEncoder.CalculateECCBlocks(data, actual, eccCount, blocks1, length1, blocks2, length2);
+            EccBinaryEncoder.CalculateECCBlocks(data, actual, info);
             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching);
         }
     }

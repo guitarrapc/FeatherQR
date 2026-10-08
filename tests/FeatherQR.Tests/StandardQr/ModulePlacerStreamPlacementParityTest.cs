@@ -46,15 +46,16 @@ public class ModulePlacerStreamPlacementParityTest
 
                 var actual = new byte[size * size];
                 actual.AsSpan().Fill(0xEE);
-                // The planes come from the shared pool, which hands back what others left: a dirty array, so a padding row the stream form
-                // does not clear shows.
+                // The planes come from the shared pool, which hands back what others left, so the stream form runs on a dirty array as it
+                // does in the encoder. A dirty padding row past the symbol does not show: with the clear of the row planes' padding removed,
+                // or replaced by a fill of ones, this test passes at every version.
                 var junk = System.Buffers.ArrayPool<ulong>.Shared.Rent(ModulePlacer.TransposedScratchLength(version));
                 junk.AsSpan().Fill(0xA5A5A5A5A5A5A5A5ul);
                 System.Buffers.ArrayPool<ulong>.Shared.Return(junk);
                 var pattern = ModulePlacer.MaskCodeTransposedFromStream(actual, version, stream, ecc);
 
-                // The stream form writes the version information with the rest; the placed path gets it from PlaceVersion. Only the
-                // expected matrix takes it, so the comparison holds the stream form's own version modules.
+                // The stream form writes the version information with the rest, from its column template; the placed path gets it from
+                // PlaceVersion, as the encoder calls it after that path only.
                 ModulePlacer.PlaceVersion(expected, size, QRCodeConstants.GetVersionBits(version));
 
                 var first = actual.AsSpan().CommonPrefixLength(expected);
@@ -93,8 +94,8 @@ public class ModulePlacerStreamPlacementParityTest
                 for (var k = 0; k < 64; k++)
                 {
                     var b = bit + k;
-                    var value = b < length * 8 ? (stream[b >> 3] >> (7 - (b & 7))) & 1 : 0;
-                    expected = (expected << 1) | (ulong)value;
+                    var value = b < length * 8 ? (uint)(stream[b >> 3] >> (7 - (b & 7))) & 1 : 0u;
+                    expected = (expected << 1) | value;
                 }
                 if (ModulePlacer.ReadStreamBits(stream, bit) != expected)
                     mismatches.Add($"length {length}, bit {bit}");
@@ -127,7 +128,7 @@ public class ModulePlacerStreamPlacementParityTest
         yield return ("all dark", Filled(length, 0xFF));
         yield return ("alternating", Filled(length, 0xAA));
         yield return ("cut short", random.AsSpan(0, length - 7).ToArray());
-        yield return ("cut inside a byte", random.AsSpan(0, length / 3).ToArray());
+        yield return ("cut to a third", random.AsSpan(0, length / 3).ToArray());
         var longer = new byte[length + 5];
         random.CopyTo(longer, 0);
         new Random(seed + 2000).NextBytes(longer.AsSpan(length));

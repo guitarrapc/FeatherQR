@@ -1193,7 +1193,7 @@ The other builds, five rounds unless stated, change over base:
 - .NET Framework 4.8, the netstandard2.0 build (no intrinsics; the block entry goes one block at a time), four alternating processes a build in a Stopwatch harness: 0.99 to 1.00 over V1-L to V40-L, R7x43, R17x139 and Micro QR M4.
 - WebAssembly, where neither multi-block kernel nor the stream form runs. Interpreted, three rounds: 0.98 to 1.02. AOT-compiled, three rounds: 0.96 to 1.08, with V19-M at 1.07 and the untouched Micro QR M4 at 1.08. A second AOT run of five rounds: V6-M 1.00, V19-M 1.00, V40-L 1.04, R11x59 1.00, the untouched Micro QR M2 to M4 0.94 to 1.00. V40-L's processes there read 62.97 to 67.33 µs on base and 63.03 to 67.61 on the change.
 
-Not measured: ARM64, where neither change runs.
+Not measured: ARM64, where the block entry goes a block at a time through the NEON kernel and the stream form does not run.
 
 ## Phase 9 follow-up: scalar mask selection on .NET Framework 4.8 (2026-10-07)
 
