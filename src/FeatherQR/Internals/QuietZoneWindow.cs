@@ -73,8 +73,9 @@ internal static partial class QuietZoneWindow
 
     /// <summary>Zeroes the <paramref name="gap"/> bytes ending at <paramref name="gapEnd"/>; a gap of up to 16 bytes also zeroes up to 6 bytes in front of it.</summary>
     /// <remarks>
-    /// .NET 10 on x64 writes a clear of a constant 8 or 16 bytes as one store whichever form its profile saw run; 32-bit x86 on .NET 10
-    /// calls <c>SpanHelpers.ClearWithoutReferences</c> for it. .NET 8 leaves the form the profile did not see as a call, so a process that
+    /// .NET 10 on x64 writes a clear of a constant 8 or 16 bytes as one store whichever form its profile saw run, unless the method it is
+    /// inlined into has used up its inline budget (see <c>ClearByStores</c>); 32-bit x86 on .NET 10 calls
+    /// <c>SpanHelpers.ClearWithoutReferences</c> for it. .NET 8 leaves the form the profile did not see as a call, so a process that
     /// encoded with the default quiet zones and then with one of 5 to 8 paid a call a row. The builds before .NET 10 write 8-byte stores
     /// instead, which .NET 8 inlines in either form. .NET Framework 4.8 inlines them too but calls <c>MemoryMarshal.GetReference</c> for
     /// each (2026-10-06).
@@ -85,9 +86,9 @@ internal static partial class QuietZoneWindow
     /// for Standard QR and 0.94 to 0.97 for rMQR on .NET 8 x64, and to 0.91 to 0.94, 0.98 to 1.02 and 0.96 to 1.00 on .NET 10 x64. The
     /// four took them at quiet zones 17 to 32 to 0.81 to 0.90, 0.91 to 1.01 and 0.94 to 0.98 on .NET 8 x64, and to 0.95 to 0.99, 0.98 to
     /// 1.02 and 0.97 to 1.02 on .NET 10 x64 (2026-10-08). A wider gap keeps the clear: a loop of 16-byte stores lost to it on x64 between
-    /// quiet zones 32 and 64, and at 64 and 128 took 1.01 to 1.43 of its time in the kernel (2026-10-07). The browser keeps the clear: with the stores the WebAssembly interpreter took 1.01 to 1.05 times as long
-    /// at quiet zones 9 and 16 and AOT-compiled WebAssembly 0.90 to 0.98, and one test serves both WebAssembly builds. The netstandard
-    /// builds keep it too, not timed with the stores.
+    /// quiet zones 32 and 64, and at 64 and 128 took 1.01 to 1.43 of its time in the kernel (2026-10-07). The browser keeps the clear:
+    /// with the stores the WebAssembly interpreter took 1.01 to 1.05 times as long at quiet zones 9 and 16 and AOT-compiled WebAssembly
+    /// 0.90 to 0.98, and one test serves both WebAssembly builds. The netstandard builds keep it too, not timed with the stores.
     /// </para>
     /// </remarks>
     // Called once a row. Until it was marked for inlining, the WebAssembly interpreter called it, and in one run the quiet-zone encodes
@@ -116,18 +117,8 @@ internal static partial class QuietZoneWindow
         else
         {
 #if NET8_0_OR_GREATER
-            if (!OperatingSystem.IsBrowser() && gap <= 32)
-            {
-                Clear16(target, gapEnd - 16);
-                Clear16(target, gapEnd - gap);
-            }
-            else if (!OperatingSystem.IsBrowser() && gap <= 64)
-            {
-                Clear16(target, gapEnd - 16);
-                Clear16(target, gapEnd - 32);
-                Clear16(target, gapEnd - gap + 16);
-                Clear16(target, gapEnd - gap);
-            }
+            if (!OperatingSystem.IsBrowser() && gap <= 64)
+                ClearByStores(target.Slice(gapEnd - gap, gap));
             else
 #endif
             {

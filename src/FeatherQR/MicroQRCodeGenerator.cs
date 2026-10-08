@@ -690,6 +690,12 @@ public static class MicroQRCodeGenerator
     /// Runs the encode → ECC → placement → masking → format pipeline into a byte-per-module core buffer, every module of which it writes.
     /// Allocation-free: all intermediates are stackalloc.
     /// </summary>
+    // Called on .NET 10, where the JIT inlines it into the span Create when the inline budget allows. Inlined, M2 and M4 took 1.08 to
+    // 1.15 times as long as called at the default quiet zone and 1.04 to 1.08 with none (x64). .NET 8 inlines it into CreateCore, and
+    // there inlined took 0.93 to 1.02 of the time called took (2026-10-08).
+#if NET10_0_OR_GREATER
+    [MethodImpl(MethodImplOptions.NoInlining)]
+#endif
     private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> core, int size, int stride, int maskPattern)
     {
         var eccCount = MicroQRConstants.GetEccCodewordCount(config.Version, config.EccLevel);
