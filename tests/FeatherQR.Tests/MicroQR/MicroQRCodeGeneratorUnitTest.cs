@@ -249,8 +249,9 @@ public class MicroQRCodeGeneratorUnitTest
     // Every version, and quiet zones around a core the placer writes into the destination's window: none, one column of margin, the
     // default, and a margin wider than an M1 core. The margins are cleared before the placer, whose vector unpack runs past a row into
     // them with light modules. Between two rows they (2q bytes) are zeroed by a clear of a constant 8 bytes up to q = 4, of 16 up to
-    // q = 8 and of the 2q bytes from q = 9. Below q = 4 and from q = 5 to 7 that also zeroes the end of the row in front, which the placer
-    // writes over.
+    // q = 8, from q = 9 to 16 by two 16-byte stores, one ending where the gap ends and one starting where it starts, from q = 17 to 32 by
+    // four, two from each end, and from q = 33 by a clear of the 2q bytes. Below q = 4 and from q = 5 to 7 the clear also zeroes the end
+    // of the row in front, which the placer writes over.
     public static IEnumerable<(string Text, MicroQREccLevel Ecc, MicroQRVersion Version, int QuietZone)> DirtyDestinationCases()
     {
         (string, MicroQREccLevel, MicroQRVersion)[] symbols =
@@ -262,7 +263,7 @@ public class MicroQRCodeGeneratorUnitTest
         ];
         foreach (var (text, ecc, version) in symbols)
         {
-            foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9, 25 })
+            foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9, 16, 17, 25, 32, 33 })
                 yield return (text, ecc, version, quietZone);
         }
     }

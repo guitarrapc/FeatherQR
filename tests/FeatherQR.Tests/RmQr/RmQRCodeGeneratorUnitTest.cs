@@ -262,10 +262,11 @@ public class RmQRCodeGeneratorUnitTest
     public async Task CreateSpan_QuietZones_MatchClassApiAndTouchOnlyRequiredBytes(RmQRVersion version, RmQREccLevel ecc)
     {
         var text = new string('7', 3);
-        // The margins between two rows (2q bytes) are zeroed by a clear of a constant 8 bytes up to q = 4, of 16 up to q = 8 and of the
-        // 2q bytes from q = 9, before the placer writes the window. Below q = 4 and from q = 5 to 7 that also zeroes the end of the row
-        // in front, which the placer writes over.
-        foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9 })
+        // The margins between two rows (2q bytes) are zeroed by a clear of a constant 8 bytes up to q = 4, of 16 up to q = 8, and from
+        // q = 9 to 16 by two 16-byte stores, one ending where the gap ends and one starting where it starts, from q = 17 to 32 by four,
+        // two from each end, and from q = 33 by a clear of the 2q bytes, all before the placer writes the window. Below q = 4 and from q = 5
+        // to 7 the clear also zeroes the end of the row in front, which the placer writes over.
+        foreach (var quietZone in new[] { 0, 1, 2, 3, 4, 5, 8, 9, 16, 17, 32, 33 })
         {
             var data = RmQRCodeGenerator.Create(text, ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
             var size = Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
