@@ -58,8 +58,9 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Data placement and mask selection in one, from the interleaved stream, where this build has the form: places the stream, selects the
-    /// pattern as <see cref="MaskCode"/> does and writes the masked symbol to <paramref name="buffer"/>, all but the format information.
-    /// Returns false, the buffer untouched, where the caller places the template and the data and calls <see cref="MaskCode"/>.
+    /// pattern as <see cref="MaskCode"/> does and writes the masked symbol to <paramref name="buffer"/>: every module, the version
+    /// information included and the format modules light, for the caller to place the format information. Returns false, the buffer
+    /// untouched, where the caller places the template and the data, calls <see cref="MaskCode"/> and places the version information.
     /// </summary>
     internal static bool TryMaskCodeFromStream(Span<byte> buffer, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel, out int pattern)
     {

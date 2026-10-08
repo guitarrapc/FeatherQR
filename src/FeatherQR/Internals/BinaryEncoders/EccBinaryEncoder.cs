@@ -70,18 +70,25 @@ internal static partial class EccBinaryEncoder
     }
 
     /// <summary>
-    /// Calculates the error correction codewords of a symbol's blocks: <paramref name="blocks1"/> blocks of <paramref name="length1"/> data codewords, then <paramref name="blocks2"/> blocks of <paramref name="length2"/>, one after another in <paramref name="data"/>.
-    /// Each block's <paramref name="eccCount"/> codewords go one block after another into <paramref name="ecc"/>.
+    /// Calculates the error correction codewords of a symbol's blocks as <paramref name="eccInfo"/> lays them out: group 1's blocks, then group 2's, one after
+    /// another in <paramref name="data"/>. Each block's <see cref="ECCInfo.ECCPerBlock"/> codewords go one block after another into <paramref name="ecc"/>.
     /// </summary>
     /// <remarks>
     /// The output is <see cref="CalculateECC"/> per block. A block's remainder is one serial chain, each step's division factors read from the register the step before left,
     /// and the blocks of a group have one length and one generator, so the x86 kernels advance two or four blocks' chains in one loop, where they overlap.
-    /// A block alone in its group goes to <see cref="CalculateECC"/> from this inlined entry. With that test inside a call of its own, the codeword
-    /// assembly of a one-block rMQR symbol (R7x43) read 0.038 to 0.044 µs against 0.035 to 0.036 on the SSSE3 kernel, and 0.035 to 0.037 inlined (2026-10-07).
+    /// A symbol with no group of two or more blocks goes block by block to <see cref="CalculateECC"/> from this inlined entry. With that test inside a
+    /// call of its own, the codeword assembly of a one-block rMQR symbol (R7x43) read 0.038 to 0.044 µs against 0.035 to 0.036 on the SSSE3 kernel,
+    /// and 0.035 to 0.037 inlined (2026-10-07). The argument checks belong to the other path; on this one a bad argument raises what
+    /// slicing the spans or <see cref="CalculateECC"/> throws.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void CalculateECCBlocks(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks1, int length1, int blocks2, int length2)
+    public static void CalculateECCBlocks(ReadOnlySpan<byte> data, Span<byte> ecc, in ECCInfo eccInfo)
     {
+        var eccCount = eccInfo.ECCPerBlock;
+        var blocks1 = eccInfo.BlocksInGroup1;
+        var length1 = eccInfo.CodewordsInGroup1;
+        var blocks2 = eccInfo.BlocksInGroup2;
+        var length2 = eccInfo.CodewordsInGroup2;
         if (blocks1 < 2 && blocks2 < 2)
         {
             if (blocks1 == 1)
@@ -93,10 +100,12 @@ internal static partial class EccBinaryEncoder
         CalculateEccGroups(data, ecc, eccCount, blocks1, length1, blocks2, length2);
     }
 
+    // The fields go on as integers. Given the ECCInfo by reference, the JIT stopped inlining this method into the stage harness's
+    // Reed-Solomon row, where it is inlined with integers; the encoders' Tier1 code calls it out of line with integers (.NET 10).
     private static void CalculateEccGroups(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks1, int length1, int blocks2, int length2)
     {
         if (eccCount < 1 || eccCount > 255)
-            throw new ArgumentOutOfRangeException(nameof(eccCount), $"ECC count must be 1-255, got {eccCount}");
+            throw new ArgumentOutOfRangeException("eccInfo", $"ECC count must be 1-255, got {eccCount}");
         var dataLength1 = blocks1 * length1;
         if (data.Length < dataLength1 + blocks2 * length2)
             throw new ArgumentException($"Data buffer too small: required {dataLength1 + blocks2 * length2}, got {data.Length}", nameof(data));

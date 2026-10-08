@@ -64,8 +64,9 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// <see cref="MaskCodeTransposed"/> from the interleaved stream instead of a placed buffer: the stream is placed straight into the column
-    /// planes, the row planes are their transpose, and the winner is written to <paramref name="buffer"/> whole, every module of the symbol
-    /// but the format information, which the caller places. The buffer needs no template or placement before.
+    /// planes, the row planes are their transpose, and the winner is written to <paramref name="buffer"/> whole: every module of the symbol,
+    /// the version information included and the format modules light, for the caller to place the format information. The buffer needs no
+    /// template or placement before.
     /// </summary>
     internal static int MaskCodeTransposedFromStream(Span<byte> buffer, int version, ReadOnlySpan<byte> interleavedData, QREccLevel eccLevel)
     {

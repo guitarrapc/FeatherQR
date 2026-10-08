@@ -74,8 +74,9 @@ public static class QRCodeGenerator
         //    - Take the version's cached function-pattern template and blocked-module bitmask
         //    - Place data modules in zigzag pattern
         //    - Apply optimal mask pattern (test all 8 patterns, select best)
+        //    - Place version information (version 7+ only; the stream form of automatic
+        //      selection writes it with the winner, see WriteQRMatrix)
         //    - Place format information (ECC level + mask pattern)
-        //    - Place version information (version 7+ only)
         // 8. Return QRCodeData (quiet zone handled by QRCodeData class)
 
         ValidateQuietZoneSize(quietZoneSize);
@@ -1055,8 +1056,7 @@ public static class QRCodeGenerator
     /// <param name="eccBuffer">Output buffer for ECC codewords <c>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock</c> bytes.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CalculateErrorCorrection(ReadOnlySpan<byte> encodedBytes, in ECCInfo eccInfo, Span<byte> eccBuffer)
-        => EccBinaryEncoder.CalculateECCBlocks(encodedBytes, eccBuffer, eccInfo.ECCPerBlock,
-            eccInfo.BlocksInGroup1, eccInfo.CodewordsInGroup1, eccInfo.BlocksInGroup2, eccInfo.CodewordsInGroup2);
+        => EccBinaryEncoder.CalculateECCBlocks(encodedBytes, eccBuffer, eccInfo);
 
     /// <summary>
     /// Interleaves data and error correction codewords according to QR code specification.
@@ -1087,8 +1087,9 @@ public static class QRCodeGenerator
     {
         // Function patterns, the blocked-module bitmask and the zigzag order all come
         // from the version's cached placement tables (ModulePlacer.PlacementLayout).
-        // On AVX2 from version 12, automatic selection takes the interleaved stream
-        // into its own bit planes and writes every module but the format information.
+        // On .NET 8 and later with AVX2, from version 12, automatic selection takes the
+        // interleaved stream into its own bit planes and writes every module, the version
+        // information included and the format modules light.
         // Otherwise the template copy paints every function module and zeros the rest,
         // the data placement writes only the stream bits, and mask selection reads the
         // cached blocked mask directly (no per-call bitmask build).
@@ -1111,16 +1112,16 @@ public static class QRCodeGenerator
             {
                 maskVersion = ModulePlacer.MaskCode(buffer, size, version, layout.BlockedMask, eccLevel);
             }
+
+            // Place version information (version 7+)
+            if (version >= 7)
+            {
+                var versionBits = QRCodeConstants.GetVersionBits(version);
+                ModulePlacer.PlaceVersion(buffer, size, versionBits);
+            }
         }
         var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(buffer, size, formatBit);
-
-        // Place version information (version 7+)
-        if (version >= 7)
-        {
-            var versionBits = QRCodeConstants.GetVersionBits(version);
-            ModulePlacer.PlaceVersion(buffer, size, versionBits);
-        }
     }
 
     /// <summary>

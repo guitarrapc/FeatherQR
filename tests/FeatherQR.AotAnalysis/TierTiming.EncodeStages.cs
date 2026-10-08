@@ -130,8 +130,7 @@ internal static partial class TierTiming
 
         public int ReedSolomon()
         {
-            EccBinaryEncoder.CalculateECCBlocks(Data.AsSpan(0, DataLength), Ecc2, EccInfo.ECCPerBlock,
-                EccInfo.BlocksInGroup1, EccInfo.CodewordsInGroup1, EccInfo.BlocksInGroup2, EccInfo.CodewordsInGroup2);
+            EccBinaryEncoder.CalculateECCBlocks(Data.AsSpan(0, DataLength), Ecc2, EccInfo);
             return Ecc2[0];
         }
 
@@ -148,6 +147,8 @@ internal static partial class TierTiming
             return target[^1];
         }
 
+        // The placed route's last step. The stream route (the mask-stream row) writes the version information with the winner, so
+        // at versions 12 to 40 on AVX2 this row also times a PlaceVersion the encoder skips.
         public int FormatAndVersion(byte[] target, int mask)
         {
             ModulePlacer.PlaceFormat(target, Layout.Size, QRCodeConstants.GetFormatBits(Ecc, mask));

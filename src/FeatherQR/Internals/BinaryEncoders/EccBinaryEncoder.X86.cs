@@ -276,9 +276,9 @@ internal static partial class EccBinaryEncoder
     /// (eccCount ≤ 16), one at a time otherwise. Caller guarantees Ssse3.IsSupported and eccCount ≤ 32.
     /// </summary>
     /// <remarks>
-    /// Two blocks' chains in one loop took 0.72 of one at a time at version 6-M (16 codewords). With 17 to 30, a pair that read its sixteen generator vectors from
-    /// the nibble table at every step took 0.90 to 1.06 at versions 10-M to 40-L, so those go one at a time; a pair holding them in registers was not tried
-    /// (.NET 10 on Zen 4, the kernels called directly, one run, 2026-10-07).
+    /// Two blocks' chains in one loop took 0.72 of one at a time at version 6-M (16 codewords). Above 16, a pair that read its sixteen generator vectors from
+    /// the nibble table at every step took 0.90 to 1.06 at versions 10-M to 40-L (26 to 30 codewords; 17 to 24 were not measured), so those go one at a
+    /// time; a pair holding them in registers was not tried (.NET 10 on Zen 4, the kernels called directly, one run, 2026-10-07).
     /// </remarks>
     internal static void CalculateEccSsse3Group(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount, int blocks, int length)
     {
