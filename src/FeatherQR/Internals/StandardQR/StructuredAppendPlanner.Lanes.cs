@@ -13,7 +13,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// The probes of a budget search walk the same text from the same start and differ only in the budget they close their chunks at, so they are independent instances of one program and share its control: while every lane is at the same character, which is nearly always, a step is the scalar loop's class lookup and branches over vector adds and mins, at about the cost of one scalar step for the eight of them.
-/// A lane whose chunk closes re-reads the character that did not fit as the first of its next chunk, so it falls behind the others: by one step, by two when it closed on the second half of a pair. A cut kept off a run of U+FEFF moves the chunk's start back before the run, but the lane does not re-read the run: what its next chunk costs up to the character that did not fit is one Byte run of the character ahead and the marks, taken in closed form. While the lanes are apart they are stepped with the class and the byte cost taken per lane in scalar code, and the lanes ahead wait, keeping their states, until the one furthest behind is level with them; left apart, lanes whose closes cost them differently never share a character again. Closing a chunk is itself scalar code, a dozen times per lane in a walk of thousands of steps.
+/// A lane whose chunk closes re-reads the character that did not fit, so it falls behind the others: by one step, by two when it closed on the second half of a pair. A cut kept off a run of U+FEFF moves the chunk's start back to the character ahead of the run. When marks lie between that character and the one that did not fit, the vector loop prices that character and the marks in closed form, one Byte run, and the lane re-reads only the character that did not fit; a cut at the run's first mark re-reads from the character ahead, two steps back, three when that character is a pair. While the lanes are apart they are stepped with the class and the byte cost taken per lane in scalar code, and the lanes ahead wait, keeping their states, until the one furthest behind is level with them; left apart, lanes whose closes cost them differently never share a character again. Closing a chunk is itself scalar code, a dozen times per lane in a walk of thousands of steps.
 /// A lane that has failed keeps closing chunks at its own budget, unrecorded: one that stopped would run ahead for good and the lanes would never share a character again.
 /// The walk prices exactly what <see cref="CountChunks(ReadOnlySpan{char}, EciMode, bool, QRSegmentation, int, int, int, Span{int}, bool)"/> prices (the single-mode shortcuts of <see cref="LongestChunkEnd"/> are the program's own answers on the content they apply to), which <c>StructuredAppendLaneWalkTest</c> holds lane by lane. The byte order mark <see cref="QRCodeGeneratorOptions.Utf8Bom"/> asks for is not handled here, since its chunk is priced by another rule; the caller keeps those walks scalar.
 /// The eight 32-bit lanes use accelerated <c>Vector256</c>; ARM64 uses eight saturating 16-bit NEON lanes, and every other 128-bit target the same lanes on portable vectors. Without accelerated vectors, or when a chunk averages under the backend's minimum length (the lanes then spend too many steps apart), nothing here runs and the caller's scalar probes do.
@@ -194,8 +194,7 @@ internal static partial class StructuredAppendPlanner
         return true;
     }
 
-    // A pair needs no rule of its own while stepping: it is priced whole on its first half, so a budget it breaks is broken there and on its second half alike, and either way the chunk ends
-    // before the pair.
+    // A pair needs no rule of its own while stepping: a cut never splits one, so whichever half breaks a budget, the chunk ends before the pair.
     /// <summary>
     /// The end a chunk from <paramref name="chunkStart"/> takes when it closes before <paramref name="position"/>: before a pair whose second half is there, since a split never cuts one, and off a U+FEFF as the scalar walk keeps it (<see cref="BeforeMark"/>).
     /// <paramref name="chunkStart"/> when that leaves the chunk nothing.
@@ -207,7 +206,7 @@ internal static partial class StructuredAppendPlanner
     }
 
     /// <summary>
-    /// What the chunk from <paramref name="end"/> costs just before <paramref name="position"/> when a cut was kept off the run of U+FEFF there: the character at <paramref name="end"/>, a pair whole, and the marks after it, one Byte run, since none opens at a mark past a chunk's head and continuing the character's run is never dearer than opening another.
+    /// What the chunk from <paramref name="end"/> costs just before <paramref name="position"/> when a cut was kept off the run of U+FEFF there: the character at <paramref name="end"/>, a pair whole, and the marks after it, one Byte run, since none opens at a mark past a chunk's head.
     /// -1 when no mark lies between, and the lane re-reads from <paramref name="end"/>.
     /// </summary>
     private static int KeptOffRunBits(ReadOnlySpan<char> text, EciMode charset, int end, int position, int openByte)

@@ -6,7 +6,8 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The portable 16-bit lane walk against the scalar walk, entered directly: the dispatch takes it only without 256-bit vectors and NEON,
-/// so this is where an x64 machine with AVX2 runs it at all. Same inputs as the NEON walk's test: resets, saturation, the scalar finish.
+/// so this is where an x64 machine with AVX2 runs it at all. Its parity walk takes the NEON walk test's inputs (resets, saturation, runs of marks, the scalar finish);
+/// its step, tail and let-through tests share the lane walk test's helpers.
 /// </summary>
 public class StructuredAppendVector128ParityTest
 {
@@ -64,31 +65,43 @@ public class StructuredAppendVector128ParityTest
             Skip.Test("Vector128 not accelerated on this machine");
             return;
         }
-        var text = StructuredAppendLaneWalkTest.MarkRun(name);
-        var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
-        const int version = 40;
-        var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
-        var budgets = Enumerable.Range(0, 8).Select(lane => capacity - 6 * (7 - lane)).ToArray();
-        var limit = StructuredAppendPlanner.MaxSymbols;
-        var counts = new int[8];
-        var laneEnds = new int[8 * limit];
-        var scalarEnds = new int[limit];
+        await StructuredAppendLaneWalkTest.AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(name, StructuredAppendLaneWalkTest.MarkRun(name), 40, StructuredAppendPlanner.WalkLanesVector128, everyCloseResumes: true);
+    }
 
-        await Assert.That(StructuredAppendPlanner.WalkLanesVector128(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out var apart)).IsTrue().Because(name);
-        var closes = 0;
-        for (var lane = 0; lane < 8; lane++)
+    public static IEnumerable<string> KeptOffAhead() => StructuredAppendLaneWalkTest.KeptOffAhead();
+
+    [Test]
+    [MethodDataSource(nameof(KeptOffAhead))]
+    public async Task Walk_ACutAtARunsFirstMarkReReadsIt_AndOneAtItsSecondResumes(string ahead)
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
         {
-            var because = $"{name} budget {budgets[lane]}";
-            var expected = StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], limit, scalarEnds);
-            await Assert.That(counts[lane]).IsEqualTo(expected > limit ? limit + 1 : expected).Because(because);
-            for (var k = 0; k < Math.Min(expected, limit); k++)
-                await Assert.That(laneEnds[lane * limit + k]).IsEqualTo(scalarEnds[k]).Because($"{because}, chunk {k}");
-            closes += StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], 64, scalarEnds) - 1;
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
         }
+        await StructuredAppendLaneWalkTest.AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(ahead, StructuredAppendLaneWalkTest.KeptOffRun(ahead, 24, 9_000), 9, StructuredAppendPlanner.WalkLanesVector128, everyCloseResumes: false);
+    }
 
-        // As in the 32-bit lanes: a close sets its lane a step back, two at a pair.
-        await Assert.That(apart).IsGreaterThan(0).Because(name);
-        await Assert.That(apart).IsLessThanOrEqualTo(2 * closes).Because(name);
+    [Test]
+    public async Task Walk_PricesAMarkInALanesLastCharactersAsTheScalarWalkDoes()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertAMarkInALanesLastCharactersIsPricedAsTheScalarWalkDoes(StructuredAppendPlanner.WalkLanesVector128);
+    }
+
+    [Test]
+    public async Task Walk_ARunNoChunkHolds_StopsALiveLaneAndLetsAFailedOneThrough()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertARunNoChunkHoldsStopsALiveLaneAndLetsAFailedOneThrough(StructuredAppendPlanner.WalkLanesVector128);
     }
 
     [Test]

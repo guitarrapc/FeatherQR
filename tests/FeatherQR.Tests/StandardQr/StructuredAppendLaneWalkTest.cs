@@ -16,6 +16,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class StructuredAppendLaneWalkTest
 {
+    /// <summary>Every text fits sixteen symbols at level H, which <c>StructuredAppendWriterPlanTest</c>, sharing this corpus, needs.</summary>
     public static IEnumerable<(string Name, string Text)> Corpus()
     {
         yield return ("order-lines", Repeat("order 20260915 item 0000123456 qty 42 ", 9_000));
@@ -54,7 +55,35 @@ public class StructuredAppendLaneWalkTest
         yield return ("runs-of-two-hundred-marks", Repeat("0123456789012345678901234567890123456789" + new string((char)0xFEFF, 200), 15_000));
     }
 
-    /// <summary>Runs of 200 marks after each kind of character a cut kept off one leaves at the head of the next chunk.</summary>
+    /// <summary>
+    /// Runs of 24 marks after each kind of character a cut kept off one leaves at the head of the next chunk, walked lane by lane: the runs are short enough that a run priced a byte off moves a later cut, which the chunk ends show.
+    /// </summary>
+    public static IEnumerable<(string Name, string Text)> KeptOffCorpus()
+    {
+        // The space's run is the corpus's runs-of-marks-after-spaces.
+        foreach (var ahead in KeptOffAhead().Where(ahead => ahead != "a-space"))
+            yield return ($"runs-of-24-marks-after-{ahead}", KeptOffRun(ahead, 24, 9_000));
+    }
+
+    public static IEnumerable<string> KeptOffAhead() => ["a-digit", "a-space", "a-letter", "a-two-byte-character", "a-three-byte-character", "a-pair", "a-lone-high-surrogate", "a-lone-low-surrogate"];
+
+    internal static string KeptOffRun(string ahead, int marks, int length)
+    {
+        var character = ahead switch
+        {
+            "a-digit" => "7",
+            "a-space" => " ",
+            "a-letter" => "x",
+            "a-two-byte-character" => "é",
+            "a-three-byte-character" => ((char)0x3042).ToString(),
+            "a-pair" => char.ConvertFromUtf32(0x1F389),
+            "a-lone-high-surrogate" => ((char)0xD83C).ToString(),
+            _ => ((char)0xDE00).ToString(),
+        };
+        return Repeat("order 20260915 item 0000123456 qty 42" + character + new string((char)0xFEFF, marks), length);
+    }
+
+    /// <summary>Runs of 200 marks after five kinds of character a cut kept off one leaves at the head of the next chunk. Every budget runs out deep inside a run, so every close resumes; <see cref="KeptOffCorpus"/> pins the price in the 32-bit lanes.</summary>
     public static IEnumerable<string> MarkRuns() => ["after-digits", "after-a-space", "after-a-letter", "after-a-three-byte-character", "after-a-pair"];
 
     internal static string MarkRun(string name)
@@ -98,6 +127,7 @@ public class StructuredAppendLaneWalkTest
 
     [Test]
     [MethodDataSource(nameof(Corpus))]
+    [MethodDataSource(nameof(KeptOffCorpus))]
     public async Task WalkLanes_EndsEveryChunkWhereTheScalarWalkDoes(string name, string text)
     {
         if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
@@ -166,11 +196,19 @@ public class StructuredAppendLaneWalkTest
     [Test]
     public async Task WalkLanes_PricesAMarkInALanesLastCharactersAsTheScalarWalkDoes()
     {
-        // The lanes that fell behind finish the text one by one, from their own states. Runs of marks make a lane that
-        // closes inside one fall far behind, and the text ends in digits and a mark, where a Byte run must not open:
-        // the filler walks each lane's last chunk across its budget, and the shifts put every budget within the few bits that opening one would save.
         if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
+        await AssertAMarkInALanesLastCharactersIsPricedAsTheScalarWalkDoes(StructuredAppendPlanner.WalkLanes);
+    }
+
+    /// <summary>
+    /// The vector loop's exit moves only at a close, so it leaves the text's last character, a mark after digits, to each lane's
+    /// scalar finish, run from the lane's own states. A Byte run must not open at that mark: the filler walks each lane's last
+    /// chunk across its budget, and the shifts put budgets within the few bits that opening one would save.
+    /// An exact exit would move the decision to the vector loop's copy of the rule and leave the scalar finish's untested here.
+    /// </summary>
+    internal static async Task AssertAMarkInALanesLastCharactersIsPricedAsTheScalarWalkDoes(LaneWalk walk)
+    {
         var mark = (char)0xFEFF;
         var scalarEnds = new int[StructuredAppendPlanner.MaxSymbols];
         var laneEnds = new int[8 * StructuredAppendPlanner.MaxSymbols];
@@ -187,11 +225,11 @@ public class StructuredAppendLaneWalkTest
                     for (var lane = 0; lane < 8; lane++)
                         budgets[lane] = capacity - shift - spacing * (7 - lane);
 
-                    // Every fifth filler: each planted fault in the lanes' tail was caught at a fifth of the fillers or more
+                    // Every fifth filler still catches a tail that drops the mark rule.
                     for (var filler = 0; filler < 250; filler += 5)
                     {
                         var text = Repeat("order 20260915 item 0000123456 qty 42 " + new string(mark, 6), 1_500) + new string('x', filler) + new string('7', 30) + mark;
-                        await Assert.That(StructuredAppendPlanner.WalkLanes(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out _)).IsTrue();
+                        await Assert.That(walk(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out _)).IsTrue();
                         for (var lane = 0; lane < 8; lane++)
                         {
                             var because = $"{charset} spacing {spacing} shift {shift} filler {filler} budget {budgets[lane]}";
@@ -208,46 +246,117 @@ public class StructuredAppendLaneWalkTest
     [MethodDataSource(nameof(MarkRuns))]
     public async Task WalkLanes_ACutKeptOffARunOfMarks_LeavesTheLaneAStepBehind(string name)
     {
-        // A cut inside a run moves the chunk's start back to the character ahead of the run. A lane that re-read the run from
-        // there held the others for its length, at every close, which made a batch cost several scalar walks.
         if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
-        var text = MarkRun(name);
+        await AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(name, MarkRun(name), 40, StructuredAppendPlanner.WalkLanes, everyCloseResumes: true);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(KeptOffAhead))]
+    public async Task WalkLanes_ACutAtARunsFirstMarkReReadsIt_AndOneAtItsSecondResumes(string ahead)
+    {
+        if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+            return;
+        await AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(ahead, KeptOffRun(ahead, 24, 9_000), 9, StructuredAppendPlanner.WalkLanes, everyCloseResumes: false);
+    }
+
+    internal delegate bool LaneWalk(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps);
+
+    /// <summary>
+    /// The lanes that run out at one place close in one step and fall behind by what they re-read: the character that did not fit when marks lie between the cut and it, which they price instead, else everything from the cut.
+    /// A step apart levels a step of that, so the steps apart are their sum while some lane waits at each place and the scalar finish takes none. A lane that re-read from every cut would be apart a step more for each character from the cut up to the place, and one that also resumed at a run's first mark a step or two less there.
+    /// Walked at the limit and below it, where the lanes past the limit keep closing to the end of the text.
+    /// </summary>
+    internal static async Task AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(string name, string text, int version, LaneWalk walk, bool everyCloseResumes)
+    {
         var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
-        const int version = 40;
         var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
         // A mark is 24 bits, so neighbouring lanes close at the same mark or the next one.
         var budgets = Enumerable.Range(0, 8).Select(lane => capacity - 6 * (7 - lane)).ToArray();
-        var limit = StructuredAppendPlanner.MaxSymbols;
-        var counts = new int[8];
-        var laneEnds = new int[8 * limit];
-        var scalarEnds = new int[limit];
 
-        await Assert.That(StructuredAppendPlanner.WalkLanes(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out var apart)).IsTrue().Because(name);
-        var closes = 0;
+        // Where each budget runs out, before the cut is kept off a run, and how far behind the close leaves the lane.
+        // A lane past the limit keeps closing to the end of the text, so every chunk of the whole walk counts.
+        var allEnds = new int[256];
+        var setBack = new Dictionary<int, int>();
+        var lanesAt = new Dictionary<int, int>();
+        int atFirstMark = 0, atSecondMark = 0;
         for (var lane = 0; lane < 8; lane++)
         {
-            var because = $"{name} budget {budgets[lane]}";
-            var expected = StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], limit, scalarEnds);
-            await Assert.That(counts[lane]).IsEqualTo(expected > limit ? limit + 1 : expected).Because(because);
-            for (var k = 0; k < Math.Min(expected, limit); k++)
-                await Assert.That(laneEnds[lane * limit + k]).IsEqualTo(scalarEnds[k]).Because($"{because}, chunk {k}");
-            // A lane past the limit keeps closing to the end of the text.
-            closes += StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], 64, scalarEnds) - 1;
+            var chunks = StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], allEnds.Length, allEnds);
+            await Assert.That(chunks).IsLessThanOrEqualTo(allEnds.Length).Because(name);
+            for (int k = 0, from = 0; k < chunks - 1; from = allEnds[k], k++)
+            {
+                var end = allEnds[k];
+                var width = char.IsHighSurrogate(text[end]) && char.IsLowSurrogate(text[end + 1]) ? 2 : 1;
+                var runsOut = StructuredAppendPlanner.LongestChunkEnd(text, from, charset, version, QRSegmentation.Optimal, false, budgets[lane]);
+                var marksBetween = runsOut - end - width;
+                var back = marksBetween >= 1 ? 1 : 1 + (runsOut - end);
+                var because = $"{name} budget {budgets[lane]}, chunk {k}";
+                if (everyCloseResumes)
+                {
+                    await Assert.That(text[runsOut]).IsEqualTo((char)0xFEFF).Because(because);
+                    await Assert.That(marksBetween).IsGreaterThanOrEqualTo(1).Because(because);
+                }
+                if (text[runsOut] == (char)0xFEFF)
+                {
+                    atFirstMark += marksBetween == 0 ? 1 : 0;
+                    atSecondMark += marksBetween == 1 ? 1 : 0;
+                }
+                // Lanes that run out at one place share its cut.
+                if (setBack.TryGetValue(runsOut, out var seen))
+                    await Assert.That(back).IsEqualTo(seen).Because(because);
+                setBack[runsOut] = back;
+                lanesAt[runsOut] = lanesAt.GetValueOrDefault(runsOut) + 1;
+                // The loop's exit moves only at a close, so a place within a close's largest set-back of the end can fall to the scalar finish.
+                await Assert.That(runsOut).IsLessThan(text.Length - 3).Because(because);
+            }
         }
+        // A place where every lane closes leaves none ahead to wait, and its set-back takes no step apart.
+        await Assert.That(lanesAt.Values.Max()).IsLessThan(8).Because(name);
+        if (!everyCloseResumes)
+        {
+            // Both sides of where the resume starts: budgets that run out at a run's first mark and at its second.
+            await Assert.That(atFirstMark).IsGreaterThan(0).Because(name);
+            await Assert.That(atSecondMark).IsGreaterThan(0).Because(name);
+        }
+        var setBackSum = setBack.Values.Sum();
 
-        // A close sets its lane a step back, two at a pair, and a step apart moves every lane that is behind.
-        await Assert.That(apart).IsGreaterThan(0).Because(name);
-        await Assert.That(apart).IsLessThanOrEqualTo(2 * closes).Because(name);
+        foreach (var limit in new[] { StructuredAppendPlanner.MaxSymbols, 4 })
+        {
+            var counts = new int[8];
+            var laneEnds = new int[8 * StructuredAppendPlanner.MaxSymbols];
+            var scalarEnds = new int[StructuredAppendPlanner.MaxSymbols];
+            await Assert.That(walk(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out var apart)).IsTrue().Because($"{name} limit {limit}");
+            for (var lane = 0; lane < 8; lane++)
+            {
+                var because = $"{name} limit {limit} budget {budgets[lane]}";
+                var expected = StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], limit, scalarEnds);
+                if (limit < StructuredAppendPlanner.MaxSymbols)
+                    await Assert.That(expected).IsGreaterThan(limit).Because(because);
+                await Assert.That(counts[lane]).IsEqualTo(expected > limit ? limit + 1 : expected).Because(because);
+                for (var k = 0; k < Math.Min(expected, limit); k++)
+                    await Assert.That(laneEnds[lane * StructuredAppendPlanner.MaxSymbols + k]).IsEqualTo(scalarEnds[k]).Because($"{because}, chunk {k}");
+            }
+
+            await Assert.That(apart).IsGreaterThan(0).Because($"{name} limit {limit}");
+            await Assert.That(apart).IsEqualTo(setBackSum).Because($"{name} limit {limit}");
+        }
     }
 
     [Test]
     public async Task WalkLanes_ARunNoChunkHolds_StopsALiveLaneAndLetsAFailedOneThrough()
     {
-        // 2,000 marks are more than a version 9 symbol holds. A lane that still counts reports the text unplannable, as the
-        // scalar walk does; one already past its limit reports nothing more and walks on, so the batch still answers.
         if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
+        await AssertARunNoChunkHoldsStopsALiveLaneAndLetsAFailedOneThrough(StructuredAppendPlanner.WalkLanes);
+    }
+
+    /// <summary>
+    /// 2,000 marks are more than a version 9 symbol holds. A lane that still counts reports the text unplannable, as the
+    /// scalar walk does; one already past its limit reports nothing more and walks on, so the batch still answers.
+    /// </summary>
+    internal static async Task AssertARunNoChunkHoldsStopsALiveLaneAndLetsAFailedOneThrough(LaneWalk walk)
+    {
         // Few enough chunks ahead of the run that no lane is past the larger limit when it gets there, and more than the smaller one.
         var text = Repeat("0123456789012345678901234567890123456789" + new string((char)0xFEFF, 40), 480) + new string((char)0xFEFF, 2_000) + Repeat("0123456789", 500);
         var charset = TextAnalyzer.Analyze(text, EciMode.Default).EciMode;
@@ -259,10 +368,10 @@ public class StructuredAppendLaneWalkTest
         var scalarEnds = new int[64];
 
         await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[0], 64, scalarEnds)).IsEqualTo(int.MaxValue);
-        await Assert.That(StructuredAppendPlanner.WalkLanes(text, charset, version, budgets, StructuredAppendPlanner.MaxSymbols, 0, 0, counts, laneEnds, out _)).IsFalse();
+        await Assert.That(walk(text, charset, version, budgets, StructuredAppendPlanner.MaxSymbols, 0, 0, counts, laneEnds, out _)).IsFalse();
 
         const int limit = 2;
-        await Assert.That(StructuredAppendPlanner.WalkLanes(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out _)).IsTrue();
+        await Assert.That(walk(text, charset, version, budgets, limit, 0, 0, counts, laneEnds, out _)).IsTrue();
         for (var lane = 0; lane < 8; lane++)
         {
             await Assert.That(StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, version, budgets[lane], limit, scalarEnds)).IsEqualTo(limit + 1);
