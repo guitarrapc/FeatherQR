@@ -1,8 +1,8 @@
-# 2.0.0: API cleanup, the announced removals, three feature gaps and 128-bit tiers
+# 2.0.0: API cleanup, the announced removals, four feature gaps and 128-bit tiers
 
 ## Purpose
 
-The core split shipped as `2.0.0-preview.2` with three packages, new namespaces and a new repository name, and by plan left the API's shape unchanged: the split plan called the renames "a separate workstream that lands in the same major after this plan". This document is that workstream, plus the three feature gaps that the 2026-09-04 reference-library evaluation found worth closing before the major closes. It also gives 128-bit tiers to the kernels that run scalar on a default NativeAOT publish and on WebAssembly.
+The core split shipped as `2.0.0-preview.2` with three packages, new namespaces and a new repository name, and by plan left the API's shape unchanged: the split plan called the renames "a separate workstream that lands in the same major after this plan". This document is that workstream, plus the three feature gaps that the 2026-09-04 reference-library evaluation found worth closing before the major closes, and GS1 / FNC1, added on 2026-10-10 after that day's comparison found it in CodeGlyphX, ZXing.Net, zxing-cpp, go-qr and qrcode2. It also gives 128-bit tiers to the kernels that run scalar on a default NativeAOT publish and on WebAssembly.
 
 It sets what changes, in which order, and why. Each piece is verified under the mandatory test-first workflow. When the plan completes, its durable content moves into [specs/qrcode-symbologies.md](../specs/qrcode-symbologies.md) and the per-symbology records, and this file is deleted.
 
@@ -14,7 +14,8 @@ A public API is added in a minor and removed only in a major. 2.0.0 is the only 
 |---|---|
 | The announced removals (`Compression`, `GetRequiredBufferSize` ×2, parameter-list generator overloads) | `CancellationToken` / time-budget decode overloads (additive, 2.1.0) |
 | Type and method renames under one naming rule | Payload helpers (deferred by the maintainer and unchanged) |
-| Value-kind, immutability and sealing unification | GS1 / FNC1 (unchanged) |
+| Value-kind, immutability and sealing unification | |
+| GS1 / FNC1 (FNC1 in first and second position), encode and decode, Standard QR and rMQR | GS1 syntax validation and human-readable `(AI)` formatting, which need the GS1 AI table |
 | Symbol geometry in the decode result | A pure-BCL SVG / 1-bit PNG writer (waits for a concrete request) |
 | Structured Append, encode and decode (Standard QR only) | `EciMode` as a value type (decided against, see D7) |
 | Kanji encoding for all three symbologies | Additional renderer packages |
@@ -22,7 +23,7 @@ A public API is added in a minor and removed only in a major. 2.0.0 is the only 
 | 128-bit tiers where x64 without AVX or WebAssembly runs scalar | The instruction set a NativeAOT publish targets, which is the application's choice. The README states what the default costs and when to target `x86-64-v3` (2026-10-06) |
 | | Decoder options on the decode overloads (decided against, see D8) |
 
-Features are additive and could ship in 2.1.0 without breaking anyone. They are in 2.0.0 because the maintainer chose a feature-complete major over a rename-only one. Kanji encoding is the largest and last of them. It was placed last so it could move to 2.1.0 if it slipped, but on 2026-09-29 it was decided that Kanji encoding ships in 2.0.0 and does not move to 2.1.0. It changes the default output for Japanese text, which D5 accepts only in a major, so a slip delays 2.0.0 instead of demoting the phase.
+Features are additive and could ship in 2.1.0 without breaking anyone. They are in 2.0.0 because the maintainer chose a feature-complete major over a rename-only one. Kanji encoding is the largest of them, and was the last until GS1 / FNC1 joined on 2026-10-10. It was placed last so it could move to 2.1.0 if it slipped, but on 2026-09-29 it was decided that Kanji encoding ships in 2.0.0 and does not move to 2.1.0. It changes the default output for Japanese text, which D5 accepts only in a major, so a slip delays 2.0.0 instead of demoting the phase. GS1 / FNC1 changes no default output, so whether its slip delays 2.0.0 is D12.
 
 The 128-bit tiers are internal and could ship in any 2.x. They are in 2.0.0 because the design treats NativeAOT and WebAssembly as first-class, and most users will first measure 2.0.0. Unlike Kanji, they move to 2.1.0 if they slip, because they change no output.
 
@@ -151,6 +152,19 @@ The phase has two decisions. D5 asks whether single-mode selection picks Kanji a
 
 Decided (D5, D6, below) and shipped, with Kanji mode as an option, not the default. The rules, and why they are not wider, are in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#when-kanji-mode-is-written).
 
+### GS1 and FNC1 (Standard QR and rMQR)
+
+ISO/IEC 18004 defines two FNC1 modes. FNC1 in first position marks GS1 data. FNC1 in second position marks data formatted to an industry specification and is followed by an 8-bit application indicator (00-99 as its value, or a letter as its ASCII value plus 100). While either mode is active, a `%` in an Alphanumeric segment stands for the GS1 field separator (GS, 0x1D), a literal `%` is written as `%%`, and a Byte segment carries GS as the byte 0x1D. Micro QR defines neither mode.
+
+Today the Standard QR decoder recognises both indicators and returns `UnsupportedContent`, and no encoder writes them. The rMQR decoder treats indicators 101 and 110 as reserved (`InvalidBitstream`), and [rmqr-decoder.md](../specs/rmqr-decoder.md) and [rmqr-encoder.md](../specs/rmqr-encoder.md) say rMQR does not define FNC1. Two independent implementations disagree: zxing-cpp's and qrcode2's mode tables both read 101 as FNC1 in first position and 110 as FNC1 in second position. The phase settles this against ISO/IEC 23941 before the rMQR half is built, or against both oracles if the table stays unread, and corrects whichever record is wrong.
+
+The work:
+
+1. Decode. Read both indicators in Standard QR and rMQR, apply the `%` rule to Alphanumeric segments only while a mode is active, read the application indicator, and report the mode on `QRCodeDecodeInfo` and `RmQRDecodeInfo` (D10). The text keeps GS as U+001D, so the element string comes back exactly.
+2. Encode. An FNC1 option on `QRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` (D9). The caller passes the element string with U+001D separators. The encoder writes the indicator, maps U+001D to `%` in Alphanumeric segments and to 0x1D in Byte segments, and doubles a literal `%` in Alphanumeric segments. Under FNC1 a literal `%` costs two Alphanumeric characters, so both `Single` and `Optimal` price it. The route without FNC1 keeps its instructions, measured before and after.
+3. What stays out. GS1 syntax (AI lengths, check digits) is a property of the data, not of the symbol, and needs the GS1 AI table, as human-readable `(01)…(17)…` formatting does. The encoder checks only what the symbol needs: an application indicator in range and text the mode can carry.
+4. Verification. zxing-cpp through ZXingCpp reports `ContentType.GS1` and the AIM symbology identifier (`]Q3`, `]Q5`), so it reads this library's symbols back as GS1. Writers for the fixture corpus, each to be confirmed before it is relied on: libzint's `gs1` option (whether the wrapper passes it), ZXing.Net's `GS1_FORMAT` hint and CodeGlyphX's `EncodeGs1`. The real-image corpus already holds one GS1 symbol in its content column, which the change must read.
+
 ## 128-bit tiers for builds without AVX2
 
 Done on 2026-10-01, in 2.0.0. Every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` was raised or kept with its measured reason, and the public API is unchanged. Its own plan was folded into [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round) (the rules a tier ships under, how each build is measured, the end-to-end result, the lessons) and the per-symbology records, then deleted.
@@ -167,6 +181,10 @@ Done on 2026-10-01, in 2.0.0. Every scalar cell in the x64-without-AVX and WebAs
 | D6 | Kanji segments mixed with ECI-tagged Byte segments | Decided 2026-10-01: never. The sweep found zxing-cpp reads a Kanji segment after ECI 26 in the ECI's charset, as ISO/IEC 18004:2015 reads it, where ZXing and its ports read JIS X 0208. A text that would need both stays UTF-8 |
 | D7 | `EciMode` enum → a value type with `FromValue` / `Value` | No. An encoder can emit only a charset it can convert text into (Latin-1 and UTF-8), and the decoder reports every other ECI as `UnsupportedContent` without carrying the number. A value type would also need a sentinel for "no ECI", which collides with the real ECI 0, only to express values nothing can produce or consume. Recorded as a scope decision with this reason instead of left open |
 | D8 | Decoder options: an `in XxxDecoderOptions` parameter on the decode overloads before the Phase 7 freeze | Decided 2026-10-02: no. Raised by the decode pipeline review (2026-09-28, since folded into [qrcode-symbologies.md](../specs/qrcode-symbologies.md)): the generators take `in XxxGeneratorOptions` and the decoders take none, and a parameter added before the freeze would let a caller trade passes for speed without new overloads. Other readers' QR options fill no gap here. Inverted, mirrored and rotated symbols are always read, and cost extra only when the first reading fails. The decoder type chooses the symbology, and `Status` says why a decode failed. No caller has asked. The needs that could come later each want their own shape. A time budget or cancellation is a trailing `CancellationToken`, already scoped to 2.1.0, and a time limit works against Micro QR's attempt budget, which keeps a result independent of CPU speed. Faster failures for continuous camera scanning may want a reusable reader instead of a per-call struct. A switch that lifts the measured gates, such as rMQR's 6 px scale-search bound, fits a per-call struct. A charset for Byte segments with no ECI (11 corpus photographs carry Shift_JIS) is first a better guess, which needs no option. Several symbols per image need a new result type, not an option. Added later, options are new overloads beside the existing ones (the 12 image overloads, or all 24 if the option applies to matrix decodes), and a call without options still binds to the existing overload. Added now, the type would ship empty or with a field nobody asked for |
+| D9 | FNC1 encode: the option's shape and the input form | An enum (none, first position, second position) and an application indicator on `QRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions`, plain values as the other options are. An indicator without second position, or out of range, throws, as contradictions do today. `MicroQRCodeGeneratorOptions` gets no member, so Micro QR cannot be asked. The input is the element string with U+001D separators. Parsing `(01)…` notation would need the AI table |
+| D10 | FNC1 on the decode result | The same enum and the application indicator on `QRCodeDecodeInfo` and `RmQRDecodeInfo`, the text with GS as U+001D. No AIM symbology identifier member: it follows from the mode and the ECI, and adding it later is additive. An FNC1 indicator after the first data segment is `InvalidBitstream`, as a misplaced Structured Append header is, once the corpus and the oracle writers show no symbol that puts it elsewhere |
+| D11 | FNC1 beside ECI, Structured Append and Kanji | Decode reads every combination the standard allows. Encode starts with FNC1 plus the existing ECI rule, and Kanji follows `AllowKanji` as it does without FNC1. FNC1 inside a Structured Append set is refused until a reader is measured to read one |
+| D12 | Does a GS1 / FNC1 slip delay 2.0.0? | No. It is additive and changes no default output, so like Phase 6b it moves to 2.1.0 if it slips |
 
 ## Follow-ups, each its own PR
 
@@ -213,10 +231,11 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over the whole input's bytes as the set writes them | Round-trip plus oracle cross-check |
 | 6 | Kanji encoding | D5, D6, reverse table, segmenter state, `EncodingMode`, capacity docs. Sub-phases 6.1-6.9, done (see the Progress log) | Oracle sweep green. Tag `2.0.0-preview.4` |
 | 6b | 128-bit tiers | Done 2026-10-01: [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round) | That plan's exit: every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` raised or carrying its measured reason. Public API unchanged |
-| 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script. README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry, 128-bit tiers). Fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot be folded in as history, and F1's renderer half landed and is already in the specs) | Approved API listing frozen |
+| 6c | GS1 / FNC1 | D9-D11, the rMQR indicator question, decode for Standard QR and rMQR, the encode option, the segmenter's price for `%` under FNC1, oracle fixtures | zxing-cpp reads this library's first- and second-position symbols as `]Q3` / `]Q5` with the exact element string. This library reads the oracle writers' symbols and the corpus GS1 photograph. The route without FNC1 unchanged in its benchmark |
+| 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script. README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry, 128-bit tiers, GS1 / FNC1). Fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot be folded in as history, and F1's renderer half landed and is already in the specs) | Approved API listing frozen |
 | 8 | Release | Below | `2.0.0` on nuget.org |
 
-Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last and ships in 2.0.0 whatever it takes (decided 2026-09-29, see Scope), so Phase 8 waits for it. Phase 6b touches no public API, so it can run beside 4-6 or after the freeze. It must land before Phase 8 to be in 2.0.0 and moves to 2.1.0 if it slips. Phase 3b was found after Phase 4 shipped and runs in that order. It belongs to the cleanup, so it is numbered with it instead of appended, and Phase 3's "API-final" line held for the types it named but not for the builder's option signatures.
+Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last and ships in 2.0.0 whatever it takes (decided 2026-09-29, see Scope), so Phase 8 waits for it. Phase 6b touches no public API, so it can run beside 4-6 or after the freeze. It must land before Phase 8 to be in 2.0.0 and moves to 2.1.0 if it slips. Phase 6c depends only on 1-3 and adds public API, so it lands before the Phase 7 freeze. Phase 3b was found after Phase 4 shipped and runs in that order. It belongs to the cleanup, so it is numbered with it instead of appended, and Phase 3's "API-final" line held for the types it named but not for the builder's option signatures.
 
 ## Release checklist (Phase 8)
 
@@ -1181,3 +1200,11 @@ Done. The vector loop's exit was recomputed only at a close, while every wait st
 Benchmark delta: the 32-bit walk, eight budgets near version 40 at L, the code before (80e6049) against the change, Release, net10.0 JIT, AVX2, 24 alternating rounds pinned to two cores, every process started at most at 20 % machine load, minimum and median. 342,000 characters of order lines 634 and 644 → 609 and 645 µs, 100,000 characters of Japanese with numbers 365 and 368 → 364 and 369 µs, 200 marks after forty digits on 15,000 characters 74.0 and 74.5 → 72.8 and 73.45 µs.
 
 Lesson: the back edge's listing changed in every way of updating the exit that was tried, yet 24 rounds showed no time cost. A listing change in a hot block is a reason to time it, not a cost by itself.
+
+### GS1 and FNC1 join the scope (2026-10-10)
+
+Done: GS1 / FNC1 moved from Out to In at the maintainer's request, as Phase 6c with D9-D12. The comparison of that day found FNC1 in CodeGlyphX, ZXing.Net, zxing-cpp, go-qr and qrcode2, and in none of QRCoder, QrCodeGenerator or this library.
+
+Lesson: the premise check for the rMQR half found that the rMQR records' "rMQR does not define FNC1" disagrees with both independent mode tables at hand (zxing-cpp, qrcode2). `Decode_ReservedModes_AreInvalidBitstream` pins both indicators as reserved, which checks the decoder against the record, not the record against anything outside it. The Structured Append half of the same sentence agrees with both tables. A spec statement about what a standard lacks needs a source, as one about what it has does.
+
+No code changed.
