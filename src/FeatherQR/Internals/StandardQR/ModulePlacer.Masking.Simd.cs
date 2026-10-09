@@ -66,12 +66,16 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>Each 64-bit lane's total of an <see cref="AddPopCount"/> accumulator.</summary>
+    /// <remarks>
+    /// The high pair takes the low pair in and the shift brings the sum down, with no mask of the low pair: .NET 8's unoptimized ARM64 JIT
+    /// loads <c>Vector128.Create(0xFFFFFFFFul)</c> as all ones, which left the high pair in every total and aborted lanes at the checkpoint.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<ulong> LaneTotals(Vector128<ushort> acc)
+    internal static Vector128<ulong> LaneTotals(Vector128<ushort> acc)
     {
         var a = acc.AsUInt64();
-        var pairs = (a & Vector128.Create(0x0000FFFF0000FFFFul)) + ((a >> 16) & Vector128.Create(0x0000FFFF0000FFFFul));
-        return (pairs & Vector128.Create(0xFFFFFFFFul)) + (pairs >> 32);
+        var pairs = (a & Vector128.Create(0x0000FFFF0000FFFFul)) + (Shr(a, 16) & Vector128.Create(0x0000FFFF0000FFFFul));
+        return Shr(pairs + Shl(pairs, 32), 32);
     }
 
     // ---------------------------------
