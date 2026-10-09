@@ -35,7 +35,10 @@ Plans hold forward-looking strategy. After implementation, durable decisions mov
 
 | Document | Covers |
 |---|---|
-| [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, release checklist |
+| [featherqr-2.0.0-plan.md](plans/featherqr-2.0.0-plan.md) | Remaining 2.0.0 work: naming rule and renames, announced removals, value-kind and immutability unification, symbol geometry, Structured Append, Kanji encoding, 128-bit tiers for builds without AVX2, GS1 / FNC1, release checklist |
+| [fnc1-support-plan.md](plans/fnc1-support-plan.md) | The 2.0.0 GS1 / FNC1 phase at the bit-stream level: both FNC1 modes read and written in Standard QR and rMQR, the rMQR indicators the records got wrong, the `%` separator rule and the pairs no Alphanumeric segment can carry, the API shape, oracle fixtures, phases. Its research is in [plans/references/fnc1-support-research.md](plans/references/fnc1-support-research.md) |
+| [gs1-support-plan.md](plans/gs1-support-plan.md) | GS1 above the bit stream: an AI table generated from the GS1 Syntax Dictionary, the checks (linters, check digits, pairings), `(AI)` text in both directions, Digital Link URIs, GS1's carrier rules for the three symbologies, the API sketch, oracles, phases. Its research is in [plans/references/gs1-support-research.md](plans/references/gs1-support-research.md) |
+| [decode-photos-plan.md](plans/decode-photos-plan.md) | Decoding photographs: where the image decoders stand against zxing-cpp on photograph sets, the Shift_JIS Byte segments without an ECI header, the photograph techniques other readers use, and the README, specs and XML docs rewritten from the measurements |
 
 The 2.0.0 core split plan (`FeatherQR` core, `FeatherQR.SkiaSharp` renderer, `SkiaSharp.QrCode` metapackage, repository rename) completed on 2026-09-06 and was folded into [qrcode-symbologies.md](specs/qrcode-symbologies.md) (package architecture, seam, graph, the "why three packages" record, scope decisions, lessons) and [DESIGN.md](DESIGN.md).
 
