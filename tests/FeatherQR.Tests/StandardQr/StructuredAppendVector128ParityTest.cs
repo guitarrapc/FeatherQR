@@ -6,7 +6,8 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The portable 16-bit lane walk against the scalar walk, entered directly: the dispatch takes it only without 256-bit vectors and NEON,
-/// so this is where an x64 machine with AVX2 runs it at all. Same inputs as the NEON walk's test: resets, saturation, the scalar finish.
+/// so this is where an x64 machine with AVX2 runs it at all. Its parity walk takes the NEON walk test's inputs (resets, saturation, runs of marks, the scalar finish);
+/// its step, tail and let-through tests share the lane walk test's helpers.
 /// </summary>
 public class StructuredAppendVector128ParityTest
 {
@@ -51,6 +52,69 @@ public class StructuredAppendVector128ParityTest
                         await Assert.That(actual[lane * StructuredAppendPlanner.MaxSymbols + k]).IsEqualTo(expected[k]).Because(because);
                 }
             }
+    }
+
+    public static IEnumerable<string> MarkRuns() => StructuredAppendLaneWalkTest.MarkRuns();
+
+    [Test]
+    [MethodDataSource(nameof(MarkRuns))]
+    public async Task Walk_ACutKeptOffARunOfMarks_LeavesTheLaneAStepBehind(string name)
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(name, StructuredAppendLaneWalkTest.MarkRun(name), 40, StructuredAppendPlanner.WalkLanesVector128, everyCloseResumes: true);
+    }
+
+    public static IEnumerable<string> KeptOffAhead() => StructuredAppendLaneWalkTest.KeptOffAhead();
+
+    [Test]
+    [MethodDataSource(nameof(KeptOffAhead))]
+    public async Task Walk_ACutAtARunsFirstMarkReReadsIt_AndOneAtItsSecondResumes(string ahead)
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(ahead, StructuredAppendLaneWalkTest.KeptOffRun(ahead, 24, 9_000), 9, StructuredAppendPlanner.WalkLanesVector128, everyCloseResumes: false);
+    }
+
+    [Test]
+    [Arguments(8_988)]
+    [Arguments(8_989)]
+    public async Task Walk_ClosesNearTheEnd_CatchUpInTheVectorLoop(int length)
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack($"a-pair-{length}", StructuredAppendLaneWalkTest.KeptOffRun("a-pair", 24, length), 9, StructuredAppendPlanner.WalkLanesVector128, everyCloseResumes: false);
+    }
+
+    [Test]
+    public async Task Walk_PricesAMarkInALanesLastCharactersAsTheScalarWalkDoes()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertAMarkInALanesLastCharactersIsPricedAsTheScalarWalkDoes(StructuredAppendPlanner.WalkLanesVector128);
+    }
+
+    [Test]
+    public async Task Walk_ARunNoChunkHolds_StopsALiveLaneAndLetsAFailedOneThrough()
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertARunNoChunkHoldsStopsALiveLaneAndLetsAFailedOneThrough(StructuredAppendPlanner.WalkLanesVector128);
     }
 
     [Test]

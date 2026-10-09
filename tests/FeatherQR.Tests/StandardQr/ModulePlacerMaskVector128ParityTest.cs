@@ -106,6 +106,31 @@ public class ModulePlacerMaskVector128ParityTest
         await Assert.That((Total(build, 0), Total(build, 1))).IsEqualTo((expectedLow, expectedHigh));
     }
 
+    [Test]
+    public async Task LaneTotals_FourCountsALane_SumToThatLanesWholeTotal()
+    {
+        // The checkpoint reads a total as 64 bits, so a bit above the sum aborts a lane that can still win. .NET 8's unoptimized
+        // ARM64 JIT loaded a 0xFFFFFFFF lane mask as all ones and left the high pair in every total.
+        var random = new Random(11);
+        List<ushort[]> cases =
+        [
+            new ushort[8],
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            [ushort.MaxValue, ushort.MaxValue, ushort.MaxValue, ushort.MaxValue, ushort.MaxValue, ushort.MaxValue, ushort.MaxValue, ushort.MaxValue],
+            [0, 0, ushort.MaxValue, ushort.MaxValue, ushort.MaxValue, ushort.MaxValue, 0, 0],
+            [ushort.MaxValue, 0, 0, 0, 0, 0, 0, ushort.MaxValue],
+        ];
+        for (var i = 0; i < 100; i++)
+            cases.Add(Enumerable.Range(0, 8).Select(_ => (ushort)random.Next(ushort.MaxValue + 1)).ToArray());
+
+        foreach (var counts in cases)
+        {
+            var totals = ModulePlacer.LaneTotals(Vector128.Create(counts));
+            var expected = ((ulong)counts[0] + counts[1] + counts[2] + counts[3], (ulong)counts[4] + counts[5] + counts[6] + counts[7]);
+            await Assert.That((totals.GetElement(0), totals.GetElement(1))).IsEqualTo(expected).Because(string.Join(", ", counts));
+        }
+    }
+
     private static async Task AssertMatches(byte[] buffer, byte[] blockedMask, int size, int version, QREccLevel eccLevel)
     {
         var expectedBuffer = (byte[])buffer.Clone();

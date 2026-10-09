@@ -5,7 +5,7 @@ using FeatherQR.Internals.StandardQR;
 
 namespace FeatherQR.Tests;
 
-/// <summary>ARM64 budget costs stay exact at resets, saturation, and scalar fallback boundaries.</summary>
+/// <summary>The ARM64 lanes end chunks where the scalar walk does at resets, saturation, runs of marks and the 16-bit budget boundary; below the measured average chunk length they do not run and leave the search's bracket as it was.</summary>
 public class StructuredAppendNeonParityTest
 {
     public static IEnumerable<(string Text, EciMode Charset)> Inputs()
@@ -23,6 +23,13 @@ public class StructuredAppendNeonParityTest
             foreach (var charset in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
                 yield return (text.ToString(), charset);
         }
+
+        // Runs of marks a cut lands inside, after digits and after a pair; two hundred marks are more than a small version holds.
+        yield return (string.Concat(Enumerable.Repeat("0123456789012345678901234567890123456789" + new string((char)0xFEFF, 200), 60)), EciMode.Utf8);
+        yield return (string.Concat(Enumerable.Repeat("1234" + char.ConvertFromUtf32(0x1F389) + new string((char)0xFEFF, 60), 100)), EciMode.Utf8);
+        // Short runs after each kind of character reach the 16-bit lanes' resume. In the portable lanes they catch a lost resumed state but not a price a byte off.
+        foreach (var ahead in StructuredAppendLaneWalkTest.KeptOffAhead())
+            yield return (StructuredAppendLaneWalkTest.KeptOffRun(ahead, 24, 3_000), EciMode.Utf8);
     }
 
     [Test]

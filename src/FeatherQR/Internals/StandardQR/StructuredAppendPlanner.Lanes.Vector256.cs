@@ -1,4 +1,5 @@
 #if NET8_0_OR_GREATER
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -54,7 +55,7 @@ internal static partial class StructuredAppendPlanner
         ref var origin = ref MemoryMarshal.GetReference(text);
         int s0 = start, s1 = start, s2 = start, s3 = start, s4 = start, s5 = start, s6 = start, s7 = start;
 
-        // The vector loop runs until the lane furthest ahead reaches the end of the text; the others are a few characters behind and finish in scalar code.
+        // The vector loop runs until the lane furthest ahead reaches the end of the text; the lanes that closed on the last character finish in scalar code.
         var step = 0;
         apartSteps = 0;
         var stop = length - start;
@@ -143,7 +144,7 @@ internal static partial class StructuredAppendPlanner
                 nb = Vector256.Min(b, cheapest + vOpenByte) + byteBits;
                 next = Vector256.Min(Vector256.Min(Vector256.Min(nn0, nn1), Vector256.Min(nn2, na0)), Vector256.Min(na1, nb));
 
-                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this character again, so the lanes are back at one character a few steps after a close, whatever the close cost each of them (a pair is two characters back, a cut kept off a mark more).
+                // The lanes ahead of the one furthest behind wait for it: they keep their states and read this character again, so the lanes are back at one character a few steps after a close, whatever the close cost each of them (a pair is two characters back, a cut kept off a run at its first mark two or three).
                 var lowest = Math.Min(Math.Min(Math.Min(s0, s1), Math.Min(s2, s3)), Math.Min(Math.Min(s4, s5), Math.Min(s6, s7)));
                 var hold = Vector256.GreaterThan(Vector256.Create(s0, s1, s2, s3, s4, s5, s6, s7), Vector256.Create(lowest));
                 nn0 = Vector256.ConditionalSelect(hold, n0, nn0);
@@ -171,6 +172,9 @@ internal static partial class StructuredAppendPlanner
                 offset[6] = s6;
                 offset[7] = s7;
                 together = s0 == s1 && s1 == s2 && s2 == s3 && s3 == s4 && s4 == s5 && s5 == s6 && s6 == s7;
+                // The lane furthest ahead waited, so the exit moves on a step with it.
+                stop++;
+                Debug.Assert(stop == length - Math.Max(Math.Max(Math.Max(s0, s1), Math.Max(s2, s3)), Math.Max(Math.Max(s4, s5), Math.Max(s6, s7))));
             }
 
             var overBits = over.ExtractMostSignificantBits();
@@ -187,7 +191,8 @@ internal static partial class StructuredAppendPlanner
                 continue;
             }
 
-            // Some lane's chunk closes before this character, which starts its next chunk: the lane re-reads it on the next step, with fresh states.
+            // Some lane's chunk closes before this character. The lane re-reads its next chunk from the cut; when marks lie between the cut and this character, the character ahead and the marks are priced here and the lane re-reads only this character.
+            var kept = int.MinValue; // not priced yet this step
             for (var lane = 0; lane < Lanes; lane++)
             {
                 if ((overBits & (1u << lane)) == 0)
@@ -213,6 +218,20 @@ internal static partial class StructuredAppendPlanner
                     budget[lane] = int.MaxValue;
                 }
                 chunkStart[lane] = end;
+                if (TWidth.Utf8)
+                {
+                    // Re-reading from the cut would hold the other lanes a step for every character re-read. Every lane that closes in a step stands at this character with one cut, so all of them resume or none, at one cost.
+                    var laneKept = position - end >= 2 ? KeptOffRunBits(text, charset, end, position, openByte) : -1;
+                    Debug.Assert(kept == int.MinValue || laneKept == kept);
+                    kept = laneKept;
+                    if (kept >= 0)
+                    {
+                        // The closing chunk held these marks in one Byte run from the character ahead or an earlier one, within its budget.
+                        Debug.Assert(kept <= budget[lane]);
+                        offset[lane] -= 1;
+                        continue;
+                    }
+                }
                 offset[lane] -= 1 + (position - end);
             }
 
@@ -224,6 +243,13 @@ internal static partial class StructuredAppendPlanner
             a1 = Vector256.ConditionalSelect(over, unreachable, na1);
             b = Vector256.ConditionalSelect(over, unreachable, nb);
             cheapest = Vector256.ConditionalSelect(over, Vector256<int>.Zero, next);
+            if (TWidth.Utf8 && kept >= 0)
+            {
+                // Only Byte is reachable after a mark, so the run's cost is both states. Only UTF-8 cuts are kept off marks, and the gate keeps this out of the one-byte walk's code.
+                var cost = Vector256.Create(kept);
+                b = Vector256.ConditionalSelect(over, cost, b);
+                cheapest = Vector256.ConditionalSelect(over, cost, cheapest);
+            }
             s0 = offset[0];
             s1 = offset[1];
             s2 = offset[2];
@@ -237,7 +263,7 @@ internal static partial class StructuredAppendPlanner
             stop = length - Math.Max(Math.Max(Math.Max(s0, s1), Math.Max(s2, s3)), Math.Max(Math.Max(s4, s5), Math.Max(s6, s7)));
         }
 
-        // Each lane finishes its last few characters in scalar code, from its own states.
+        // Each lane ends its last chunk in scalar code, from its own states.
         for (var lane = 0; lane < used; lane++)
         {
             if (failed[lane])
@@ -263,7 +289,9 @@ internal static partial class StructuredAppendPlanner
                     u1 = Math.Min(m0 + 6, lc + openAlnum);
                     u0 = m1 + 5;
                 }
-                var tb = (TWidth.Utf8 && text[position] == ModeSegmenter.ByteOrderMark ? lb : Math.Min(lb, lc + openByte)) + byteBits;
+                // No rule for a U+FEFF here: a lane with characters left closed on the last one and re-reads the head of its next chunk, one character and then the marks its cut was kept off, where continuing that character's run is never dearer than opening another.
+                Debug.Assert(!TWidth.Utf8 || text[position] != ModeSegmenter.ByteOrderMark || lb <= lc + openByte);
+                var tb = Math.Min(lb, lc + openByte) + byteBits;
                 var cost = Math.Min(Math.Min(Math.Min(t0, t1), Math.Min(t2, u0)), Math.Min(u1, tb));
                 if (cost > budget[lane])
                 {
