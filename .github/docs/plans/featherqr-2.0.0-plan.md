@@ -15,7 +15,7 @@ A public API is added in a minor and removed only in a major. 2.0.0 is the only 
 | The announced removals (`Compression`, `GetRequiredBufferSize` ×2, parameter-list generator overloads) | `CancellationToken` / time-budget decode overloads (additive, 2.1.0) |
 | Type and method renames under one naming rule | Payload helpers (deferred by the maintainer and unchanged) |
 | Value-kind, immutability and sealing unification | |
-| GS1 / FNC1 (FNC1 in first and second position), encode and decode, Standard QR and rMQR | GS1 syntax validation and human-readable `(AI)` formatting, which need the GS1 AI table |
+| FNC1 decode (first and second position), Standard QR and rMQR ([fnc1-support-plan.md](fnc1-support-plan.md)) | FNC1 encode and the GS1 layer (AI table, checks, `(AI)` text, Digital Link, [gs1-support-plan.md](gs1-support-plan.md)), unless both land before the freeze. They ship together (D12) |
 | Symbol geometry in the decode result | A pure-BCL SVG / 1-bit PNG writer (waits for a concrete request) |
 | Structured Append, encode and decode (Standard QR only) | `EciMode` as a value type (decided against, see D7) |
 | Kanji encoding for all three symbologies | Additional renderer packages |
@@ -162,7 +162,7 @@ The work:
 
 1. Decode. Read both indicators in Standard QR and rMQR, apply the `%` rule to Alphanumeric segments only while a mode is active, read the application indicator, and report the mode on `QRCodeDecodeInfo` and `RmQRDecodeInfo` (D10). The text keeps GS as U+001D, so the element string comes back exactly.
 2. Encode. An FNC1 option on `QRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` (D9). The caller passes the element string with U+001D separators. The encoder writes the indicator, maps U+001D to `%` in Alphanumeric segments and to 0x1D in Byte segments, and doubles a literal `%` in Alphanumeric segments. Under FNC1 a literal `%` costs two Alphanumeric characters, so both `Single` and `Optimal` price it. The route without FNC1 keeps its instructions, measured before and after.
-3. What stays out. GS1 syntax (AI lengths, check digits) is a property of the data, not of the symbol, and needs the GS1 AI table, as human-readable `(01)…(17)…` formatting does. The encoder checks only what the symbol needs: an application indicator in range and text the mode can carry.
+3. What stays out. GS1 syntax (AI lengths, check digits) is a property of the data, not of the symbol, and needs the GS1 AI table, as human-readable `(01)…(17)…` formatting does. The encoder checks only what the symbol needs: an application indicator in range and text the mode can carry. The GS1 layer that builds and checks the data is [gs1-support-plan.md](gs1-support-plan.md), and encode ships in the same release as it (D12).
 4. Verification. zxing-cpp through ZXingCpp reports `ContentType.GS1` and the AIM symbology identifier (`]Q3`, `]Q5`), so it reads this library's symbols back as GS1. Writers for the fixture corpus, each to be confirmed before it is relied on: libzint's `gs1` option (whether the wrapper passes it), ZXing.Net's `GS1_FORMAT` hint and CodeGlyphX's `EncodeGs1`. The real-image corpus already holds one GS1 symbol in its content column, which the change must read.
 
 ## 128-bit tiers for builds without AVX2
@@ -184,7 +184,7 @@ Done on 2026-10-01, in 2.0.0. Every scalar cell in the x64-without-AVX and WebAs
 | D9 | FNC1 encode: the option's shape and the input form | An enum (none, first position, second position) and an application indicator on `QRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions`, plain values as the other options are. An indicator without second position, or out of range, throws, as contradictions do today. `MicroQRCodeGeneratorOptions` gets no member, so Micro QR cannot be asked. The input is the element string with U+001D separators. Parsing `(01)…` notation would need the AI table |
 | D10 | FNC1 on the decode result | The same enum and the application indicator on `QRCodeDecodeInfo` and `RmQRDecodeInfo`, the text with GS as U+001D. No AIM symbology identifier member: it follows from the mode and the ECI, and adding it later is additive. An FNC1 indicator after the first data segment is `InvalidBitstream`, as a misplaced Structured Append header is, once the corpus and the oracle writers show no symbol that puts it elsewhere |
 | D11 | FNC1 beside ECI, Structured Append and Kanji | Decode reads every combination the standard allows. Encode starts with FNC1 plus the existing ECI rule, and Kanji follows `AllowKanji` as it does without FNC1. FNC1 inside a Structured Append set is refused until a reader is measured to read one |
-| D12 | Does a GS1 / FNC1 slip delay 2.0.0? | No. It is additive and changes no default output, so like Phase 6b it moves to 2.1.0 if it slips |
+| D12 | Does a GS1 / FNC1 slip delay 2.0.0? | No. Decided 2026-10-10: the halves ship separately. FNC1 decode ships in 2.0.0 on its own, since today every GS1 QR Code reads as `UnsupportedContent` and reading one needs no GS1 layer. FNC1 encode ships in the same release as the GS1 layer's builders, because an encoder that takes any element string lets a missing separator write a wrong symbol with no error. That release is 2.0.0 if both land before the Phase 7 freeze, 2.1.0 otherwise. All of it is additive and changes no default output, so like Phase 6b none of it delays 2.0.0 |
 
 ## Follow-ups, each its own PR
 
@@ -231,11 +231,11 @@ Each phase follows the test-first workflow, regenerates both `PublicAPI.approved
 | 5 | Structured Append | D4, decode-side header reporting, encode-side split, parity over the whole input's bytes as the set writes them | Round-trip plus oracle cross-check |
 | 6 | Kanji encoding | D5, D6, reverse table, segmenter state, `EncodingMode`, capacity docs. Sub-phases 6.1-6.9, done (see the Progress log) | Oracle sweep green. Tag `2.0.0-preview.4` |
 | 6b | 128-bit tiers | Done 2026-10-01: [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round) | That plan's exit: every scalar cell in the x64-without-AVX and WebAssembly columns of `SimdTiers.Expected` raised or carrying its measured reason. Public API unchanged |
-| 6c | GS1 / FNC1 | D9-D11, the rMQR indicator question, decode for Standard QR and rMQR, the encode option, the segmenter's price for `%` under FNC1, oracle fixtures | zxing-cpp reads this library's first- and second-position symbols as `]Q3` / `]Q5` with the exact element string. This library reads the oracle writers' symbols and the corpus GS1 photograph. The route without FNC1 unchanged in its benchmark |
+| 6c | GS1 / FNC1 | D9-D11 and the rMQR indicator question, then decode for Standard QR and rMQR ([fnc1-support-plan.md](fnc1-support-plan.md) Phases 0-2). The encode option, the segmenter's price for `%` under FNC1 and the GS1 layer ([gs1-support-plan.md](gs1-support-plan.md)) ship together, in 2.0.0 only if both land before the freeze (D12) | Decode: this library reads the oracle writers' symbols and the corpus GS1 photograph. Encode: zxing-cpp reads this library's first- and second-position symbols as `]Q3` / `]Q5` with the exact element string, and the route without FNC1 is unchanged in its benchmark |
 | 7 | Docs and API freeze | `docs/migration.md` 2.0.0 section rewritten with the full rename table and a mechanical replacement script. README, DESIGN.md, spec scope rows (Kanji, Structured Append, geometry, 128-bit tiers, GS1 / FNC1). Fold this plan into the specs and delete it, moving the Follow-ups table somewhere durable first (what remains there is not 2.0.0 work, so it cannot be folded in as history, and F1's renderer half landed and is already in the specs) | Approved API listing frozen |
 | 8 | Release | Below | `2.0.0` on nuget.org |
 
-Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last and ships in 2.0.0 whatever it takes (decided 2026-09-29, see Scope), so Phase 8 waits for it. Phase 6b touches no public API, so it can run beside 4-6 or after the freeze. It must land before Phase 8 to be in 2.0.0 and moves to 2.1.0 if it slips. Phase 6c depends only on 1-3 and adds public API, so it lands before the Phase 7 freeze. Phase 3b was found after Phase 4 shipped and runs in that order. It belongs to the cleanup, so it is numbered with it instead of appended, and Phase 3's "API-final" line held for the types it named but not for the builder's option signatures.
+Phases 4-6 are independent of each other and depend only on 1-3. Phase 6 is last and ships in 2.0.0 whatever it takes (decided 2026-09-29, see Scope), so Phase 8 waits for it. Phase 6b touches no public API, so it can run beside 4-6 or after the freeze. It must land before Phase 8 to be in 2.0.0 and moves to 2.1.0 if it slips. Phase 6c depends only on 1-3 and adds public API. Its decode half lands before the Phase 7 freeze. Its encode half lands before the freeze only together with the GS1 layer, and otherwise after 2.0.0 (D12). Phase 3b was found after Phase 4 shipped and runs in that order. It belongs to the cleanup, so it is numbered with it instead of appended, and Phase 3's "API-final" line held for the types it named but not for the builder's option signatures.
 
 ## Release checklist (Phase 8)
 
@@ -1206,5 +1206,13 @@ Lesson: the back edge's listing changed in every way of updating the exit that w
 Done: GS1 / FNC1 moved from Out to In at the maintainer's request, as Phase 6c with D9-D12. The comparison of that day found FNC1 in CodeGlyphX, ZXing.Net, zxing-cpp, go-qr and qrcode2, and in none of QRCoder, QrCodeGenerator or this library.
 
 Lesson: the premise check for the rMQR half found that the rMQR records' "rMQR does not define FNC1" disagrees with both independent mode tables at hand (zxing-cpp, qrcode2). `Decode_ReservedModes_AreInvalidBitstream` pins both indicators as reserved, which checks the decoder against the record, not the record against anything outside it. The Structured Append half of the same sentence agrees with both tables. A spec statement about what a standard lacks needs a source, as one about what it has does.
+
+No code changed.
+
+### FNC1 and the GS1 layer are planned, and their halves ship separately (2026-10-10)
+
+Done: Phase 6c is planned in two documents, [fnc1-support-plan.md](fnc1-support-plan.md) for the bit stream and [gs1-support-plan.md](gs1-support-plan.md) for the layer above the element string, which moves GS1 syntax and `(AI)` text from Out to "with FNC1 encode". The maintainer decided D12: FNC1 decode ships in 2.0.0 on its own, and FNC1 encode ships in the same release as the GS1 layer. The scope row, D12, the Phase 6c row and the phase-order paragraph were updated.
+
+Lesson: the retail half of GS1 is a Digital Link URI in plain QR, which needs the GS1 layer and no FNC1. A scope that read "GS1 / FNC1" as one bit-stream feature would have missed it.
 
 No code changed.
