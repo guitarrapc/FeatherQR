@@ -202,10 +202,8 @@ public class StructuredAppendLaneWalkTest
     }
 
     /// <summary>
-    /// The vector loop's exit moves only at a close, so it leaves the text's last character, a mark after digits, to each lane's
-    /// scalar finish, run from the lane's own states. A Byte run must not open at that mark: the filler walks each lane's last
-    /// chunk across its budget, and the shifts put budgets within the few bits that opening one would save.
-    /// An exact exit would move the decision to the vector loop's copy of the rule and leave the scalar finish's untested here.
+    /// The text ends in digits and a mark, which the vector loop reads last and where a Byte run must not open: the filler walks
+    /// each lane's last chunk across its budget, and the shifts put budgets within the few bits that opening one would save.
     /// </summary>
     internal static async Task AssertAMarkInALanesLastCharactersIsPricedAsTheScalarWalkDoes(LaneWalk walk)
     {
@@ -225,7 +223,7 @@ public class StructuredAppendLaneWalkTest
                     for (var lane = 0; lane < 8; lane++)
                         budgets[lane] = capacity - shift - spacing * (7 - lane);
 
-                    // Every fifth filler still catches a tail that drops the mark rule.
+                    // Every fifth filler still catches the mark rule dropped at the last character.
                     for (var filler = 0; filler < 250; filler += 5)
                     {
                         var text = Repeat("order 20260915 item 0000123456 qty 42 " + new string(mark, 6), 1_500) + new string('x', filler) + new string('7', 30) + mark;
@@ -258,6 +256,17 @@ public class StructuredAppendLaneWalkTest
         if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;
         await AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack(ahead, KeptOffRun(ahead, 24, 9_000), 9, StructuredAppendPlanner.WalkLanes, everyCloseResumes: false);
+    }
+
+    [Test]
+    [Arguments(8_988)]
+    [Arguments(8_989)]
+    public async Task WalkLanes_ClosesNearTheEnd_CatchUpInTheVectorLoop(int length)
+    {
+        // The last places lie two and three characters from the end.
+        if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+            return;
+        await AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack($"a-pair-{length}", KeptOffRun("a-pair", 24, length), 9, StructuredAppendPlanner.WalkLanes, everyCloseResumes: false);
     }
 
     internal delegate bool LaneWalk(ReadOnlySpan<char> text, EciMode charset, int version, ReadOnlySpan<int> budgets, int limit, int placed, int start, Span<int> counts, Span<int> laneEnds, out int apartSteps);
@@ -307,8 +316,8 @@ public class StructuredAppendLaneWalkTest
                     await Assert.That(back).IsEqualTo(seen).Because(because);
                 setBack[runsOut] = back;
                 lanesAt[runsOut] = lanesAt.GetValueOrDefault(runsOut) + 1;
-                // The loop's exit moves only at a close, so a place within a close's largest set-back of the end can fall to the scalar finish.
-                await Assert.That(runsOut).IsLessThan(text.Length - 3).Because(because);
+                // The vector loop ends when the lane furthest ahead reaches the end, so lanes that close on the last character re-read it in scalar code, apart for no step.
+                await Assert.That(runsOut).IsLessThan(text.Length - 1).Because(because);
             }
         }
         // A place where every lane closes leaves none ahead to wait, and its set-back takes no step apart.

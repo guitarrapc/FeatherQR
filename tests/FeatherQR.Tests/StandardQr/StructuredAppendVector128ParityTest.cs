@@ -83,6 +83,19 @@ public class StructuredAppendVector128ParityTest
     }
 
     [Test]
+    [Arguments(8_988)]
+    [Arguments(8_989)]
+    public async Task Walk_ClosesNearTheEnd_CatchUpInTheVectorLoop(int length)
+    {
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+        await StructuredAppendLaneWalkTest.AssertLanesAreApartOnlyAsLongAsTheirClosesSetThemBack($"a-pair-{length}", StructuredAppendLaneWalkTest.KeptOffRun("a-pair", 24, length), 9, StructuredAppendPlanner.WalkLanesVector128, everyCloseResumes: false);
+    }
+
+    [Test]
     public async Task Walk_PricesAMarkInALanesLastCharactersAsTheScalarWalkDoes()
     {
         if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
