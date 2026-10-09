@@ -126,7 +126,7 @@ internal static partial class ModeSegmenter
     /// </summary>
     /// <remarks>
     /// One forward pass of the program <see cref="ComputeCosts"/> runs: the optimum of every prefix falls out of the sweep, and it is monotone in the prefix length (a plan for a longer prefix restricted to a shorter one is a plan for the shorter at no more cost), so the pass stops at the first prefix over budget.
-    /// A prefix that cuts a surrogate pair is never a candidate; the pair is priced on its first half, so the end after its second half is the one compared.
+    /// A prefix that cuts a surrogate pair is never a candidate: neither prefix walk judges the end between its halves, so the end after its second half is the one compared.
     /// </remarks>
     public static int LongestPrefixWithinBudget(ReadOnlySpan<char> text, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, int budgetBits)
     {
@@ -382,7 +382,7 @@ internal static partial class ModeSegmenter
                 n0 = n1 = n2 = a0 = a1 = Unreachable;
                 while (true)
                 {
-                    // A pair is priced on its first half and judged after its second.
+                    // A pair is judged only after its second half.
                     if (b > budgetBits && !(char.IsHighSurrogate(c) && i + 1 < length && char.IsLowSurrogate(text[i + 1])))
                         return StoppedBefore(text, i);
                     if (i + 1 >= length || ClassOf(text[i + 1]) != ClassOther)
