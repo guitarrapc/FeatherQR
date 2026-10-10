@@ -1279,3 +1279,11 @@ Outside the change and left as it is: a generator reads a member of its options 
 Lessons: in the spec. A list of refused writes is not proof that no write is lost, a reflection rule covers what its query reads, an expected value written through the code under test carries its fault, a sweep that compares two lists reports their sizes, and a suite can pass with part of the public shape gone. The one for this plan is about the review's own fixes. A comment that gave a rule's purpose was read in the next round as a claim about what the rule catches, and the second and the third round each found a case past one. The comments that held say what the query reads.
 
 Benchmark delta: none measured. The review changed tests, comments and documents.
+
+### The API listing prints an accessor's own access (2026-10-11)
+
+Done. `tools/check_public_api.cs` and `tools/public_api.cs` took a property's access from one accessor, the getter where it was visible, and printed `get`, `set` and `init` bare. `public int X { get; protected set; }` was listed as `public int X { get; set; }`, a protected `init` as a public one, and `public int X { protected get; set; }` as a protected property. A property is now as accessible as its more accessible accessor, and the other accessor carries `protected`. Both tools print the same lines for nine planted properties, the metadata tool on four target frameworks. No exported property has a visible accessor narrower than the property today, so both approved listings are unchanged and the Playground page equals a regeneration. The review of the settable options found it, when a planted protected setter showed in the listing's diff as a public one.
+
+Lesson: the listing is read as source, so each modifier has to come from the member it belongs to. This is the second time a property was printed from less than both accessors. The first printed `static` and none of `abstract`, `virtual` and `override`.
+
+No library code changed.

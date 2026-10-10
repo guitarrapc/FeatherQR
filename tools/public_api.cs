@@ -458,14 +458,21 @@ IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId, stri
         var writable = setter is not null && Visible(setter.IsPublic, setter.IsFamily, setter.IsFamilyOrAssembly);
         if (!readable && !writable) continue;
 
+        // A property is as accessible as its more accessible accessor, and the other one is
+        // printed with its own modifier, the way source spells it: { get; protected set; }.
+        // check_public_api does the same, so the two listings still match line for line.
+        var getterIsPublic = readable && getter!.IsPublic;
+        var setterIsPublic = writable && setter!.IsPublic;
+        var isPublic = getterIsPublic || setterIsPublic;
+
         var accessors = new StringBuilder("{ ");
-        if (readable) accessors.Append("get; ");
-        if (writable) accessors.Append(IsInitOnly(setter!) ? "init; " : "set; ");
+        if (readable) accessors.Append(AccessorAccess(isPublic, getterIsPublic)).Append("get; ");
+        if (writable) accessors.Append(AccessorAccess(isPublic, setterIsPublic)).Append(IsInitOnly(setter!) ? "init; " : "set; ");
         accessors.Append('}');
 
         var anchor = readable ? getter! : setter!;
         var name = property.GetIndexParameters().Length > 0 ? $"this[{Parameters(anchor)}]" : property.Name;
-        lines.Add((2, property.GetIndexParameters().Length > 0 ? "indexer" : "property", name, Line(property, Access(anchor.IsPublic), Modifier(anchor), null,
+        lines.Add((2, property.GetIndexParameters().Length > 0 ? "indexer" : "property", name, Line(property, Access(isPublic), Modifier(anchor), null,
             TypeName(property.PropertyType, PropertyNullability(property)), $"{name} {accessors}"), DocIdOfProperty(property), SourceHref(anchor)));
     }
 
@@ -592,6 +599,10 @@ string FullName(Type type) => $"{type.Namespace}.{BareName(type)}";
 bool Visible(bool isPublic, bool isFamily, bool isFamilyOrAssembly) => isPublic || isFamily || isFamilyOrAssembly;
 
 string Access(bool isPublic) => isPublic ? "public" : "protected";
+
+// The modifier an accessor carries in front of get, set or init: none unless it is narrower
+// than its property, which among visible members means protected inside a public property.
+string AccessorAccess(bool propertyIsPublic, bool accessorIsPublic) => propertyIsPublic && !accessorIsPublic ? "protected " : "";
 
 bool Generated(MemberInfo member) =>
     member.Name.Contains('<') || member.GetCustomAttributes(typeof(CompilerGeneratedAttribute), false).Length > 0;
