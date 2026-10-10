@@ -84,7 +84,6 @@ namespace FeatherQR
 
     public struct MicroQRCodeGeneratorOptions : IEquatable<MicroQRCodeGeneratorOptions>
     {
-        public MicroQRCodeGeneratorOptions(MicroQRVersionRange version = null, int quietZoneSize = 2, int? maskPattern = null, MicroQRSegmentation segmentation = 0, bool allowKanji = false);
         public MicroQRSegmentation Segmentation { get; set; }
         public MicroQRVersionRange Version { get; set; }
         public bool AllowKanji { get; set; }
@@ -201,7 +200,6 @@ namespace FeatherQR
 
     public struct QRCodeGeneratorOptions : IEquatable<QRCodeGeneratorOptions>
     {
-        public QRCodeGeneratorOptions(EciMode eciMode = 0, bool utf8Bom = false, QRVersionRange version = null, int quietZoneSize = 4, int? maskPattern = null, bool boostEccLevel = false, QRSegmentation segmentation = 0, bool allowKanji = false);
         public EciMode EciMode { get; set; }
         public QRSegmentation Segmentation { get; set; }
         public QRVersionRange Version { get; set; }
@@ -309,7 +307,6 @@ namespace FeatherQR
 
     public struct RmQRCodeGeneratorOptions : IEquatable<RmQRCodeGeneratorOptions>
     {
-        public RmQRCodeGeneratorOptions(EciMode eciMode = 0, RmQRVersion? version = null, RmQRFitStrategy fitStrategy = 0, RmQRHeight? height = null, int quietZoneSize = 2, RmQRSegmentation segmentation = 0, bool allowKanji = false);
         public EciMode EciMode { get; set; }
         public RmQRFitStrategy FitStrategy { get; set; }
         public RmQRHeight? Height { get; set; }

@@ -5,8 +5,15 @@ namespace FeatherQR;
 /// <c>default</c> is the complete default configuration, so set only what you need: <c>new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, QuietZoneSize = 0 }</c>.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Standard QR specific rather than shared: the three generators agree on almost nothing.
 /// <see cref="Version"/> is a different type in each, <see cref="QuietZoneSize"/> has a different specified default in each, Micro QR has no ECI, and rMQR carries fit options that mean nothing here.
+/// </para>
+/// <para>
+/// A plain value: write it with an object initializer, assign a member afterwards (<c>options.QuietZoneSize = 0;</c>), or copy it with <c>with</c>, and the three give equal values.
+/// It is copied when it is stored or passed, so assigning to one variable changes no other, and a generator reads the value as it is at the call.
+/// The members have <c>set</c> accessors, not <c>init</c>: an object initializer over them compiles at every language version, where <c>init</c> needs C# 9, so no constructor has to list the options and an option added later is one more property.
+/// </para>
 /// </remarks>
 public record struct QRCodeGeneratorOptions
 {
@@ -20,47 +27,6 @@ public record struct QRCodeGeneratorOptions
     private int _quietZoneSizeOffset;
 
     private int? _maskPattern;
-
-    /// <summary>
-    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
-    /// </summary>
-    /// <remarks>
-    /// Prefer the object initializer (<c>new QRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order.
-    /// This exists because <c>init</c> accessors are unassignable before C# 9, and .NET Framework and netstandard2.0 projects default to C# 7.3 while netstandard2.1 defaults to C# 8.0; the parameter list generator overloads that used to serve those consumers were removed in 2.0.0.
-    /// <strong>Pass arguments by name.</strong> Three consecutive parameters accept a bare <c>int</c> (<paramref name="version"/> converts from one, and <paramref name="quietZoneSize"/> and <paramref name="maskPattern"/> are integers), so a positional call can transpose two of them and still compile.
-    /// Every parameter is optional, and each default is the value <c>default</c> carries for that property, so omitting one leaves it exactly as the default configuration has it.
-    /// Values are assigned through the same <c>init</c> accessors, so validation is identical either way.
-    /// The three option structs list their shared settings in the same relative order (version, quiet zone, mask pattern, segmentation, Kanji) so that a caller moving between symbologies does not meet a different one. <see cref="MaskPattern"/> is validated on assignment either way; the other members carry no constructor-time check, exactly as the object initializer does not.
-    /// </remarks>
-    /// <param name="eciMode">See <see cref="EciMode"/>.</param>
-    /// <param name="utf8Bom">See <see cref="Utf8Bom"/>.</param>
-    /// <param name="version">See <see cref="Version"/>.</param>
-    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
-    /// <param name="maskPattern">See <see cref="MaskPattern"/>.</param>
-    /// <param name="boostEccLevel">See <see cref="BoostEccLevel"/>.</param>
-    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
-    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-7 or <c>null</c>.</exception>
-    public QRCodeGeneratorOptions(
-        EciMode eciMode = EciMode.Default,
-        bool utf8Bom = false,
-        QRVersionRange version = default,
-        int quietZoneSize = DefaultQuietZone,
-        int? maskPattern = null,
-        bool boostEccLevel = false,
-        QRSegmentation segmentation = QRSegmentation.Single,
-        bool allowKanji = false)
-        : this()
-    {
-        EciMode = eciMode;
-        Utf8Bom = utf8Bom;
-        Version = version;
-        QuietZoneSize = quietZoneSize;
-        MaskPattern = maskPattern;
-        BoostEccLevel = boostEccLevel;
-        Segmentation = segmentation;
-        AllowKanji = allowKanji;
-    }
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static QRCodeGeneratorOptions Default => default;

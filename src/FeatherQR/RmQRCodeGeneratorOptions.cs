@@ -9,6 +9,7 @@ namespace FeatherQR;
 /// <remarks>
 /// rMQR specific rather than shared: <see cref="Version"/> is a different type in each symbology, <see cref="QuietZoneSize"/> has a different specified default, and <see cref="FitStrategy"/>, <see cref="Height"/> and <see cref="Segmentation"/> have no meaning outside rMQR.
 /// There is no version range here because rMQR's 32 versions are not totally ordered; fit is constrained by strategy and height instead.
+/// A plain value a caller may assign to and copy with <c>with</c>, for the reasons on <see cref="QRCodeGeneratorOptions"/>.
 /// </remarks>
 public record struct RmQRCodeGeneratorOptions
 {
@@ -17,39 +18,6 @@ public record struct RmQRCodeGeneratorOptions
     // keeps the canonical form unique, so equality does not report two identical option sets
     // as different.
     private int _quietZoneSizeOffset;
-
-    /// <summary>
-    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
-    /// </summary>
-    /// <remarks>
-    /// Prefer the object initializer (<c>new RmQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order, and pass constructor arguments by name.
-    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation, bool)"/>.
-    /// </remarks>
-    /// <param name="eciMode">See <see cref="EciMode"/>.</param>
-    /// <param name="version">See <see cref="Version"/>.</param>
-    /// <param name="fitStrategy">See <see cref="FitStrategy"/>.</param>
-    /// <param name="height">See <see cref="Height"/>.</param>
-    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
-    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
-    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
-    public RmQRCodeGeneratorOptions(
-        EciMode eciMode = EciMode.Default,
-        RmQRVersion? version = null,
-        RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea,
-        RmQRHeight? height = null,
-        int quietZoneSize = RmQRConstants.QuietZoneModules,
-        RmQRSegmentation segmentation = RmQRSegmentation.Single,
-        bool allowKanji = false)
-        : this()
-    {
-        EciMode = eciMode;
-        Version = version;
-        FitStrategy = fitStrategy;
-        Height = height;
-        QuietZoneSize = quietZoneSize;
-        Segmentation = segmentation;
-        AllowKanji = allowKanji;
-    }
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static RmQRCodeGeneratorOptions Default => default;

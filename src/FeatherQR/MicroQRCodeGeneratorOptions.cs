@@ -6,6 +6,7 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// The smallest option set of the three symbologies: Micro QR has no ECI, and no fit strategy because M1-M4 are totally ordered by capacity.
+/// A plain value a caller may assign to and copy with <c>with</c>, for the reasons on <see cref="QRCodeGeneratorOptions"/>.
 /// </remarks>
 public record struct MicroQRCodeGeneratorOptions
 {
@@ -13,34 +14,6 @@ public record struct MicroQRCodeGeneratorOptions
     private int _quietZoneSizeOffset;
 
     private int? _maskPattern;
-
-    /// <summary>
-    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
-    /// </summary>
-    /// <remarks>
-    /// Prefer the object initializer (<c>new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order. Pass constructor arguments by name: <paramref name="quietZoneSize"/> and <paramref name="maskPattern"/> are adjacent integers, so a positional call can transpose them and still compile.
-    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation, bool)"/>.
-    /// </remarks>
-    /// <param name="version">See <see cref="Version"/>.</param>
-    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
-    /// <param name="maskPattern">See <see cref="MaskPattern"/>.</param>
-    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
-    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-3 or <c>null</c>.</exception>
-    public MicroQRCodeGeneratorOptions(
-        MicroQRVersionRange version = default,
-        int quietZoneSize = MicroQRCodeGenerator.DefaultQuietZone,
-        int? maskPattern = null,
-        MicroQRSegmentation segmentation = MicroQRSegmentation.Single,
-        bool allowKanji = false)
-        : this()
-    {
-        Version = version;
-        QuietZoneSize = quietZoneSize;
-        MaskPattern = maskPattern;
-        Segmentation = segmentation;
-        AllowKanji = allowKanji;
-    }
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static MicroQRCodeGeneratorOptions Default => default;

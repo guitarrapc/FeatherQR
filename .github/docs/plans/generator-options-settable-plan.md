@@ -131,7 +131,7 @@ Consumer compilation, measured from a consumer project against the netstandard2.
 | 1 | Build enforcement: IDE0251 an error for every C# file, `EnforceCodeStyleInBuild` on the two shipping projects, the 27 unused `using` lines removed, `readonly` on the seven members the rule names | Done 2026-10-10. The two projects build without a warning on four target frameworks, and the solution builds as before. Every method body of both assemblies equals the commit before. It changes no API, so it can merge on its own |
 | 2 | Tests first: the assignment classes, the rule that names the three structs, and the sweep | Done 2026-10-10. The first two fail against today's structs for the stated reason (no setter, no struct that is not `readonly`). The sweep has nothing to check yet |
 | 3 | The accessors: `record struct`, `set`, `readonly` on the five getters. The constructors stay for this step, so that method bodies can be compared byte for byte | Done 2026-10-10. Phase 2's tests pass. Every method body of both assemblies equals the commit before, on four target frameworks. Each planted fault is refused twice: the build fails with IDE0251, and with code-style enforcement off for the run a shape rule fails, through `tools/mutation_check.cs`. Encode benchmarks within noise, which the JIT's identical listings stand in for (see the log) |
-| 4 | The constructors removed. `TypeShapeTest`'s constructor rules narrowed to `init`-only members, which leaves `IconData`. `tools/decode_figures.cs` moved to initializers. The approved API listing, accepted in Phase 3 for the accessors, again for the constructors. The Playground API page | The full suite passes on both target frameworks. A consumer project at C# 7.3 sets every option. The listing diff is the accessors, the struct kind and the three constructors |
+| 4 | The constructors removed. `TypeShapeTest`'s constructor rules narrowed to `init`-only members, which leaves `IconData`. `tools/decode_figures.cs` moved to initializers. The approved API listing, accepted in Phase 3 for the accessors, again for the constructors. The Playground API page | Done 2026-10-10. The full suite passes on both target frameworks. A consumer project at C# 7.3 sets every option. The listing diff is the accessors, the struct kind and the three constructors |
 | 5 | The documents below, then this plan folded into the specs and deleted with its research file | D13 and Phase 3c of the 2.0.0 plan marked done |
 
 ## Documents to change
@@ -228,3 +228,22 @@ Lessons:
 
 - A build rule hides the test behind it. With IDE0251 an error, a fault never reaches the shape rule, so what the rule catches was measured with code style off for the run.
 - Writing the faults found a flaw in two of the new tests before any ran. Both swept every property, and would have demanded a setter and a test case for a property that only computes a value. They now sweep the properties that have a setter.
+
+### Phase 4, the constructors (2026-10-10)
+
+Done. The three constructors are gone, with their documentation. The remarks of the three types now say how an option set is written (an initializer, a later assignment, `with`) and why the accessors are `set`.
+
+- Red first. `GeneratorOptions_HaveNoConstructorThatListsTheOptions` failed on each struct and named its constructor.
+- `TypeShapeTest`'s constructor rules cover `init`-only members. `EveryInitOnlyProperty_IsAlsoAConstructorParameter`, which was `EverySettableProperty_IsReachableWithoutAnInitSetter`, sweeps `init`-only properties and asserts that it found `IconData`. `SettingsObject_TakesOneConstructorOfOptionalParameters` and the constructor-agreement test keep `IconData` and drop the three structs.
+- The solution builds with the 15 warnings it had. Nothing but the tests, `tools/decode_figures.cs` and the migration guide called a constructor.
+- The full suite passes: 38,114 tests, both target frameworks.
+- A consumer project sets every option of the three structs in an object initializer and again by assignment. It compiles against the netstandard2.0 asset at the SDK's language version, which a C# 8 statement in the same build shows to be 7.3, and against the netstandard2.1 asset at its default. Run against the netstandard2.0 asset, the two spellings give equal values and the generators take them.
+- `tools/decode_figures.cs` builds its six option sets with initializers. Run into a scratch folder, it writes the 26 committed figures byte for byte.
+- The approved API listing lost the three constructors and nothing else. The Playground API page was regenerated without source links, and its diff stays inside the three option types.
+- The 19 planted faults were run again and are refused as in Phase 3. The four `MaskPattern` bounds are now caught by two tests each, the assignment test and the mask test that was there before, since the constructor test no longer checks them.
+
+The migration guide still shows an option constructor in its sample for older language versions. Phase 5 rewrites that section.
+
+Benchmarks: not run. The phase removes three methods that no generator calls.
+
+Lesson: narrowed to `init`-only properties, the constructor sweep would pass with nothing to check if `IconData` ever lost its `init`. It now asserts what it found, as the 2.0.0 review asked of another shape rule that passed by finding nothing.
