@@ -1,3 +1,5 @@
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Wasm;
 using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 
@@ -173,5 +175,125 @@ public class LuminanceHalverTest
     public async Task Halve_DestinationShorterThanTheHalvedImage_Throws()
     {
         await Assert.That(() => LuminanceHalver.Halve(new byte[64], 8, 8, new byte[15])).Throws<ArgumentException>();
+    }
+
+    private delegate void Halving(ReadOnlySpan<byte> source, int width, int height, Span<byte> destination);
+
+    /// <summary>
+    /// One tier through its own entry, since the dispatch hides a lower tier behind a higher one: widths to past three 256-bit steps, so every tail length of both vector widths is met, out of place and in place.
+    /// Out of place the destination has slack after the halved image, which a step laid one pixel past a row's end would write into.
+    /// </summary>
+    private static async Task AssertMatchesTheDefinition(Halving tier)
+    {
+        var mismatches = new List<string>();
+        for (var width = 2; width <= 200; width++)
+        {
+            foreach (var height in new[] { 2, 3, 6, 7 })
+            {
+                var source = Sample(width * height, width * 31 + height);
+                var expected = Reference(source, width, height);
+                var actual = new byte[expected.Length + 64];
+                Array.Fill(actual, (byte)0xA5);
+
+                tier(source, width, height, actual);
+                if (!actual.AsSpan(0, expected.Length).SequenceEqual(expected))
+                    mismatches.Add($"{width}x{height}");
+                if (actual.AsSpan(expected.Length).IndexOfAnyExcept((byte)0xA5) >= 0)
+                    mismatches.Add($"{width}x{height} written past the halved image");
+
+                var buffer = source.ToArray();
+                tier(buffer, width, height, buffer);
+                if (!buffer.AsSpan(0, expected.Length).SequenceEqual(expected))
+                    mismatches.Add($"{width}x{height} in place");
+            }
+        }
+
+        await Assert.That(mismatches).IsEmpty();
+    }
+
+    /// <summary>
+    /// A tier reads nothing past its source and writes nothing past its destination: each ends where readable memory ends, so a step that reaches past either takes the process down.
+    /// The widths put every tail length at the page end, the height two rows so the last row is the first.
+    /// </summary>
+    private static void AssertReachesNothingPastItsSpans(Halving tier)
+    {
+        if (!PageEndMemory.IsSupported)
+            Skip.Test("no page protection on this platform");
+        using var sourcePage = new PageEndMemory();
+        using var destinationPage = new PageEndMemory();
+        for (var width = 2; width <= 200; width++)
+        {
+            foreach (var height in new[] { 2, 3 })
+            {
+                var sample = Sample(width * height, width);
+                var source = sourcePage.AtPageEnd(sample);
+                var destination = destinationPage.AtPageEnd((width / 2) * (height / 2));
+                tier(source, width, height, destination);
+            }
+        }
+    }
+
+    [Test]
+    public async Task Vector256Tier_ReachesNothingPastItsSpans()
+    {
+        if (!Vector256.IsHardwareAccelerated)
+            Skip.Test("Vector256 not accelerated on this machine");
+        AssertReachesNothingPastItsSpans(LuminanceHalver.HalveVector256);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task Vector128Tier_ReachesNothingPastItsSpans()
+    {
+        if (!Vector128.IsHardwareAccelerated)
+            Skip.Test("Vector128 not accelerated on this machine");
+        AssertReachesNothingPastItsSpans(LuminanceHalver.HalveVector128);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task PackedSimdTier_ReachesNothingPastItsSpans()
+    {
+        if (!PackedSimd.IsSupported)
+            Skip.Test("PackedSimd not supported on this machine");
+        AssertReachesNothingPastItsSpans(LuminanceHalver.HalvePackedSimd);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task ScalarTier_ReachesNothingPastItsSpans()
+    {
+        AssertReachesNothingPastItsSpans(LuminanceHalver.HalveScalar);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task Vector256Tier_MatchesTheDefinition()
+    {
+        if (!Vector256.IsHardwareAccelerated)
+            Skip.Test("Vector256 not accelerated on this machine");
+        await AssertMatchesTheDefinition(LuminanceHalver.HalveVector256);
+    }
+
+    [Test]
+    public async Task Vector128Tier_MatchesTheDefinition()
+    {
+        if (!Vector128.IsHardwareAccelerated)
+            Skip.Test("Vector128 not accelerated on this machine");
+        await AssertMatchesTheDefinition(LuminanceHalver.HalveVector128);
+    }
+
+    [Test]
+    public async Task PackedSimdTier_MatchesTheDefinition()
+    {
+        if (!PackedSimd.IsSupported)
+            Skip.Test("PackedSimd not supported on this machine");
+        await AssertMatchesTheDefinition(LuminanceHalver.HalvePackedSimd);
+    }
+
+    [Test]
+    public async Task ScalarTier_MatchesTheDefinition()
+    {
+        await AssertMatchesTheDefinition(LuminanceHalver.HalveScalar);
     }
 }

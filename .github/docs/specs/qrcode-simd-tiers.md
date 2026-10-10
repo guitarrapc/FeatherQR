@@ -81,6 +81,7 @@ For each kernel, its tiers in the order its dispatch tries them, and the tier th
 | `EccBinaryDecoder` | `GfniV256`, `AdvSimd`, `Vector128` | `Vector128` | `GfniV256` or `Vector128` | `AdvSimd` | `Vector128` |
 | `LuminanceConverter` | `Avx2`, `AdvSimdDp`, `Sse2`, `PackedSimd`, `Vector128` | `Sse2` | `Avx2` | `AdvSimdDp` or `Vector128` | `PackedSimd` |
 | `LuminanceInverter` | `Vector256`, `Vector128` | `Vector128` | `Vector256` | `Vector128` | `Vector128` |
+| `LuminanceHalver` | `Vector256`, `PackedSimd`, `Vector128` | `Vector128` | `Vector256` | `Vector128` | `PackedSimd` |
 | `Binarizer` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |
 | `LocalBinarizer` | `Vector128` | `Vector128` | `Vector128` | `Vector128` | `Vector128` |
 | `FinderRowMask` | `Vector256`, `AdvSimd`, `Vector128` | `Vector128` | `Vector256` | `AdvSimd` | `Vector128` |

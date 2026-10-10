@@ -1,4 +1,5 @@
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Wasm;
 using FeatherQR;
 using FeatherQR.Internals;
 using FeatherQR.Internals.ImageDecoders;
@@ -37,6 +38,7 @@ internal static class SimdParity
         failures += Report("ModuleBitPacker", BitPackerMismatches);
         failures += Report("TextAnalyzer", TextAnalyzerMismatches);
         failures += Report("Binarizer histogram", HistogramMismatches);
+        failures += Report("LuminanceHalver", HalverMismatches);
         failures += Report("LuminanceConverter", LuminanceMismatches);
         failures += Report("QRImageDecoder.SampleGridPiecewise", PiecewiseMismatches);
         failures += Report("ModulePlacer.MaskCode", MaskCodeMismatches);
@@ -509,6 +511,39 @@ internal static class SimdParity
     /// The histogram through the dispatch against a per-pixel count: noise, two-valued runs of every length the blocks meet (a rendered
     /// symbol), runs with a grey pixel in them, a gradient, and lengths around the 32-pixel block and the untested stretch.
     /// </summary>
+    private delegate void Halving(ReadOnlySpan<byte> source, int width, int height, Span<byte> destination);
+
+    /// <summary>Each vector tier of the halving against the scalar tier, out of place and in place, over widths that end in every tail length and an image the search halves.</summary>
+    private static List<string> HalverMismatches()
+    {
+        var mismatches = new List<string>();
+        var random = new Random(20261011);
+        var tiers = new List<(string Name, Halving Tier)> { ("Vector128", LuminanceHalver.HalveVector128) };
+        if (Vector256.IsHardwareAccelerated)
+            tiers.Add(("Vector256", LuminanceHalver.HalveVector256));
+        if (PackedSimd.IsSupported)
+            tiers.Add(("PackedSimd", LuminanceHalver.HalvePackedSimd));
+        foreach (var (width, height) in new[] { (2, 2), (3, 3), (31, 2), (32, 4), (33, 3), (63, 5), (64, 2), (65, 7), (127, 3), (128, 6), (129, 2), (255, 9), (740, 740), (1001, 37) })
+        {
+            var source = new byte[width * height];
+            random.NextBytes(source);
+            var expected = new byte[(width / 2) * (height / 2)];
+            LuminanceHalver.HalveScalar(source, width, height, expected);
+            foreach (var (name, tier) in tiers)
+            {
+                var actual = new byte[expected.Length];
+                tier(source, width, height, actual);
+                if (!actual.AsSpan().SequenceEqual(expected))
+                    mismatches.Add($"{name} {width}x{height}");
+                var buffer = source.ToArray();
+                tier(buffer, width, height, buffer);
+                if (!buffer.AsSpan(0, expected.Length).SequenceEqual(expected))
+                    mismatches.Add($"{name} {width}x{height} in place");
+            }
+        }
+        return mismatches;
+    }
+
     private static List<string> HistogramMismatches()
     {
         var mismatches = new List<string>();
