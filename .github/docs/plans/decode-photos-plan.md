@@ -132,10 +132,42 @@ The records list what was tried and refuted on this decoder ([standardqr-decoder
 | 1 | Measure photographs | Done 2026-10-10 (Progress log): the `photos` and `boofcv` commands, the ZXing set read from a checkout (D7), zxing-cpp's samples at 2c3dcfe checked against the import, eight camera kinds drawn by `CameraRenderer`, BoofCV per category with a cause class for each of its 77 gap photographs | A table per set with gap and reverse, a recorded cause for every gap image of the ZXing and zxing-cpp sets, BoofCV per category, and the candidates of the technique table ranked by the reads they are aimed at |
 | 2 | Documented scope from the measurement | Done 2026-10-10 (Progress log): the documents in "Documents to change" state the measured envelope on photographs, with no stage added | Every place listed says what the measurement shows, and none says "out of scope" for a class the decoder reads |
 | 3 | Charset | Done 2026-10-10 (Progress log): the Shift_JIS guess and ECI 20 in the shared Byte segment decoder, and Micro QR writing UTF-8 where its ISO-8859-1 bytes would read as another text. Standard QR and rMQR already declared ECI 3. The rule and its costs were accepted as measured (D2 to D4) | The 11 ZXing images and the 44 corpus reads return their texts. A round trip over Latin-1 payloads, including text whose bytes look like half-width katakana, misreads nothing. The guess's rate on foreign Latin-1 symbols is measured and recorded. Micro QR and rMQR share it |
-| 4 | Image stages | One sub-phase per class Phase 1 ranks, in its order. Each starts from the failing images, finds the stage that loses them (the true-transform column on synthetic kinds, zxing-cpp's corners on photographs), and follows the accuracy-change rules | Each sub-phase's own exit: the reads gained per set, nothing lost, the failure-path multiple, and the test renders with their mechanism switched off |
+| 4 | Image stages | The first, a search at reduced scale, done 2026-10-10 (Progress log): BoofCV 322 to 371 of 536, the gap 77 to 40. Next is the gap that is left, classified again. One sub-phase per class Phase 1 ranks, in its order. Each starts from the failing images, finds the stage that loses them (the true-transform column on synthetic kinds, zxing-cpp's corners on photographs), and follows the accuracy-change rules | Each sub-phase's own exit: the reads gained per set, nothing lost, the failure-path multiple, and the test renders with their mechanism switched off |
+| 4b | Vector tiers for the halving | `LuminanceHalver` gets a 256-bit tier and a portable 128-bit tier under the rules of the 128-bit round, with the word-at-a-time loop as the scalar tier and the tail ("The halving's vector tiers" below). It changes no read | Every build class runs the tier it measured faster on, or keeps the word-at-a-time loop with its measured reason beside its row. The failing photographs' multiple is measured again and replaces 1.53 in the records |
 | 5 | Fold | Durable results into the decoder records, [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md) and [qrcode-symbologies.md](../specs/qrcode-symbologies.md), the README and XML docs final, this file deleted and the index updated | No completed plan remains |
 
 Phase 2 runs before any stage is built, because today's documents are wrong about today's decoder. Phases 3 and 4 are independent. Phase 3 has to land before the 2.0.0 freeze if D1 holds, and each sub-phase of Phase 4 updates the documents for its own change.
+
+## The halving's vector tiers
+
+Phase 4b. The reduced-scale search shipped with a scalar halving, four pixels a step in one 64-bit word. The maintainer asked on 2026-10-10 for the vector tiers as a phase of their own.
+
+Where it stands, on one 12-megapixel photograph (Ryzen 9 7950X3D, .NET 10 JIT):
+
+| Step | Time |
+|---|---|
+| Halving, a byte at a time (the first cut) | 3.7 ms |
+| Halving, a word at a time (shipped) | 1.6 ms |
+| `LuminanceInverter` over the same bytes, 256-bit | 0.23 ms |
+
+The inverter reads and writes 12 megabytes where the halving reads 12 and writes 3, so 0.23 ms is about what memory allows and the target is a few tenths of a millisecond. The step from 3.7 to 1.6 ms took the multiple on BoofCV's failing photographs from 1.68 to 1.53. By the same proportion a tier at the inverter's speed is worth about 0.09 more, an estimate the phase replaces with a measurement. The halving runs only on an image nothing read, so it is no part of any read.
+
+What to build:
+
+- `LuminanceHalver.Vector256.cs`, 32 pixels of each row a step into 16, and `LuminanceHalver.Vector128.cs`, 16 into 8. The sums of a block fit sixteen bits, so a row's bytes viewed as 16-bit lanes give the pair sums with a mask and a shift, the two rows add, and the means narrow to bytes. No platform instruction is expected to be needed, and `Narrow` exists on .NET 8.
+- The stem file keeps the entry point, the dispatch and the word-at-a-time loop, which is the scalar tier, the netstandard builds' only tier and every row's tail.
+- The search halves a level into the buffer it sits in. A step loads both rows before it stores, and a row ends in the scalar tail, not in a last vector step laid over pixels already written. `LuminanceHalverTest` checks in place against the definition, and each tier is called through its own entry there.
+
+What the rules of [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit-round) ask of it:
+
+- The kernel's row in `SimdTiers.cs` and its expected tier for each build class, its files in `SimdTiersTest`, and the rendered table in [qrcode-simd-tiers.md](../specs/qrcode-simd-tiers.md).
+- A `--parity` case in both report projects, through each tier's own entry point, in place and out of place, with planted faults that make it fail.
+- A `--time` kernel pair (through the dispatch, and the scalar entry) and a shape that reaches the halving. No shape of the report projects fails to read today, so the phase adds one, an image with grey levels and no symbol.
+- Each build measured as itself: the JIT on x64 with and without AVX on .NET 8 and 10, a default NativeAOT publish, `x86-64-v3`, ARM64, and WebAssembly interpreted and AOT-compiled. A tier ships on a build only where it beats the word-at-a-time loop there and loses nowhere beyond noise, and interpreted and AOT-compiled WebAssembly have to agree.
+- The 3 % bar is on the kernel's share of a shape. From the 12-megapixel timing the halving is about 6 % of a failing photograph and about 8 % of a 740 px ramp with no symbol, both over the bar, and both estimates until the new shape is timed.
+- The machine code is read: the search's own method compiles as before on every build, and the word-at-a-time loop costs no instruction for having tiers above it.
+
+What it does not touch: the levels, the floor and which images are searched stay as the first stage of Phase 4 left them, so the sweep, the corpus and both photograph sets read image for image as before, which `compare` shows. The histogram on photographs (4.6 ms on the same photograph, five times a symbol pass) is a lead of its own and not part of this phase.
 
 ## Documents to change
 
@@ -276,3 +308,46 @@ Lessons:
 - A total that moves between runs of one build is a fault, not noise. zxing-cpp's BoofCV code count read 900, 960, 965 and 964 while every per-photograph figure held, and the cause was this tool's handling of the wrapper's lifetimes. The published 900 was wrong by 75.
 - A residual gets its cause confirmed like any other. The four corpus reads still "another text" were taken for a second symbol, and were checked: zxing-cpp returns two symbols from that image, one with this library's text.
 - A measurement can reopen a decision the plan had closed on a guess. D3 kept ISO-8859-1 "until a set holds a symbol that needs Windows-1252". The same SDK messages hold 1,866 such texts, and the 0x80 to 0x9F clause, the one that reads `100円`, turns 345 of them into Japanese or a refusal. Neither reading is the text, and zxing-cpp does the same, so the rule stands, and D3 was decided again with its numbers.
+
+### Phase 4, first stage: the reduced-scale search (2026-10-10)
+
+Done:
+
+- `ImageDecodePasses` reads a Standard QR image again at reduced scale when nothing settles at full size: the image halved by `LuminanceHalver` (each pixel the rounded mean of a two by two block, four pixels a step in one 64-bit word), every pass on it, and halved again until its shorter side would be under 64 px. A read reports its corners in the pixels of the image given. The levels share the inverted image's buffer, so nothing more is rented.
+- An image of only 0 and 255 is not searched, and Micro QR and rMQR do not have the search. Both are measured choices, recorded with their numbers in [standardqr-decoder.md](../specs/standardqr-decoder.md#decisions), Reduced-scale search.
+- Tests, written before the code: `LuminanceHalverTest` (the definition at every width, rounding, odd sides, in place), the search's rules in `ImageDecodePassesTest` through its recording pass, `ReducedScaleDecodeTest` on a renderer of texture finer than a module (`FineTextureRenderer`), and a scene in `DecodeAllocationTest`. Sixteen planted faults, run in a copy of the tree, were all caught.
+- Documents: the passes in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#image-decode-passes), the decision row, the image-level text and Photographs in the Standard QR record, its spec map, the tables in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md#where-the-gap-stands), and the README and XML sentences that named screens.
+- The full suite passes on net8.0 and net10.0 (19,141 and 19,235 tests).
+
+Reads, against the build before it:
+
+| Set | Before | After | zxing-cpp |
+|---|---|---|---|
+| BoofCV, photographs with an agreed read | 322 of 536 | 371 | 391 |
+| The same, gap and reverse | 77 and 9 | 40 and 20 | |
+| ZXing's photographs, upright | 162 of 179 | 164 | 165 |
+| Committed corpus, Standard QR, four turns | 465 of 548 | 470 | 489 |
+| Sweep, Standard QR | | 7 more camera renders of 57,600, none lost | |
+| Sweep, Micro QR and rMQR | | the same pixels and the same reads | |
+
+No read returned a text other than the expected one or one another reader contradicted. ZXing's `13.txt` is one letter short of its symbol, so the tool counts 163 there.
+
+Cost: nothing on a photograph that read before, 1.28 times on one gained, 1.53 times on one that still fails (BoofCV, both builds timed in turn). The other multiples are in the decision row.
+
+Lessons:
+
+- Most of a failing photograph's time is not in the symbol passes. On a 12-megapixel photograph the histogram took 4.6 ms and the two regional binarizations 16.6 ms, against 0.9 ms for a symbol pass. The estimate "a third more pixels, a third more time" was wrong because of it: the search costs its levels' image-wide steps and the halving, and a halver 2.3 times faster took the failing multiple from 1.68 to 1.53.
+- What a failing image pays depends on why it fails. An image where nothing is found pays by the pixel. One where a symbol is found and not corrected pays a decode at every level, whatever its size: a damaged symbol drawn crisp cost 2.4 to 2.9 times with the search.
+- An exclusion is checked against the gains before it is written down. "No black and white image gained anything" was assumed from the sweep, and the photograph set had two that did, drawn symbols with altered finders that read at half scale through a regional pass. The rule stayed, for its cost, and the two are its stated price.
+- Which pass reads a gained image decides what the stage needs. Through the public API a level only reads or does not. A recording pass around the decoder's own core showed 28 of the 51 reads coming from a level's regional pass, so a search of global passes alone would have gained less than half.
+- A set's expected text can be wrong where no reader had read the image. ZXing's `13.txt` says "photograph", the symbol says "photography", and zxing-cpp's copy of the file had already been corrected. The other two readers confirmed it once given the reduced image.
+- Timings taken hours apart do not compare. Two timed runs of the final build put the photographs that read both ways at 1.14 times, with zxing-cpp's own total up by a fifth: the machine, not the change. Both builds timed in turn, each photograph at its faster of two runs, gave 1.00.
+
+What the next stage starts from: the 40 photographs left in BoofCV's gap, classified again on this build (2026-10-10). Each was read scaled, cropped to a symbol zxing-cpp found and as a grid through zxing-cpp's corners, and its finders were looked for among the candidates of the global pass at full size:
+
+- 32 read as the grid through zxing-cpp's corners, 13 cropped to the symbol, and 19 at some other scale (0.66, 0.75, 1.5 or 2), which the halves do not reach.
+- In 17 the global pass has two of the symbol's three finders among its candidates (5 in `glare`, 4 in `pathological`, 3 in `high_version`), and in 4 it has one. A third finder inferred from two is the technique aimed at them.
+- In 10 it has none (7 in `brightness`, small symbols of 3 to 4 px a module in 12-megapixel scenes, 5 of which read cropped). The threshold of the whole scene is the suspect, and why the regional pass does not read them is not looked at yet.
+- In 9 it has all three. In the 4 of `curved` they are the selected triple and the grid fails, on version 1 symbols at 10 to 46 px a module. In the 2 of `lots` the candidate list is full (32) and the triple mixes symbols.
+
+The probe looked at the global positive pass only, so the counts say where to look first, not what each stage will gain.

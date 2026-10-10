@@ -274,17 +274,17 @@ On the first baseline (2026-09-21, seven encoders, payloads sized as above), the
 
 Micro QR and rMQR had a gap of a few renders per kind, plus 54 in Micro QR bilinear upscales at 2-2.5 px/module. zxing-cpp reads far fewer of both, so they are tracked by their own read rate.
 
-The real images were each read at four right angles. The `qrcode-2` row and the total are as read since the Shift_JIS guess (2026-10-10), which moved 40 reads out of the content column and no other figure:
+The real images were each read at four right angles. The `qrcode-2` and `qrcode-4` rows and the total are as read on 2026-10-10: the Shift_JIS guess moved 40 reads out of the content column, and the reduced-scale search read `qrcode-2/13` at its four turns and one more turn of `qrcode-4/15`:
 
 | Set | Images | This library | zxing-cpp | ZXing.Net | Gap | Reverse | Content |
 |---|---|---|---|---|---|---|---|
 | `qrcode-1` | 8 | 32/32 | 32 | 24 | 0 | 0 | 0 |
-| `qrcode-2` | 56 | 188/224 | 201 | 100 | 16 | 7 | 12 |
+| `qrcode-2` | 56 | 192/224 | 201 | 100 | 16 | 11 | 12 |
 | `qrcode-3` | 18 | 67/72 | 72 | 56 | 5 | 0 | 0 |
-| `qrcode-4` | 24 | 54/96 | 60 | 64 | 7 | 1 | 0 |
+| `qrcode-4` | 24 | 55/96 | 60 | 64 | 6 | 1 | 0 |
 | `qrcode-5` | 16 | 64/64 | 64 | 64 | 0 | 0 | 0 |
 | `qrcode-6` | 15 | 60/60 | 60 | 60 | 0 | 0 | 0 |
-| Standard QR | 137 | 465/548 | 489 | 368 | 28 | 8 | 12 |
+| Standard QR | 137 | 470/548 | 489 | 368 | 27 | 12 | 12 |
 | `microqrcode-1` | 16 | 64/64 | 59 | | 0 | 5 | |
 | `rmqrcode-1` | 3 | 12/12 | 12 | | 0 | 0 | |
 
@@ -315,8 +315,9 @@ ZXing's QR photographs (the ZXing.Net checkout's black-box `qrcode-1` to `-6`, 1
 |---|---|---|---|---|---|---|---|
 | ZXing `qrcode-1` to `-6`, as first measured | 716 | 606 | 660 | 584 | 15 | 5 | 48 |
 | ZXing `qrcode-1` to `-6`, since the Shift_JIS guess | 716 | 650 | 660 | 584 | 15 | 5 | 4 |
+| ZXing `qrcode-1` to `-6`, since the reduced-scale search | 716 | 653 | 660 | 584 | 14 | 7 | 8 |
 
-Upright, this library read 151 of 179 and zxing-cpp 165, the number go-qr publishes for zxing-cpp on this set. The content column was the eleven Shift_JIS photographs (44 reads) and `qrcode-2/33`, whose bit stream is refused. The guess reads all eleven, which makes 162 upright, and `qrcode-2/33` is what the column still holds. Each gap image has a cause, from the grid sampled through zxing-cpp's reported corners and the image cropped and scaled:
+Upright, this library read 151 of 179 and zxing-cpp 165, the number go-qr publishes for zxing-cpp on this set. The content column was the eleven Shift_JIS photographs (44 reads) and `qrcode-2/33`, whose bit stream is refused. The guess reads all eleven, which makes 162 upright, and `qrcode-2/33` is what the column still held. The reduced-scale search reads `qrcode-2/12` at half scale and `13` at a quarter, which neither other reader reads at full size, and one more turn of `qrcode-4/15`. The four new entries in the content column are `13` at its four turns: this set's `13.txt` says "photograph" where the symbol, the file in zxing-cpp's samples, and zxing-cpp and ZXing.Net given the reduced image all say "photography". That makes 164 upright against zxing-cpp's 165. Each gap image has a cause, from the grid sampled through zxing-cpp's reported corners and the image cropped and scaled:
 
 - `qrcode-2/5`, a version 1 at 2.3 px/module on a billboard in a 480 × 360 photograph of a station hall, and `qrcode-4/19`, a version 3 at 4.1 px/module, are not detected in the whole image. Cropped to the symbol, or scaled by 0.75, 1.5 or 2, both read, and the grid through zxing-cpp's corners reads with 2 to 3 and 0 corrections.
 - `qrcode-4/14`, a version 3 at 4.9 px/module, is found and fails Reed-Solomon. The grid through zxing-cpp's corners reads with 1 or 2 corrections, so this library's frame is the cause.
@@ -326,25 +327,27 @@ BoofCV's QR photographs (`qrcodes_v3`, 536 photographs holding 1,232 labelled co
 
 | Category | Photographs | This library | zxing-cpp | ZXing.Net | Gap | Reverse |
 |---|---|---|---|---|---|---|
-| blurred | 45 | 29 | 30 | 17 | 3 | 2 |
-| bright_spots | 32 | 15 | 13 | 17 | 1 | 3 |
-| brightness | 28 | 17 | 27 | 20 | 10 | 0 |
-| close | 40 | 39 | 40 | 2 | 1 | 0 |
-| curved | 50 | 25 | 34 | 22 | 9 | 0 |
-| damaged | 37 | 6 | 7 | 4 | 1 | 0 |
-| glare | 50 | 12 | 21 | 12 | 9 | 0 |
+| blurred | 45 | 32 | 30 | 17 | 0 | 2 |
+| bright_spots | 32 | 21 | 13 | 17 | 0 | 8 |
+| brightness | 28 | 20 | 27 | 20 | 8 | 1 |
+| close | 40 | 40 | 40 | 2 | 0 | 0 |
+| curved | 50 | 28 | 34 | 22 | 6 | 0 |
+| damaged | 37 | 9 | 8 | 4 | 0 | 1 |
+| glare | 50 | 19 | 21 | 12 | 5 | 3 |
 | high_version | 33 | 25 | 32 | 2 | 7 | 0 |
-| lots | 7 | 4 | 7 | 7 | 3 | 0 |
-| monitor | 17 | 7 | 17 | 0 | 10 | 0 |
-| nominal | 65 | 55 | 61 | 47 | 7 | 1 |
-| noncompliant | 16 | 6 | 11 | 4 | 6 | 1 |
+| lots | 7 | 5 | 7 | 7 | 2 | 0 |
+| monitor | 17 | 17 | 17 | 0 | 0 | 0 |
+| nominal | 65 | 58 | 61 | 47 | 4 | 1 |
+| noncompliant | 16 | 11 | 11 | 4 | 1 | 1 |
 | pathological | 23 | 7 | 11 | 10 | 5 | 1 |
-| perspective | 35 | 22 | 22 | 15 | 1 | 1 |
-| rotations | 44 | 42 | 44 | 20 | 2 | 0 |
-| shadows | 14 | 11 | 13 | 11 | 2 | 0 |
-| All | 536 | 322 | 390 | 210 | 77 | 9 |
+| perspective | 35 | 23 | 22 | 15 | 1 | 2 |
+| rotations | 44 | 44 | 44 | 20 | 0 | 0 |
+| shadows | 14 | 12 | 13 | 11 | 1 | 0 |
+| All | 536 | 371 | 391 | 210 | 40 | 20 |
 
-zxing-cpp's 390 is 72.8 %, against the 73.1 % go-qr publishes for it on this set, and go-qr publishes 77.1 % for itself. Counted as codes, zxing-cpp read 975 of the 1,232 and this library, which reads one symbol a call, 322. The first run counted 900, and three more gave 960, 965 and 964 with every per-photograph figure unchanged: the tool held neither the pixel buffer nor the wrapper's objects through the native call (below, lessons). With them held, three runs gave 975 row for row. No read of this library's disagreed with another reader's at the same code, and every text it read was confirmed by another read. On one thread this library took a median 1.3 ms a photograph and 2.2 s for the set, and zxing-cpp 6.2 ms and 6.0 s.
+The table is as read with the reduced-scale search. Without it this library read 322 (gap 77, reverse 9), by category 29, 15, 17, 39, 25, 6, 12, 25, 4, 7, 55, 6, 7, 22, 42 and 11. zxing-cpp's column grew by one, a read the other columns did not confirm until this library read the same text.
+
+zxing-cpp's first 390 is 72.8 %, against the 73.1 % go-qr publishes for it on this set, and go-qr publishes 77.1 % for itself. Counted as codes, zxing-cpp read 976 of the 1,232 (975 at first) and this library, which reads one symbol a call, 371. The first run counted 900, and three more gave 960, 965 and 964 with every per-photograph figure unchanged: the tool held neither the pixel buffer nor the wrapper's objects through the native call (below, lessons). With them held, three runs gave 975 row for row. No read of this library's disagreed with another reader's at the same code. Two texts it read, on `damaged/image005` and `image020`, no other read of the set confirms: ZXing.Net reads both the same once given the image scaled down by 8 and by 4. On one thread this library takes a median 1.7 ms a photograph and 2.8 s for the set, and zxing-cpp 6.2 ms and 5.9 s. Before the reduced-scale search it took 1.3 ms and 2.2 s.
 
 Of the 77 gap photographs, this library did not detect 57, failed Reed-Solomon on 15 and read no format information on 5. In 47 of them the smallest symbol zxing-cpp found is 8 px/module or more. Each was read again scaled, cropped to a symbol zxing-cpp found, and as a grid through zxing-cpp's corners:
 
@@ -352,6 +355,8 @@ Of the 77 gap photographs, this library did not detect 57, failed Reed-Solomon o
 - 10 more read cropped to the symbol, 6 of them in `brightness`.
 - 17 more read only as the grid through zxing-cpp's corners, so the frame is the cause there. None of the 7 in `high_version` read through one homography.
 - 3 read in none of these ways, all in `high_version`.
+
+The reduced-scale search (2026-10-10) reads 51 photographs that failed: 38 at half scale, 11 at a quarter and 2 at an eighth, 23 through the level's global pass and 28 through its regional pass. 37 are from the gap of 77, 11 are reads zxing-cpp does not have, one is a text zxing-cpp alone had read, and two are the unconfirmed texts above. Of the 40 left in the gap, 27 are not detected, 10 fail Reed-Solomon and 3 read no format information: brightness 8, high_version 7, curved 6, glare 5, pathological 5, nominal 4, lots 2, and one each in noncompliant, perspective and shadows.
 
 The 26 rendered symbols of the set's `decoding` directory read in all three readers. Nine of its expected texts differ from the symbols only in their line ends.
 

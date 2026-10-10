@@ -494,7 +494,7 @@ finally
 
 Use the decoder that matches the expected symbol type. Each decoder in `FeatherQR` accepts generated data, a byte-per-module matrix, or a grayscale luminance span. `FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
 
-Image decoding reads screenshots, generated images, scans and camera photographs, including a rotated, mirrored or tilted symbol and one under a shading gradient or a soft-edged shadow. It is less reliable on photographs with glare, damage, a curved surface or strong lens distortion, and on photographs of a screen.
+Image decoding reads screenshots, generated images, scans and camera photographs, including a rotated, mirrored or tilted symbol and one under a shading gradient or a soft-edged shadow. It is less reliable on photographs with glare, damage, uneven brightness, a curved surface or strong lens distortion.
 
 ```csharp
 using SkiaSharp;
@@ -688,7 +688,7 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional
 
 ### Does it read QR codes from images?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)): screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. Photographs are where it fails most often: glare, damage, a curved surface, strong lens distortion, or a symbol photographed off a screen. A failed decode reports a status that says where it stopped.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)): screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. Photographs are where it fails most often: glare, damage, uneven brightness, a curved surface or strong lens distortion. A failed decode reports a status that says where it stopped.
 
 ### What QR code style provides the best scan reliability?
 

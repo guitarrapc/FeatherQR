@@ -79,7 +79,7 @@ internal static class RegionalRetry
     }
 
     /// <summary>Whether every pixel is 0 or 255; symmetric, so it holds for a histogram in either polarity.</summary>
-    private static bool HoldsOnlyExtremes(ReadOnlySpan<int> histogram)
+    internal static bool HoldsOnlyExtremes(ReadOnlySpan<int> histogram)
     {
         foreach (var count in histogram.Slice(1, Binarizer.HistogramBins - 2))
         {

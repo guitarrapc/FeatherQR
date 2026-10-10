@@ -97,7 +97,7 @@ The image decoders share these primitives in `Internals.ImageDecoders`. The firs
 
 ### Image decode passes
 
-One shared driver (`ImageDecodePasses`) runs the three image decoders through the same sequence of passes. Only Micro QR and rMQR have the last, midpoint pass. Each pass sets how the image is read (a luminance threshold for the global and midpoint passes, an image binarized region by region for the regional pass) and runs the symbology's own pipeline on it. A pass runs only when the earlier passes read nothing. The rules below say which results end the sequence early. The spec-to-code maps draw the per-symbology pipelines: [Standard QR](standardqr-spec-map.md#decoding-pipeline), [Micro QR](microqr-spec-map.md#image-detection-and-sampling), [rMQR](rmqr-spec-map.md#image-detection-and-sampling).
+One shared driver (`ImageDecodePasses`) runs the three image decoders through the same sequence of passes. Only Micro QR and rMQR have the midpoint pass, and only Standard QR the reduced-scale search that follows it. Each pass sets how the image is read (a luminance threshold for the global and midpoint passes, an image binarized region by region for the regional pass) and runs the symbology's own pipeline on it. A pass runs only when the earlier passes read nothing. The rules below say which results end the sequence early. The spec-to-code maps draw the per-symbology pipelines: [Standard QR](standardqr-spec-map.md#decoding-pipeline), [Micro QR](microqr-spec-map.md#image-detection-and-sampling), [rMQR](rmqr-spec-map.md#image-detection-and-sampling).
 
 ```
 Luminance ──> histogram, counted once
@@ -105,8 +105,11 @@ Luminance ──> histogram, counted once
 ├─ Global, negative   the image inverted; Otsu threshold of the mirrored histogram ──> symbol pass
 ├─ Regional           each pixel against the mean black point of the blocks around its own,
 │                     positive then negative ──> symbol pass each
-└─ Midpoint           Micro QR and rMQR, for each polarity whose global pass found no finder candidate:
-                      halfway between its two grey levels ──> full finder sweep ──> symbology pipeline
+├─ Midpoint           Micro QR and rMQR, for each polarity whose global pass found no finder candidate:
+│                     halfway between its two grey levels ──> full finder sweep ──> symbology pipeline
+└─ Reduced scale      Standard QR, when nothing above settled and the image is not black and white alone:
+                      the image halved, each pixel the mean of four ──> every pass above on it,
+                      then halved again, while its shorter side stays 64 px or more
 
 Symbol pass
 ├─ Standard QR        finder triple ──> symbology pipeline
@@ -126,12 +129,16 @@ Symbol pass
 - The regional pass is skipped when a side of the image is 32 px or less, which leaves too few blocks for one neighbourhood, or when the image holds only 0 and 255. Within the pass, a polarity is not decoded when its binarization leaves every pixel in the class its global threshold gave it.
 - The regional pass reads a two-level image, so no stage that needs grey levels runs in it.
 - The midpoint pass needs grey levels and is skipped when the midpoint equals the global threshold.
+- The reduced-scale search runs after every pass at full size has ended without a read or a verdict. Each level is the level above with every two by two pixels averaged into one, and is read as an image of its own: the same passes, and the same rules for ending early. A level that settles ends the search.
+- A read at a level reports its corners in the pixels of the full image. A reduced pixel is the block that starts at the scale times its own corner, so the coordinates are multiplied by the scale and nothing is added.
+- The search skips an image that holds only 0 and 255, as the regional pass does, and stops before the level whose shorter side would be under 64 px, about where a version 1 symbol with its quiet zone is 2 px a module.
 - The global threshold can land inside a wide, noisy background: with the levels squeezed to 100-170, ±24 of noise and the symbol a small part of the image, Otsu lands near 165, inside the light background, and in 65 of 65 such failures the finder was never a candidate (measured on rMQR, 2026-09-28). Every symbology uses this threshold.
-- When no pass reads the symbol or gives a verdict, the result carries the global positive pass's diagnostics, which for Micro QR and rMQR are those of its strided scan.
+- When no pass reads the symbol or gives a verdict, at full size or at a reduced level, the result carries the full-size global positive pass's diagnostics, which for Micro QR and rMQR are those of its strided scan.
 
 Why the passes are ordered this way:
 - Every pass after the first runs only on an image the earlier passes failed to read, so an image the global threshold reads runs nothing else, and the inverted image's buffer is rented only after that failure.
 - The negative needs no second count, because its histogram is the positive's mirrored (`Binarizer` above).
+- The reduced-scale search is last because it costs the most and reads what nothing before it can: a symbol under noise or a texture finer than its modules, which breaks a finder's runs at full size and averages out of the image halved. One buffer serves it, the inverted image's: a level is at most a quarter of the image, so the level and its own inverted image fit, and the next level is halved in place. The reads it gains, what it costs an image that still fails, and why black and white alone is left out are in the Standard QR record ([standardqr-decoder.md](standardqr-decoder.md#decisions), Reduced-scale search).
 - A read too long for the destination ends the sequence as a read does, because with the inverted and regional passes run after it, a call one character short cost 2.15 times a sized one at the median on the 577 Micro QR `destination` renders and 2.46 times on the 600 rMQR renders, and up to 93 and 72 times at worst (2026-10-02).
 - The regional pass is an added attempt, not a replacement for the global threshold ([standardqr-decoder.md](standardqr-decoder.md#image-detection-and-sampling)).
 - A verdict ends only what could not change the answer, because a rule stated for one symbol has to hold for the whole image: stopping a Micro QR or rMQR search at a verdict would also stop it for every other symbol in the image. A strided-scan verdict that skipped the full sweep lost 20 to 24 readable neighbours in about 490 pairs of an unmapped symbol beside a readable low-density one. In exchange, a symbol holding an unmapped Kanji cell cost 2 to 19 ms, against microseconds for a mappable one (2026-09-23, before the failure-path work made those searches faster).

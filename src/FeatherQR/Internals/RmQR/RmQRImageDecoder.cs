@@ -88,6 +88,10 @@ internal static partial class RmQRImageDecoder
     {
         public bool HasMidpointPass => true;
 
+        public bool HasReducedScaleSearch => false;
+
+        public RmQRCodeDecodeInfo AtFullScale(in RmQRCodeDecodeInfo info, int scale) => info.WithCorners(SymbolGeometry.Scaled(info.Corners, scale));
+
         public RmQRCodeDecodeInfo NotDetected => RmQRImageDecoder.NotDetected();
 
         public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)

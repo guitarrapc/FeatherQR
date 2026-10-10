@@ -54,6 +54,10 @@ internal static partial class MicroQRImageDecoder
     {
         public bool HasMidpointPass => true;
 
+        public bool HasReducedScaleSearch => false;
+
+        public MicroQRCodeDecodeInfo AtFullScale(in MicroQRCodeDecodeInfo info, int scale) => info.WithCorners(SymbolGeometry.Scaled(info.Corners, scale));
+
         public MicroQRCodeDecodeInfo NotDetected => new CandidateDecoder().NotDetected;
 
         public DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, out bool noFinder, out byte threshold, out GreyLevels grey)

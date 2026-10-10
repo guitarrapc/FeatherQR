@@ -18,7 +18,7 @@ public static class QRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// Reads screenshots, rendered QR codes, scans and camera photographs, at any rotation, mirrored, inverted, tilted, or under a shading gradient or a soft-edged shadow.
-        /// Photographs with glare, damage, a curved surface or strong lens distortion, and photographs of a screen, read less reliably.
+        /// Photographs with glare, damage, uneven brightness, a curved surface or strong lens distortion read less reliably.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
@@ -32,7 +32,7 @@ public static class QRCodeImageDecoder
         /// </summary>
         /// <remarks>
         /// Reads screenshots, rendered QR codes, scans and camera photographs, at any rotation, mirrored, inverted, tilted, or under a shading gradient or a soft-edged shadow.
-        /// Photographs with glare, damage, a curved surface or strong lens distortion, and photographs of a screen, read less reliably.
+        /// Photographs with glare, damage, uneven brightness, a curved surface or strong lens distortion read less reliably.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>

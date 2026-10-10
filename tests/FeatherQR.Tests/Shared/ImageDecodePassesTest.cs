@@ -21,6 +21,9 @@ public class ImageDecodePassesTest
         /// <summary>The length of the buffer each global pass was given.</summary>
         public List<int> Lengths { get; } = [];
 
+        /// <summary>The dimensions each pass was given, in call order.</summary>
+        public List<(string Pass, int Width, int Height)> Shapes { get; } = [];
+
         public int Count(string pass) => Calls.Count(call => call.Pass == pass);
     }
 
@@ -31,9 +34,14 @@ public class ImageDecodePassesTest
     /// The stand-in: its info names the attempt the result came from, 1 and 2 for the global positive and negative, 3 and 4 for the regional, 5 and 6 for the midpoint; -1 is not detected.
     /// Its global pass takes the threshold and levels from the histogram, as the decoders do.
     /// </summary>
-    private readonly struct RecordingPass(Script script, bool midpointPass) : ISymbolPass<int>
+    private readonly struct RecordingPass(Script script, bool midpointPass, bool reducedScale) : ISymbolPass<int>
     {
         public bool HasMidpointPass => midpointPass;
+
+        public bool HasReducedScaleSearch => reducedScale;
+
+        /// <summary>A thousand times the scale on top of the attempt, so a test sees both.</summary>
+        public int AtFullScale(in int info, int scale) => info + 1000 * scale;
 
         public int NotDetected => -1;
 
@@ -42,6 +50,7 @@ public class ImageDecodePassesTest
             threshold = Binarizer.ComputeOtsuThresholdFromHistogram(histogram, out grey);
             var index = script.Count("global");
             script.Lengths.Add(luminance.Length);
+            script.Shapes.Add(("global", width, height));
             script.Calls.Add(("global", luminance.Slice(0, width * height).ToArray(), threshold));
             noFinder = index < script.NoFinder.Length && script.NoFinder[index];
             charsWritten = Written;
@@ -52,6 +61,7 @@ public class ImageDecodePassesTest
         public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out int info)
         {
             var index = script.Count("regional");
+            script.Shapes.Add(("regional", width, height));
             script.Calls.Add(("regional", luminance.Slice(0, width * height).ToArray(), -1));
             charsWritten = Written;
             info = 3 + index;
@@ -61,6 +71,7 @@ public class ImageDecodePassesTest
         public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out int info)
         {
             var index = script.Count("midpoint");
+            script.Shapes.Add(("midpoint", width, height));
             script.Calls.Add(("midpoint", luminance.Slice(0, width * height).ToArray(), threshold));
             charsWritten = Written;
             info = 5 + index;
@@ -68,9 +79,9 @@ public class ImageDecodePassesTest
         }
     }
 
-    private static DecodeStatus Run(byte[] luminance, int width, int height, Script script, bool midpointPass, out int charsWritten, out int info)
+    private static DecodeStatus Run(byte[] luminance, int width, int height, Script script, bool midpointPass, out int charsWritten, out int info, bool reducedScale = false)
     {
-        var pass = new RecordingPass(script, midpointPass);
+        var pass = new RecordingPass(script, midpointPass, reducedScale);
         return ImageDecodePasses.Decode<RecordingPass, int>(ref pass, luminance, width, height, new char[16], out charsWritten, out info);
     }
 
@@ -391,6 +402,223 @@ public class ImageDecodePassesTest
         await Assert.That(script.Lengths).IsEquivalentTo([side * side, side * side], CollectionOrdering.Matching);
         await Assert.That(script.Calls[0].Threshold).IsEqualTo((int)Levels(luminance).Threshold);
         await Assert.That(script.Calls[1].Threshold).IsEqualTo((int)Levels(Negative(luminance)).Threshold);
+    }
+
+    #endregion
+
+    #region The reduced-scale search
+
+    /// <summary>Seeded grey levels and no symbol: an image every pass that can run is given.</summary>
+    private static byte[] Texture(int width, int height)
+    {
+        var luminance = new byte[width * height];
+        new Random(20261010).NextBytes(luminance);
+        return luminance;
+    }
+
+    /// <summary>Each pixel the rounded mean of the two by two block above it, an odd last column or row dropped.</summary>
+    private static byte[] Halved(byte[] luminance, int width, int height)
+    {
+        int halfWidth = width / 2, halfHeight = height / 2;
+        var halved = new byte[halfWidth * halfHeight];
+        for (var y = 0; y < halfHeight; y++)
+        {
+            for (var x = 0; x < halfWidth; x++)
+            {
+                var sum = luminance[2 * y * width + 2 * x] + luminance[2 * y * width + 2 * x + 1]
+                    + luminance[(2 * y + 1) * width + 2 * x] + luminance[(2 * y + 1) * width + 2 * x + 1];
+                halved[y * halfWidth + x] = (byte)((sum + 2) / 4);
+            }
+        }
+        return halved;
+    }
+
+    private static (int Width, int Height)[] GlobalShapes(Script script)
+        => [.. script.Shapes.Where(static shape => shape.Pass == "global").Select(static shape => (shape.Width, shape.Height))];
+
+    /// <summary>
+    /// When nothing settles at full size, the same passes read the image halved, and halved again while its shorter side stays at least 64 pixels.
+    /// When nothing settles there either, the full-size positive pass is reported, as without the search.
+    /// </summary>
+    [Test]
+    [Arguments(400, 300, new[] { 200, 150, 100, 75 })]
+    [Arguments(401, 301, new[] { 200, 150, 100, 75 })]
+    [Arguments(1024, 128, new[] { 512, 64 })]
+    public async Task NothingReads_SearchesEachHalfDownToTheFloor(int width, int height, int[] levels)
+    {
+        var script = new Script { Global = [DecodeStatus.DataUncorrectable] };
+
+        var status = Run(Texture(width, height), width, height, script, midpointPass: false, out var charsWritten, out var info, reducedScale: true);
+
+        var expected = new List<(int, int)> { (width, height), (width, height) };
+        for (var i = 0; i < levels.Length; i += 2)
+        {
+            expected.Add((levels[i], levels[i + 1]));
+            expected.Add((levels[i], levels[i + 1]));
+        }
+        await Assert.That(GlobalShapes(script)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(status).IsEqualTo(DecodeStatus.DataUncorrectable);
+        await Assert.That(info).IsEqualTo(1);
+        await Assert.That(charsWritten).IsEqualTo(0);
+    }
+
+    /// <summary>A level is the level above it halved, the first from the image itself, which is not written.</summary>
+    [Test]
+    public async Task EachLevel_IsTheLevelAboveHalved()
+    {
+        const int Width = 301, Height = 260;
+        var luminance = Texture(Width, Height);
+        var script = new Script();
+
+        Run(luminance, Width, Height, script, midpointPass: false, out _, out _, reducedScale: true);
+
+        var globals = script.Calls.Where(static call => call.Pass == "global").ToArray();
+        var half = Halved(luminance, Width, Height);
+        var quarter = Halved(half, Width / 2, Height / 2);
+        await Assert.That(GlobalShapes(script)).IsEquivalentTo([(301, 260), (301, 260), (150, 130), (150, 130), (75, 65), (75, 65)], CollectionOrdering.Matching);
+        await Assert.That(globals[2].Image.AsSpan().SequenceEqual(half)).IsTrue();
+        await Assert.That(globals[3].Image.AsSpan().SequenceEqual(Negative(half))).IsTrue();
+        await Assert.That(globals[4].Image.AsSpan().SequenceEqual(quarter)).IsTrue();
+        await Assert.That(globals[5].Image.AsSpan().SequenceEqual(Negative(quarter))).IsTrue();
+        await Assert.That(luminance.AsSpan().SequenceEqual(Texture(Width, Height))).IsTrue();
+    }
+
+    /// <summary>
+    /// A level goes through every pass a full-size image does: the calls on it are the calls its image gets on its own, pass for pass, image for image and threshold for threshold.
+    /// </summary>
+    [Test]
+    public async Task EachLevel_RunsThePassesItsImageGetsOnItsOwn()
+    {
+        // The shadowed symbol at twice the scale, so its half is an image every pass runs on
+        var qr = QRCodeGenerator.Create("FQR 2.0", QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
+        var (luminance, side, _) = UnevenLightingRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 8, UnevenLight.Shadow, 0f, 0.55f);
+        luminance = Negative(luminance);
+        var half = Halved(luminance, side, side);
+        var alone = new Script { NoFinder = [true, true] };
+        Run(half, side / 2, side / 2, alone, midpointPass: true, out _, out _);
+        await Assert.That(Passes(alone)).IsEquivalentTo(["global", "global", "regional", "regional", "midpoint", "midpoint"], CollectionOrdering.Matching).Because("a premise: every pass runs on the half");
+
+        var script = new Script { NoFinder = [true, true, true, true] };
+        Run(luminance, side, side, script, midpointPass: true, out _, out _, reducedScale: true);
+
+        var fullSize = script.Shapes.Count(shape => shape.Width == side);
+        var level = script.Calls.Skip(fullSize).Take(alone.Calls.Count).ToArray();
+        await Assert.That(level.Length).IsEqualTo(alone.Calls.Count);
+        for (var i = 0; i < level.Length; i++)
+        {
+            await Assert.That(level[i].Pass).IsEqualTo(alone.Calls[i].Pass);
+            await Assert.That(level[i].Threshold).IsEqualTo(alone.Calls[i].Threshold);
+            await Assert.That(level[i].Image.AsSpan().SequenceEqual(alone.Calls[i].Image)).IsTrue().Because($"call {i}, {level[i].Pass}");
+        }
+    }
+
+    /// <summary>A read at a reduced level ends the search, and its diagnostics go through the mapping to full scale with the scale of the level.</summary>
+    [Test]
+    [Arguments(2, 2)]
+    [Arguments(3, 2)]
+    [Arguments(4, 4)]
+    [Arguments(6, 8)]
+    public async Task ReducedRead_EndsTheSearch_AndIsReportedAtFullScale(int failedGlobalPasses, int scale)
+    {
+        DecodeStatus[] global = [.. Enumerable.Repeat(DecodeStatus.NotDetected, failedGlobalPasses), DecodeStatus.Success];
+        var script = new Script { Global = global };
+
+        var status = Run(Texture(800, 600), 800, 600, script, midpointPass: false, out var charsWritten, out var info, reducedScale: true);
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(info).IsEqualTo(failedGlobalPasses + 1 + 1000 * scale);
+        await Assert.That(charsWritten).IsEqualTo(Written);
+        await Assert.That(script.Count("global")).IsEqualTo(failedGlobalPasses + 1);
+        await Assert.That(script.Calls[^1].Pass).IsEqualTo("global");
+    }
+
+    /// <summary>A reduced level that settles without a read, too long for the destination or a verdict on the content, is reported the same way and ends the search.</summary>
+    [Test]
+    [Arguments(DecodeStatus.DestinationTooSmall)]
+    [Arguments(DecodeStatus.UnsupportedContent)]
+    [Arguments(DecodeStatus.UnmappedCharacter)]
+    public async Task ReducedSettledWithoutARead_IsReported_AndEndsTheSearch(DecodeStatus result)
+    {
+        var script = new Script { Global = [DecodeStatus.NotDetected, DecodeStatus.NotDetected, DecodeStatus.NotDetected, result] };
+
+        var status = Run(Texture(400, 300), 400, 300, script, midpointPass: false, out var charsWritten, out var info, reducedScale: true);
+
+        await Assert.That(status).IsEqualTo(result);
+        await Assert.That(info).IsEqualTo(4 + 2000);
+        await Assert.That(charsWritten).IsEqualTo(0);
+        await Assert.That(GlobalShapes(script)).IsEquivalentTo([(400, 300), (400, 300), (200, 150), (200, 150)], CollectionOrdering.Matching);
+    }
+
+    /// <summary>Whatever settles at full size is final: nothing is read reduced after a read, a read too long for the destination, or a verdict, from a global pass or the regional one.</summary>
+    [Test]
+    [Arguments(DecodeStatus.Success, false)]
+    [Arguments(DecodeStatus.DestinationTooSmall, false)]
+    [Arguments(DecodeStatus.UnsupportedContent, false)]
+    [Arguments(DecodeStatus.UnmappedCharacter, false)]
+    [Arguments(DecodeStatus.Success, true)]
+    [Arguments(DecodeStatus.UnsupportedContent, true)]
+    public async Task FullSizeSettled_NothingIsReadReduced(DecodeStatus result, bool regional)
+    {
+        var (luminance, side) = Shadowed();
+        await Assert.That(side / 2).IsGreaterThanOrEqualTo(64).Because("a premise: the image is large enough to be searched reduced");
+        var script = regional
+            ? new Script { Regional = [DecodeStatus.NotDetected, result] }
+            : new Script { Global = [DecodeStatus.NotDetected, result] };
+
+        var status = Run(luminance, side, side, script, midpointPass: false, out _, out var info, reducedScale: true);
+
+        await Assert.That(status).IsEqualTo(result);
+        await Assert.That(info).IsEqualTo(regional ? 4 : 2);
+        await Assert.That(script.Shapes.All(shape => shape.Width == side && shape.Height == side)).IsTrue();
+    }
+
+    /// <summary>A decoder without the search reads at full size only.</summary>
+    [Test]
+    public async Task DecoderWithoutTheSearch_ReadsAtFullSizeOnly()
+    {
+        var script = new Script();
+
+        Run(Texture(400, 300), 400, 300, script, midpointPass: false, out _, out var info);
+
+        await Assert.That(GlobalShapes(script)).IsEquivalentTo([(400, 300), (400, 300)], CollectionOrdering.Matching);
+        await Assert.That(info).IsEqualTo(1);
+    }
+
+    /// <summary>An image whose shorter side would be under 64 pixels halved is not searched reduced, and the levels stop where the next would be.</summary>
+    [Test]
+    [Arguments(127, 400, 0)]
+    [Arguments(400, 127, 0)]
+    [Arguments(128, 400, 1)]
+    [Arguments(255, 255, 1)]
+    [Arguments(256, 256, 2)]
+    public async Task ShorterSideUnderTheFloorWhenHalved_IsNotSearched(int width, int height, int levels)
+    {
+        var script = new Script();
+
+        Run(Texture(width, height), width, height, script, midpointPass: false, out _, out _, reducedScale: true);
+
+        await Assert.That(script.Count("global")).IsEqualTo(2 * (1 + levels));
+    }
+
+    /// <summary>
+    /// An image of only black and white is not searched reduced, as it is not binarized region by region.
+    /// One grey pixel makes it an image like any other.
+    /// </summary>
+    [Test]
+    [Arguments(false, 0)]
+    [Arguments(true, 2)]
+    public async Task OnlyBlackAndWhite_IsNotSearchedReduced(bool oneGreyPixel, int levels)
+    {
+        var luminance = Texture(400, 300);
+        for (var i = 0; i < luminance.Length; i++)
+            luminance[i] = luminance[i] < 128 ? (byte)0 : (byte)255;
+        if (oneGreyPixel)
+            luminance[^1] = 128;
+        var script = new Script();
+
+        Run(luminance, 400, 300, script, midpointPass: false, out _, out _, reducedScale: true);
+
+        await Assert.That(script.Count("global")).IsEqualTo(2 * (1 + levels));
     }
 
     #endregion

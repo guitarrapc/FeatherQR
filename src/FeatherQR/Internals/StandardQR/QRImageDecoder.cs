@@ -11,6 +11,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, then the regional binarization, which a verdict on the content from either earlier pass also skips.
+/// When no pass settles at full size, an image with grey levels is read again halved, and halved again, through the same passes (<see cref="ImageDecodePasses"/>).
 /// Each grid is decoded through the matrix level as soon as it is sampled, then transposed unless that settles it; the first grid that settles ends the pass.
 /// The list gives the stages in order with their main conditions; each method states its own in full.
 /// <code>
@@ -34,6 +35,7 @@ internal static partial class QRImageDecoder
     /// <summary>
     /// Decodes a QR code from grayscale pixels.
     /// Reflectance-reversed codes (light modules on a dark background, common in dark-mode UIs) are handled by one inverted retry when the normal attempt fails. A symbol lit unevenly, which no one threshold splits, is retried on a regional binarization of each polarity when both fail.
+    /// A symbol under noise or a texture finer than its modules is read at reduced scale when all of those fail.
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -54,6 +56,10 @@ internal static partial class QRImageDecoder
     private readonly struct SymbolPass : ISymbolPass<QRCodeDecodeInfo>
     {
         public bool HasMidpointPass => false;
+
+        public bool HasReducedScaleSearch => true;
+
+        public QRCodeDecodeInfo AtFullScale(in QRCodeDecodeInfo info, int scale) => info.WithCorners(SymbolGeometry.Scaled(info.Corners, scale));
 
         public QRCodeDecodeInfo NotDetected => NotDetectedInfo;
 

@@ -248,10 +248,12 @@ public class DecodeAllocationTest
         LightOnDark,
         /// <summary>A shadow across the middle: the regional pass, both global ones having failed.</summary>
         UnevenLight,
+        /// <summary>Standard QR only: <see cref="ReducedScaleDecodeTest"/>'s texture finer than a module, read at half scale after every pass at full size has failed.</summary>
+        FineTexture,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -322,6 +324,12 @@ public class DecodeAllocationTest
                     // UnevenLightingDecodeTest's symbol
                     var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
                     return Shadowed((row, column) => qr[row, column], qr.Size, qr.Size, Content);
+                }
+            case ImageScene.FineTexture:
+                {
+                    var qr = StandardQR(Content, 3);
+                    var (luminance, width, height) = FineTextureRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 8);
+                    return new Scene(luminance, width, height, Content);
                 }
             default:
                 throw new ArgumentOutOfRangeException(nameof(scene), scene, "not a Standard QR scene");
@@ -444,7 +452,7 @@ public class DecodeAllocationTest
     /// <summary>The scene's premise where the pipeline's own passes decide its path: the passes before the one it is about do not read it.</summary>
     private static async Task AssertEarlierPassesFail(Symbology symbology, ImageScene scene, Scene image)
     {
-        if (scene == ImageScene.LightOnDark)
+        if (scene is ImageScene.LightOnDark or ImageScene.FineTexture)
         {
             var histogram = new int[Binarizer.HistogramBins];
             Binarizer.FillHistogram(image.Luminance, histogram);
