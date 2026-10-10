@@ -53,15 +53,16 @@ public enum RmQRHeight { H7 = 7, H9 = 9, H11 = 11, H13 = 13, H15 = 15, H17 = 17 
 Generator (`public static class RmQRCodeGenerator`, `DefaultQuietZone = 2`):
 
 ```csharp
-public readonly record struct RmQRCodeGeneratorOptions
+public record struct RmQRCodeGeneratorOptions
 {
     static RmQRCodeGeneratorOptions Default { get; }        // == default
-    EciMode EciMode { get; init; }                          // Default; only Default / Iso8859_1 / Utf8 accepted
-    RmQRVersion? Version { get; init; }                     // null = fit automatically
-    RmQRFitStrategy FitStrategy { get; init; }              // MinimizeArea
-    RmQRHeight? Height { get; init; }                       // null = every height
-    int QuietZoneSize { get; init; }                        // 2 (ISO/IEC 23941)
-    RmQRSegmentation Segmentation { get; init; }            // Single
+    EciMode EciMode { get; set; }                           // Default; only Default / Iso8859_1 / Utf8 accepted
+    RmQRVersion? Version { get; set; }                      // null = fit automatically
+    RmQRFitStrategy FitStrategy { get; set; }               // MinimizeArea
+    RmQRHeight? Height { get; set; }                        // null = every height
+    int QuietZoneSize { get; set; }                         // 2 (ISO/IEC 23941)
+    RmQRSegmentation Segmentation { get; set; }             // Single
+    bool AllowKanji { get; set; }                           // false
 }
 
 RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This plan details Phase 6c of the [2.0.0 plan](featherqr-2.0.0-plan.md) (GS1 / FNC1, D9-D12): reading and writing both FNC1 modes in Standard QR and rMQR. It settles the rMQR indicator question, corrects three premises of D9 and D10, adds what the investigation found about the `%` rule, and orders the work so each step is checked against an outside reader. Decode ships on its own, in 2.0.0. Encode ships in the same release as the GS1 layer (D12, decided 2026-10-10).
+This plan details Phase 6c of the [2.0.0 plan](featherqr-2.0.0-plan.md) (GS1 / FNC1, D9-D12): reading and writing both FNC1 modes in Standard QR and rMQR. It settles the rMQR indicator question, corrects two premises of D10, adds what the investigation found about the `%` rule, and orders the work so each step is checked against an outside reader. Decode ships on its own, in 2.0.0. Encode ships in the same release as the GS1 layer (D12, decided 2026-10-10).
 
 The layer above the bit stream (the GS1 AI table, check digits, `(AI)` text, Digital Link) is in [gs1-support-plan.md](gs1-support-plan.md). This plan gives that layer an encoder that takes an element string with U+001D separators and a decoder that returns one with the mode beside it. The research behind the plan (standard clauses, the oracle probe, the code inventory) is in [references/fnc1-support-research.md](references/fnc1-support-research.md).
 
@@ -57,9 +57,10 @@ No writer produces rMQR second position, so that cell is checked only by zxing-c
 
 ### Premises of the 2.0.0 decisions that do not hold
 
-- D9 says an indicator without second position throws "as contradictions do today". No option combination is refused today: the init accessors validate single values. Decision 1 below makes the combination impossible to express instead.
 - D10 says a misplaced FNC1 is `InvalidBitstream` "as a misplaced Structured Append header is". A Structured Append header is read wherever it sits, and two tests pin that. The FNC1 rule would be the decoder's first placement rule. Decision 6 keeps it for its own reason.
 - D10 names `RmQRDecodeInfo`. The type is `RmQRCodeDecodeInfo`.
+
+D9's premise has a precedent. It says an indicator without second position throws "as contradictions do today", and rMQR refuses a `Version` and a `Height` that disagree, in the generator at the call. No accessor refuses a combination: the accessors validate single values. Decision 1 below makes the combination impossible to express instead.
 
 ## Scope
 
@@ -154,7 +155,8 @@ Lessons:
 
 - A writer's FNC1 output is not evidence of the `%` rule. Two of the three writers return a different text for some input, and both readers agree on what those symbols say.
 - The separator-pair trap is not in the standard. It was found by asking what `%%%` reads as.
-- D9 and D10 cite precedents (refused contradictions, a Structured Append placement rule) that the code does not have. A decision's "as X does today" is a claim to check like any other.
+- D10 cites a precedent, a Structured Append placement rule, that the code does not have. A decision's "as X does today" is a claim to check like any other.
+- A correction is a claim too. This plan first said that no option combination is refused today, and rMQR refuses a `Version` and a `Height` that disagree.
 
 ### Release order (2026-10-10)
 

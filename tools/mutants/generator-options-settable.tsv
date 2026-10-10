@@ -1,18 +1,41 @@
 # Planted faults for the settable generator options (qrcode-symbologies.md, Public API direction).
 # ro-*: `readonly` taken off a hand-written getter. new-*: a member added without it. Both make the compiler copy the struct
-# when it is read through `in`. init-*: an option back on an init accessor. mask-*: a MaskPattern bound one step loose.
-# clobber-* and offset-*: a setter that writes another member, or the value where the offset from the default belongs.
+# when that member is called through `in`. init-*: an option on an init accessor, an existing one and a new one. mask-*: a
+# MaskPattern bound one step loose. clobber-*: a setter that writes another member, the -default ones only when it is given
+# its own default. offset-*: a setter that stores the value where the offset from the default belongs. narrow-*: a quiet
+# zone setter that keeps 16 bits of the offset. checked-qr-quiet: one that throws where the offset leaves the range of int.
+# throw-*: the exception of a MaskPattern setter naming another parameter or another range, or reporting the value held and
+# not the one refused. field-*: an option, or `Default`, declared as a field. static-*: a static setter, and a `Default`
+# read from a static field. ctor-* and factory-*: a constructor, and a static method, that take options as parameters.
+# record-qr: `record` taken off a declaration. print-*: a `ToString`, and a `PrintMembers`, that names no option.
+# hash-qr-constant: a hash that is the same for every value. getter-qr-internal: an option's getter made internal.
+# struct-new: a new exported struct that is not readonly. type-*: something new a caller can assign to outside the three
+# structs: a class and a readonly struct with a plain setter, a class with a public field, a class with a plain setter
+# nested as protected in an extension point, and a protected setter on the extension point itself. nested-init: a class
+# nested as protected in an extension point, with an init-only property and no constructor that sets it. protected-init: a
+# protected init accessor on an extension point.
 #
 #   dotnet run tools/mutation_check.cs -- run tools/mutants/generator-options-settable.tsv <out-dir>
 #
 # The two shipping projects enforce code style when they build, so ro-* and new-* stop at IDE0251 and the run reports
-# BUILD FAILED, as it does for init-*, where the assignment tests no longer compile. To see which test catches ro-* and
-# new-* without the analyzer, put a Directory.Build.rsp holding -p:EnforceCodeStyleInBuild=false in the repository root
+# BUILD FAILED, as it does for init-qr-kanji, where the assignment tests no longer compile. To see which test catches ro-*
+# and new-* without the analyzer, put a Directory.Build.rsp holding -p:EnforceCodeStyleInBuild=false in the repository root
 # for the run and delete it afterwards.
 #
-# Against the full suite (2026-10-10) all 19 are refused. ro-* and new-* fail the build with IDE0251, and with code style off
-# SettableStruct_EveryMemberButASetterIsReadOnly catches each of them, alone for all but new-pair. init-qr-kanji fails the build
-# of the tests. The rest are caught by GeneratorOptionsAssignmentTest, among others.
+# Against the full suite on net10.0 (2026-10-11) all 52 are refused. ro-* and new-* fail the build with IDE0251, and with
+# code style off SettableStruct_EveryMemberButASetterIsReadOnly catches each of them, alone for all but new-pair.
+# init-qr-kanji fails the build of the tests. mask-*, clobber-*, offset-*, narrow-*, throw-*, checked-qr-quiet and
+# hash-qr-constant are each caught by GeneratorOptionsAssignmentTest, and clobber-qr-quiet-default,
+# clobber-micro-quiet-default, the three narrow-*, the six throw-*, checked-qr-quiet and hash-qr-constant by it alone. The
+# others are caught by the rules of TypeShapeTest named here and by no other test, except where one is named: field-* by
+# GeneratorOptions_ExposeNoFieldAndDefaultIsAValue and
+# NoExportedType_HasAFieldACallerCanAssign, static-* by the first of those two, type-field-class by the second, ctor-qr and
+# factory-qr by GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions, struct-new by
+# GeneratorOptions_AreTheOnlyStructsACallerAssignsTo, the other four type-* by
+# GeneratorOptions_AreTheOnlyTypesWithAPlainSetter, print-* by GeneratorOptions_CompareAndPrintByValue, record-qr by that
+# rule and GeneratorOptionsAssignmentTest, getter-qr-internal by GeneratorOptions_EveryOptionHasAPublicGetter, nested-init
+# and protected-init by EveryInitOnlyProperty_IsAlsoAConstructorParameter, and init-new-option by
+# GeneratorOptions_EveryOptionHasAPlainSetter and GeneratorOptionsAssignmentTest.
 ro-qr-quiet	src/FeatherQR/QRCodeGeneratorOptions.cs	readonly get => DefaultQuietZone + _quietZoneSizeOffset;	get => DefaultQuietZone + _quietZoneSizeOffset;
 ro-qr-mask	src/FeatherQR/QRCodeGeneratorOptions.cs	readonly get => _maskPattern;	get => _maskPattern;
 ro-micro-mask	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	readonly get => _maskPattern;	get => _maskPattern;
@@ -32,3 +55,36 @@ clobber-micro-quiet	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	set => _quietZo
 clobber-micro-mask	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	            _maskPattern = value;	            _maskPattern = value;␤            _quietZoneSizeOffset = 0;
 offset-qr-quiet	src/FeatherQR/QRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - DefaultQuietZone;	set => _quietZoneSizeOffset = value;
 offset-rm-quiet	src/FeatherQR/RmQRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - RmQRConstants.QuietZoneModules;	set => _quietZoneSizeOffset = value;
+clobber-qr-quiet-default	src/FeatherQR/QRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - DefaultQuietZone;	set { _quietZoneSizeOffset = value - DefaultQuietZone; if (value == DefaultQuietZone) _maskPattern = null; }
+clobber-qr-mask-default	src/FeatherQR/QRCodeGeneratorOptions.cs	            _maskPattern = value;	            _maskPattern = value;␤            if (value is null) _quietZoneSizeOffset = 0;
+clobber-micro-quiet-default	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - MicroQRCodeGenerator.DefaultQuietZone;	set { _quietZoneSizeOffset = value - MicroQRCodeGenerator.DefaultQuietZone; if (value == MicroQRCodeGenerator.DefaultQuietZone) _maskPattern = null; }
+field-qr-option	src/FeatherQR/QRCodeGeneratorOptions.cs	    private int? _maskPattern;	    private int? _maskPattern;␤␤    public bool Extra;
+field-qr-default	src/FeatherQR/QRCodeGeneratorOptions.cs	public static QRCodeGeneratorOptions Default => default;	public static QRCodeGeneratorOptions Default;
+type-settable-class	src/FeatherQR/RmQRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }␤}	    public bool AllowKanji { get; set; }␤}␤␤/// <summary>Planted.</summary>␤public sealed class ExtraSettings␤{␤    /// <summary>Planted.</summary>␤    public int QuietZoneSize { get; set; }␤}
+type-readonly-struct-setter	src/FeatherQR/RmQRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }␤}	    public bool AllowKanji { get; set; }␤}␤␤/// <summary>Planted.</summary>␤public readonly record struct SharedOptions␤{␤    private readonly int[] _box;␤␤    /// <summary>Planted.</summary>␤    public SharedOptions() => _box = new int[1];␤␤    /// <summary>Planted.</summary>␤    public int QuietZoneSize { get => _box[0]; set => _box[0] = value; }␤}
+struct-new	src/FeatherQR/RmQRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }␤}	    public bool AllowKanji { get; set; }␤}␤␤/// <summary>Planted.</summary>␤public struct ExtraValue␤{␤    /// <summary>Planted.</summary>␤    public readonly int Value => 0;␤}
+ctor-qr	src/FeatherQR/QRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { get; set; }␤␤    /// <summary>Planted.</summary>␤    public QRCodeGeneratorOptions(EciMode eciMode) : this() => EciMode = eciMode;
+factory-qr	src/FeatherQR/QRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { get; set; }␤␤    /// <summary>Planted.</summary>␤    public static QRCodeGeneratorOptions Create(EciMode eciMode = default, bool allowKanji = false) => new() { EciMode = eciMode, AllowKanji = allowKanji };
+init-new-option	src/FeatherQR/QRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { get; set; }␤␤    /// <summary>Planted.</summary>␤    public bool Extra { get; init; }
+static-qr-setter	src/FeatherQR/QRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { get; set; }␤␤    /// <summary>Planted.</summary>␤    public static int SharedQuietZoneSize { get; set; }
+static-qr-default	src/FeatherQR/QRCodeGeneratorOptions.cs	public static QRCodeGeneratorOptions Default => default;	public static QRCodeGeneratorOptions Default => s_default;␤␤    private static QRCodeGeneratorOptions s_default;␤␤    /// <summary>Planted.</summary>␤    public static QRCodeGeneratorOptions ProcessDefault { get => s_default; set => s_default = value; }
+type-field-class	src/FeatherQR/RmQRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }␤}	    public bool AllowKanji { get; set; }␤}␤␤/// <summary>Planted.</summary>␤public sealed class ExtraFields␤{␤    /// <summary>Planted.</summary>␤    public int QuietZoneSize;␤}
+type-protected-nested	src/FeatherQR.SkiaSharp/ModuleShape.cs	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);␤␤    /// <summary>Planted.</summary>␤    protected sealed class DrawSettings␤    {␤        /// <summary>Planted.</summary>␤        public int Inset { get; set; }␤    }
+record-qr	src/FeatherQR/QRCodeGeneratorOptions.cs	public record struct QRCodeGeneratorOptions	public struct QRCodeGeneratorOptions
+getter-qr-internal	src/FeatherQR/QRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { internal get; set; }
+throw-qr-paramname	src/FeatherQR/QRCodeGeneratorOptions.cs	throw new ArgumentOutOfRangeException(nameof(MaskPattern), $"Mask pattern must be 0-7	throw new ArgumentOutOfRangeException(nameof(QuietZoneSize), $"Mask pattern must be 0-7
+throw-qr-message	src/FeatherQR/QRCodeGeneratorOptions.cs	Mask pattern must be 0-7, or null	Mask pattern must be 0-9, or null
+throw-micro-paramname	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	throw new ArgumentOutOfRangeException(nameof(MaskPattern), $"Mask pattern must be 0-3	throw new ArgumentOutOfRangeException(nameof(QuietZoneSize), $"Mask pattern must be 0-3
+throw-micro-message	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	Mask pattern must be 0-3, or null	Mask pattern must be 0-9, or null
+type-protected-setter	src/FeatherQR.SkiaSharp/ModuleShape.cs	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);␤␤    /// <summary>Planted.</summary>␤    public int Inset { get; protected set; }
+nested-init	src/FeatherQR.SkiaSharp/ModuleShape.cs	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);␤␤    /// <summary>Planted.</summary>␤    protected sealed class DrawSettings␤    {␤        /// <summary>Planted.</summary>␤        public int Inset { get; init; }␤    }
+narrow-qr-quiet	src/FeatherQR/QRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - DefaultQuietZone;	set => _quietZoneSizeOffset = (short)(value - DefaultQuietZone);
+narrow-micro-quiet	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - MicroQRCodeGenerator.DefaultQuietZone;	set => _quietZoneSizeOffset = (short)(value - MicroQRCodeGenerator.DefaultQuietZone);
+narrow-rm-quiet	src/FeatherQR/RmQRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - RmQRConstants.QuietZoneModules;	set => _quietZoneSizeOffset = (short)(value - RmQRConstants.QuietZoneModules);
+throw-qr-value	src/FeatherQR/QRCodeGeneratorOptions.cs	but was {value}	but was {_maskPattern}
+throw-micro-value	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	but was {value}	but was {_maskPattern}
+protected-init	src/FeatherQR.SkiaSharp/ModuleShape.cs	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);	    public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);␤␤    /// <summary>Planted.</summary>␤    public int Inset { get; protected init; }
+print-qr-tostring	src/FeatherQR/QRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { get; set; }␤␤    /// <summary>Planted.</summary>␤    public override readonly string ToString() => nameof(QRCodeGeneratorOptions);
+print-micro-members	src/FeatherQR/MicroQRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { get; set; }␤␤    private readonly bool PrintMembers(System.Text.StringBuilder builder) => false;
+checked-qr-quiet	src/FeatherQR/QRCodeGeneratorOptions.cs	set => _quietZoneSizeOffset = value - DefaultQuietZone;	set => _quietZoneSizeOffset = checked(value - DefaultQuietZone);
+hash-qr-constant	src/FeatherQR/QRCodeGeneratorOptions.cs	    public bool AllowKanji { get; set; }	    public bool AllowKanji { get; set; }␤␤    /// <summary>Planted.</summary>␤    public override readonly int GetHashCode() => 0;

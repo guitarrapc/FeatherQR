@@ -240,7 +240,8 @@ public static class QRCodeGenerator
     // ReadOnlySpan<T> comes from the System.Memory package rather than the framework -- the
     // netstandard2.0 asset, which is what .NET Framework consumers bind -- only C# 14
     // synthesizes it. Below that, those consumers write Create(text.AsSpan(), ecc). The
-    // options structs carry a constructor for the same audience, since `init` needs C# 9.
+    // options structs need no such spelling: their accessors are `set`, so an object
+    // initializer compiles for the same audience.
     //
     // Sizing is deliberately not paired: only TryGetRequiredBufferSize is offered, because
     // "does not fit" is a data-dependent answer rather than a defect.

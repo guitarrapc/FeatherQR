@@ -7,12 +7,16 @@ namespace FeatherQR;
 /// <remarks>
 /// <para>
 /// Standard QR specific rather than shared: the three generators agree on almost nothing.
-/// <see cref="Version"/> is a different type in each, <see cref="QuietZoneSize"/> has a different specified default in each, Micro QR has no ECI, and rMQR carries fit options that mean nothing here.
+/// <see cref="Version"/> is a different type in each, <see cref="QuietZoneSize"/> defaults to 4 here and to 2 in the other two, Micro QR has no ECI, and rMQR carries fit options that mean nothing here.
 /// </para>
 /// <para>
 /// A plain value: write it with an object initializer, assign a member afterwards (<c>options.QuietZoneSize = 0;</c>), or copy it with <c>with</c>, and the three give equal values.
-/// It is copied when it is stored or passed, so assigning to one variable changes no other, and a generator reads the value as it is at the call.
-/// The members have <c>set</c> accessors, not <c>init</c>: an object initializer over them compiles at every language version, where <c>init</c> needs C# 9, so no constructor has to list the options and an option added later is one more property.
+/// Each variable holds its own value: assigning it to another variable, or passing it to a method by value, copies it, so an assignment changes one variable and no copy of it.
+/// A method or a callback that takes the options by value and assigns to them therefore changes only its own copy, and has to return them or take them by <c>ref</c>.
+/// The generators take the options by <c>in</c>, a reference: they read it during the call and do not keep a reference to it afterwards, so do not assign to that variable from another thread while a call is running.
+/// </para>
+/// <para>
+/// The members have <c>set</c> accessors, not <c>init</c>: an object initializer over them compiles at C# 7.3, where <c>init</c> needs C# 9, so no constructor has to list the options and an option added later is one more property.
 /// </para>
 /// </remarks>
 public record struct QRCodeGeneratorOptions

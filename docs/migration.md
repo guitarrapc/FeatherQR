@@ -4,7 +4,7 @@ One section per release, newest first. Each section lists what changed in that r
 
 | Upgrading to | What it means for existing code |
 |---|---|
-| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, padding takes the background colour rather than transparency, and a finder shape draws only its dark modules. Three encode and decode changes: `Optimal` keeps a U+FEFF inside the content in its Byte run, Structured Append symbols decode instead of failing, and a matrix decode that fails reports no characters written |
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package, the deprecated members removed, one naming rule applied (`ECCLevel` to `QREccLevel`, `CreateQrCode` to `Create`, and friends — with a replacement script), and the result and option types unified (immutable apart from the generator options, sealed). The `SkiaSharp.QrCode` install line keeps working. Rendering changes too: styled symbols keep a solid finder, a non-square canvas or render area fits the symbol instead of stretching it, padding takes the background colour rather than transparency, and a finder shape draws only its dark modules. Three encode and decode changes: `Optimal` keeps a U+FEFF inside the content in its Byte run, Structured Append symbols decode instead of failing, and a matrix decode that fails reports no characters written |
 | [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
 | [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
 | [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
@@ -184,7 +184,7 @@ Some 2.0.0 spellings need C# features your project may not have enabled. They af
 
 `string` converts to `ReadOnlySpan<char>` through a conversion the compiler synthesizes, and on netstandard2.0 the span comes from the `System.Memory` package rather than the framework, where only C# 14 synthesizes it. Every version through C# 13 reports `CS1503`. `IconData`'s members are `init`, a C# 9 feature, so an object initializer that assigns one reports `CS8370` or `CS8400` below that.
 
-The generator options are not in the table, because they need nothing. `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` have `set` accessors, so `new QRCodeGeneratorOptions { QuietZoneSize = 0 }` compiles at every language version.
+The generator options are not in the table, because an object initializer and an assignment need nothing: `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` have `set` accessors, so `new QRCodeGeneratorOptions { QuietZoneSize = 0 }` compiles at C# 7.3. A `with` expression on them is the exception, because `with` on a struct needs C# 10. Below that, copy the value and assign: `var borderless = options; borderless.QuietZoneSize = 0;`.
 
 `IconData` carries one constraint the table cannot express, because it is about your *compiler* rather than your language version. `Icon` is a `required` member, and the compiler marks every constructor of such a type that is not annotated `[SetsRequiredMembers]` as unusable to compilers that do not understand required members, so a compiler older than Roslyn 4.3 (before VS 2022 17.3 / .NET SDK 6.0.4xx) reports `CS0619: 'IconData.IconData()' is obsolete: 'Constructors of types with required members are not supported in this version of your compiler.'` Raising `<LangVersion>` does not help there — only a newer SDK does, and the boundary is not the C# 11 line: Roslyn 4.3 caps out at C# 10 and already consumes required members. On any compiler from 4.3 onward the table applies as written, and `<LangVersion>9</LangVersion>` is enough. The `IconData` constructor below carries that annotation, so it stays usable even on the older compilers.
 
@@ -252,11 +252,13 @@ Each name maps to one member, and nothing else changes:
 
 ```csharp
 var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 };
-if (borderless)
+if (noQuietZone)
     options.QuietZoneSize = 0;      // changes this variable and nothing else
 ```
 
-An options value is copied when it is stored or passed, so assigning to one variable never reaches another, and a generator reads the value as it is at the call.
+Each variable holds its own value, so assigning to one never reaches another. That includes a parameter passed by value: a helper, or a callback such as `Action<QRCodeGeneratorOptions>`, that assigns to its parameter changes a copy. With `init` that assignment did not compile. Now it compiles and is lost, so return the value or take it by `ref`. The generators take the options by `in` and read them during the call, so do not assign to a variable from another thread while a call is using it.
+
+The change is binary breaking for an assembly compiled against a 2.0.0 preview, up to preview.5. `init` and `set` accessors have different signatures, so an object initializer or a `with` expression over these options that was compiled against the `init` accessors throws `MissingMethodException` when it runs on a later version. Recompile it. `FeatherQR.SkiaSharp` up to preview.5 is such an assembly, and NuGet accepts it beside a newer `FeatherQR`, so update both packages together.
 
 **`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself (below C# 9, use the constructor described under [Older language versions](#older-language-versions)):
 
@@ -334,7 +336,7 @@ Three things the contract fixes:
 
 ### Kanji mode on request
 
-Additive. `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` gain `AllowKanji`, off by default, with a constructor parameter of the same name. With it, and with the charset left to the library (`EciMode.Default`, the only choice Micro QR has) and no byte order mark asked for, the generators write text whose every character is in JIS X 0208 in ISO/IEC 18004 Kanji mode. That is 13 bits a character and no ECI header, where UTF-8 takes 16 or 24 bits a character behind an ECI header of 12 bits (11 on rMQR, none on Micro QR). It covers kana and kanji, and also the Greek, Cyrillic, box-drawing and symbol characters the table holds. Without the option every generator writes what 1.x wrote.
+Additive. `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` gain `AllowKanji`, off by default. With it, and with the charset left to the library (`EciMode.Default`, the only choice Micro QR has) and no byte order mark asked for, the generators write text whose every character is in JIS X 0208 in ISO/IEC 18004 Kanji mode. That is 13 bits a character and no ECI header, where UTF-8 takes 16 or 24 bits a character behind an ECI header of 12 bits (11 on rMQR, none on Micro QR). It covers kana and kanji, and also the Greek, Cyrillic, box-drawing and symbol characters the table holds. Without the option every generator writes what 1.x wrote.
 
 ```csharp
 QRCodeGenerator.Create("日本語のテキスト", QREccLevel.M).Version;              // 2, as 1.x wrote it

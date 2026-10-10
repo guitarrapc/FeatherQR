@@ -1,5 +1,4 @@
 using System.Reflection;
-using TUnit.Assertions.Enums;
 
 namespace FeatherQR.Tests;
 
@@ -9,18 +8,33 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The options have <c>set</c> accessors so that the object initializer compiles at every
-/// language version. An <c>init</c> accessor needs C# 9, and the constructor that served
-/// older compilers had to list every option, so adding one changed its signature under
-/// every compiled caller (specs/qrcode-symbologies.md).
+/// The options have <c>set</c> accessors so that the object initializer compiles at C# 7.3,
+/// where an <c>init</c> accessor needs C# 9. The constructor that served the older
+/// compilers had to list every option, so adding one changed its signature under every
+/// compiled caller (specs/qrcode-symbologies.md).
 /// </para>
 /// <para>
 /// A setter adds one spelling and no new state: <c>o.P = v</c> does what
 /// <c>o = o with { P = v }</c> already did. So each option is written by all three routes
 /// and the results compared, with its default named as well as a value that is not the
-/// default. The quiet zone is stored as an offset from the specified default and the mask
-/// pattern is validated, which makes those two the hand-written accessors a route could
-/// get wrong. The rest are covered so that the next option is.
+/// default. The three routes go through the same accessor, so the comparison cannot show
+/// what a getter returns. It shows a setter that stores nothing, a default that does not
+/// collapse onto the unset form, and a setter that writes another member.
+/// </para>
+/// <para>
+/// The two assignments of a case are also checked through the property its name gives:
+/// after the first the option has to read something other than its default, and the second
+/// has to bring the value back to <c>default</c>. The name alone would pass a row whose
+/// assignments are another option's. The two cells that write the value are compared with
+/// the first assignment, so they are tied to the option as well. The two cells that write
+/// the default are compared with <c>default</c> only, so one that named another option's
+/// default would pass.
+/// </para>
+/// <para>
+/// What the getters return is read back by the round-trip tests of
+/// <see cref="GeneratorOptionsTest"/> and <see cref="RmQRCodeGeneratorOptionsTest"/> for a
+/// quiet zone a generator accepts, and below for one it refuses and for the mask pattern
+/// at its bounds.
 /// </para>
 /// </remarks>
 public class GeneratorOptionsAssignmentTest
@@ -153,17 +167,28 @@ public class GeneratorOptionsAssignmentTest
         var options = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.SetMethod is { IsPublic: true })
             .Select(p => p.Name)
-            .Order(StringComparer.Ordinal);
-        await Assert.That(cases.Select(c => c.Name).Order(StringComparer.Ordinal)).IsEquivalentTo(options, CollectionOrdering.Matching);
+            .ToArray();
+        var named = cases.Select(c => c.Name).ToArray();
+        // Three checks and not one comparison, so that a failure names the option.
+        await Assert.That(options.Except(named)).IsEmpty().Because("every option has a case");
+        await Assert.That(named.Except(options)).IsEmpty().Because("every case is named for an option");
+        await Assert.That(named.GroupBy(n => n).Where(g => g.Count() > 1).Select(g => g.Key)).IsEmpty().Because("an option has one case");
+
+        // What the option a case is named for reads on a value.
+        static object? Read(OptionCase<T> c, T on) => typeof(T).GetProperty(c.Name)!.GetValue(on);
 
         foreach (var c in cases)
         {
             var assigned = default(T);
             c.AssignValue(ref assigned);
-            await Assert.That(assigned).IsNotEqualTo(default(T))
-                .Because($"{c.Name}: the case has to use a value that is not the default, or it shows nothing");
+            // Read through the name, so that a row copied from another option does not pass as this one's.
+            await Assert.That(Equals(Read(c, assigned), Read(c, default(T)))).IsFalse()
+                .Because($"{c.Name} still reads its default ({Read(c, default(T)) ?? "null"}) after the case assigned it: the setter did not store the value, or the case assigns the default or another option");
             await Assert.That(assigned).IsEqualTo(c.ValueByInitializer).Because($"{c.Name}: assignment and initializer");
             await Assert.That(assigned).IsEqualTo(c.ValueByWith).Because($"{c.Name}: assignment and with");
+            // Not a contract: unequal values may collide. The generated hash has no random seed for
+            // these member types, so the assertion is what catches a hash that leaves the option out.
+            await Assert.That(assigned.GetHashCode()).IsNotEqualTo(default(T).GetHashCode()).Because($"{c.Name}: hash of a value that is not the default");
 
             // The default, named. It has to collapse onto the unset form by every route, or
             // the generated equality calls two identical option sets different.
@@ -184,8 +209,31 @@ public class GeneratorOptionsAssignmentTest
         foreach (var c in Enumerable.Reverse(cases))
             c.AssignValue(ref backward);
 
-        await Assert.That(forward).IsEqualTo(everyOptionSet);
-        await Assert.That(backward).IsEqualTo(everyOptionSet);
+        // Option by option first, against the value the case assigns on its own. `everyOptionSet`
+        // is written through the same setters, so a setter that writes another member is in it too.
+        foreach (var c in cases)
+        {
+            var own = Read(c, c.ValueByInitializer);
+            await Assert.That(Equals(Read(c, forward), own)).IsTrue()
+                .Because($"{c.Name} has to read {own ?? "null"}, the value its case assigns, after every option was assigned in the table's order, and reads {Read(c, forward) ?? "null"}");
+            await Assert.That(Equals(Read(c, backward), own)).IsTrue()
+                .Because($"{c.Name} has to read {own ?? "null"}, the value its case assigns, after every option was assigned in reverse, and reads {Read(c, backward) ?? "null"}");
+        }
+
+        await Assert.That(forward).IsEqualTo(everyOptionSet).Because("every option assigned in the table's order, against the same options in one initializer");
+        await Assert.That(backward).IsEqualTo(everyOptionSet).Because("every option assigned in reverse, against the same options in one initializer");
+
+        // Each option to its default and back, on a value that has every option set: a setter
+        // that cleared another member only when it was given its own default would pass
+        // everything above, because there the default is only ever assigned on its own.
+        foreach (var c in cases)
+        {
+            var roundTrip = everyOptionSet;
+            c.AssignDefault(ref roundTrip);
+            await Assert.That(roundTrip).IsNotEqualTo(everyOptionSet).Because($"{c.Name}: its default beside every other option");
+            c.AssignValue(ref roundTrip);
+            await Assert.That(roundTrip).IsEqualTo(everyOptionSet).Because($"{c.Name}: its default and then its value, beside every other option");
+        }
     }
 
     // ---- MaskPattern is validated by every route ---------------------------------------
@@ -212,9 +260,13 @@ public class GeneratorOptionsAssignmentTest
         await Assert.That(() => default(QRCodeGeneratorOptions) with { MaskPattern = maskPattern }).Throws<ArgumentOutOfRangeException>();
 
         var assigned = new QRCodeGeneratorOptions { MaskPattern = 3 };
-        await Assert.That(() => { assigned.MaskPattern = maskPattern; }).Throws<ArgumentOutOfRangeException>();
+        var refused = Assert.Throws<ArgumentOutOfRangeException>(() => { assigned.MaskPattern = maskPattern; });
         // A refused assignment leaves the option as it was.
         await Assert.That(assigned.MaskPattern).IsEqualTo(3);
+
+        // The three routes run one accessor, so what the exception says is read once.
+        await Assert.That(refused.ParamName).IsEqualTo(nameof(QRCodeGeneratorOptions.MaskPattern));
+        await Assert.That(refused.Message).Contains($"Mask pattern must be 0-7, or null for automatic selection, but was {maskPattern}");
     }
 
     [Test]
@@ -239,9 +291,31 @@ public class GeneratorOptionsAssignmentTest
         await Assert.That(() => default(MicroQRCodeGeneratorOptions) with { MaskPattern = maskPattern }).Throws<ArgumentOutOfRangeException>();
 
         var assigned = new MicroQRCodeGeneratorOptions { MaskPattern = 1 };
-        await Assert.That(() => { assigned.MaskPattern = maskPattern; }).Throws<ArgumentOutOfRangeException>();
+        var refused = Assert.Throws<ArgumentOutOfRangeException>(() => { assigned.MaskPattern = maskPattern; });
         // A refused assignment leaves the option as it was.
         await Assert.That(assigned.MaskPattern).IsEqualTo(1);
+
+        // The three routes run one accessor, so what the exception says is read once.
+        await Assert.That(refused.ParamName).IsEqualTo(nameof(MicroQRCodeGeneratorOptions.MaskPattern));
+        await Assert.That(refused.Message).Contains($"Mask pattern must be 0-3, or null for automatic selection, but was {maskPattern}");
+    }
+
+    // ---- QuietZoneSize keeps what it is given -------------------------------------------
+
+    [Test]
+    [Arguments(int.MinValue)]
+    [Arguments(-65_540)]
+    [Arguments(-1)]
+    [Arguments(65_540)]
+    [Arguments(int.MaxValue)]
+    public async Task QuietZoneSize_OutsideWhatAGeneratorAccepts_ReadsBackAsAssigned(int quietZoneSize)
+    {
+        // The accessor refuses no value and stores an offset from the default in an int. A
+        // generator checks the range at the call, so what it reads has to be what was assigned.
+        // int.MinValue is here because the offset from the default wraps there, and has to wrap back.
+        await Assert.That(new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }.QuietZoneSize).IsEqualTo(quietZoneSize);
+        await Assert.That(new MicroQRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }.QuietZoneSize).IsEqualTo(quietZoneSize);
+        await Assert.That(new RmQRCodeGeneratorOptions { QuietZoneSize = quietZoneSize }.QuietZoneSize).IsEqualTo(quietZoneSize);
     }
 
     // ---- an assignment reaches one variable --------------------------------------------
@@ -249,27 +323,46 @@ public class GeneratorOptionsAssignmentTest
     [Test]
     public async Task Assignment_ChangesTheVariableAssignedTo_AndNoCopyOfIt()
     {
-        // Why a setter on these structs is safe: a struct is copied when it is stored or
-        // passed, so nothing else holds the value a caller assigns to.
-        var original = new QRCodeGeneratorOptions { QuietZoneSize = 1, MaskPattern = 3 };
+        // Each variable holds its own value: an assignment reaches the variable assigned to
+        // and no copy of it. One member to a pair of values, so that a setter that writes
+        // another member does not fail here: the tests above report that one.
+        var original = new QRCodeGeneratorOptions { QuietZoneSize = 1 };
         var copy = original;
         copy.QuietZoneSize = 0;
-        copy.MaskPattern = null;
+        var masked = new QRCodeGeneratorOptions { MaskPattern = 3 };
+        var unmasked = masked;
+        unmasked.MaskPattern = null;
 
-        await Assert.That(original).IsEqualTo(new QRCodeGeneratorOptions { QuietZoneSize = 1, MaskPattern = 3 });
+        // Read member by member first, before any other value is built. The comparisons below
+        // go through the setters and the generated equality, which do not show state that
+        // two values share.
+        await Assert.That(original.QuietZoneSize).IsEqualTo(1);
+        await Assert.That(copy.QuietZoneSize).IsEqualTo(0);
+        await Assert.That(masked.MaskPattern).IsEqualTo(3);
+        await Assert.That(unmasked.MaskPattern).IsNull();
+
+        await Assert.That(original).IsEqualTo(new QRCodeGeneratorOptions { QuietZoneSize = 1 });
         await Assert.That(copy).IsEqualTo(new QRCodeGeneratorOptions { QuietZoneSize = 0 });
+        await Assert.That(masked).IsEqualTo(new QRCodeGeneratorOptions { MaskPattern = 3 });
+        await Assert.That(unmasked).IsEqualTo(default(QRCodeGeneratorOptions));
 
-        // `Default` hands out a value, not a shared instance.
+        // A copy taken from `Default` is the caller's own, so assigning to it leaves `Default`
+        // as it was. That `Default` is a get-only property and not a field is the rule
+        // TypeShapeTest.GeneratorOptions_ExposeNoFieldAndDefaultIsAValue states. The quiet
+        // zone is read as well as compared, for the reason above: 4, 2 and 2 are the defaults.
         var fromDefault = QRCodeGeneratorOptions.Default;
         fromDefault.QuietZoneSize = 0;
+        await Assert.That(QRCodeGeneratorOptions.Default.QuietZoneSize).IsEqualTo(4);
         await Assert.That(QRCodeGeneratorOptions.Default).IsEqualTo(default(QRCodeGeneratorOptions));
 
         var micro = MicroQRCodeGeneratorOptions.Default;
         micro.QuietZoneSize = 0;
+        await Assert.That(MicroQRCodeGeneratorOptions.Default.QuietZoneSize).IsEqualTo(2);
         await Assert.That(MicroQRCodeGeneratorOptions.Default).IsEqualTo(default(MicroQRCodeGeneratorOptions));
 
         var rm = RmQRCodeGeneratorOptions.Default;
         rm.QuietZoneSize = 0;
+        await Assert.That(RmQRCodeGeneratorOptions.Default.QuietZoneSize).IsEqualTo(2);
         await Assert.That(RmQRCodeGeneratorOptions.Default).IsEqualTo(default(RmQRCodeGeneratorOptions));
     }
 }

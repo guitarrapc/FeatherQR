@@ -7,9 +7,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The type shapes 2.0.0 unified: one value kind for every sizing and decode result,
-/// option objects that are immutable where the library holds the caller's instance and
-/// plain settable values where it holds a copy, and no extension point that was not
-/// designed as one.
+/// option objects that are immutable where a builder keeps the caller's instance and
+/// plain settable values where the library keeps nothing after a call, and no extension
+/// point that was not designed as one.
 /// </summary>
 /// <remarks>
 /// Shape tests, not behaviour tests. Each of these was inconsistent across the three
@@ -35,18 +35,18 @@ public class TypeShapeTest
     private static bool IsInitOnly(MethodInfo setter)
         => setter.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.Name == "IsExternalInit");
 
-    // An init-only property a caller can set. A private setter and an indexer are not
-    // settings: QRCodeData.Version is `{ get; private set; }` and would otherwise demand a
-    // constructor parameter it has no business exposing. A plain set accessor is left out
-    // on purpose, because an object initializer assigns it at every language version.
+    // A property with a public init accessor, indexers aside. A plain set accessor is left
+    // out on purpose, because an object initializer assigns it at C# 7.3 as well.
     private static PropertyInfo[] InitOnlyProperties(Type type) => type.GetProperties(Instance)
         .Where(p => p.SetMethod is { IsPublic: true } setter && IsInitOnly(setter) && p.GetIndexParameters().Length == 0)
         .ToArray();
 
     /// <summary>
-    /// Every <c>init</c>-only property on every exported type is also a parameter of one
-    /// constructor. A consumer whose compiler predates C# 9 cannot assign an <c>init</c>
-    /// accessor, so a constructor parameter is the only route to it there.
+    /// Every property with a public <c>init</c> accessor, on every exported type but the
+    /// three generator options, is also a parameter of one public constructor, and no
+    /// exported type has a protected <c>init</c> accessor. A consumer whose compiler predates
+    /// C# 9 cannot assign an <c>init</c> accessor, so a constructor parameter is the only
+    /// route to it there.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -57,21 +57,34 @@ public class TypeShapeTest
     /// remembered; the sweep states it for the next type too.
     /// </para>
     /// <para>
-    /// The generator options were swept here until they took <c>set</c> accessors. The
+    /// The generator options were swept here until their constructors went. The
     /// constructor this rule made them carry had to list every option, so an option added
     /// in a later release would have changed its signature under every compiled caller.
+    /// They are left out by name now: <see cref="GeneratorOptions_EveryOptionHasAPlainSetter"/>
+    /// refuses an <c>init</c> accessor on one of them, and
+    /// <see cref="GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions"/> the
+    /// constructor this rule would ask for.
+    /// </para>
+    /// <para>
+    /// A protected <c>init</c> accessor is refused outright and not matched to a constructor:
+    /// a class deriving below C# 9 cannot assign one either.
     /// </para>
     /// </remarks>
     [Test]
     public async Task EveryInitOnlyProperty_IsAlsoAConstructorParameter()
     {
+        const BindingFlags declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
         var offenders = new List<string>();
         var swept = new List<Type>();
 
-        foreach (var type in new[] { typeof(QRCodeData).Assembly, typeof(IconData).Assembly }
-            .SelectMany(a => a.GetExportedTypes())
-            .Where(t => InitOnlyProperties(t).Length > 0)
-            .OrderBy(t => t.FullName, StringComparer.Ordinal))
+        var protectedInit = ExportedTypes()
+            .SelectMany(t => t.GetProperties(declared)
+                .Where(p => p.SetMethod is { } setter && (setter.IsFamily || setter.IsFamilyOrAssembly) && IsInitOnly(setter))
+                .Select(p => $"{t.FullName}.{p.Name}"));
+        await Assert.That(protectedInit).IsEmpty()
+            .Because("a class deriving below C# 9 cannot assign a protected init accessor");
+
+        foreach (var type in ExportedTypes().Where(t => !GeneratorOptionStructTypes.Contains(t) && InitOnlyProperties(t).Length > 0))
         {
             swept.Add(type);
 
@@ -94,7 +107,7 @@ public class TypeShapeTest
         }
 
         await Assert.That(swept).Contains(typeof(IconData))
-            .Because("the sweep has to find the type the rule was written for, or it passes by finding nothing");
+            .Because("the sweep has to find the type the rule was written for, or the rule passes without it");
         await Assert.That(offenders).IsEmpty()
             .Because("an init-only property no constructor can set is unreachable below C# 9");
     }
@@ -113,7 +126,7 @@ public class TypeShapeTest
     /// <see cref="ReadOnlySpan{T}"/>). Reachability, the rule that actually protects the
     /// pre-C#-9 audience, is swept over both assemblies above and covers those two. The
     /// generator options are not listed: they have <c>set</c> accessors and, by
-    /// <see cref="GeneratorOptions_HaveNoConstructorThatListsTheOptions"/>, no constructor.
+    /// <see cref="GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions"/>, no constructor.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(InitOnlySettingsObjects))]
@@ -138,14 +151,15 @@ public class TypeShapeTest
     }
 
     /// <summary>
-    /// <see cref="IconData"/>'s constructor is a second spelling of its object initializer,
-    /// not a second behaviour: it produces equal values, because it assigns through the same
-    /// <c>init</c> accessors.
+    /// <see cref="IconData"/>'s constructor is a second spelling of its object initializer:
+    /// for the same settings it produces an equal value, because it assigns through the same
+    /// <c>init</c> accessors. The two differ on a null icon, which the constructor refuses
+    /// and the initializer keeps.
     /// </summary>
     /// <remarks>
     /// The three generator options had the same check for their constructors, which went
-    /// when their accessors became <c>set</c>. <see cref="GeneratorOptionsAssignmentTest"/>
-    /// compares the routes that remain for them.
+    /// with those constructors. <see cref="GeneratorOptionsAssignmentTest"/> compares the
+    /// routes that remain for them.
     /// </remarks>
     [Test]
     public async Task IconData_ConstructorAgreesWithTheObjectInitializer()
@@ -533,16 +547,17 @@ public class TypeShapeTest
     /// <summary>
     /// An option object a caller holds can be varied with <c>with</c>: the three generator
     /// options and <see cref="IconData"/> here, <see cref="GradientOptions"/> in its own
-    /// case above. Without it, changing one field of an instance you did not construct
-    /// means retyping every other field and silently taking the defaults for any you forget.
+    /// case above. Without it, changing one field of an immutable instance you did not
+    /// construct means retyping every other field and silently taking the defaults for any
+    /// you forget. On the generator options a copy and an assignment do the same.
     /// </summary>
     /// <remarks>
-    /// Only <see cref="IconData"/> can fail the "keeps the other members" half: it is a
-    /// record <em>class</em>, so <c>with</c> runs a real copy constructor that a future
-    /// edit could get wrong. The three option types are record <em>structs</em>, where the
-    /// copy is memberwise and not user-overridable, so their cases pin the API shape —
-    /// that <c>with</c> compiles and reaches the accessor — rather than guarding a copy
-    /// step that cannot break.
+    /// <see cref="IconData"/> is a record <em>class</em>, so <c>with</c> runs a real copy
+    /// constructor that a future edit could get wrong. The three option types are record
+    /// <em>structs</em>, where the copy is memberwise and not user-overridable. What their
+    /// cases can fail on is the accessor <c>with</c> calls: a setter after which the quiet
+    /// zone does not read the 3 it was given, or one that also writes the other member the
+    /// case reads.
     /// </remarks>
     [Test]
     public async Task OptionTypes_CanBeVariedWithWith()
@@ -559,17 +574,19 @@ public class TypeShapeTest
         await Assert.That(bigger).IsNotEqualTo(icon);
 
         // The summary names every option type, so every option type is exercised here.
-        // GradientOptions has its own case above; these three had none.
-        var qr = new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = 5 } with { QuietZoneSize = 2 };
-        await Assert.That(qr.QuietZoneSize).IsEqualTo(2);
+        // GradientOptions has its own case above; these three had none. The quiet zone goes
+        // to 3, which is the default of none of the three (4, 2 and 2), so that a setter
+        // that left the default does not pass.
+        var qr = new QRCodeGeneratorOptions { QuietZoneSize = 0, Version = 5 } with { QuietZoneSize = 3 };
+        await Assert.That(qr.QuietZoneSize).IsEqualTo(3);
         await Assert.That(qr.Version).IsEqualTo(QRVersionRange.Exactly(5));
 
-        var micro = new MicroQRCodeGeneratorOptions { QuietZoneSize = 0, MaskPattern = 1 } with { QuietZoneSize = 2 };
-        await Assert.That(micro.QuietZoneSize).IsEqualTo(2);
+        var micro = new MicroQRCodeGeneratorOptions { QuietZoneSize = 0, MaskPattern = 1 } with { QuietZoneSize = 3 };
+        await Assert.That(micro.QuietZoneSize).IsEqualTo(3);
         await Assert.That(micro.MaskPattern).IsEqualTo(1);
 
-        var rm = new RmQRCodeGeneratorOptions { QuietZoneSize = 0, FitStrategy = RmQRFitStrategy.MinimizeWidth } with { QuietZoneSize = 2 };
-        await Assert.That(rm.QuietZoneSize).IsEqualTo(2);
+        var rm = new RmQRCodeGeneratorOptions { QuietZoneSize = 0, FitStrategy = RmQRFitStrategy.MinimizeWidth } with { QuietZoneSize = 3 };
+        await Assert.That(rm.QuietZoneSize).IsEqualTo(3);
         await Assert.That(rm.FitStrategy).IsEqualTo(RmQRFitStrategy.MinimizeWidth);
     }
 
@@ -592,43 +609,129 @@ public class TypeShapeTest
 
     private const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
+    // The three generator options. Every rule about them below reads this list, and
+    // GeneratorOptions_AreTheOnlyStructsACallerAssignsTo holds it against what the two
+    // assemblies export, so a struct added to it on purpose meets every one of those rules.
+    private static readonly Type[] GeneratorOptionStructTypes =
+    [
+        typeof(MicroQRCodeGeneratorOptions),
+        typeof(QRCodeGeneratorOptions),
+        typeof(RmQRCodeGeneratorOptions),
+    ];
+
     // Func<Type>, for the reason on InitOnlySettingsObjects.
     public static IEnumerable<Func<Type>> GeneratorOptionStructs()
-    {
-        yield return () => typeof(QRCodeGeneratorOptions);
-        yield return () => typeof(MicroQRCodeGeneratorOptions);
-        yield return () => typeof(RmQRCodeGeneratorOptions);
-    }
+        => GeneratorOptionStructTypes.Select(type => (Func<Type>)(() => type));
 
     private static bool IsReadOnly(IEnumerable<CustomAttributeData> attributes)
         => attributes.Any(a => a.AttributeType.Name == "IsReadOnlyAttribute");
 
-    // Every exported struct a caller may assign to: not an enum, and not declared `readonly`.
-    private static Type[] SettableStructs() => new[] { typeof(QRCodeData).Assembly, typeof(IconData).Assembly }
-        .SelectMany(a => a.GetExportedTypes())
+    // Every type a caller can name: the public ones, and those nested as public or protected
+    // in one of them. GetExportedTypes leaves out a type nested as protected, which a class
+    // deriving from one of the extension points still sees.
+    private static IEnumerable<Type> ExportedTypes() => new[] { typeof(QRCodeData).Assembly, typeof(IconData).Assembly }
+        .SelectMany(a => a.GetTypes())
+        .Where(IsVisibleOutsideItsAssembly)
+        .OrderBy(t => t.FullName, StringComparer.Ordinal);
+
+    private static bool IsVisibleOutsideItsAssembly(Type type) => type.IsNested
+        ? (type.IsNestedPublic || type.IsNestedFamily || type.IsNestedFamORAssem) && IsVisibleOutsideItsAssembly(type.DeclaringType!)
+        : type.IsPublic;
+
+    // The full names in ordinal order, which is what a failure of the two rules below prints.
+    private static string[] FullNames(IEnumerable<Type> types) => types.Select(t => t.FullName!).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+
+    // Every exported struct that is not declared `readonly`, enums aside.
+    private static Type[] SettableStructs() => ExportedTypes()
         .Where(t => t.IsValueType && !t.IsEnum && !IsReadOnly(t.CustomAttributes))
-        .OrderBy(t => t.FullName, StringComparer.Ordinal)
         .ToArray();
 
     /// <summary>
-    /// The three generator options are the only structs a caller may assign to, member by
-    /// member, after building one. Every other exported struct is <c>readonly</c>.
+    /// The three generator options are the only exported structs that are not
+    /// <c>readonly</c>, so they are the only structs a caller may assign to member by member.
     /// </summary>
     /// <remarks>
-    /// A struct is copied when it is passed or stored, so a setter on one changes the
-    /// caller's own variable and nothing the library holds, and an object initializer over
-    /// <c>set</c> accessors compiles at every language version where <c>init</c> needs C# 9.
-    /// That is why these three are settable. It is a decision made for them and not a
-    /// default: a new struct that is not <c>readonly</c> fails here until it is added on
-    /// purpose.
+    /// Each variable of a struct type holds its own value, and the library keeps no options
+    /// after a call, so a setter changes the caller's own variable and nothing else, and an
+    /// object initializer over <c>set</c> accessors compiles at C# 7.3, where <c>init</c>
+    /// needs C# 9. That is why these three are settable. It is a decision made for them and
+    /// not a default: a new struct that is not <c>readonly</c> fails here. A fourth set of
+    /// generator options is added to <c>GeneratorOptionStructTypes</c> on purpose, and the
+    /// rules of this class that read that list then apply to it.
+    /// <see cref="GeneratorOptionsAssignmentTest"/> does not read the list, so it needs a
+    /// table for the new struct. A struct that has to change for another reason, an
+    /// enumerator for example, does not fit the list, and this rule and
+    /// <see cref="SettableStruct_EveryMemberButASetterIsReadOnly"/> have no other exception
+    /// today.
     /// </remarks>
     [Test]
     public async Task GeneratorOptions_AreTheOnlyStructsACallerAssignsTo()
     {
-        await Assert.That(SettableStructs().Select(t => t.Name))
-            .IsEquivalentTo(
-                [nameof(MicroQRCodeGeneratorOptions), nameof(QRCodeGeneratorOptions), nameof(RmQRCodeGeneratorOptions)],
-                CollectionOrdering.Matching);
+        var notReadOnly = FullNames(SettableStructs());
+        var listed = FullNames(GeneratorOptionStructTypes);
+
+        // Two differences and not one comparison, so that a failure names the type.
+        await Assert.That(notReadOnly.Except(listed)).IsEmpty()
+            .Because("the exported structs that are not readonly are the ones listed in GeneratorOptionStructTypes");
+        await Assert.That(listed.Except(notReadOnly)).IsEmpty()
+            .Because("GeneratorOptionStructTypes lists exported structs that are not readonly, and nothing else");
+    }
+
+    /// <summary>
+    /// No exported type but the three generator options has a property whose <c>set</c>
+    /// accessor is public or protected.
+    /// </summary>
+    /// <remarks>
+    /// A settable class is the shape <see cref="IconData"/> had before 2.0.0, which let a
+    /// caller reach a state its factory methods validate against. A <c>readonly</c> struct
+    /// with a setter that writes into something its copies share would be assignable too.
+    /// Neither is a struct that is not <c>readonly</c>, so
+    /// <see cref="GeneratorOptions_AreTheOnlyStructsACallerAssignsTo"/> does not see them,
+    /// and this sweep does. A protected accessor counts, because a class deriving from one
+    /// of the extension points can call it. An <c>init</c> accessor does not:
+    /// <see cref="EveryInitOnlyProperty_IsAlsoAConstructorParameter"/> reads the public and
+    /// the protected ones.
+    /// </remarks>
+    [Test]
+    public async Task GeneratorOptions_AreTheOnlyTypesWithAPlainSetter()
+    {
+        const BindingFlags declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var withAPlainSetter = FullNames(ExportedTypes()
+            .Where(t => t.GetProperties(declared).Any(p => p.SetMethod is { } setter
+                && (setter.IsPublic || setter.IsFamily || setter.IsFamilyOrAssembly)
+                && !IsInitOnly(setter))));
+        var listed = FullNames(GeneratorOptionStructTypes);
+
+        // Two differences and not one comparison, so that a failure names the type.
+        await Assert.That(withAPlainSetter.Except(listed)).IsEmpty()
+            .Because("a public or protected set accessor is a decision made for the generator options, and for no other type");
+        await Assert.That(listed.Except(withAPlainSetter)).IsEmpty()
+            .Because("each of the generator options has a set accessor a caller can use");
+    }
+
+    /// <summary>
+    /// No exported type has a field a caller can assign.
+    /// </summary>
+    /// <remarks>
+    /// A public or protected field that is neither a constant nor <c>readonly</c> is assigned
+    /// like a plain setter, and <see cref="GeneratorOptions_AreTheOnlyTypesWithAPlainSetter"/>
+    /// reads properties only. No type is excepted, the generator options included: a field
+    /// cannot become a property later without breaking compiled callers.
+    /// </remarks>
+    [Test]
+    public async Task NoExportedType_HasAFieldACallerCanAssign()
+    {
+        const BindingFlags declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+        // Enums aside: the runtime keeps an enum's value in a public field, value__, that C# cannot name.
+        var assignable = ExportedTypes()
+            .Where(t => !t.IsEnum)
+            .SelectMany(t => t.GetFields(declared)
+                .Where(f => (f.IsPublic || f.IsFamily || f.IsFamilyOrAssembly) && !f.IsLiteral && !f.IsInitOnly)
+                .Select(f => $"{t.FullName}.{f.Name}"));
+
+        await Assert.That(assignable).IsEmpty()
+            .Because("a field a caller can assign is a setter that no accessor can replace later");
     }
 
     /// <summary>
@@ -654,33 +757,132 @@ public class TypeShapeTest
             var setter = property.SetMethod!;
             await Assert.That(setter.IsPublic).IsTrue()
                 .Because($"{type.Name}.{property.Name} must be settable by a caller");
-            await Assert.That(setter.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.Name == "IsExternalInit")).IsFalse()
+            await Assert.That(IsInitOnly(setter)).IsFalse()
                 .Because($"{type.Name}.{property.Name} must be a set accessor, which every language version can assign");
         }
     }
 
     /// <summary>
-    /// The three generator options have no constructor that takes the options as parameters.
+    /// Every option of the three generator options has a public getter.
     /// </summary>
     /// <remarks>
-    /// One existed while the options were <c>init</c>-only, for compilers before C# 9. It had
-    /// to list every option, so an option added in a later release would have changed its
-    /// signature under every compiled caller, or stood beside it as a second constructor and
-    /// made <c>new QRCodeGeneratorOptions(eciMode: …)</c> ambiguous. With <c>set</c>
-    /// accessors the object initializer serves every language version, and a constructor
-    /// would only bring that problem back.
+    /// The tests see the library's internals, so a getter made <c>internal</c> would still
+    /// compile in every test that reads it. An option is a property with a setter, as in
+    /// <see cref="GeneratorOptions_EveryOptionHasAPlainSetter"/>.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(GeneratorOptionStructs))]
-    public async Task GeneratorOptions_HaveNoConstructorThatListsTheOptions(Type type)
+    public async Task GeneratorOptions_EveryOptionHasAPublicGetter(Type type)
     {
-        await Assert.That(type.GetConstructors().Where(c => c.GetParameters().Length > 0)).IsEmpty()
-            .Because($"{type.Name} is configured through its setters, and a constructor would have to change with every new option");
+        var options = type.GetProperties(Declared).Where(p => p.SetMethod is not null).ToArray();
+        await Assert.That(options).IsNotEmpty().Because($"{type.Name} has options, so a sweep that finds none is broken");
+
+        foreach (var property in options)
+        {
+            await Assert.That(property.GetMethod is { IsPublic: true }).IsTrue()
+                .Because($"{type.Name}.{property.Name} must be readable by a caller");
+        }
     }
 
     /// <summary>
-    /// On a struct a caller may assign to, every instance member except a property's setter
-    /// is <c>readonly</c>.
+    /// Each of the three generator options implements <see cref="IEquatable{T}"/> of itself,
+    /// declares a <c>ToString</c> that names every option, and has <c>==</c>, which
+    /// <c>record</c> gives a struct.
+    /// </summary>
+    /// <remarks>
+    /// <c>with</c> and the equality assertions work on a plain struct too. When this rule
+    /// was written, the rest of the suite passed with <c>record</c> taken off the three
+    /// declarations.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(GeneratorOptionStructs))]
+    public async Task GeneratorOptions_CompareAndPrintByValue(Type type)
+    {
+        await Assert.That(typeof(IEquatable<>).MakeGenericType(type).IsAssignableFrom(type)).IsTrue()
+            .Because($"{type.Name} must implement IEquatable<{type.Name}>");
+        await Assert.That(type.GetMethod("ToString", Type.EmptyTypes)!.DeclaringType).IsEqualTo(type)
+            .Because($"{type.Name} must declare ToString");
+        await Assert.That(type.GetMethod("op_Equality", BindingFlags.Public | BindingFlags.Static)).IsNotNull()
+            .Because($"{type.Name} must have ==");
+
+        // The text of the default value. An option is a property with a setter, as in the rules above.
+        var printed = Activator.CreateInstance(type)!.ToString()!;
+        foreach (var option in type.GetProperties(Declared).Where(p => p.SetMethod is not null))
+        {
+            await Assert.That(printed).Contains($"{option.Name} = ")
+                .Because($"{type.Name}.ToString must name {option.Name}");
+        }
+    }
+
+    /// <summary>
+    /// The three generator options have no public constructor with parameters, and no public
+    /// static method with parameters that returns the struct.
+    /// </summary>
+    /// <remarks>
+    /// A constructor existed while the options were <c>init</c>-only, for compilers before
+    /// C# 9. It had to list every option, so an option added in a later release would have
+    /// changed its signature under every compiled caller, or stood beside it as a second
+    /// constructor and made <c>new QRCodeGeneratorOptions(eciMode: …)</c> ambiguous. With
+    /// <c>set</c> accessors the object initializer serves C# 7.3 too, and a constructor would
+    /// only bring that problem back. So would a static method on the struct that returns
+    /// one from the options, which is the same constructor under another name. The rule
+    /// reads those two shapes: it does not see a method that hands the struct back through
+    /// an <c>out</c> parameter, or one declared on another type.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(GeneratorOptionStructs))]
+    public async Task GeneratorOptions_HaveNoConstructorOrFactoryThatListsTheOptions(Type type)
+    {
+        await Assert.That(type.GetConstructors().Where(c => c.GetParameters().Length > 0)).IsEmpty()
+            .Because($"{type.Name} is configured through its setters, and a constructor would have to change with every new option");
+
+        var factories = type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(m => m.ReturnType == type && m.GetParameters().Length > 0)
+            .Select(m => m.ToString());
+        await Assert.That(factories).IsEmpty()
+            .Because($"a public static method on {type.Name} that returns it from parameters is a constructor under another name");
+    }
+
+    /// <summary>
+    /// On each of the three generator options, <c>Default</c> is a public static property
+    /// with no setter that returns the struct, no field but a constant is public or static,
+    /// and no static property has a setter.
+    /// </summary>
+    /// <remarks>
+    /// A public field could not become a property later without breaking compiled callers.
+    /// <see cref="NoExportedType_HasAFieldACallerCanAssign"/> refuses one a caller can assign,
+    /// and this rule also refuses a <c>readonly</c> one. A <c>Default</c> that is a field or a
+    /// <c>ref</c> return would be one value for the whole process, which
+    /// <c>QRCodeGeneratorOptions.Default.QuietZoneSize = 0;</c> would change. As a property
+    /// that returns by value, that statement does not compile. A <c>Default</c> that returned
+    /// a static field of the struct would have that shape and still be one value for the
+    /// whole process, which is why the struct declares no static field but a constant. The
+    /// rule reads the struct's own members: it does not see a value kept in another type.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(GeneratorOptionStructs))]
+    public async Task GeneratorOptions_ExposeNoFieldAndDefaultIsAValue(Type type)
+    {
+        const BindingFlags declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+        // Default first, so that a Default of another shape is reported as that and not as a field or a setter.
+        var defaultValue = type.GetProperty("Default", BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        await Assert.That(defaultValue).IsNotNull().Because($"{type.Name}.Default must be a public static property");
+        await Assert.That(defaultValue!.SetMethod).IsNull().Because($"{type.Name}.Default must have no setter");
+        await Assert.That(defaultValue.PropertyType).IsEqualTo(type).Because($"{type.Name}.Default must return the struct by value");
+
+        var fields = type.GetFields(declared).Where(f => !f.IsLiteral).ToArray();
+        await Assert.That(fields.Where(f => f.IsPublic).Select(f => f.Name)).IsEmpty()
+            .Because($"{type.Name} has no public field but a constant: one could not become a property later without breaking compiled callers");
+        await Assert.That(fields.Where(f => f.IsStatic).Select(f => f.Name)).IsEmpty()
+            .Because($"{type.Name} declares no static field but a constant: one would hold a value for the whole process");
+        await Assert.That(type.GetProperties(declared).Where(p => p.SetMethod is { IsStatic: true }).Select(p => p.Name)).IsEmpty()
+            .Because($"{type.Name} declares no static property with a setter");
+    }
+
+    /// <summary>
+    /// On an exported struct that is not <c>readonly</c>, every instance member except a
+    /// property's setter is <c>readonly</c>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -692,10 +894,14 @@ public class TypeShapeTest
     /// to be settable.
     /// </para>
     /// <para>
-    /// IDE0251 refuses the same mistake at build time in the two shipping projects. This
-    /// states the rule for a build that did not run the analyzer, and for both assemblies:
-    /// <see cref="GeneratorOptions_AreTheOnlyStructsACallerAssignsTo"/> says which structs
-    /// the sweep finds.
+    /// IDE0251 refuses, at build time in the two shipping projects, a member that could be
+    /// <c>readonly</c> and is not. This rule also refuses a member that writes state, such
+    /// as a private helper a setter calls, which the analyzer accepts: code inside the
+    /// struct can call such a member through <c>in</c>, and the write then lands on a copy.
+    /// The analyzer in turn reports a setter that could be <c>readonly</c>, which this rule
+    /// leaves alone. This rule also holds for a build that did not run the analyzer, and for
+    /// both assemblies: <see cref="GeneratorOptions_AreTheOnlyStructsACallerAssignsTo"/>
+    /// says which structs the sweep finds.
     /// </para>
     /// </remarks>
     [Test]
@@ -711,6 +917,6 @@ public class TypeShapeTest
         }
 
         await Assert.That(offenders).IsEmpty()
-            .Because("a member that is not readonly makes the compiler copy the struct when it is read through `in`");
+            .Because("the compiler copies the struct before it calls a member that is not readonly through `in`");
     }
 }
