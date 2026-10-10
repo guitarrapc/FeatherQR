@@ -27,6 +27,7 @@
     <Compile Include="..\..\tests\FeatherQR.Tests\Shared\BilinearUpscaleRenderer.cs" Link="Renderers\BilinearUpscaleRenderer.cs" />
     <Compile Include="..\..\tests\FeatherQR.Tests\Shared\NearestNeighbourRenderer.cs" Link="Renderers\NearestNeighbourRenderer.cs" />
     <Compile Include="..\..\tests\FeatherQR.Tests\Shared\SupersampledRenderer.cs" Link="Renderers\SupersampledRenderer.cs" />
+    <Compile Include="..\..\tests\FeatherQR.Tests\Shared\CameraRenderer.cs" Link="Renderers\CameraRenderer.cs" />
   </ItemGroup>
 
 </Project>

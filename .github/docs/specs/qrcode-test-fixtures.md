@@ -203,11 +203,17 @@ The fixtures above prove a foreign symbol decodes from its matrix and from a cle
 `tools/QRImageDecodeSweep` measures it against other readers, image for image. Its main number is the gap, the images zxing-cpp reads and this library does not get through. The reverse counts images this library reads and zxing-cpp does not.
 
 ```bash
-# Synthetic renders: every encoder's symbol of the same payload through the same render, 23 kinds
+# Synthetic renders: every encoder's symbol of the same payload through the same render, 23 kinds, then 8 camera kinds of this library's symbol
 dotnet run -c Release --project tools/QRImageDecodeSweep -- sweep [qr|micro|rmqr|all] [cases] [outDir]
 
 # The committed real images, each at the four right angles
 dotnet run -c Release --project tools/QRImageDecodeSweep -- corpus [outDir]
+
+# Sample sets that are not committed, laid out as the corpus is (a checkout's black-box sets), and with --time a timing pass
+dotnet run -c Release --project tools/QRImageDecodeSweep -- photos <root> [outDir] [--time]
+
+# BoofCV's QR photographs (the detection directory of qrcodes_v3.zip, downloaded by hand), by category
+dotnet run -c Release --project tools/QRImageDecodeSweep -- boofcv <detection-dir> [outDir] [--time]
 
 # Two result files of the same run from two trees, image for image: gained, lost, and every lost image by name
 dotnet run -c Release --project tools/QRImageDecodeSweep -- compare <before.csv> <after.csv>
@@ -222,6 +228,7 @@ dotnet run -c Release --project tools/QRImageDecodeSweep -- import-corpus <zxing
 
 - The encoders are this library, ZXing.Net, QRCoder, QrCodeGenerator, CodeGlyphX, libzint and qrtool for Standard QR, and this library, libzint and qrtool for Micro QR and rMQR. Each case fixes payload, level and version for every encoder. The payload is ASCII so a failure is an image failure, not a character-set convention. Micro QR and rMQR pin the version in every encoder. Standard QR sizes the payload above the capacity of the version below and within the requested one, so the requested version is the smallest that fits. The first cut took 75-100 % of the version's capacity, which from version 6 up also fits the version below: 230 of 400 cases landed under their version (two at version 40, three at 39). Another encoder's own segmentation may still choose a neighbouring version, as part of its output, so each row carries its symbol's version. The run prints how many cases put this library's symbol off the requested version (zero). The first cut's error was a claim about the generator that nothing counted. A claim about a sample is cheap to check.
 - The kinds are the test suite's renderers, linked from `tests/FeatherQR.Tests/Shared` (crisp nearest-neighbour and anti-aliased path at a fractional scale and random sub-pixel offset, supersampled at any rotation with and without keystone), plus bilinear upscales, mip-mapped downscales, right-angle turns, mirrors, a JPEG round trip, and each library's own image writer. Every kind measured is one a test draws, including the supersampled renderer's four-module quiet zone round Micro QR and rMQR symbols (other kinds draw the two modules their specifications ask for). It is kept as the rotation tests have it, and a wider quiet zone is within either specification.
+- The camera kinds (since 2026-10-10) photograph a printed card through `CameraRenderer`, a pinhole camera: the card is tilted about any axis and turned, can be bent round a cylinder, and is seen through a lens with radial distortion, then blurred and given sensor noise, on a plain table or in a scene of clutter. Each kind varies one effect (tilt 15-35° and 35-55°, blur, barrel distortion, noise, a bow, a small symbol in a scene), and a phone mix varies them all. Only this library's symbol is photographed, because the encoder does not decide whether a symbol reads (below) and a photograph costs as much to draw as a case's other kinds together. They follow the other kinds in the list, so the earlier kinds' seeds did not move.
 - The readers are this library, zxing-cpp and ZXing.Net, each given the same grayscale buffer and told the symbology.
 - Render parameters are seeded by arithmetic on the case and kind indices (never `GetHashCode`, which is randomized per process), so two runs write byte-identical result files and two trees pair render for render. Each row carries its key (how its image was made) and a pixel digest. `compare` puts a pair whose digests differ in its own column, not in gained or lost: if an encoder picks another mask or a renderer changes between the trees, the pair is two different images and a moved read says nothing about the decoder. Every recorded table uses the default case counts (400 / 400 / 640: ten per Standard QR version, a hundred per Micro QR version, twenty per rMQR version).
 - A content failure is not gap: an image this library decodes into another text, or whose bit stream it refuses (`InvalidBitstream`, `UnsupportedContent`, `UnmappedCharacter`), was still located, sampled and error-corrected, and has its own column. In the real-image sets that column holds Byte-mode Shift_JIS without an ECI header (eleven images, which zxing-cpp reads by guessing the character set), one GS1 symbol, and one symbol whose bit stream is refused and which neither other reader reads.
@@ -233,8 +240,10 @@ dotnet run -c Release --project tools/QRImageDecodeSweep -- import-corpus <zxing
 - `compare-destination` pairs two trees' renders by name and, like `compare`, by digest. It lists every status, version or text that moved within a same-image pair and the renders whose image differs between the files, and reports the cost over the same-image pairs and their count.
   - A file from before the digest (2026-10-01) pairs by how each render was made (kind, ppm, angle, noise), which detects a redrawn set but not a changed renderer. The comparison says so.
   - Times depend on the machine, so only their ratio to the sized call compares between runs.
+- `corpus` and `photos` list every gap image and every reverse image by name, so each can be given a cause. `photos` reads sets that are not committed from where they are, such as the ZXing black-box sets of a ZXing.Net checkout, under the corpus's rules. Its `--time` pass reads each upright image on one thread with this library and zxing-cpp, each call the fastest of five after an untimed one, because the accuracy pass runs in parallel and its times do not compare.
+- `boofcv` reads BoofCV's QR photographs, never committed because the set's licence is not stated. The set labels each code's corners and not its text, so a read is scored without a known text, two ways. It is located when its centre lies inside a labelled outline, and agreed when another reader, or the same reader in another photograph, read the same text. A photograph counts for a reader when one of its reads is agreed, as go-qr scores the set. A code read in only one photograph by only one reader is not agreed, so the counts are a floor. Its lists name the gap and reverse photographs, every read of this library inside a code zxing-cpp read with another text, and every text this library read that no other read confirms, which are either codes read once or misreads and are looked at by hand.
 
-The sweep is a hand-run measurement: it needs the native oracles, and its result is a table to compare, not a condition to assert. On 2026-09-27, without qrtool, a default `sweep all` took about 40 s on 32 hardware threads, nearly all Standard QR (Micro QR and rMQR a few seconds each), and `corpus` about a second.
+The sweep is a hand-run measurement: it needs the native oracles, and its result is a table to compare, not a condition to assert. On 2026-09-27, without qrtool, a default `sweep all` took about 40 s on 32 hardware threads, nearly all Standard QR (Micro QR and rMQR a few seconds each), and `corpus` about a second. With the camera kinds (2026-10-10), Standard QR took 1 min 33 s, Micro QR 4 s and rMQR 27 s.
 
 A decoder change that moves reads is measured with the sweep against the commit before it, image for image, under these rules:
 
@@ -284,6 +293,66 @@ On the first run this library read 295 of the 548 Standard QR images (gap 153) a
 - 12 reads are out of scope. `qrcode-2/#940` and `qr-model-1` are Model 1 symbols (zxing-cpp reports `]Q0`): their format word reads under Model 1's mask, and their data, placed as Model 1 places it, fails. `#258` draws its finder rings as dots, and its diagonals read only with each run moved by 0.52 to 0.68 of a module, past the half-module bound.
 - 14 fail in the grid. `high-res-1` is a version 34 on curled paper at 2.2 px/module. Its mesh interior reads, and the bands along its edges have about half their function modules wrong. `qrcode-4/29` is on curved paper and no alignment pattern is found: of 3,721 fourth anchors within 3 modules, 12 read, none with fewer than 15 corrections (20 through zxing-cpp's corners). `qrcode-3/03` is binarized with heavy ink spread, and the anchors that read need 23 or 24 corrections. `qrcode-4/12` at 0° and 90° has all four corners within 0.12 module of zxing-cpp's plane (a knife edge).
 - 2 fail at a finder's floor: `qrcode-3/30` at 270° has diagonals at the 2 px floor, and `qrcode-4/15` at 270° has a falling diagonal rounded at one outer corner (runs of 5, 5, 15, 5 and 2 px).
+
+On 2026-10-10 (`main` at f4b74de, the sweep and corpus reading as on 2026-09-28) the camera kinds and ZXing's QR photographs were measured for the first time. The camera kinds, 400 renders each for Standard QR and Micro QR and 640 for rMQR, this library against zxing-cpp:
+
+| Camera kind | Standard QR | Micro QR | rMQR |
+|---|---|---|---|
+| Tilt 15-35°, 3-6 px/module | 400 / 400 | 267 / 377 | 638 / 51 |
+| Tilt 35-55°, 4-8 px/module | 400 / 373 | 9 / 386 | 640 / 93 |
+| Blur 0.25-0.45 module | 398 / 394 | 394 / 334 | 637 / 25 |
+| Barrel distortion 5-20 % | 46 / 86 | 393 / 20 | 174 / 10 |
+| Noise 12-30 grey levels | 397 / 392 | 397 / 328 | 636 / 46 |
+| Bowed 1-4 modules | 389 / 396 | 390 / 265 | 640 / 45 |
+| Small in a textured scene | 400 / 400 | 398 / 361 | 640 / 56 |
+| Phone mix | 189 / 328 | 315 / 188 | 488 / 19 |
+
+Two classes hold the gap. Micro QR loses tilt past its keystone envelope. Standard QR loses barrel distortion from about version 10. In a probe of 40 renders a cell, version 20 read 1 of 40 at 2.5 % where zxing-cpp read every one, and version 10 read 27 of 40 at 5 % against 40. Without its lens term, the phone mix read 40 of 40 at versions 2, 5, 10 and 20, and with it 21 and 10 of 40 at versions 10 and 20, against zxing-cpp's 40 and 36.
+
+ZXing's QR photographs (the ZXing.Net checkout's black-box `qrcode-1` to `-6`, 179 images, of which 79 are zxing-cpp samples again, exactly or re-encoded) read at four right angles:
+
+| Set | Images | This library | zxing-cpp | ZXing.Net | Gap | Reverse | Content |
+|---|---|---|---|---|---|---|---|
+| ZXing `qrcode-1` to `-6` | 716 | 606 | 660 | 584 | 15 | 5 | 48 |
+
+Upright, this library read 151 of 179 and zxing-cpp 165, the number go-qr publishes for zxing-cpp on this set. The content column is the eleven Shift_JIS photographs (44 reads) and `qrcode-2/33`, whose bit stream is refused. Each new gap image has a cause, from the grid sampled through zxing-cpp's reported corners and the image cropped and scaled:
+
+- `qrcode-2/5`, a version 1 at 2.3 px/module on a billboard in a 480 × 360 photograph of a station hall, and `qrcode-4/19`, a version 3 at 4.1 px/module, are not detected in the whole image. Cropped to the symbol, or scaled by 0.75, 1.5 or 2, both read, and the grid through zxing-cpp's corners reads with 2 to 3 and 0 corrections.
+- `qrcode-4/14`, a version 3 at 4.9 px/module, is found and fails Reed-Solomon. The grid through zxing-cpp's corners reads with 1 or 2 corrections, so this library's frame is the cause.
+- `qrcode-4/29` is the corpus's bowed card again. Through zxing-cpp's corners one homography reads with 13 to 17 of its 22 corrections.
+
+BoofCV's QR photographs (`qrcodes_v3`, 536 photographs holding 1,232 labelled codes, 2026-10-10), counted as photographs with an agreed read:
+
+| Category | Photographs | This library | zxing-cpp | ZXing.Net | Gap | Reverse |
+|---|---|---|---|---|---|---|
+| blurred | 45 | 29 | 30 | 17 | 3 | 2 |
+| bright_spots | 32 | 15 | 13 | 17 | 1 | 3 |
+| brightness | 28 | 17 | 27 | 20 | 10 | 0 |
+| close | 40 | 39 | 40 | 2 | 1 | 0 |
+| curved | 50 | 25 | 34 | 22 | 9 | 0 |
+| damaged | 37 | 6 | 7 | 4 | 1 | 0 |
+| glare | 50 | 12 | 21 | 12 | 9 | 0 |
+| high_version | 33 | 25 | 32 | 2 | 7 | 0 |
+| lots | 7 | 4 | 7 | 7 | 3 | 0 |
+| monitor | 17 | 7 | 17 | 0 | 10 | 0 |
+| nominal | 65 | 55 | 61 | 47 | 7 | 1 |
+| noncompliant | 16 | 6 | 11 | 4 | 6 | 1 |
+| pathological | 23 | 7 | 11 | 10 | 5 | 1 |
+| perspective | 35 | 22 | 22 | 15 | 1 | 1 |
+| rotations | 44 | 42 | 44 | 20 | 2 | 0 |
+| shadows | 14 | 11 | 13 | 11 | 2 | 0 |
+| All | 536 | 322 | 390 | 210 | 77 | 9 |
+
+zxing-cpp's 390 is 72.8 %, against the 73.1 % go-qr publishes for it on this set, and go-qr publishes 77.1 % for itself. Counted as codes, zxing-cpp read 900 of the 1,232 and this library, which reads one symbol a call, 322. No read of this library's disagreed with another reader's at the same code, and every text it read was confirmed by another read. On one thread this library took a median 1.3 ms a photograph and 2.2 s for the set, and zxing-cpp 6.2 ms and 6.0 s.
+
+Of the 77 gap photographs, this library did not detect 57, failed Reed-Solomon on 15 and read no format information on 5. In 47 of them the smallest symbol zxing-cpp found is 8 px/module or more. Each was read again scaled, cropped to a symbol zxing-cpp found, and as a grid through zxing-cpp's corners:
+
+- 41 read scaled down by 2, 4 or 8, among them all 10 of `monitor`. 6 more read scaled up by 2.
+- 10 more read cropped to the symbol, 6 of them in `brightness`.
+- 17 more read only as the grid through zxing-cpp's corners, so the frame is the cause there. None of the 7 in `high_version` read through one homography.
+- 3 read in none of these ways, all in `high_version`.
+
+The 26 rendered symbols of the set's `decoding` directory read in all three readers. Nine of its expected texts differ from the symbols only in their line ends.
 
 ## Oracle capability matrix
 

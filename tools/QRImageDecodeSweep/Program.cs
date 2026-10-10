@@ -7,6 +7,8 @@ using QRImageDecodeSweep;
 // Usage: dotnet run -c Release --project tools/QRImageDecodeSweep -- <command>
 //   sweep [qr|micro|rmqr|all] [cases] [outDir]   synthetic renders of every encoder's symbols
 //   corpus [outDir]                              the committed real-image sets
+//   photos <root> [outDir] [--time]              sample sets under root that are not committed (a checkout's black-box sets)
+//   boofcv <detection-dir> [outDir] [--time]     BoofCV's QR photographs, by category, scored without known texts
 //   compare <before.csv> <after.csv>             two result files of the same run, image for image
 //   destination [micro|rmqr|all] [count] [outDir]  what a destination too short costs, render for render
 //   compare-destination <before.csv> <after.csv>  two destination files of the same set, render for render
@@ -62,24 +64,36 @@ switch (command)
             var csv = Path.Combine(outDir, "corpus.csv");
             Csv.Write(csv, Corpus.KeyColumns, rows);
             Console.WriteLine($"wrote {csv}");
-
-            var markdown = new StringBuilder();
-            foreach (var symbology in Symbologies.All)
+            return Finish(Path.Combine(outDir, "corpus.md"), CorpusMarkdown(rows));
+        }
+    case "photos" when args.Length >= 2:
+        {
+            // Sets that are not committed, read from where they are: another reader's checkout, or a download
+            var root = Path.GetFullPath(args[1]);
+            var timed = args.Contains("--time");
+            var rest = args.Skip(2).Where(static a => a != "--time").ToList();
+            var outDir = rest.Count > 0 ? rest[0] : defaultOut;
+            var lineage = new[] { (Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), root) };
+            var rows = Corpus.Run(lineage);
+            if (rows.Count == 0)
             {
-                var part = rows.Where(r => r.Key[0] == symbology).ToList();
-                if (part.Count > 0)
-                    markdown.Append(Report.Table($"{symbology}, real images by rotation", part, rowColumn: 2, splitColumn: 4, withZXingNet: symbology == Symbologies.StandardQr));
+                Console.Error.WriteLine($"no sample set (qrcode-*, microqrcode-*, rmqrcode-*) with images beside .txt files under {root}");
+                return 1;
             }
-            var notes = rows.Where(static r => r.Note is not null).ToList();
-            if (notes.Count > 0)
-            {
-                markdown.AppendLine("## Decoded, with another text");
-                markdown.AppendLine();
-                foreach (var row in notes)
-                    markdown.AppendLine($"- {row.Key[2]}/{row.Key[3]} at {row.Key[4]}: {row.Note}");
-                markdown.AppendLine();
-            }
-            return Finish(Path.Combine(outDir, "corpus.md"), markdown.ToString());
+            var csv = Path.Combine(outDir, "photos.csv");
+            Csv.Write(csv, Corpus.KeyColumns, rows);
+            Console.WriteLine($"wrote {csv}");
+            var markdown = CorpusMarkdown(rows);
+            if (timed)
+                markdown += Corpus.Timing(Corpus.Images(lineage), rounds: 5);
+            return Finish(Path.Combine(outDir, "photos.md"), markdown);
+        }
+    case "boofcv" when args.Length >= 2:
+        {
+            var timed = args.Contains("--time");
+            var rest = args.Skip(2).Where(static a => a != "--time").ToList();
+            var outDir = rest.Count > 0 ? rest[0] : defaultOut;
+            return BoofCv.Run(Path.GetFullPath(args[1]), outDir, timed, Finish);
         }
     case "compare" when args.Length == 3:
         return Compare.Run(args[1], args[2]);
@@ -112,8 +126,30 @@ switch (command)
     case "import-corpus" when args.Length == 3:
         return CorpusImporter.Run(repoRoot, args[1], args[2]);
     default:
-        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] | corpus [outDir] | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
+        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] | corpus [outDir] | photos <root> [outDir] [--time] | boofcv <detection-dir> [outDir] [--time] | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
         return 1;
+}
+
+static string CorpusMarkdown(List<ResultRow> rows)
+{
+    var markdown = new StringBuilder();
+    foreach (var symbology in Symbologies.All)
+    {
+        var part = rows.Where(r => r.Key[0] == symbology).ToList();
+        if (part.Count > 0)
+            markdown.Append(Report.Table($"{symbology}, real images by rotation", part, rowColumn: 2, splitColumn: 4, withZXingNet: symbology == Symbologies.StandardQr));
+    }
+    markdown.Append(Report.ImageLists(rows, static r => $"{r.Key[1]}/{r.Key[2]}/{r.Key[3]} at {r.Key[4]}"));
+    var notes = rows.Where(static r => r.Note is not null).ToList();
+    if (notes.Count > 0)
+    {
+        markdown.AppendLine("## Decoded, with another text");
+        markdown.AppendLine();
+        foreach (var row in notes)
+            markdown.AppendLine($"- {row.Key[2]}/{row.Key[3]} at {row.Key[4]}: {row.Note}");
+        markdown.AppendLine();
+    }
+    return markdown.ToString();
 }
 
 static int Finish(string path, string markdown)
@@ -127,13 +163,17 @@ static int Finish(string path, string markdown)
 
 static string FindRepoRoot()
 {
-    var dir = new DirectoryInfo(AppContext.BaseDirectory);
-    while (dir is not null)
+    // Above the tool's output, or above the working directory for a build whose artifacts live outside the tree
+    foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
     {
-        if (File.Exists(Path.Combine(dir.FullName, "FeatherQR.slnx")))
-            return dir.FullName;
-        dir = dir.Parent;
+        var dir = new DirectoryInfo(start);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "FeatherQR.slnx")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
     }
 
-    throw new InvalidOperationException("Repository root (FeatherQR.slnx) not found above the tool output directory.");
+    throw new InvalidOperationException("Repository root (FeatherQR.slnx) not found above the tool output directory or the working directory.");
 }

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using FeatherQR.Tests;
@@ -29,20 +30,17 @@ internal static class Corpus
 
     public static bool IsImage(string path) => Array.IndexOf(imageExtensions, Path.GetExtension(path).ToLowerInvariant()) >= 0;
 
+    /// <summary>The committed sets, every lineage under <see cref="RelativeRoot"/>.</summary>
     public static List<ResultRow> Run(string repoRoot)
     {
         var root = Path.Combine(repoRoot, RelativeRoot);
-        var images = new List<(string Lineage, string Set, string Path)>();
-        foreach (var lineage in Directory.EnumerateDirectories(root).OrderBy(static x => x, StringComparer.Ordinal))
-        {
-            foreach (var set in Directory.EnumerateDirectories(lineage).OrderBy(static x => x, StringComparer.Ordinal))
-            {
-                if (SymbologyOf(Path.GetFileName(set)) is null)
-                    continue;
-                images.AddRange(Directory.EnumerateFiles(set).Where(IsImage).OrderBy(static x => x, StringComparer.Ordinal).Select(p => (Path.GetFileName(lineage), Path.GetFileName(set), p)));
-            }
-        }
+        return Run(Directory.EnumerateDirectories(root).OrderBy(static x => x, StringComparer.Ordinal).Select(static lineage => (Path.GetFileName(lineage), lineage)));
+    }
 
+    /// <summary>The images of every sample set (a directory named for its symbology) under each root, each image beside the <c>.txt</c> it encodes. An image with no <c>.txt</c> has nothing to compare and is left out.</summary>
+    public static List<ResultRow> Run(IEnumerable<(string Lineage, string Root)> lineages)
+    {
+        var images = Images(lineages);
         var rows = new ConcurrentBag<(int Order, ResultRow Row)>();
         Parallel.For(0, images.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 2) }, i =>
         {
@@ -70,5 +68,81 @@ internal static class Corpus
             }
         });
         return [.. rows.OrderBy(static r => r.Order).Select(static r => r.Row)];
+    }
+
+    public static List<(string Lineage, string Set, string Path)> Images(IEnumerable<(string Lineage, string Root)> lineages)
+    {
+        var images = new List<(string Lineage, string Set, string Path)>();
+        foreach (var (lineage, root) in lineages)
+        {
+            foreach (var set in Directory.EnumerateDirectories(root).OrderBy(static x => x, StringComparer.Ordinal))
+            {
+                if (SymbologyOf(Path.GetFileName(set)) is null)
+                    continue;
+                images.AddRange(Directory.EnumerateFiles(set).Where(IsImage).Where(static p => File.Exists(Path.ChangeExtension(p, ".txt"))).OrderBy(static x => x, StringComparer.Ordinal).Select(p => (lineage, Path.GetFileName(set), p)));
+            }
+        }
+        return images;
+    }
+
+    /// <summary>
+    /// Each upright image read by this library and by zxing-cpp, one image at a time on one thread, each call timed as the fastest of <paramref name="rounds"/> after one untimed call.
+    /// The accuracy pass runs in parallel and its times are not comparable, so this is a pass of its own.
+    /// </summary>
+    public static string Timing(IReadOnlyList<(string Lineage, string Set, string Path)> images, int rounds)
+    {
+        var decoded = new List<double>();
+        var failed = new List<double>();
+        var zxing = new List<double>();
+        double total = 0, zxingTotal = 0;
+        foreach (var (_, set, path) in images)
+        {
+            var symbology = SymbologyOf(set)!;
+            using var bitmap = SKBitmap.Decode(path) ?? throw new InvalidDataException($"cannot decode {path}");
+            var (luminance, width, height) = Pixels.ToLuminance(bitmap);
+            var image = new Rendered(luminance, width, height, 0);
+            var success = Readers.FeatherQr(symbology, image).Text is not null;
+            Readers.ZXingCpp(symbology, image);
+            var own = Fastest(rounds, () => Readers.FeatherQr(symbology, image));
+            var other = Fastest(rounds, () => Readers.ZXingCpp(symbology, image));
+            (success ? decoded : failed).Add(own);
+            zxing.Add(other);
+            total += own;
+            zxingTotal += other;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("## Timing, upright, one thread");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Fastest of {rounds} calls a reader, after one untimed call, in milliseconds. A decode returned text, whether or not it was the expected one.");
+        sb.AppendLine();
+        sb.AppendLine("| Reader | Images | Median | 90th percentile | Total |");
+        sb.AppendLine("|---|---|---|---|---|");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| FeatherQR, decoded | {decoded.Count:N0} | {Percentile(decoded, 0.5):F3} | {Percentile(decoded, 0.9):F3} | |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| FeatherQR, failed | {failed.Count:N0} | {Percentile(failed, 0.5):F3} | {Percentile(failed, 0.9):F3} | |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| FeatherQR, all | {images.Count:N0} | {Percentile([.. decoded, .. failed], 0.5):F3} | {Percentile([.. decoded, .. failed], 0.9):F3} | {total:F1} |");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"| zxing-cpp (`TryHarder`), all | {zxing.Count:N0} | {Percentile(zxing, 0.5):F3} | {Percentile(zxing, 0.9):F3} | {zxingTotal:F1} |");
+        sb.AppendLine();
+        return sb.ToString();
+    }
+
+    private static double Fastest(int rounds, Action call)
+    {
+        var best = double.MaxValue;
+        for (var i = 0; i < rounds; i++)
+        {
+            var start = Stopwatch.GetTimestamp();
+            call();
+            best = Math.Min(best, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+        }
+        return best;
+    }
+
+    private static double Percentile(List<double> values, double fraction)
+    {
+        if (values.Count == 0)
+            return 0;
+        var sorted = values.Order().ToList();
+        return sorted[Math.Min(sorted.Count - 1, (int)(fraction * sorted.Count))];
     }
 }
