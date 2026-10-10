@@ -656,4 +656,105 @@ public class TypeShapeTest
                 .Because($"IconData.{property.Name} must be init-only");
         }
     }
+
+    private const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+
+    // Func<Type>, for the reason on GeneratorOptionTypes.
+    public static IEnumerable<Func<Type>> GeneratorOptionStructs()
+    {
+        yield return () => typeof(QRCodeGeneratorOptions);
+        yield return () => typeof(MicroQRCodeGeneratorOptions);
+        yield return () => typeof(RmQRCodeGeneratorOptions);
+    }
+
+    private static bool IsReadOnly(IEnumerable<CustomAttributeData> attributes)
+        => attributes.Any(a => a.AttributeType.Name == "IsReadOnlyAttribute");
+
+    // Every exported struct a caller may assign to: not an enum, and not declared `readonly`.
+    private static Type[] SettableStructs() => new[] { typeof(QRCodeData).Assembly, typeof(IconData).Assembly }
+        .SelectMany(a => a.GetExportedTypes())
+        .Where(t => t.IsValueType && !t.IsEnum && !IsReadOnly(t.CustomAttributes))
+        .OrderBy(t => t.FullName, StringComparer.Ordinal)
+        .ToArray();
+
+    /// <summary>
+    /// The three generator options are the only structs a caller may assign to, member by
+    /// member, after building one. Every other exported struct is <c>readonly</c>.
+    /// </summary>
+    /// <remarks>
+    /// A struct is copied when it is passed or stored, so a setter on one changes the
+    /// caller's own variable and nothing the library holds, and an object initializer over
+    /// <c>set</c> accessors compiles at every language version where <c>init</c> needs C# 9.
+    /// That is why these three are settable. It is a decision made for them and not a
+    /// default: a new struct that is not <c>readonly</c> fails here until it is added on
+    /// purpose.
+    /// </remarks>
+    [Test]
+    public async Task GeneratorOptions_AreTheOnlyStructsACallerAssignsTo()
+    {
+        await Assert.That(SettableStructs().Select(t => t.Name))
+            .IsEquivalentTo(
+                [nameof(MicroQRCodeGeneratorOptions), nameof(QRCodeGeneratorOptions), nameof(RmQRCodeGeneratorOptions)],
+                CollectionOrdering.Matching);
+    }
+
+    /// <summary>
+    /// Every option of the three generator options has a plain setter, not an <c>init</c>
+    /// accessor.
+    /// </summary>
+    /// <remarks>
+    /// An <c>init</c> accessor cannot be assigned below C# 9, so an <c>init</c>-only option
+    /// is reachable there only through a constructor parameter, and a constructor that has
+    /// to list every option changes its signature under every compiled caller whenever one
+    /// is added. A sweep, so the next option is covered without a case of its own.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(GeneratorOptionStructs))]
+    public async Task GeneratorOptions_EveryOptionHasAPlainSetter(Type type)
+    {
+        foreach (var property in type.GetProperties(Instance))
+        {
+            var setter = property.SetMethod;
+            await Assert.That(setter is { IsPublic: true }).IsTrue()
+                .Because($"{type.Name}.{property.Name} must be settable");
+            await Assert.That(setter!.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.Name == "IsExternalInit")).IsFalse()
+                .Because($"{type.Name}.{property.Name} must be a set accessor, which every language version can assign");
+        }
+    }
+
+    /// <summary>
+    /// On a struct a caller may assign to, every instance member except a property's setter
+    /// is <c>readonly</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The generators take their options by <c>in</c>. The compiler copies a struct before
+    /// it calls a member that is not <c>readonly</c> through such a reference, so one getter
+    /// without the modifier costs a copy in every method that reads it, and takes
+    /// <c>readonly</c> off the generated <c>ToString</c> and <c>PrintMembers</c> with it.
+    /// A <c>readonly struct</c> cannot make that mistake, which is what these three gave up
+    /// to be settable.
+    /// </para>
+    /// <para>
+    /// IDE0251 refuses the same mistake at build time in the two shipping projects. This
+    /// states the rule for a build that did not run the analyzer, and for both assemblies:
+    /// <see cref="GeneratorOptions_AreTheOnlyStructsACallerAssignsTo"/> says which structs
+    /// the sweep finds.
+    /// </para>
+    /// </remarks>
+    [Test]
+    public async Task SettableStruct_EveryMemberButASetterIsReadOnly()
+    {
+        var offenders = new List<string>();
+        foreach (var type in SettableStructs())
+        {
+            var setters = type.GetProperties(Declared).Select(p => p.SetMethod).Where(m => m is not null).ToHashSet();
+            offenders.AddRange(type.GetMethods(Declared)
+                .Where(m => !setters.Contains(m) && !IsReadOnly(m.CustomAttributes))
+                .Select(m => $"{type.Name}.{m.Name}"));
+        }
+
+        await Assert.That(offenders).IsEmpty()
+            .Because("a member that is not readonly makes the compiler copy the struct when it is read through `in`");
+    }
 }

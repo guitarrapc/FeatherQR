@@ -25,7 +25,7 @@ internal ref struct BitWriter
     /// <summary>
     /// Current bit position in the buffer.
     /// </summary>
-    public int BitPosition => _bytePosition * 8 + _accumulatorBits;
+    public readonly int BitPosition => _bytePosition * 8 + _accumulatorBits;
 
     /// <summary>
     /// Number of bytes written (rounded up to nearest byte)
@@ -33,7 +33,7 @@ internal ref struct BitWriter
     /// <remarks>
     /// If written 9 bits, this will be 2
     /// </remarks>
-    public int ByteCount => _bytePosition + (_accumulatorBits + 7) / 8;
+    public readonly int ByteCount => _bytePosition + (_accumulatorBits + 7) / 8;
 
     public BitWriter(Span<byte> buffer)
     {

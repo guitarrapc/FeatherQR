@@ -1,6 +1,5 @@
 #if NET8_0_OR_GREATER
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 
 namespace FeatherQR.Internals;

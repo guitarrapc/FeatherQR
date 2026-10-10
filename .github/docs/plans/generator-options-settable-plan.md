@@ -128,8 +128,8 @@ Consumer compilation, measured from a consumer project against the netstandard2.
 | Phase | Content | Exit |
 |---|---|---|
 | 0 | This plan, its research file, D13 and the Phase 3c row of the 2.0.0 plan, the index | Done 2026-10-10 |
-| 1 | Build enforcement: IDE0251 an error for every C# file, `EnforceCodeStyleInBuild` on the two shipping projects, the 27 unused `using` lines removed, `readonly` on the seven members the rule names | The two projects build without a warning on four target frameworks, and the solution builds as before. Every method body of both assemblies equals the commit before. It changes no API, so it can merge on its own |
-| 2 | Tests first: the assignment classes, the rule that names the three structs, and the sweep | The first two fail against today's structs for the stated reason (no setter, no struct that is not `readonly`). The sweep has nothing to check yet |
+| 1 | Build enforcement: IDE0251 an error for every C# file, `EnforceCodeStyleInBuild` on the two shipping projects, the 27 unused `using` lines removed, `readonly` on the seven members the rule names | Done 2026-10-10. The two projects build without a warning on four target frameworks, and the solution builds as before. Every method body of both assemblies equals the commit before. It changes no API, so it can merge on its own |
+| 2 | Tests first: the assignment classes, the rule that names the three structs, and the sweep | Done 2026-10-10. The first two fail against today's structs for the stated reason (no setter, no struct that is not `readonly`). The sweep has nothing to check yet |
 | 3 | The accessors: `record struct`, `set`, `readonly` on the five getters. The constructors stay for this step, so that method bodies can be compared byte for byte | Phase 2's tests pass. Every method body of both assemblies equals the commit before, on four target frameworks. Each planted fault is refused twice: the build fails with IDE0251, and with code-style enforcement off for the run a shape rule fails, through `tools/mutation_check.cs`. Encode benchmarks within noise |
 | 4 | The constructors removed. `TypeShapeTest`'s constructor rules narrowed to `init`-only members, which leaves `IconData`. `tools/decode_figures.cs` moved to initializers. The approved API listing and the Playground API page | The full suite passes on both target frameworks. A consumer project at C# 7.3 sets every option. The listing diff is the accessors, the struct kind and the three constructors |
 | 5 | The documents below, then this plan folded into the specs and deleted with its research file | D13 and Phase 3c of the 2.0.0 plan marked done |
@@ -185,3 +185,27 @@ Lessons:
 
 - IDE0005 reports one diagnostic for a run of unused `using` lines, so 17 reported lines were 27. The count came from removing the reported lines and building again until none was left.
 - IDE0251 cascades. A member that only reads a property becomes eligible once that property is `readonly`, so four reported members were six.
+
+### Phase 1, build enforcement (2026-10-10)
+
+Done. IDE0251 is an error in `.editorconfig`, and `FeatherQR` and `FeatherQR.SkiaSharp` enforce code style when they build. The 27 unused `using` lines are gone from 13 files, with the two conditional blocks that had nothing left in them. Seven members are `readonly`: `BitPosition` and `HasBits` of `BitReader`, `BitPosition` and `ByteCount` of `BitWriter` and of `QRBinaryEncoder`, and `Decode` of a private struct in `RegionalRetryTest`.
+
+- Red first. With the rule on and nothing else changed, the build failed with IDE0251 on the four `BitReader` and `BitWriter` members and gave 36 IDE0005 warnings.
+- The two projects build without a warning on four target frameworks. The solution builds with the 15 warnings it had before, none of them from a code-style rule.
+- Every method body of both assemblies equals the commit before, on four target frameworks.
+- The approved API listings are unchanged.
+- In a one-off build with code style forced on for every project, IDE0251 reports nothing in the solution.
+- The full suite passes: 38,080 tests, both target frameworks.
+
+Benchmarks: not run, no method body changed.
+
+### Phase 2, tests first (2026-10-10)
+
+Done. `TypeShapeTest` has three new rules and `GeneratorOptionsAssignmentTest` is new. All of it is red or idle against today's structs, for the reasons the plan gives.
+
+- `GeneratorOptions_AreTheOnlyStructsACallerAssignsTo` fails. The sweep finds no struct that is not `readonly` and expects the three.
+- `GeneratorOptions_EveryOptionHasAPlainSetter` fails on each of the three structs, because every option is `init`-only. The plan did not list this rule. It states decision 1 for every option, so that one added later with `init` fails without a case of its own.
+- `SettableStruct_EveryMemberButASetterIsReadOnly` passes with nothing to check.
+- `GeneratorOptionsAssignmentTest` does not compile: CS8852 at each of its 49 assignments, and no other error. It writes each of the 20 options by assignment, by initializer and by `with`, once with a value and once with the default named. It assigns every option in turn in both orders, puts `MaskPattern` on both sides of each bound by every route, and checks that an assignment reaches one variable and no copy of it.
+
+The test project does not build until Phase 3.

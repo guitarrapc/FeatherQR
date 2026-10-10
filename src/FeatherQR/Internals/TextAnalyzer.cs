@@ -1,10 +1,8 @@
 #if NET5_0_OR_GREATER
 #define SIMD_SUPPORTED
-using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 #endif
 #if NET8_0_OR_GREATER
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.Wasm;
 #endif
