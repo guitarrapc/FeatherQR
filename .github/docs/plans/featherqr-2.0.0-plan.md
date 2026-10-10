@@ -1287,3 +1287,13 @@ Done. `tools/check_public_api.cs` and `tools/public_api.cs` took a property's ac
 Lesson: the listing is read as source, so each modifier has to come from the member it belongs to. This is the second time a property was printed from less than both accessors. The first printed `static` and none of `abstract`, `virtual` and `override`.
 
 No library code changed.
+
+### A leftover actual file no longer fails the golden report (2026-10-11)
+
+Done. `QRCodeVisualCompatibilityTest` writes what it rendered to a file ending in `.actual.pixels`, beside the sample, when a comparison fails, and the file stays in the test output directory. `GenerateGoldenFilesReport` searched for `*.pixels`, took that file for a golden one and failed with `FormatException` on its name, where `0.actual` stood for the ECI number. Every later run failed there until the file was deleted, a run of the unchanged tree included. The report now leaves out names with that ending, and the test and the report take the ending from one place. A test plants such a file beside a sample in a temporary directory. It failed with that exception before the change and passes after it. With a leftover planted in the net10.0 output directory the class passes, and the full suite passes with 38,148 tests. The review of the settable options met it, when a planted fault failed a comparison and the runs after it failed in the report.
+
+Found beside it and left for its own change: the sixteen inputs of that class that are not ASCII are mojibake in the source, on `main` too, for example `縺薙ｓ縺ｫ縺｡縺ｯ` where the committed sample is named `こんにちは`. Their sample names match none of the sixteen committed samples with such names, so in a fresh output directory each of those cases writes its own sample on the first run and passes.
+
+Lesson: a file a failing test leaves behind is input to the next run, so a reader that searches a directory has to say which files it means.
+
+No library code changed.
