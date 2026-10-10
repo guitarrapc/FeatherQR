@@ -163,6 +163,15 @@ In the clean copy, IDE0251 was set to an error for `[*.cs]`, which there is ever
 
 With the 27 lines removed and these six members `readonly`, every method body of both assemblies on all four target frameworks equals the set variant.
 
+### The whole solution
+
+A copy of the tracked tree, 20 projects, built with `EnforceCodeStyleInBuild=true` on every project.
+
+- IDE0251, set to a warning for `[*.cs]`, reports five members: the four of `BitReader` and `BitWriter` above, and `RecordingAttempt.Decode`, a method of a private struct in `RegionalRetryTest`. The cascade was not followed in the tests.
+- The file-based tools under `tools/` are outside the solution. They declare three structs, all `readonly`, so the rule has nothing to report there.
+- IDE0005 needs `GenerateDocumentationFile`. Each of the 17 projects without it warns `EnableGenerateDocumentationFile`, and `FeatherQR.AotAnalysis`, which treats warnings as errors, then fails to build.
+- IDE0052 reports `Version1` to `Version4` of `SimpleEncode` in the benchmark project.
+
 ### A consumer reading through read-only locations
 
 The C# 7.3 consumer and the same source compiled at the SDK default read two getters through a `static readonly` field and through an `in` parameter, for both struct kinds. Each method has no local and the same length for both kinds at both language versions (22 bytes through the field, 14 through the parameter). So the current compiler does not copy a struct with `readonly` getters, whatever `LangVersion` says.
@@ -186,6 +195,5 @@ The C# 7.3 consumer and the same source compiled at the SDK default read two get
 - Benchmarks. The method bodies are equal, so no difference is expected, and the real change measures it.
 - A compiler from before C# 8, which does not know `readonly` members and would copy the struct in the consumer's own code.
 - IDE0251 in an editor without `EnforceCodeStyleInBuild`.
-- A section of `.editorconfig` scoped to the two projects by path. The measurement used `[*.cs]` in a copy that holds only those projects, and the repository's `.editorconfig` also covers the test, tool, benchmark and sample projects.
-- The build workflow and the Playground publish with code style enforced.
+- The build workflow and the Playground publish with code style enforced on the two shipping projects.
 - The `field` keyword for `MaskPattern`, which would leave `QuietZoneSize` as the only hand-written getter.

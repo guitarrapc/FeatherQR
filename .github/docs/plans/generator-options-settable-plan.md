@@ -52,7 +52,8 @@ The compiler copies a struct only when a member that is not `readonly` is called
 - Without `readonly` on the five getters, 24 generator methods gain a copy on every target framework. The generated `ToString` and `PrintMembers` of the three structs stop being `readonly` too.
 - A reflection rule (on every exported struct that is not `readonly`, every instance member except a setter is `readonly`) passed on the correct build. It reported each of the five getters when their `readonly` was removed, and a planted method, computed property and get/set pair. It passed a planted auto-property.
 - IDE0251 set to an error rejects the same faults at build time and reports nothing on the correct build. It needs `EnforceCodeStyleInBuild`, which also brings the existing IDE0005 warnings into the build: 27 unused `using` lines in 13 files of `FeatherQR`. Removing them changes no method body.
-- Set to an error for every source file of the two shipping projects, IDE0251 asks for `readonly` on six more members, all on the internal `BitReader`, `BitWriter` and `QRBinaryEncoder`. Adding it changes no method body either.
+- Set to an error for every source file of the two shipping projects, IDE0251 asks for `readonly` on six more members, all on the internal `BitReader`, `BitWriter` and `QRBinaryEncoder`. Adding it changes no method body either. Across the whole solution it names one more, a method of a private struct in the tests.
+- Code style enforced in the build of the whole solution is a different matter from this rule. IDE0005 cannot run in the 17 projects that generate no documentation file. Each of them warns about that, and `FeatherQR.AotAnalysis` treats the warning as an error. IDE0052 reports four members of a benchmark class.
 - A miss costs time and not output. The copy is of one option struct, and the getter returns the same value from it.
 
 ### `init` and `set` cannot be exchanged within a major version
@@ -77,7 +78,7 @@ An application compiled against one and run against the other fails with `Missin
 | The three option structs become `record struct`s with `set` accessors, and their five hand-written getters are `readonly` | `IconData`, which keeps `init` and its constructor. It is a class a builder holds by reference, and its `init` has a recorded reason |
 | Their three constructors are removed | `GradientOptions`, `ModuleRect` and the result values, which keep their shapes |
 | `TypeShapeTest`: the constructor rules narrowed to `init`-only members, and two new rules for structs that are not `readonly` | The FNC1 option, which [fnc1-support-plan.md](fnc1-support-plan.md) adds on top of this |
-| IDE0251 as a build error on the two shipping projects: `EnforceCodeStyleInBuild`, the 27 unused `using` lines it brings up removed, `readonly` on the six other members the rule names | A `With…` method for each option. It was considered and is not needed once `set` compiles everywhere |
+| IDE0251 an error for every C# file, enforced in the build of the two shipping projects: `EnforceCodeStyleInBuild` there, the 27 unused `using` lines it brings up removed, `readonly` on the seven other members the rule names | A `With…` method for each option. It was considered and is not needed once `set` compiles everywhere |
 | The approved API listing, the Playground API page, `tools/decode_figures.cs`, the XML docs, the migration guide, the README and the spec | Code style enforced in the build of the test, tool, benchmark and sample projects |
 
 ## What has to stay true
@@ -98,7 +99,7 @@ An application compiled against one and run against the other fails with `Missin
 | 1 | `set` accessors on the three option structs, as its own pull request before FNC1 | Decided 2026-10-10 by the maintainer. What `init` guaranteed is kept by decision 3, and what it cost is the constructor and a break with every later option |
 | 2 | The constructors are removed, not kept beside the setters | Decided 2026-10-10. Kept, each would still have to grow with every new option, which is the break this plan removes. They shipped only in previews |
 | 3 | Two `TypeShapeTest` rules hold the `readonly` guarantee. On an exported struct that is not `readonly`, no instance member but a setter lacks `readonly`. The three option structs are the only such structs | Decided 2026-10-10. The first rule is a sweep, so a later type is covered. The second makes a new settable struct a decision instead of an accident |
-| 4 | IDE0251 as a build error | Decided 2026-10-10: it is part of this plan and comes before the accessors, so that a getter without `readonly` fails the build before any test runs. Recommended scope: every source file of the two shipping projects, not the three option files alone. That needs no list of files to keep up, and it costs `readonly` on six internal members with no method body changed |
+| 4 | IDE0251 as a build error | Decided 2026-10-10: it is part of this plan and comes before the accessors, so that a getter without `readonly` fails the build before any test runs. The rule is an error for every C# file of the repository, so an editor shows it everywhere and no list of files has to be kept up. The build enforces it on the two shipping projects. That costs `readonly` on six internal members, with no method body changed, and on one member in the tests. Code style enforced in the build of the whole solution is left out, because what it adds is IDE0005 and IDE0052 in the other projects and not this rule |
 | 5 | `IconData` keeps `init` and its constructor | Decided 2026-10-10. An `IconData` option added after 2.0.0 meets the constructor problem above, and then takes the form that keeps the old signature without its default values |
 | 6 | The spec's rule for option objects splits by sharing. A reference type the library holds is immutable once built. An option struct is a plain value a caller may assign to | Decided 2026-10-10. It replaces "an option object a caller builds is immutable once built" in [qrcode-symbologies.md](../specs/qrcode-symbologies.md) |
 
@@ -127,7 +128,7 @@ Consumer compilation, measured from a consumer project against the netstandard2.
 | Phase | Content | Exit |
 |---|---|---|
 | 0 | This plan, its research file, D13 and the Phase 3c row of the 2.0.0 plan, the index | Done 2026-10-10 |
-| 1 | Build enforcement: `EnforceCodeStyleInBuild` on the two shipping projects, the 27 unused `using` lines removed, IDE0251 an error for their sources, `readonly` on the six members it names | The two projects build without a warning on four target frameworks. Every method body of both assemblies equals the commit before. It changes no API, so it can merge on its own |
+| 1 | Build enforcement: IDE0251 an error for every C# file, `EnforceCodeStyleInBuild` on the two shipping projects, the 27 unused `using` lines removed, `readonly` on the seven members the rule names | The two projects build without a warning on four target frameworks, and the solution builds as before. Every method body of both assemblies equals the commit before. It changes no API, so it can merge on its own |
 | 2 | Tests first: the assignment classes, the rule that names the three structs, and the sweep | The first two fail against today's structs for the stated reason (no setter, no struct that is not `readonly`). The sweep has nothing to check yet |
 | 3 | The accessors: `record struct`, `set`, `readonly` on the five getters. The constructors stay for this step, so that method bodies can be compared byte for byte | Phase 2's tests pass. Every method body of both assemblies equals the commit before, on four target frameworks. Each planted fault is refused twice: the build fails with IDE0251, and with code-style enforcement off for the run a shape rule fails, through `tools/mutation_check.cs`. Encode benchmarks within noise |
 | 4 | The constructors removed. `TypeShapeTest`'s constructor rules narrowed to `init`-only members, which leaves `IconData`. `tools/decode_figures.cs` moved to initializers. The approved API listing and the Playground API page | The full suite passes on both target frameworks. A consumer project at C# 7.3 sets every option. The listing diff is the accessors, the struct kind and the three constructors |
@@ -176,6 +177,7 @@ Done: the maintainer decided the remaining decisions. The constructors go. Two s
 
 - The IDE0005 warnings that build enforcement brings up are 27 `using` lines in 13 files, and removing them changes no method body.
 - IDE0251 over every source file of the two shipping projects names six more members, and `readonly` on them changes no method body.
+- Across the whole solution the rule names one more member, in the tests. The maintainer accepted either scope. The rule is set for every C# file, and the build enforces it on the two shipping projects, because code style in every project's build brings IDE0005 and IDE0052 work that has nothing to do with the option structs.
 
 No code changed.
 
