@@ -706,18 +706,22 @@ public class TypeShapeTest
     /// An <c>init</c> accessor cannot be assigned below C# 9, so an <c>init</c>-only option
     /// is reachable there only through a constructor parameter, and a constructor that has
     /// to list every option changes its signature under every compiled caller whenever one
-    /// is added. A sweep, so the next option is covered without a case of its own.
+    /// is added. A sweep, so the next option is covered without a case of its own. An
+    /// option is a property with a setter: one that only computes a value has none to check.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(GeneratorOptionStructs))]
     public async Task GeneratorOptions_EveryOptionHasAPlainSetter(Type type)
     {
-        foreach (var property in type.GetProperties(Instance))
+        var options = type.GetProperties(Declared).Where(p => p.SetMethod is not null).ToArray();
+        await Assert.That(options).IsNotEmpty().Because($"{type.Name} has options, so a sweep that finds none is broken");
+
+        foreach (var property in options)
         {
-            var setter = property.SetMethod;
-            await Assert.That(setter is { IsPublic: true }).IsTrue()
-                .Because($"{type.Name}.{property.Name} must be settable");
-            await Assert.That(setter!.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.Name == "IsExternalInit")).IsFalse()
+            var setter = property.SetMethod!;
+            await Assert.That(setter.IsPublic).IsTrue()
+                .Because($"{type.Name}.{property.Name} must be settable by a caller");
+            await Assert.That(setter.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.Name == "IsExternalInit")).IsFalse()
                 .Because($"{type.Name}.{property.Name} must be a set accessor, which every language version can assign");
         }
     }

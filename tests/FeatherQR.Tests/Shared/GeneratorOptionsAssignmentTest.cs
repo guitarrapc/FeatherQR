@@ -149,7 +149,11 @@ public class GeneratorOptionsAssignmentTest
     private static async Task CheckEveryOption<T>(OptionCase<T>[] cases, T everyOptionSet) where T : struct
     {
         // A case for every option, so an option added later fails here until it has one.
-        var options = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => p.Name).Order(StringComparer.Ordinal);
+        // An option is a property a caller can set; one that only computes a value needs no case.
+        var options = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.SetMethod is { IsPublic: true })
+            .Select(p => p.Name)
+            .Order(StringComparer.Ordinal);
         await Assert.That(cases.Select(c => c.Name).Order(StringComparer.Ordinal)).IsEquivalentTo(options, CollectionOrdering.Matching);
 
         foreach (var c in cases)

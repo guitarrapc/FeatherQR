@@ -192,7 +192,7 @@ The C# 7.3 consumer and the same source compiled at the SDK default read two get
 
 ## Not measured
 
-- Benchmarks. The method bodies are equal, so no difference is expected, and the real change measures it.
+- Benchmarks. The method bodies are equal, so no difference is expected. Phase 3 compared the JIT's listings before and after and found them identical (the plan's progress log).
 - A compiler from before C# 8, which does not know `readonly` members and would copy the struct in the consumer's own code.
 - IDE0251 in an editor without `EnforceCodeStyleInBuild`.
 - The build workflow and the Playground publish with code style enforced on the two shipping projects.

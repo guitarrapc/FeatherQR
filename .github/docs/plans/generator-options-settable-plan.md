@@ -130,8 +130,8 @@ Consumer compilation, measured from a consumer project against the netstandard2.
 | 0 | This plan, its research file, D13 and the Phase 3c row of the 2.0.0 plan, the index | Done 2026-10-10 |
 | 1 | Build enforcement: IDE0251 an error for every C# file, `EnforceCodeStyleInBuild` on the two shipping projects, the 27 unused `using` lines removed, `readonly` on the seven members the rule names | Done 2026-10-10. The two projects build without a warning on four target frameworks, and the solution builds as before. Every method body of both assemblies equals the commit before. It changes no API, so it can merge on its own |
 | 2 | Tests first: the assignment classes, the rule that names the three structs, and the sweep | Done 2026-10-10. The first two fail against today's structs for the stated reason (no setter, no struct that is not `readonly`). The sweep has nothing to check yet |
-| 3 | The accessors: `record struct`, `set`, `readonly` on the five getters. The constructors stay for this step, so that method bodies can be compared byte for byte | Phase 2's tests pass. Every method body of both assemblies equals the commit before, on four target frameworks. Each planted fault is refused twice: the build fails with IDE0251, and with code-style enforcement off for the run a shape rule fails, through `tools/mutation_check.cs`. Encode benchmarks within noise |
-| 4 | The constructors removed. `TypeShapeTest`'s constructor rules narrowed to `init`-only members, which leaves `IconData`. `tools/decode_figures.cs` moved to initializers. The approved API listing and the Playground API page | The full suite passes on both target frameworks. A consumer project at C# 7.3 sets every option. The listing diff is the accessors, the struct kind and the three constructors |
+| 3 | The accessors: `record struct`, `set`, `readonly` on the five getters. The constructors stay for this step, so that method bodies can be compared byte for byte | Done 2026-10-10. Phase 2's tests pass. Every method body of both assemblies equals the commit before, on four target frameworks. Each planted fault is refused twice: the build fails with IDE0251, and with code-style enforcement off for the run a shape rule fails, through `tools/mutation_check.cs`. Encode benchmarks within noise, which the JIT's identical listings stand in for (see the log) |
+| 4 | The constructors removed. `TypeShapeTest`'s constructor rules narrowed to `init`-only members, which leaves `IconData`. `tools/decode_figures.cs` moved to initializers. The approved API listing, accepted in Phase 3 for the accessors, again for the constructors. The Playground API page | The full suite passes on both target frameworks. A consumer project at C# 7.3 sets every option. The listing diff is the accessors, the struct kind and the three constructors |
 | 5 | The documents below, then this plan folded into the specs and deleted with its research file | D13 and Phase 3c of the 2.0.0 plan marked done |
 
 ## Documents to change
@@ -209,3 +209,22 @@ Done. `TypeShapeTest` has three new rules and `GeneratorOptionsAssignmentTest` i
 - `GeneratorOptionsAssignmentTest` does not compile: CS8852 at each of its 49 assignments, and no other error. It writes each of the 20 options by assignment, by initializer and by `with`, once with a value and once with the default named. It assigns every option in turn in both orders, puts `MaskPattern` on both sides of each bound by every route, and checks that an assignment reaches one variable and no copy of it.
 
 The test project does not build until Phase 3.
+
+### Phase 3, the accessors (2026-10-10)
+
+Done. The three option structs are `record struct`s with `set` accessors, and their five hand-written getters are `readonly`. The constructors are still there, with documentation that still gives `init` as their reason. Phase 4 removes both.
+
+- Phase 2's tests pass, and the full suite with them: 38,114 tests, both target frameworks.
+- Every method body of `FeatherQR` equals the commit before on four target frameworks. `FeatherQR.SkiaSharp` equals it on net8.0 and net10.0. On its two netstandard builds one method differs, `SymbolRenderer.ValidateIcon`, in the number of the `System.Int64` type reference and nothing else, as the investigation found.
+- The planted faults are in [generator-options-settable.tsv](../../../tools/mutants/generator-options-settable.tsv), 19 of them, and all are refused:
+  - The five getters without `readonly` and the three members added without it fail the build with IDE0251. With code style off for the run, `SettableStruct_EveryMemberButASetterIsReadOnly` catches each, and for seven of the eight it is the only test that does.
+  - An option put back on `init` stops the test project compiling, with CS8852 in the assignment tests.
+  - The four loosened `MaskPattern` bounds, the four setters that write another member and the two that store the value where the offset belongs are each caught by `GeneratorOptionsAssignmentTest`, among other tests.
+- The approved API listing changed by 23 lines, the three struct lines and the 20 accessors. It was accepted here and not in Phase 4, so that the listing check passes at this step.
+
+Benchmarks: not run. The JIT's output was compared instead. One driver, built once, called every generator entry point of the three symbologies with the option shapes the encode route branches on, against the library before and after, with tiered compilation off. The two listings are byte-identical: 334 methods, 267 of them in `FeatherQR`, all at full optimization. Timing two builds that compile to the same machine code would measure noise.
+
+Lessons:
+
+- A build rule hides the test behind it. With IDE0251 an error, a fault never reaches the shape rule, so what the rule catches was measured with code style off for the run.
+- Writing the faults found a flaw in two of the new tests before any ran. Both swept every property, and would have demanded a setter and a test case for a property that only computes a value. They now sweep the properties that have a setter.

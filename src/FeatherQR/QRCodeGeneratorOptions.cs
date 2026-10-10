@@ -8,7 +8,7 @@ namespace FeatherQR;
 /// Standard QR specific rather than shared: the three generators agree on almost nothing.
 /// <see cref="Version"/> is a different type in each, <see cref="QuietZoneSize"/> has a different specified default in each, Micro QR has no ECI, and rMQR carries fit options that mean nothing here.
 /// </remarks>
-public readonly record struct QRCodeGeneratorOptions
+public record struct QRCodeGeneratorOptions
 {
     /// <summary>ISO/IEC 18004 quiet zone for Standard QR, and the default the 1.1.1 parameter lists applied.</summary>
     internal const int DefaultQuietZone = 4;
@@ -17,9 +17,9 @@ public readonly record struct QRCodeGeneratorOptions
     // caller choice that cannot double as "unset"). An offset rather than a value+1 sentinel
     // keeps the canonical form unique, so the generated equality does not report two
     // identical option sets as different.
-    private readonly int _quietZoneSizeOffset;
+    private int _quietZoneSizeOffset;
 
-    private readonly int? _maskPattern;
+    private int? _maskPattern;
 
     /// <summary>
     /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
@@ -69,20 +69,20 @@ public readonly record struct QRCodeGeneratorOptions
     /// Character encoding declaration.
     /// The default auto-detects ASCII (no ECI), ISO-8859-1 (assignment 3) or UTF-8 (assignment 26) from the content, and with <see cref="AllowKanji"/> Kanji mode (no ECI) for text JIS X 0208 holds.
     /// </summary>
-    public EciMode EciMode { get; init; }
+    public EciMode EciMode { get; set; }
 
     /// <summary>
     /// Include a UTF-8 byte order mark.
     /// Ignored unless the content is written as UTF-8 in Byte mode; asking for one keeps text that <see cref="AllowKanji"/> would write in Kanji mode in UTF-8.
     /// When a BOM would be written, <see cref="QRSegmentation.Optimal"/> emits the single-mode stream instead of a split (the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text).
     /// </summary>
-    public bool Utf8Bom { get; init; }
+    public bool Utf8Bom { get; set; }
 
     /// <summary>
     /// The versions the generator may choose from.
     /// Defaults to <see cref="QRVersionRange.Any"/>; an <c>int</c> or <c>int?</c> converts implicitly, so <c>Version = 15</c> pins one and a <c>null</c> means automatic.
     /// </summary>
-    public QRVersionRange Version { get; init; }
+    public QRVersionRange Version { get; set; }
 
     /// <summary>
     /// Quiet zone width in modules.
@@ -90,8 +90,8 @@ public readonly record struct QRCodeGeneratorOptions
     /// </summary>
     public int QuietZoneSize
     {
-        get => DefaultQuietZone + _quietZoneSizeOffset;
-        init => _quietZoneSizeOffset = value - DefaultQuietZone;
+        readonly get => DefaultQuietZone + _quietZoneSizeOffset;
+        set => _quietZoneSizeOffset = value - DefaultQuietZone;
     }
 
     /// <summary>
@@ -106,8 +106,8 @@ public readonly record struct QRCodeGeneratorOptions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not 0-7 or <c>null</c>.</exception>
     public int? MaskPattern
     {
-        get => _maskPattern;
-        init
+        readonly get => _maskPattern;
+        set
         {
             if (value is < 0 or > 7)
                 throw new ArgumentOutOfRangeException(nameof(MaskPattern), $"Mask pattern must be 0-7, or null for automatic selection, but was {value}");
@@ -124,7 +124,7 @@ public readonly record struct QRCodeGeneratorOptions
     /// Off by default: a raised level rewrites the format information and can change the chosen mask, so a default of on would silently change every existing symbol.
     /// Sizing is unaffected either way, the buffer size depends only on the version.
     /// </remarks>
-    public bool BoostEccLevel { get; init; }
+    public bool BoostEccLevel { get; set; }
 
     /// <summary>
     /// How the content is split into encoding-mode segments (see <see cref="QRSegmentation"/>).
@@ -132,7 +132,7 @@ public readonly record struct QRCodeGeneratorOptions
     /// <see cref="QRSegmentation.Optimal"/> never selects a larger version, emits the identical bit stream when a split would not shrink the symbol, and defers to the single-mode stream when <see cref="Utf8Bom"/> would actually write a byte order mark.
     /// Size a destination buffer with the same value you encode with.
     /// </summary>
-    public QRSegmentation Segmentation { get; init; }
+    public QRSegmentation Segmentation { get; set; }
 
     /// <summary>
     /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind a 12-bit ECI header.
@@ -151,5 +151,5 @@ public readonly record struct QRCodeGeneratorOptions
     /// Turn it on where the readers are known to read it, an industrial scanner for example, or where the symbol has to be smaller.
     /// </para>
     /// </remarks>
-    public bool AllowKanji { get; init; }
+    public bool AllowKanji { get; set; }
 }

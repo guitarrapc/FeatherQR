@@ -82,14 +82,14 @@ namespace FeatherQR
         public static int Create(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options = null);
     }
 
-    public readonly struct MicroQRCodeGeneratorOptions : IEquatable<MicroQRCodeGeneratorOptions>
+    public struct MicroQRCodeGeneratorOptions : IEquatable<MicroQRCodeGeneratorOptions>
     {
         public MicroQRCodeGeneratorOptions(MicroQRVersionRange version = null, int quietZoneSize = 2, int? maskPattern = null, MicroQRSegmentation segmentation = 0, bool allowKanji = false);
-        public MicroQRSegmentation Segmentation { get; init; }
-        public MicroQRVersionRange Version { get; init; }
-        public bool AllowKanji { get; init; }
-        public int QuietZoneSize { get; init; }
-        public int? MaskPattern { get; init; }
+        public MicroQRSegmentation Segmentation { get; set; }
+        public MicroQRVersionRange Version { get; set; }
+        public bool AllowKanji { get; set; }
+        public int QuietZoneSize { get; set; }
+        public int? MaskPattern { get; set; }
         public static MicroQRCodeGeneratorOptions Default { get; }
     }
 
@@ -199,17 +199,17 @@ namespace FeatherQR
         public static int Create(ReadOnlySpan<char> textSpan, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null);
     }
 
-    public readonly struct QRCodeGeneratorOptions : IEquatable<QRCodeGeneratorOptions>
+    public struct QRCodeGeneratorOptions : IEquatable<QRCodeGeneratorOptions>
     {
         public QRCodeGeneratorOptions(EciMode eciMode = 0, bool utf8Bom = false, QRVersionRange version = null, int quietZoneSize = 4, int? maskPattern = null, bool boostEccLevel = false, QRSegmentation segmentation = 0, bool allowKanji = false);
-        public EciMode EciMode { get; init; }
-        public QRSegmentation Segmentation { get; init; }
-        public QRVersionRange Version { get; init; }
-        public bool AllowKanji { get; init; }
-        public bool BoostEccLevel { get; init; }
-        public bool Utf8Bom { get; init; }
-        public int QuietZoneSize { get; init; }
-        public int? MaskPattern { get; init; }
+        public EciMode EciMode { get; set; }
+        public QRSegmentation Segmentation { get; set; }
+        public QRVersionRange Version { get; set; }
+        public bool AllowKanji { get; set; }
+        public bool BoostEccLevel { get; set; }
+        public bool Utf8Bom { get; set; }
+        public int QuietZoneSize { get; set; }
+        public int? MaskPattern { get; set; }
         public static QRCodeGeneratorOptions Default { get; }
     }
 
@@ -307,16 +307,16 @@ namespace FeatherQR
         public static int Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = null);
     }
 
-    public readonly struct RmQRCodeGeneratorOptions : IEquatable<RmQRCodeGeneratorOptions>
+    public struct RmQRCodeGeneratorOptions : IEquatable<RmQRCodeGeneratorOptions>
     {
         public RmQRCodeGeneratorOptions(EciMode eciMode = 0, RmQRVersion? version = null, RmQRFitStrategy fitStrategy = 0, RmQRHeight? height = null, int quietZoneSize = 2, RmQRSegmentation segmentation = 0, bool allowKanji = false);
-        public EciMode EciMode { get; init; }
-        public RmQRFitStrategy FitStrategy { get; init; }
-        public RmQRHeight? Height { get; init; }
-        public RmQRSegmentation Segmentation { get; init; }
-        public RmQRVersion? Version { get; init; }
-        public bool AllowKanji { get; init; }
-        public int QuietZoneSize { get; init; }
+        public EciMode EciMode { get; set; }
+        public RmQRFitStrategy FitStrategy { get; set; }
+        public RmQRHeight? Height { get; set; }
+        public RmQRSegmentation Segmentation { get; set; }
+        public RmQRVersion? Version { get; set; }
+        public bool AllowKanji { get; set; }
+        public int QuietZoneSize { get; set; }
         public static RmQRCodeGeneratorOptions Default { get; }
     }
 
