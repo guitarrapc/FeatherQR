@@ -351,3 +351,54 @@ What the next stage starts from: the 40 photographs left in BoofCV's gap, classi
 - In 9 it has all three. In the 4 of `curved` they are the selected triple and the grid fails, on version 1 symbols at 10 to 46 px a module. In the 2 of `lots` the candidate list is full (32) and the triple mixes symbols.
 
 The probe looked at the global positive pass only, so the counts say where to look first, not what each stage will gain.
+
+### ARM64: the branch as it stands (2026-10-11)
+
+Done: the branch at 5b6884c was run on an Apple M2 (osx-arm64, SDK 10.0.401, runtimes 8.0.31 and 10.0.12). Phase 4b is not built, so the halving has no tier to measure yet. What was checked is Phase 3 and the first stage of Phase 4 as they stand, and the figures Phase 4b will be measured against on this build. No code changed, so no read or cost moved.
+
+- The full suite passes on net8.0 and net10.0 in Release (19,141 and 19,235 tests, the counts of Phase 4's first stage), in Release with `DOTNET_EnableArm64Dp=0`, and in Debug (19,055 and 19,149). Of the 569 and 661 skips in Release, 564 and 656 are tests of x64 and WebAssembly tiers, and the other 5 have nothing to check on this build.
+- `tests/FeatherQR.AotAnalysis --simd-class Arm64 --parity` passes as four builds: the JIT, the JIT with `DOTNET_EnableArm64Dp=0`, a default NativeAOT publish and one for `armv8-a,-dotprod`. All 21 parity cases match in each, and both publishes pass the trim and AOT analysis with no warning.
+- `corpus` reads the committed photographs as the record has them, with the same result file in five runs. `sweep all` (six Standard QR encoders, no qrtool, 7 min 27 s on eight cores) returns no text other than the expected one, and this library's column equals the x64 record in every row the records hold: the 23 Standard QR rows of the kinds before the camera, the totals of all three symbologies, and all 24 camera rows as first measured once Standard QR's 7 gained renders are added.
+- Through the netstandard2.0 and netstandard2.1 builds of both packages, put in place of the net10.0 assemblies under the tool, `corpus` writes the same file byte for byte. That runs the Shift_JIS guess on the corpus's photographs and the reduced-scale read of `qrcode-2/13` on the builds no test project targets.
+- Against the library at aa004d5, the build before the reduced-scale search, put under the same tool, `compare` pairs every image with the same pixels and finds the gains of the x64 record and no read lost.
+
+Reads, on this build:
+
+| Set | Before the search | With it | zxing-cpp |
+|---|---|---|---|
+| Committed corpus, Standard QR, four turns | 465 of 548 | 470: `qrcode-2/13` at its four turns and one more turn of `qrcode-4/15` | 489 |
+| Committed corpus, Micro QR and rMQR | 64 of 64 and 12 of 12 | the same | 60 and 12 |
+| Sweep, Standard QR, 57,600 | 54,946 | 54,953: 7 more camera renders (blur 1, barrel 1, noise 3, phone mix 2) | 51,508 |
+| Sweep, Micro QR, 21,600 | 20,450 | the same pixels and the same reads | 14,762 |
+| Sweep, rMQR, 34,560 | 33,149 | the same pixels and the same reads | 8,143 |
+
+Cost (Apple M2, .NET 10 JIT, the fastest of 15 batches in each of three processes, the two builds taken in turn for the multiples). The halving alone on 12 megapixels, beside the table under "The halving's vector tiers":
+
+| Step | M2 | Ryzen 9 7950X3D |
+|---|---|---|
+| Halving, a byte at a time | 2.4 ms | 3.7 ms |
+| Halving, a word at a time (shipped) | 1.3 ms | 1.6 ms |
+| `LuminanceInverter` over the same bytes | 0.28 to 0.47 ms, its 128-bit tier | 0.23 ms, its 256-bit tier |
+
+An image with no symbol, as a multiple of the build before the search:
+
+| Image | M2 | x64 record |
+|---|---|---|
+| 740 px, uniform noise | 1.66 | 1.65 |
+| 740 px, blurred noise | 1.68 | 1.80 |
+| 740 px, a ramp | 1.53 | 1.49 |
+| 12 megapixels, a blurred scene | 1.60 | 1.53 on BoofCV's failing photographs |
+
+The images are this probe's own, not those of the x64 probe, so a row compares a class and not an image. The machine carried other load (a load average of 5), and the cycle counts give the same multiples within 0.02.
+
+The halving's share, its time alone scaled to the pixels of each level over the image's time, is about 5.5 % of the 12-megapixel scene and 7.6 % of the ramp, against the estimates of 6 % and 8 % above. Both are over the 3 % bar on ARM64 too. The word-at-a-time loop takes 2.7 to 4.6 times the inverter's time here, where x64 has 7 times, so a tier has less room on this build.
+
+Not covered: ZXing's photographs and BoofCV's are not on this machine, so `photos` and `boofcv` were not run. linux-arm64 and win-arm64 are CI's legs, and no run exists for this commit. The NativeAOT gate is net10.0 only, so no .NET 8 publish was checked.
+
+Lessons:
+
+- A managed reader's column says whether two machines drew the same images. zxing-cpp's column differs from the x64 record here: 60 of the Micro QR corpus against 59, five Standard QR rows by 1 to 6 renders, three rMQR camera rows by 1 to 3, and the totals of the kinds before the camera by 21 for Micro QR and 26 for rMQR. ZXing.Net's column equals the record in all 23 Standard QR rows, and so does this library's, which points at the native reader's build and not at the renders. The cause was not looked for, and without the x64 result file the pixel digests could not be compared.
+- A skip count is read before a pass is believed. The first run skipped 12 tests more, each saying the core's netstandard builds were older than the source, because building the test project builds the core for its own two frameworks only. Built for every framework, they ran and passed.
+- The tool that compares readers also runs another build of the library. It calls only the public API, so the netstandard assemblies, or an earlier commit's, take the place of the net10.0 ones under it. Phase 3 wrote a probe by hand for the netstandard builds, where `corpus` holds them to 624 reads of real images.
+
+What this leaves open in the records, as found: the corpus gap in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md#where-the-gap-stands) is 27 in its table and 28 in the causes below it, which still list `qrcode-4/15` at 270° that the search now reads. The sweep's zxing-cpp total and reverse for Standard QR are 48,739 and 3,606 at the top of this plan and 48,738 and 3,607 there. This build gave 48,739 and 3,606.
