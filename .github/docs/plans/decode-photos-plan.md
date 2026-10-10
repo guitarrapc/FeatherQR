@@ -29,6 +29,8 @@ The sweep with its default cases and six Standard QR encoders (qrtool was not on
 | The same, four turns | 716 | 606 | 660 | 15 | 5 | 44 |
 | BoofCV `qrcodes_v3`, photographs with an agreed read | 536 | 322 | 390 | 77 | 9 | 0 |
 
+The table is where the plan started. Since Phase 3 the Charset column is 4, 0, 0 and 0, and the first three rows read 465, 162 and 650 (Progress log).
+
 Gap counts images zxing-cpp reads and this library does not get through, and Charset counts images this library decodes with the ISO-8859-1 reading of a Shift_JIS Byte segment. Both readers get the same grey image (SkiaSharp's Gray8 conversion), and a read counts only when the text equals the expected text.
 
 The ZXing set is the one go-qr publishes as photographs its decoder was not tuned on. Through the ZXingCpp package zxing-cpp reads 165 of them upright, the number go-qr published for zxing-cpp 3.1, so the two harnesses agree. go-qr published 166 for itself, 155 for WeChat's reader and 154 for ZBar.
@@ -116,10 +118,10 @@ The records list what was tried and refuted on this decoder ([standardqr-decoder
 | # | Decision | Recommendation |
 |---|---|---|
 | D1 | Which release takes the charset phase | Decided 2026-10-10: 2.0.0. Writing ECI 3 for Latin-1 text that would read as Shift_JIS changes the encoder's default output, which the 2.0.0 plan accepts only in a major (D5 there). The image stages change no output and ship in any 2.x |
-| D2 | The guess rule | Decided 2026-10-10: rules, as zxing-cpp's, to start with. UTF-8 when valid, Shift_JIS when valid and the bytes show Japanese runs, ISO-8859-1 otherwise. Whether all undeclared Byte segments of one symbol take one charset, and whether a Kanji segment in the symbol counts toward Shift_JIS, is settled in Phase 3 against the sets. A scoring model only if the rules misguess a measured case |
-| D3 | Undeclared single-byte text: ISO-8859-1 or Windows-1252 | ISO-8859-1, the standard's default, until a set holds a symbol that needs Windows-1252 |
-| D4 | CP932 extensions (NEC row 13, the IBM rows) | No, until a measured symbol needs one. They report `UnmappedCharacter`, as in Kanji mode |
-| D5 | ECI 20 decode | Yes, through the same table. The scope row in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions) changes with it |
+| D2 | The guess rule | Decided 2026-10-10: rules, as zxing-cpp's, to start with. Settled in Phase 3: UTF-8 when valid, then Shift_JIS when the bytes are well formed and hold three half-width katakana in a row or a byte from 0x80 to 0x9F, then ISO-8859-1. Each Byte segment is resolved on its own, as before, and a Kanji segment beside it is not counted, since no measured symbol needed either. Three of zxing-cpp's clauses are left out and tab counts as text, on the measurement in the Progress log, which the maintainer accepted on 2026-10-10. A scoring model only if the rules misguess a measured case |
+| D3 | Undeclared single-byte text: ISO-8859-1 or Windows-1252 | Decided 2026-10-10 on the Phase 3 measurement: ISO-8859-1, and the rule stays as it is. Of 1,866 Windows-1252 messages with a byte from 0x80 to 0x9F, 345 (338 of them French) now read as Japanese or are refused where they read one character a byte, as in zxing-cpp. Reading Windows-1252 would not help them: a typographic apostrophe before a letter is well formed Shift_JIS under either choice. What would is an exception for a lone pair that begins 0x84 or 0x91 to 0x94 and ends in an ASCII letter, at the cost of a lone kanji with those bytes, which is not measured. It is taken up again when a symbol shows up |
+| D4 | CP932 extensions (NEC row 13, the IBM rows) | Decided 2026-10-10: no. None of the eleven photographs needs one. A pair with no cell is `UnmappedCharacter`, as in Kanji mode, in a declared segment and in a guessed one |
+| D5 | ECI 20 decode | Done in Phase 3 for Standard QR and rMQR, through the Kanji table. The scope row in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions) changed with it |
 | D6 | BoofCV's photographs (`qrcodes_v3.zip`, about 200 MB, licence not stated) | Decided 2026-10-10: never committed. The maintainer downloads them from `https://boofcv.org/notwiki/regression/fiducial/qrcodes_v3.zip`, the tool takes the path, and only numbers enter the records |
 | D7 | ZXing's QR photographs (Apache-2.0) | Decided 2026-10-10: not imported. Of the 179, 30 are pixel for pixel zxing-cpp samples and 49 more are the same photographs re-encoded (same size and name, a mean difference under 15 grey levels), so 100 are new. They are 10.5 MB as PNG and 9.2 MB as lossless WebP, eight to ten times the committed corpus (1.1 MB). `photos` reads them from a ZXing.Net checkout, as BoofCV's are read, and a photograph is committed only when a test needs it, as the five corpus decode tests needed theirs |
 
@@ -128,8 +130,8 @@ The records list what was tried and refuted on this decoder ([standardqr-decoder
 | # | Phase | Contents | Exit |
 |---|---|---|---|
 | 1 | Measure photographs | Done 2026-10-10 (Progress log): the `photos` and `boofcv` commands, the ZXing set read from a checkout (D7), zxing-cpp's samples at 2c3dcfe checked against the import, eight camera kinds drawn by `CameraRenderer`, BoofCV per category with a cause class for each of its 77 gap photographs | A table per set with gap and reverse, a recorded cause for every gap image of the ZXing and zxing-cpp sets, BoofCV per category, and the candidates of the technique table ranked by the reads they are aimed at |
-| 2 | Documented scope from the measurement | The documents in "Documents to change" state the measured envelope on photographs, with no stage added yet | Every place listed says what the measurement shows, and none says "out of scope" for a class the decoder reads |
-| 3 | Charset | D2 to D5. The shared Byte segment decoder, the encoder rule that writes ECI 3 where the guess would fire, ECI 20 decode | The 11 ZXing images and the 44 corpus reads return their texts. A round trip over Latin-1 payloads, including text whose bytes look like half-width katakana, misreads nothing. The guess's rate on foreign Latin-1 symbols is measured and recorded. Micro QR and rMQR share it |
+| 2 | Documented scope from the measurement | Done 2026-10-10 (Progress log): the documents in "Documents to change" state the measured envelope on photographs, with no stage added | Every place listed says what the measurement shows, and none says "out of scope" for a class the decoder reads |
+| 3 | Charset | Done 2026-10-10 (Progress log): the Shift_JIS guess and ECI 20 in the shared Byte segment decoder, and Micro QR writing UTF-8 where its ISO-8859-1 bytes would read as another text. Standard QR and rMQR already declared ECI 3. The rule and its costs were accepted as measured (D2 to D4) | The 11 ZXing images and the 44 corpus reads return their texts. A round trip over Latin-1 payloads, including text whose bytes look like half-width katakana, misreads nothing. The guess's rate on foreign Latin-1 symbols is measured and recorded. Micro QR and rMQR share it |
 | 4 | Image stages | One sub-phase per class Phase 1 ranks, in its order. Each starts from the failing images, finds the stage that loses them (the true-transform column on synthetic kinds, zxing-cpp's corners on photographs), and follows the accuracy-change rules | Each sub-phase's own exit: the reads gained per set, nothing lost, the failure-path multiple, and the test renders with their mechanism switched off |
 | 5 | Fold | Durable results into the decoder records, [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md) and [qrcode-symbologies.md](../specs/qrcode-symbologies.md), the README and XML docs final, this file deleted and the index updated | No completed plan remains |
 
@@ -155,6 +157,7 @@ Phase 2 runs before any stage is built, because today's documents are wrong abou
   - The ECI 20 scope row and the sentence on Kanji mode that says ECI 20 Byte segments need the wider CP932 range.
 - [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md): "Where the gap stands", with the new sets, and the content column, whose Shift_JIS images become reads.
 - The user documents under `docs/` hold no such statement today (checked 2026-10-10). Phase 3 adds the charset behaviour to `docs/migration.md` if D1 puts it in 2.0.0.
+- Every item above was changed in Phase 2 or Phase 3 (Progress log), `docs/migration.md` included. Phase 5 has the final pass.
 
 ## Progress log
 
@@ -201,3 +204,75 @@ Lessons:
 - Most of the gap is finding the symbol, not reading it. The grid through zxing-cpp's corners, one homography and a plain threshold, reads 69 of the 77. What the decoder is behind on in photographs is the search at full size, and in 47 of the 77 a module is 8 pixels or more.
 - "On par on photographs" held on one set and not on the next. On ZXing's set the image-level gap was 4 photographs, and on BoofCV it is 77 of 536. The documents of Phase 2 state the envelope per set and class, not one sentence about photographs.
 - An expected text can be wrong in its line ends. Nine of the 26 rendered symbols in BoofCV's `decoding` directory read as another text in all three readers, CRLF in the symbol against LF in the file.
+
+### Phase 2: the documents say what was measured (2026-10-10)
+
+Done: every place under "Documents to change" that states a scope. The README's Decoders paragraph and its FAQ entry, now headed "Does it read QR codes from images?". The XML docs of the three image decoders and of `MicroQRCodeDecoder`. In [standardqr-decoder.md](../specs/standardqr-decoder.md) the tier table, the first Why bullet and a new [Photographs](../specs/standardqr-decoder.md#photographs) section that gives each set and the classes this library is behind in. A photographs paragraph in the Micro QR and rMQR records, and the status cell in [qrcode-symbologies.md](../specs/qrcode-symbologies.md). No code changed, so no read or cost moved.
+
+Lessons:
+
+- One sentence about photographs is wrong whichever way it leans. A decoder at 162 of 179 on one set and 322 of 536 on the next neither "reads photographs" nor has them "out of scope", so the records give the sets and the classes, and the README names the classes without numbers.
+- A scope sentence is written per symbology from what was measured for it. No rMQR photograph set exists and its camera renders are the only evidence, so its XML doc says tilted, blurred or noisy images and does not say photographs.
+
+### Phase 3: Shift_JIS in Byte segments (2026-10-10)
+
+Done:
+
+- `SegmentDecoders.DecodeBytePayload` reads Shift_JIS, declared by ECI 20 (Standard QR and rMQR) or guessed for a segment with no ECI header that is not valid UTF-8. ASCII stands, the 63 half-width katakana are one range, and pairs go through `ShiftJisKanjiTable`, so no table was added. A pair with no cell is `UnmappedCharacter`, a declared segment that is not well formed is `InvalidBitstream`, and the destination is counted in characters before anything is written. All three symbologies share it.
+- The rule (D2) is zxing-cpp's with three clauses left out and tab counted as text. It is recorded with its costs in [standardqr-decoder.md](../specs/standardqr-decoder.md#decisions), Byte-mode charset heuristic.
+- The encoder needed less than planned. Standard QR and rMQR already write ECI 3 wherever a byte is past ASCII, so the guess never sees their output, and no ECI 3 rule was added. Micro QR has no ECI: text whose ISO-8859-1 bytes the decoder would read as UTF-8 or Shift_JIS is now written as UTF-8, and the planner refuses a Latin-1 run that reads otherwise once a split isolates it. `SegmentDecoders.ResolvesToIso8859_1WhenUnspecified` is the mirror both ask.
+- Tests, written before the code: `ByteSegmentShiftJisTest` (each class of the rule, the cases that must stay ISO-8859-1, ECI 20 in Standard QR and rMQR, another encoder's symbols, this library's own Standard QR and rMQR round trips), `MicroQRUndeclaredCharsetTest` (every pair of characters from U+0080 to U+00FF, alone and between ASCII letters), and `ByteSegmentCharsetParityTest` with the Shift_JIS rule written out a second time. Two tests that used ECI 20 as their unsupported ECI use ECI 4.
+- The full suite passes on net8.0 and net10.0 (19,090 and 19,184 tests). The netstandard2.0 and netstandard2.1 builds, which no test project targets and whose UTF-8 step is other code, pass a probe through the public API: Shift_JIS with and without ECI 20, French and UTF-8 text without one, and the three symbologies' round trips.
+- `tools/QRImageDecodeSweep` pins the pixel buffer and holds the ZXingCpp wrapper's objects through each read ([qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md#lessons-learned)).
+- Documents: the decision row, coverage table and Photographs section of the Standard QR decoder record, the Micro QR and rMQR records and the Micro QR spec map, the scope row and status rule in [qrcode-symbologies.md](../specs/qrcode-symbologies.md), the Micro QR rule in [standardqr-encoder.md](../specs/standardqr-encoder.md#mixed-mode-segmentation), the tables in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md#where-the-gap-stands), the README's encoding FAQ, the decoder XML docs, and two sections in `docs/migration.md`.
+
+Reads:
+
+| Set | Before | After | zxing-cpp |
+|---|---|---|---|
+| ZXing's photographs, upright | 151 of 179 | 162 | 165 |
+| The same, four turns | 606 of 716, 44 with another text | 650, none | 660 |
+| Committed corpus, Standard QR, four turns | 425 of 548, 44 with another text | 465, 4 | 489 |
+| Sweep, 113,760 renders | | the same pixels and the same reads | |
+| BoofCV | 322 of 536 | 322, photograph for photograph | 390 |
+
+The corpus's 4 are `qrcode-2/16` at its four turns, an image of two symbols. This library reads the one the expected text does not name, with the text zxing-cpp gives for it. What is left on ZXing's set upright is four image failures and one read zxing-cpp misses.
+
+The guess on other encoders' symbols, written by ZXing.Net with no ECI header from the .NET SDK's own messages (10.0.301, about 7,600 a language):
+
+| Text | Units | Not read as written | zxing-cpp |
+|---|---|---|---|
+| ISO-8859-1, five languages, messages | 24,555 | 0 | 19 |
+| The same, lines | 25,995 | 0 | 26 |
+| The same, words | 7,156 | 1 | 68 |
+| Shift_JIS, Japanese, messages / lines / runs between ASCII | 7,375 / 7,995 / 11,705 | 0 | 2 / 0 / 0 |
+| Windows-1252 with a byte from 0x80 to 0x9F, messages | 1,866 | 345 turned from one character a byte into Japanese, 21 of them refused | the same 345 |
+
+The one word is `é`, a no-break space and `»`, whose bytes E9 A0 BB are valid UTF-8, read so before this phase as well. With zxing-cpp's three-in-a-row clause this library misread 13 French messages, 18 lines and 13 words more. zxing-cpp's two Japanese messages hold tabs.
+
+Cost (Ryzen 9 7950X3D, .NET 10 JIT, a probe on two pinned cores, the fastest of 600 batches in each of four runs a tree, the trees taken in turn, nanoseconds):
+
+| Operation | Before | After |
+|---|---|---|
+| Micro QR encode, numeric, M2 | 127 to 138 | 126 to 131 |
+| Micro QR encode, ASCII in Byte mode, M4 | 169 to 172 | 170 to 177 |
+| Micro QR encode, `café à Zürich`, M4 | 165 to 168 | 178 to 185 |
+| Micro QR decode, ASCII in Byte mode, M4 | 284 to 287 | 280 to 283 |
+| Micro QR decode, `café à Zürich` | 291 to 299 | 291 to 295 |
+| Standard QR decode, a URL, version 6 | 982 to 1,015 | 992 to 1,019 |
+| Standard QR decode, accented text under ECI 3 | 671 to 705 | 677 to 700 |
+| Standard QR decode, ASCII, version 40 | 15,818 to 16,455 | 16,064 to 16,600 |
+
+One row moved: Micro QR text with a character past ASCII pays about 13 ns for the question it now asks the decoder's rule. The rest are level within the runs' spread. BenchmarkDotNet in process could not settle it that day, its runs of one tree differing by up to 20 % with other sessions on the machine. No allocation was added: `MemoryDiagnoser` reports none on the four span benchmarks run, and `ByteSegmentShiftJisTest` holds the guess and the Shift_JIS reading to none.
+
+Lessons:
+
+- A rule taken from another reader brings that reader's misreads. zxing-cpp's "three double-byte characters in a row" reads French `générée` as kanji, since é before a letter is a well formed pair. A corpus in the other language found it at once (13 of 5,354 French messages), and leaving the clause out lost none of 27,075 Japanese units. "As zxing-cpp's" was where the rule started, and each clause stayed only where a measurement kept it.
+- The corpus was already on the machine. The .NET SDK ships its messages in thirteen languages as resource assemblies, which gave real prose in five ISO-8859-1 languages and Japanese with nothing downloaded.
+- The exit's round trip found a misread older than the guess. Micro QR wrote `Ã©` as C3 A9 and its own decoder returned `é`, under the UTF-8 rule that had been there from the start. The plan had assumed the encoder work was an ECI 3 rule, which Standard QR and rMQR turned out to have already.
+- A new reading can break the inequality behind an early return. The one-pass transcoder could answer "too small" before validating, because UTF-16 units never outnumber UTF-8 bytes or ISO-8859-1 bytes. A Shift_JIS reading needs a character a pair, so that answer now holds only where the guess does not.
+- A conversion at a rarely run call is not inlined, and every call of the method pays for it. The first build decoded a Standard QR Byte symbol 2.5 to 3.5 % slower with nothing new on its path. `Span<byte>` to `ReadOnlySpan<byte>` at the five new cold calls had stayed five calls, the bit-stream decoder's frame grew from 536 to 648 bytes, and its prolog zeroed the frame in a loop. Converting once, where the bytes are read, put the frame at 552 bytes and the times back.
+- A probe times nothing until every operation in it has reached its last tier. Timed after its own warm-up alone, the first operation read 630 ns in both trees against BenchmarkDotNet's 127, because the methods it shares with the others were still instrumented. All operations are warmed, then all are timed.
+- A total that moves between runs of one build is a fault, not noise. zxing-cpp's BoofCV code count read 900, 960, 965 and 964 while every per-photograph figure held, and the cause was this tool's handling of the wrapper's lifetimes. The published 900 was wrong by 75.
+- A residual gets its cause confirmed like any other. The four corpus reads still "another text" were taken for a second symbol, and were checked: zxing-cpp returns two symbols from that image, one with this library's text.
+- A measurement can reopen a decision the plan had closed on a guess. D3 kept ISO-8859-1 "until a set holds a symbol that needs Windows-1252". The same SDK messages hold 1,866 such texts, and the 0x80 to 0x9F clause, the one that reads `100円`, turns 345 of them into Japanese or a refusal. Neither reading is the text, and zxing-cpp does the same, so the rule stands, and D3 was decided again with its numbers.

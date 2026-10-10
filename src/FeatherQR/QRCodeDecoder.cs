@@ -8,7 +8,9 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// Reads Numeric, Alphanumeric, Byte and Kanji mode across all versions and error correction levels.
-/// A Byte segment with no ECI header is read as UTF-8 when the bytes are valid UTF-8 (or carry a BOM), and as ISO-8859-1 otherwise.
+/// A Byte segment is read as its ECI header declares, for ISO-8859-1, UTF-8 and Shift_JIS.
+/// With no ECI header it is read as UTF-8 when the bytes are valid UTF-8 (or carry a BOM), as Shift_JIS when they are well formed Shift_JIS that ISO-8859-1 text would not hold, and as ISO-8859-1 otherwise.
+/// Shift_JIS is read through JIS X 0208, as Kanji mode is.
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire, such as the circled digits CP932 adds, fails the whole QR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
 /// That status is distinct from <see cref="DecodeStatus.UnsupportedContent"/>, which marks a feature this library does not implement, such as FNC1.
 /// </remarks>

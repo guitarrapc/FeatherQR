@@ -115,20 +115,11 @@ internal static class BoofCv
     /// <summary>zxing-cpp with <c>TryHarder</c>, every symbol it finds.</summary>
     private static Read[] ZXingCpp(byte[] luminance, int width, int height)
     {
-        try
+        return Readers.ZXingCpp(global::ZXingCpp.BarcodeFormat.QRCode, luminance, width, height, static r =>
         {
-            var view = new global::ZXingCpp.ImageView(luminance, width, height, global::ZXingCpp.ImageFormat.Lum);
-            var results = new global::ZXingCpp.BarcodeReader { Formats = global::ZXingCpp.BarcodeFormat.QRCode, TryHarder = true }.From(view);
-            return [.. results.Select(static r =>
-            {
-                var p = r.Position;
-                return new Read(r.Text, (p.TopLeft.X + p.TopRight.X + p.BottomRight.X + p.BottomLeft.X) / 4.0, (p.TopLeft.Y + p.TopRight.Y + p.BottomRight.Y + p.BottomLeft.Y) / 4.0);
-            })];
-        }
-        catch
-        {
-            return [];
-        }
+            var p = r.Position;
+            return new Read(r.Text, (p.TopLeft.X + p.TopRight.X + p.BottomRight.X + p.BottomLeft.X) / 4.0, (p.TopLeft.Y + p.TopRight.Y + p.BottomRight.Y + p.BottomLeft.Y) / 4.0);
+        });
     }
 
     /// <summary>ZXing.Net with <c>TryHarder</c>, every symbol it finds; its result points are the finder centres, whose mean lies inside the symbol.</summary>

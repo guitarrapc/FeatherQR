@@ -14,7 +14,7 @@ public enum MicroQRSegmentation
 
     /// <summary>
     /// The mixed-mode split with the fewest total bits. Text JIS X 0208 holds apart from its ASCII characters can be written as Kanji runs beside runs of that ASCII, when <see cref="MicroQRCodeGeneratorOptions.AllowKanji"/> is set and that is the smaller symbol.
-    /// Never selects a larger version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink the symbol, and additionally encodes content that overflows every version in a single mode, unless the minimal-bit plan would be misread on decode (a Latin-1 run the charset heuristic would read as UTF-8), in which case it reports "does not fit" rather than emitting a stream that decodes differently. A U+FEFF inside UTF-8 content never opens a Byte run, where a reader would drop it as a byte order mark: the run opens a character early and keeps it interior.
+    /// Never selects a larger version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream verbatim when a split would not shrink the symbol, and additionally encodes content that overflows every version in a single mode, unless the minimal-bit plan would be misread on decode (a Latin-1 run the charset heuristic would read as UTF-8 or Shift_JIS), in which case it reports "does not fit" rather than emitting a stream that decodes differently. A U+FEFF inside UTF-8 content never opens a Byte run, where a reader would drop it as a byte order mark: the run opens a character early and keeps it interior.
     /// </summary>
     /// <remarks>
     /// Opt-in because it prices candidate versions; the search allocates nothing (Micro QR content never exceeds 35 characters).

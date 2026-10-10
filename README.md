@@ -494,7 +494,7 @@ finally
 
 Use the decoder that matches the expected symbol type. Each decoder in `FeatherQR` accepts generated data, a byte-per-module matrix, or a grayscale luminance span. `FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
 
-Image decoding is intended for screenshots, generated images, and clean scans, including a shading gradient or a soft-edged shadow over part of the symbol. Camera images with strong perspective, hard-edged shadows, or blur are outside its scope.
+Image decoding reads screenshots, generated images, scans and camera photographs, including a rotated, mirrored or tilted symbol and one under a shading gradient or a soft-edged shadow. It is less reliable on photographs with glare, damage, a curved surface or strong lens distortion, and on photographs of a screen.
 
 ```csharp
 using SkiaSharp;
@@ -673,7 +673,7 @@ Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and
 
 Encoding: FeatherQR writes ISO-8859-1 and UTF-8, and Japanese text in Kanji mode (JIS X 0208) when you ask for it with `AllowKanji` (see [Kanji mode for Japanese text](#kanji-mode-for-japanese-text)). Other encodings (e.g. ISO-8859-2, or Shift JIS in Byte mode under ECI 20) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
 
-Decoding reads Kanji mode segments from any encoder. ECI 20 (Shift_JIS) Byte segments are still not read.
+Decoding reads ISO-8859-1, UTF-8 and Shift_JIS (JIS X 0208) text, and Kanji mode segments from any encoder. Where a symbol declares no encoding, the decoder tells the three apart from the bytes. Other encodings are not read: a symbol that declares one is reported as unsupported, and one that declares nothing is read as one of the three.
 
 | Supported | Encoding Mode | Encoding |
 | --- | --- | --- |
@@ -686,9 +686,9 @@ Decoding reads Kanji mode segments from any encoder. ECI 20 (Shift_JIS) Byte seg
 
 No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that FeatherQR outputs SVG only; it does not read or render existing SVG files.
 
-### Any plan to support QR code scanning?
+### Does it read QR codes from images?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, hard-edged shadows, blur) is a computer-vision problem outside this library's scope.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)): screenshots, rendered QR codes, scans and camera photographs, rotated, mirrored or tilted. Photographs are where it fails most often: glare, damage, a curved surface, strong lens distortion, or a symbol photographed off a screen. A failed decode reports a status that says where it stopped.
 
 ### What QR code style provides the best scan reliability?
 

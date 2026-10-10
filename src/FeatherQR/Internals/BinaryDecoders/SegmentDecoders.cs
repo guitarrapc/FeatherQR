@@ -9,20 +9,24 @@ using System.Buffers;
 #if !NET8_0_OR_GREATER
 using System.Text;
 #endif
+using System.Runtime.CompilerServices;
 using FeatherQR.Internals.BinaryEncoders;
 
 namespace FeatherQR.Internals.BinaryDecoders;
 
 /// <summary>
 /// Effective charset of a Byte mode segment.
-/// Standard QR can pin it via an ECI header; Micro QR has no ECI, so it is always <see cref="Unspecified"/> there.
+/// Standard QR and rMQR can pin it via an ECI header; Micro QR has no ECI, so it is always <see cref="Unspecified"/> there.
 /// </summary>
 internal enum ByteSegmentCharset
 {
-    /// <summary>No declared charset: UTF-8 when the payload validates as UTF-8, else ISO-8859-1.</summary>
+    /// <summary>No declared charset: UTF-8 when the payload validates as UTF-8, else Shift_JIS when the bytes give it away, else ISO-8859-1.</summary>
     Unspecified,
     Iso8859_1,
     Utf8,
+
+    /// <summary>ECI 20. Read through the JIS X 0208 cells Kanji mode reads, plus JIS X 0201's half-width katakana.</summary>
+    ShiftJis,
 }
 
 /// <summary>
@@ -177,8 +181,15 @@ internal static class SegmentDecoders
     {
         if (totalBits - reader.BitPosition < count * 8)
             return DecodeStatus.InvalidBitstream;
-        var bytes = byteBuffer.AsSpan(0, count);
-        reader.ReadBytes(bytes);
+        var buffer = byteBuffer.AsSpan(0, count);
+        reader.ReadBytes(buffer);
+
+        // Converted once, here: a conversion at a rarely run call below stays a call and costs every decode its frame
+        ReadOnlySpan<byte> bytes = buffer;
+
+        // Declared Shift_JIS is not tried as UTF-8 first, and EF BB BF in it is no byte order mark
+        if (charset == ByteSegmentCharset.ShiftJis)
+            return DecodeShiftJis(bytes, destination, ref charsWritten);
 
 #if NET8_0_OR_GREATER
         // A UTF-8 BOM (the encoder can emit one with utf8BOM: true) is consumed, not decoded,
@@ -199,7 +210,9 @@ internal static class SegmentDecoders
 
             // Too small for the UTF-8 reading is too small for the ISO-8859-1 one, which needs a char per byte,
             // so this holds before knowing whether the rest of the segment is well formed.
-            if (status == OperationStatus.DestinationTooSmall)
+            // A Shift_JIS reading needs a char per pair, so a segment that turns out to be one is counted below.
+            if (status == OperationStatus.DestinationTooSmall
+                && (hasBom || charset == ByteSegmentCharset.Utf8 || IsValidUtf8(bytes) || !GuessesShiftJis(bytes)))
                 return DecodeStatus.DestinationTooSmall;
         }
 #else
@@ -224,6 +237,10 @@ internal static class SegmentDecoders
             return DecodeUtf8(byteBuffer, bytes.Length == count ? 0 : 3, bytes.Length, destination, ref charsWritten);
 #endif
 
+        // Undeclared and not UTF-8: encoders that write Shift_JIS here leave the ECI header out
+        if (charset == ByteSegmentCharset.Unspecified && GuessesShiftJis(bytes))
+            return DecodeShiftJis(bytes, destination, ref charsWritten);
+
         // ISO-8859-1 → UTF-16 is a pure widening cast
         if (destination.Length - charsWritten < bytes.Length)
             return DecodeStatus.DestinationTooSmall;
@@ -237,11 +254,106 @@ internal static class SegmentDecoders
 
     /// <summary>
     /// Whether the charset resolution above would read a byte segment as UTF-8 when no charset is declared: the validity heuristic, or a leading BOM (which is consumed).
-    /// The mixed-mode planners ask this to refuse plans whose Latin-1 runs would be misread once a split isolates them from their disambiguating neighbours; it must mirror <see cref="DecodeBytePayload"/> exactly, which is why it lives here rather than beside a planner.
+    /// The first half of <see cref="ResolvesToIso8859_1WhenUnspecified"/>.
     /// </summary>
     public static bool ResolvesToUtf8WhenUnspecified(ReadOnlySpan<byte> bytes)
         => IsValidUtf8(bytes)
             || (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
+
+    /// <summary>
+    /// Whether the charset resolution above reads an undeclared byte segment as ISO-8859-1, which is neither of its other two readings.
+    /// The Micro QR generator and its mixed-mode planner ask this before they write ISO-8859-1 bytes with no ECI header to declare them, the whole text or a run a split isolates from its disambiguating neighbours.
+    /// It must mirror <see cref="DecodeBytePayload"/> exactly, which is why it lives here rather than beside them.
+    /// </summary>
+    public static bool ResolvesToIso8859_1WhenUnspecified(ReadOnlySpan<byte> bytes)
+        => !ResolvesToUtf8WhenUnspecified(bytes) && !GuessesShiftJis(bytes);
+
+    /// <summary>
+    /// Whether an undeclared segment that is not UTF-8 is read as Shift_JIS: its bytes are well formed Shift_JIS with no control character but tab, CR and LF,
+    /// and hold a run of three half-width katakana, or a byte from 0x80 to 0x9F, which ISO-8859-1 text does not.
+    /// </summary>
+    private static bool GuessesShiftJis(ReadOnlySpan<byte> bytes)
+    {
+        var katakanaRun = 0;
+        var telling = false;
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            int b = bytes[i];
+            if (b < 0x80)
+            {
+                // Binary data, not text
+                if (b < 0x20 && b != '\t' && b != '\r' && b != '\n')
+                    return false;
+                katakanaRun = 0;
+            }
+            else if (b is >= 0xA1 and <= 0xDF)
+            {
+                telling |= ++katakanaRun >= 3;
+            }
+            else
+            {
+                if (!IsShiftJisPair(bytes, i))
+                    return false;
+                katakanaRun = 0;
+
+                // Pairs alone tell nothing: é before a letter is one, and French has three in a row
+                telling |= b <= 0x9F || bytes[i + 1] is >= 0x80 and <= 0x9F;
+                i++;
+            }
+        }
+        return telling;
+    }
+
+    /// <summary>A lead byte at <paramref name="index"/> with a trail byte after it.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsShiftJisPair(ReadOnlySpan<byte> bytes, int index)
+        => bytes[index] is (>= 0x81 and <= 0x9F) or (>= 0xE0 and <= 0xEF)
+            && index + 1 < bytes.Length
+            && bytes[index + 1] is >= 0x40 and <= 0xFC and not 0x7F;
+
+    /// <summary>
+    /// Shift_JIS to UTF-16: ASCII as it stands, JIS X 0201's half-width katakana, and pairs through the JIS X 0208 cells Kanji mode reads.
+    /// A segment that is not well formed is <see cref="DecodeStatus.InvalidBitstream"/>, and a pair with no cell is <see cref="DecodeStatus.UnmappedCharacter"/>, as an unmapped Kanji value is.
+    /// </summary>
+    private static DecodeStatus DecodeShiftJis(ReadOnlySpan<byte> bytes, Span<char> destination, ref int charsWritten)
+    {
+        var characters = 0;
+        for (var i = 0; i < bytes.Length; i++, characters++)
+        {
+            int b = bytes[i];
+            if (b < 0x80 || b is >= 0xA1 and <= 0xDF)
+                continue;
+            if (!IsShiftJisPair(bytes, i))
+                return DecodeStatus.InvalidBitstream;
+            i++;
+        }
+        if (destination.Length - charsWritten < characters)
+            return DecodeStatus.DestinationTooSmall;
+
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            int b = bytes[i];
+            if (b < 0x80)
+            {
+                destination[charsWritten++] = (char)b;
+            }
+            else if (b <= 0xDF && b >= 0xA1)
+            {
+                destination[charsWritten++] = (char)(b + (0xFF61 - 0xA1));
+            }
+            else
+            {
+                // The pair's Kanji-mode value (ISO/IEC 18004 8.4.5). Pairs past 0xEBBF have none
+                var pair = b << 8 | bytes[++i];
+                var folded = pair - (pair <= 0x9FFC ? 0x8140 : 0xC140);
+                var mapped = pair <= 0xEBBF ? ShiftJisKanjiTable.Lookup((folded >> 8) * 0xC0 + (folded & 0xFF)) : '\0';
+                if (mapped == '\0')
+                    return DecodeStatus.UnmappedCharacter;
+                destination[charsWritten++] = mapped;
+            }
+        }
+        return DecodeStatus.Success;
+    }
 
 #if !NET8_0_OR_GREATER
     // Two passes (count, then transcode); net8.0 and later transcode once in DecodeBytePayload.

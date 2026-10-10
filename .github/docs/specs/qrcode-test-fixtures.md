@@ -231,7 +231,7 @@ dotnet run -c Release --project tools/QRImageDecodeSweep -- import-corpus <zxing
 - The camera kinds (since 2026-10-10) photograph a printed card through `CameraRenderer`, a pinhole camera: the card is tilted about any axis and turned, can be bent round a cylinder, and is seen through a lens with radial distortion, then blurred and given sensor noise, on a plain table or in a scene of clutter. Each kind varies one effect (tilt 15-35° and 35-55°, blur, barrel distortion, noise, a bow, a small symbol in a scene), and a phone mix varies them all. Only this library's symbol is photographed, because the encoder does not decide whether a symbol reads (below) and a photograph costs as much to draw as a case's other kinds together. They follow the other kinds in the list, so the earlier kinds' seeds did not move.
 - The readers are this library, zxing-cpp and ZXing.Net, each given the same grayscale buffer and told the symbology.
 - Render parameters are seeded by arithmetic on the case and kind indices (never `GetHashCode`, which is randomized per process), so two runs write byte-identical result files and two trees pair render for render. Each row carries its key (how its image was made) and a pixel digest. `compare` puts a pair whose digests differ in its own column, not in gained or lost: if an encoder picks another mask or a renderer changes between the trees, the pair is two different images and a moved read says nothing about the decoder. Every recorded table uses the default case counts (400 / 400 / 640: ten per Standard QR version, a hundred per Micro QR version, twenty per rMQR version).
-- A content failure is not gap: an image this library decodes into another text, or whose bit stream it refuses (`InvalidBitstream`, `UnsupportedContent`, `UnmappedCharacter`), was still located, sampled and error-corrected, and has its own column. In the real-image sets that column holds Byte-mode Shift_JIS without an ECI header (eleven images, which zxing-cpp reads by guessing the character set), one GS1 symbol, and one symbol whose bit stream is refused and which neither other reader reads.
+- A content failure is not gap: an image this library decodes into another text, or whose bit stream it refuses (`InvalidBitstream`, `UnsupportedContent`, `UnmappedCharacter`), was still located, sampled and error-corrected, and has its own column. In the real-image sets that column holds one GS1 symbol, one symbol whose bit stream is refused and which neither other reader reads, and `qrcode-2/16`, an image of two symbols where this library reads the one the expected text does not name (zxing-cpp returns both, and its text for that one is the same). Until the Shift_JIS guess of 2026-10-10 it also held eleven images of Byte-mode Shift_JIS without an ECI header, which came back as their ISO-8859-1 reading.
 - `destination` decodes each Micro QR and rMQR render into three destinations (sized, one character short, and 2 characters), timing each call as the fastest of five rounds, each round making the three calls in turn.
   - The renders are 600 draws per symbology from a fixed seed (random version, level and text, turned, 2 × 2 supersampled, uniform noise), the sets behind the cost figures of the [single-finder candidate scan](qrcode-symbologies.md#single-finder-candidate-scan). Each draw tries texts from a random length down to 2 characters, and a draw where none fits its version and level is skipped, leaving 577 Micro QR renders and 600 rMQR.
   - Until 2026-10-01 the rMQR draws counted versions from 0, which is not a version number, so those draws were dropped and R17x139 was never drawn.
@@ -274,17 +274,17 @@ On the first baseline (2026-09-21, seven encoders, payloads sized as above), the
 
 Micro QR and rMQR had a gap of a few renders per kind, plus 54 in Micro QR bilinear upscales at 2-2.5 px/module. zxing-cpp reads far fewer of both, so they are tracked by their own read rate.
 
-The real images were each read at four right angles:
+The real images were each read at four right angles. The `qrcode-2` row and the total are as read since the Shift_JIS guess (2026-10-10), which moved 40 reads out of the content column and no other figure:
 
 | Set | Images | This library | zxing-cpp | ZXing.Net | Gap | Reverse | Content |
 |---|---|---|---|---|---|---|---|
 | `qrcode-1` | 8 | 32/32 | 32 | 24 | 0 | 0 | 0 |
-| `qrcode-2` | 56 | 148/224 | 201 | 100 | 16 | 7 | 52 |
+| `qrcode-2` | 56 | 188/224 | 201 | 100 | 16 | 7 | 12 |
 | `qrcode-3` | 18 | 67/72 | 72 | 56 | 5 | 0 | 0 |
 | `qrcode-4` | 24 | 54/96 | 60 | 64 | 7 | 1 | 0 |
 | `qrcode-5` | 16 | 64/64 | 64 | 64 | 0 | 0 | 0 |
 | `qrcode-6` | 15 | 60/60 | 60 | 60 | 0 | 0 | 0 |
-| Standard QR | 137 | 425/548 | 489 | 368 | 28 | 8 | 52 |
+| Standard QR | 137 | 465/548 | 489 | 368 | 28 | 8 | 12 |
 | `microqrcode-1` | 16 | 64/64 | 59 | | 0 | 5 | |
 | `rmqrcode-1` | 3 | 12/12 | 12 | | 0 | 0 | |
 
@@ -313,9 +313,10 @@ ZXing's QR photographs (the ZXing.Net checkout's black-box `qrcode-1` to `-6`, 1
 
 | Set | Images | This library | zxing-cpp | ZXing.Net | Gap | Reverse | Content |
 |---|---|---|---|---|---|---|---|
-| ZXing `qrcode-1` to `-6` | 716 | 606 | 660 | 584 | 15 | 5 | 48 |
+| ZXing `qrcode-1` to `-6`, as first measured | 716 | 606 | 660 | 584 | 15 | 5 | 48 |
+| ZXing `qrcode-1` to `-6`, since the Shift_JIS guess | 716 | 650 | 660 | 584 | 15 | 5 | 4 |
 
-Upright, this library read 151 of 179 and zxing-cpp 165, the number go-qr publishes for zxing-cpp on this set. The content column is the eleven Shift_JIS photographs (44 reads) and `qrcode-2/33`, whose bit stream is refused. Each new gap image has a cause, from the grid sampled through zxing-cpp's reported corners and the image cropped and scaled:
+Upright, this library read 151 of 179 and zxing-cpp 165, the number go-qr publishes for zxing-cpp on this set. The content column was the eleven Shift_JIS photographs (44 reads) and `qrcode-2/33`, whose bit stream is refused. The guess reads all eleven, which makes 162 upright, and `qrcode-2/33` is what the column still holds. Each gap image has a cause, from the grid sampled through zxing-cpp's reported corners and the image cropped and scaled:
 
 - `qrcode-2/5`, a version 1 at 2.3 px/module on a billboard in a 480 × 360 photograph of a station hall, and `qrcode-4/19`, a version 3 at 4.1 px/module, are not detected in the whole image. Cropped to the symbol, or scaled by 0.75, 1.5 or 2, both read, and the grid through zxing-cpp's corners reads with 2 to 3 and 0 corrections.
 - `qrcode-4/14`, a version 3 at 4.9 px/module, is found and fails Reed-Solomon. The grid through zxing-cpp's corners reads with 1 or 2 corrections, so this library's frame is the cause.
@@ -343,7 +344,7 @@ BoofCV's QR photographs (`qrcodes_v3`, 536 photographs holding 1,232 labelled co
 | shadows | 14 | 11 | 13 | 11 | 2 | 0 |
 | All | 536 | 322 | 390 | 210 | 77 | 9 |
 
-zxing-cpp's 390 is 72.8 %, against the 73.1 % go-qr publishes for it on this set, and go-qr publishes 77.1 % for itself. Counted as codes, zxing-cpp read 900 of the 1,232 and this library, which reads one symbol a call, 322. No read of this library's disagreed with another reader's at the same code, and every text it read was confirmed by another read. On one thread this library took a median 1.3 ms a photograph and 2.2 s for the set, and zxing-cpp 6.2 ms and 6.0 s.
+zxing-cpp's 390 is 72.8 %, against the 73.1 % go-qr publishes for it on this set, and go-qr publishes 77.1 % for itself. Counted as codes, zxing-cpp read 975 of the 1,232 and this library, which reads one symbol a call, 322. The first run counted 900, and three more gave 960, 965 and 964 with every per-photograph figure unchanged: the tool held neither the pixel buffer nor the wrapper's objects through the native call (below, lessons). With them held, three runs gave 975 row for row. No read of this library's disagreed with another reader's at the same code, and every text it read was confirmed by another read. On one thread this library took a median 1.3 ms a photograph and 2.2 s for the set, and zxing-cpp 6.2 ms and 6.0 s.
 
 Of the 77 gap photographs, this library did not detect 57, failed Reed-Solomon on 15 and read no format information on 5. In 47 of them the smallest symbol zxing-cpp found is 8 px/module or more. Each was read again scaled, cropped to a symbol zxing-cpp found, and as a grid through zxing-cpp's corners:
 
@@ -438,6 +439,9 @@ Committed fixtures keep PR CI self-contained and deterministic (no Rust/C++/Pyth
 - A corpus someone else collected finds the class nobody here drew. The synthetic kinds came from failure classes this project knew, so none drew a lighting gradient, the largest cause on photographs: the real-image gap was 28 % of Standard QR reads against 3 % in the sweep. ZXing.Net, behind in every synthetic kind, at first read more photographs than this library (368 against 295) with the hybrid binarizer the regional pass now uses. A class the corpus shows once can be much larger when drawn: one bent version 7 photograph became a set of bowed renders with a gap of about 1,200 in 1,400.
 - A stand-in renderer is checked against real readers before a test trusts it. The uneven-lighting renderer's first shadow depth (75 % across a three-module edge) was picked to make this library fail. At that depth every reader measured reads only some directions (zxing-cpp and ZXing.Net 2 of 8), and at 85 % none reads any. As a test assertion it would have set a target no reader meets.
 - The oracle's column is specific to its run. zxing-cpp's corpus reads moved by one to three between runs of one build. In one of three runs of one build on 2026-09-28 it read 17 fewer Standard QR images, 16 at 0° (472 against 489), while this library's columns were identical in all three. Its native reader also died once with an access violation in `ZXing_ReadBarcodes`. The rerun was clean. Compare this library's columns between trees, and take the oracle's from more than one run.
+  - The harness was at fault, found on 2026-10-10 when zxing-cpp's count of BoofCV codes came out as 900, 960, 965 and 964 in four runs. The ZXingCpp wrapper (its source at 2c3dcfe) hands the native reader a raw pointer to the caller's pixel array without pinning it, and frees its image view and reader options in finalizers, and the tool held none of them through the call. A collection during a read could then move a small buffer or free an object in use.
+  - The tool now pins the buffer and keeps the objects until the results are taken. Three runs then gave 975 row for row, and the corpus, ZXing's photographs and the sweeps gave zxing-cpp's earlier totals. Which of the two faults was at work was not separated, and the 2026-09-28 variance was not reproduced to confirm it had this cause.
+  - An oracle's column that moves between runs of one build is a reason to suspect the harness before the oracle.
 - A brute-force reader needs a time budget. CodeGlyphX's reader, used in the keystone and Micro QR comparisons, spent over 25 CPU-seconds per keystoned render and never finished a cell, so it runs with a stated budget (1 s) and its column is what it reads in that time. Stopping one cell's process did not stop the loop over cells: the next cell ran unbudgeted beside the timing runs and doubled their times.
 - Expected texts must reach the tool as committed. The corpus's `.txt` files are marked `-text` in `.gitattributes`, but a checkout older than that line keeps CRLF working copies (autocrlf) until the files are rewritten, and every reader's read of a multi-line text is then graded as another text. This hit 16 `qrcode-5` reads and zxing-cpp's four reads of `high-res-1`, keeping that image out of the gap and its triage. `git ls-files --eol` shows such files as `i/lf w/crlf`. Delete and check them out again.
 - A premise must hold per case, or the case tests nothing. When the two single-finder decoders' destination tests became one contract test (`DestinationContractTest`, 2026-10-01), each case got the premise its rule needs, and rMQR's case "another symbol that fits is still read", with the small symbol drawn first, failed it: the small symbol had been tried first and read, so the case passed whatever the rule did. Drawn at 4 px/module against the big symbol's 6, the small symbol is now tried second in both orders.

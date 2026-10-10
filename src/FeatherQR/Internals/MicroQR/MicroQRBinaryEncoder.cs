@@ -420,6 +420,26 @@ internal static partial class MicroQRBinaryEncoder
     }
 
     /// <summary>
+    /// The Byte segment of a text the analysis put in UTF-8, whatever its characters: <see cref="EncodeDataCodewords"/> narrows any text ISO-8859-1 holds, and some such text is written as UTF-8 so that a reader with no ECI to go by reads it as written.
+    /// </summary>
+    /// <param name="text">Input text whose UTF-8 length fits the version's capacity (validated by the caller).</param>
+    /// <param name="version">Micro QR version (M3 or M4, which have Byte mode).</param>
+    /// <param name="eccLevel">Error correction level (valid for the version).</param>
+    /// <param name="destination">Destination for the data codewords, as for <see cref="EncodeDataCodewords"/>.</param>
+    /// <returns>Number of codeword bytes written.</returns>
+    public static int EncodeUtf8DataCodewords(ReadOnlySpan<char> text, MicroQRVersion version, MicroQREccLevel eccLevel, Span<byte> destination)
+    {
+        var countBits = MicroQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+        return EncodeUtf8Codewords(
+            text, version,
+            MicroQRConstants.GetDataBitCapacity(version, eccLevel),
+            MicroQRConstants.GetDataCodewordCount(version, eccLevel),
+            MicroQRConstants.GetModeIndicatorValue(EncodingMode.Byte) << countBits,
+            (int)version - 1 + countBits,
+            destination);
+    }
+
+    /// <summary>
     /// Byte segment for non-Latin-1 text: full encode on a private accumulator.
     /// The count indicator counts encoded BYTES.
     /// Not inlined by design, see the class remarks on address exposure.

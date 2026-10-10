@@ -17,8 +17,8 @@ public static class RmQRCodeImageDecoder
         /// Finds and decodes an rMQR code in a bitmap.
         /// </summary>
         /// <remarks>
-        /// Made for clean images, including a shading gradient or a soft-edged shadow over part of the symbol: screenshots, rendered rMQR codes and scans, at any rotation, mirrored, inverted, scaled, or mildly skewed.
-        /// Photos with strong perspective, hard-edged shadows or blur are out of scope.
+        /// Reads screenshots, rendered rMQR codes and scans, at any rotation, mirrored, inverted, scaled, tilted, blurred or noisy, or under a shading gradient or a soft-edged shadow.
+        /// Strong lens distortion and hard-edged shadows read less reliably.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>

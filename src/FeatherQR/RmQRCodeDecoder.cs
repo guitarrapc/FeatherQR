@@ -8,7 +8,8 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// Reads Numeric, Alphanumeric, Byte and Kanji mode across all 32 versions and both error correction levels.
-/// A Byte segment with no ECI header is read as UTF-8 when the bytes are valid UTF-8, and as ISO-8859-1 otherwise.
+/// A Byte segment is read as its ECI header declares, for ISO-8859-1, UTF-8 and Shift_JIS.
+/// With no ECI header it is read as UTF-8 when the bytes are valid UTF-8, as Shift_JIS when they are well formed Shift_JIS that ISO-8859-1 text would not hold, and as ISO-8859-1 otherwise.
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire fails the whole rMQR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
 /// Reed-Solomon runs at full block strength, correcting up to ⌊ecc/2⌋ codewords per block, and reports the count in <see cref="RmQRCodeDecodeInfo.ErrorsCorrected"/>.
 /// Both a plain matrix and one with a quiet zone are accepted; the border is located and stripped automatically.

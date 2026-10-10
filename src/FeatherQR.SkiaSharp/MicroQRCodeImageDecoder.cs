@@ -17,8 +17,8 @@ public static class MicroQRCodeImageDecoder
         /// Finds and decodes a Micro QR code in a bitmap.
         /// </summary>
         /// <remarks>
-        /// Made for clean images, including a shading gradient or a soft-edged shadow over part of the symbol (M1 only when the shading is mild): screenshots, rendered Micro QR codes and scans, at any rotation, mirrored, inverted, scaled, or mildly skewed.
-        /// Photos with strong perspective, hard-edged shadows or blur are out of scope.
+        /// Reads screenshots, rendered Micro QR codes, scans and camera photographs, at any rotation, mirrored, inverted, scaled, mildly tilted, or under a shading gradient or a soft-edged shadow (M1 only when the shading is mild).
+        /// A symbol tilted more than mildly is often not read.
         /// </remarks>
         /// <param name="bitmap">The bitmap to scan.</param>
         /// <param name="text">Decoded text, or an empty string when decoding fails.</param>

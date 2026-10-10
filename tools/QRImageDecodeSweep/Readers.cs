@@ -45,15 +45,35 @@ internal static class Readers
             Symbologies.MicroQr => global::ZXingCpp.BarcodeFormat.MicroQRCode,
             _ => global::ZXingCpp.BarcodeFormat.RMQRCode,
         };
+        return ZXingCpp(format, image.Luminance, image.Width, image.Height, static r => r.Text);
+    }
+
+    /// <summary>
+    /// zxing-cpp with <c>TryHarder</c> over a grayscale buffer, each symbol it reports through <paramref name="select"/>.
+    /// Its wrapper keeps a raw pointer to the pixels and frees each object's native half in a finalizer, so the buffer is pinned and every object is held until the results are taken.
+    /// Without that a collection during the call moves a small buffer or frees the options, and the reads vary from run to run.
+    /// </summary>
+    public static T[] ZXingCpp<T>(global::ZXingCpp.BarcodeFormat format, byte[] luminance, int width, int height, Func<global::ZXingCpp.Barcode, T> select)
+    {
+        var pin = System.Runtime.InteropServices.GCHandle.Alloc(luminance, System.Runtime.InteropServices.GCHandleType.Pinned);
         try
         {
-            var view = new global::ZXingCpp.ImageView(image.Luminance, image.Width, image.Height, global::ZXingCpp.ImageFormat.Lum);
-            var results = new global::ZXingCpp.BarcodeReader { Formats = format, TryHarder = true }.From(view);
-            return [.. results.Select(static r => r.Text)];
+            var view = new global::ZXingCpp.ImageView(pin.AddrOfPinnedObject(), width, height, global::ZXingCpp.ImageFormat.Lum);
+            var reader = new global::ZXingCpp.BarcodeReader { Formats = format, TryHarder = true };
+            var results = reader.From(view);
+            T[] selected = [.. results.Select(select)];
+            GC.KeepAlive(results);
+            GC.KeepAlive(reader);
+            GC.KeepAlive(view);
+            return selected;
         }
         catch
         {
             return [];
+        }
+        finally
+        {
+            pin.Free();
         }
     }
 

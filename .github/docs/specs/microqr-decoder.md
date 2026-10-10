@@ -127,7 +127,7 @@ The grids scaled from the finder fail first, and no timing frame is fitted.
 |---|---|
 | Versions | M1 to M4. The matrix size gives the version, and the format information must agree with it |
 | ECC levels | L, M and Q, as each version defines them. M1 only detects errors |
-| Data modes | Numeric, Alphanumeric, Byte (UTF-8 or ISO-8859-1, chosen by heuristic because Micro QR has no ECI), Kanji (M3 and M4, JIS X 0208). The generator writes Kanji on request (`AllowKanji`) for text JIS X 0208 can represent |
+| Data modes | Numeric, Alphanumeric, Byte (UTF-8, Shift_JIS or ISO-8859-1, chosen by the [shared heuristic](standardqr-decoder.md#decisions) because Micro QR has no ECI), Kanji (M3 and M4, JIS X 0208). The generator writes Kanji on request (`AllowKanji`) for text JIS X 0208 can represent |
 | Quiet zone | Matrix: any uniform light border, with the core located from the finder's corner |
 | Error correction | Reed-Solomon, capped at the capacity t of ISO Table 9. Corrections are reported |
 | Format information | One 15-bit copy, with up to 3 bit errors corrected |
@@ -146,6 +146,8 @@ The measured image envelope (Tier 1 to 2) is kept conservative because a single 
 - Translation and quiet-zone variants.
 - Mild optical degradation: JPEG artifacts, low contrast, additive noise.
 - Keystone: any one edge inset by up to 8 % of the symbol's width (quiet zone included) at each end, at any rotation, mirrored or not, from 5 px/module drawn crisp and from 3 px/module with grey edges.
+
+Photographs have no envelope. On renders through a pinhole camera (2026-10-10, [qrcode-test-fixtures.md](qrcode-test-fixtures.md#where-the-gap-stands)), blur, noise, a bow, barrel distortion and a small symbol in a scene read 390 to 398 of 400, each more than zxing-cpp reads. Tilt past the keystone envelope does not: 267 of 400 read at 15-35° and 9 at 35-55°, where zxing-cpp reads 377 and 386. The 16 corpus photographs read at every right angle.
 
 On the [image decode sweep](qrcode-test-fixtures.md#image-decode-sweep) of 2026-09-28, this library reads 17,887 of 18,400 images and zxing-cpp 0.5.2 reads 12,524 of them, none that this library misses. The sweep has 400 cases, a hundred a version, each encoded by this library and by libzint, with 800 renders a kind.
 

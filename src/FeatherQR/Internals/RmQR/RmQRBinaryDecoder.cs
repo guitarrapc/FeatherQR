@@ -20,6 +20,7 @@ internal static class RmQRBinaryDecoder
     // ECI assignment numbers the shared byte decoder can map to a charset.
     private const int EciIso8859_1a = 1;
     private const int EciIso8859_1b = 3;
+    private const int EciShiftJis = 20;
     private const int EciUtf8 = 26;
     private const int EciAscii = 27;
 
@@ -95,6 +96,9 @@ internal static class RmQRBinaryDecoder
                                     break;
                                 case EciUtf8:
                                     charset = ByteSegmentCharset.Utf8;
+                                    break;
+                                case EciShiftJis:
+                                    charset = ByteSegmentCharset.ShiftJis;
                                     break;
                                 default:
                                     return DecodeStatus.UnsupportedContent;

@@ -314,9 +314,9 @@ public class QRBinaryDecoderUnitTest
     [Test]
     public async Task UnknownEciCharset_ReturnsUnsupportedContent()
     {
-        // ECI 20 = Shift-JIS: recognized designator, unsupported charset
+        // ECI 4 = ISO-8859-2: recognized designator, unsupported charset
         var data = Build(
-            (ModeEci, 4), (20, 8),
+            (ModeEci, 4), (4, 8),
             (ModeByte, 4), (1, 8), ('A', 8),
             (ModeTerminator, 4));
 

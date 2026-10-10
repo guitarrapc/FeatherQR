@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using FeatherQR.Internals;
+using FeatherQR.Internals.BinaryDecoders;
 using FeatherQR.Internals.BinaryEncoders;
 using FeatherQR.Internals.MicroQR;
 
@@ -151,7 +152,7 @@ public static class MicroQRCodeGenerator
         size = default;
         ValidateQuietZone(quietZoneSize);
 
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji);
+        var analysis = Analyze(text, allowKanji);
         if (!TrySelectVersion(in analysis, eccLevel, out var version))
             return false;
 
@@ -260,7 +261,7 @@ public static class MicroQRCodeGenerator
         // Kanji mode included when the caller asked for it; for Byte mode the analyzer's DataLength is already
         // the encoded byte count (ISO-8859-1 char count or UTF-8 byte count), for
         // Kanji mode the character count.
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji);
+        var analysis = Analyze(textSpan, allowKanji);
         if (TrySelectVersion(in analysis, eccLevel, out var version))
             return PrepareConfiguration(in analysis, eccLevel, version);
 
@@ -268,16 +269,43 @@ public static class MicroQRCodeGenerator
     }
 
     /// <summary>
+    /// The analysis every entry point starts from, under the default charset rules with one more.
+    /// With no ECI to declare a charset, ISO-8859-1 text is written one byte a character only where this library's decoder reads those bytes back as ISO-8859-1.
+    /// Text it would read as UTF-8 or as Shift_JIS is analysed as UTF-8, which it reads as written.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static TextAnalysisResult Analyze(ReadOnlySpan<char> text, bool allowKanji, bool planKanji = false)
+    {
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji, planKanji);
+        return analysis.EciMode == EciMode.Iso8859_1 ? AsTheDecoderReadsIt(text, analysis) : analysis;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static TextAnalysisResult AsTheDecoderReadsIt(ReadOnlySpan<char> text, TextAnalysisResult latin1)
+    {
+        // Longer text fits no version under any plan and is refused on its length
+        if (text.Length > MicroQRSegmentPlanner.MaxPlannableChars)
+            return latin1;
+
+        Span<byte> bytes = stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars];
+        for (var i = 0; i < text.Length; i++)
+            bytes[i] = (byte)text[i];
+        return SegmentDecoders.ResolvesToIso8859_1WhenUnspecified(bytes.Slice(0, text.Length))
+            ? latin1
+            : TextAnalyzer.Analyze(text, EciMode.Utf8);
+    }
+
+    /// <summary>
     /// The configuration that writes an analyzed text's single-mode stream at a version already chosen, one that offers the level and the mode and holds the text.
     /// </summary>
     /// <remarks>
-    /// Only the analysis's mode is read, so a mixed-mode analysis serves too: it differs from the single-mode one only in <see cref="TextAnalysisResult.KanjiPlannable"/>.
+    /// Only the analysis's mode and charset are read, so a mixed-mode analysis serves too: it differs from the single-mode one only in <see cref="TextAnalysisResult.KanjiPlannable"/>.
     /// The version is not checked again: every caller has it from a fit (<see cref="TrySelectVersion"/> or <see cref="TrySelectVersionInRange"/>, directly or through the planner's single-mode fit).
     /// </remarks>
     private static MicroQRConfiguration PrepareConfiguration(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion version)
     {
         Debug.Assert(TrySelectVersionInRange(in analysis, eccLevel, MicroQRVersionRange.Exactly(version), out var fitted) && fitted == version, "The version comes from a fit.");
-        return new(version, eccLevel, analysis.EncodingMode);
+        return new(version, eccLevel, analysis.EncodingMode, analysis.EncodingMode == EncodingMode.Byte && analysis.EciMode == EciMode.Utf8);
     }
 
     /// <summary>
@@ -354,7 +382,7 @@ public static class MicroQRCodeGenerator
         size = default;
         ValidateQuietZone(options.QuietZoneSize);
 
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: options.AllowKanji);
+        var analysis = Analyze(text, allowKanji: options.AllowKanji);
         if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
             return false;
 
@@ -389,7 +417,7 @@ public static class MicroQRCodeGenerator
     {
         ValidateQuietZone(options.QuietZoneSize);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: options.AllowKanji);
+        var analysis = Analyze(textSpan, allowKanji: options.AllowKanji);
         if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
             throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version);
 
@@ -550,7 +578,7 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: options.AllowKanji, planKanji: true);
+        var analysis = Analyze(textSpan, allowKanji: options.AllowKanji, planKanji: true);
         // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
@@ -585,7 +613,7 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default, allowKanji: options.AllowKanji, planKanji: true);
+        var analysis = Analyze(textSpan, allowKanji: options.AllowKanji, planKanji: true);
         // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
@@ -648,7 +676,7 @@ public static class MicroQRCodeGenerator
         ValidateQuietZone(options.QuietZoneSize);
         ValidateOptimalEntry(options.Segmentation);
 
-        var analysis = TextAnalyzer.Analyze(text, EciMode.Default, allowKanji: options.AllowKanji, planKanji: true);
+        var analysis = Analyze(text, allowKanji: options.AllowKanji, planKanji: true);
         // The Kanji plan's table, kept by the scan for the build; a text with no Kanji plan takes none.
         Span<byte> kanjiTable = analysis.KanjiPlannable ? stackalloc byte[MicroQRSegmentPlanner.MaxPlannableChars * ModeSegmenter.ParentBytesPerChar] : default;
         if (!MicroQRSegmentPlanner.TrySelectVersion(text, in analysis, eccLevel, options.Version, kanjiTable, out var version, out var useSegments, out var kanjiPlan, out var kanjiFinalState, out var kanjiPlannedBits))
@@ -702,7 +730,10 @@ public static class MicroQRCodeGenerator
         var dataBitCount = MicroQRConstants.GetDataBitCapacity(config.Version, config.EccLevel);
 
         Span<byte> dataCodewords = stackalloc byte[16]; // max data codewords (M4-L)
-        var dataCount = MicroQRBinaryEncoder.EncodeDataCodewords(textSpan, config.Version, config.EccLevel, config.Mode, dataCodewords);
+        // The Byte writer narrows any text ISO-8859-1 holds, so text the analysis put in UTF-8 goes to the UTF-8 writer by name
+        var dataCount = config.Utf8
+            ? MicroQRBinaryEncoder.EncodeUtf8DataCodewords(textSpan, config.Version, config.EccLevel, dataCodewords)
+            : MicroQRBinaryEncoder.EncodeDataCodewords(textSpan, config.Version, config.EccLevel, config.Mode, dataCodewords);
 
         // Reed-Solomon over the data codeword bytes as-is; a final half codeword
         // (M1/M3) participates as its high-nibble byte value.
@@ -712,5 +743,5 @@ public static class MicroQRCodeGenerator
         MicroQRModulePlacer.PlaceSymbol(core, size, stride, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, config.Version, config.EccLevel, maskPattern);
     }
 
-    private readonly record struct MicroQRConfiguration(MicroQRVersion Version, MicroQREccLevel EccLevel, EncodingMode Mode);
+    private readonly record struct MicroQRConfiguration(MicroQRVersion Version, MicroQREccLevel EccLevel, EncodingMode Mode, bool Utf8);
 }

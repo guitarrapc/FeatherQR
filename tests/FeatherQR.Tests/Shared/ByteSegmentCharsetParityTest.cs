@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Text;
+using FeatherQR.Internals;
 using FeatherQR.Internals.BinaryDecoders;
 using FeatherQR.Internals.BinaryEncoders;
 
@@ -8,8 +9,10 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// What <see cref="SegmentDecoders.DecodeBytePayload"/> makes of a byte segment, against the rule
 /// written out here from the specification of the behaviour: ISO-8859-1 widens; a declared UTF-8
-/// segment, or one that opens with a BOM, decodes as UTF-8 and substitutes what is invalid; an
-/// undeclared one is UTF-8 only when every sequence is well formed, and ISO-8859-1 otherwise.
+/// segment, or one that opens with a BOM, decodes as UTF-8 and substitutes what is invalid; a
+/// declared Shift_JIS segment is read through the JIS X 0208 cells and refused where it is not well
+/// formed or holds a cell outside them; an undeclared one is UTF-8 when every sequence is well
+/// formed, else Shift_JIS when the guess written out below holds, and ISO-8859-1 otherwise.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,14 +22,15 @@ namespace FeatherQR.Tests;
 /// time), so both are held to the same answer.
 /// </para>
 /// <para>
-/// <see cref="SegmentDecoders.ResolvesToUtf8WhenUnspecified"/> is checked in the same pass: the
-/// mixed-mode planners ask it what the decoder will do, so a validity rule that moves in one and
-/// not the other turns into a plan the decoder misreads.
+/// <see cref="SegmentDecoders.ResolvesToUtf8WhenUnspecified"/> and
+/// <see cref="SegmentDecoders.ResolvesToIso8859_1WhenUnspecified"/> are checked in the same pass: the
+/// Micro QR generator and its planner ask what the decoder will do, so a rule that moves in one and
+/// not the other turns into a symbol the decoder misreads.
 /// </para>
 /// </remarks>
 public class ByteSegmentCharsetParityTest
 {
-    private static readonly ByteSegmentCharset[] charsets = [ByteSegmentCharset.Unspecified, ByteSegmentCharset.Iso8859_1, ByteSegmentCharset.Utf8];
+    private static readonly ByteSegmentCharset[] charsets = [ByteSegmentCharset.Unspecified, ByteSegmentCharset.Iso8859_1, ByteSegmentCharset.Utf8, ByteSegmentCharset.ShiftJis];
 
     private static bool IsWellFormed(ReadOnlySpan<byte> bytes)
     {
@@ -47,16 +51,98 @@ public class ByteSegmentCharsetParityTest
         return new string(chars);
     }
 
-    private static string Expected(byte[] payload, ByteSegmentCharset charset)
+    private enum Token
+    {
+        Ascii,
+        Control,
+        Kana,
+        Pair,
+        Malformed,
+    }
+
+    /// <summary>The bytes as Shift_JIS reads them: ASCII, a half-width katakana byte, a lead and trail pair, or a byte that is none of these where it stands.</summary>
+    private static List<(Token Kind, int Code)> ShiftJisTokens(byte[] payload)
+    {
+        var tokens = new List<(Token, int)>();
+        for (var i = 0; i < payload.Length; i++)
+        {
+            int b = payload[i];
+            if (b <= 0x7F)
+                tokens.Add((b < 0x20 && b is not ('\t' or '\r' or '\n') ? Token.Control : Token.Ascii, b));
+            else if (b is >= 0xA1 and <= 0xDF)
+                tokens.Add((Token.Kana, b));
+            else if (b is (>= 0x81 and <= 0x9F) or (>= 0xE0 and <= 0xEF) && i + 1 < payload.Length && payload[i + 1] is >= 0x40 and <= 0xFC and not 0x7F)
+                tokens.Add((Token.Pair, b << 8 | payload[++i]));
+            else
+                tokens.Add((Token.Malformed, b));
+        }
+        return tokens;
+    }
+
+    private static int LongestRun(List<(Token Kind, int Code)> tokens, Token kind)
+    {
+        int longest = 0, current = 0;
+        foreach (var token in tokens)
+        {
+            current = token.Kind == kind ? current + 1 : 0;
+            longest = Math.Max(longest, current);
+        }
+        return longest;
+    }
+
+    /// <summary>The guess for an undeclared segment that is not UTF-8: well formed Shift_JIS with no control character but tab, CR and LF, and a run of three half-width katakana or a byte ISO-8859-1 text never holds.</summary>
+    private static bool GuessesShiftJis(byte[] payload)
+    {
+        var tokens = ShiftJisTokens(payload);
+        if (tokens.Any(static t => t.Kind is Token.Malformed or Token.Control))
+            return false;
+        return LongestRun(tokens, Token.Kana) >= 3 || payload.Any(static b => b is >= 0x80 and <= 0x9F);
+    }
+
+    private static (DecodeStatus Status, string Text) ShiftJis(byte[] payload)
+    {
+        var tokens = ShiftJisTokens(payload);
+        if (tokens.Any(static t => t.Kind == Token.Malformed))
+            return (DecodeStatus.InvalidBitstream, "");
+
+        var text = new StringBuilder();
+        foreach (var (kind, code) in tokens)
+        {
+            if (kind == Token.Kana)
+            {
+                text.Append((char)(0xFF61 + code - 0xA1));
+            }
+            else if (kind == Token.Pair)
+            {
+                // The Kanji-mode cell of the pair: rows of 0xC0 from lead 0x81, and from 0xE0 after the gap, as far as the table goes (0xEBBF)
+                int lead = code >> 8, trail = code & 0xFF;
+                var row = lead <= 0x9F ? lead - 0x81 : lead - 0xC1;
+                var index = row * 0xC0 + (trail - 0x40);
+                var cell = index < ShiftJisKanjiTable.IndexCount ? ShiftJisKanjiTable.Lookup(index) : '\0';
+                if (cell == '\0')
+                    return (DecodeStatus.UnmappedCharacter, "");
+                text.Append(cell);
+            }
+            else
+            {
+                text.Append((char)code);
+            }
+        }
+        return (DecodeStatus.Success, text.ToString());
+    }
+
+    private static (DecodeStatus Status, string Text) Expected(byte[] payload, ByteSegmentCharset charset)
     {
         if (charset == ByteSegmentCharset.Iso8859_1)
-            return Latin1(payload);
+            return (DecodeStatus.Success, Latin1(payload));
+        if (charset == ByteSegmentCharset.ShiftJis)
+            return ShiftJis(payload);
         var hasBom = payload.Length >= 3 && payload[0] == 0xEF && payload[1] == 0xBB && payload[2] == 0xBF;
         if (hasBom)
-            return Encoding.UTF8.GetString(payload, 3, payload.Length - 3);
+            return (DecodeStatus.Success, Encoding.UTF8.GetString(payload, 3, payload.Length - 3));
         if (charset == ByteSegmentCharset.Utf8 || IsWellFormed(payload))
-            return Encoding.UTF8.GetString(payload);
-        return Latin1(payload);
+            return (DecodeStatus.Success, Encoding.UTF8.GetString(payload));
+        return GuessesShiftJis(payload) ? ShiftJis(payload) : (DecodeStatus.Success, Latin1(payload));
     }
 
     /// <summary>
@@ -108,6 +194,23 @@ public class ByteSegmentCharsetParityTest
         }
         // a sequence cut short by the end of the segment
         yield return prose.AsSpan(0, prose.Length - 2).ToArray();
+
+        // Shift_JIS: runs of two and three of each kind, a control character, and prose
+        byte[][] units = [[0x41], [0x0D], [0x09], [0xB1], [0xDF], [0xE9, 0x61], [0xE0, 0xFC], [0x83, 0x82], [0x87, 0x40], [0xEC, 0x40], [0x80], [0xFD]];
+        foreach (var a in units)
+        {
+            foreach (var b in units)
+            {
+                foreach (var c in units)
+                {
+                    yield return [.. a, .. b, .. c];
+                    yield return [.. a, .. b, .. c, .. c];
+                }
+            }
+        }
+        var japanese = Encoding.GetEncoding(932).GetBytes(string.Concat(Enumerable.Repeat("Google モバイル\r\nﾃﾞｻﾞｲﾝQR 価格は100円です。", 6)));
+        yield return japanese;
+        yield return japanese.AsSpan(0, japanese.Length - 1).ToArray();
     }
 
     private static IEnumerable<byte[]> CorpusWithFramings()
@@ -157,10 +260,11 @@ public class ByteSegmentCharsetParityTest
         {
             foreach (var charset in charsets)
             {
-                var expected = Expected(payload, charset);
-                var (status, text) = Decode(payload, charset, cases % 8, expected.Length);
-                if (status != DecodeStatus.Success || text != expected)
-                    mismatches.Add($"{charset} {Convert.ToHexString(payload.AsSpan(0, Math.Min(payload.Length, 8)))} ({payload.Length} B): {status}");
+                var (expectedStatus, expected) = Expected(payload, charset);
+                // A refused segment gets room for any reading, so that the refusal is not for want of it
+                var (status, text) = Decode(payload, charset, cases % 8, expectedStatus == DecodeStatus.Success ? expected.Length : payload.Length);
+                if (status != expectedStatus || (status == DecodeStatus.Success && text != expected))
+                    mismatches.Add($"{charset} {Convert.ToHexString(payload.AsSpan(0, Math.Min(payload.Length, 8)))} ({payload.Length} B): {status}, expected {expectedStatus}");
                 cases++;
             }
         }
@@ -181,8 +285,8 @@ public class ByteSegmentCharsetParityTest
         {
             foreach (var charset in charsets)
             {
-                var expected = Expected(payload, charset);
-                if (expected.Length == 0)
+                var (expectedStatus, expected) = Expected(payload, charset);
+                if (expectedStatus != DecodeStatus.Success || expected.Length == 0)
                     continue;
                 var (status, _) = Decode(payload, charset, 0, expected.Length - 1);
                 if (status != DecodeStatus.DestinationTooSmall)
@@ -201,6 +305,22 @@ public class ByteSegmentCharsetParityTest
         {
             var hasBom = payload.Length >= 3 && payload[0] == 0xEF && payload[1] == 0xBB && payload[2] == 0xBF;
             if (SegmentDecoders.ResolvesToUtf8WhenUnspecified(payload) != (hasBom || IsWellFormed(payload)))
+                mismatches.Add(Convert.ToHexString(payload.AsSpan(0, Math.Min(payload.Length, 8))));
+        }
+
+        await Assert.That(mismatches).IsEmpty();
+    }
+
+    /// <summary>The Micro QR generator asks this before it writes ISO-8859-1 bytes with no ECI to declare them, so it has to say what the decoder does.</summary>
+    [Test]
+    public async Task ResolvesToIso8859_1WhenUnspecified_AgreesWithTheDecoder_OverTheCorpus()
+    {
+        var mismatches = new List<string>();
+        foreach (var payload in CorpusWithFramings())
+        {
+            var hasBom = payload.Length >= 3 && payload[0] == 0xEF && payload[1] == 0xBB && payload[2] == 0xBF;
+            var latin1 = !hasBom && !IsWellFormed(payload) && !GuessesShiftJis(payload);
+            if (SegmentDecoders.ResolvesToIso8859_1WhenUnspecified(payload) != latin1)
                 mismatches.Add(Convert.ToHexString(payload.AsSpan(0, Math.Min(payload.Length, 8))));
         }
 

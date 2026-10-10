@@ -8,9 +8,9 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// Reads Numeric, Alphanumeric and Byte mode across M1 to M4, and Kanji in M3 and M4.
-/// Micro QR has no ECI, so a Byte segment is read as UTF-8 when the bytes are valid UTF-8, and as ISO-8859-1 otherwise.
+/// Micro QR has no ECI, so a Byte segment is read as UTF-8 when the bytes are valid UTF-8, as Shift_JIS when they are well formed Shift_JIS that ISO-8859-1 text would not hold, and as ISO-8859-1 otherwise.
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire fails the whole Micro QR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
-/// Image scanning handles clean screen or scanner images, including rotation, mirroring, inverted colors, scaling and mild perspective.
+/// Image scanning reads screen images, scans and camera photographs, including rotation, mirroring, inverted colors, scaling and mild perspective.
 /// It is a separate entry point, and <see cref="QRCodeDecoder"/> keeps scanning Standard QR only.
 /// </remarks>
 public static class MicroQRCodeDecoder
