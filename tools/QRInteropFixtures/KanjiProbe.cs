@@ -103,8 +103,7 @@ public static class KanjiProbe
             static (format, options, label) =>
             {
                 var payload = label == "short" ? Short : Long;
-                var creator = new BarcodeCreator(format) { Options = options };
-                return creator.From(payload);
+                return ZXingCppCalls.Create(new BarcodeCreator(format) { Options = options }, payload);
             },
             ["short", "long"]);
     }
@@ -124,8 +123,7 @@ public static class KanjiProbe
         RunLibzintMatrix(
             (format, options, label) =>
             {
-                var creator = new BarcodeCreator(format) { Options = options };
-                return creator.From(payloads[label]);
+                return ZXingCppCalls.Create(new BarcodeCreator(format) { Options = options }, payloads[label]);
             },
             [.. payloads.Keys]);
     }
@@ -148,7 +146,7 @@ public static class KanjiProbe
                             continue;
                         }
 
-                        using var image = barcode.ToImage(new WriterOptions { Scale = 1, AddQuietZones = false });
+                        using var image = ZXingCppCalls.ToImage(barcode, new WriterOptions { Scale = 1, AddQuietZones = false });
                         Console.WriteLine($"  {format} '{options}' {label}: {image.Height}x{image.Width} modules, {ReadBack(image, format)}");
                     }
                     catch (Exception ex)
@@ -181,7 +179,7 @@ public static class KanjiProbe
             }
         }
 
-        var results = new BarcodeReader { Formats = format, TryHarder = true }.From(new ImageView(lum, w, h, ImageFormat.Lum));
+        var results = ZXingCppCalls.Read(new BarcodeReader { Formats = format, TryHarder = true }, lum, w, h);
         if (results.Length != 1)
             return $"reader found {results.Length} symbols";
 

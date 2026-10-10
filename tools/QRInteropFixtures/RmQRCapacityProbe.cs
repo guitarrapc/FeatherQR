@@ -184,8 +184,7 @@ public static class RmQRCapacityProbe
     private static bool DecodesAs(BarcodeReader reader, byte[] modules, int width, int height, string expected)
     {
         var luminance = RenderLuminance(modules, width, height, PixelsPerModule);
-        var image = new ImageView(luminance, width * PixelsPerModule, height * PixelsPerModule, ImageFormat.Lum);
-        var results = reader.From(image);
+        var results = ZXingCppCalls.Read(reader, luminance, width * PixelsPerModule, height * PixelsPerModule);
         return results.Length == 1 && results[0].Text == expected;
     }
 

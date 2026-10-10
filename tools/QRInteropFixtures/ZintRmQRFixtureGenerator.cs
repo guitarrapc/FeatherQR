@@ -20,7 +20,7 @@ public sealed class ZintRmQRFixtureGenerator : IRmQRFixtureGenerator
         {
             try
             {
-                using var barcode = new BarcodeCreator(BarcodeFormat.RMQRCode).From("0");
+                using var barcode = ZXingCppCalls.Create(new BarcodeCreator(BarcodeFormat.RMQRCode), "0");
                 return barcode.IsValid;
             }
             catch
@@ -39,11 +39,10 @@ public sealed class ZintRmQRFixtureGenerator : IRmQRFixtureGenerator
     public GeneratedFixture Generate(RmQRFixtureCaseDefinition caseDefinition)
     {
         var entry = RmQRVersionTable.Find(caseDefinition.Height, caseDefinition.Width);
-        var creator = new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = $"version={entry.Number},ecLevel={caseDefinition.ErrorCorrectionLevel}" };
-        using var barcode = creator.From(caseDefinition.PayloadText);
+        using var barcode = ZXingCppCalls.Create(new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = $"version={entry.Number},ecLevel={caseDefinition.ErrorCorrectionLevel}" }, caseDefinition.PayloadText);
 
         // Scale 1 without quiet zones yields the module-exact symbol.
-        using var image = barcode.ToImage(new WriterOptions { Scale = 1, AddQuietZones = false });
+        using var image = ZXingCppCalls.ToImage(barcode, new WriterOptions { Scale = 1, AddQuietZones = false });
         if (image.Width != caseDefinition.Width || image.Height != caseDefinition.Height)
             throw new InvalidOperationException($"libzint produced a {image.Height}x{image.Width} symbol for case {caseDefinition.Id}, expected {caseDefinition.VersionName}.");
 

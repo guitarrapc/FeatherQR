@@ -48,8 +48,7 @@ public static class RmQRSpotCheck
                         RmQRCodeGenerator.Create(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
 
                     var luminance = RenderLuminance(modules, calculated.Width, calculated.Height, PixelsPerModule);
-                    var image = new ImageView(luminance, calculated.Width * PixelsPerModule, calculated.Height * PixelsPerModule, ImageFormat.Lum);
-                    var results = reader.From(image);
+                    var results = ZXingCppCalls.Read(reader, luminance, calculated.Width * PixelsPerModule, calculated.Height * PixelsPerModule);
 
                     var expectedVersion = version.ToString();
                     var expectedBytes = mode is "kanji" or "kanji-plan"

@@ -4,8 +4,6 @@ using FeatherQR;
 using Net.Codecrete.QrCodeGenerator;
 using ZXing.Common;
 using CppFormat = ZXingCpp.BarcodeFormat;
-using CppImageFormat = ZXingCpp.ImageFormat;
-using CppImageView = ZXingCpp.ImageView;
 using CppReader = ZXingCpp.BarcodeReader;
 using GlyphDecoder = CodeGlyphX.QrDecoder;
 using GlyphMatrix = CodeGlyphX.BitMatrix;
@@ -157,7 +155,7 @@ public static class KanjiSpotCheck
 
             tally.Read("this", text, QRCodeDecoder.TryDecode(data, out var ours, out _) ? ours : null, variant);
             var (luminance, width) = RenderSquare(data.Size, (r, c) => data[r, c]);
-            var cppResults = cpp.From(new CppImageView(luminance, width, width, CppImageFormat.Lum));
+            var cppResults = ZXingCppCalls.Read(cpp, luminance, width, width);
             tally.Read("zxing-cpp", text, cppResults.Length == 1 ? cppResults[0].Text : null, variant);
             var netResult = NetRead(net, luminance, width, width);
             tally.Read("ZXing.Net", text, netResult?.Text, variant);
@@ -181,7 +179,7 @@ public static class KanjiSpotCheck
 
             tally.Read("this", text, MicroQRCodeDecoder.TryDecode(data, out var ours, out _) ? ours : null, variant);
             var (luminance, width) = RenderSquare(data.Size, (r, c) => data[r, c]);
-            var cppResults = cpp.From(new CppImageView(luminance, width, width, CppImageFormat.Lum));
+            var cppResults = ZXingCppCalls.Read(cpp, luminance, width, width);
             tally.Read("zxing-cpp", text, cppResults.Length == 1 ? cppResults[0].Text : null, variant);
         }
         return tally.Report();
@@ -203,7 +201,7 @@ public static class KanjiSpotCheck
 
             tally.Read("this", text, RmQRCodeDecoder.TryDecode(data, out var ours, out _) ? ours : null, variant);
             var (luminance, width, height) = RenderRect(data.Width, data.Height, (r, c) => data[r, c]);
-            var cppResults = cpp.From(new CppImageView(luminance, width, height, CppImageFormat.Lum));
+            var cppResults = ZXingCppCalls.Read(cpp, luminance, width, height);
             tally.Read("zxing-cpp", text, cppResults.Length == 1 ? cppResults[0].Text : null, variant);
         }
         return tally.Report();
@@ -257,7 +255,7 @@ public static class KanjiSpotCheck
 
             var qr = QRCodeGenerator.Create(text, QREccLevel.M, new QRCodeGeneratorOptions { AllowKanji = true, Segmentation = QRSegmentation.Optimal });
             var (qrLuminance, qrWidth) = RenderSquare(qr.Size, (r, c) => qr[r, c]);
-            var qrCpp = cppQr.From(new CppImageView(qrLuminance, qrWidth, qrWidth, CppImageFormat.Lum));
+            var qrCpp = ZXingCppCalls.Read(cppQr, qrLuminance, qrWidth, qrWidth);
             var qrNet = NetRead(net, qrLuminance, qrWidth, qrWidth);
             failures += Line($"Standard QR {qr.Version}", text, shiftJis, qrCpp,
                 ("this", QRCodeDecoder.TryDecode(qr, out var qrOurs, out _) ? qrOurs : null),
@@ -269,7 +267,7 @@ public static class KanjiSpotCheck
             {
                 var micro = MicroQRCodeGenerator.Create(text, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { AllowKanji = true, Segmentation = MicroQRSegmentation.Optimal });
                 var (microLuminance, microWidth) = RenderSquare(micro.Size, (r, c) => micro[r, c]);
-                var microCpp = cppMicro.From(new CppImageView(microLuminance, microWidth, microWidth, CppImageFormat.Lum));
+                var microCpp = ZXingCppCalls.Read(cppMicro, microLuminance, microWidth, microWidth);
                 failures += Line($"Micro QR {micro.Version}", text, shiftJis, microCpp,
                     ("this", MicroQRCodeDecoder.TryDecode(micro, out var microOurs, out _) ? microOurs : null),
                     ("zxing-cpp", microCpp.Length == 1 ? microCpp[0].Text : null));
@@ -277,7 +275,7 @@ public static class KanjiSpotCheck
 
             var rmqr = RmQRCodeGenerator.Create(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { AllowKanji = true, Segmentation = RmQRSegmentation.Optimal });
             var (rmqrLuminance, rmqrWidth, rmqrHeight) = RenderRect(rmqr.Width, rmqr.Height, (r, c) => rmqr[r, c]);
-            var rmqrCpp = cppRmQr.From(new CppImageView(rmqrLuminance, rmqrWidth, rmqrHeight, CppImageFormat.Lum));
+            var rmqrCpp = ZXingCppCalls.Read(cppRmQr, rmqrLuminance, rmqrWidth, rmqrHeight);
             failures += Line($"rMQR {rmqr.Version}", text, shiftJis, rmqrCpp,
                 ("this", RmQRCodeDecoder.TryDecode(rmqr, out var rmqrOurs, out _) ? rmqrOurs : null),
                 ("zxing-cpp", rmqrCpp.Length == 1 ? rmqrCpp[0].Text : null));
@@ -345,7 +343,7 @@ public static class KanjiSpotCheck
             var code = QrCode.EncodeSegments(segments, QrCode.Ecc.Medium, 1, 40, false);
             var size = code.Size;
             var (luminance, width) = RenderSquare(size, (r, c) => code.GetModule(c, r), quietZone: 4);
-            var cppResults = cpp.From(new CppImageView(luminance, width, width, CppImageFormat.Lum));
+            var cppResults = ZXingCppCalls.Read(cpp, luminance, width, width);
             var netResult = NetRead(net, luminance, width, width);
             var matrix = new byte[size * size];
             var glyphMatrix = new GlyphMatrix(size, size);

@@ -20,7 +20,7 @@ public sealed class ZintMicroQRFixtureGenerator : IMicroQRFixtureGenerator
         {
             try
             {
-                using var barcode = new BarcodeCreator(BarcodeFormat.MicroQRCode).From("0");
+                using var barcode = ZXingCppCalls.Create(new BarcodeCreator(BarcodeFormat.MicroQRCode), "0");
                 return barcode.IsValid;
             }
             catch
@@ -45,11 +45,10 @@ public sealed class ZintMicroQRFixtureGenerator : IMicroQRFixtureGenerator
             ? $"version={caseDefinition.Version}"
             : $"version={caseDefinition.Version},ecLevel={caseDefinition.ErrorCorrectionLevel}";
 
-        var creator = new BarcodeCreator(BarcodeFormat.MicroQRCode) { Options = options };
-        using var barcode = creator.From(caseDefinition.PayloadText);
+        using var barcode = ZXingCppCalls.Create(new BarcodeCreator(BarcodeFormat.MicroQRCode) { Options = options }, caseDefinition.PayloadText);
 
         // Scale 1 without quiet zones yields the module-exact symbol.
-        using var image = barcode.ToImage(new WriterOptions { Scale = 1, AddQuietZones = false });
+        using var image = ZXingCppCalls.ToImage(barcode, new WriterOptions { Scale = 1, AddQuietZones = false });
         var size = image.Width;
         var expectedSize = 9 + 2 * caseDefinition.Version;
         if (image.Height != size || size != expectedSize)

@@ -34,9 +34,8 @@ public static class RmQRProbe
         {
             try
             {
-                var creator = new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = $"version={n}" };
-                using var barcode = creator.From("1");
-                using var image = barcode.ToImage(new WriterOptions { Scale = 1, AddQuietZones = false });
+                using var barcode = ZXingCppCalls.Create(new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = $"version={n}" }, "1");
+                using var image = ZXingCppCalls.ToImage(barcode, new WriterOptions { Scale = 1, AddQuietZones = false });
                 var expected = n is >= 1 and <= 32 ? $"R{Versions[n - 1].Height}x{Versions[n - 1].Width}" : "(auto)";
                 var actual = $"R{image.Height}x{image.Width}";
                 var match = n <= 32 && actual == expected;
@@ -54,9 +53,8 @@ public static class RmQRProbe
         Console.WriteLine("== libzint automatic version choice (no version option): which fit policy? ==");
         foreach (var payload in new[] { "012345678901", "0123456789012", "012345678901234", new string('0', 100) })
         {
-            var creator = new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = "ecLevel=M" };
-            using var barcode = creator.From(payload);
-            using var image = barcode.ToImage(new WriterOptions { Scale = 1, AddQuietZones = false });
+            using var barcode = ZXingCppCalls.Create(new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = "ecLevel=M" }, payload);
+            using var image = ZXingCppCalls.ToImage(barcode, new WriterOptions { Scale = 1, AddQuietZones = false });
             Console.WriteLine($"{payload.Length,3} digits at M -> R{image.Height}x{image.Width}");
         }
 
@@ -67,11 +65,9 @@ public static class RmQRProbe
         {
             foreach (var ecc in new[] { "M", "H" })
             {
-                var creator = new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = $"version={i + 1},ecLevel={ecc}" };
-                using var barcode = creator.From("12345");
-                using var image = barcode.ToImage(new WriterOptions { Scale = 4, AddQuietZones = true });
-                var view = new ImageView(image.ToArray(), image.Width, image.Height, image.Format);
-                var results = new BarcodeReader { Formats = BarcodeFormat.RMQRCode, TryHarder = true }.From(view);
+                using var barcode = ZXingCppCalls.Create(new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = $"version={i + 1},ecLevel={ecc}" }, "12345");
+                using var image = ZXingCppCalls.ToImage(barcode, new WriterOptions { Scale = 4, AddQuietZones = true });
+                var results = ZXingCppCalls.Read(new BarcodeReader { Formats = BarcodeFormat.RMQRCode, TryHarder = true }, image.ToArray(), image.Width, image.Height, image.Format);
                 var expectedVersion = $"R{Versions[i].Height}x{Versions[i].Width}";
                 if (results.Length == 1 && results[0].Text == "12345")
                 {
@@ -126,8 +122,7 @@ public static class RmQRProbe
                 }
             }
 
-            var view = new ImageView(lum, pw, ph, ImageFormat.Lum);
-            var results = new BarcodeReader { Formats = BarcodeFormat.RMQRCode, TryHarder = true }.From(view);
+            var results = ZXingCppCalls.Read(new BarcodeReader { Formats = BarcodeFormat.RMQRCode, TryHarder = true }, lum, pw, ph);
             if (results.Length == 1)
             {
                 var r = results[0];

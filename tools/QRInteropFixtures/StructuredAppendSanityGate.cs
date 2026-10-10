@@ -139,7 +139,7 @@ public static class StructuredAppendSanityGate
             }
         }
 
-        var results = new BarcodeReader { Formats = BarcodeFormat.QRCode, TryHarder = true }.From(new ImageView(luminance, widthPixels, widthPixels, ImageFormat.Lum));
+        var results = ZXingCppCalls.Read(new BarcodeReader { Formats = BarcodeFormat.QRCode, TryHarder = true }, luminance, widthPixels, widthPixels);
         if (results.Length != 1)
             throw new InvalidOperationException($"sanity gate: zxing-cpp found {results.Length} symbols in fixture {manifest.Generator}/{manifest.Id}.");
         return results[0];

@@ -44,8 +44,7 @@ public static class MicroQRSanityGate
             }
         }
 
-        var imageView = new ImageView(luminance, widthPixels, widthPixels, ImageFormat.Lum);
-        var results = new BarcodeReader { Formats = BarcodeFormat.MicroQRCode, TryHarder = true }.From(imageView);
+        var results = ZXingCppCalls.Read(new BarcodeReader { Formats = BarcodeFormat.MicroQRCode, TryHarder = true }, luminance, widthPixels, widthPixels);
         if (results.Length != 1)
             throw new InvalidOperationException($"sanity gate: zxing-cpp found {results.Length} symbols in fixture {manifest.Generator}/{manifest.Id}.");
 

@@ -58,7 +58,7 @@ public static class StructuredAppendSampleImporter
                 using var decoded = SKBitmap.Decode(png) ?? throw new InvalidOperationException($"cannot decode {png}");
                 using var gray = decoded.ColorType == SKColorType.Gray8 ? decoded.Copy() : decoded.Copy(SKColorType.Gray8);
                 var pixels = gray.GetPixelSpan().ToArray();
-                var results = new BarcodeReader { Formats = BarcodeFormat.QRCode, TryHarder = true }.From(new ImageView(pixels, gray.Width, gray.Height, ImageFormat.Lum, gray.RowBytes));
+                var results = ZXingCppCalls.Read(new BarcodeReader { Formats = BarcodeFormat.QRCode, TryHarder = true }, pixels, gray.Width, gray.Height, ImageFormat.Lum, gray.RowBytes);
                 if (results.Length != 1)
                     throw new InvalidOperationException($"zxing-cpp found {results.Length} symbols in {png}");
                 var r = results[0];

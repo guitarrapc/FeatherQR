@@ -42,13 +42,16 @@ internal static class ZXingCppOperations
     private static Operation DecodeImage((byte[] Pixels, int Width, int Height) image, BarcodeFormat format)
     {
         // An ImageView keeps a pointer to the pixels without pinning them, so they live on the pinned heap.
+        // It frees its native half when finalized, so each read holds its view until it returns.
         var pixels = GC.AllocateArray<byte>(image.Pixels.Length, pinned: true);
         image.Pixels.CopyTo(pixels, 0);
         var reader = new BarcodeReader { Formats = format, MaxNumberOfSymbols = 1 };
         return new(
             () =>
             {
-                var barcodes = reader.From(new ImageView(pixels, image.Width, image.Height, ImageFormat.Lum));
+                var view = new ImageView(pixels, image.Width, image.Height, ImageFormat.Lum);
+                var barcodes = reader.From(view);
+                GC.KeepAlive(view);
                 var fold = barcodes.Length > 0 ? Fold(barcodes[0].Text) : 0;
                 foreach (var barcode in barcodes)
                     barcode.Dispose();
@@ -56,7 +59,9 @@ internal static class ZXingCppOperations
             },
             () =>
             {
-                var barcodes = reader.From(new ImageView(pixels, image.Width, image.Height, ImageFormat.Lum));
+                var view = new ImageView(pixels, image.Width, image.Height, ImageFormat.Lum);
+                var barcodes = reader.From(view);
+                GC.KeepAlive(view);
                 try
                 {
                     return barcodes.Length > 0 && barcodes[0].IsValid ? $"\"status\":\"ok\",\"text\":\"{Convert.ToHexString(Encoding.UTF8.GetBytes(barcodes[0].Text))}\"" : Failed;
