@@ -295,7 +295,7 @@ QRCodeGenerator.Create("content", QREccLevel.M, QRCodeGeneratorOptions.Default);
 
 #### Changing one option with `with`
 
-The options types are `readonly record struct`, so `with` produces a copy with some members replaced and leaves the original untouched. Useful when a base configuration is shared and one call needs a variation:
+The options types are `record struct`, so `with` produces a copy with some members replaced and leaves the original untouched. Useful when a base configuration is shared and one call needs a variation:
 
 ```csharp
 var house = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, QuietZoneSize = 7 };
@@ -305,6 +305,14 @@ var pinned     = house with { Version = 20 };
 
 // starting from the defaults reads the same way
 var opts = QRCodeGeneratorOptions.Default with { QuietZoneSize = 0 };
+```
+
+A member can also be assigned after construction. An options value is copied when it is stored or passed, so the assignment changes that one variable:
+
+```csharp
+var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 };
+if (borderless)
+    options.QuietZoneSize = 0;   // changes this variable only
 ```
 
 Value equality comes with the record, and two option sets that behave identically compare equal: writing a default explicitly is the same value as leaving it out, so `new QRCodeGeneratorOptions { QuietZoneSize = 4 } == QRCodeGeneratorOptions.Default`.

@@ -175,14 +175,16 @@ The one spelling that needs an edit is a named argument: `plainText:` becomes `t
 
 Some 2.0.0 spellings need C# features your project may not have enabled. They affect the `netstandard2.0` asset, which is what .NET Framework 4.6.2+ binds, and the `init` ones affect `netstandard2.1` as well. Neither is about the runtime — the compiled library works fine on both; it is about what your compiler will let you write.
 
-| Your project targets | Default language version | A `string` where a `ReadOnlySpan<char>` is expected (`Create`, `TryGetRequiredBufferSize`) | Any `{ … }` initializer (`QRCodeGeneratorOptions`, `IconData`) |
+| Your project targets | Default language version | A `string` where a `ReadOnlySpan<char>` is expected (`Create`, `TryGetRequiredBufferSize`) | An `IconData { … }` initializer |
 |---|---|---|---|
 | net472 / net48 / netstandard2.0 | 7.3 | needs C# 14 | needs C# 9 |
 | netstandard2.1 | 8.0 | works | needs C# 9 |
 | net8.0 | 12.0 | works | works |
 | net10.0 | 14.0 | works | works |
 
-`string` converts to `ReadOnlySpan<char>` through a conversion the compiler synthesizes, and on netstandard2.0 the span comes from the `System.Memory` package rather than the framework, where only C# 14 synthesizes it. Every version through C# 13 reports `CS1503`. `init` accessors are a C# 9 feature, so an object initializer that assigns one reports `CS8370` or `CS8400` below that.
+`string` converts to `ReadOnlySpan<char>` through a conversion the compiler synthesizes, and on netstandard2.0 the span comes from the `System.Memory` package rather than the framework, where only C# 14 synthesizes it. Every version through C# 13 reports `CS1503`. `IconData`'s members are `init`, a C# 9 feature, so an object initializer that assigns one reports `CS8370` or `CS8400` below that.
+
+The generator options are not in the table, because they need nothing. `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` have `set` accessors, so `new QRCodeGeneratorOptions { QuietZoneSize = 0 }` compiles at every language version.
 
 `IconData` carries one constraint the table cannot express, because it is about your *compiler* rather than your language version. `Icon` is a `required` member, and the compiler marks every constructor of such a type that is not annotated `[SetsRequiredMembers]` as unusable to compilers that do not understand required members, so a compiler older than Roslyn 4.3 (before VS 2022 17.3 / .NET SDK 6.0.4xx) reports `CS0619: 'IconData.IconData()' is obsolete: 'Constructors of types with required members are not supported in this version of your compiler.'` Raising `<LangVersion>` does not help there — only a newer SDK does, and the boundary is not the C# 11 line: Roslyn 4.3 caps out at C# 10 and already consumes required members. On any compiler from 4.3 onward the table applies as written, and `<LangVersion>9</LangVersion>` is enough. The `IconData` constructor below carries that annotation, so it stays usable even on the older compilers.
 
@@ -194,7 +196,7 @@ You have two ways forward.
 <LangVersion>14</LangVersion>
 ```
 
-**Or keep your language version** and use the spellings that work everywhere. Each option struct has a constructor taking the same settings as optional parameters, and `IconData` has one taking the icon plus the rest as optional parameters, so nothing is out of reach:
+**Or keep your language version** and use the spellings that work everywhere. The generator options take an object initializer or a plain assignment, and `IconData` has a constructor taking the icon plus the rest as optional parameters, so nothing is out of reach:
 
 ```csharp
 using System;                       // for AsSpan
@@ -203,18 +205,20 @@ using FeatherQR;
 using FeatherQR.SkiaSharp;
 
 var data = QRCodeGenerator.Create("https://example.com".AsSpan(), QREccLevel.M,
-    new QRCodeGeneratorOptions(quietZoneSize: 2, version: 5));
+    new QRCodeGeneratorOptions { QuietZoneSize = 2, Version = 5 });
 
-// IconData too. Below C# 9 this is the only way to reach a shape the FromImage
+// IconData through its constructor. Below C# 9 this is the only way to reach a shape the FromImage
 // factories cannot build, since both of them hardcode ImageIconShape.
 var icon = new IconData(new ImageTextIconShape(logo, "FooBar", SKColors.Black, font), iconSizePercent: 15);
 ```
 
-The constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order.
+`IconData`'s constructor exists for exactly this case. On C# 9 and above, prefer the object initializer: it names only the settings it changes and does not depend on the parameter order.
+
+The generator options had a constructor of the same kind in 2.0.0-preview.3 through preview.5 (`new QRCodeGeneratorOptions(quietZoneSize: 2)`). It is gone, since the initializer now compiles everywhere: write `new QRCodeGeneratorOptions { QuietZoneSize = 2 }`.
 
 ### Results, options and sealing
 
-The three symbologies now describe their results the same way, and the option objects are immutable.
+The three symbologies now describe their results the same way, the option objects a builder holds are immutable, and the generator options are plain values.
 
 **The sizing and decode results are the same kind of value on all three symbologies**: a `readonly record struct` the library builds. They keep `ToString()`, `==` and `IEquatable<T>`, so logging and comparing them is unchanged. `QRCodeCalculatedSize` is the one that moves, and it loses two things a caller may have used:
 
@@ -243,6 +247,16 @@ Each name maps to one member, and nothing else changes:
 | `bufferSize` | `size.BufferSize` |
 | `qrSize` | `size.Size` |
 | `version` | `size.Version` |
+
+**The generator options are plain values you can assign to.** `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions` and `RmQRCodeGeneratorOptions` have `set` accessors where 1.2.0 had `init`. Nothing you wrote changes: an object initializer and `with` compile as before. What is new is that a member can be assigned after construction, and that the initializer compiles below C# 9:
+
+```csharp
+var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 };
+if (borderless)
+    options.QuietZoneSize = 0;      // changes this variable and nothing else
+```
+
+An options value is copied when it is stored or passed, so assigning to one variable never reaches another, and a generator reads the value as it is at the call.
 
 **`IconData` properties are `init`-only**, so configuration happens at construction. Code that adjusted an instance afterwards uses `with`, which is also how you vary an instance you did not build yourself (below C# 9, use the constructor described under [Older language versions](#older-language-versions)):
 

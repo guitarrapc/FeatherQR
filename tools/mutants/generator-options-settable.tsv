@@ -1,4 +1,4 @@
-# Planted faults for the settable generator options (qrcode-symbologies.md, option objects).
+# Planted faults for the settable generator options (qrcode-symbologies.md, Public API direction).
 # ro-*: `readonly` taken off a hand-written getter. new-*: a member added without it. Both make the compiler copy the struct
 # when it is read through `in`. init-*: an option back on an init accessor. mask-*: a MaskPattern bound one step loose.
 # clobber-* and offset-*: a setter that writes another member, or the value where the offset from the default belongs.
