@@ -81,39 +81,197 @@ DL URI ── FromDigitalLink ──> element string (GS as U+001D) ── ToDig
 
 Every conversion is one hop, and the hub is the form the FNC1 encoder takes and the decoder returns. A Digital Link URI goes into a symbol as plain text, with no FNC1.
 
-### API sketch
+### API (approved 2026-10-12)
 
-Names and signatures are settled in Phase 1. The recipes use the FNC1 plan's decision 1. Its read members (`info.Fnc1.IsFirstPosition`) are public from FNC1 decode in 2.0.0. Its construction members (`Fnc1Mode.FirstPosition`, the options' `Fnc1`) go public with FNC1 encode, which is the release this layer ships in (G1). The shape follows the existing pair: builders look like the generators (a one-line form that throws, and a span form), readers look like the decoders (`Try`, with a string or a caller's span).
+The listing below is the Phase 1 deliverable, reviewed in three rounds and approved by the maintainer on 2026-10-12. Phase 2 starts from it, and a change to it is a change to this section first. The recipes use the FNC1 plan's decision 1. Its read members (`info.Fnc1.IsFirstPosition`) are public from FNC1 decode in 2.0.0. Its construction members (`Fnc1Mode.FirstPosition`, the options' `Fnc1`) go public with FNC1 encode, which is the release this layer ships in (G1). The shape follows the existing pair: the data layer looks like the decoders (`Try` only, with a string or a caller's span, never throwing for input), and the generator entry points look like the generators (a one-line form that throws).
+
+Package, namespace and names (G2, the entry type decided 2026-10-12): the package is `FeatherQR.Gs1`, its assembly `FeatherQR.Gs1.dll`, its namespace `FeatherQR.Gs1`, with internals under `FeatherQR.Gs1.Internals`, and it depends on `FeatherQR` and nothing else (decided with G4, 2026-10-12, the same direction as `FeatherQR.SkiaSharp`). The entry type is the static class `Gs1ElementString`, named after the hub every member converts to or from. A type named `Gs1` was compiled against callers in four namespaces: it resolves for a caller in the global namespace, in an application's own namespace and inside `FeatherQR.Gs1.Internals`, and fails (CS0234, the simple name `Gs1` binds to the namespace) for a caller in any other `FeatherQR` namespace, which is where this repository's 302 test files and the Playground live. An alias would have carried that, and the longer name costs one word. Every public type carries the `Gs1` prefix, as `Fnc1Mode` carries `Fnc1`. Six types: `Gs1ElementString`, `Gs1Error`, `Gs1ErrorKind`, `Gs1FormatException`, `Gs1Element` and `Gs1ElementEnumerator`, plus the two static classes the generator extensions compile to (`Gs1QRCodeGenerator`, `Gs1RmQRCodeGenerator`), which a consumer below C# 14 calls by name as the rendering package's `QRCodeImageDecoder` is called.
 
 ```csharp
-// Build a GS1 QR Code (healthcare, logistics)
-var qr = QRCodeGenerator.Create(Gs1.FromHri("(01)09506000134352(17)201225(10)ABC123"), QREccLevel.M, new() { Fnc1 = Fnc1Mode.FirstPosition });
+namespace FeatherQR.Gs1;
 
-// Build a QR Code with a Digital Link URI (retail)
-var dl = QRCodeGenerator.Create(Gs1.ToDigitalLink(Gs1.FromHri("(01)09506000134352(10)ABC123")), QREccLevel.M);
-
-// Read
-if (QRCodeDecoder.TryDecode(data, out var text, out var info))
+/// <summary>Conversions between a GS1 element string (AI values with the group separator U+001D after each variable-length value another follows), its (AI) text and a GS1 Digital Link URI, and the checks the GS1 General Specifications define on the data.</summary>
+public static class Gs1ElementString
 {
-    if (info.Fnc1.IsFirstPosition && Gs1.TryToHri(text, out var hri, out _)) { /* (01)09506000134352(17)201225(10)ABC123 */ }
-    else if (Gs1.TryFromDigitalLink(text, out var elementString, out _)) { /* the same element string */ }
+    /// <summary>Builds an element string from (AI) text such as <c>(01)09506000134352(17)201225(10)ABC123</c>, a literal parenthesis in a value written <c>\(</c>. Every check runs, pairings included: <c>false</c> with the error when the text is not valid GS1 data.</summary>
+    public static bool TryFromHri(ReadOnlySpan<char> hri, out string elementString, out Gs1Error error);
+    /// <summary>The span form of <see cref="TryFromHri"/>: writes into the caller's buffer and allocates nothing. <see cref="TryGetFromHriLength"/> gives the exact length, and the result is never longer than the text. A short destination fails with <see cref="Gs1ErrorKind.DestinationTooSmall"/>.</summary>
+    public static bool TryFromHri(ReadOnlySpan<char> hri, Span<char> destination, out int charsWritten, out Gs1Error error);
+    /// <summary>The length <see cref="TryFromHri"/> would write for this text, after the same checks: <c>false</c> with the same error where the conversion would fail.</summary>
+    public static bool TryGetFromHriLength(ReadOnlySpan<char> hri, out int length, out Gs1Error error);
+
+    /// <summary>Formats an element string as (AI) text, <c>(01)09506000134352(17)201225(10)ABC123</c>, a literal parenthesis in a value written <c>\(</c> so that <see cref="TryFromHri"/> reads the text back. Runs what splitting needs and no more: an unknown AI is read as variable length up to the next separator, a redundant or trailing separator is accepted.</summary>
+    public static bool TryToHri(ReadOnlySpan<char> elementString, out string hri, out Gs1Error error);
+    /// <summary>The span form of <see cref="TryToHri"/>. <see cref="TryGetToHriLength"/> gives the exact length, and the text is never longer than twice the element string.</summary>
+    public static bool TryToHri(ReadOnlySpan<char> elementString, Span<char> destination, out int charsWritten, out Gs1Error error);
+    /// <summary>The length <see cref="TryToHri"/> would write for this element string, after the same splitting.</summary>
+    public static bool TryGetToHriLength(ReadOnlySpan<char> elementString, out int length, out Gs1Error error);
+
+    /// <summary>Builds a GS1 Digital Link URI (URI Syntax 1.7.0, uncompressed) from an element string: the primary key and its qualifiers in the path, the other AIs as query attributes in the lexical order of the AIs, reserved characters percent-encoded. With no stem the canonical <c>https://id.gs1.org</c>. Every check runs, pairings included, plus what a URI can carry: <c>false</c> with the error for the data. A stem that is not an <c>http</c> or <c>https</c> URI prefix throws <see cref="ArgumentException"/>, as a malformed option does elsewhere.</summary>
+    public static bool TryToDigitalLink(ReadOnlySpan<char> elementString, out string uri, out Gs1Error error, string? stem = null);
+    /// <summary>The span form of <see cref="TryToDigitalLink"/>. <see cref="TryGetToDigitalLinkLength"/> gives the exact length, and the URI is never longer than the stem plus three times the element string plus two.</summary>
+    public static bool TryToDigitalLink(ReadOnlySpan<char> elementString, Span<char> destination, out int charsWritten, out Gs1Error error, string? stem = null);
+    /// <summary>The length <see cref="TryToDigitalLink"/> would write for this element string and stem, after the same checks.</summary>
+    public static bool TryGetToDigitalLinkLength(ReadOnlySpan<char> elementString, out int length, out Gs1Error error, string? stem = null);
+
+    /// <summary>Reads the GS1 data out of a Digital Link URI with any stem: the path's key and qualifiers, then the numeric query keys in URI order, percent-decoded, a repeated key resolved to its last value, non-numeric keys ignored. Runs what reading needs: the URI's structure. A compressed URI is refused.</summary>
+    public static bool TryFromDigitalLink(ReadOnlySpan<char> uri, out string elementString, out Gs1Error error);
+    /// <summary>The span form of <see cref="TryFromDigitalLink"/>. <see cref="TryGetFromDigitalLinkLength"/> gives the exact length, and the element string is never longer than the URI.</summary>
+    public static bool TryFromDigitalLink(ReadOnlySpan<char> uri, Span<char> destination, out int charsWritten, out Gs1Error error);
+    /// <summary>The length <see cref="TryFromDigitalLink"/> would write for this URI, after the same reading.</summary>
+    public static bool TryGetFromDigitalLinkLength(ReadOnlySpan<char> uri, out int length, out Gs1Error error);
+
+    /// <summary>Reads what a decoder returned as GS1 data: with FNC1 in first position the text is an element string and comes back as (AI) text, otherwise the text is read as a Digital Link URI and its element string comes back as (AI) text. <c>false</c> when it is neither. The decode-side mirror of <c>CreateGs1</c>, independent of which decode entry point read the symbol.</summary>
+    public static bool TryRead(ReadOnlySpan<char> text, Fnc1Mode fnc1, out string hri, out Gs1Error error);
+    /// <summary>The span form of <see cref="TryRead"/>. The text is never longer than twice the input.</summary>
+    public static bool TryRead(ReadOnlySpan<char> text, Fnc1Mode fnc1, Span<char> destination, out int charsWritten, out Gs1Error error);
+    /// <summary>The length <see cref="TryRead"/> would write, after the same reading.</summary>
+    public static bool TryGetReadLength(ReadOnlySpan<char> text, Fnc1Mode fnc1, out int length, out Gs1Error error);
+
+    /// <summary>Runs every check on an element string: AI lengths and character sets, check digits and check character pairs, dates and the other linters, requisite and exclusive pairings, repeated AIs. <c>true</c> with <c>default</c> error when it passes.</summary>
+    public static bool TryValidate(ReadOnlySpan<char> elementString, out Gs1Error error);
+
+    /// <summary>Splits an element string into its elements without allocating: <c>foreach (var element in Gs1ElementString.EnumerateElements(text))</c>. Runs what splitting needs, as <see cref="TryToHri"/> does, and stops at the first element it cannot split. <see cref="TryValidate"/> says why.</summary>
+    public static Gs1ElementEnumerator EnumerateElements(ReadOnlySpan<char> elementString);
 }
 
-// Check data from elsewhere, and look at single elements without allocating
-if (!Gs1.TryValidate(elementString, out Gs1Error error)) { /* error.Kind, error.Offset, error.Length */ }
-foreach (var element in Gs1.EnumerateElements(elementString)) { /* element.Ai, element.Value */ }
+/// <summary>Why a conversion or check refused its input: the kind, and where in the input (<see cref="Offset"/>, <see cref="Length"/>, both 0 when the kind names no place). <c>default</c> is <see cref="Gs1ErrorKind.None"/>. <see cref="ToString"/> is the message the generator entry points put in their <see cref="Gs1FormatException"/>.</summary>
+public readonly record struct Gs1Error
+{
+    public Gs1ErrorKind Kind { get; }
+    public int Offset { get; }
+    public int Length { get; }
+    public override string ToString();
+}
+
+/// <summary>Thrown by the generator entry points (<c>CreateGs1</c>, <c>CreateGs1DigitalLink</c>) when the data is not valid GS1 data. Nothing on <see cref="Gs1ElementString"/> throws for its input. A <see cref="FormatException"/>, as <see cref="UriFormatException"/> is, so an existing <c>catch (FormatException)</c> still catches it, with the <see cref="Error"/> for callers that want the kind and the place.</summary>
+public sealed class Gs1FormatException : FormatException
+{
+    public Gs1Error Error { get; }
+}
+
+/// <summary>The kinds of <see cref="Gs1Error"/>. Later phases may add members at the end.</summary>
+public enum Gs1ErrorKind
+{
+    None,
+    DestinationTooSmall,
+    /// <summary>The (AI) text is malformed: an unbalanced or empty parenthesis, a non-digit AI, a stray character outside the elements.</summary>
+    InvalidText,
+    /// <summary>The input is not an http or https URI with a path.</summary>
+    NotAUri,
+    CompressedUri,
+    InvalidPercentEncoding,
+    /// <summary>A separator where no value can end: at the start, after another separator.</summary>
+    UnexpectedSeparator,
+    /// <summary>An AI the table does not know, where building refuses it (G6).</summary>
+    UnknownAi,
+    /// <summary>An AI a Digital Link URI cannot carry: (03), (8014), (8200), or one the table does not flag as a data attribute.</summary>
+    AiNotAllowedInUri,
+    MissingPrimaryKey,
+    InvalidKeyQualifierSequence,
+    EmptyValue,
+    ValueTooShort,
+    ValueTooLong,
+    InvalidCharacter,
+    InvalidCheckDigit,
+    InvalidDate,
+    /// <summary>A linter other than the above refused the value: an ISO 3166 or 4217 code, a yes/no flag, a zero or non-zero rule, a coordinate, an IBAN, a coupon field, a position in a sequence.</summary>
+    InvalidValue,
+    MissingRequiredAi,
+    ExcludedAiPair,
+    /// <summary>The same AI twice with different values, or a key repeated between path and query.</summary>
+    RepeatedAi,
+}
+
+/// <summary>One element of an element string as spans into it: the AI, its value and the value's offset. The AI is 2 to 4 digits, the value excludes the separator.</summary>
+public readonly ref struct Gs1Element
+{
+    public ReadOnlySpan<char> Ai { get; }
+    public ReadOnlySpan<char> Value { get; }
+    public int Offset { get; }
+}
+
+/// <summary>Enumerates the elements of an element string. Allocation-free, usable in <c>foreach</c>.</summary>
+public ref struct Gs1ElementEnumerator
+{
+    public Gs1ElementEnumerator GetEnumerator();
+    public bool MoveNext();
+    public Gs1Element Current { get; }
+}
+
+/// <summary>GS1 entry points on the core generators (G4). A C# 14 consumer writes <c>QRCodeGenerator.CreateGs1(…)</c>, an older one <c>Gs1QRCodeGenerator.CreateGs1(…)</c>. The text is (AI) text or an element string, told apart by its first character: (AI) text starts with <c>(</c>, an element string with a digit. Every check runs, pairings included, and the element string goes into the symbol with FNC1 in first position. An <c>options.Fnc1</c> other than <c>default</c> or first position throws <see cref="ArgumentException"/>. Micro QR has no GS1 entry, since GS1 does not support it.</summary>
+public static class Gs1QRCodeGenerator
+{
+    extension(QRCodeGenerator)
+    {
+        /// <summary>A GS1 QR Code of the data. Throws <see cref="Gs1FormatException"/> for the data and <see cref="ArgumentException"/> as <c>Create</c> does for its options.</summary>
+        public static QRCodeData CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null);
+        /// <summary>The span form of <see cref="CreateGs1"/>, writing the modules into the caller's buffer as <c>Create</c> does.</summary>
+        public static int CreateGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null);
+        /// <summary>The size <see cref="CreateGs1"/> needs, as <c>TryGetRequiredBufferSize</c> gives it for <c>Create</c>. <c>false</c> when the data is not valid GS1 data or does not fit.</summary>
+        public static bool TryGetRequiredBufferSizeGs1(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null);
+        /// <summary>A QR Code holding the Digital Link URI of the data, the retail carrier: plain QR, no FNC1, the canonical <c>https://id.gs1.org</c> stem unless one is given.</summary>
+        public static QRCodeData CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, in QRCodeGeneratorOptions options = null, string? stem = null);
+        public static int CreateGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options = null, string? stem = null);
+        public static bool TryGetRequiredBufferSizeGs1DigitalLink(ReadOnlySpan<char> text, QREccLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = null, string? stem = null);
+    }
+}
+
+/// <summary>The same six members on <c>RmQRCodeGenerator</c> with its level, options and size types. The docs say GS1 does not list rMQR as a carrier (G10).</summary>
+public static class Gs1RmQRCodeGenerator
+{
+    extension(RmQRCodeGenerator) { /* CreateGs1 ×2, TryGetRequiredBufferSizeGs1, CreateGs1DigitalLink ×2, TryGetRequiredBufferSizeGs1DigitalLink */ }
+}
 ```
 
-| Member | From → to | Checks |
+The recipes for the three jobs:
+
+```csharp
+using FeatherQR;
+using FeatherQR.Gs1;
+
+// Build a GS1 QR Code (healthcare, logistics). The entry point checks the data, writes the separators and sets FNC1.
+var qr = QRCodeGenerator.CreateGs1("(01)09506000134352(17)201225(10)ABC123", QREccLevel.M);
+
+// Build a QR Code with a Digital Link URI (retail). Plain QR, no FNC1.
+var dl = QRCodeGenerator.CreateGs1DigitalLink("(01)09506000134352(10)ABC123", QREccLevel.M);
+
+// Read: one line after any decode entry point, both carriers
+if (QRCodeDecoder.TryDecode(data, out var text, out var info) && Gs1ElementString.TryRead(text, info.Fnc1, out var hri, out _))
+{
+    /* (01)09506000134352(17)201225(10)ABC123, from the element string or from the URI */
+}
+
+// The conversions on their own: a label's HRI, an element string for another carrier, a URI for a web page. The data layer never throws for input.
+if (Gs1ElementString.TryFromHri("(01)09506000134352(10)ABC123", out var elementString, out var error)
+    && Gs1ElementString.TryToDigitalLink(elementString, out var uri, out error, stem: "https://brand.example.com")) { }
+
+// Check data from elsewhere, and look at single elements without allocating
+if (!Gs1ElementString.TryValidate(elementString, out Gs1Error error)) { /* error.Kind, error.Offset, error.Length, error.ToString() */ }
+foreach (var element in Gs1ElementString.EnumerateElements(elementString)) { /* element.Ai, element.Value */ }
+```
+
+| Member | From → to | Checks (G5) |
 |---|---|---|
-| `FromHri`, `TryFromHri` | `(AI)` text → element string | every check, pairings included |
-| `ToDigitalLink`, `TryToDigitalLink` | element string → URI, with an optional stem (default `https://id.gs1.org`) | every check, pairings included, plus what a URI can carry |
+| `TryFromHri` | `(AI)` text → element string | every check, pairings included |
+| `TryToDigitalLink` | element string → URI, with an optional stem (default `https://id.gs1.org`) | every check, pairings included, plus what a URI can carry |
 | `TryToHri` | element string → `(AI)` text | what splitting needs, unknown AIs read |
-| `TryFromDigitalLink` | URI → element string | what reading needs (G5): the URI's structure. Key order and unknown keys follow the Syntax Engine (Phase 5) |
+| `TryFromDigitalLink` | URI → element string | what reading needs: the URI's structure. Key order and unknown keys follow the Syntax Engine, settled in Phase 5 against the fixtures (it refuses an unknown numeric key by default) |
 | `TryValidate` | element string | every check |
 | `EnumerateElements` | element string → `(Ai, Value)` spans | what splitting needs |
+| `TryRead` | decoded text + `Fnc1Mode` → `(AI)` text | what reading needs: `TryToHri`'s under FNC1, `TryFromDigitalLink`'s then `TryToHri`'s otherwise |
+| `CreateGs1`, `CreateGs1DigitalLink` (generator extensions) | `(AI)` text or element string → symbol | every check, pairings included, as the builders |
 
-Each `Try` form exists twice, returning a `string` or writing into a caller's span with `charsWritten`, and the span form allocates nothing. The public surface is five types: the static class `Gs1`, `Gs1Error` and its kind enum, and the ref struct element and enumerator that keep reading allocation-free. They ship in their own package, `FeatherQR.Gs1` (G2, decided 2026-10-12). Its namespace and the entry type's name are settled in Phase 1: namespaces follow packages in this repository, and a type named `Gs1` inside a namespace that ends in `Gs1` collides with the namespace for callers in any `FeatherQR` namespace, so one of the two names moves.
+The rules the listing rests on:
+
+- Every input is a `ReadOnlySpan<char>`, so a `string` converts without an overload. `Gs1ElementString` has `Try` forms only (decided 2026-10-12): with the generator entry points taking `(AI)` text directly, a throwing `FromHri` or `ToDigitalLink` had no caller a `Try` form does not serve, and the data layer is cleaner never throwing for input. Each `Try` form exists twice, returning a `string` or writing into a caller's span with `charsWritten`, and the span form allocates nothing.
+- A short destination fails as the decoders' does: `false`, `charsWritten` 0 and `Gs1ErrorKind.DestinationTooSmall`. Each span form has a `TryGet…Length` twin that returns the exact length after the same checks, as the generators' `TryGetRequiredBufferSize` does, so a caller can allocate exactly, and a destination of that length succeeds with `charsWritten` equal to it. The bound each span form also documents (the text, twice the element string, the stem plus three times the element string plus two, the URI) lets a caller size from the input alone instead. Decided 2026-10-12 over documented bounds alone and over `GetMax…Length` formulas, because the exact form leaves both choices to the caller. The twins are named after the member they size (`TryGetFromHriLength` for `FromHri`), since two of the four produce an element string and a name built from the output would collide. The exact length costs a second pass over the input, which the pure-formula helper would not, and no caller on a hot path has to take it.
+- No `Try` form throws for any input text (the invariant below). A malformed stem throws `ArgumentException` from every `TryToDigitalLink` form, as a malformed option does in the generators (G7).
+- The generator entry points throw `Gs1FormatException` for the data, a `FormatException` whose message is `Gs1Error.ToString()` and whose `Error` is the `Gs1Error`, as `UriFormatException` derives in the BCL (G7, decided 2026-10-12 over a plain `FormatException`, so the one-line forms give the place of the error too).
+- `TryToHri` escapes a literal `(` in a value as `\(`, so `TryFromHri` reads its output back (decided 2026-10-12). zxing-cpp's `TextMode.HRI` does not escape, and the fixtures' comparison in Phase 4 unescapes before comparing.
+- Readers tolerate a redundant separator after a predefined-length element and a trailing one, as the Syntax Engine does and as 7.8.6.3 asks of a processing routine, and refuse a separator at the start or two in a row. Whether `TryValidate` reports a tolerated separator is settled in Phase 3 against the fixtures (the engine accepts both).
+- The generators get GS1 entry points from this package through C# 14 extension blocks (G4, decided 2026-10-12): `CreateGs1` for the GS1 QR Code carrier and `CreateGs1DigitalLink` for the retail carrier, each with the data, destination and size forms of `Create`, on Standard QR and rMQR, twelve members in two enclosing classes. The decode side gets no twin on the decoders: `TryRead` on `Gs1ElementString` takes any decoder's text and `Fnc1Mode` and gives the `(AI)` text for either carrier, so the sixteen decode entry points (eight per symbology, two of them in the rendering package) stay as they are. No other library gives its decoder a GS1 entry: zxing-cpp formats HRI in a text mode, the rest return a flag and the element string.
+- Both entry points take `(AI)` text or an element string in one parameter, told apart by the first character, which is unambiguous: `(AI)` text starts with `(` and an element string with a digit.
 
 ### The table
 
@@ -141,14 +299,14 @@ Building writes a separator only where the General Specifications require one (�
 | # | Decision | Recommendation |
 |---|---|---|
 | G1 | Release | Decided 2026-10-10 (the 2.0.0 plan's D12): this layer ships in the same release as FNC1 encode ([fnc1-support-plan.md](fnc1-support-plan.md) Phases 3-6), not before it and not after it. That is 2.0.0 if both land before the Phase 7 freeze, 2.1.0 otherwise, and it does not block 2.0.0. An encoder that takes any element string without these builders lets a missing separator write a wrong symbol with no error. FNC1 decode ships in 2.0.0 on its own, since reading needs no GS1 layer |
-| G2 | Package | Decided 2026-10-12: a fourth package, `FeatherQR.Gs1`, holding the whole data layer (the table, the checks, `(AI)` text and Digital Link in both directions). The maintainer chose it to keep the core's license posture untouched: the generated table is Apache-2.0-derived data, and in its own package the notice (G8) travels with the data and the core packages stay plain MIT. The package has no dependency on `FeatherQR` unless Phase 1 finds one it needs, since every member works on text, and the recipes compose it with the core's FNC1 option. FNC1 itself stays in the core, because the mode indicator and the `%` rule are bit-stream behaviour of the encoders and decoders, and FNC1 decode already shipped there. The costs the core split record weighed (a fourth package to version in lockstep, validate in `check_package_deps`, list in `PublicAPI.approved.txt`, reference from the Playground and document) are accepted. The size argument that first put the layer in the core (about 6 KB of data, measured in Phase 0) no longer decides anything. The earlier text of this row recommended the core and listed the package as the alternative, with a size threshold and two revisit conditions. License isolation was the third condition, unwritten |
+| G2 | Package | Decided 2026-10-12: a fourth package, `FeatherQR.Gs1`, holding the whole data layer (the table, the checks, `(AI)` text and Digital Link in both directions). The maintainer chose it to keep the core's license posture untouched: the generated table is Apache-2.0-derived data, and in its own package the notice (G8) travels with the data and the core packages stay plain MIT. The package depends on `FeatherQR` (Phase 1 found the need: the generator entry points of G4 and `TryRead`'s `Fnc1Mode` parameter), in the direction `FeatherQR.SkiaSharp` already takes, and the core never references it. FNC1 itself stays in the core, because the mode indicator and the `%` rule are bit-stream behaviour of the encoders and decoders, and FNC1 decode already shipped there. The costs the core split record weighed (a fourth package to version in lockstep, validate in `check_package_deps`, list in `PublicAPI.approved.txt`, reference from the Playground and document) are accepted. The size argument that first put the layer in the core (about 6 KB of data, measured in Phase 0) no longer decides anything. The earlier text of this row recommended the core and listed the package as the alternative, with a size threshold and two revisit conditions. License isolation was the third condition, unwritten |
 | G3 | Table source and update | Decided 2026-10-12: generated from dictionary release 2026-01-27 by a test, as described above, updated once a year. A hand-written table was asked about and not chosen. The plan's scope table had placed it in the Out column as a recommendation, not a decision, and the Phase 0 record misread that as a rejection. Transcribing the same dictionary by hand produces the same derivative work under the same license, so it saves no notice. Transcribing the General Specifications instead would change the source to GS1's standards terms, but the ISO code lists and the 34 linter rules would then have to be re-sourced from the standard's text, and the 5,656 linter vectors the tests use are the dictionary project's, so the attribution stays either way. With the layer in its own package the notice costs the core nothing, which settled it |
-| G4 | Encode entry point | No GS1 overload on the generators. The conversion and the FNC1 option compose with every existing overload (span, destination, sizing) on both symbologies, where an overload would need a twin of each |
-| G5 | Check strength per member | Members that build data for a symbol run every check, pairings included. Members that read data from a symbol check only what they need and accept unknown AIs. `TryValidate` runs every check. Revisit when a caller needs to build data split across carriers, which the pairing check refuses |
-| G6 | Unknown AIs | Read as variable length up to the next separator. Refused when building |
-| G7 | Error shape | `Gs1Error` with a kind, an offset and a length into the input, so a caller can point at the bad element. The throwing forms throw `FormatException` with the same information, as parsers in the BCL do. No new exception type |
+| G4 | Encode entry point | Decided 2026-10-12: `CreateGs1` and `CreateGs1DigitalLink` on `QRCodeGenerator` and `RmQRCodeGenerator`, added by `FeatherQR.Gs1` through extension blocks, with the data, destination and size forms of `Create` (twelve members). They take `(AI)` text or an element string, run every check and set FNC1 themselves, so a caller needs to know nothing of the GS1 format and cannot forget the FNC1 option. The maintainer chose this over the earlier recommendation (compose the conversion with the FNC1 option on `Create`) after a survey of the other libraries: the ones that take an element string behind a flag (ZXing.Net, go-qr, CodeGlyphX's QR encoder) let a missing separator through, and the ones that take `(AI)` text (libzint and zxing-cpp, BWIPP, CodeGlyphX's rMQR encoder and its Code 128 helper) are the ones a caller cannot misuse. The decode side gets `TryRead` on the data layer instead of decoder twins (see the API section) |
+| G5 | Check strength per member | Decided 2026-10-12 as recommended: members that build data for a symbol run every check, pairings included. Members that read data from a symbol check only what they need and accept unknown AIs. `TryValidate` runs every check. No switch to turn the pairing check off. Revisit when a caller needs to build data split across carriers, which the pairing check refuses (five of the 21 General Specifications examples in the corpus are such data) |
+| G6 | Unknown AIs | Decided 2026-10-12 with the API: read as variable length up to the next separator. Refused when building |
+| G7 | Error shape | Decided 2026-10-12: `Gs1Error` with a kind, an offset and a length into the input, so a caller can point at the bad element. The throwing forms throw `Gs1FormatException`, derived from `FormatException` as `UriFormatException` is, carrying the `Gs1Error`, so the one-line forms give the place too and an existing `catch (FormatException)` still works. The earlier recommendation of no new exception type was dropped because it would have forced callers who want the position onto the `Try` forms |
 | G8 | License of the generated table | Decided 2026-10-12, with G2. `FeatherQR.Gs1` is MIT like the other packages (`PackageLicenseExpression` `MIT`) and carries a `THIRD-PARTY-NOTICES.md` packed into its nupkg, the way `Directory.Build.props` packs the README. The same file sits at the repository root, since the generated table lives in `src/`. It holds what Apache-2.0 section 4 asks for: the dictionary's three copyright lines (BWIPP project 2020-2021, Zint Project 2020-2021, GS1 AISBL 2021-2025), the release, the commit, the URL, a statement of what is derived (the AI table and the ISO 3166, ISO 4217, media and package type lists are generated from the dictionary and its reference linters, the linter rules are implemented in managed code and copy no C source) and the full Apache-2.0 text, because this repository's own LICENSE is MIT and cannot stand in for it. The dictionary repository has no NOTICE file (checked in Phase 0), so nothing else is owed. The generated source's header names the release, the commit and the notice file. `FeatherQR` and `FeatherQR.SkiaSharp` carry no notice. The Playground compiles the package into its WebAssembly bundle and links the notice from its page (Phase 7). The test fixtures' copy of the dictionary and the linter sources keep their own LICENSE and PROVENANCE.md beside them. The file is created in Phase 2 with the table it describes |
-| G9 | Digital Link | Uncompressed, URI Syntax 1.7.0. Output in the canonical form. Input with any stem, percent-decoded, a repeated query key resolved last-wins. Non-numeric extension keys are ignored. A compressed URI is refused with its own kind. When an element string holds two primary keys, the choice follows the Syntax Engine, settled in Phase 5. Phase 0 found that 1.7.0 lists (7041) and (8040) to (8043) as data attributes while dictionary 2026-01-27 does not flag them `?`, and both dictionary-driven oracles refuse them in a URI. Phase 5 decides whether the table or the standard wins there. Every other key, qualifier and attribute of 1.7.0 is in the dictionary with the same flags, so 1.7.0 needs no data newer than the pinned release |
+| G9 | Digital Link | Decided 2026-10-12 with the API, except the five attributes noted below, which Phase 5 settles. Uncompressed, URI Syntax 1.7.0. Output in the canonical form. Input with any stem, percent-decoded, a repeated query key resolved last-wins. Non-numeric extension keys are ignored. A compressed URI is refused with its own kind. When an element string holds two primary keys, the choice follows the Syntax Engine, settled in Phase 5. Phase 0 found that 1.7.0 lists (7041) and (8040) to (8043) as data attributes while dictionary 2026-01-27 does not flag them `?`, and both dictionary-driven oracles refuse them in a URI. Phase 5 decides whether the table or the standard wins there. Every other key, qualifier and attribute of 1.7.0 is in the dictionary with the same flags, so 1.7.0 needs no data newer than the pinned release |
 | G10 | rMQR | No refusal. The layer does not see the symbol, and readers do read GS1 rMQR. The docs say GS1 does not list rMQR as a carrier (General Specifications Release 26.0), so a GS1 scanner may not accept it |
 | G11 | Where the record lives | A "GS1 data" section in [qrcode-symbologies.md](../specs/qrcode-symbologies.md), since shared content lives only there. If it outgrows a section, a `gs1-data.md` design record and a guidelines change, decided with the maintainer then |
 
@@ -174,10 +332,10 @@ A lead outside the scope: the scheme and host of a Digital Link URI are case-ins
 - Fixtures from the oracles, regenerated by hand and committed, as the interop scope decision requires: the Syntax Engine 1.4.1 console app (prebuilt, pinned by version and SHA-256, fetched by a script as qrtool is), CodeGlyphX 2.1.0's validator and Digital Link builder, and libzint's `gs1` option read back through zxing-cpp with `TextMode.Plain`. Each fixture records the verdict, the output and the oracle's dictionary release.
 - The input corpus: the General Specifications' and the Digital Link standard's examples, the Syntax Engine's unit-test vectors and the dictionary's linter tests if it has them (imported with provenance, Apache-2.0), one generated valid value per AI, and one mutation per check.
 - `(AI)` text: `TryToHri` matches zxing-cpp's `TextMode.HRI` for every valid fixture whose AIs its table knows.
-- Separator placement: `FromHri` matches libzint's element string for every input both accept.
+- Separator placement: `TryFromHri` matches libzint's element string for every input both accept.
 - Round trips: `(AI)` text → element string → `(AI)` text, and element string → Digital Link → element string for every element string a URI can carry.
 - Symbols, after the FNC1 plan's encode phases: zxing-cpp reads this library's GS1 QR Code and rMQR as `]Q3` / `ContentType.GS1` with `(AI)` text equal to `TryToHri`'s. The corpus photograph reads as the expected `(AI)` text in all four rotations.
-- Costs: a small benchmark class for the six members on three typical element strings, recorded, not tuned. Allocation tests on the span forms. The trimmed size of a QR-encode-only application, unchanged, and of one that calls `FromHri`, recorded. The AOT analysis project calls every member with no warning. The Playground runs it under WebAssembly.
+- Costs: a small benchmark class for the data layer's conversions and `TryValidate` on three typical element strings, recorded, not tuned. Allocation tests on the span forms. The trimmed size of a QR-encode-only application, unchanged, and of one that calls `FromHri`, recorded. The AOT analysis project calls every member with no warning. The Playground runs it under WebAssembly.
 
 ## Phases
 
@@ -197,8 +355,8 @@ Phases 0-5 touch no symbol code and can run beside the FNC1 plan. Only Phase 6 w
 ## Documents to change
 
 - [README.md](../../../README.md): the `FeatherQR.Gs1` install line beside the others, and a GS1 section. Which carrier to use (Digital Link for retail, GS1 QR Code elsewhere), the two-line recipes, leave `EciMode` at its default, rMQR's carrier status. No numbers.
-- [qrcode-symbologies.md](../specs/qrcode-symbologies.md): the "GS1 data" section (the table and its update, the check strength per member, the carrier rules), the package topology (its scope row, the packing paragraph and "Why three packages" become four, with the license isolation as the reason the fourth exists), scope rows (GS1 data in, compressed Digital Link, titles and scanner strings out, each with a revisit condition) and lessons.
-- `tools/check_package_deps.cs`: the fourth package's dependency group per target framework.
+- [qrcode-symbologies.md](../specs/qrcode-symbologies.md): the "GS1 data" section (the table and its update, the check strength per member, the carrier rules), the package topology (its scope row, the package table with `FeatherQR.Gs1` depending on `FeatherQR`, the packing paragraph and "Why three packages" become four, with the license isolation as the reason the fourth exists), the extension-member paragraph (the generators gain a second set, with `Gs1QRCodeGenerator` and `Gs1RmQRCodeGenerator` as the named fallback), scope rows (GS1 data in, compressed Digital Link, titles and scanner strings out, each with a revisit condition) and lessons.
+- `tools/check_package_deps.cs`: the fourth package's dependency group per target framework (`FeatherQR` at the shared version).
 - [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md): the GS1 oracles, the Syntax Engine under the toolchain policy, the GS1 fixtures and what each oracle's release explains.
 - [standardqr-encoder.md](../specs/standardqr-encoder.md), [rmqr-encoder.md](../specs/rmqr-encoder.md) and the two decoder records: a link to the GS1 section where they describe FNC1.
 - The third-party notice file (G8) and the XML docs of the new members.
@@ -265,5 +423,33 @@ Lessons:
 
 - A scope table's Out column reads as a decision. The hand-written table sat there as the investigation's recommendation, the Phase 0 record then called it rejected, and the maintainer had never been asked. A recommendation in a scope row needs the word, or a decision row of its own.
 - The size threshold in G2 answered a question nobody was asking. The core split had rejected a package for a saving in kilobytes, so the row argued kilobytes, and the reason that decided the package was the license posture, which the row listed nowhere.
+
+Benchmarks: not applicable, no `src/` change.
+
+### Phase 1, first review round (2026-10-12)
+
+Done: the API proposal replaced the sketch (the "API" section above). The maintainer decided three of its points on code examples: the entry type is `Gs1ElementString`, each span form gets an exact-length `TryGet…Length` twin, and `TryToHri` escapes a literal parenthesis. The name was decided after a compile probe of a type named `Gs1` in four caller namespaces, recorded in the names paragraph. The maintainer's comments on the rest (G4, G5, G7, the `Try` shapes, the error kinds) are pending, so the heading keeps "proposal". No code changed.
+
+Lessons:
+
+- A namespace collision is narrower than "the type is hidden". The compile probe showed the simple name `Gs1` binding to the namespace only for callers inside another `FeatherQR` namespace, which is this repository and almost no consumer. The decision still went to the longer name, since the cost was one word, but the first description of the problem had overstated who it reaches.
+- A sizing helper that returns the exact length subsumes the other two shapes. A caller who wants the formula can still use the documented bound, and a caller who wants exactness gets it. The decoders' `GetMaxDecodedLength` exists because their bound is not a function of the input, which is not the case here.
+
+Benchmarks: not applicable, no `src/` change.
+
+### Phase 1, second review round (2026-10-12)
+
+Done: the maintainer decided G4, G5 and G7 and the decode side. G4 reversed the recommendation: the generators get `CreateGs1` and `CreateGs1DigitalLink` from the package, which therefore depends on `FeatherQR`. G5 stands as recommended. G7 gains `Gs1FormatException`. The decode side gets `TryRead(text, fnc1)` on `Gs1ElementString` rather than twins on the sixteen decode entry points, after a comparison of the decode surfaces of zxing-cpp, ZXing.Net, CodeGlyphX and go-qr, none of which gives its decoder a GS1 entry. The API section, the decision rows, the recipes and the documents list carry the result. Still open from the review: the `Try` shapes and the `Gs1ErrorKind` members, which the maintainer asked to have explained and has not yet ruled on. No code changed.
+
+Lessons:
+
+- "No dependency" was a simplification that became an argument. The package needed no dependency only while every member worked on text, and the plan's G2 row stated it as a property. The costs that were real (overload twins, a named fallback class for older compilers) had a precedent in the rendering package and were paid there already.
+- The encode and decode sides are not symmetric in any library, and for a reason. A writer owes the separators, so the encoder is where a GS1 entry prevents a wrong symbol. A reader owes only the flag, and every library stops there. The one-line read belongs to the data layer, where it does not multiply with the decode entry points.
+
+Benchmarks: not applicable, no `src/` change.
+
+### Phase 1 complete (2026-10-12)
+
+Done: the maintainer approved the two remaining points as written, the `Try` shapes and the 22 members of `Gs1ErrorKind`, and then removed the throwing `FromHri` and `ToDigitalLink` from the data layer, since the generator entry points take `(AI)` text directly and a `Try` form serves every other caller. `Gs1ElementString` now never throws for its input, and `Gs1FormatException` is thrown by `CreateGs1` and `CreateGs1DigitalLink` only. The API section is the approved listing and Phase 1 is complete. Every open decision but G10 and G11 is now decided. Phase 2 builds the `FeatherQR.Gs1` project and the table from this listing. No code changed.
 
 Benchmarks: not applicable, no `src/` change.
