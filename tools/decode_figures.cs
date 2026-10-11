@@ -17,7 +17,7 @@ using FeatherQR;
 // unless it decodes. The figures carry pictures and labels only; their text is in the symbology's
 // design record (.github/docs/specs/*-decoder.md), whose numbered notes match the numbers on the boxes.
 // A box is green when, without its stage, the input would not read, or would read only after more grids
-// fail than with it; a grid is one sampling, and its transposed and coverage reads are the same grid.
+// fail than with it; a grid is one sampling, and its transposed, coverage and module-space reads are the same grid.
 // The boxes follow the image-level outline in the symbology's spec-to-code map.
 
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
@@ -637,6 +637,7 @@ string[] qrBoxes =
     "Mesh over the alignment lattice",
     "Four-point transform",
     "Coverage re-read",
+    "Module-space re-read",
     "Parallelogram or frame grid",
     "Alternative triples",
 ];
@@ -788,7 +789,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-clean.svg"), qrBoxes,
         return ["det|found centre", "detl|finder line", "estl|longest side", "pred|alignment search"];
     },
     [],
-    "UUUSUUUSUSCSU", 8);
+    "UUUSUUUSUSSCSU", 8);
 
 // Rotated or mirrored
 InputFigure(Path.Combine(qrDir, "decode-input-rotated.svg"), qrBoxes,
@@ -809,7 +810,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-rotated.svg"), qrBoxes,
         return ["det|found centre", "detl|finder line", "row|image row", "estl|longest side"];
     },
     [4, Bar],
-    "UUUSKUUSUCCSK", 8);
+    "UUUSKUUSUCCCSK", 8);
 
 // Keystone: tilted back about the horizontal axis, so the left finder line runs into the distance
 InputFigure(Path.Combine(qrDir, "decode-input-keystone.svg"), qrBoxes,
@@ -834,7 +835,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-keystone.svg"), qrBoxes,
         return ["det|found centre", "tick|one module, near and far", "pred|alignment search", "est|parallelogram estimate", "detd|four-point anchors"];
     },
     [4, 5, 6, 8, 10],
-    "UUUSKKKSKCCSU", 8);
+    "UUUSKKKSKCCCSU", 8);
 
 // Grey edges and wrong modules
 InputFigure(Path.Combine(qrDir, "decode-input-degraded.svg"), qrBoxes,
@@ -849,7 +850,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-degraded.svg"), qrBoxes,
         return ["det|refined centre", "err|wrong module"];
     },
     [9, Bar],
-    "UUUSUUUSUCCSK", 8,
+    "UUUSUUUSUCCCSK", 8,
     "<filter id=\"soft\" x=\"-5%\" y=\"-5%\" width=\"110%\" height=\"110%\"><feGaussianBlur stdDeviation=\"1.2\"/></filter>");
 
 // Thin rings: the top-left finder's row that reads 1:1:3:1:1, and the column through its centre, which reads only by like edges
@@ -874,7 +875,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-thin-rings.svg"), qrBoxes,
         return ["det|found centre", "row|a row reading 1:1:3:1:1", "like|read by like edges"];
     },
     [1],
-    "UKUSUUUSUCCSU", 8);
+    "UKUSUUUSUCCCSU", 8);
 
 // Uneven lighting
 InputFigure(Path.Combine(qrDir, "decode-input-lighting.svg"), qrBoxes,
@@ -899,7 +900,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-lighting.svg"), qrBoxes,
         return ["shade|soft shadow", "blk|regional threshold block"];
     },
     [0, 0],
-    "KUUSUUUSUSCSU", 8);
+    "KUUSUUUSUSCCSU", 8);
 
 // Low density
 InputFigure(Path.Combine(qrDir, "decode-input-low-density.svg"), qrBoxes,
@@ -935,7 +936,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-low-density.svg"), qrBoxes,
         return ["tick|module boundary", "px|pixel"];
     },
     [1, 3, 3],
-    "UKUKSSSSSSSSU", 8);
+    "UKUKSSSSSSSSSU", 8);
 
 // Light on dark
 InputFigure(Path.Combine(qrDir, "decode-input-light-on-dark.svg"), qrBoxes,
@@ -948,7 +949,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-light-on-dark.svg"), qrBoxes,
         return ["det|found centre"];
     },
     [0, 0],
-    "KUUSUUUSUSCSU", 8);
+    "KUUSUUUSUSSCSU", 8);
 
 // Large version: the mesh, with the bottom-right alignment pattern lost
 InputFigure(Path.Combine(qrDir, "decode-input-large-version.svg"), qrBoxes,
@@ -975,7 +976,7 @@ InputFigure(Path.Combine(qrDir, "decode-input-large-version.svg"), qrBoxes,
         return ["det|found node", "predr|predicted node", "lat|mesh"];
     },
     [7],
-    "UUUSUUUKCCCSU", 8);
+    "UUUSUUUKCCCCSU", 8);
 
 // ---------- The Micro QR input figures ----------
 

@@ -212,10 +212,10 @@ public class DecodeAllocationTest
         return new Scene(luminance, width, height, content);
     }
 
-    /// <summary>The lighting <see cref="UnevenLightingDecodeTest"/> pins to the regional pass for every symbology: a shadow across the middle.</summary>
-    private static Scene Shadowed(Func<int, int, bool> isDark, int columns, int rows, string content)
+    /// <summary>A shadow across the middle, a lighting <see cref="UnevenLightingDecodeTest"/> pins to the regional pass: falling off to the right for Micro QR and rMQR, to the left for Standard QR, which reads the other at the global pass in module space.</summary>
+    private static Scene Shadowed(Func<int, int, bool> isDark, int columns, int rows, string content, float degrees = 0f)
     {
-        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, columns, rows, 4, UnevenLight.Shadow, 0f, 0.55f);
+        var (luminance, width, height) = UnevenLightingRenderer.Render(isDark, columns, rows, 4, UnevenLight.Shadow, degrees, 0.55f);
         return new Scene(luminance, width, height, content);
     }
 
@@ -258,10 +258,14 @@ public class DecodeAllocationTest
         Crowded,
         /// <summary>Standard QR only: <see cref="EdgeFourthPointDecodeTest"/>'s version 1 bent round a cylinder and tilted, read through the fourth point from the finders' edges.</summary>
         EdgePoint,
+        /// <summary>Standard QR only: <see cref="ModuleSpaceDecodeTest"/>'s shadow at the global pass, the grid failing by the threshold and by coverage and read in module space.</summary>
+        ModuleSpace,
+        /// <summary>Standard QR only: <see cref="ModuleSpaceDecodeTest"/>'s small shadowed symbol, read at the regional pass in module space from the grey image.</summary>
+        ModuleSpaceRegional,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint, ImageScene.ModuleSpace, ImageScene.ModuleSpaceRegional];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -331,7 +335,17 @@ public class DecodeAllocationTest
                 {
                     // UnevenLightingDecodeTest's symbol
                     var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
+                    return Shadowed((row, column) => qr[row, column], qr.Size, qr.Size, Content, degrees: 180f);
+                }
+            case ImageScene.ModuleSpace:
+                {
+                    var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 3 });
                     return Shadowed((row, column) => qr[row, column], qr.Size, qr.Size, Content);
+                }
+            case ImageScene.ModuleSpaceRegional:
+                {
+                    var (luminance, width, height, text) = ModuleSpaceDecodeTest.Shadowed(3, QREccLevel.M, 3f, 20f, 0f, negated: false, destroyData: false);
+                    return new Scene(luminance, width, height, text);
                 }
             case ImageScene.FineTexture:
                 {
@@ -493,7 +507,7 @@ public class DecodeAllocationTest
             };
             await Assert.That(positive).IsNotEqualTo(DecodeStatus.Success).Because("the global positive pass must not read it");
         }
-        else if (scene == ImageScene.UnevenLight)
+        else if (scene is ImageScene.UnevenLight or ImageScene.ModuleSpaceRegional)
         {
             await Assert.That(UnevenLightingDecodeTest.GlobalAttemptsRead(symbology, image.Luminance, image.Width, image.Height)).IsFalse().Because("neither global pass may read it");
         }

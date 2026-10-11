@@ -23,7 +23,23 @@ internal readonly ref struct ImageView
     /// <summary>The luminance an edge is located at (<see cref="GreyLevels.EdgeLevel"/>): halfway between the image's two levels, on an image with no grey pixel too; the threshold only on an image of one level, or with no levels measured.</summary>
     public readonly float EdgeLevel;
 
+    /// <summary>
+    /// The grey image of this reading, the same size: <see cref="Luminance"/> itself when it holds grey levels, the image it was binarized from when it is a binarization, and empty when there is none.
+    /// A stage that reads grey levels where this reading placed the symbol reads them here.
+    /// </summary>
+    public readonly ReadOnlySpan<byte> GreySource;
+
+    /// <summary>Whether <see cref="Luminance"/> was binarized from the negative of <see cref="GreySource"/>: a dark pixel of this reading is a light one there.</summary>
+    public readonly bool GreySourceNegative;
+
     public ImageView(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, GreyLevels grey)
+        : this(luminance, default, false, width, height, threshold, grey)
+    {
+    }
+
+    /// <param name="source">The grey image <paramref name="luminance"/> was binarized from, or empty when it is no binarization.</param>
+    /// <param name="negative">Whether it was binarized from <paramref name="source"/>'s negative.</param>
+    public ImageView(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, int width, int height, byte threshold, GreyLevels grey)
     {
         Luminance = luminance;
         Width = width;
@@ -31,5 +47,14 @@ internal readonly ref struct ImageView
         Threshold = threshold;
         Grey = grey;
         EdgeLevel = grey.EdgeLevel(threshold);
+        if (!source.IsEmpty)
+        {
+            GreySource = source;
+            GreySourceNegative = negative;
+        }
+        else if (grey.IsEnabled)
+        {
+            GreySource = luminance;
+        }
     }
 }

@@ -252,6 +252,7 @@ A decoder change that moves reads is measured with the sweep against the commit 
 - No read may return anything but the encoded text, over every sweep and the corpus (the baseline is zero misreads).
 - Nothing is lost silently: every lost render is listed by kind, and the reverse does not shrink without a stated reason.
 - Failure paths are measured on failures: two-level and blurred noise, a damaged symbol of each symbology and another symbology's image, each timed as the fastest of interleaved runs and reported beside the success-path benchmarks. A read that multiplies the cost of every unreadable image is a trade-off to state, not a side effect.
+- A photograph set is timed in rounds: the build before and the changed one in turn, three rounds each, and each photograph's fastest round of each build compared. One round against one round is not enough: on 2026-10-12 two rounds of one build differed by 3 to 5 % in the set's sum and by 1.2 at the 90th percentile of the photographs' ratios, where the fastest of three rounds a build put that percentile at 1.03.
 - The finder's candidate counts on the two-level noise set stay identical unless the change is to the finder, in which case they are the change's headline number.
 - Every report gives the corpus beside the sweep. A change that moves the threshold or the sampled grid says so and takes a new baseline. Only speed work and refactors are held to bit-identical results.
 - The baseline is built apart: the commit before is checked out with `git worktree add --detach` and the sweep and corpus run there, so nothing built from the changed tree reaches it. Sweep result files are byte-identical between runs, but the corpus file is not (zxing-cpp's column moved on 9 of 624 rows, all at rotation 0, with this library unchanged, 2026-09-29), so a refactor is held to this library's columns, the ones `compare` counts.
@@ -276,24 +277,24 @@ On the first baseline (2026-09-21, seven encoders, payloads sized as above), the
 
 Micro QR and rMQR had a gap of a few renders per kind, plus 54 in Micro QR bilinear upscales at 2-2.5 px/module. zxing-cpp reads far fewer of both, so they are tracked by their own read rate.
 
-The real images were each read at four right angles. The `qrcode-2`, `qrcode-3` and `qrcode-4` rows and the total are as read on 2026-10-11 with the inferred third finder, which added four reads (below). On 2026-10-10 the Shift_JIS guess had moved 40 reads out of the content column, and the reduced-scale search read `qrcode-2/13` at its four turns and one more turn of `qrcode-4/15`:
+The real images were each read at four right angles. The `qrcode-2` and `qrcode-4` rows and the total are as read on 2026-10-12 with the module-space re-read, which added ten reads: `qrcode-4/09` and `14` at three turns each, which zxing-cpp does not read at those turns, `qrcode-4/12` at 0° and 90°, out of the gap, and `qrcode-2/12` at 90° and 270°. Before it they read 194 of 224 (gap 16, reverse 13), 56 of 96 (gap 6, reverse 2) and 474 of 548 (gap 26, reverse 15), the inferred third finder of 2026-10-11 having added four reads (below). On 2026-10-10 the Shift_JIS guess had moved 40 reads out of the content column, and the reduced-scale search read `qrcode-2/13` at its four turns and one more turn of `qrcode-4/15`:
 
 | Set | Images | This library | zxing-cpp | ZXing.Net | Gap | Reverse | Content |
 |---|---|---|---|---|---|---|---|
 | `qrcode-1` | 8 | 32/32 | 32 | 24 | 0 | 0 | 0 |
-| `qrcode-2` | 56 | 194/224 | 201 | 100 | 16 | 13 | 12 |
+| `qrcode-2` | 56 | 196/224 | 201 | 100 | 16 | 15 | 12 |
 | `qrcode-3` | 18 | 68/72 | 72 | 56 | 4 | 0 | 0 |
-| `qrcode-4` | 24 | 56/96 | 60 | 64 | 6 | 2 | 0 |
+| `qrcode-4` | 24 | 64/96 | 60 | 64 | 4 | 8 | 0 |
 | `qrcode-5` | 16 | 64/64 | 64 | 64 | 0 | 0 | 0 |
 | `qrcode-6` | 15 | 60/60 | 60 | 60 | 0 | 0 | 0 |
-| Standard QR | 137 | 474/548 | 489 | 368 | 26 | 15 | 12 |
+| Standard QR | 137 | 484/548 | 489 | 368 | 24 | 23 | 12 |
 | `microqrcode-1` | 16 | 64/64 | 59 | | 0 | 5 | |
 | `rmqrcode-1` | 3 | 12/12 | 12 | | 0 | 0 | |
 
 On the first run this library read 295 of the 548 Standard QR images (gap 153) and 60 of the 64 Micro QR ones. The largest cause was a shading gradient across the symbol, which one global threshold splits into two solid halves (42 of the 43 gap reads in `qrcode-5` and `qrcode-1`). The regional pass reads them ([image decode passes](qrcode-symbologies.md#image-decode-passes)). Each image left in the gap has a recorded cause:
 
 - 12 reads are out of scope. `qrcode-2/#940` and `qr-model-1` are Model 1 symbols (zxing-cpp reports `]Q0`): their format word reads under Model 1's mask, and their data, placed as Model 1 places it, fails. `#258` draws its finder rings as dots, and its diagonals read only with each run moved by 0.52 to 0.68 of a module, past the half-module bound.
-- 14 fail in the grid. `high-res-1` is a version 34 on curled paper at 2.2 px/module. Its mesh interior reads, and the bands along its edges have about half their function modules wrong. `qrcode-4/29` is on curved paper and no alignment pattern is found: of 3,721 fourth anchors within 3 modules, 12 read, none with fewer than 15 corrections (20 through zxing-cpp's corners). `qrcode-3/03` is binarized with heavy ink spread, and the anchors that read need 23 or 24 corrections. `qrcode-4/12` at 0° and 90° has all four corners within 0.12 module of zxing-cpp's plane (a knife edge).
+- 12 fail in the grid. `high-res-1` is a version 34 on curled paper at 2.2 px/module. Its mesh interior reads, and the bands along its edges have about half their function modules wrong. `qrcode-4/29` is on curved paper and no alignment pattern is found: of 3,721 fourth anchors within 3 modules, 12 read, none with fewer than 15 corrections (20 through zxing-cpp's corners). `qrcode-3/03` is binarized with heavy ink spread, and the anchors that read need 23 or 24 corrections. `qrcode-4/12` at 0° and 90°, whose four corners lie within 0.12 module of zxing-cpp's plane (a knife edge), was the other two until the module-space re-read read it.
 - 1 fails at a finder's floor: `qrcode-4/15` at 270° has a falling diagonal rounded at one outer corner (runs of 5, 5, 15, 5 and 2 px). `qrcode-3/30` at 270°, whose diagonals are at the 2 px floor, reads since the inferred third finder (2026-10-11), as do `qrcode-2/12` at 0° and 180° and `qrcode-4/14` at 180°, which neither other reader reads.
 
 On 2026-10-10 (`main` at f4b74de, the sweep and corpus reading as on 2026-09-28) the camera kinds and ZXing's QR photographs were measured for the first time. The camera kinds, 400 renders each for Standard QR and Micro QR and 640 for rMQR, this library against zxing-cpp:
@@ -319,64 +320,65 @@ ZXing's QR photographs (the ZXing.Net checkout's black-box `qrcode-1` to `-6`, 1
 | ZXing `qrcode-1` to `-6`, since the Shift_JIS guess | 716 | 650 | 660 | 584 | 15 | 5 | 4 |
 | ZXing `qrcode-1` to `-6`, since the reduced-scale search | 716 | 653 | 660 | 584 | 14 | 7 | 8 |
 | ZXing `qrcode-1` to `-6`, since the inferred third finder | 716 | 657 | 660 | 584 | 12 | 9 | 8 |
+| ZXing `qrcode-1` to `-6`, since the module-space re-read | 716 | 672 | 660 | 584 | 4 | 16 | 8 |
 
-Upright, this library read 151 of 179 and zxing-cpp 165, the number go-qr publishes for zxing-cpp on this set. The content column was the eleven Shift_JIS photographs (44 reads) and `qrcode-2/33`, whose bit stream is refused. The guess reads all eleven, which makes 162 upright, and `qrcode-2/33` is what the column still held. The reduced-scale search reads `qrcode-2/12` at half scale and `13` at a quarter, which neither other reader reads at full size, and one more turn of `qrcode-4/15`. The four new entries in the content column are `13` at its four turns: this set's `13.txt` says "photograph" where the symbol, the file in zxing-cpp's samples, and zxing-cpp and ZXing.Net given the reduced image all say "photography". That makes 164 upright against zxing-cpp's 165. The inferred third finder (2026-10-11) reads `qrcode-4/19` at 0° and 180° and `qrcode-2/12` at 90° and 270°, which makes 165 upright. Each gap image has a cause, from the grid sampled through zxing-cpp's reported corners and the image cropped and scaled:
+Upright, this library read 151 of 179 and zxing-cpp 165, the number go-qr publishes for zxing-cpp on this set. The content column was the eleven Shift_JIS photographs (44 reads) and `qrcode-2/33`, whose bit stream is refused. The guess reads all eleven, which makes 162 upright, and `qrcode-2/33` is what the column still held. The reduced-scale search reads `qrcode-2/12` at half scale and `13` at a quarter, which neither other reader reads at full size, and one more turn of `qrcode-4/15`. The four new entries in the content column are `13` at its four turns: this set's `13.txt` says "photograph" where the symbol, the file in zxing-cpp's samples, and zxing-cpp and ZXing.Net given the reduced image all say "photography". That makes 164 upright against zxing-cpp's 165. The inferred third finder (2026-10-11) reads `qrcode-4/19` at 0° and 180° and `qrcode-2/12` at 90° and 270°, which makes 165 upright. The module-space re-read (2026-10-12) reads `qrcode-2/5` and `qrcode-4/14` at every turn, `qrcode-4/09` at the three it did not read, `qrcode-4/34` at three and `qrcode-4/13` at one more, 15 reads, which makes 168 upright against zxing-cpp's 165 and leaves `qrcode-4/29` as the whole gap. Each gap image had a cause, from the grid sampled through zxing-cpp's reported corners and the image cropped and scaled:
 
-- `qrcode-2/5`, a version 1 at 2.3 px/module on a billboard in a 480 × 360 photograph of a station hall, is not detected in the whole image. Cropped to the symbol, or scaled by 0.75, 1.5 or 2, it reads, and the grid through zxing-cpp's corners reads with 2 to 3 corrections. `qrcode-4/19`, a version 3 at 4.1 px/module, was the same case until the inferred third finder read it.
-- `qrcode-4/14`, a version 3 at 4.9 px/module, is found and fails Reed-Solomon. The grid through zxing-cpp's corners reads with 1 or 2 corrections, so this library's frame is the cause.
+- `qrcode-2/5`, a version 1 at 2.3 px/module on a billboard in a 480 × 360 photograph of a station hall, is not detected in the whole image. Cropped to the symbol, or scaled by 0.75, 1.5 or 2, it reads, and the grid through zxing-cpp's corners reads with 2 to 3 corrections. `qrcode-4/19`, a version 3 at 4.1 px/module, was the same case until the inferred third finder read it. Since the module-space re-read `qrcode-2/5` reads: the regional pass selects its finders, and their grid reads in module space from the grey image where the binarization's one pixel a module did not.
+- `qrcode-4/14`, a version 3 at 4.9 px/module, is found and fails Reed-Solomon. The grid through zxing-cpp's corners reads with 1 or 2 corrections, so this library's frame was taken for the cause. It reads since the module-space re-read, through this library's own grid: the modules were read wrong, not placed wrong.
 - `qrcode-4/29` is the corpus's bowed card again. Through zxing-cpp's corners one homography reads with 13 to 17 of its 22 corrections.
 
 BoofCV's QR photographs (`qrcodes_v3`, 536 photographs holding 1,232 labelled codes, 2026-10-10), counted as photographs with an agreed read:
 
 | Category | Photographs | This library | zxing-cpp | ZXing.Net | Gap | Reverse |
 |---|---|---|---|---|---|---|
-| blurred | 45 | 32 | 30 | 17 | 0 | 2 |
-| bright_spots | 32 | 22 | 13 | 17 | 0 | 9 |
+| blurred | 45 | 33 | 30 | 17 | 0 | 3 |
+| bright_spots | 32 | 25 | 13 | 17 | 0 | 12 |
 | brightness | 28 | 25 | 27 | 20 | 3 | 1 |
 | close | 40 | 40 | 40 | 2 | 0 | 0 |
-| curved | 50 | 35 | 34 | 22 | 0 | 1 |
-| damaged | 37 | 12 | 8 | 4 | 0 | 4 |
-| glare | 50 | 28 | 21 | 12 | 1 | 8 |
+| curved | 50 | 38 | 34 | 22 | 0 | 4 |
+| damaged | 37 | 13 | 8 | 4 | 0 | 5 |
+| glare | 50 | 29 | 21 | 12 | 1 | 9 |
 | high_version | 33 | 27 | 32 | 2 | 5 | 0 |
 | lots | 7 | 7 | 7 | 7 | 0 | 0 |
 | monitor | 17 | 17 | 17 | 0 | 0 | 0 |
-| nominal | 65 | 60 | 61 | 47 | 3 | 2 |
+| nominal | 65 | 62 | 61 | 47 | 1 | 2 |
 | noncompliant | 16 | 13 | 11 | 4 | 1 | 3 |
 | pathological | 23 | 17 | 11 | 10 | 1 | 7 |
 | perspective | 35 | 23 | 22 | 15 | 1 | 2 |
 | rotations | 44 | 44 | 44 | 20 | 0 | 0 |
-| shadows | 14 | 13 | 13 | 11 | 1 | 1 |
-| All | 536 | 415 | 391 | 210 | 16 | 40 |
+| shadows | 14 | 14 | 13 | 11 | 0 | 1 |
+| All | 536 | 427 | 391 | 210 | 13 | 49 |
 
-The table is as read with the mesh's measured coordinate-6 nodes (2026-10-11), which gained `high_version/image020` and `image024` over the fourth point's 413 (gap 18, reverse 40; `high_version` 25) and lost none. The fourth point from the finders' edges, the same day, had gained the four curved version 1 photographs and `curved/image018`, `nominal/image042` and `shadows/image011` over the selection stages' 406 (gap 22, reverse 37; `curved` 30, `nominal` 59, `shadows` 12) and lost none. The selection stages of the same day (the skipped rows after a failed strided triple, and the triples of a crowded list gated by their timing patterns) had gained four `brightness` photographs and both `lots` ones over the inferred third finder's 400 (gap 28, reverse 37; `brightness` 21, `lots` 5) and lost none. Before the inference, with the reduced-scale search, this library read 371 (gap 40, reverse 20), by category 32, 21, 20, 40, 28, 9, 19, 25, 5, 17, 58, 11, 7, 23, 44 and 12; the inference gained 29 photographs and lost none: 9 under glare, 10 of the drawn `pathological` symbols, 3 damaged, 2 curved, 2 `noncompliant`, and one each of `bright_spots`, `brightness` and `nominal`. Without the reduced-scale search it read 322 (gap 77, reverse 9), by category 29, 15, 17, 39, 25, 6, 12, 25, 4, 7, 55, 6, 7, 22, 42 and 11. zxing-cpp's column grew by one, a read the other columns did not confirm until this library read the same text.
+The table is as read with the module-space re-read (2026-10-12), which gained twelve photographs over the measured mesh nodes' 415 (gap 16, reverse 40; `blurred` 32, `bright_spots` 22, `curved` 35, `damaged` 12, `glare` 28, `nominal` 60, `shadows` 13) and lost none: `blurred/image027`, `bright_spots/image017`, `018` and `019`, `curved/image005`, `032` and `034`, `damaged/image015`, `glare/image039`, `nominal/image001` and `004`, and `shadows/image013`. Seven of them read at the regional pass, from the grey image that pass is handed. The mesh's measured coordinate-6 nodes (2026-10-11) had gained `high_version/image020` and `image024` over the fourth point's 413 (gap 18, reverse 40; `high_version` 25) and lost none. The fourth point from the finders' edges, the same day, had gained the four curved version 1 photographs and `curved/image018`, `nominal/image042` and `shadows/image011` over the selection stages' 406 (gap 22, reverse 37; `curved` 30, `nominal` 59, `shadows` 12) and lost none. The selection stages of the same day (the skipped rows after a failed strided triple, and the triples of a crowded list gated by their timing patterns) had gained four `brightness` photographs and both `lots` ones over the inferred third finder's 400 (gap 28, reverse 37; `brightness` 21, `lots` 5) and lost none. Before the inference, with the reduced-scale search, this library read 371 (gap 40, reverse 20), by category 32, 21, 20, 40, 28, 9, 19, 25, 5, 17, 58, 11, 7, 23, 44 and 12; the inference gained 29 photographs and lost none: 9 under glare, 10 of the drawn `pathological` symbols, 3 damaged, 2 curved, 2 `noncompliant`, and one each of `bright_spots`, `brightness` and `nominal`. Without the reduced-scale search it read 322 (gap 77, reverse 9), by category 29, 15, 17, 39, 25, 6, 12, 25, 4, 7, 55, 6, 7, 22, 42 and 11. zxing-cpp's column grew by one, a read the other columns did not confirm until this library read the same text.
 
 zxing-cpp's first 390 is 72.8 %, against the 73.1 % go-qr publishes for it on this set, and go-qr publishes 77.1 % for itself. Counted as codes, zxing-cpp read 976 of the 1,232 (975 at first) and this library, which reads one symbol a call, 371. The first run counted 900, and three more gave 960, 965 and 964 with every per-photograph figure unchanged: the tool held neither the pixel buffer nor the wrapper's objects through the native call (below, lessons). With them held, three runs gave 975 row for row. No read of this library's disagreed with another reader's at the same code. Two texts it read, on `damaged/image005` and `image020`, no other read of the set confirms: ZXing.Net reads both the same once given the image scaled down by 8 and by 4. On one thread this library takes a median 1.7 ms a photograph and 2.8 s for the set, and zxing-cpp 6.2 ms and 5.9 s. Before the reduced-scale search it took 1.3 ms and 2.2 s.
 
-go-qr was run in its own harness on 2026-10-11: its `TestBoofCV` unchanged, on its checkout at v2.6.0 (d8a5d8d) with Go 1.26.4 on Windows x64, through a workspace file kept outside the checkout, and its lines read with `--lines`. From its own grey conversion it reads 411 of BoofCV's photographs by this tool's rule against the 413 it publishes: every category as published but `damaged`, 15 for 16, and `lots`, 6 for 7. It reads 166 of ZXing's 179 upright, the published figure, and gozxing, in the same lines, 182 and 155 against a published 183 and 155. From the grey images this tool hands its readers (`grey`), go-qr reads 412 and 165: five BoofCV photographs move with the conversion (`bright_spots/image016`, `damaged/image010` and `lots/image006` read, `brightness/image026` and `glare/image026` no longer), on six more it reads another of the photograph's symbols, and ZXing's `qrcode-2/12` is lost. The two published reads missing from its own conversion are the `damaged` and `lots` reads the other conversion gives, so the difference is the image, not the scoring; which image the published run read is not known. The tables below are from the shared grey image.
+go-qr was run in its own harness on 2026-10-11: its `TestBoofCV` unchanged, on its checkout at v2.6.0 (d8a5d8d) with Go 1.26.4 on Windows x64, through a workspace file kept outside the checkout, and its lines read with `--lines`. From its own grey conversion it reads 411 of BoofCV's photographs by this tool's rule against the 413 it publishes: every category as published but `damaged`, 15 for 16, and `lots`, 6 for 7. It reads 166 of ZXing's 179 upright, the published figure, and gozxing, in the same lines, 182 and 155 against a published 183 and 155. From the grey images this tool hands its readers (`grey`), go-qr reads 412 and 165: five BoofCV photographs move with the conversion (`bright_spots/image016`, `damaged/image010` and `lots/image006` read, `brightness/image026` and `glare/image026` no longer), on six more it reads another of the photograph's symbols, and ZXing's `qrcode-2/12` is lost. The two published reads missing from its own conversion are the `damaged` and `lots` reads the other conversion gives, so the difference is the image, not the scoring; which image the published run read is not known. The table below is from the shared grey image, with this library as it reads since the module-space re-read (2026-10-12).
 
 | Category | Photographs | This library | go-qr | Gap | Reverse |
 |---|---|---|---|---|---|
-| blurred | 45 | 32 | 33 | 2 | 1 |
-| bright_spots | 32 | 22 | 18 | 1 | 5 |
+| blurred | 45 | 33 | 33 | 1 | 1 |
+| bright_spots | 32 | 25 | 18 | 1 | 8 |
 | brightness | 28 | 25 | 21 | 0 | 4 |
 | close | 40 | 40 | 40 | 0 | 0 |
-| curved | 50 | 35 | 36 | 2 | 1 |
-| damaged | 37 | 13 | 16 | 4 | 1 |
-| glare | 50 | 28 | 28 | 6 | 6 |
+| curved | 50 | 38 | 36 | 0 | 2 |
+| damaged | 37 | 14 | 16 | 4 | 2 |
+| glare | 50 | 29 | 28 | 5 | 6 |
 | high_version | 33 | 27 | 22 | 1 | 6 |
 | lots | 7 | 7 | 7 | 0 | 0 |
 | monitor | 17 | 17 | 17 | 0 | 0 |
-| nominal | 65 | 60 | 59 | 1 | 2 |
+| nominal | 65 | 62 | 59 | 1 | 4 |
 | noncompliant | 16 | 13 | 14 | 1 | 0 |
 | pathological | 23 | 17 | 19 | 2 | 0 |
 | perspective | 35 | 23 | 25 | 2 | 0 |
 | rotations | 44 | 44 | 44 | 0 | 0 |
-| shadows | 14 | 13 | 13 | 1 | 1 |
-| All | 536 | 416 | 412 | 23 | 27 |
+| shadows | 14 | 14 | 13 | 0 | 1 |
+| All | 536 | 428 | 412 | 18 | 34 |
 
-This library's 416 is the 415 of the table above and `damaged/image020`, the one text of its own that no read had confirmed, which go-qr reads the same; no text of either reader is now unconfirmed. The totals are level and hide 50 photographs: 23 only go-qr reads and 27 only this library. Against both other readers, 34 photographs are read by one of them and not by this library (zxing-cpp alone 11, go-qr alone 18, both 5), 11 by this library alone, and 86 by none of the three. On ZXing's set, upright, go-qr reads `qrcode-2/5`, `qrcode-4/09`, `29` and `34` where this library does not, and this library `qrcode-2/12`, `qrcode-3/22` and `40` where go-qr does not. By its own clock go-qr takes 9.2 to 9.5 s for BoofCV's set (it publishes 8.7 s), where this library takes 2.5 s and zxing-cpp 5.9 s.
+This library's 428 is the 427 of the table above and `damaged/image020`, the one text of its own that no other read confirms, which go-qr reads the same; no text of either reader is unconfirmed. Against both other readers, 27 photographs are read by one of them and not by this library (zxing-cpp alone 9, go-qr alone 14, both 4), 16 by this library alone, and 81 by none of the three. On ZXing's set, upright, go-qr reads `qrcode-4/29` and `34` where this library does not, and this library `qrcode-2/12`, `qrcode-3/22`, `40` and `qrcode-4/14` where go-qr does not. As first measured, on 2026-10-11, the totals were level, 416 against 412, and hid 50 photographs, 23 only go-qr read and 27 only this library, with 34 read by one of the other two and not by this library (zxing-cpp alone 11, go-qr alone 18, both 5); on ZXing's set go-qr read `qrcode-2/5`, `qrcode-4/09`, `29` and `34` where this library did not. By its own clock go-qr takes 9.2 to 9.5 s for BoofCV's set (it publishes 8.7 s), where this library takes 2.5 s and zxing-cpp 5.9 s.
 
-Each of the 27 gap photographs was read again by a probe with go-qr's version and corners as the truth (2026-10-11): the finders over every row at each scale to an eighth and under both thresholds, the selection, the decoder's first grid from the right triple at the true dimension, and the flat grid through go-qr's four corners, each grid read by the threshold and again in module space as go-qr reads a module (the mean of nine samples over its central 30 %, against the mean of the modules within three of it, or an eighth of the dimension):
+Each of the 27 gap photographs of 2026-10-11 was read again that day by a probe with go-qr's version and corners as the truth. Seven of them read since the module-space re-read: `blurred/image027`, `curved/image032` and `034`, `glare/image039`, `shadows/image013`, `qrcode-2/5` and `qrcode-4/09`. The probe read: the finders over every row at each scale to an eighth and under both thresholds, the selection, the decoder's first grid from the right triple at the true dimension, and the flat grid through go-qr's four corners, each grid read by the threshold and again in module space as go-qr reads a module (the mean of nine samples over its central 30 %, against the mean of the modules within three of it, or an eighth of the dimension):
 
 - Finders, 8: at no scale or threshold are all three candidates. None on `pathological/image009` and `010`, drawn symbols the flat grid reads with no correction. One on `bright_spots/image016`, `glare/image037`, `nominal/image003` and `perspective/image030`. Two on `glare/image039` and `perspective/image029`.
 - The grid, with the right triple selected at some scale and threshold and its centres within 0.4 module, 19. On 9 the flat grid through go-qr's corners reads by the threshold with 0 to 13 corrections where the decoder's own does not: `blurred/image027` and `038`, `curved/image032` and `034`, `damaged/image009` and `010`, `noncompliant/image008`, `qrcode-2/5` and `qrcode-4/09`, all version 1 to 3. On 5 it reads only in module space: `damaged/image008` and `011`, `glare/image011` and `015`, `qrcode-4/29`. On 5 it reads neither way: `glare/image013` and `016`, `high_version/image030`, `shadows/image013`, `qrcode-4/34`.

@@ -58,7 +58,7 @@ public class ImageDecodePassesTest
             return index < script.Global.Length ? script.Global[index] : DecodeStatus.NotDetected;
         }
 
-        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out int info)
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out int info)
         {
             var index = script.Count("regional");
             script.Shapes.Add(("regional", width, height));

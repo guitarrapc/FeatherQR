@@ -27,11 +27,11 @@ public class UnevenLightingDecodeTest
 
     /// <summary>
     /// The lighting of <see cref="Lighting"/> a global threshold still reads, per symbology; every other case needs the regional pass.
-    /// Standard QR reads the ramps at 135°, 225° and 315° at the global threshold through a third finder inferred from the two the threshold keeps (<see cref="InferredFinderDecodeTest"/>).
+    /// Standard QR reads the ramps at 135°, 225° and 315° at the global threshold through a third finder inferred from the two the threshold keeps (<see cref="InferredFinderDecodeTest"/>), and the ramps and shadows at 0° and 90°, whose three finders the threshold keeps, through the grid read again in module space (<see cref="ModuleSpaceDecodeTest"/>).
     /// </summary>
     private static readonly Dictionary<Symbology, (UnevenLight, float)[]> ReadByGlobalThreshold = new()
     {
-        [Symbology.StandardQR] = [(UnevenLight.Ramp, 45f), (UnevenLight.Ramp, 135f), (UnevenLight.Ramp, 225f), (UnevenLight.Ramp, 315f)],
+        [Symbology.StandardQR] = [(UnevenLight.Ramp, 0f), (UnevenLight.Ramp, 45f), (UnevenLight.Ramp, 90f), (UnevenLight.Ramp, 135f), (UnevenLight.Ramp, 225f), (UnevenLight.Ramp, 315f), (UnevenLight.Shadow, 0f), (UnevenLight.Shadow, 90f)],
         [Symbology.MicroQR] = [(UnevenLight.Ramp, 45f), (UnevenLight.Ramp, 135f), (UnevenLight.Ramp, 315f)],
         [Symbology.RmQR] = [(UnevenLight.Ramp, 0f), (UnevenLight.Ramp, 45f), (UnevenLight.Ramp, 135f), (UnevenLight.Ramp, 315f)],
     };

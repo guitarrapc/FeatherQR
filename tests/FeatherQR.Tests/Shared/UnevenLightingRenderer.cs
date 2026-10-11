@@ -86,6 +86,15 @@ internal static class UnevenLightingRenderer
         return (luminance, width, height);
     }
 
+    /// <summary>The same light over an image already drawn: each pixel times the light that falls there.</summary>
+    /// <param name="pixelsPerModule">The module size the shadow's soft edge is measured in.</param>
+    public static void Light(byte[] luminance, int width, int height, float pixelsPerModule, UnevenLight light, float degrees, float depth)
+    {
+        var illumination = Illumination(width, height, pixelsPerModule, light, degrees, depth);
+        for (var i = 0; i < width * height; i++)
+            luminance[i] = (byte)MathF.Round(luminance[i] * illumination[i]);
+    }
+
     /// <summary>The light at each pixel centre, 1 at full light.</summary>
     private static float[] Illumination(int width, int height, float pixelsPerModule, UnevenLight light, float degrees, float depth)
     {

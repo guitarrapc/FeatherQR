@@ -39,12 +39,12 @@ public class ReducedScaleDecodeTest
             noFinder = false;
             threshold = 0;
             grey = default;
-            return Decode(luminance, histogram, width, height, destination, out charsWritten, out info);
+            return Decode(luminance, default, false, histogram, width, height, destination, out charsWritten, out info);
         }
 
-        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
         {
-            var status = QRImageDecoder.DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
+            var status = QRImageDecoder.DecodeLuminanceCore(luminance, source, negative, histogram, width, height, destination, out charsWritten, out info);
             log.Calls.Add((width, height, status));
             return status;
         }

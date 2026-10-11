@@ -6,7 +6,10 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
 internal interface ILuminanceAttempt<TInfo>
 {
-    DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info);
+    /// <param name="luminance">The pixels the attempt reads: a binarization, two levels.</param>
+    /// <param name="source">The grey image <paramref name="luminance"/> was binarized from, for a stage that reads grey levels where the binarization placed the symbol.</param>
+    /// <param name="negative">Whether <paramref name="luminance"/> is the binarization of <paramref name="source"/>'s negative, so that its dark pixels are the light ones of <paramref name="source"/>.</param>
+    DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info);
 }
 
 /// <summary>
@@ -75,7 +78,7 @@ internal static class RegionalRetry
         histogram.Clear();
         histogram[LocalBinarizer.Dark] = darkCount;
         histogram[LocalBinarizer.Light] = binarized.Length - darkCount;
-        return attempt.Decode(binarized, histogram, width, height, destination, out charsWritten, out info);
+        return attempt.Decode(binarized, luminance, negative, histogram, width, height, destination, out charsWritten, out info);
     }
 
     /// <summary>Whether every pixel is 0 or 255; symmetric, so it holds for a histogram in either polarity.</summary>

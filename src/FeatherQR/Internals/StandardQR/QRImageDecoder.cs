@@ -22,9 +22,9 @@ namespace FeatherQR.Internals.StandardQR;
 ///    c. Finders' frame and dimension candidates
 ///    d. Per dimension: alignment search, then grids in turn: mesh (version 7+, half its searched nodes found)
 ///       when nothing anchored, four-point transform (alignment-anchored, else the parallelogram), coverage
-///       re-read (grey levels), mesh when the search anchored, then, each with its coverage re-read, the
-///       parallelogram after an anchored grid or the frame grid when nothing anchored and the frame
-///       foreshortens; neither at the runner-up
+///       re-read (grey levels), mesh when the search anchored, module-space re-read (a grey image in hand, the
+///       timing patterns alternating), then, each with both re-reads, the parallelogram after an anchored grid
+///       or the frame grid when nothing anchored and the frame foreshortens; neither at the runner-up
 /// 3. When that does not settle, a-d from each other corner whose timing patterns read
 /// 4. When the selected triple does not settle and more than three candidates were found, the next two triples: each a-d once, from the first of its corners whose timing patterns read, or skipped when none does
 /// </code>
@@ -71,8 +71,8 @@ internal static partial class QRImageDecoder
             return DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
         }
 
-        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
-            => DecodeLuminanceCore(luminance, histogram, width, height, destination, out charsWritten, out info);
+        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+            => DecodeLuminanceCore(luminance, source, negative, histogram, width, height, destination, out charsWritten, out info);
 
         public DecodeStatus DecodeAtMidpoint(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
         {
@@ -83,6 +83,11 @@ internal static partial class QRImageDecoder
     }
 
     internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+        => DecodeLuminanceCore(luminance, default, false, histogram, width, height, destination, out charsWritten, out info);
+
+    /// <param name="source">The grey image <paramref name="luminance"/> was binarized from, or empty when it is the image itself.</param>
+    /// <param name="negative">Whether it was binarized from <paramref name="source"/>'s negative.</param>
+    internal static DecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
 
@@ -97,7 +102,7 @@ internal static partial class QRImageDecoder
             return DecodeStatus.NotDetected;
         }
 
-        var image = new ImageView(luminance, width, height, threshold, grey);
+        var image = new ImageView(luminance, source, negative, width, height, threshold, grey);
         var modules = new ModuleWorkspace();
         try
         {
@@ -205,7 +210,7 @@ internal static partial class QRImageDecoder
         /// <summary>Another grid of the same dimension, compared against <see cref="First"/>.</summary>
         public readonly Span<byte> Other(int dimension) => Grid(1, dimension);
 
-        /// <summary>A coverage re-read of the same dimension, compared against <see cref="First"/> or <see cref="Other"/>.</summary>
+        /// <summary>A re-read of the same dimension, by coverage or in module space, compared against <see cref="First"/> or <see cref="Other"/>.</summary>
         public readonly Span<byte> Coverage(int dimension) => Grid(2, dimension);
 
         private readonly Span<byte> Grid(int index, int dimension)
@@ -632,6 +637,14 @@ internal static partial class QRImageDecoder
                 return result.Report(out charsWritten, out info);
         }
 
+        // The same grid read in module space, after the mesh: it samples every module nine times, and a symbol the mesh reads does not wait for it
+        if (!image.GreySource.IsEmpty)
+        {
+            var moduleSpaceStatus = DecodeInModuleSpace(image, transform, dimension, first, modules.Coverage(dimension), destination, out var moduleSpaceCharsWritten, out var moduleSpaceInfo);
+            if (result.Other(moduleSpaceStatus, moduleSpaceCharsWritten, moduleSpaceInfo))
+                return result.Report(out charsWritten, out info);
+        }
+
         if (!finderFallback)
             return result.Report(out charsWritten, out info);
 
@@ -681,7 +694,7 @@ internal static partial class QRImageDecoder
     }
 
     /// <summary>
-    /// Another grid for the same symbol, as one more attempt of <paramref name="result"/>: sampled into <see cref="ModuleWorkspace.Other"/> and decoded unless it samples what <see cref="ModuleWorkspace.First"/> holds, then read again by coverage when asked and the grid did not settle.
+    /// Another grid for the same symbol, as one more attempt of <paramref name="result"/>: sampled into <see cref="ModuleWorkspace.Other"/> and decoded unless it samples what <see cref="ModuleWorkspace.First"/> holds, then, while nothing settles, read again by coverage when asked and in module space when the reading has a grey image.
     /// </summary>
     private static void DecodeOtherGrid(in ImageView image, in PerspectiveTransform transform, int dimension, ref ModuleWorkspace modules, bool coverage, Span<char> destination, ref SearchResult<QRCodeDecodeInfo> result)
     {
@@ -695,11 +708,19 @@ internal static partial class QRImageDecoder
         var otherStatus = DecodeWithMirrorRetry(other, dimension, destination, out var otherCharsWritten, out var otherInfo, out var transposed);
         if (otherStatus == DecodeStatus.Success)
             otherInfo = otherInfo.WithCorners(SymbolGeometry.FromTransform(transform, dimension, dimension, transposed));
-        if (result.Other(otherStatus, otherCharsWritten, otherInfo) || !coverage)
+        if (result.Other(otherStatus, otherCharsWritten, otherInfo))
             return;
 
-        var coverageStatus = DecodeByCoverage(image, transform, dimension, other, modules.Coverage(dimension), destination, out var coverageCharsWritten, out var coverageInfo);
-        result.Other(coverageStatus, coverageCharsWritten, coverageInfo);
+        if (coverage)
+        {
+            var coverageStatus = DecodeByCoverage(image, transform, dimension, other, modules.Coverage(dimension), destination, out var coverageCharsWritten, out var coverageInfo);
+            if (result.Other(coverageStatus, coverageCharsWritten, coverageInfo))
+                return;
+        }
+        if (image.GreySource.IsEmpty)
+            return;
+        var moduleSpaceStatus = DecodeInModuleSpace(image, transform, dimension, other, modules.Coverage(dimension), destination, out var moduleSpaceCharsWritten, out var moduleSpaceInfo);
+        result.Other(moduleSpaceStatus, moduleSpaceCharsWritten, moduleSpaceInfo);
     }
 
     /// <summary>The grid read again into <paramref name="modules"/> with each module's luminance interpolated at its centre and split halfway between the two levels.</summary>
