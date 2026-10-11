@@ -156,7 +156,8 @@ The square symbologies follow the same rule, their builders since 2026-09-10 and
 ### Not implemented
 
 - Kanji beside an ECI header. Kanji mode is written only when the library chooses the charset ([When Kanji mode is written](qrcode-symbologies.md#when-kanji-mode-is-written)).
-- FNC1 and Structured Append (rMQR does not define Structured Append).
+- FNC1, which the decoder reads since 2026-10-11 and the encoder will write with the GS1 layer ([fnc1-support-plan.md](../plans/fnc1-support-plan.md)).
+- Structured Append, which rMQR does not define.
 
 ### Symbol parameters (verified)
 

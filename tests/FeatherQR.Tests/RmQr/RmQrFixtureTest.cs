@@ -195,7 +195,7 @@ public class RmQrFixtureTest
     /// interleaved codeword 0. Mirrors RmQRModulePlacer's zigzag (column pairs from
     /// the right, alternating up/down, function modules skipped).
     /// </summary>
-    private static (int Row, int Col) FirstDataModule(int height, int width)
+    internal static (int Row, int Col) FirstDataModule(int height, int width)
     {
         var function = RmQRNaiveReference.FunctionModuleMap(height, width);
         var upward = true;

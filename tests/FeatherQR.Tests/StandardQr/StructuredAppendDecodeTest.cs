@@ -191,7 +191,7 @@ public class StructuredAppendDecodeTest
     private static DecodeStatus Decode(byte[] data, out string text, out QRStructuredAppend header)
     {
         Span<char> destination = stackalloc char[64];
-        var status = QRBinaryDecoder.DecodeBitStream(data, Version, destination, out var charsWritten, out header);
+        var status = QRBinaryDecoder.DecodeBitStream(data, Version, destination, out var charsWritten, out header, out _);
         text = destination.Slice(0, charsWritten).ToString();
         return status;
     }

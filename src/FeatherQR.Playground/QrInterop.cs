@@ -116,6 +116,7 @@ public static partial class QrInterop
 
     /// <summary>
     /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the result as a JSON string: <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N,"corners":[x,y,...],"imageWidth":N,"imageHeight":N}</c> on success, <c>{"ok":false,"status":"NotDetected","totalMs":N,"imageWidth":N,"imageHeight":N}</c> when no QR decodes, or <c>{"error":"..."}</c> on unexpected failure.
+    /// A Standard QR or rMQR symbol with FNC1 adds <c>"fnc1":"first"</c> (GS1 data) or <c>"fnc1":"second"</c> with <c>"applicationIndicator":N</c> (the 8-bit codeword), and its text is the element string with each separator as U+001D.
     /// <para>
     /// <c>"corners"</c> is the located symbol as eight numbers (top-left, top-right, bottom-right, bottom-left, each x then y) in the decoded image's pixel space, which <c>"imageWidth"</c> and <c>"imageHeight"</c> describe so the page can scale the overlay to whatever size it displays the image at. That space is the file's <em>stored</em> pixels: <c>"orientation"</c> carries the EXIF tag (1-8) the decoder ignored, and the page must map the corners through it, because every browser decode path applies the tag to the picture it shows.
     /// </para>
@@ -158,7 +159,9 @@ public static partial class QrInterop
                     Corners: Flatten(info.Corners),
                     ImageWidth: bitmap.Width,
                     ImageHeight: bitmap.Height,
-                    Orientation: origin);
+                    Orientation: origin,
+                    Fnc1: Fnc1Label(info.Fnc1),
+                    ApplicationIndicator: info.Fnc1.ApplicationIndicator);
                 return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
             }
 
@@ -201,7 +204,9 @@ public static partial class QrInterop
                     Corners: Flatten(rmInfo.Corners),
                     ImageWidth: bitmap.Width,
                     ImageHeight: bitmap.Height,
-                    Orientation: origin)
+                    Orientation: origin,
+                    Fnc1: Fnc1Label(rmInfo.Fnc1),
+                    ApplicationIndicator: rmInfo.Fnc1.ApplicationIndicator)
                 : new DecodePayload(
                     Ok: false,
                     Text: null,
@@ -222,6 +227,9 @@ public static partial class QrInterop
             return JsonSerializer.Serialize(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
         }
     }
+
+    /// <summary>The FNC1 mode for the page: "first" (GS1), "second" (an AIM industry format), or null without FNC1.</summary>
+    private static string? Fnc1Label(Fnc1Mode fnc1) => fnc1.IsFirstPosition ? "first" : fnc1.IsSecondPosition ? "second" : null;
 
     /// <summary>
     /// The symbol's corners as eight numbers for the page to stroke, in the order the contract
@@ -901,6 +909,8 @@ public sealed record ErrorPayload(string Error);
 /// <param name="ImageWidth">Pixel width of the image the decoder saw, so the page can scale the overlay to however it is displaying that image.</param>
 /// <param name="ImageHeight">Pixel height of the image the decoder saw.</param>
 /// <param name="Orientation">The file's EXIF orientation tag (1-8), or 1 when it has none. The decoder ignores it but a browser applies it, so the page maps <see cref="Corners"/> through it before drawing.</param>
+/// <param name="Fnc1">"first" (GS1 data) or "second" (an AIM industry format) when the symbol carries FNC1, else null. Standard QR and rMQR only.</param>
+/// <param name="ApplicationIndicator">In second position, the 8-bit codeword (0-99 as its value, or a letter's ASCII value plus 100), else null.</param>
 public sealed record DecodePayload(
     bool Ok,
     string? Text,
@@ -914,7 +924,9 @@ public sealed record DecodePayload(
     float[]? Corners = null,
     int ImageWidth = 0,
     int ImageHeight = 0,
-    int Orientation = 1);
+    int Orientation = 1,
+    string? Fnc1 = null,
+    int? ApplicationIndicator = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(QrRequest))]

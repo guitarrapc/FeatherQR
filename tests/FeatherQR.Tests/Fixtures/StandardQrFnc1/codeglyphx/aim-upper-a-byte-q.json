@@ -1,0 +1,22 @@
+{
+  "id": "aim-upper-a-byte-q",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "Q",
+  "mode": "Unknown",
+  "maskPattern": 3,
+  "payloadText": "hello world",
+  "payloadUtf8Hex": "68656C6C6F20776F726C64",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "Second",
+    "applicationIndicator": 165,
+    "symbologyIdentifier": "]Q5"
+  }
+}

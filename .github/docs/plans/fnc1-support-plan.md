@@ -17,12 +17,11 @@ ISO/IEC 18004 (read in its 2006 edition) defines two modes that change how the w
 - A reader signals the mode with the symbology identifier (`]Q3` / `]Q4` first, `]Q5` / `]Q6` second, the even ones under the ECI protocol) and transmits the application indicator before the data.
 - Micro QR has neither mode. rMQR has both, as `101` and `110` (below).
 
-## Where it stands (2026-10-10, `main` at f4b74de)
+## Where it stands (2026-10-11, branch `feature/fnc1-decode`)
 
-- The Standard QR decoder recognises both indicators and returns `UnsupportedContent`.
-- The rMQR decoder treats `101` and `110` as reserved (`InvalidBitstream`). [rmqr-decoder.md](../specs/rmqr-decoder.md) and [rmqr-spec-map.md](../specs/rmqr-spec-map.md) say rMQR has no FNC1 indicators, without a source, and a test pins the decoder to that statement.
+- Phases 0 to 2 are built: both decoders read both indicators and report `Fnc1Mode` on `QRCodeDecodeInfo.Fnc1` and `RmQRCodeDecodeInfo.Fnc1`, 28 fixtures from three writers are committed, and the rMQR records are corrected. Before this branch the Standard QR decoder returned `UnsupportedContent` for both indicators and the rMQR decoder refused `101` and `110` as reserved.
 - The Micro QR decoder refuses M4 indicators 4-7, which is correct.
-- No generator writes FNC1, and no option asks for it.
+- No generator writes FNC1, and no option asks for it (Phases 3 to 6).
 - The real-image corpus holds one GS1 photograph (`qrcode-2/gs1-figure-4.15.1-2.png`), which the sweep counts in the content column in all four rotations. Its expected text is the element string with raw GS and no identifier, the form this plan returns.
 - No test or tool asks a writer for FNC1.
 
@@ -170,3 +169,24 @@ Lesson: an encoder option that writes whatever data it is given is only half a f
 Done: decisions 1 and 2 now say that `ApplicationIndicator` is an `int?` and that `Fnc1Mode.None` ships with the encode half. Both were worked out in the discussion of decision 1 on 2026-10-10, where the first proposal was -1 for an indicator that does not apply and `None` in the decode release, and the maintainer had them written in. Decision 1 as a whole is still settled at the end of Phase 0. No code changed.
 
 Lesson: the plan gave the indicator a member and did not say what it reads outside second position. A member whose zero is a real value needs its absent case decided with it.
+
+### Phase 0: fixtures and probes (2026-10-11)
+
+Done: `probe-fnc1` reproduces the 2026-10-10 probe as a QRInteropFixtures command, and `regenerate-fnc1` writes 28 fixtures (20 Standard QR under `StandardQrFnc1/`, 8 rMQR under `RmQrFnc1/`) from libzint, ZXing.Net and CodeGlyphX, each read by zxing-cpp in `TextMode.Plain` before it is written. The manifest and `FixtureLoader` gained `fnc1` (position, the application indicator codeword, the reader's symbology identifier, and the writer's input where it is not the text). The writer defects and the oracle capabilities are in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md). Decision 1 is settled as recommended: `Fnc1Mode` with `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator` in the decode half, and construction internal until the encode half. Decision 7's premise held in the probe: both rMQR writers' GS1 symbols read as `]Q3` in zxing-cpp.
+
+The probe added to the research. CodeGlyphX's rMQR validator also takes the element string with separators, and refuses only a separator after a fixed-length AI. CodeGlyphX writes an application indicator outside the standard's ranges (164) without an error, and zxing-cpp then returns no result, which decision 6 refuses as `InvalidBitstream`. ZXing.Net's reader reports `]Q4` for first position under an ECI where zxing-cpp's property reports `]Q3` with `HasECI`. libzint needs 32 data codewords for the 51-character element string at level H, so the rMQR case that zxing-cpp's unit test holds in R15x59-H is at R17x77-H here.
+
+Lessons:
+
+- A fixture of a writer defect is still a fixture of a valid symbol. The symbol means what the standard says it does, every reader agrees, and recording the writer's input beside the reader's text keeps the defect visible without making it the expectation.
+- A corpus case pinned to another encoder's version is a claim about that encoder's segmentation. zxing-cpp's test symbol fits 51 characters in R15x59-H and libzint cannot, because libzint spends more codewords on the same text.
+
+### Phases 1 and 2: decode (2026-10-11)
+
+Done: `Fnc1Mode` (`IsFirstPosition`, `IsSecondPosition`, `ApplicationIndicator` as an `int?` codeword, construction internal) on `QRCodeDecodeInfo.Fnc1` and `RmQRCodeDecodeInfo.Fnc1`. The Standard QR and rMQR bit stream decoders read both indicators (`0101` and `1001`, `101` and `110`) once before the first data segment, with ECI and Structured Append headers on either side, read and range-check the application indicator, and apply the `%` rule through one shared Alphanumeric payload decoder (`SegmentDecoders.DecodeAlphanumericPayloadFnc1`), kept apart from the plain one so the route without FNC1 keeps its code. The destination is checked per character written under the rule. The 28 fixtures, zxing-cpp's five FNC1 unit test vectors and the standard's two examples read as expected in 420 FNC1 tests on both target frameworks, the whole suite passes (37,770), and the GS1 figure of the real-image corpus reads at four right angles. The rMQR records and `Decode_ReservedModes_AreInvalidBitstream` are replaced. The decode half of the documents (both decoder records, both spec maps, the architecture record, the fixture spec, the README and the migration guide), the approved API listing (`Fnc1Mode` and the two `Fnc1` properties, the API page regenerated) and the Playground's decode panel (the mode beside the symbol, the separator shown as U+241D) landed with it. The rMQR sweep is identical on every paired render (29,440 renders, 0 gained, 0 lost, 0 misread), and the real-image corpus gained the GS1 figure's four reads with nothing else moved. Decode benchmarks (`QRCodeDecodeEndToEnd`, `RmQRDecodeEndToEnd`, in-process, pinned to one CCD, main and branch alternating twice, with `MicroQRDecodeEndToEnd` as an untouched control): in the second round the branch reads 0.87 to 1.04 of main on Standard QR and 0.94 to 1.09 on rMQR, and the control moved 0.90 to 1.05 in the same runs, so the change is within the run-to-run noise. Allocations are identical on every row. An unpinned first attempt had read every Standard QR row 30 to 60 % slower on the branch, the untouched image and codeword-extraction paths included, which is the CCD placement this machine is known for and not the code. The Playground was published (Debug, no AOT) and checked by hand in the browser: a second-position fixture reads with its indicator (37), a GS1 fixture reads as GS1 with the separator shown as U+241D, and an rMQR GS1 fixture reads as GS1.
+
+Lessons:
+
+- A hand-computed bit constant is a claim too. Two rMQR test streams were written with wrong Alphanumeric pair values, and the decoder, correct, failed them. A vector copied from another reader's test suite (zxing-cpp's five) is worth more than one derived by hand, so both kinds are in the tests.
+- A test that pins a record is not a test of the record. `Decode_ReservedModes_AreInvalidBitstream` pinned the decoder to the "reserved" statement, so correcting the record meant deleting the test rather than failing it.
+- The destination check cannot be the count read. The `%` rule only shrinks the text, and a check for the count read would refuse a destination sized for the text as it reads, so the FNC1 payload decoder checks per character written.

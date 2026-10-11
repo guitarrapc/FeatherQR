@@ -28,6 +28,8 @@ public sealed record FixtureManifest
     public int PixelsPerModule { get; init; }
     /// <summary>Structured Append header of this symbol; null when the symbol carries none.</summary>
     public StructuredAppendManifest? StructuredAppend { get; init; }
+    /// <summary>FNC1 mode of this symbol; null when the symbol carries none.</summary>
+    public Fnc1Manifest? Fnc1 { get; init; }
 }
 
 /// <summary>The Structured Append header as on the wire: 0-based index, count 1..16, parity byte; <c>SetId</c> groups one set.</summary>
@@ -37,6 +39,19 @@ public sealed record StructuredAppendManifest
     public required int Index { get; init; }
     public required int Count { get; init; }
     public required int Parity { get; init; }
+}
+
+/// <summary>
+/// The FNC1 mode as on the wire: <c>Position</c> is "First" (GS1) or "Second" (an AIM application indicator), <c>ApplicationIndicator</c> the
+/// 8-bit codeword in second position (0-99, or a letter's ASCII value plus 100) and null otherwise, <c>SymbologyIdentifier</c> what the
+/// zxing-cpp reader reported (<c>]Q3</c> or <c>]Q5</c>), and <c>WriterInput</c> the writer's input where it is not the text the symbol means.
+/// </summary>
+public sealed record Fnc1Manifest
+{
+    public required string Position { get; init; }
+    public int? ApplicationIndicator { get; init; }
+    public required string SymbologyIdentifier { get; init; }
+    public string? WriterInput { get; init; }
 }
 
 /// <summary>One loadable fixture case: manifest plus sibling matrix/PNG files.</summary>
