@@ -16,10 +16,10 @@ public class LargeVersionGridOrderTest
     /// The mesh reads the same render with corrections, from interpolating between measured nodes, so a read without any is the transform's.
     /// </summary>
     [Test]
-    [Arguments(14, 4f, 20f, 0.16f)]
-    [Arguments(17, 5f, 20f, 0.16f)]
+    [Arguments(14, 3f, 20f, 0.2f)]
     [Arguments(20, 3.5f, 20f, 0.12f)]
-    [Arguments(25, 4f, 200f, 0.16f)]
+    [Arguments(25, 3f, 200f, 0.2f)]
+    [Arguments(30, 3f, 20f, 0.2f)]
     public async Task AnchoredIntactSymbol_ReadsThroughTheFourPointTransform(int version, float pixelsPerModule, float degrees, float keystone)
     {
         var qr = Symbol(version);

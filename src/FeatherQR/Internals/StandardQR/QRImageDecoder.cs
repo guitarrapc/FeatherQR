@@ -1242,9 +1242,9 @@ internal static partial class QRImageDecoder
 
     /// <summary>
     /// Builds the piecewise sampling mesh for version 14+ symbols: nodes at every alignment lattice position (grid coordinate c + 0.5 for each Annex E center coordinate c), located by the alignment finder around a wavefront prediction seeded from the finders' affine frame.
-    /// Unfound interior nodes keep the prediction; the coordinate-6 row and column, finder corners included, are not searched and are re-derived by extrapolation along their lattice lines.
+    /// Unfound interior nodes keep the prediction. The coordinate-6 row and column are placed afterwards: their alignment patterns searched around an extrapolation along their lattice lines, the finder corners interpolated between the finder centres and the lattice.
     /// </summary>
-    /// <returns>True when the mesh should be used: at least half of the searched nodes were actually detected. Below that the nodes are mostly predictions, so the caller keeps the global transform instead.</returns>
+    /// <returns>True when the mesh should be used: at least half of the searched interior nodes were actually detected. Below that the nodes are mostly predictions, so the caller keeps the global transform instead.</returns>
     internal static bool TryBuildSampleMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<float> gridCoords, Span<float> nodeXs, Span<float> nodeYs, out int meshSize, out int searchedNodes, out int foundNodes)
     {
         meshSize = 0;
@@ -1381,7 +1381,7 @@ internal static partial class QRImageDecoder
         if (found * 2 < searched)
             return false;
 
-        // Second pass: re-derive the coordinate-6 row and column, finder corners included, from the interior nodes. The affine seeds find patterns but drift too far to sample with, and lattice spacing along a line is projective, so the extrapolation is quadratic, not linear.
+        // Second pass: predict the coordinate-6 row and column from the interior nodes. The affine seeds find patterns but drift too far to sample with, and lattice spacing along a line is projective, so the extrapolation is quadratic, not linear.
         for (var i = 1; i < count; i++)
         {
             Extrapolate(nodeXs, nodeYs, gridCoords, target: i, stride: count, first: count + i);
@@ -1390,7 +1390,7 @@ internal static partial class QRImageDecoder
         {
             Extrapolate(nodeXs, nodeYs, gridCoords, target: j * count, stride: 1, first: j * count + 1);
         }
-        // Top-left corner: average of the row and column extrapolations through the just-corrected edge nodes
+        // Top-left corner: average of the row and column extrapolations through the just-predicted edge nodes
         {
             Span<float> cornerX = stackalloc float[2];
             Span<float> cornerY = stackalloc float[2];
@@ -1408,8 +1408,75 @@ internal static partial class QRImageDecoder
             nodeYs[0] = (cornerY[0] + cornerY[1]) / 2f;
         }
 
+        // The edge nodes between the corners are alignment patterns like the interior ones, sitting on the timing lines, and the extrapolation is their prediction: on a photograph it carries the found nodes' noise several times over, a search around it lands on the pattern.
+        for (var i = 1; i < count - 1; i++)
+        {
+            MeasureEdgeNode(luminance, width, height, threshold, grey, moduleSize, axisX, axisY, nodeXs, nodeYs, node: i);
+            MeasureEdgeNode(luminance, width, height, threshold, grey, moduleSize, axisX, axisY, nodeXs, nodeYs, node: i * count);
+        }
+
+        // The corner nodes sit three modules inside their finders' centres, which are measured, and a cell short of two found interior nodes: the local affine frame of those three points places the corner by interpolation, exact on a plane in perspective to within the curvature over three modules and following a bend, where the extrapolation reaches past a cell from noisy nodes and a plane through everything does not bend.
+        var last = count - 1;
+        PlaceCorner(nodeXs, nodeYs, nodeFound, gridCoords, count, dimension, topLeft, cornerI: 0, cornerJ: 0);
+        PlaceCorner(nodeXs, nodeYs, nodeFound, gridCoords, count, dimension, topRight, cornerI: last, cornerJ: 0);
+        PlaceCorner(nodeXs, nodeYs, nodeFound, gridCoords, count, dimension, bottomLeft, cornerI: 0, cornerJ: last);
+
         return true;
 
+        static void PlaceCorner(Span<float> nodeXs, Span<float> nodeYs, ReadOnlySpan<bool> nodeFound, ReadOnlySpan<float> gridCoords, int count, int dimension, in FinderPattern finder, int cornerI, int cornerJ)
+        {
+            var stepI = cornerI == 0 ? 1 : -1;
+            var stepJ = cornerJ == 0 ? 1 : -1;
+            // The nearest found diagonal node, and with it a found node a cell further along the corner's own lattice line where that line is interior, else along the row or the column; a missed pair keeps the extrapolation
+            for (var k = 1; k < count - 1; k++)
+            {
+                var aI = cornerI + k * stepI;
+                var aJ = cornerJ + k * stepJ;
+                if (!nodeFound[aJ * count + aI])
+                    continue;
+                if (cornerI != 0 && TryPlaceCorner(nodeXs, nodeYs, nodeFound, gridCoords, count, dimension, finder, cornerI, cornerJ, aI, aJ, cornerI, aJ))
+                    return;
+                if (cornerJ != 0 && TryPlaceCorner(nodeXs, nodeYs, nodeFound, gridCoords, count, dimension, finder, cornerI, cornerJ, aI, aJ, aI, cornerJ))
+                    return;
+                if (k + 1 < count - 1
+                    && (TryPlaceCorner(nodeXs, nodeYs, nodeFound, gridCoords, count, dimension, finder, cornerI, cornerJ, aI, aJ, aI + stepI, aJ)
+                        || TryPlaceCorner(nodeXs, nodeYs, nodeFound, gridCoords, count, dimension, finder, cornerI, cornerJ, aI, aJ, aI, aJ + stepJ)))
+                    return;
+            }
+        }
+
+        static bool TryPlaceCorner(Span<float> nodeXs, Span<float> nodeYs, ReadOnlySpan<bool> nodeFound, ReadOnlySpan<float> gridCoords, int count, int dimension, in FinderPattern finder, int cornerI, int cornerJ, int aI, int aJ, int bI, int bJ)
+        {
+            var a = aJ * count + aI;
+            var b = bJ * count + bI;
+            if (!nodeFound[b])
+                return false;
+            var finderU = cornerI == 0 ? 3.5f : dimension - 3.5f;
+            var finderV = cornerJ == 0 ? 3.5f : dimension - 3.5f;
+            // The corner in the grid frame spanned by the two nodes about the finder, then the same weights in the image
+            var du1 = gridCoords[aI] - finderU;
+            var dv1 = gridCoords[aJ] - finderV;
+            var du2 = gridCoords[bI] - finderU;
+            var dv2 = gridCoords[bJ] - finderV;
+            var cu = gridCoords[cornerI] - finderU;
+            var cv = gridCoords[cornerJ] - finderV;
+            var determinant = du1 * dv2 - du2 * dv1;
+            var wa = (cu * dv2 - du2 * cv) / determinant;
+            var wb = (du1 * cv - cu * dv1) / determinant;
+            var corner = cornerJ * count + cornerI;
+            nodeXs[corner] = finder.X + wa * (nodeXs[a] - finder.X) + wb * (nodeXs[b] - finder.X);
+            nodeYs[corner] = finder.Y + wa * (nodeYs[a] - finder.Y) + wb * (nodeYs[b] - finder.Y);
+            return true;
+        }
+
+        static void MeasureEdgeNode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, Span<float> nodeXs, Span<float> nodeYs, int node)
+        {
+            if (TryFindAlignment(luminance, width, height, threshold, grey, nodeXs[node], nodeYs[node], moduleSize, axisX, axisY, 2.5f, out var foundX, out var foundY))
+            {
+                nodeXs[node] = foundX;
+                nodeYs[node] = foundY;
+            }
+        }
         // Quadratic Lagrange extrapolation of the node at `target` (grid parameter gridCoords[0]) through the nodes at `first`, `first + stride` and `first + 2*stride` (grid parameters gridCoords[1..3]).
         static void Extrapolate(Span<float> nodeXs, Span<float> nodeYs, ReadOnlySpan<float> gridCoords, int target, int stride, int first)
         {
