@@ -81,7 +81,7 @@ internal static partial class FinderPatternFinder
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
     {
         Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
-        return TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, candidates, out _, patterns);
+        return TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, candidates, out _, out _, patterns);
     }
 
     /// <summary>
@@ -97,20 +97,26 @@ internal static partial class FinderPatternFinder
     /// <param name="candidateCount">The number of candidates written, whether or not a triple was selected.</param>
     /// <returns>True when at least three mutually consistent finder patterns were found.</returns>
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey, Span<FinderPattern> candidates, out int candidateCount)
-        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, candidates, out candidateCount, patterns);
+        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, candidates, out candidateCount, out _, patterns);
+
+    /// <summary>
+    /// <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels, Span{FinderPattern}, out int)"/>, saying whether the list is every row's: false when the stride pass selected the triple and the rows between were never scanned, so each candidate's count is a third of its rows or less.
+    /// </summary>
+    public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey, Span<FinderPattern> candidates, out int candidateCount, out bool everyRowScanned)
+        => TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Auto, candidates, out candidateCount, out everyRowScanned, patterns);
 
     /// <summary>Reference entry for parity tests: the scalar row walk and the reference cross-check walks; behavior-identical to <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/>.</summary>
     internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey)
     {
         Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
-        return TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Scalar, candidates, out _, patterns);
+        return TryFindCore(luminance, width, height, threshold, grey, FinderRowKernel.Scalar, candidates, out _, out _, patterns);
     }
 
     /// <summary>Kernel-selecting entry for parity tests; behavior-identical to <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels)"/> under every kernel.</summary>
     internal static bool TryFindWith(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns, in GreyLevels grey, FinderRowKernel kernel)
     {
         Span<FinderPattern> candidates = stackalloc FinderPattern[MaxCandidates];
-        return TryFindCore(luminance, width, height, threshold, grey, kernel, candidates, out _, patterns);
+        return TryFindCore(luminance, width, height, threshold, grey, kernel, candidates, out _, out _, patterns);
     }
 
     /// <summary>
@@ -213,13 +219,13 @@ internal static partial class FinderPatternFinder
         return false;
     }
 
-    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<FinderPattern> candidates, out int candidateCount, Span<FinderPattern> patterns)
+    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<FinderPattern> candidates, out int candidateCount, out bool everyRowScanned, Span<FinderPattern> patterns)
     {
         // One rental a search, not a row: the edge-list kernel's buffer
         var rentedEdges = RentEdgeBuffer(kernel, width);
         try
         {
-            return TryFindRows(luminance, width, height, threshold, grey, kernel, rentedEdges, candidates.Slice(0, MaxCandidates), out candidateCount, patterns);
+            return TryFindRows(luminance, width, height, threshold, grey, kernel, rentedEdges, candidates.Slice(0, MaxCandidates), out candidateCount, out everyRowScanned, patterns);
         }
         finally
         {
@@ -227,8 +233,9 @@ internal static partial class FinderPatternFinder
         }
     }
 
-    private static bool TryFindRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> candidates, out int candidateCount, Span<FinderPattern> patterns)
+    private static bool TryFindRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> candidates, out int candidateCount, out bool everyRowScanned, Span<FinderPattern> patterns)
     {
+        everyRowScanned = true;
         // Row stride bound: a v40 symbol filling the frame has module size height/177.
         // Its 3-module center band is 3·height/177 px tall and a stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol occupies half the frame), enough for the Count-based confirmation in TrySelectBestThree.
         // Smaller strides than 3 don't pay for themselves.
@@ -249,7 +256,10 @@ internal static partial class FinderPatternFinder
             // A stride can hit a real finder's band once while a false candidate is confirmed; a poor triple with candidates left out is not an answer yet.
             var strideSelected = TrySelectBestThree(scratch.Slice(0, candidateCount), patterns, out var unconfirmedLeftOut);
             if (strideSelected && !unconfirmedLeftOut)
+            {
+                everyRowScanned = false;
                 return true;
+            }
 
             // Complementary rescan: only the rows the stride pass skipped, keeping its candidates. Covers exactly the rows of a full scan, so the
             // detection envelope cannot regress. Costs one full sweep in total.

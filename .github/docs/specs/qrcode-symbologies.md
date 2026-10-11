@@ -115,6 +115,7 @@ Symbol pass
 ├─ Standard QR        finder triple ──> symbology pipeline
 │                     the triple comes from a strided row scan, which also scans the rows it skipped when it
 │                     selects no triple, or selects a doubtful one after setting once-seen candidates aside
+│                     nothing read and every row scanned: a third finder inferred from two ──> symbology pipeline
 └─ Micro QR, rMQR     strided finder scan ──> symbology pipeline
                       nothing read: full finder sweep ──> symbology pipeline
 ```
@@ -128,6 +129,7 @@ Symbol pass
 - When one attempt reaches more than one result, the symbology's own rule decides which it reports (see its map).
 - The regional pass is skipped when a side of the image is 32 px or less, which leaves too few blocks for one neighbourhood, or when the image holds only 0 and 255. Within the pass, a polarity is not decoded when its binarization leaves every pixel in the class its global threshold gave it.
 - The regional pass reads a two-level image, so no stage that needs grey levels runs in it.
+- A Standard QR symbol pass whose triple read nothing, or that found fewer than three candidates, infers a third finder from two of them, once every row has been scanned: the rows a stride skips undercount how many confirmed each candidate, which is what the pairing is judged on. It is part of the pass, so it runs in every pass at every level ([standardqr-decoder.md](standardqr-decoder.md#decisions), Inferred third finder).
 - The midpoint pass needs grey levels and is skipped when the midpoint equals the global threshold.
 - The reduced-scale search runs after every pass at full size has ended without a read or a verdict. Each level is the level above with every two by two pixels averaged into one, and is read as an image of its own: the same passes, and the same rules for ending early. A level that settles ends the search.
 - A read at a level reports its corners in the pixels of the full image. A reduced pixel is the block that starts at the scale times its own corner, so the coordinates are multiplied by the scale and nothing is added.

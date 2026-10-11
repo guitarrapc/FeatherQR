@@ -250,10 +250,12 @@ public class DecodeAllocationTest
         UnevenLight,
         /// <summary>Standard QR only: <see cref="ReducedScaleDecodeTest"/>'s texture finer than a module, read at half scale after every pass at full size has failed.</summary>
         FineTexture,
+        /// <summary>Standard QR only: <see cref="InferredFinderDecodeTest"/>'s symbol with its top-left finder blanked, read through the third finder inferred from the other two.</summary>
+        InferredFinder,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -330,6 +332,11 @@ public class DecodeAllocationTest
                     var qr = StandardQR(Content, 3);
                     var (luminance, width, height) = FineTextureRenderer.Render((row, column) => qr[row, column], qr.Size, qr.Size, 8);
                     return new Scene(luminance, width, height, Content);
+                }
+            case ImageScene.InferredFinder:
+                {
+                    var (luminance, width, height, _, _) = InferredFinderDecodeTest.Render(InferredFinderDecodeTest.Finder.TopLeft, 200f, 0f);
+                    return new Scene(luminance, width, height, InferredFinderDecodeTest.Content);
                 }
             default:
                 throw new ArgumentOutOfRangeException(nameof(scene), scene, "not a Standard QR scene");

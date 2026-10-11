@@ -90,7 +90,8 @@ internal static partial class QRImageDecoder
 
         Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
         Span<FinderPattern> patterns = stackalloc FinderPattern[3];
-        if (!FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey, candidates, out var candidateCount))
+        var found = FinderPatternFinder.TryFind(luminance, width, height, threshold, patterns, grey, candidates, out var candidateCount, out var everyRowScanned);
+        if (!found && (!everyRowScanned || candidateCount < 2))
         {
             info = NotDetectedInfo;
             return DecodeStatus.NotDetected;
@@ -100,11 +101,28 @@ internal static partial class QRImageDecoder
         var modules = new ModuleWorkspace();
         try
         {
+            if (!found)
+                return DecodeInferred(image, candidates.Slice(0, candidateCount), ref modules, destination, out charsWritten, out info);
+
             var corners = new ImageCorners();
             var status = DecodeTriple(ref corners, image, patterns, ref modules, destination, out charsWritten, out info);
-            if (IsSettled(status) || candidateCount <= 3)
+            if (IsSettled(status))
                 return status;
-            return DecodeAlternativeTriples(ref corners, image, candidates.Slice(0, candidateCount), patterns, ref modules, destination, status, ref charsWritten, ref info);
+            if (candidateCount > 3)
+            {
+                status = DecodeAlternativeTriples(ref corners, image, candidates.Slice(0, candidateCount), patterns, ref modules, destination, status, ref charsWritten, ref info);
+                if (IsSettled(status))
+                    return status;
+            }
+
+            // A third finder inferred from two is judged on how many rows confirmed each, which only a list of every row's candidates says
+            if (!everyRowScanned)
+                return status;
+            var result = NewResult();
+            result.Main(status, charsWritten, info);
+            var inferredStatus = DecodeInferred(image, candidates.Slice(0, candidateCount), ref modules, destination, out var inferredCharsWritten, out var inferredInfo);
+            result.Other(inferredStatus, inferredCharsWritten, inferredInfo);
+            return result.Report(out charsWritten, out info);
         }
         finally
         {
@@ -323,16 +341,16 @@ internal static partial class QRImageDecoder
         var uY = (topRight.Y - topLeft.Y) / uLength;
         var vX = (bottomLeft.X - topLeft.X) / vLength;
         var vY = (bottomLeft.Y - topLeft.Y) / vLength;
-        var moved = Refine(luminance, width, height, grey, uX, uY, vX, vY, moduleSizes.TopLeft, ref topLeft);
-        moved |= Refine(luminance, width, height, grey, uX, uY, vX, vY, moduleSizes.TopRight, ref topRight);
-        moved |= Refine(luminance, width, height, grey, uX, uY, vX, vY, moduleSizes.BottomLeft, ref bottomLeft);
+        var moved = RefineCentre(luminance, width, height, grey, uX, uY, vX, vY, moduleSizes.TopLeft, ref topLeft);
+        moved |= RefineCentre(luminance, width, height, grey, uX, uY, vX, vY, moduleSizes.TopRight, ref topRight);
+        moved |= RefineCentre(luminance, width, height, grey, uX, uY, vX, vY, moduleSizes.BottomLeft, ref bottomLeft);
         return moved;
-
-        static bool Refine(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, float uX, float uY, float vX, float vY, float moduleSize, ref FinderPattern finder)
-            // NaN when the measurement left the image
-            => moduleSize >= 1f
-                && ConcentricCentroid.TryRefine(luminance, width, height, grey, uX * moduleSize, uY * moduleSize, vX * moduleSize, vY * moduleSize, 2f, 9f, 0.75f, ref finder.X, ref finder.Y, out _);
     }
+
+    private static bool RefineCentre(ReadOnlySpan<byte> luminance, int width, int height, in GreyLevels grey, float uX, float uY, float vX, float vY, float moduleSize, ref FinderPattern finder)
+        // NaN when the measurement left the image
+        => moduleSize >= 1f
+            && ConcentricCentroid.TryRefine(luminance, width, height, grey, uX * moduleSize, uY * moduleSize, vX * moduleSize, vY * moduleSize, 2f, 9f, 0.75f, ref finder.X, ref finder.Y, out _);
 
     /// <summary>
     /// Module sizes measured along the finder-to-finder lines: each finder's own along each line it is on, since one size does not fit a keystoned symbol, and their mean.
@@ -1021,16 +1039,17 @@ internal static partial class QRImageDecoder
             }
         }
         return best;
+    }
 
-        static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in PerspectiveTransform transform, float u, float v)
-        {
-            transform.Transform(u, v, out var x, out var y);
-            if (grey.IsEnabled)
-                return LuminanceSampler.Bilinear(luminance, width, height, x, y) < grey.Midpoint;
-            var px = x < 0f ? 0 : x >= width ? width - 1 : (int)x;
-            var py = y < 0f ? 0 : y >= height ? height - 1 : (int)y;
-            return luminance[py * width + px] < threshold;
-        }
+    /// <summary>Whether the module at grid point (<paramref name="u"/>, <paramref name="v"/>) through <paramref name="transform"/> is dark: interpolated against the grey midpoint where the image has grey levels, else the pixel against the threshold.</summary>
+    private static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, in PerspectiveTransform transform, float u, float v)
+    {
+        transform.Transform(u, v, out var x, out var y);
+        if (grey.IsEnabled)
+            return LuminanceSampler.Bilinear(luminance, width, height, x, y) < grey.Midpoint;
+        var px = x < 0f ? 0 : x >= width ? width - 1 : (int)x;
+        var py = y < 0f ? 0 : y >= height ? height - 1 : (int)y;
+        return luminance[py * width + px] < threshold;
     }
 
     /// <summary>
