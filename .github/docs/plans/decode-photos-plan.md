@@ -124,19 +124,21 @@ The records list what was tried and refuted on this decoder ([standardqr-decoder
 | D5 | ECI 20 decode | Done in Phase 3 for Standard QR and rMQR, through the Kanji table. The scope row in [qrcode-symbologies.md](../specs/qrcode-symbologies.md#scope-decisions) changed with it |
 | D6 | BoofCV's photographs (`qrcodes_v3.zip`, about 200 MB, licence not stated) | Decided 2026-10-10: never committed. The maintainer downloads them from `https://boofcv.org/notwiki/regression/fiducial/qrcodes_v3.zip`, the tool takes the path, and only numbers enter the records |
 | D7 | ZXing's QR photographs (Apache-2.0) | Decided 2026-10-10: not imported. Of the 179, 30 are pixel for pixel zxing-cpp samples and 49 more are the same photographs re-encoded (same size and name, a mean difference under 15 grey levels), so 100 are new. They are 10.5 MB as PNG and 9.2 MB as lossless WebP, eight to ten times the committed corpus (1.1 MB). `photos` reads them from a ZXing.Net checkout, as BoofCV's are read, and a photograph is committed only when a test needs it, as the five corpus decode tests needed theirs |
+| D8 | go-qr as a measured reader | Proposed by the maintainer 2026-10-11 and run that day as recommended; the maintainer has not yet ruled on the details. As run: its own test, unchanged, run with the Go toolchain on the maintainer's machine from the checkout at `.references/go-qr`, the workspace file kept outside the checkout; never in CI and never a test's dependency; no Go code and no result file in this repository, only numbers and causes in the records, as with BoofCV's photographs. The toolchain policy in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md) is written for oracles a test depends on and names prebuilt binaries; a `go test` run on one machine for a measurement is outside what it rules on, which is why this is a decision. Which grey image go-qr reads was settled by the comparison in Phase 1b: reads move with the conversion, so the records use this tool's grey images, and its own conversion is recorded as the reproduction of its published figures |
 
 ## Phases
 
 | # | Phase | Contents | Exit |
 |---|---|---|---|
 | 1 | Measure photographs | Done 2026-10-10 (Progress log): the `photos` and `boofcv` commands, the ZXing set read from a checkout (D7), zxing-cpp's samples at 2c3dcfe checked against the import, eight camera kinds drawn by `CameraRenderer`, BoofCV per category with a cause class for each of its 77 gap photographs | A table per set with gap and reverse, a recorded cause for every gap image of the ZXing and zxing-cpp sets, BoofCV per category, and the candidates of the technique table ranked by the reads they are aimed at |
+| 1b | go-qr in its own harness | Done 2026-10-11 (Progress log; "go-qr in its own harness" below, D8): go-qr's `TestBoofCV` run unchanged on its checkout over BoofCV's photographs and ZXing's, its lines read by `boofcv` and `photos` as one more reader's column. 412 of 536 against this library's 416, 23 photographs only it reads and 27 only this library; 165 of 179 against 164 | The published 413 of 536 and 166 of 179 reproduced, or the difference explained. Gap and reverse against go-qr per category, a cause class for every gap photograph, and the candidates ranked again |
 | 2 | Documented scope from the measurement | Done 2026-10-10 (Progress log): the documents in "Documents to change" state the measured envelope on photographs, with no stage added | Every place listed says what the measurement shows, and none says "out of scope" for a class the decoder reads |
 | 3 | Charset | Done 2026-10-10 (Progress log): the Shift_JIS guess and ECI 20 in the shared Byte segment decoder, and Micro QR writing UTF-8 where its ISO-8859-1 bytes would read as another text. Standard QR and rMQR already declared ECI 3. The rule and its costs were accepted as measured (D2 to D4) | The 11 ZXing images and the 44 corpus reads return their texts. A round trip over Latin-1 payloads, including text whose bytes look like half-width katakana, misreads nothing. The guess's rate on foreign Latin-1 symbols is measured and recorded. Micro QR and rMQR share it |
-| 4 | Image stages | The first, a search at reduced scale, done 2026-10-10 (Progress log): BoofCV 322 to 371 of 536, the gap 77 to 40. The second, a third finder inferred from two, done 2026-10-11 (Progress log): 371 to 400, the gap 40 to 28, the reverse 20 to 37. The third, the selection on a crowded or 12-megapixel scene, done 2026-10-11 (Progress log): 400 to 406, the gap 28 to 22. The fourth, the fourth point from the finders' edges for a symbol nothing anchors, done 2026-10-11 (Progress log). The fifth, the alignment mesh of a version 25 and up at 5 to 8 px/module, investigated and not built (Progress log): the lattice is found, the mesh's extrapolated edge nodes are what fail. The sixth, those edge nodes measured, done 2026-10-11 (Progress log): 413 to 415, the gap 18 to 16. Each starts from the failing images, finds the stage that loses them (the true-transform column on synthetic kinds, zxing-cpp's corners on photographs), and follows the accuracy-change rules | Each sub-phase's own exit: the reads gained per set, nothing lost, the failure-path multiple, and the test renders with their mechanism switched off |
+| 4 | Image stages | The first, a search at reduced scale, done 2026-10-10 (Progress log): BoofCV 322 to 371 of 536, the gap 77 to 40. The second, a third finder inferred from two, done 2026-10-11 (Progress log): 371 to 400, the gap 40 to 28, the reverse 20 to 37. The third, the selection on a crowded or 12-megapixel scene, done 2026-10-11 (Progress log): 400 to 406, the gap 28 to 22. The fourth, the fourth point from the finders' edges for a symbol nothing anchors, done 2026-10-11 (Progress log). The fifth, the alignment mesh of a version 25 and up at 5 to 8 px/module, investigated and not built (Progress log): the lattice is found, the mesh's extrapolated edge nodes are what fail. The sixth, those edge nodes measured, done 2026-10-11 (Progress log): 413 to 415, the gap 18 to 16. The seventh, a grid that follows a lens, planned ("A grid that follows a lens" below): the phone-mix renders, 235 of 400 against zxing-cpp's 328. Each starts from the failing images, finds the stage that loses them (the true-transform column on synthetic kinds, zxing-cpp's corners on photographs), and follows the accuracy-change rules | Each sub-phase's own exit: the reads gained per set, nothing lost, the failure-path multiple, and the test renders with their mechanism switched off |
 | 4b | Vector tiers for the halving | Done 2026-10-11 on x64, WebAssembly and ARM64 (Progress log, the ARM64 timing in its own entry): `LuminanceHalver` has a 256-bit tier, a portable 128-bit tier and a WebAssembly tier under the rules of the 128-bit round, with the word-at-a-time loop as the scalar tier and the tail ("The halving's vector tiers" below). It changed no read | Every build class runs the tier it measured faster on, or keeps the word-at-a-time loop with its measured reason beside its row. The failing photographs' multiple is measured again and replaces 1.53 in the records |
 | 5 | Fold | Durable results into the decoder records, [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md) and [qrcode-symbologies.md](../specs/qrcode-symbologies.md), the README and XML docs final, this file deleted and the index updated | No completed plan remains |
 
-Phase 2 runs before any stage is built, because today's documents are wrong about today's decoder. Phases 3 and 4 are independent. Phase 3 has to land before the 2.0.0 freeze if D1 holds, and each sub-phase of Phase 4 updates the documents for its own change.
+Phase 2 runs before any stage is built, because today's documents are wrong about today's decoder. Phases 3 and 4 are independent. Phase 3 has to land before the 2.0.0 freeze if D1 holds, and each sub-phase of Phase 4 updates the documents for its own change. Phase 1b builds nothing in the library and can change the ranking, so it runs before the seventh stage of Phase 4 is built; that stage's diagnosis does not wait for it.
 
 ## The halving's vector tiers
 
@@ -168,6 +170,76 @@ What the rules of [the 128-bit round](../specs/qrcode-symbologies.md#the-128-bit
 - The machine code is read: the search's own method compiles as before on every build, and the word-at-a-time loop costs no instruction for having tiers above it.
 
 What it does not touch: the levels, the floor and which images are searched stay as the first stage of Phase 4 left them, so the sweep, the corpus and both photograph sets read image for image as before, which `compare` shows. The histogram on photographs (4.6 ms on the same photograph, five times a symbol pass) is a lead of its own and not part of this phase.
+
+## go-qr in its own harness
+
+Phase 1b, proposed by the maintainer on 2026-10-11. go-qr has been compared through its published figures alone: 77.1 % of BoofCV's photographs and 166 of ZXing's 179 upright. They give a total and a share per category, not which photographs.
+
+Why it is worth a phase:
+
+- The zxing-cpp gap is nearly spent as a source of leads: 16 photographs on BoofCV's set, no class of more than four.
+- go-qr reads other photographs than this library does. Its published shares, turned into counts (they sum to 413, the 77.1 %), put it ahead in seven categories by 12 photographs: `damaged` 16 against 12, `pathological` 19 against 17, `perspective` 25 against 23, and one each in `glare`, `blurred`, `curved` and `noncompliant`. This library is ahead in four by 14: `bright_spots` 22 against 17, `high_version` 27 against 22, `brightness` 25 against 22, `nominal` 60 against 59. The 12 are a floor: the photographs go-qr reads and this library does not are at least that many, and only a run names them.
+- Three of its techniques are still rows of the technique table with nothing built (the homography fitted to many points, the cubic lens correction, the module read as nine samples). A gap photograph says which of them a measured image needs.
+
+How:
+
+- The checkout at `.references/go-qr` (v2.6.0, d8a5d8d) and the Go toolchain on the maintainer's machine (1.26.4). `tools/bench` holds `TestBoofCV`, which reads every photograph of a directory of directories through `Decode` and writes one line of JSON a decoder and photograph: the directory, the file, the texts and the milliseconds. It is run unchanged.
+- `tools/go.mod` requires the released v2.5.1, so the checkout is measured only through a workspace. go-qr's own instructions write that file into the checkout's root; here it goes outside (`GOWORK`), and the checkout stays as cloned. The module fetches gozxing and two encoders from the module proxy.
+- The published figures come first, as zxing-cpp's did in Phase 1: 413 of 536 and the share of each category. A harness that reproduces them is one whose other columns compare with this tool's.
+- `boofcv` reads the lines as an input and gives go-qr a column, scored by the rule every reader is scored by (a text another read confirms), with gap and reverse against it per category and the photographs named.
+- The same test pointed at ZXing's black-box directory walks `qrcode-1` to `-6`; `photos` scores those lines against the expected texts, upright, where 166 is the figure to reproduce.
+
+To settle on the way:
+
+- The grey image. go-qr's test converts with Go's image package, this tool gives every reader SkiaSharp's Gray8. The two are compared on a sample of photographs first. If a read moves with the conversion, the tool writes its grey images out and go-qr reads those, so that the column means what zxing-cpp's does.
+- The time. Its milliseconds are Go's on this machine beside .NET's, a call each, and are recorded beside each other without a ratio the records lean on. go-qr publishes 8.7 s for the set against zxing-cpp's 5.5 s; this library takes 2.5 s here and zxing-cpp 5.9 s.
+- go-qr states that its thresholds were tuned on BoofCV's set, so ZXing's is the fairer column. Both are recorded.
+- `DecodeAll`, several symbols an image, stays out as the codes column does.
+
+Exit: the row in the phase table. Each gap photograph gets its cause by the probes Phase 4 used (the finders, the selection, the grid), and the ranking is written again with the seventh stage among its rows.
+
+## A grid that follows a lens
+
+The seventh stage of Phase 4: candidate 4 of the first ranking, which no stage has taken.
+
+Where it stands, on the sweep of 2026-10-11 (400 renders a kind, both readers on the same image):
+
+| Kind | Versions | Renders | This library | zxing-cpp | Gap | Reverse |
+|---|---|---|---|---|---|---|
+| Phone mix | 1 to 6 | 60 | 56 | 51 | 0 | 5 |
+| | 7 to 13 | 70 | 33 | 68 | 35 | 0 |
+| | 14 to 24 | 110 | 65 | 93 | 29 | 1 |
+| | 25 to 40 | 160 | 81 | 116 | 41 | 6 |
+| | All | 400 | 235 | 328 | 105 | 12 |
+| Barrel distortion 5-20 % | 1 to 6 | 60 | 34 | 20 | 0 | 14 |
+| | 7 to 13 | 70 | 3 | 25 | 22 | 0 |
+| | 14 to 24 | 110 | 17 | 23 | 7 | 1 |
+| | 25 to 40 | 160 | 17 | 18 | 5 | 4 |
+| | All | 400 | 71 | 86 | 34 | 19 |
+
+What the table says:
+
+- The phone mix is the largest gap left on any set, 105 renders. 98 of them fail in the data and 6 are not detected: the finders are found and the grid is what loses them.
+- Versions 7 to 13 are the worst band, 33 of 70 against 68. Theirs is the 3 × 3 lattice whose mesh one fitted plane places, and the sixth stage's lesson is that no plane fits a bend. Its two alignment patterns on the timing lines are placed by that plane, not searched, where the large lattice's are searched since the sixth stage.
+- Below version 7 this library is ahead on both kinds, so that band is not in the stage.
+- The barrel kind at 5 to 20 % is past both readers (zxing-cpp reads 86 of 400). It is the yardstick for a mechanism, and the phone mix, whose lens term is 0 to 10 %, is the target.
+- Phase 1 measured the lens term as the cause: without it the phone mix read 40 of 40 at versions 2, 5, 10 and 20, and with it 21 and 10 of 40 at versions 10 and 20, against zxing-cpp's 40 and 36. That was before the mesh stages, so the diagnosis repeats it.
+- The sixth stage moved both kinds without aiming at them (the phone mix 191 to 235, the barrel kind 47 to 71): the mesh is where these renders are decided.
+
+Diagnosis before anything is built, by a probe on the 105 and the 34:
+
+1. Each gap render drawn again with one effect taken out (the lens, the bow, the blur, the tilt) and read: which effect loses it, per band.
+2. Against the camera's own truth (`Photograph.ToPixel`): how far the finder centres and each lattice node are from where they were drawn, which nodes are found, and the mesh grid's wrong modules per cell, as the fifth stage's map. It has to split the failures four ways: nodes not found; nodes found and the cells between them too coarse for the curvature; the strip outside the lattice, six modules extrapolated from the nearest cell; the dimension or the finders.
+3. The grid through the true nodes, sampled as the mesh samples. If it does not read, bilinear cells are not enough and the model changes. If it reads, the nodes are what to measure.
+
+Candidates, each read in the other reader's code up to the call that gates it:
+
+- The small lattice's two alignment patterns on the timing lines searched, as the large lattice's are. The nearest to what the sixth stage built.
+- zxing-cpp's local grid between each pair of alignment patterns, to which go-qr's own record credits zxing-cpp's lead at high versions.
+- go-qr's cubic lens correction on a homography fitted to many points, kept only when the fixed patterns read back better. It needs more points than three centres and an anchor, which the mesh now measures.
+- The strip outside the lattice measured on the timing patterns and the finders' edges, as the fourth stage follows an edge.
+
+Exit: the reads gained per band on both kinds with nothing lost, every set image for image under the accuracy-change rules, the failing photographs' multiple and the no-symbol shapes, test renders with their premises asserted, and a round of planted faults. Renders are the target because no photograph set holds the class in number: BoofCV's gap is 5 in `high_version` and 1 in `perspective`. If Phase 1b's gap holds photographs of this class, they join it.
 
 ## Documents to change
 
@@ -619,3 +691,45 @@ Lessons:
 - Seven faults planted in the stage's search, bounds and weights, the new test, `LargeVersionGridOrderTest` and `SampleMeshTest` as the filter: six caught (the search window shut, the left column left unsearched, the found node's y dropped, the found check inverted, the two nodes' weights swapped, the finder's grid position moved a module). The first test rows, chosen only for the extrapolated mesh failing, caught the corner faults and none of the search's: on those shots the corners alone read, so the rows were rechosen from the sweep run with the search off and on. One survived: the top-left corner left at its extrapolation, which the renders place within the read's tolerance, both of that corner's lattice gaps being equal; `image020`'s top-left band, 0 % by the interpolation against 22 to 50 % by the extrapolation on the probe's runs, is the evidence, and a committed photograph would be the test.
 
 What is left, the 16: three `high_version` photographs (version 25 at 5.5 to 6 px/module) whose lattice is found 11 to 15 of 16 and whose cells, interior included, sample half their modules wrong; two finders found but not read from the true third centre either, 4; one finder, 3; none, 1; `brightness/image021`; `high_version/image030`; `nominal/image004`; `noncompliant/image008`; `shadows/image013`. The strided list of exactly three candidates taken unscored (`image024` at the global pass) is still not completed on failure; the photograph reads at the regional pass.
+
+### Phase 1b: go-qr in its own harness (2026-10-11)
+
+Done:
+
+- go-qr's `TestBoofCV`, unchanged, on the checkout at `.references/go-qr` (v2.6.0, d8a5d8d) with Go 1.26.4 on Windows x64, over BoofCV's detection directory and over a copy of ZXing's `qrcode-1` to `-6`. The workspace file sits in the scratch directory (`GOWORK`) and the checkout is as cloned after every run.
+- `tools/QRImageDecodeSweep`: `--lines <file>` on `boofcv` and `photos` (`ReaderLines`), which scores each reader of a file of result lines as one more reader with its own table, gap, reverse and names; and `grey <root> <outDir>`, which writes a set as the grey images the readers here are handed. Without `--lines` both commands write what they wrote before.
+- Both sets read twice by go-qr: from its own grey conversion, to reproduce its figures, and from this tool's grey images, for the records.
+
+Measured:
+
+- The published figures. BoofCV: 411 of 536 by this tool's rule against the published 413, every category as published but `damaged` (15 for 16) and `lots` (6 for 7). ZXing upright: 166 of 179, as published. gozxing, in the same lines: 182 and 155 against 183 and 155.
+- The grey image. From this tool's grey images go-qr reads 412 and 165. Five BoofCV photographs move (`bright_spots/image016`, `damaged/image010`, `lots/image006` read; `brightness/image026`, `glare/image026` lost), six more read another symbol of the photograph, and ZXing's `qrcode-2/12` is lost. The two published reads its own conversion misses are in the categories the other conversion adds to, so the 411 is the image and not the scoring. The records use the shared image (D8).
+- Against this library on the shared image. BoofCV: 412 against 416, gap 23, reverse 27; by category in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md#where-the-gap-stands). With go-qr's reads in the agreement, `damaged/image020` is confirmed and this library's 415 becomes 416; no text of either reader is unconfirmed. ZXing upright: 165 against 164, gap 4 (`qrcode-2/5`, `qrcode-4/09`, `29`, `34`), reverse 3 (`qrcode-2/12`, `qrcode-3/22`, `40`).
+- All three readers on BoofCV: 34 photographs one of the other two reads and this library does not (zxing-cpp alone 11, go-qr alone 18, both 5: `glare/image037`, `high_version/image030`, `nominal/image003`, `noncompliant/image008`, `shadows/image013`), 11 this library alone, 86 none.
+- Time, each reader's own clock on this machine: go-qr 9.2 to 9.5 s for BoofCV's set (published 8.7 s), this library 2.5 s, zxing-cpp 5.9 s.
+
+The cause of each of the 27 gap photographs, by a temporary probe (deleted) with go-qr's version and corners as the truth, taken from a scratch program on the same workspace: the full sweep's candidates at each scale to an eighth under both thresholds, the selection, the decoder's first grid from the right triple at the true dimension, and the flat grid through go-qr's four corners, each read by the threshold and in module space (go-qr's module read, written into the probe: nine samples over the module's central 30 %, against the mean of the modules within max(3, dimension / 8)):
+
+- Finders, 8. None: `pathological/image009`, `010`. One: `bright_spots/image016`, `glare/image037`, `nominal/image003`, `perspective/image030`. Two: `glare/image039`, `perspective/image029`.
+- The grid with the right triple, the flat grid through go-qr's corners reading by the threshold, 9, versions 1 to 3: `blurred/image027`, `038`, `curved/image032`, `034`, `damaged/image009`, `010`, `noncompliant/image008`, `qrcode-2/5`, `qrcode-4/09`.
+- The same, the flat grid reading only in module space, 5: `damaged/image008`, `011`, `glare/image011`, `015`, `qrcode-4/29`.
+- The same, the flat grid reading neither way, 5: `glare/image013`, `016`, `high_version/image030`, `shadows/image013`, `qrcode-4/34`.
+- The decoder's own first grid read in module space reads `curved/image034`, `shadows/image013` and `qrcode-4/09`, with 5, 24 and 3 corrections. From go-qr's corners, `blurred/image027` and `damaged/image009` read by the threshold and not in module space.
+
+The ranking, written again from what is measured now:
+
+1. A grid that follows a lens (the seventh stage, planned above): 105 phone-mix renders against zxing-cpp, versions 7 and up. No photograph of either gap is of this class but `high_version/image030`, and go-qr was not run on the renders.
+2. The grid of a small symbol fitted to more than three centres and one anchor: 9 photographs whose flat grid through four outer corners reads by the threshold where the decoder's own does not. `curved/image032` is the plain case: version 2 at 18 px/module, anchored, the centres within 0.15 module, and the outer corners read with one correction. go-qr's fit over each finder's corners is the technique-table row.
+3. A module read in module space as one more re-read of a failed grid: 3 photographs from the decoder's own first grid, one of them (`shadows/image013`) in both gaps, and 5 more that also need the grid of row 2. It joins the coverage re-read and does not replace the threshold, which reads two photographs it does not.
+4. Finders: 8 photographs of four kinds (drawn symbols with no candidate at all, perspective, glare, a 3 px/module symbol), no class of more than two.
+5. Nothing measured reads them: `glare/image013`, `016`, `qrcode-4/34`.
+
+Lessons:
+
+- Level totals hide the leads. 416 against 412 is 23 and 27, and the published shares turned into counts had promised a gap of at least 12.
+- A reader in its own harness reads its own image. Go's conversion and SkiaSharp's differ enough to move 5 of 536 photographs and 1 of 179 and to change which symbol is read on 6. A column means what the others mean only when the image is handed over, which is what `grey` is for.
+- A workspace file written with forward slashes on Windows resolves the modules and then refuses the package ("directory is contained in a module that is not one of the workspace modules"); with the system's separators it works.
+- The reported status is not the stage. Six of the 19 grid photographs report `NotDetected`, and the full sweep selects their right triple only under the regional threshold or at a reduced scale. Whether the pipeline's strided and staged search reaches that triple was not measured, and a stage built for any of them measures it first.
+- A probe that carries the other reader's rule answers "which of its techniques" before anything is built: the module-space read written into the probe split the 19 three ways in one run.
+
+What is left open: go-qr on this tool's camera renders (its `Decode` takes an image, so the phone-mix kind can be written out and read as the photographs were), which would say whether its lens correction or zxing-cpp's local grid is the lead for row 1; and the maintainer's ruling on D8.

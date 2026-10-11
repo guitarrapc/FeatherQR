@@ -42,6 +42,28 @@ internal static class Pixels
         return (luminance, gray.Width, gray.Height);
     }
 
+    /// <summary>
+    /// Writes every image of <paramref name="root"/>'s directories as the grey image <see cref="ToLuminance"/> hands the readers here, as PNG under the same directory and name.
+    /// A reader run in its own harness converts a photograph to grey its own way, and reads at the edge of a decoder move with the conversion; given these files it reads the pixels every other reader was given.
+    /// </summary>
+    public static int WriteGrey(string root, string outDir)
+    {
+        var files = Directory.EnumerateDirectories(root).SelectMany(Directory.EnumerateFiles).Where(Corpus.IsImage).ToList();
+        Parallel.ForEach(files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 1, 16) }, path =>
+        {
+            using var bitmap = SKBitmap.Decode(path) ?? throw new InvalidDataException($"cannot decode {path}");
+            var (luminance, width, height) = ToLuminance(bitmap);
+            using var gray = ToGrayBitmap(luminance, width, height);
+            using var data = gray.Encode(SKEncodedImageFormat.Png, 100);
+            var directory = Path.Combine(outDir, Path.GetFileName(Path.GetDirectoryName(path)!));
+            Directory.CreateDirectory(directory);
+            using var stream = File.Create(Path.Combine(directory, Path.GetFileNameWithoutExtension(path) + ".png"));
+            data.SaveTo(stream);
+        });
+        Console.WriteLine($"wrote {files.Count:N0} grey images under {outDir}");
+        return 0;
+    }
+
     public static (byte[] Luminance, int Width, int Height) Resize(byte[] luminance, int width, int height, int newWidth, int newHeight, SKSamplingOptions sampling)
     {
         using var source = ToGrayBitmap(luminance, width, height);

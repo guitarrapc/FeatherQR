@@ -126,6 +126,55 @@ internal static class Corpus
         return sb.ToString();
     }
 
+    /// <summary>
+    /// For each reader that came from result lines (<see cref="ReaderLines"/>), the upright images it reads, set by set, beside this library's and zxing-cpp's, with the gap and the reverse against this library and each image by name.
+    /// It reads an image when one of its texts is the expected one, the rule every reader here is scored by.
+    /// </summary>
+    public static string LinesMarkdown(IReadOnlyList<ResultRow> rows, IReadOnlyList<(string Lineage, string Set, string Path)> images, ReaderLines lines)
+    {
+        var upright = rows.Where(static r => r.Key[4] == "0").ToDictionary(static r => (r.Key[2], r.Key[3]));
+        var sb = new StringBuilder();
+        foreach (var name in lines.Readers)
+        {
+            var scored = new List<(string Set, string File, ResultRow Row, bool Held, bool Read, string? AnotherText)>();
+            foreach (var (_, set, path) in images)
+            {
+                var file = Path.GetFileName(path);
+                var expected = File.ReadAllText(Path.ChangeExtension(path, ".txt"), Encoding.UTF8);
+                var line = lines.Find(name, set, file);
+                var read = line is not null && Array.IndexOf(line.Texts, expected) >= 0;
+                scored.Add((set, file, upright[(set, file)], line is not null, read, line is { Texts.Length: > 0 } && !read ? Readers.Difference(expected, line.Texts[0]) : null));
+            }
+
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## {name}, from result lines, upright");
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Run in its own harness: {scored.Count(static s => s.Held):N0} of the {scored.Count:N0} images have a line.");
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Set | Images | FeatherQR | zxing-cpp | {name} | Gap | Reverse | Another text |");
+            sb.AppendLine("|---|---|---|---|---|---|---|---|");
+            foreach (var group in scored.GroupBy(static s => s.Set).OrderBy(static g => g.Key, StringComparer.Ordinal).Append(scored.GroupBy(static _ => "**All**").Single()))
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {group.Key} | {group.Count():N0} | {group.Count(static s => s.Row.FeatherQr):N0} | {group.Count(static s => s.Row.ZXingCpp):N0} | {group.Count(static s => s.Read):N0} | {group.Count(static s => s.Read && !s.Row.FeatherQr):N0} | {group.Count(static s => s.Row.FeatherQr && !s.Read):N0} | {group.Count(static s => s.AnotherText is not null):N0} |");
+            sb.AppendLine();
+
+            AppendList(sb, $"Gap: {name} reads, FeatherQR does not", scored.Where(static s => s.Read && !s.Row.FeatherQr).Select(static s => $"{s.Set}/{s.File}: {s.Row.Status}"));
+            AppendList(sb, $"Reverse: FeatherQR reads, {name} does not", scored.Where(static s => s.Row.FeatherQr && !s.Read).Select(static s => $"{s.Set}/{s.File}"));
+            AppendList(sb, $"{name} decoded, with another text", scored.Where(static s => s.AnotherText is not null).Select(static s => $"{s.Set}/{s.File}: {s.AnotherText}"));
+        }
+        return sb.ToString();
+
+        static void AppendList(StringBuilder sb, string title, IEnumerable<string> items)
+        {
+            var list = items.ToList();
+            if (list.Count == 0)
+                return;
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## {title} ({list.Count:N0})");
+            sb.AppendLine();
+            foreach (var item in list)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {item}");
+            sb.AppendLine();
+        }
+    }
+
     private static double Fastest(int rounds, Action call)
     {
         var best = double.MaxValue;

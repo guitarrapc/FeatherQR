@@ -7,8 +7,10 @@ using QRImageDecodeSweep;
 // Usage: dotnet run -c Release --project tools/QRImageDecodeSweep -- <command>
 //   sweep [qr|micro|rmqr|all] [cases] [outDir]   synthetic renders of every encoder's symbols
 //   corpus [outDir]                              the committed real-image sets
-//   photos <root> [outDir] [--time]              sample sets under root that are not committed (a checkout's black-box sets)
-//   boofcv <detection-dir> [outDir] [--time]     BoofCV's QR photographs, by category, scored without known texts
+//   photos <root> [outDir] [--time] [--lines <file>]           sample sets under root that are not committed (a checkout's black-box sets)
+//   boofcv <detection-dir> [outDir] [--time] [--lines <file>]  BoofCV's QR photographs, by category, scored without known texts
+//     --lines: results of readers run in their own harness, one JSON object a line (ReaderLines), each scored as one more reader
+//   grey <root> <outDir>                         every image of root's directories as the grey image the readers here are handed, as PNG
 //   compare <before.csv> <after.csv>             two result files of the same run, image for image
 //   destination [micro|rmqr|all] [count] [outDir]  what a destination too short costs, render for render
 //   compare-destination <before.csv> <after.csv>  two destination files of the same set, render for render
@@ -72,6 +74,7 @@ switch (command)
             var root = Path.GetFullPath(args[1]);
             var timed = args.Contains("--time");
             var rest = args.Skip(2).Where(static a => a != "--time").ToList();
+            var lines = ReaderLines.FromArguments(rest);
             var outDir = rest.Count > 0 ? rest[0] : defaultOut;
             var lineage = new[] { (Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), root) };
             var rows = Corpus.Run(lineage);
@@ -83,7 +86,7 @@ switch (command)
             var csv = Path.Combine(outDir, "photos.csv");
             Csv.Write(csv, Corpus.KeyColumns, rows);
             Console.WriteLine($"wrote {csv}");
-            var markdown = CorpusMarkdown(rows);
+            var markdown = CorpusMarkdown(rows) + Corpus.LinesMarkdown(rows, Corpus.Images(lineage), lines);
             if (timed)
                 markdown += Corpus.Timing(Corpus.Images(lineage), rounds: 5);
             return Finish(Path.Combine(outDir, "photos.md"), markdown);
@@ -92,9 +95,12 @@ switch (command)
         {
             var timed = args.Contains("--time");
             var rest = args.Skip(2).Where(static a => a != "--time").ToList();
+            var lines = ReaderLines.FromArguments(rest);
             var outDir = rest.Count > 0 ? rest[0] : defaultOut;
-            return BoofCv.Run(Path.GetFullPath(args[1]), outDir, timed, Finish);
+            return BoofCv.Run(Path.GetFullPath(args[1]), outDir, timed, lines, Finish);
         }
+    case "grey" when args.Length == 3:
+        return Pixels.WriteGrey(Path.GetFullPath(args[1]), Path.GetFullPath(args[2]));
     case "compare" when args.Length == 3:
         return Compare.Run(args[1], args[2]);
     case "destination":
@@ -126,7 +132,7 @@ switch (command)
     case "import-corpus" when args.Length == 3:
         return CorpusImporter.Run(repoRoot, args[1], args[2]);
     default:
-        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] | corpus [outDir] | photos <root> [outDir] [--time] | boofcv <detection-dir> [outDir] [--time] | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
+        Console.Error.WriteLine("Usage: sweep [qr|micro|rmqr|all] [cases] [outDir] | corpus [outDir] | photos <root> [outDir] [--time] [--lines <file>] | boofcv <detection-dir> [outDir] [--time] [--lines <file>] | grey <root> <outDir> | compare <before.csv> <after.csv> | destination [micro|rmqr|all] [count] [outDir] | compare-destination <before.csv> <after.csv> | import-corpus <zxing-cpp-root> <commit>");
         return 1;
 }
 

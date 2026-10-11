@@ -11,6 +11,7 @@ namespace QRImageDecodeSweep;
 /// The set records where each code is, not what it says, so a read is scored without a known text, two ways:
 /// located, when the read symbol's centre lies inside a labelled code's outline, and agreed, when another reader, or the same reader in another photograph, read the same text.
 /// A photograph counts for a reader when one of its reads is agreed. The set is never committed (its licence is not stated); the path is given on the command line.
+/// Readers run in their own harness join through a file of result lines (<see cref="ReaderLines"/>): their texts count toward agreement like any other read, and each gets a table and a gap of its own. Their reads carry no position, so they count photographs and not codes.
 /// </summary>
 internal static class BoofCv
 {
@@ -21,6 +22,9 @@ internal static class BoofCv
     /// <summary>A decoded symbol: its text and the centre of the outline the reader reported.</summary>
     private sealed record Read(string Text, double X, double Y);
 
+    /// <summary>Index in <see cref="Photo.Reads"/> of the first reader that comes from result lines.</summary>
+    private static int FirstLineReader => readers.Length;
+
     private sealed record Photo(string Category, string File, int Width, int Height, List<(double X, double Y)[]> Labels, string FeatherQrStatus, Read[][] Reads)
     {
         public double FeatherQrMs { get; set; } = double.NaN;
@@ -28,7 +32,7 @@ internal static class BoofCv
         public double ZXingCppMs { get; set; } = double.NaN;
     }
 
-    public static int Run(string root, string outDir, bool timed, Func<string, string, int> finish)
+    public static int Run(string root, string outDir, bool timed, ReaderLines lines, Func<string, string, int> finish)
     {
         var images = new List<(string Category, string Path)>();
         foreach (var directory in Directory.EnumerateDirectories(root).OrderBy(static x => x, StringComparer.Ordinal))
@@ -48,7 +52,7 @@ internal static class BoofCv
         // A photograph is up to 12 MP, decoded to 4 bytes a pixel before it is grey; fewer threads keep the memory bounded
         Parallel.For(0, images.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 1, 16) }, i =>
         {
-            photos[i] = Measure(images[i].Category, images[i].Path);
+            photos[i] = Measure(images[i].Category, images[i].Path, lines);
             var n = Interlocked.Increment(ref done);
             if (n % 50 == 0 || n == images.Count)
                 Console.WriteLine($"[{stopwatch.Elapsed:mm\\:ss}] {n}/{images.Count} photographs");
@@ -71,11 +75,11 @@ internal static class BoofCv
         bool Agreed(Read read) => observations[read.Text] >= 2;
 
         Directory.CreateDirectory(outDir);
-        WriteCsv(Path.Combine(outDir, "boofcv.csv"), photos, Agreed);
-        return finish(Path.Combine(outDir, "boofcv.md"), Markdown(photos, Agreed, timed));
+        WriteCsv(Path.Combine(outDir, "boofcv.csv"), photos, Agreed, lines);
+        return finish(Path.Combine(outDir, "boofcv.md"), Markdown(photos, Agreed, timed) + LinesMarkdown(photos, Agreed, lines));
     }
 
-    private static Photo Measure(string category, string path)
+    private static Photo Measure(string category, string path, ReaderLines lines)
     {
         using var bitmap = SKBitmap.Decode(path) ?? throw new InvalidDataException($"cannot decode {path}");
         var (luminance, width, height) = Pixels.ToLuminance(bitmap);
@@ -88,7 +92,9 @@ internal static class BoofCv
             own = [new Read(text, (c.TopLeft.X + c.TopRight.X + c.BottomRight.X + c.BottomLeft.X) / 4.0, (c.TopLeft.Y + c.TopRight.Y + c.BottomRight.Y + c.BottomLeft.Y) / 4.0)];
         }
 
-        return new Photo(category, Path.GetFileName(path), width, height, Labels(Path.ChangeExtension(path, ".txt")), success ? "Success" : info.Status.ToString(), [own, ZXingCpp(luminance, width, height), ZXingNet(luminance, width, height)]);
+        // A read from result lines has no position, so it lies inside no label
+        var fromLines = lines.Readers.Select(reader => lines.Find(reader, category, Path.GetFileName(path)) is { } line ? line.Texts.Select(static t => new Read(t, double.NaN, double.NaN)).ToArray() : []);
+        return new Photo(category, Path.GetFileName(path), width, height, Labels(Path.ChangeExtension(path, ".txt")), success ? "Success" : info.Status.ToString(), [own, ZXingCpp(luminance, width, height), ZXingNet(luminance, width, height), .. fromLines]);
     }
 
     private static void Time(Photo photo, string path)
@@ -245,6 +251,38 @@ internal static class BoofCv
         return sb.ToString();
     }
 
+    /// <summary>A table and the photographs by name for each reader that came from result lines: what it reads, the gap (it has an agreed read, FeatherQR none) and the reverse.</summary>
+    private static string LinesMarkdown(Photo[] photos, Func<Read, bool> agreed, ReaderLines lines)
+    {
+        var sb = new StringBuilder();
+        for (var r = 0; r < lines.Readers.Length; r++)
+        {
+            var name = lines.Readers[r];
+            var index = FirstLineReader + r;
+            bool Own(Photo p) => p.Reads[0].Any(agreed);
+            bool Other(Photo p) => p.Reads[index].Any(agreed);
+            var held = photos.Count(p => lines.Find(name, p.Category, p.File) is not null);
+            var known = photos.Select(static p => (p.Category, Path.GetFileNameWithoutExtension(p.File))).ToHashSet();
+            var strangers = lines.Images(name).Count(i => !known.Contains(i));
+            var times = photos.Select(p => lines.Find(name, p.Category, p.File)?.Milliseconds ?? double.NaN).ToList();
+
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## {name}, from result lines");
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"Run in its own harness: {held:N0} of the {photos.Length:N0} photographs have a line, {strangers:N0} lines name no photograph of the set. Its texts count toward agreement, so a text only it and one other reader read is agreed for both. Its own clock: {times.Where(static t => !double.IsNaN(t)).Sum():F0} ms over the set, median {Median(times):F2}.");
+            sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| Category | Photographs | FeatherQR | {name} | Gap | Reverse |");
+            sb.AppendLine("|---|---|---|---|---|---|");
+            foreach (var group in photos.GroupBy(static p => p.Category).OrderBy(static g => g.Key, StringComparer.Ordinal).Append(photos.GroupBy(static _ => "**All**").Single()))
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| {group.Key} | {group.Count():N0} | {group.Count(Own):N0} | {group.Count(Other):N0} | {group.Count(p => Other(p) && !Own(p)):N0} | {group.Count(p => Own(p) && !Other(p)):N0} |");
+            sb.AppendLine();
+
+            List(sb, $"Gap: {name} has an agreed read, FeatherQR none", photos.Where(p => Other(p) && !Own(p)), static p => $"{p.Category}/{p.File} ({p.Width}x{p.Height}, {p.Labels.Count} codes): {p.FeatherQrStatus}");
+            List(sb, $"Reverse: FeatherQR has an agreed read, {name} none", photos.Where(p => Own(p) && !Other(p)), static p => $"{p.Category}/{p.File} ({p.Width}x{p.Height}, {p.Labels.Count} codes)");
+            List(sb, $"{name} texts no other read confirms", photos.Where(p => p.Reads[index].Any(read => !agreed(read))), p => $"{p.Category}/{p.File}: {Show(p.Reads[index].First(read => !agreed(read)).Text)}");
+        }
+        return sb.ToString();
+    }
+
     private static void Line(StringBuilder sb, string name, Photo[] photos, Func<Read, bool> agreed)
     {
         bool Reads(Photo p, int reader) => p.Reads[reader].Any(agreed);
@@ -278,10 +316,11 @@ internal static class BoofCv
         return sorted.Count == 0 ? double.NaN : sorted[sorted.Count / 2];
     }
 
-    private static void WriteCsv(string path, Photo[] photos, Func<Read, bool> agreed)
+    private static void WriteCsv(string path, Photo[] photos, Func<Read, bool> agreed, ReaderLines lines)
     {
         using var writer = new StreamWriter(path, false, new UTF8Encoding(false)) { NewLine = "\n" };
-        writer.WriteLine("category,file,width,height,codes,featherqr_status,featherqr,featherqr_located,zxingcpp,zxingcpp_codes,zxingnet,featherqr_ms,zxingcpp_ms");
+        // The readers from result lines come last, so the columns before them keep their places
+        writer.WriteLine("category,file,width,height,codes,featherqr_status,featherqr,featherqr_located,zxingcpp,zxingcpp_codes,zxingnet,featherqr_ms,zxingcpp_ms" + string.Concat(lines.Readers.Select(static r => $",{r},{r}_ms")));
         foreach (var p in photos)
         {
             var own = p.Reads[0].Any(agreed);
@@ -289,7 +328,8 @@ internal static class BoofCv
             var cpp = p.Reads[1].Any(agreed);
             var cppCodes = p.Reads[1].Where(agreed).Select(r => LabelOf(p, r)).Where(static l => l >= 0).Distinct().Count();
             var net = p.Reads[2].Any(agreed);
-            writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Width},{p.Height},{p.Labels.Count},{p.FeatherQrStatus},{(own ? 1 : 0)},{(located ? 1 : 0)},{(cpp ? 1 : 0)},{cppCodes},{(net ? 1 : 0)},{p.FeatherQrMs:F3},{p.ZXingCppMs:F3}"));
+            var fromLines = string.Concat(lines.Readers.Select((reader, r) => string.Create(CultureInfo.InvariantCulture, $",{(p.Reads[FirstLineReader + r].Any(agreed) ? 1 : 0)},{lines.Find(reader, p.Category, p.File)?.Milliseconds ?? double.NaN:F3}")));
+            writer.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{p.Category},{p.File},{p.Width},{p.Height},{p.Labels.Count},{p.FeatherQrStatus},{(own ? 1 : 0)},{(located ? 1 : 0)},{(cpp ? 1 : 0)},{cppCodes},{(net ? 1 : 0)},{p.FeatherQrMs:F3},{p.ZXingCppMs:F3}") + fromLines);
         }
     }
 }

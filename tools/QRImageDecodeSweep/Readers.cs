@@ -107,7 +107,7 @@ internal static class Readers
     /// <summary>The pixels only; the size is in the key.</summary>
     private static string Digest(Rendered image) => Convert.ToHexString(SHA256.HashData(image.Luminance), 0, 8);
 
-    private static string Difference(string expected, string actual)
+    public static string Difference(string expected, string actual)
     {
         var at = 0;
         while (at < expected.Length && at < actual.Length && expected[at] == actual[at])
