@@ -10,8 +10,10 @@ namespace FeatherQR.Tests;
 /// ranges, an indicator after a data segment or a second indicator is a malformed stream, and while a
 /// mode is active a lone <c>%</c> in an Alphanumeric segment is the separator (U+001D) and <c>%%</c>
 /// is one <c>%</c>, read left to right within the segment. The same texts without FNC1 stay literal.
-/// Five streams are zxing-cpp's own unit test vectors, so the bit layout is checked against an
-/// independent reader, and the two examples of the standard are assembled from its description.
+/// Eight streams are zxing-cpp's own unit test vectors (six it reads, one it rejects, one it disabled), of which this
+/// decoder reads five and refuses three (the late first-position one by decision 6, the rejected one and the disabled
+/// one), so the bit layout is checked against an independent reader, and the two examples of the standard are
+/// assembled from its description and pinned as bytes.
 /// </summary>
 public class Fnc1DecodeTest
 {
@@ -183,6 +185,20 @@ public class Fnc1DecodeTest
     }
 
     [Test]
+    public async Task SecondPosition_OnEitherSideOfEci_IsReported()
+    {
+        var afterEci = Decode(Build(Eci(26), Fnc1Second(37), Bytes(0xC3, 0xA9), Terminator()), out var textAfter, out var fnc1After);
+        var beforeEci = Decode(Build(Fnc1Second(37), Eci(26), Bytes(0xC3, 0xA9), Terminator()), out var textBefore, out var fnc1Before);
+
+        await Assert.That(afterEci).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(textAfter).IsEqualTo("é");
+        await Assert.That(fnc1After.ApplicationIndicator).IsEqualTo(37);
+        await Assert.That(beforeEci).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(textBefore).IsEqualTo("é");
+        await Assert.That(fnc1Before.ApplicationIndicator).IsEqualTo(37);
+    }
+
+    [Test]
     public async Task FirstPosition_AfterAStructuredAppendHeader_IsReportedWithTheHeader()
     {
         var status = Decode(Build(StructuredAppend(1, 2, 0x5A), Fnc1First(), Numeric("7"), Terminator()), out var text, out var header, out var fnc1);
@@ -219,11 +235,13 @@ public class Fnc1DecodeTest
         await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
-    /// <summary>An empty segment is still a data segment indicator, so an FNC1 behind it is late too.</summary>
+    /// <summary>An empty segment is still a data segment indicator, so an FNC1 behind it is late too, in either position.</summary>
     [Test]
-    public async Task FirstPosition_AfterAnEmptyDataSegment_IsInvalidBitstream()
+    [Arguments(ModeFnc1First)]
+    [Arguments(ModeFnc1Second)]
+    public async Task Indicator_AfterAnEmptyDataSegment_IsInvalidBitstream(int mode)
     {
-        var status = Decode(Build([(ModeNumeric, 4), (0, 10)], Fnc1First(), Numeric("7"), Terminator()), out _, out _);
+        var status = Decode(Build([(ModeNumeric, 4), (0, 10)], Indicator(mode), Numeric("7"), Terminator()), out _, out _);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
@@ -276,10 +294,14 @@ public class Fnc1DecodeTest
     [Arguments("A%B")]
     [Arguments("A%%B")]
     [Arguments("A%%%B")]
+    [Arguments("A%%%%B")]
     [Arguments("%AB")]
     [Arguments("AB%")]
     [Arguments("%")]
     [Arguments("%%")]
+    [Arguments("%%%")]
+    [Arguments("%%%%")]
+    [Arguments("12%34")]
     public async Task WithoutFnc1_PercentStaysLiteral(string written)
     {
         var status = Decode(Build(Alphanumeric(written), Terminator()), out var text, out var fnc1);
@@ -350,13 +372,15 @@ public class Fnc1DecodeTest
     /// <summary>
     /// ISO/IEC 18004:2006 6.4.8.1 example 1: FNC1 in first position, the 29 digits 01049123451234591597033130128 in
     /// Numeric mode, then %10ABC123 in Alphanumeric mode, transmitted as ]Q3 01049123451234591597033130128 GS 10ABC123.
+    /// The stream is assembled from that description with this file's helpers and pinned as bytes, so a helper change
+    /// shows here rather than moving the decoder's expectation with it.
     /// </summary>
     [Test]
     public async Task IsoExample_FirstPosition_ReadsTheTransmittedElementString()
     {
         var data = Build(Fnc1First(), Numeric("01049123451234591597033130128"), Alphanumeric("%10ABC123"), Terminator());
-        await Assert.That(data[0]).IsEqualTo((byte)0x51).Because("0101 FNC1, 0001 Numeric");
-        await Assert.That(data[1]).IsEqualTo((byte)0x07).Because("the 10-bit count 29 starts 00000111");
+        await Assert.That(Convert.ToHexString(data)).IsEqualTo("5107 40A7 ACEA 8015 9E4F CA52 D2D3 8409 D5E0 28FD 82F0 C0".Replace(" ", ""))
+            .Because("0101 FNC1, 0001 Numeric, the 10-bit count 29, nine 10-bit and one 7-bit digit group, 0010 Alphanumeric, the 9-bit count 9, four 11-bit pairs and one 6-bit character, 0000");
 
         var status = Decode(data, out var text, out var fnc1);
 
@@ -374,8 +398,8 @@ public class Fnc1DecodeTest
     public async Task IsoExample_SecondPosition_ReadsTheIndicatorAndTheData()
     {
         var data = Build(Fnc1Second(37), Alphanumeric("AA1234BBB112"), Ascii("text text text text\n"), Terminator());
-        await Assert.That(data[0]).IsEqualTo((byte)0x92).Because("1001 FNC1 second, the indicator 37 starts 0010");
-        await Assert.That(data[1]).IsEqualTo((byte)0x52).Because("0101 ends the indicator, 0010 Alphanumeric");
+        await Assert.That(Convert.ToHexString(data)).IsEqualTo("9252 061C C05E 22CF D1F0 05E8 28E8 CAF0 E840 E8CA F0E8 40E8 CAF0 E840 E8CA F0E8 1400".Replace(" ", ""))
+            .Because("1001 FNC1 second, 00100101 the indicator 37, 0010 Alphanumeric, the 9-bit count 12, six 11-bit pairs, 0100 Byte, the 8-bit count 20, twenty bytes, 0000");
 
         var status = Decode(data, out var text, out var fnc1);
 

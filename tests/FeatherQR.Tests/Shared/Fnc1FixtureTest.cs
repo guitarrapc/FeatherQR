@@ -1,6 +1,7 @@
 using FeatherQR.SkiaSharp;
 using FeatherQR.SkiaSharp.Internals;
 using SkiaSharp;
+using TUnit.Assertions.Enums;
 
 namespace FeatherQR.Tests;
 
@@ -53,9 +54,18 @@ public class Fnc1FixtureTest
         await Assert.That(all.Any(m => m.PayloadText.Contains('\u001D'))).IsTrue().Because("the separator is carried as U+001D");
 
         // An ECI header on each side of FNC1: ZXing.Net writes the standard's order, the other two write FNC1 first.
-        await Assert.That(manifests["zxing-net/gs1-eci-then-fnc1-utf8-m"].EciCharset).IsEqualTo("UTF-8");
-        await Assert.That(manifests["codeglyphx/gs1-fnc1-then-eci-utf8-m"].EciCharset).IsEqualTo("UTF-8");
-        await Assert.That(manifests["zint-libzint/gs1-fnc1-then-eci-utf8-m"].EciCharset).IsEqualTo("UTF-8");
+        // Neither the writers nor the gate report the order, so it is read from the matrix.
+        await Assert.That(StandardQrShape("zxing-net/gs1-eci-then-fnc1-utf8-m").Headers).IsEquivalentTo(["ECI:26", "FNC1First"], CollectionOrdering.Matching);
+        await Assert.That(StandardQrShape("codeglyphx/gs1-fnc1-then-eci-utf8-m").Headers).IsEquivalentTo(["FNC1First", "ECI:26"], CollectionOrdering.Matching);
+        await Assert.That(StandardQrShape("zint-libzint/gs1-fnc1-then-eci-utf8-m").Headers).IsEquivalentTo(["FNC1First", "ECI:26"], CollectionOrdering.Matching);
+
+        // Each data mode under FNC1, as the symbols hold it: a Numeric-only stream, an Alphanumeric segment with
+        // the separator as %, and a Byte segment with the separator as 0x1D.
+        var shapes = StandardQrIds().Select(StandardQrShape).ToList();
+        await Assert.That(shapes.Any(s => s.Headers.Contains("FNC1First") && s.DataModes.Count > 0 && s.DataModes.All(m => m == "Numeric"))).IsTrue().Because("a GS1 symbol of digits only");
+        await Assert.That(shapes.Any(s => s.AlphanumericHasPercent)).IsTrue().Because("an Alphanumeric segment with %");
+        await Assert.That(shapes.Any(s => s.ByteHasGs)).IsTrue().Because("a Byte segment with 0x1D");
+        await Assert.That(StandardQrShape("codeglyphx/gs1-percent-literal-doubled-h").AlphanumericHasPercent).IsTrue();
 
         // The % rule's edges, each a symbol whose reading is not the writer's input.
         foreach (var (id, expected) in new[]
@@ -72,6 +82,21 @@ public class Fnc1FixtureTest
         }
         await Assert.That(manifests["codeglyphx/gs1-percent-literal-doubled-h"].PayloadText).Contains("AB%CD");
         await Assert.That(manifests["codeglyphx/gs1-percent-literal-doubled-h"].Fnc1!.WriterInput).IsNull().Because("a doubled literal % reads back as written");
+    }
+
+    /// <summary>
+    /// The stream read from the matrix with the reference extraction, not with the decoder under test, carries the
+    /// headers the manifest claims: one FNC1 indicator in the recorded position with the recorded application
+    /// indicator, an ECI 26 header exactly where the manifest says UTF-8, and no Structured Append header.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(StandardQrIds))]
+    public async Task StandardQrStream_HeadersAgreeWithTheManifest(string fixtureId)
+    {
+        var manifest = StandardQrManifests.Value[fixtureId];
+        var shape = StandardQrShape(fixtureId);
+
+        await AssertHeaders(shape, manifest);
     }
 
     [Test]
@@ -216,9 +241,24 @@ public class Fnc1FixtureTest
         await Assert.That(all.Count).IsGreaterThanOrEqualTo(7);
         await Assert.That(all.Select(m => m.Generator).Distinct().OrderBy(g => g, StringComparer.Ordinal)).IsEquivalentTo(["codeglyphx", "zint-libzint"]);
         await Assert.That(all.All(m => m.SymbolType == "rMQR" && m.Fnc1 is not null && m.Fnc1.Position == "First" && m.Fnc1.SymbologyIdentifier == "]Q3")).IsTrue();
-        await Assert.That(all.Any(m => m.EciCharset == "UTF-8")).IsTrue().Because("FNC1 before an ECI header is in the corpus");
         await Assert.That(all.Any(m => m.PayloadText.Contains('\u001D'))).IsTrue();
         await Assert.That(all.All(m => m.Fnc1!.WriterInput is not null && m.Fnc1.WriterInput.StartsWith('('))).IsTrue().Because("both rMQR writers take bracketed AI syntax");
+
+        // FNC1 before the ECI header (libzint's order), read from the matrix, and the separator in both forms.
+        await Assert.That(RmQrShape("zint-libzint/r13x99-m-gs1-fnc1-then-eci-utf8").Headers).IsEquivalentTo(["FNC1First", "ECI:26"], CollectionOrdering.Matching);
+        var shapes = RmQrIds().Select(RmQrShape).ToList();
+        await Assert.That(shapes.Any(s => s.AlphanumericHasPercent)).IsTrue().Because("an Alphanumeric segment with %");
+        await Assert.That(shapes.Any(s => s.ByteHasGs)).IsTrue().Because("a Byte segment with 0x1D");
+    }
+
+    [Test]
+    [MethodDataSource(nameof(RmQrIds))]
+    public async Task RmQrStream_HeadersAgreeWithTheManifest(string fixtureId)
+    {
+        var manifest = RmQrManifests.Value[fixtureId];
+        var shape = RmQrShape(fixtureId);
+
+        await AssertHeaders(shape, manifest);
     }
 
     [Test]
@@ -313,6 +353,33 @@ public class Fnc1FixtureTest
         await Assert.That(allocated).IsEqualTo(0);
     }
 #endif
+
+    private static Fnc1StreamShape StandardQrShape(string fixtureId)
+    {
+        var fixture = FixtureLoader.Load(StandardQr, fixtureId);
+        var (modules, size) = FixtureLoader.ReadMatrix(fixture.MatrixPath);
+        return Fnc1StreamShape.OfStandardQr(modules, size, fixture.Manifest.Version, Enum.Parse<QREccLevel>(fixture.Manifest.ErrorCorrectionLevel), fixture.Manifest.MaskPattern);
+    }
+
+    private static Fnc1StreamShape RmQrShape(string fixtureId)
+    {
+        var fixture = FixtureLoader.Load(RmQr, fixtureId);
+        var (modules, width, height) = FixtureLoader.ReadRectangularMatrix(fixture.MatrixPath);
+        return Fnc1StreamShape.OfRmQr(modules, width, height, (RmQRVersion)fixture.Manifest.Version, Enum.Parse<RmQREccLevel>(fixture.Manifest.ErrorCorrectionLevel));
+    }
+
+    private static async Task AssertHeaders(Fnc1StreamShape shape, FixtureManifest manifest)
+    {
+        var fnc1 = manifest.Fnc1!;
+        var expectedFnc1 = fnc1.Position == "First" ? "FNC1First" : $"FNC1Second:{fnc1.ApplicationIndicator}";
+        await Assert.That(shape.Headers.Count(h => h.StartsWith("FNC1", StringComparison.Ordinal))).IsEqualTo(1);
+        await Assert.That(shape.Headers).Contains(expectedFnc1);
+        await Assert.That(shape.Headers.Count(h => h.StartsWith("ECI:", StringComparison.Ordinal))).IsEqualTo(manifest.EciCharset is null ? 0 : 1);
+        if (manifest.EciCharset is not null)
+            await Assert.That(shape.Headers).Contains("ECI:26").Because($"the manifest says {manifest.EciCharset}");
+        await Assert.That(shape.Headers).DoesNotContain("SA");
+        await Assert.That(shape.DataModes.Count).IsGreaterThan(0);
+    }
 
     private static async Task AssertFnc1(Fnc1Mode actual, Fnc1Manifest expected)
     {

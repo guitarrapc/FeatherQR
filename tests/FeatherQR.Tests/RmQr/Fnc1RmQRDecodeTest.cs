@@ -33,9 +33,12 @@ public class Fnc1RmQRDecodeTest
     private const string A = "001010";          // 10
     private const string Percent = "100110";    // 38
     private const string PairAPercent = "00111101000"; // 10 * 45 + 38 = 488
+    private const string PairPercentA = "11010111000"; // 38 * 45 + 10 = 1720
+    private const string PairAB = "00111001101";       // 10 * 45 + 11 = 461
     private const string PairPercentPercent = "11011010100"; // 38 * 45 + 38 = 1748
     private const string PairPercentB = "11010111001"; // 38 * 45 + 11 = 1721
     private const string B = "001011";          // 11
+    private const string Kanji93FA = "0111000111010"; // 日: 0x93FA - 0x8140 = 0x12BA, 0x12 * 0xC0 + 0xBA = 3642
 
     [Test]
     public async Task FirstPosition_IsReadAndReported()
@@ -82,6 +85,7 @@ public class Fnc1RmQRDecodeTest
     [Arguments("10111111")] // 191
     [Arguments("11000100")] // 196
     [Arguments("11011111")] // 223
+    [Arguments("11111111")] // 255
     public async Task SecondPosition_IndicatorOutsideTheRanges_IsInvalidBitstream(string indicatorBits)
     {
         await Assert.That(Decode("110 " + indicatorBits + " 001 0001 0111 000").Status).IsEqualTo(DecodeStatus.InvalidBitstream);
@@ -122,16 +126,32 @@ public class Fnc1RmQRDecodeTest
     }
 
     [Test]
+    public async Task SecondPosition_OnEitherSideOfEci_IsReported()
+    {
+        var afterEci = Decode("111 00011010 110 00100101 011 010 11000011 10101001 000");
+        var beforeEci = Decode("110 00100101 111 00011010 011 010 11000011 10101001 000");
+
+        await Assert.That(afterEci.Status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(afterEci.Text).IsEqualTo("é");
+        await Assert.That(afterEci.Fnc1.ApplicationIndicator).IsEqualTo(37);
+        await Assert.That(beforeEci.Status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(beforeEci.Text).IsEqualTo("é");
+        await Assert.That(beforeEci.Fnc1.ApplicationIndicator).IsEqualTo(37);
+    }
+
+    [Test]
     public async Task FirstPosition_AfterADataSegment_IsInvalidBitstream()
     {
         await Assert.That(Decode("001 0001 0111 101 001 0001 0111 000").Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
-    /// <summary>rMQR skips an empty segment, which is still a data segment indicator, so an FNC1 behind it is late.</summary>
+    /// <summary>rMQR skips an empty segment, which is still a data segment indicator, so an FNC1 behind it is late, in either position.</summary>
     [Test]
-    public async Task FirstPosition_AfterAnEmptyDataSegment_IsInvalidBitstream()
+    [Arguments("101")]
+    [Arguments("110 00100101")]
+    public async Task Indicator_AfterAnEmptyDataSegment_IsInvalidBitstream(string indicator)
     {
-        await Assert.That(Decode("001 0000 101 001 0001 0111 000").Status).IsEqualTo(DecodeStatus.InvalidBitstream);
+        await Assert.That(Decode("001 0000 " + indicator + " 001 0001 0111 000").Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]
@@ -175,6 +195,49 @@ public class Fnc1RmQRDecodeTest
     }
 
     [Test]
+    public async Task FirstPosition_PercentAtASegmentStartOrEnd_IsTheSeparator()
+    {
+        // count 2: the pair %A; count 3: the pair AB then %.
+        var atStart = Decode("101 010 010 " + PairPercentA + " 000");
+        var atEnd = Decode("101 010 011 " + PairAB + " " + Percent + " 000");
+
+        await Assert.That(atStart.Status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(atStart.Text).IsEqualTo(Gs + "A");
+        await Assert.That(atEnd.Status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(atEnd.Text).IsEqualTo("AB" + Gs);
+    }
+
+    [Test]
+    public async Task FirstPosition_QuadruplePercent_IsTwoLiterals()
+    {
+        var (status, text, _) = Decode("101 010 100 " + PairPercentPercent + " " + PairPercentPercent + " 000");
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("%%");
+    }
+
+    /// <summary>The rule is applied within one segment: a % ending one segment and a % starting the next are two separators.</summary>
+    [Test]
+    public async Task FirstPosition_PercentAtASegmentEndAndTheNextStart_AreTwoSeparators()
+    {
+        var (status, text, _) = Decode("101 010 010 " + PairAPercent + " 010 010 " + PairPercentB + " 000");
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("A" + Gs + Gs + "B");
+    }
+
+    [Test]
+    public async Task FirstPosition_KanjiSegment_IsUnchanged()
+    {
+        // 100 Kanji, 2-bit count 1, one 13-bit character.
+        var (status, text, fnc1) = Decode("101 100 01 " + Kanji93FA + " 000");
+
+        await Assert.That(status).IsEqualTo(DecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("日");
+        await Assert.That(fnc1.IsFirstPosition).IsTrue();
+    }
+
+    [Test]
     public async Task SecondPosition_PercentInAlphanumeric_FollowsTheSameRule()
     {
         var (status, text, fnc1) = Decode("110 00100101 010 011 " + PairAPercent + " " + B + " 000");
@@ -185,20 +248,30 @@ public class Fnc1RmQRDecodeTest
     }
 
     [Test]
-    public async Task WithoutFnc1_PercentStaysLiteral()
+    [Arguments("010 011 " + PairAPercent + " " + B, "A%B")]
+    [Arguments("010 100 " + PairAPercent + " " + PairPercentB, "A%%B")]
+    [Arguments("010 101 " + PairAPercent + " " + PairPercentPercent + " " + B, "A%%%B")]
+    [Arguments("010 010 " + PairPercentA, "%A")]
+    [Arguments("010 011 " + PairAB + " " + Percent, "AB%")]
+    [Arguments("010 100 " + PairPercentPercent + " " + PairPercentPercent, "%%%%")]
+    public async Task WithoutFnc1_PercentStaysLiteral(string segment, string expected)
     {
-        var (status, text, fnc1) = Decode("010 011 " + PairAPercent + " " + B + " 000");
+        var (status, text, fnc1) = Decode(segment + " 000");
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
-        await Assert.That(text).IsEqualTo("A%B");
+        await Assert.That(text).IsEqualTo(expected);
         await Assert.That(fnc1).IsEqualTo(default(Fnc1Mode));
     }
 
+    /// <summary>A Byte segment carries the separator as 0x1D and a literal % as 0x25, under no ECI and under ECI 3 and 26.</summary>
     [Test]
-    public async Task FirstPosition_ByteSegment_CarriesSeparatorAndPercentAsBytes()
+    [Arguments("")]
+    [Arguments("111 00000011 ")]
+    [Arguments("111 00011010 ")]
+    public async Task FirstPosition_ByteSegment_CarriesSeparatorAndPercentAsBytes(string eci)
     {
         // 011 Byte, count 2 (3 bits): 0x25 then 0x1D.
-        var (status, text, fnc1) = Decode("101 011 010 00100101 00011101 000");
+        var (status, text, fnc1) = Decode(eci + "101 011 010 00100101 00011101 000");
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
         await Assert.That(text).IsEqualTo("%" + Gs);

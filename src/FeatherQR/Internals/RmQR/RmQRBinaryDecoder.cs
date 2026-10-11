@@ -31,7 +31,7 @@ internal static class RmQRBinaryDecoder
     /// Decodes the corrected data codewords into characters.
     /// </summary>
     /// <param name="data">Corrected data codewords (without ECC).</param>
-    /// <param name="dataBitCount">The number of data bits the version and level hold, which can end inside the last codeword.</param>
+    /// <param name="dataBitCount">The number of data bits to read: 8 times the data codewords on the matrix path, since rMQR places its remainder bits after whole codewords. A smaller count ends the stream early, which the tests use.</param>
     /// <param name="version">The rMQR version, which sets the character count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>

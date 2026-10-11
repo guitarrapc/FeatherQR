@@ -536,7 +536,7 @@ To decode from any other image source, convert the pixels to 8-bit luminance you
 A symbol that carries FNC1, the GS1 mode (first position) or an industry format registered with AIM (second position, with an application indicator), decodes to its element string with each separator as U+001D, and the decode information reports the mode as `Fnc1` (`Fnc1Mode`): `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`, the 8-bit codeword (00 to 99 as its value, or a letter as its ASCII value plus 100, `null` outside second position). Standard QR and rMQR carry it. Micro QR has no FNC1 mode. The text holds no symbology identifier and no application indicator, so an application that formats GS1 data as `(01)…(17)…` needs the GS1 application identifier table, which this library does not ship. Writing FNC1 symbols is not available yet.
 
 ```csharp
-if (QRCodeDecoder.TryDecode(data, out var text, out var info) && info.Fnc1.IsFirstPosition)
+if (QRCodeDecoder.TryDecode(qrData, out var text, out var info) && info.Fnc1.IsFirstPosition)
 {
     // A GS1 element string. AI (01) is fixed length, (10) is variable and so followed by U+001D:
     // "010952400005910910ABC123\u001D17231120"

@@ -35,6 +35,14 @@ public static class Fnc1SanityGate
             throw new InvalidOperationException($"sanity gate: fixture {name} reads as {result.ContentType} content, not GS1.");
         if (result.HasECI != caseDefinition.Utf8)
             throw new InvalidOperationException($"sanity gate: fixture {name} {(result.HasECI ? "carries" : "carries no")} ECI header, the case {(caseDefinition.Utf8 ? "asked for one" : "asked for none")}.");
+        if (caseDefinition.Utf8)
+        {
+            // The reader's ECI-protocol bytes name each assignment as \000026; HasECI alone would pass a writer that
+            // honoured a UTF-8 request with another assignment.
+            var eciProtocol = Encoding.Latin1.GetString(result.BytesECI);
+            if (!eciProtocol.Contains("\\000026", StringComparison.Ordinal))
+                throw new InvalidOperationException($"sanity gate: fixture {name} carries an ECI header that is not assignment 26 (ECI protocol bytes: {eciProtocol}).");
+        }
 
         // Plain text: the element string with GS as 0x1D. In second position the reader puts the
         // application indicator first, as the standard transmits it, and the fixture's text is the rest.

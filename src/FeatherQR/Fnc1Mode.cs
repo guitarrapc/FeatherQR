@@ -14,7 +14,7 @@ namespace FeatherQR;
 /// </para>
 /// <para>
 /// A reader transmits such a symbol as the AIM symbology identifier, then in second position the application indicator as two digits or one letter, then the data.
-/// The identifier is <c>]Q3</c> for first position and <c>]Q5</c> for second, or <c>]Q4</c> and <c>]Q6</c> when the symbol also carries an ECI header, and <c>]Q1</c> or <c>]Q2</c> without FNC1.
+/// The identifier is <c>]Q3</c> for first position and <c>]Q5</c> for second, one higher (<c>]Q4</c>, <c>]Q6</c>) when the reader transmits under the ECI protocol, which zxing-cpp and ZXing.Net do when the symbol carries an ECI header, and <c>]Q1</c> or <c>]Q2</c> without FNC1.
 /// The indicator <c>n</c> is written <c>n &lt; 100 ? n.ToString("D2") : ((char)(n - 100)).ToString()</c>.
 /// </para>
 /// <para>
