@@ -414,7 +414,7 @@ Done:
 - The search's own method compiles as before on every build read, and the scalar tier's word loop is one instruction shorter than the shipped method's.
 - The photograph set, timed with three builds in turn (before the search, the word loop, the tiers): the 163 failing photographs at 1.59 and 1.58 times the build before, where the first stage recorded 1.53 from a two-build run. The 322 that read at full size, which the halving never touches, moved 6 % between the word loop and the tiers, so the tiers' expected 4 % on a failing photograph is under what the set resolves. The 1.53 stands as the search's cost, and the tiers' gain is the kernel pairs' figure.
 - The full suite passes on net8.0 and net10.0, and `--simd-class` with `--parity` on the JIT with and without AVX, both native publishes and both WebAssembly modes.
-- Not done here: ARM64. The table declares the portable 128-bit tier for it, which the dispatch takes there, and the kernel pairs are ready for `--time` on the Apple M2 (`kernel/LuminanceHalver-740`, `-740-scalar`, `-12mp`, `-12mp-scalar`), beside the figures the ARM64 entry above recorded for the scalar tier.
+- ARM64 was not timed on this machine. The table declares the portable 128-bit tier for it, and the next entry, the maintainer's run on the Apple M2, times it at 0.21 to 0.22 of the word loop and folds it into the records.
 
 Lessons:
 
