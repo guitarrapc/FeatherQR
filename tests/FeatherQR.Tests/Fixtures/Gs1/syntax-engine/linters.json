@@ -1,0 +1,3143 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Barcode Syntax Engine 1.4.1 unit tests, ai.c test_ai_linters",
+  "cases": [
+    {
+      "id": "linters-000",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675",
+      "note": "GS1_LINTER_OK",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^00123456789012345675",
+        "elementString": "00123456789012345675",
+        "bracketed": "(00)123456789012345675",
+        "hri": [
+          "(00) 123456789012345675"
+        ],
+        "digitalLink": "https://id.gs1.org/00/123456789012345675"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00123456789012345675",
+        "hri": "(00)123456789012345675",
+        "digitalLink": "https://id.gs1.org/00/123456789012345675",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00123456789012345675",
+        "hri": "(00)123456789012345675"
+      }
+    },
+    {
+      "id": "linters-001",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(00)A23456789012345675",
+      "note": "GS1_LINTER_NON_DIGIT_CHARACTER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (00): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(00)|A|23456789012345675"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(00)",
+          "InvalidData(00)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00A23456789012345675",
+        "hri": "(00)A23456789012345675"
+      }
+    },
+    {
+      "id": "linters-002",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(10) ",
+      "note": "GS1_LINTER_INVALID_CSET82_CHARACTER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(10)| |"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)",
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "10 ",
+        "hri": "(10) "
+      }
+    },
+    {
+      "id": "linters-003",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8010)123456_",
+      "note": "GS1_LINTER_INVALID_CSET39_CHARACTER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8010): A non-CSET 39 character was found where a CSET 39 character is expected.",
+        "errorMarkup": "(8010)123456|_|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(8010)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8010123456_",
+        "hri": "(8010)123456_"
+      }
+    },
+    {
+      "id": "linters-004",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8030)ABC:123",
+      "note": "GS1_LINTER_INVALID_CSET64_CHARACTER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8030): A non-CSET 64 character was found where a CSET 64 character is expected.",
+        "errorMarkup": "(8030)ABC|:|123"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(8030)",
+          "MissingRequiredApplicationIdentifier(8030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030ABC:123",
+        "hri": "(8030)ABC:123"
+      }
+    },
+    {
+      "id": "linters-005",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8030)123=",
+      "note": "GS1_LINTER_INVALID_CSET64_PADDING",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8030): Incorrect number of CSET 64 pad characters.",
+        "errorMarkup": "(8030)123|=|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030123=",
+        "hri": "(8030)123="
+      }
+    },
+    {
+      "id": "linters-006",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345670",
+      "note": "GS1_LINTER_INCORRECT_CHECK_DIGIT",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (00): The numeric check digit is incorrect.",
+        "errorMarkup": "(00)12345678901234567|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(00)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00123456789012345670",
+        "hri": "(00)123456789012345670"
+      }
+    },
+    {
+      "id": "linters-007",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(00)123456789012345675",
+      "note": "GS1_LINTER_OK",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^00123456789012345675",
+        "elementString": "00123456789012345675",
+        "bracketed": "(00)123456789012345675",
+        "hri": [
+          "(00) 123456789012345675"
+        ],
+        "digitalLink": "https://id.gs1.org/00/123456789012345675"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00123456789012345675",
+        "hri": "(00)123456789012345675",
+        "digitalLink": "https://id.gs1.org/00/123456789012345675",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00123456789012345675",
+        "hri": "(00)123456789012345675"
+      }
+    },
+    {
+      "id": "linters-008",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8013)123456ABXX",
+      "note": "GS1_LINTER_INCORRECT_CHECK_PAIR",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8013): The alphanumeric check-character pair are incorrect.",
+        "errorMarkup": "(8013)123456AB|XX|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8013)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8013123456ABXX",
+        "hri": "(8013)123456ABXX"
+      }
+    },
+    {
+      "id": "linters-009",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8013)A",
+      "note": "GS1_LINTER_TOO_SHORT_FOR_CHECK_PAIR",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8013): The component is too short to perform an alphanumeric check character pair calculation.",
+        "errorMarkup": "(8013)|A|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8013)",
+          "InvalidData(8013)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8013A",
+        "hri": "(8013)A"
+      }
+    },
+    {
+      "id": "linters-010",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(401)123",
+      "note": "GS1_LINTER_TOO_SHORT_FOR_GCP",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (401): The component is shorter than the minimum length GS1 Company Prefix.",
+        "errorMarkup": "(401)|123|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(401)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "401123",
+        "hri": "(401)123"
+      }
+    },
+    {
+      "id": "linters-011",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(7023)12A4",
+      "note": "GS1_LINTER_INVALID_GCP_PREFIX",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7023): The GS1 Company Prefix is invalid.",
+        "errorMarkup": "(7023)12|A|4"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7023)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "702312A4",
+        "hri": "(7023)12A4"
+      }
+    },
+    {
+      "id": "linters-012",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(7040)1AB=",
+      "note": "GS1_LINTER_INVALID_IMPORT_IDX_CHARACTER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7040): The Importer Index is an invalid character.",
+        "errorMarkup": "(7040)1AB|=|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7040)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "70401AB=",
+        "hri": "(7040)1AB="
+      }
+    },
+    {
+      "id": "linters-013",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8001)12340000012311",
+      "note": "GS1_LINTER_ILLEGAL_ZERO_VALUE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001): A non-zero value is required.",
+        "errorMarkup": "(8001)1234|00000|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8001)",
+          "MissingRequiredApplicationIdentifier(8001)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800112340000012311",
+        "hri": "(8001)12340000012311"
+      }
+    },
+    {
+      "id": "linters-014",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8003)112345678901281234567890123456",
+      "note": "GS1_LINTER_NOT_ZERO",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8003): A zero is required.",
+        "errorMarkup": "(8003)|1|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8003)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8003112345678901281234567890123456",
+        "hri": "(8003)112345678901281234567890123456"
+      }
+    },
+    {
+      "id": "linters-015",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8011)023456789012",
+      "note": "GS1_LINTER_ILLEGAL_ZERO_PREFIX",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8011): A zero prefix is not permitted.",
+        "errorMarkup": "(8011)|0|23456789012"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8011)",
+          "MissingRequiredApplicationIdentifier(8011)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8011023456789012",
+        "hri": "(8011)023456789012"
+      }
+    },
+    {
+      "id": "linters-016",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4321)2",
+      "note": "GS1_LINTER_NOT_ZERO_OR_ONE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4321): A \"0\" or \"1\" is required.",
+        "errorMarkup": "(4321)|2|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4321)",
+          "MissingRequiredApplicationIdentifier(4321)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "43212",
+        "hri": "(4321)2"
+      }
+    },
+    {
+      "id": "linters-017",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8001)12341234512321",
+      "note": "GS1_LINTER_INVALID_WINDING_DIRECTION",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001): The winding direction must be either \"0\", \"1\" or \"9\".",
+        "errorMarkup": "(8001)123412345123|2|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8001)",
+          "MissingRequiredApplicationIdentifier(8001)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800112341234512321",
+        "hri": "(8001)12341234512321"
+      }
+    },
+    {
+      "id": "linters-018",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(426)987",
+      "note": "GS1_LINTER_NOT_ISO3166",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (426): A valid ISO 3166 three-digit country code is required.",
+        "errorMarkup": "(426)|987|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(426)",
+          "MissingRequiredApplicationIdentifier(426)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "426987",
+        "hri": "(426)987"
+      }
+    },
+    {
+      "id": "linters-019",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(7030)987ABC",
+      "note": "GS1_LINTER_NOT_ISO3166_OR_999",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7030): A valid ISO 3166 three-digit country code or \"999\" is required.",
+        "errorMarkup": "(7030)|987|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7030)",
+          "MissingRequiredApplicationIdentifier(7030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7030987ABC",
+        "hri": "(7030)987ABC"
+      }
+    },
+    {
+      "id": "linters-020",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4307)AA",
+      "note": "GS1_LINTER_NOT_ISO3166_ALPHA2",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4307): A valid ISO 3166 two-character country code is required.",
+        "errorMarkup": "(4307)|AA|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4307)",
+          "MissingRequiredApplicationIdentifier(4307)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4307AA",
+        "hri": "(4307)AA"
+      }
+    },
+    {
+      "id": "linters-021",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(3910)9870",
+      "note": "GS1_LINTER_NOT_ISO4217",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (3910): A valid ISO 4217 three-digit currency code is required.",
+        "errorMarkup": "(3910)|987|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(3910)",
+          "MissingRequiredApplicationIdentifier(3910)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "39109870",
+        "hri": "(3910)9870"
+      }
+    },
+    {
+      "id": "linters-022",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8007)FR1234",
+      "note": "GS1_LINTER_IBAN_TOO_SHORT",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8007): The IBAN is too short.",
+        "errorMarkup": "(8007)|FR1234|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8007)",
+          "MissingRequiredApplicationIdentifier(8007)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8007FR1234",
+        "hri": "(8007)FR1234"
+      }
+    },
+    {
+      "id": "linters-023",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8007)FR12_45678901234",
+      "note": "GS1_LINTER_INVALID_IBAN_CHARACTER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8007): The IBAN contains an invalid character.",
+        "errorMarkup": "(8007)FR12|_|45678901234"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8007)",
+          "MissingRequiredApplicationIdentifier(8007)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8007FR12_45678901234",
+        "hri": "(8007)FR12_45678901234"
+      }
+    },
+    {
+      "id": "linters-024",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8007)AB12345678901234",
+      "note": "GS1_LINTER_ILLEGAL_IBAN_COUNTRY_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8007): The IBAN must start with a valid ISO 3166 two-character country code.",
+        "errorMarkup": "(8007)|AB|12345678901234"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8007)",
+          "MissingRequiredApplicationIdentifier(8007)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8007AB12345678901234",
+        "hri": "(8007)AB12345678901234"
+      }
+    },
+    {
+      "id": "linters-025",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8007)FR12345678901234",
+      "note": "GS1_LINTER_INCORRECT_IBAN_CHECKSUM",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8007): The IBAN is invalid since the check characters are incorrect.",
+        "errorMarkup": "(8007)FR|12|345678901234"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8007)",
+          "MissingRequiredApplicationIdentifier(8007)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8007FR12345678901234",
+        "hri": "(8007)FR12345678901234"
+      }
+    },
+    {
+      "id": "linters-026",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4326)201300",
+      "note": "GS1_LINTER_ILLEGAL_MONTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4326): The date contains an illegal month of the year.",
+        "errorMarkup": "(4326)20|13|00"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4326)",
+          "MissingRequiredApplicationIdentifier(4326)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4326201300",
+        "hri": "(4326)201300"
+      }
+    },
+    {
+      "id": "linters-027",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4326)201200",
+      "note": "GS1_LINTER_ILLEGAL_DAY",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4326): The date contains an illegal day of the month.",
+        "errorMarkup": "(4326)2012|00|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4326)",
+          "MissingRequiredApplicationIdentifier(4326)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4326201200",
+        "hri": "(4326)201200"
+      }
+    },
+    {
+      "id": "linters-028",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4324)2012252400",
+      "note": "GS1_LINTER_ILLEGAL_HOUR",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4324): The time contains an illegal hour.",
+        "errorMarkup": "(4324)201225|24|00"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4324)",
+          "MissingRequiredApplicationIdentifier(4324)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "43242012252400",
+        "hri": "(4324)2012252400"
+      }
+    },
+    {
+      "id": "linters-029",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4324)2012252360",
+      "note": "GS1_LINTER_ILLEGAL_MINUTE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4324): The time contains an illegal minute.",
+        "errorMarkup": "(4324)20122523|60|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4324)",
+          "MissingRequiredApplicationIdentifier(4324)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "43242012252360",
+        "hri": "(4324)2012252360"
+      }
+    },
+    {
+      "id": "linters-030",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8008)201225230060",
+      "note": "GS1_LINTER_ILLEGAL_SECOND",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8008): The time contains an illegal seconds.",
+        "errorMarkup": "(8008)2012252300|60|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8008)",
+          "MissingRequiredApplicationIdentifier(8008)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8008201225230060",
+        "hri": "(8008)201225230060"
+      }
+    },
+    {
+      "id": "linters-031",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8026)123456789012310099",
+      "note": "GS1_LINTER_ZERO_PIECE_NUMBER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8026): The piece number must not have a value of zero.",
+        "errorMarkup": "(8026)12345678901231|00|99"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8026)",
+          "MissingRequiredApplicationIdentifier(8026)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8026123456789012310099",
+        "hri": "(8026)123456789012310099"
+      }
+    },
+    {
+      "id": "linters-032",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8026)123456789012310100",
+      "note": "GS1_LINTER_ZERO_TOTAL_PIECES",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8026): The piece total must not have a value of zero.",
+        "errorMarkup": "(8026)1234567890123101|00|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8026)",
+          "MissingRequiredApplicationIdentifier(8026)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8026123456789012310100",
+        "hri": "(8026)123456789012310100"
+      }
+    },
+    {
+      "id": "linters-033",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8026)123456789012310302",
+      "note": "GS1_LINTER_PIECE_NUMBER_EXCEEDS_TOTAL",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8026): The piece number must not exceed the piece total.",
+        "errorMarkup": "(8026)12345678901231|0302|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8026)",
+          "MissingRequiredApplicationIdentifier(8026)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8026123456789012310302",
+        "hri": "(8026)123456789012310302"
+      }
+    },
+    {
+      "id": "linters-034",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4300)ABC%0g",
+      "note": "GS1_LINTER_INVALID_PERCENT_SEQUENCE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4300): The input contains an invalid percent hex-encoding \"%hh\" sequence.",
+        "errorMarkup": "(4300)ABC|%0g|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4300)",
+          "MissingRequiredApplicationIdentifier(4300)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4300ABC%0g",
+        "hri": "(4300)ABC%0g"
+      }
+    },
+    {
+      "id": "linters-035",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8112)201234561234560123456",
+      "note": "GS1_LINTER_COUPON_INVALID_FORMAT_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): The coupon's Format Code must be \"0\" or \"1\".",
+        "errorMarkup": "(8112)|2|01234561234560123456"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8112201234561234560123456",
+        "hri": "(8112)201234561234560123456"
+      }
+    },
+    {
+      "id": "linters-036",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8112)0",
+      "note": "GS1_LINTER_COUPON_MISSING_FUNDER_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): The coupon's Funder VLI is missing.",
+        "errorMarkup": "(8112)|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81120",
+        "hri": "(8112)0"
+      }
+    },
+    {
+      "id": "linters-037",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8112)07",
+      "note": "GS1_LINTER_COUPON_INVALID_FUNDER_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): The coupon's Funder VLI must be \"0\" to \"6\".",
+        "errorMarkup": "(8112)0|7|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811207",
+        "hri": "(8112)07"
+      }
+    },
+    {
+      "id": "linters-038",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8112)01123456",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_FUNDER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): The coupon's Funder is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8112)01|123456|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811201123456",
+        "hri": "(8112)01123456"
+      }
+    },
+    {
+      "id": "linters-039",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8112)00123456",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_OFFER_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): The coupon's Offer Code is shorter than the required six digits.",
+        "errorMarkup": "(8112)|00123456|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811200123456",
+        "hri": "(8112)00123456"
+      }
+    },
+    {
+      "id": "linters-040",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8112)00123456123456",
+      "note": "GS1_LINTER_COUPON_MISSING_SERIAL_NUMBER_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): The coupon's Serial Number VLI is missing.",
+        "errorMarkup": "(8112)|00123456123456|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811200123456123456",
+        "hri": "(8112)00123456123456"
+      }
+    },
+    {
+      "id": "linters-041",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8112)001234561234560",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_SERIAL_NUMBER",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8112): The coupon's Serial Number is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8112)|001234561234560|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8112)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8112001234561234560",
+        "hri": "(8112)001234561234560"
+      }
+    },
+    {
+      "id": "linters-042",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)71234567890123",
+      "note": "GS1_LINTER_COUPON_INVALID_GCP_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary GS1 Company Prefix VLI must be \"0\" to \"6\".",
+        "errorMarkup": "(8110)|7|1234567890123"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811071234567890123",
+        "hri": "(8110)71234567890123"
+      }
+    },
+    {
+      "id": "linters-043",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_GCP",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary GS1 Company Prefix is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)0|12345|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345",
+        "hri": "(8110)012345"
+      }
+    },
+    {
+      "id": "linters-044",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456",
+      "note": "GS1_LINTER_COUPON_MISSING_SAVE_VALUE_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Save Value VLI is missing.",
+        "errorMarkup": "(8110)|0123456123456|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456",
+        "hri": "(8110)0123456123456"
+      }
+    },
+    {
+      "id": "linters-045",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234560",
+      "note": "GS1_LINTER_COUPON_INVALID_SAVE_VALUE_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Save Value VLI must be \"1\" to \"5\".",
+        "errorMarkup": "(8110)0123456123456|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234560",
+        "hri": "(8110)01234561234560"
+      }
+    },
+    {
+      "id": "linters-046",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_SAVE_VALUE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Save Value is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)|01234561234561|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561",
+        "hri": "(8110)01234561234561"
+      }
+    },
+    {
+      "id": "linters-047",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611",
+      "note": "GS1_LINTER_COUPON_MISSING_1ST_PURCHASE_REQUIREMENT_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary purchase Requirement VLI is missing.",
+        "errorMarkup": "(8110)|012345612345611|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611",
+        "hri": "(8110)012345612345611"
+      }
+    },
+    {
+      "id": "linters-048",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456116123456",
+      "note": "GS1_LINTER_COUPON_INVALID_1ST_PURCHASE_REQUIREMENT_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary purchase Requirement VLI must be \"1\" to \"5\".",
+        "errorMarkup": "(8110)012345612345611|6|123456"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456116123456",
+        "hri": "(8110)0123456123456116123456"
+      }
+    },
+    {
+      "id": "linters-049",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_1ST_PURCHASE_REQUIREMENT",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary purchase Requirement is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)|0123456123456111|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111",
+        "hri": "(8110)0123456123456111"
+      }
+    },
+    {
+      "id": "linters-050",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111",
+      "note": "GS1_LINTER_COUPON_MISSING_1ST_PURCHASE_REQUIREMENT_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary purchase Requirement Code is missing.",
+        "errorMarkup": "(8110)|01234561234561111|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111",
+        "hri": "(8110)01234561234561111"
+      }
+    },
+    {
+      "id": "linters-051",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611115",
+      "note": "GS1_LINTER_COUPON_INVALID_1ST_PURCHASE_REQUIREMENT_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary purchase Requirement Code must be \"0\" to \"4\" or \"9\".",
+        "errorMarkup": "(8110)01234561234561111|5|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611115",
+        "hri": "(8110)012345612345611115"
+      }
+    },
+    {
+      "id": "linters-052",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611119",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_1ST_PURCHASE_FAMILY_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's primary purchase Family Code is shorter than the required three digits.",
+        "errorMarkup": "(8110)|012345612345611119|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611119",
+        "hri": "(8110)012345612345611119"
+      }
+    },
+    {
+      "id": "linters-053",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101231",
+      "note": "GS1_LINTER_COUPON_MISSING_ADDITIONAL_PURCHASE_RULES_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Additional Purchase Rules Code is missing.",
+        "errorMarkup": "(8110)|0123456123456111101231|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101231",
+        "hri": "(8110)0123456123456111101231"
+      }
+    },
+    {
+      "id": "linters-054",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012314",
+      "note": "GS1_LINTER_COUPON_INVALID_ADDITIONAL_PURCHASE_RULES_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Additional Purchase Rules Code must be \"0\" to \"3\".",
+        "errorMarkup": "(8110)0123456123456111101231|4|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012314",
+        "hri": "(8110)01234561234561111012314"
+      }
+    },
+    {
+      "id": "linters-055",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012310",
+      "note": "GS1_LINTER_COUPON_MISSING_2ND_PURCHASE_REQUIREMENT_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase Requirement VLI is missing.",
+        "errorMarkup": "(8110)|01234561234561111012310|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012310",
+        "hri": "(8110)01234561234561111012310"
+      }
+    },
+    {
+      "id": "linters-056",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123106123456",
+      "note": "GS1_LINTER_COUPON_INVALID_2ND_PURCHASE_REQUIREMENT_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase Requirement VLI must be \"1\" to \"5\".",
+        "errorMarkup": "(8110)01234561234561111012310|6|123456"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123106123456",
+        "hri": "(8110)012345612345611110123106123456"
+      }
+    },
+    {
+      "id": "linters-057",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123101",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_2ND_PURCHASE_REQUIREMENT",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase Requirement is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)|012345612345611110123101|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123101",
+        "hri": "(8110)012345612345611110123101"
+      }
+    },
+    {
+      "id": "linters-058",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101231011",
+      "note": "GS1_LINTER_COUPON_MISSING_2ND_PURCHASE_REQUIREMENT_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase Requirement Code is missing.",
+        "errorMarkup": "(8110)|0123456123456111101231011|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101231011",
+        "hri": "(8110)0123456123456111101231011"
+      }
+    },
+    {
+      "id": "linters-059",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012310115",
+      "note": "GS1_LINTER_COUPON_INVALID_2ND_PURCHASE_REQUIREMENT_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase Requirement Code must be \"0\" to \"4\" or \"9\".",
+        "errorMarkup": "(8110)0123456123456111101231011|5|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012310115",
+        "hri": "(8110)01234561234561111012310115"
+      }
+    },
+    {
+      "id": "linters-060",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012310119",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_2ND_PURCHASE_FAMILY_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase Family Code is shorter than the required three digits.",
+        "errorMarkup": "(8110)|01234561234561111012310119|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012310119",
+        "hri": "(8110)01234561234561111012310119"
+      }
+    },
+    {
+      "id": "linters-061",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012310110123",
+      "note": "GS1_LINTER_COUPON_MISSING_2ND_PURCHASE_GCP_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase GS1 Company Prefix VLI is missing.",
+        "errorMarkup": "(8110)|01234561234561111012310110123|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012310110123",
+        "hri": "(8110)01234561234561111012310110123"
+      }
+    },
+    {
+      "id": "linters-062",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101231011012371234567890123",
+      "note": "GS1_LINTER_COUPON_INVALID_2ND_PURCHASE_GCP_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase GS1 Company Prefix VLI must be \"0\" to \"6\" or \"9\".",
+        "errorMarkup": "(8110)01234561234561111012310110123|7|1234567890123"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101231011012371234567890123",
+        "hri": "(8110)0123456123456111101231011012371234567890123"
+      }
+    },
+    {
+      "id": "linters-063",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123101101230",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_2ND_PURCHASE_GCP",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's second purchase GS1 Company Prefix is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)|012345612345611110123101101230|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123101101230",
+        "hri": "(8110)012345612345611110123101101230"
+      }
+    },
+    {
+      "id": "linters-064",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101232",
+      "note": "GS1_LINTER_COUPON_MISSING_3RD_PURCHASE_REQUIREMENT_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase Requirement VLI is missing.",
+        "errorMarkup": "(8110)|0123456123456111101232|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101232",
+        "hri": "(8110)0123456123456111101232"
+      }
+    },
+    {
+      "id": "linters-065",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012320",
+      "note": "GS1_LINTER_COUPON_INVALID_3RD_PURCHASE_REQUIREMENT_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase Requirement VLI must be \"1\" to \"5\".",
+        "errorMarkup": "(8110)0123456123456111101232|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012320",
+        "hri": "(8110)01234561234561111012320"
+      }
+    },
+    {
+      "id": "linters-066",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012321",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_3RD_PURCHASE_REQUIREMENT",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase Requirement is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)|01234561234561111012321|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012321",
+        "hri": "(8110)01234561234561111012321"
+      }
+    },
+    {
+      "id": "linters-067",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123211",
+      "note": "GS1_LINTER_COUPON_MISSING_3RD_PURCHASE_REQUIREMENT_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase Requirement Code is missing.",
+        "errorMarkup": "(8110)|012345612345611110123211|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123211",
+        "hri": "(8110)012345612345611110123211"
+      }
+    },
+    {
+      "id": "linters-068",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101232115",
+      "note": "GS1_LINTER_COUPON_INVALID_3RD_PURCHASE_REQUIREMENT_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase Requirement Code must be \"0\" to \"4\" or \"9\".",
+        "errorMarkup": "(8110)012345612345611110123211|5|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101232115",
+        "hri": "(8110)0123456123456111101232115"
+      }
+    },
+    {
+      "id": "linters-069",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101232110",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_3RD_PURCHASE_FAMILY_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase Family Code is shorter than the required three digits.",
+        "errorMarkup": "(8110)|0123456123456111101232110|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101232110",
+        "hri": "(8110)0123456123456111101232110"
+      }
+    },
+    {
+      "id": "linters-070",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101232110123",
+      "note": "GS1_LINTER_COUPON_MISSING_3RD_PURCHASE_GCP_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase GS1 Company Prefix VLI is missing.",
+        "errorMarkup": "(8110)|0123456123456111101232110123|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101232110123",
+        "hri": "(8110)0123456123456111101232110123"
+      }
+    },
+    {
+      "id": "linters-071",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123211012371234567890123",
+      "note": "GS1_LINTER_COUPON_INVALID_3RD_PURCHASE_GCP_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase GS1 Company Prefix VLI must be \"0\" to \"6\" or \"9\".",
+        "errorMarkup": "(8110)0123456123456111101232110123|7|1234567890123"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123211012371234567890123",
+        "hri": "(8110)012345612345611110123211012371234567890123"
+      }
+    },
+    {
+      "id": "linters-072",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012321101230",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_3RD_PURCHASE_GCP",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's third purchase GS1 Company Prefix is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)|01234561234561111012321101230|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012321101230",
+        "hri": "(8110)01234561234561111012321101230"
+      }
+    },
+    {
+      "id": "linters-073",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101233",
+      "note": "GS1_LINTER_COUPON_TOO_SHORT_FOR_EXPIRATION_DATE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's expiration date is too short for YYMMDD format.",
+        "errorMarkup": "(8110)|0123456123456111101233|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101233",
+        "hri": "(8110)0123456123456111101233"
+      }
+    },
+    {
+      "id": "linters-074",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101233200010",
+      "note": "GS1_LINTER_COUPON_INVALID_EXIPIRATION_DATE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's expiration date is invalid.",
+        "errorMarkup": "(8110)0123456123456111101233|200010|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101233200010",
+        "hri": "(8110)0123456123456111101233200010"
+      }
+    },
+    {
+      "id": "linters-075",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101234",
+      "note": "GS1_LINTER_COUPON_TOO_SHORT_FOR_START_DATE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's start date is too short to YYMMDD format.",
+        "errorMarkup": "(8110)|0123456123456111101234|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101234",
+        "hri": "(8110)0123456123456111101234"
+      }
+    },
+    {
+      "id": "linters-076",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101234200010",
+      "note": "GS1_LINTER_COUPON_INVALID_START_DATE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's start date is invalid.",
+        "errorMarkup": "(8110)0123456123456111101234|200010|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101234200010",
+        "hri": "(8110)0123456123456111101234200010"
+      }
+    },
+    {
+      "id": "linters-077",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012335006064500607",
+      "note": "GS1_LINTER_COUPON_EXPIRATION_BEFORE_START",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's expiration date precede the start date.",
+        "errorMarkup": "(8110)012345612345611110123|35006064500607|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012335006064500607",
+        "hri": "(8110)01234561234561111012335006064500607"
+      }
+    },
+    {
+      "id": "linters-078",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101236",
+      "note": "GS1_LINTER_COUPON_MISSING_RETAILER_GCP_OR_GLN_VLI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Retailer GCP/GLN VLI is missing.",
+        "errorMarkup": "(8110)|0123456123456111101236|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101236",
+        "hri": "(8110)0123456123456111101236"
+      }
+    },
+    {
+      "id": "linters-079",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012360",
+      "note": "GS1_LINTER_COUPON_INVALID_RETAILER_GCP_OR_GLN_LENGTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Retailer GCP/GLN VLI must be \"1\" to \"7\".",
+        "errorMarkup": "(8110)0123456123456111101236|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012360",
+        "hri": "(8110)01234561234561111012360"
+      }
+    },
+    {
+      "id": "linters-080",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012361",
+      "note": "GS1_LINTER_COUPON_TRUNCATED_RETAILER_GCP_OR_GLN",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Retailer GCP/GLN is shorter than what is indicated by its VLI.",
+        "errorMarkup": "(8110)|01234561234561111012361|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012361",
+        "hri": "(8110)01234561234561111012361"
+      }
+    },
+    {
+      "id": "linters-081",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101239",
+      "note": "GS1_LINTER_COUPON_MISSING_SAVE_VALUE_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Save Value Code is missing.",
+        "errorMarkup": "(8110)|0123456123456111101239|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101239",
+        "hri": "(8110)0123456123456111101239"
+      }
+    },
+    {
+      "id": "linters-082",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012393",
+      "note": "GS1_LINTER_COUPON_INVALID_SAVE_VALUE_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Save Value Code must be \"0\", \"1\", \"2\", \"5\" or \"6\".",
+        "errorMarkup": "(8110)0123456123456111101239|3|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012393",
+        "hri": "(8110)01234561234561111012393"
+      }
+    },
+    {
+      "id": "linters-083",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012390",
+      "note": "GS1_LINTER_COUPON_MISSING_SAVE_VALUE_APPLIES_TO_ITEM",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Save Value Applies to Item is missing.",
+        "errorMarkup": "(8110)|01234561234561111012390|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012390",
+        "hri": "(8110)01234561234561111012390"
+      }
+    },
+    {
+      "id": "linters-084",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123903",
+      "note": "GS1_LINTER_COUPON_INVALID_SAVE_VALUE_APPLIES_TO_ITEM",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Save Value Applies to Item must be \"0\" to \"2\".",
+        "errorMarkup": "(8110)01234561234561111012390|3|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123903",
+        "hri": "(8110)012345612345611110123903"
+      }
+    },
+    {
+      "id": "linters-085",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123900",
+      "note": "GS1_LINTER_COUPON_MISSING_STORE_COUPON_FLAG",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Store Coupon Flag is missing.",
+        "errorMarkup": "(8110)|012345612345611110123900|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123900",
+        "hri": "(8110)012345612345611110123900"
+      }
+    },
+    {
+      "id": "linters-086",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)0123456123456111101239000",
+      "note": "GS1_LINTER_COUPON_MISSING_DONT_MULTIPLY_FLAG",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Don't Multiply Flag is missing.",
+        "errorMarkup": "(8110)|0123456123456111101239000|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81100123456123456111101239000",
+        "hri": "(8110)0123456123456111101239000"
+      }
+    },
+    {
+      "id": "linters-087",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)01234561234561111012390002",
+      "note": "GS1_LINTER_COUPON_INVALID_DONT_MULTIPLY_FLAG",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon's Don't Multiply Flag must be \"0\" or \"1\".",
+        "errorMarkup": "(8110)0123456123456111101239000|2|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811001234561234561111012390002",
+        "hri": "(8110)01234561234561111012390002"
+      }
+    },
+    {
+      "id": "linters-088",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(8110)012345612345611110123900000",
+      "note": "GS1_LINTER_COUPON_EXCESS_DATA",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8110): The coupon contains excess data after the recognised optional fields.",
+        "errorMarkup": "(8110)01234561234561111012390000|0|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8110)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8110012345612345611110123900000",
+        "hri": "(8110)012345612345611110123900000"
+      }
+    },
+    {
+      "id": "linters-089",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4309)18000000010000000000",
+      "note": "GS1_LINTER_INVALID_LATITUDE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4309): The latitude is outside of the range \"0000000000\" to \"1800000000\".",
+        "errorMarkup": "(4309)|1800000001|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4309)",
+          "MissingRequiredApplicationIdentifier(4309)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "430918000000010000000000",
+        "hri": "(4309)18000000010000000000"
+      }
+    },
+    {
+      "id": "linters-090",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4309)00000000003600000001",
+      "note": "GS1_LINTER_INVALID_LONGITUDE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4309): The longitude is outside of the range \"0000000000\" to \"3600000000\".",
+        "errorMarkup": "(4309)0000000000|3600000001|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4309)",
+          "MissingRequiredApplicationIdentifier(4309)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "430900000000003600000001",
+        "hri": "(4309)00000000003600000001"
+      }
+    },
+    {
+      "id": "linters-091",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(4330)000000X",
+      "note": "GS1_LINTER_NOT_HYPHEN",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4330): Only hyphens are permitted.",
+        "errorMarkup": "(4330)000000|X|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(4330)",
+          "MissingRequiredApplicationIdentifier(4330)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4330000000X",
+        "hri": "(4330)000000X"
+      }
+    },
+    {
+      "id": "linters-092",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(7252)5",
+      "note": "GS1_LINTER_INVALID_BIOLOGICAL_SEX_CODE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7252): A valid ISO/IEC 5218 biological sex code required.",
+        "errorMarkup": "(7252)|5|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7252)",
+          "MissingRequiredApplicationIdentifier(7252)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "72525",
+        "hri": "(7252)5"
+      }
+    },
+    {
+      "id": "linters-093",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(7258)111",
+      "note": "GS1_LINTER_POSITION_IN_SEQUENCE_MALFORMED",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7258): The data must have the format \"<pos>/<end>\".",
+        "errorMarkup": "(7258)|111|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7258)",
+          "MissingRequiredApplicationIdentifier(7258)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7258111",
+        "hri": "(7258)111"
+      }
+    },
+    {
+      "id": "linters-094",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(7258)0/3",
+      "note": "GS1_LINTER_ILLEGAL_ZERO_PREFIX",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7258): A zero prefix is not permitted.",
+        "errorMarkup": "(7258)|0|/3"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7258)",
+          "MissingRequiredApplicationIdentifier(7258)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "72580/3",
+        "hri": "(7258)0/3"
+      }
+    },
+    {
+      "id": "linters-095",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(7258)2/1",
+      "note": "GS1_LINTER_POSITION_EXCEEDS_END",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7258): The position number must not exceed the end number.",
+        "errorMarkup": "(7258)|2/1|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7258)",
+          "MissingRequiredApplicationIdentifier(7258)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "72582/1",
+        "hri": "(7258)2/1"
+      }
+    },
+    {
+      "id": "linters-096",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(01)95012345678903(3103)000123",
+      "note": "GS1_LINTER_OK",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01950123456789033103000123",
+        "elementString": "01950123456789033103000123",
+        "bracketed": "(01)95012345678903(3103)000123",
+        "hri": [
+          "(01) 95012345678903",
+          "(3103) 000123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/95012345678903?3103=000123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01950123456789033103000123",
+        "hri": "(01)95012345678903(3103)000123",
+        "digitalLink": "https://id.gs1.org/01/95012345678903?3103=000123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01950123456789033103000123",
+        "hri": "(01)95012345678903(3103)000123"
+      }
+    },
+    {
+      "id": "linters-097",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(01)95012345678902(3103)000123",
+      "note": "GS1_LINTER_INCORRECT_CHECK_DIGIT",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): The numeric check digit is incorrect.",
+        "errorMarkup": "(01)9501234567890|2|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(01)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01950123456789023103000123",
+        "hri": "(01)95012345678902(3103)000123"
+      }
+    },
+    {
+      "id": "linters-098",
+      "group": "syntax-engine/linters",
+      "source": "ai.c test_ai_linters",
+      "inputKind": "Bracketed",
+      "input": "(01)95012345678903(11)131313",
+      "note": "GS1_LINTER_ILLEGAL_MONTH",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (11): The date contains an illegal month of the year.",
+        "errorMarkup": "(11)13|13|13"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(11)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "019501234567890311131313",
+        "hri": "(01)95012345678903(11)131313"
+      }
+    }
+  ]
+}

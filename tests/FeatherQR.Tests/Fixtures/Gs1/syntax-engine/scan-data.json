@@ -1,0 +1,1000 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Barcode Syntax Engine 1.4.1 unit tests, scandata.c test_scandata_processScanData",
+  "cases": [
+    {
+      "id": "scan-data-000",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "",
+      "note": "symbology: NONE; No data",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Missing symbology identifier"
+      }
+    },
+    {
+      "id": "scan-data-001",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "ABC",
+      "note": "symbology: NONE; No symbology identifier",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Missing symbology identifier"
+      }
+    },
+    {
+      "id": "scan-data-002",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]",
+      "note": "symbology: NONE; Short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Missing symbology identifier"
+      }
+    },
+    {
+      "id": "scan-data-003",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]X",
+      "note": "symbology: NONE; Short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Missing symbology identifier"
+      }
+    },
+    {
+      "id": "scan-data-004",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]XX",
+      "note": "symbology: NONE; Unknown symbology identifier",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unsupported symbology identifier"
+      }
+    },
+    {
+      "id": "scan-data-005",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]e0",
+      "note": "symbology: NONE; Empty GS1 data",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      }
+    },
+    {
+      "id": "scan-data-006",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": ""
+      }
+    },
+    {
+      "id": "scan-data-007",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1TESTING",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": "TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-008",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1^TESTING",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": "\\^TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "\\^TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-009",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1\\^TESTING",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": "\\\\^TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "\\\\^TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-010",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q3",
+      "note": "symbology: NONE; Empty GS1 data",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      }
+    },
+    {
+      "id": "scan-data-011",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q3011231231231233310ABC123\u001D99TESTING",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233310ABC123^99TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC123^99TESTING",
+        "elementString": "011231231231233310ABC123\u001D99TESTING",
+        "bracketed": "(01)12312312312333(10)ABC123(99)TESTING",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(99) TESTING"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123?99=TESTING"
+      }
+    },
+    {
+      "id": "scan-data-012",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1https://example.com/01/12312312312333?99=TEST",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312333?99=TEST"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/12312312312333?99=TEST",
+        "elementString": "011231231231233399TEST",
+        "bracketed": "(01)12312312312333(99)TEST",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) TEST"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=TEST"
+      }
+    },
+    {
+      "id": "scan-data-013",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1HTTPS://example.com/01/12312312312333?99=TEST",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": "HTTPS://example.com/01/12312312312333?99=TEST"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "HTTPS://example.com/01/12312312312333?99=TEST",
+        "elementString": "011231231231233399TEST",
+        "bracketed": "(01)12312312312333(99)TEST",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) TEST"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=TEST"
+      }
+    },
+    {
+      "id": "scan-data-014",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1HtTps://example.com/01/12312312312333?99=TEST",
+      "note": "symbology: QR",
+      "expected": {
+        "valid": true,
+        "output": "HtTps://example.com/01/12312312312333?99=TEST"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "HtTps://example.com/01/12312312312333?99=TEST",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-015",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]d1",
+      "note": "symbology: DM",
+      "expected": {
+        "valid": true,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": ""
+      }
+    },
+    {
+      "id": "scan-data-016",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]d1TESTING",
+      "note": "symbology: DM",
+      "expected": {
+        "valid": true,
+        "output": "TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-017",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]d1^TESTING",
+      "note": "symbology: DM",
+      "expected": {
+        "valid": true,
+        "output": "\\^TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "\\^TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-018",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]d1\\^TESTING",
+      "note": "symbology: DM",
+      "expected": {
+        "valid": true,
+        "output": "\\\\^TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "\\\\^TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-019",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]d2",
+      "note": "symbology: NONE; Empty GS1 data",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      }
+    },
+    {
+      "id": "scan-data-020",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]d2011231231231233310ABC123\u001D99TESTING",
+      "note": "symbology: DM",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233310ABC123^99TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC123^99TESTING",
+        "elementString": "011231231231233310ABC123\u001D99TESTING",
+        "bracketed": "(01)12312312312333(10)ABC123(99)TESTING",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(99) TESTING"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123?99=TESTING"
+      }
+    },
+    {
+      "id": "scan-data-021",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]d1https://example.com/01/12312312312333?99=TEST",
+      "note": "symbology: DM",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312333?99=TEST"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/12312312312333?99=TEST",
+        "elementString": "011231231231233399TEST",
+        "bracketed": "(01)12312312312333(99)TEST",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) TEST"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=TEST"
+      }
+    },
+    {
+      "id": "scan-data-022",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]J0",
+      "note": "symbology: DotCode",
+      "expected": {
+        "valid": true,
+        "output": ""
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": ""
+      }
+    },
+    {
+      "id": "scan-data-023",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]J0TESTING",
+      "note": "symbology: DotCode",
+      "expected": {
+        "valid": true,
+        "output": "TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-024",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]J0^TESTING",
+      "note": "symbology: DotCode",
+      "expected": {
+        "valid": true,
+        "output": "\\^TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "\\^TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-025",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]J0\\^TESTING",
+      "note": "symbology: DotCode",
+      "expected": {
+        "valid": true,
+        "output": "\\\\^TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "\\\\^TESTING",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-026",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]J1",
+      "note": "symbology: NONE; Empty GS1 data",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      }
+    },
+    {
+      "id": "scan-data-027",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]J1011231231231233310ABC123\u001D99TESTING",
+      "note": "symbology: DotCode",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233310ABC123^99TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC123^99TESTING",
+        "elementString": "011231231231233310ABC123\u001D99TESTING",
+        "bracketed": "(01)12312312312333(10)ABC123(99)TESTING",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(99) TESTING"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123?99=TESTING"
+      }
+    },
+    {
+      "id": "scan-data-028",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]J0https://example.com/01/12312312312333?99=TEST",
+      "note": "symbology: DotCode",
+      "expected": {
+        "valid": true,
+        "output": "https://example.com/01/12312312312333?99=TEST"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/12312312312333?99=TEST",
+        "elementString": "011231231231233399TEST",
+        "bracketed": "(01)12312312312333(99)TEST",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) TEST"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=TEST"
+      }
+    },
+    {
+      "id": "scan-data-029",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]e0",
+      "note": "symbology: NONE; Empty GS1 data",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      }
+    },
+    {
+      "id": "scan-data-030",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]e0011231231231233310ABC123\u001D99TESTING",
+      "note": "symbology: DataBarExpanded",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233310ABC123^99TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC123^99TESTING",
+        "elementString": "011231231231233310ABC123\u001D99TESTING",
+        "bracketed": "(01)12312312312333(10)ABC123(99)TESTING",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(99) TESTING"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123?99=TESTING"
+      }
+    },
+    {
+      "id": "scan-data-031",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]e0011231231231233310ABC123\u001D99TESTING\u001D98XYZ",
+      "note": "symbology: DataBarExpanded",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233310ABC123^99TESTING^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC123^99TESTING^98XYZ",
+        "elementString": "011231231231233310ABC123\u001D99TESTING\u001D98XYZ",
+        "bracketed": "(01)12312312312333(10)ABC123(99)TESTING(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(99) TESTING",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123?99=TESTING&98=XYZ"
+      }
+    },
+    {
+      "id": "scan-data-032",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]e0011231231231233310ABC123\u001D1199122598TESTING\u001D97XYZ",
+      "note": "symbology: DataBarExpanded",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233310ABC123^1199122598TESTING^97XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC123^1199122598TESTING^97XYZ",
+        "elementString": "011231231231233310ABC123\u001D1199122598TESTING\u001D97XYZ",
+        "bracketed": "(01)12312312312333(10)ABC123(11)991225(98)TESTING(97)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(11) 991225",
+          "(98) TESTING",
+          "(97) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123?11=991225&98=TESTING&97=XYZ"
+      }
+    },
+    {
+      "id": "scan-data-033",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]e00112312312312333235XYZ\u001D10ABC",
+      "note": "symbology: DataBarExpanded; (235) X..28 in DataBar composite",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333235XYZ^10ABC"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112312312312333235XYZ^10ABC",
+        "elementString": "0112312312312333235XYZ\u001D10ABC",
+        "bracketed": "(01)12312312312333(235)XYZ(10)ABC",
+        "hri": [
+          "(01) 12312312312333",
+          "(235) XYZ",
+          "(10) ABC"
+        ],
+        "digitalLinkError": "AI (235) is not a valid DL URI data attribute"
+      }
+    },
+    {
+      "id": "scan-data-034",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]C1",
+      "note": "symbology: NONE; Empty GS1 data",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      }
+    },
+    {
+      "id": "scan-data-035",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]C1011231231231233310ABC123\u001D99TESTING",
+      "note": "symbology: GS1_128_CCA",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233310ABC123^99TESTING"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011231231231233310ABC123^99TESTING",
+        "elementString": "011231231231233310ABC123\u001D99TESTING",
+        "bracketed": "(01)12312312312333(10)ABC123(99)TESTING",
+        "hri": [
+          "(01) 12312312312333",
+          "(10) ABC123",
+          "(99) TESTING"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/10/ABC123?99=TESTING"
+      }
+    },
+    {
+      "id": "scan-data-036",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]C10112312312312333235XYZ",
+      "note": "symbology: GS1_128_CCA; (235) X..28, no separator after last AI",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333235XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112312312312333235XYZ",
+        "elementString": "0112312312312333235XYZ",
+        "bracketed": "(01)12312312312333(235)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(235) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/235/XYZ"
+      }
+    },
+    {
+      "id": "scan-data-037",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]C10112312312312333235XYZ\u001D10ABC",
+      "note": "symbology: GS1_128_CCA; (235) DO_FNC1 -> GS before (10)",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333235XYZ^10ABC"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112312312312333235XYZ^10ABC",
+        "elementString": "0112312312312333235XYZ\u001D10ABC",
+        "bracketed": "(01)12312312312333(235)XYZ(10)ABC",
+        "hri": [
+          "(01) 12312312312333",
+          "(235) XYZ",
+          "(10) ABC"
+        ],
+        "digitalLinkError": "AI (235) is not a valid DL URI data attribute"
+      }
+    },
+    {
+      "id": "scan-data-038",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E0",
+      "note": "symbology: NONE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary scan data is too short"
+      }
+    },
+    {
+      "id": "scan-data-039",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E0123456789012",
+      "note": "symbology: NONE; Short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary scan data is too short"
+      }
+    },
+    {
+      "id": "scan-data-040",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E012345678901234",
+      "note": "symbology: NONE; Long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary message is too long"
+      }
+    },
+    {
+      "id": "scan-data-041",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E01234ABC890123",
+      "note": "symbology: NONE; Non-numeric",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary message may only contain digits"
+      }
+    },
+    {
+      "id": "scan-data-042",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E02112345678901",
+      "note": "symbology: NONE; Bad check digit",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary message check digit is incorrect"
+      }
+    },
+    {
+      "id": "scan-data-043",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E02112345678900",
+      "note": "symbology: EAN13",
+      "expected": {
+        "valid": true,
+        "output": "2112345678900"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "2112345678900",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-044",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E02112345678900|]e099COMPOSITE\u001D98XYZ",
+      "note": "symbology: EAN13",
+      "expected": {
+        "valid": true,
+        "output": "2112345678900|^99COMPOSITE^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "2112345678900|^99COMPOSITE^98XYZ",
+        "elementString": "99COMPOSITE\u001D98XYZ",
+        "bracketed": "(99)COMPOSITE(98)XYZ",
+        "hri": [
+          "(99) COMPOSITE",
+          "(98) XYZ"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-045",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E4",
+      "note": "symbology: NONE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary scan data is too short"
+      }
+    },
+    {
+      "id": "scan-data-046",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E41234567",
+      "note": "symbology: NONE; Short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary scan data is too short"
+      }
+    },
+    {
+      "id": "scan-data-047",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E4123456789",
+      "note": "symbology: NONE; Long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary message is too long"
+      }
+    },
+    {
+      "id": "scan-data-048",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E412ABC678",
+      "note": "symbology: NONE; Non-numeric",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary message may only contain digits"
+      }
+    },
+    {
+      "id": "scan-data-049",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E402345674",
+      "note": "symbology: NONE; Bad check digit",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Primary message check digit is incorrect"
+      }
+    },
+    {
+      "id": "scan-data-050",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E402345673",
+      "note": "symbology: EAN8",
+      "expected": {
+        "valid": true,
+        "output": "02345673"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "02345673",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-051",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]E402345673|]e099COMPOSITE\u001D98XYZ",
+      "note": "symbology: EAN8",
+      "expected": {
+        "valid": true,
+        "output": "02345673|^99COMPOSITE^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "02345673|^99COMPOSITE^98XYZ",
+        "elementString": "99COMPOSITE\u001D98XYZ",
+        "bracketed": "(99)COMPOSITE(98)XYZ",
+        "hri": [
+          "(99) COMPOSITE",
+          "(98) XYZ"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "scan-data-052",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]C101123123123133^10ABC",
+      "note": "symbology: NONE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Scan data contains illegal ^ character"
+      }
+    },
+    {
+      "id": "scan-data-053",
+      "group": "syntax-engine/scan-data",
+      "source": "scandata.c test_testProcessScanData",
+      "inputKind": "ScanData",
+      "input": "]Q1https://a/NOPRIMARYAI",
+      "note": "symbology: NONE",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      }
+    }
+  ]
+}

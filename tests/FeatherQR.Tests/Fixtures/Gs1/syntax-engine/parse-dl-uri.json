@@ -1,0 +1,2879 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Barcode Syntax Engine 1.4.1 unit tests, dl.c test_dl_parseDLuri",
+  "cases": [
+    {
+      "id": "parse-dl-uri-000",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": ""
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-001",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "ftp://",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "ftp://",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-002",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "http://",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI must contain a domain and path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-003",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "http:///",
+      "note": "No domain",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI must contain a domain and path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-004",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "http://a",
+      "note": "No path info",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI must contain a domain and path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-005",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "http://a/",
+      "note": "Pathological minimal domain but no AI info",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-006",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "http://a/b",
+      "note": "No path info",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-007",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "http://a/b/",
+      "note": "Pathological minimal domain but no AI info",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-008",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "http://a/00/006141411234567890",
+      "note": "http",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "http://a/00/006141411234567890",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-009",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "HTTP://a/00/006141411234567890",
+      "note": "HTTP",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "HTTP://a/00/006141411234567890",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-010",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/00/006141411234567890",
+      "note": "https",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/00/006141411234567890",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-011",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "HTTPS://a/00/006141411234567890",
+      "note": "HTTPS",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "HTTPS://a/00/006141411234567890",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-012",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "HtTp://a/b/00/006141411234567890",
+      "note": "Mixed-case scheme forbidden",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "HtTp://a/b/00/006141411234567890",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-013",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://00/006141411234567890",
+      "note": "No domain",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-014",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-015",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://xn--fsq.xn--0zwm56d/01/12312312312333",
+      "note": "Puny code",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://xn--fsq.xn--0zwm56d/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-016",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a./01/12312312312333",
+      "note": "Explicit FQDN",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a./01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-017",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a:65535/01/12312312312333",
+      "note": "Port specified",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a:65535/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-018",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://192.0.2.1/01/12312312312333",
+      "note": "IPv4",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://192.0.2.1/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-019",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://3232235777/01/12312312312333",
+      "note": "Valid IPv4 in decimal form!",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://3232235777/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-020",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://0300.0250.01.01/01/12312312312333",
+      "note": "Valid IPv4 in octal form!",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://0300.0250.01.01/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-021",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://0xC0.0xA8.0x01.0x01/01/12312312312333",
+      "note": "Valid IPv4 in octal form!",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://0xC0.0xA8.0x01.0x01/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-022",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://[2001:db8::1]/01/12312312312333",
+      "note": "IPv6",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://[2001:db8::1]/01/12312312312333",
+        "elementString": "0112312312312333",
+        "bracketed": "(01)12312312312333",
+        "hri": [
+          "(01) 12312312312333"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-023",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://[fe80::1%25lo]/01/12312312312333",
+      "note": "IPv6 zone identifiers not useful",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Domain contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333",
+        "hri": "(01)12312312312333",
+        "digitalLink": "https://id.gs1.org/01/12312312312333",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-024",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://$a/006141411234567890",
+      "note": "Bad character in domain",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Domain contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-025",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a$/006141411234567890",
+      "note": "Bad character in domain",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Domain contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-026",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333<bad",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-027",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333>bad",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-028",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333{bad",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-029",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333}bad",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-030",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333\\bad",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-031",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333^bad",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-032",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333`bad",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "URI contains illegal characters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-033",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/stem/00/006141411234567890",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/stem/00/006141411234567890",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-034",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/more/stem/00/006141411234567890",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/more/stem/00/006141411234567890",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-035",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/00/faux/00/006141411234567890",
+      "note": "Fake AI in stem, stop at rightmost key",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/00/faux/00/006141411234567890",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00006141411234567890",
+        "hri": "(00)006141411234567890",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-036",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/gtin/12312312312333",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-037",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/gtin/12312312312333",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-038",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/gtin/12312312312333/ser/ABC123",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233321ABC123"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-039",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/sscc/006141411234567890",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-040",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/zzz/12312312312333",
+      "note": "Alpha not in convenience map",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-041",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/cps/12312312312333",
+      "note": "Partial prefix of map entry \"cpsn\"",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-042",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/2112345678900",
+      "note": "GTIN-13 -> GTIN-14",
+      "expected": {
+        "valid": true,
+        "output": "^0102112345678900"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-043",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/2112345678900",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-044",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/416000336108",
+      "note": "GTIN-12 -> GTIN-14",
+      "expected": {
+        "valid": true,
+        "output": "^0100416000336108"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-045",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/416000336108",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-046",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/02345673",
+      "note": "GTIN-8 -> GTIN-14",
+      "expected": {
+        "valid": true,
+        "output": "^0100000002345673"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-047",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/02345673",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-048",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/22/TEST/10/ABC/21/XYZ",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233322TEST^10ABC^21XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333/22/TEST/10/ABC/21/XYZ",
+        "elementString": "011231231231233322TEST\u001D10ABC\u001D21XYZ",
+        "bracketed": "(01)12312312312333(22)TEST(10)ABC(21)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(22) TEST",
+          "(10) ABC",
+          "(21) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/TEST/10/ABC/21/XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233322TEST\u001D10ABC\u001D21XYZ",
+        "hri": "(01)12312312312333(22)TEST(10)ABC(21)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/TEST/10/ABC/21/XYZ",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-049",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/235/TEST",
+      "expected": {
+        "valid": true,
+        "output": "^0112312312312333235TEST"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333/235/TEST",
+        "elementString": "0112312312312333235TEST",
+        "bracketed": "(01)12312312312333(235)TEST",
+        "hri": [
+          "(01) 12312312312333",
+          "(235) TEST"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/235/TEST"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112312312312333235TEST",
+        "hri": "(01)12312312312333(235)TEST",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/235/TEST",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-050",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/253/1231231231232",
+      "expected": {
+        "valid": true,
+        "output": "^2531231231231232"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/253/1231231231232",
+        "elementString": "2531231231231232",
+        "bracketed": "(253)1231231231232",
+        "hri": [
+          "(253) 1231231231232"
+        ],
+        "digitalLink": "https://id.gs1.org/253/1231231231232"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2531231231231232",
+        "hri": "(253)1231231231232",
+        "digitalLink": "https://id.gs1.org/253/1231231231232",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-051",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/253/1231231231232TEST5678901234567",
+      "expected": {
+        "valid": true,
+        "output": "^2531231231231232TEST5678901234567"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/253/1231231231232TEST5678901234567",
+        "elementString": "2531231231231232TEST5678901234567",
+        "bracketed": "(253)1231231231232TEST5678901234567",
+        "hri": [
+          "(253) 1231231231232TEST5678901234567"
+        ],
+        "digitalLink": "https://id.gs1.org/253/1231231231232TEST5678901234567"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2531231231231232TEST5678901234567",
+        "hri": "(253)1231231231232TEST5678901234567",
+        "digitalLink": "https://id.gs1.org/253/1231231231232TEST5678901234567",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-052",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/253/1231231231232TEST56789012345678",
+      "note": "Too long N13 X0..17",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (253) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(253)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-053",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/8018/123456789012345675/8019/123",
+      "expected": {
+        "valid": true,
+        "output": "^8018123456789012345675^8019123"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/8018/123456789012345675/8019/123",
+        "elementString": "8018123456789012345675\u001D8019123",
+        "bracketed": "(8018)123456789012345675(8019)123",
+        "hri": [
+          "(8018) 123456789012345675",
+          "(8019) 123"
+        ],
+        "digitalLink": "https://id.gs1.org/8018/123456789012345675/8019/123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8018123456789012345675\u001D8019123",
+        "hri": "(8018)123456789012345675(8019)123",
+        "digitalLink": "https://id.gs1.org/8018/123456789012345675/8019/123",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-054",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/stem/00/006141411234567890/",
+      "note": "Can't end in slash",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-055",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/stem/00/006141411234567890?",
+      "note": "Empty query params",
+      "expected": {
+        "valid": true,
+        "output": "^00006141411234567890"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/stem/00/006141411234567890?",
+        "elementString": "00006141411234567890",
+        "bracketed": "(00)006141411234567890",
+        "hri": [
+          "(00) 006141411234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(query)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-056",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/stem/00/006141411234567890?99=ABC",
+      "note": "Query params; no FNC1 req after pathinfo",
+      "expected": {
+        "valid": true,
+        "output": "^0000614141123456789099ABC"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/stem/00/006141411234567890?99=ABC",
+        "elementString": "0000614141123456789099ABC",
+        "bracketed": "(00)006141411234567890(99)ABC",
+        "hri": [
+          "(00) 006141411234567890",
+          "(99) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890?99=ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0000614141123456789099ABC",
+        "hri": "(00)006141411234567890(99)ABC",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890?99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-057",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/stem/401/12345678?99=ABC",
+      "note": "Query params; FNC1 req after pathinfo",
+      "expected": {
+        "valid": true,
+        "output": "^40112345678^99ABC"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/stem/401/12345678?99=ABC",
+        "elementString": "40112345678\u001D99ABC",
+        "bracketed": "(401)12345678(99)ABC",
+        "hri": [
+          "(401) 12345678",
+          "(99) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/401/12345678?99=ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "40112345678\u001D99ABC",
+        "hri": "(401)12345678(99)ABC",
+        "digitalLink": "https://id.gs1.org/401/12345678?99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-058",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=ABC&98=XYZ",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?99=ABC&98=XYZ",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "hri": "(01)12312312312333(99)ABC(98)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12312312312333?98=XYZ&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-059",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=",
+      "note": "Empty AI value in query parameter",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (99) value query element is empty"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPercentEncoding(99)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-060",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=ABC&999=faux",
+      "note": "Non-AI, numeric-only query param",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unknown AI (999) in query parameters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(999)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-061",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?&&&99=ABC&&&&&&98=XYZ&&&",
+      "note": "Extraneous query param separators",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?&&&99=ABC&&&&&&98=XYZ&&&",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-062",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=ABC&unknown=666&98=XYZ",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?99=ABC&unknown=666&98=XYZ",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "hri": "(01)12312312312333(99)ABC(98)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12312312312333?98=XYZ&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-063",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?unknown=666&99=ABC&98=XYZ",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?unknown=666&99=ABC&98=XYZ",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "hri": "(01)12312312312333(99)ABC(98)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12312312312333?98=XYZ&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-064",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=ABC&98=XYZ&unknown=666",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?99=ABC&98=XYZ&unknown=666",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "hri": "(01)12312312312333(99)ABC(98)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12312312312333?98=XYZ&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-065",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?unknown1=555&99=ABC&unknown2=666&98=XYZ&unknown3=777",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?unknown1=555&99=ABC&unknown2=666&98=XYZ&unknown3=777",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "hri": "(01)12312312312333(99)ABC(98)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12312312312333?98=XYZ&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-066",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=ABC&singleton&98=XYZ",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?99=ABC&singleton&98=XYZ",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(query)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-067",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?singleton&99=ABC&98=XYZ",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?singleton&99=ABC&98=XYZ",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(query)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-068",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=ABC&98=XYZ&singleton",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?99=ABC&98=XYZ&singleton",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(query)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-069",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?singleton1&99=ABC&singleton2&98=XYZ&singleton3",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?singleton1&99=ABC&singleton2&98=XYZ&singleton3",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-070",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?singleton1&unknown1=555&99=ABC&singleton2&unknown2=6666&98=XYZ&unknown3=777&singleton3",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233399ABC^98XYZ"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333?singleton1&unknown1=555&99=ABC&singleton2&unknown2=6666&98=XYZ&unknown3=777&singleton3",
+        "elementString": "011231231231233399ABC\u001D98XYZ",
+        "bracketed": "(01)12312312312333(99)ABC(98)XYZ",
+        "hri": [
+          "(01) 12312312312333",
+          "(99) ABC",
+          "(98) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333?99=ABC&98=XYZ"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(query)",
+          "InvalidQuery(query)",
+          "InvalidQuery(query)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-071",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/22/ABC%2d123?99=ABC&98=XYZ%2f987",
+      "note": "Percent escaped values",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233322ABC-123^99ABC^98XYZ/987"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333/22/ABC%2d123?99=ABC&98=XYZ%2f987",
+        "elementString": "011231231231233322ABC-123\u001D99ABC\u001D98XYZ/987",
+        "bracketed": "(01)12312312312333(22)ABC-123(99)ABC(98)XYZ/987",
+        "hri": [
+          "(01) 12312312312333",
+          "(22) ABC-123",
+          "(99) ABC",
+          "(98) XYZ/987"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/ABC-123?99=ABC&98=XYZ%2F987"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233322ABC-123\u001D99ABC\u001D98XYZ/987",
+        "hri": "(01)12312312312333(22)ABC-123(99)ABC(98)XYZ/987",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/ABC-123?98=XYZ%2F987&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-072",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/22/ABC+123?99=ABC&98=XYZ%2f987",
+      "note": "\"+\" means \"+\" in path info",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233322ABC+123^99ABC^98XYZ/987"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333/22/ABC+123?99=ABC&98=XYZ%2f987",
+        "elementString": "011231231231233322ABC+123\u001D99ABC\u001D98XYZ/987",
+        "bracketed": "(01)12312312312333(22)ABC+123(99)ABC(98)XYZ/987",
+        "hri": [
+          "(01) 12312312312333",
+          "(22) ABC+123",
+          "(99) ABC",
+          "(98) XYZ/987"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/ABC%2B123?99=ABC&98=XYZ%2F987"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233322ABC+123\u001D99ABC\u001D98XYZ/987",
+        "hri": "(01)12312312312333(22)ABC+123(99)ABC(98)XYZ/987",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/ABC%2B123?98=XYZ%2F987&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-073",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/22/ABC%2d123?99=ABC&98=XYZ+987",
+      "note": "\"+\" means \" \" in path info",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (98): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(98)XYZ| |987"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233322ABC-123\u001D99ABC\u001D98XYZ+987",
+        "hri": "(01)12312312312333(22)ABC-123(99)ABC(98)XYZ+987",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/ABC-123?98=XYZ%2B987&99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-074",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/22/test/10/abc/21/xyz#",
+      "note": "Empty fragment after path info",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233322test^10abc^21xyz"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333/22/test/10/abc/21/xyz#",
+        "elementString": "011231231231233322test\u001D10abc\u001D21xyz",
+        "bracketed": "(01)12312312312333(22)test(10)abc(21)xyz",
+        "hri": [
+          "(01) 12312312312333",
+          "(22) test",
+          "(10) abc",
+          "(21) xyz"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/test/10/abc/21/xyz"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233322test\u001D10abc\u001D21xyz",
+        "hri": "(01)12312312312333(22)test(10)abc(21)xyz",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/test/10/abc/21/xyz",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-075",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/22/test/10/abc/21/xyz#fragment",
+      "note": "Ignore fragment after path info",
+      "expected": {
+        "valid": true,
+        "output": "^011231231231233322test^10abc^21xyz"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/01/12312312312333/22/test/10/abc/21/xyz#fragment",
+        "elementString": "011231231231233322test\u001D10abc\u001D21xyz",
+        "bracketed": "(01)12312312312333(22)test(10)abc(21)xyz",
+        "hri": [
+          "(01) 12312312312333",
+          "(22) test",
+          "(10) abc",
+          "(21) xyz"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/test/10/abc/21/xyz"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011231231231233322test\u001D10abc\u001D21xyz",
+        "hri": "(01)12312312312333(22)test(10)abc(21)xyz",
+        "digitalLink": "https://id.gs1.org/01/12312312312333/22/test/10/abc/21/xyz",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-076",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/stem/00/006141411234567890?99=ABC#",
+      "note": "Empty fragment after query info",
+      "expected": {
+        "valid": true,
+        "output": "^0000614141123456789099ABC"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/stem/00/006141411234567890?99=ABC#",
+        "elementString": "0000614141123456789099ABC",
+        "bracketed": "(00)006141411234567890(99)ABC",
+        "hri": [
+          "(00) 006141411234567890",
+          "(99) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890?99=ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0000614141123456789099ABC",
+        "hri": "(00)006141411234567890(99)ABC",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890?99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-077",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/stem/00/006141411234567890?99=ABC#fragment",
+      "note": "Ignore fragment after query info",
+      "expected": {
+        "valid": true,
+        "output": "^0000614141123456789099ABC"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://a/stem/00/006141411234567890?99=ABC#fragment",
+        "elementString": "0000614141123456789099ABC",
+        "bracketed": "(00)006141411234567890(99)ABC",
+        "hri": [
+          "(00) 006141411234567890",
+          "(99) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/00/006141411234567890?99=ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0000614141123456789099ABC",
+        "hri": "(00)006141411234567890(99)ABC",
+        "digitalLink": "https://id.gs1.org/00/006141411234567890?99=ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-078",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-079",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/01/9520123456788",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-080",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/some-extra/pathinfo/01/9520123456788",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-081",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/22/2A",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788222A"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/22/2A",
+        "elementString": "0109520123456788222A",
+        "bracketed": "(01)09520123456788(22)2A",
+        "hri": [
+          "(01) 09520123456788",
+          "(22) 2A"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788222A",
+        "hri": "(01)09520123456788(22)2A",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-082",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC123",
+      "expected": {
+        "valid": true,
+        "output": "^010952012345678810ABC123"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/10/ABC123",
+        "elementString": "010952012345678810ABC123",
+        "bracketed": "(01)09520123456788(10)ABC123",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC123",
+        "hri": "(01)09520123456788(10)ABC123",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC123",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-083",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/21/12345",
+      "expected": {
+        "valid": true,
+        "output": "^01095201234567882112345"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/21/12345",
+        "elementString": "01095201234567882112345",
+        "bracketed": "(01)09520123456788(21)12345",
+        "hri": [
+          "(01) 09520123456788",
+          "(21) 12345"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/12345"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567882112345",
+        "hri": "(01)09520123456788(21)12345",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/12345",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-084",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426",
+      "expected": {
+        "valid": true,
+        "output": "^010952012345678810ABC1^2112345^17180426"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426",
+        "elementString": "010952012345678810ABC1\u001D2112345\u001D17180426",
+        "bracketed": "(01)09520123456788(10)ABC1(21)12345(17)180426",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC1",
+          "(21) 12345",
+          "(17) 180426"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC1\u001D2112345\u001D17180426",
+        "hri": "(01)09520123456788(10)ABC1(21)12345(17)180426",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC1/21/12345?17=180426",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-085",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?3103=000195",
+      "expected": {
+        "valid": true,
+        "output": "^01095201234567883103000195"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?3103=000195",
+        "elementString": "01095201234567883103000195",
+        "bracketed": "(01)09520123456788(3103)000195",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567883103000195",
+        "hri": "(01)09520123456788(3103)000195",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-086",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/9520123456788?3103=000195&3922=0299&17=201225",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788310300019539220299^17201225"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-087",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?3103=000195&3922=0299&17=201225",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788310300019539220299^17201225"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/09520123456788?3103=000195&3922=0299&17=201225",
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "bracketed": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195",
+          "(3922) 0299",
+          "(17) 201225"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195&17=201225&3922=0299"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "hri": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-088",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/9520123456788?3103=000195&3922=0299&17=201225",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788310300019539220299^17201225"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-089",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?3103=000195&3922=0299&17=201225",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788310300019539220299^17201225"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/01/09520123456788?3103=000195&3922=0299&17=201225",
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "bracketed": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195",
+          "(3922) 0299",
+          "(17) 201225"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195&17=201225&3922=0299"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "hri": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-090",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/9520123456788?3103=000195&3922=0299&17=201225",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788310300019539220299^17201225"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-091",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?3103=000195&3922=0299&17=201225",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788310300019539220299^17201225"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?3103=000195&3922=0299&17=201225",
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "bracketed": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195",
+          "(3922) 0299",
+          "(17) 201225"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195&17=201225&3922=0299"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788310300019539220299\u001D17201225",
+        "hri": "(01)09520123456788(3103)000195(3922)0299(17)201225",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-092",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/9520123456788?17=201225&3103=000195&3922=0299",
+      "expected": {
+        "valid": true,
+        "output": "^010952012345678817201225310300019539220299"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier",
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-093",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+      "expected": {
+        "valid": true,
+        "output": "^010952012345678817201225310300019539220299"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "elementString": "010952012345678817201225310300019539220299",
+        "bracketed": "(01)09520123456788(17)201225(3103)000195(3922)0299",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 201225",
+          "(3103) 000195",
+          "(3922) 0299"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678817201225310300019539220299",
+        "hri": "(01)09520123456788(17)201225(3103)000195(3922)0299",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=201225&3103=000195&3922=0299",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-094",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/00/952012345678912345",
+      "expected": {
+        "valid": true,
+        "output": "^00952012345678912345"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/00/952012345678912345",
+        "elementString": "00952012345678912345",
+        "bracketed": "(00)952012345678912345",
+        "hri": [
+          "(00) 952012345678912345"
+        ],
+        "digitalLink": "https://id.gs1.org/00/952012345678912345"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00952012345678912345",
+        "hri": "(00)952012345678912345",
+        "digitalLink": "https://id.gs1.org/00/952012345678912345",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-095",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/00/952012345678912345?02=09520123456788&37=25&10=ABC123",
+      "expected": {
+        "valid": true,
+        "output": "^0095201234567891234502095201234567883725^10ABC123"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/00/952012345678912345?02=09520123456788&37=25&10=ABC123",
+        "elementString": "0095201234567891234502095201234567883725\u001D10ABC123",
+        "bracketed": "(00)952012345678912345(02)09520123456788(37)25(10)ABC123",
+        "hri": [
+          "(00) 952012345678912345",
+          "(02) 09520123456788",
+          "(37) 25",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/00/952012345678912345?02=09520123456788&37=25&10=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0095201234567891234502095201234567883725\u001D10ABC123",
+        "hri": "(00)952012345678912345(02)09520123456788(37)25(10)ABC123",
+        "digitalLink": "https://id.gs1.org/00/952012345678912345?02=09520123456788&10=ABC123&37=25",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-096",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/414/9520123456788",
+      "expected": {
+        "valid": true,
+        "output": "^4149520123456788"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/414/9520123456788",
+        "elementString": "4149520123456788",
+        "bracketed": "(414)9520123456788",
+        "hri": [
+          "(414) 9520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/414/9520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "4149520123456788",
+        "hri": "(414)9520123456788",
+        "digitalLink": "https://id.gs1.org/414/9520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-097",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/414/9520123456788/254/32a%2Fb",
+      "expected": {
+        "valid": true,
+        "output": "^414952012345678825432a/b"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/414/9520123456788/254/32a%2Fb",
+        "elementString": "414952012345678825432a/b",
+        "bracketed": "(414)9520123456788(254)32a/b",
+        "hri": [
+          "(414) 9520123456788",
+          "(254) 32a/b"
+        ],
+        "digitalLink": "https://id.gs1.org/414/9520123456788/254/32a%2Fb"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "414952012345678825432a/b",
+        "hri": "(414)9520123456788(254)32a/b",
+        "digitalLink": "https://id.gs1.org/414/9520123456788/254/32a%2Fb",
+        "issues": []
+      }
+    },
+    {
+      "id": "parse-dl-uri-098",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/8004/9520614141234567?01=9520123456788",
+      "expected": {
+        "valid": true,
+        "output": "^80049520614141234567^0109520123456788"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://example.com/8004/9520614141234567?01=9520123456788",
+        "elementString": "80049520614141234567\u001D0109520123456788",
+        "bracketed": "(8004)9520614141234567(01)09520123456788",
+        "hri": [
+          "(8004) 9520614141234567",
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/8004/9520614141234567?01=09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-099",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?10=ABC123",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) from query params should be in the path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(10)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-100",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/235/XYZ?10=ABC123",
+      "expected": {
+        "valid": true,
+        "output": "^0109520123456788235XYZ^10ABC123"
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/235/XYZ?10=ABC123",
+        "elementString": "0109520123456788235XYZ\u001D10ABC123",
+        "bracketed": "(01)09520123456788(235)XYZ(10)ABC123",
+        "hri": [
+          "(01) 09520123456788",
+          "(235) XYZ",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/235/XYZ?10=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(10)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-101",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC123?99=XYZ789&01=09520123456788",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) is duplicated"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DuplicateApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-102",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC123?99=XYZ789&10=ABC123",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) is duplicated"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(10)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-103",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC123?99=XYZ789&99=XYZ789",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (99) is duplicated"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DuplicateApplicationIdentifier(99)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-104",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788/89/ABC123?99=XYZ",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(89)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-105",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?99=XYZ&89=ABC123",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unknown AI (89) in query parameters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-106",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?99=XYZ&89=ABC123",
+      "note": "Unknown AIs are not permitted data attributes",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unknown AI (89) in query parameters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-107",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://example.com/01/09520123456788?99=XYZ&89=ABC123",
+      "expected": {
+        "valid": true,
+        "output": "^010952012345678899XYZ^89ABC123"
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unknown AI (89) in query parameters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-108",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01//12312312312333",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-109",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/1231231231233%003",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Decoded AI (01) from DL path info contains illegal null character"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier",
+          "InvalidApplicationIdentifier(01)",
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-110",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333?99=ABC%00DEF",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Decoded AI (99) value from DL query params contains illegal null character"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(99)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-111",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/10/",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) value path element is empty"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(path)"
+        ]
+      }
+    },
+    {
+      "id": "parse-dl-uri-112",
+      "group": "syntax-engine/parse-dl-uri",
+      "source": "dl.c test_parseDLuri",
+      "inputKind": "DigitalLink",
+      "input": "https://a/01/12312312312333/99/ABC",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AIs in the path are not a valid key-qualifier sequence for the key"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(99)"
+        ]
+      }
+    }
+  ]
+}

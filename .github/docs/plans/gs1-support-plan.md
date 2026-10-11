@@ -119,7 +119,7 @@ Each `Try` form exists twice, returning a `string` or writing into a caller's sp
 
 - Source: the dictionary file of the pinned release, committed with its license and a provenance note under the test data. The generator lives in the test project, as `SimdTiersDocTest` does: it fails when the generated source differs from what the pinned release produces and rewrites it outside CI.
 - Output: RVA data and a lookup by AI, with no allocation and no static constructor, like `ShiftJisKanjiTable`. Titles are not stored.
-- The list linters (`iso3166`, `iso3166alpha2`, `iso3166999`, `iso4217`, `iso5218`, `mediatype`, `packagetype`) need data the dictionary does not hold. Phase 0 finds and pins its source the same way.
+- The list linters (`iso3166`, `iso3166alpha2`, `iso3166999`, `iso4217`, `iso5218`, `mediatype`, `packagetype`) need data the dictionary does not hold. Phase 0 found it in the same repository at the same tag, `src/lint_*.c`: bit fields for the ISO 3166 numeric, alpha-2 and ISO 4217 codes and the media types, a 431-entry string list for the package types, and the `iso5218` and `iso3166999` rules in code. The seven files are committed beside the dictionary with the same provenance note.
 - The generator refuses a dictionary that names a linter the code does not implement, so a release that adds one cannot be pinned without it.
 - Update: once a year, after GS1's January release, as its own pull request that lists the release's GSCNs and the fixtures it changes.
 
@@ -148,7 +148,7 @@ Building writes a separator only where the General Specifications require one (Â
 | G6 | Unknown AIs | Read as variable length up to the next separator. Refused when building |
 | G7 | Error shape | `Gs1Error` with a kind, an offset and a length into the input, so a caller can point at the bad element. The throwing forms throw `FormatException` with the same information, as parsers in the BCL do. No new exception type |
 | G8 | License of the generated table | A third-party notice file in the repository and in the core package, with the dictionary's Apache-2.0 text and attribution, and a header in the generated source naming the release. `PackageLicenseExpression` stays `MIT`, as .NET packages that carry third-party notices do. The maintainer confirms this before Phase 2 |
-| G9 | Digital Link | Uncompressed, URI Syntax 1.7.0. Output in the canonical form. Input with any stem, percent-decoded, a repeated query key resolved last-wins. Non-numeric extension keys are ignored. A compressed URI is refused with its own kind. When an element string holds two primary keys, the choice follows the Syntax Engine, settled in Phase 5 |
+| G9 | Digital Link | Uncompressed, URI Syntax 1.7.0. Output in the canonical form. Input with any stem, percent-decoded, a repeated query key resolved last-wins. Non-numeric extension keys are ignored. A compressed URI is refused with its own kind. When an element string holds two primary keys, the choice follows the Syntax Engine, settled in Phase 5. Phase 0 found that 1.7.0 lists (7041) and (8040) to (8043) as data attributes while dictionary 2026-01-27 does not flag them `?`, and both dictionary-driven oracles refuse them in a URI. Phase 5 decides whether the table or the standard wins there. Every other key, qualifier and attribute of 1.7.0 is in the dictionary with the same flags, so 1.7.0 needs no data newer than the pinned release |
 | G10 | rMQR | No refusal. The layer does not see the symbol, and readers do read GS1 rMQR. The docs say GS1 does not list rMQR as a carrier (General Specifications Release 26.0), so a GS1 scanner may not accept it |
 | G11 | Where the record lives | A "GS1 data" section in [qrcode-symbologies.md](../specs/qrcode-symbologies.md), since shared content lives only there. If it outgrows a section, a `gs1-data.md` design record and a guidelines change, decided with the maintainer then |
 
@@ -229,5 +229,27 @@ Benchmarks: not applicable, no `src/` change.
 Done: the maintainer decided G1. This layer ships in the same release as FNC1 encode, and FNC1 decode ships in 2.0.0 on its own. [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md) (scope row, D12, Phase 6c) and [fnc1-support-plan.md](fnc1-support-plan.md) (phase exits, release paragraph) were updated in the same change.
 
 Lesson: what decides the release is where a caller can go wrong. Reading GS1 data is safe without this layer. Writing it is not, because the encoder cannot tell a missing separator from a long value.
+
+Benchmarks: not applicable, no `src/` change.
+
+### Phase 0: premises and fixtures (2026-10-12)
+
+Done: `get-gs1-syntax-engine.ps1` fetches the Syntax Engine 1.4.1 console app (pinned by SHA-256) and shallow clones of its source and of Syntax Dictionary release 2026-01-27 (pinned by commit). `import-gs1-syntax-dictionary` copies the dictionary, its LICENSE and the seven list-linter sources into `Fixtures/Gs1/syntax-dictionary/` with a provenance note that hashes each file. `regenerate-gs1` writes 1,248 cases (779 of this repository's corpus, 469 imported from the engine's unit tests) and 5,656 linter unit-test vectors, each case carrying the verdict of the Syntax Engine (run with the committed dictionary through `--syndict`), CodeGlyphX, libzint and the zxing-cpp reader. `Gs1FixtureTest` (17 tests, green) pins the dictionary's hash and release, the corpus shapes, one engine-valid case per AI and one engine-refused mutation per linter, the vector counts, and the imported vectors' agreement with their source or a named cause. The oracle disagreements are listed by cause in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md), and that record's claim that libzint validates check digits was corrected there.
+
+The premises, item by item:
+
+- G8: open. The maintainer has not yet confirmed the notice file. Phase 0 found that the dictionary repository has no NOTICE file, so the Apache-2.0 attribution is its LICENSE text and the copyright lines of the dictionary header, which the provenance note already carries.
+- The list linters' source is the dictionary repository at the same tag (the table section above). The generator of Phase 2 reads the bit fields and the string list from the committed sources, and the drift test can hash them.
+- The Syntax Engine 1.4.1 console app embeds dictionary 2026-01-27 (its source copy differs from the release in one copyright-year line). The app also loads a dictionary file on the command line, so the fixtures never depend on the embedded table. The library reports its build date, May 28 2026, as its version string. Its console form is a stdin menu, one process per input, which `regenerate-gs1` drives in parallel in about ten seconds.
+- Digital Link 1.7.0 needs no data newer than dictionary 2026-01-27, with the five attribute flags noted in G9.
+- The table: 224 entry lines, 541 AIs, 79 distinct components, 70 distinct specifications, 32 distinct `req` and 79 distinct `ex` strings, 34 linters. As data: an AI index of about 1.1 KB, entries 1.1 KB, components 0.9 KB, specifications 0.2 KB, the pairing strings 0.9 KB as text, the ISO 3166, ISO 4217 and media type bit fields 0.35 KB and the package types 1.7 KB, about 6 KB in all, against the 16 KB Kanji table. The linters' code is not in that figure. G2 holds.
+- The dictionary names 34 linters. An earlier count of 31 missed the three that sit on optional components (`hyphen`, `mi`, `ss`), whose bracket precedes the comma.
+
+Lessons:
+
+- An oracle's "validates" is a claim about its return value. libzint runs its linters and writes the symbol anyway, reporting a warning the ZXingCpp wrapper drops. The FNC1 corpus never gave it a bad check digit, so the claim stood until this corpus did.
+- A reference implementation's unit tests test a layer. 49 of the 469 engine vectors get the opposite verdict from its console app, every one because the test calls the parser below the requisite check or sets a flag the app does not. Keeping the source's expectation beside the binary's verdict made the layer visible.
+- The pairing rule, applied per symbol, refuses the General Specifications' own figures. Five of the 21 GenSpecs cases show an attribute without its key, as a second symbol on the same item would, and the engine refuses all five. That is the evidence for G5's revisit condition.
+- A clone's working tree is not the upstream file. The first import hashed a CRLF copy that `core.autocrlf` had made, 344 bytes longer than the release.
 
 Benchmarks: not applicable, no `src/` change.

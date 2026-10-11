@@ -1,0 +1,7 @@
+{
+  "linter": "gcppos1",
+  "source": "gs1-syntax-dictionary 2026-01-27 src/lint_gcppos1.c unit tests (5 tests build their value in code and are not imported)",
+  "cases": [
+
+  ]
+}

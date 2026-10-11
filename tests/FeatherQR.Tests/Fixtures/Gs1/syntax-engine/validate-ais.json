@@ -1,0 +1,2621 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Barcode Syntax Engine 1.4.1 unit tests, ai.c test_ai_validateAIs",
+  "cases": [
+    {
+      "id": "validate-ais-000",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^400ABC",
+        "elementString": "400ABC",
+        "bracketed": "(400)ABC",
+        "hri": [
+          "(400) ABC"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC",
+        "hri": "(400)ABC",
+        "digitalLinkError": "At least one GS1 Digital Link primary Application Identifier is required.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC",
+        "hri": "(400)ABC"
+      }
+    },
+    {
+      "id": "validate-ais-001",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(400)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^400ABC^400ABC",
+        "elementString": "400ABC\u001D400ABC",
+        "bracketed": "(400)ABC(400)ABC",
+        "hri": [
+          "(400) ABC",
+          "(400) ABC"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D400ABC",
+        "hri": "(400)ABC(400)ABC",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D400ABC",
+        "hri": "(400)ABC(400)ABC"
+      }
+    },
+    {
+      "id": "validate-ais-002",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(99)DEF(400)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^400ABC^99DEF^400ABC",
+        "elementString": "400ABC\u001D99DEF\u001D400ABC",
+        "bracketed": "(400)ABC(99)DEF(400)ABC",
+        "hri": [
+          "(400) ABC",
+          "(99) DEF",
+          "(400) ABC"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D99DEF\u001D400ABC",
+        "hri": "(400)ABC(99)DEF(400)ABC",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D99DEF\u001D400ABC",
+        "hri": "(400)ABC(99)DEF(400)ABC"
+      }
+    },
+    {
+      "id": "validate-ais-003",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(99)ABC(400)XYZ(400)XYZ",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^99ABC^400XYZ^400XYZ",
+        "elementString": "99ABC\u001D400XYZ\u001D400XYZ",
+        "bracketed": "(99)ABC(400)XYZ(400)XYZ",
+        "hri": [
+          "(99) ABC",
+          "(400) XYZ",
+          "(400) XYZ"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "99ABC\u001D400XYZ\u001D400XYZ",
+        "hri": "(99)ABC(400)XYZ(400)XYZ",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "99ABC\u001D400XYZ\u001D400XYZ",
+        "hri": "(99)ABC(400)XYZ(400)XYZ"
+      }
+    },
+    {
+      "id": "validate-ais-004",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(400)AB",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (400) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D400AB",
+        "hri": "(400)ABC(400)AB",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D400AB",
+        "hri": "(400)ABC(400)AB"
+      }
+    },
+    {
+      "id": "validate-ais-005",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(400)ABCD",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (400) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D400ABCD",
+        "hri": "(400)ABC(400)ABCD",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D400ABCD",
+        "hri": "(400)ABC(400)ABCD"
+      }
+    },
+    {
+      "id": "validate-ais-006",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(400)ABC(400)XYZ",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (400) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D400ABC\u001D400XYZ",
+        "hri": "(400)ABC(400)ABC(400)XYZ",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D400ABC\u001D400XYZ",
+        "hri": "(400)ABC(400)ABC(400)XYZ"
+      }
+    },
+    {
+      "id": "validate-ais-007",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(400)XYZ(400)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (400) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D400XYZ\u001D400ABC",
+        "hri": "(400)ABC(400)XYZ(400)ABC",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D400XYZ\u001D400ABC",
+        "hri": "(400)ABC(400)XYZ(400)ABC"
+      }
+    },
+    {
+      "id": "validate-ais-008",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(400)XYZ(400)XYZ",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (400) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D400XYZ\u001D400XYZ",
+        "hri": "(400)ABC(400)XYZ(400)XYZ",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D400XYZ\u001D400XYZ",
+        "hri": "(400)ABC(400)XYZ(400)XYZ"
+      }
+    },
+    {
+      "id": "validate-ais-009",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(400)ABC(99)DEF(400)XYZ",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (400) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "400ABC\u001D99DEF\u001D400XYZ",
+        "hri": "(400)ABC(99)DEF(400)XYZ",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "400ABC\u001D99DEF\u001D400XYZ",
+        "hri": "(400)ABC(99)DEF(400)XYZ"
+      }
+    },
+    {
+      "id": "validate-ais-010",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(99)ABC(400)ABC(400)XYZ",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (400) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "99ABC\u001D400ABC\u001D400XYZ",
+        "hri": "(99)ABC(400)ABC(400)XYZ",
+        "digitalLinkError": "Application Identifier '400' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "99ABC\u001D400ABC\u001D400XYZ",
+        "hri": "(99)ABC(400)ABC(400)XYZ"
+      }
+    },
+    {
+      "id": "validate-ais-011",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(89)ABC(89)ABC(89)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-012",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(89)ABC(89)ABC(89)XYZ",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-013",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(89)ABC(89)XYZ(89)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-014",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(89)ABC(89)XYZ(89)XYZ",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-015",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(89)ABC(89)AB(89)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-016",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(89)ABC(89)ABCD(89)ABC",
+      "note": "validateAIrepeats",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)",
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-017",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(02)12345678901231",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (02) with AI (01)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(02)",
+          "MutuallyExclusiveApplicationIdentifiers(02)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012310212345678901231",
+        "hri": "(01)12345678901231(02)12345678901231"
+      }
+    },
+    {
+      "id": "validate-ais-018",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(99)ABC123(01)12345678901231(02)12345678901231",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (02) with AI (01)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(02)",
+          "MutuallyExclusiveApplicationIdentifiers(02)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "99ABC123\u001D01123456789012310212345678901231",
+        "hri": "(99)ABC123(01)12345678901231(02)12345678901231"
+      }
+    },
+    {
+      "id": "validate-ais-019",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(99)ABC123(02)12345678901231",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (02) with AI (01)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(02)",
+          "MutuallyExclusiveApplicationIdentifiers(02)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123199ABC123\u001D0212345678901231",
+        "hri": "(01)12345678901231(99)ABC123(02)12345678901231"
+      }
+    },
+    {
+      "id": "validate-ais-020",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(02)12345678901231(99)ABC123",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (02) with AI (01)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(02)",
+          "MutuallyExclusiveApplicationIdentifiers(02)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231021234567890123199ABC123",
+        "hri": "(01)12345678901231(02)12345678901231(99)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-021",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(255)5412345000150",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (01) with AI (255)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MutuallyExclusiveApplicationIdentifiers(01)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012312555412345000150",
+        "hri": "(01)12345678901231(255)5412345000150"
+      }
+    },
+    {
+      "id": "validate-ais-022",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(37)123",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (01) with AI (37)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MutuallyExclusiveApplicationIdentifiers(01)",
+          "MissingRequiredApplicationIdentifier(37)",
+          "MissingRequiredApplicationIdentifier(37)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123137123",
+        "hri": "(01)12345678901231(37)123"
+      }
+    },
+    {
+      "id": "validate-ais-023",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(21)ABC123(235)XYZ",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (21) with AI (235)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(21)",
+          "MutuallyExclusiveApplicationIdentifiers(21)",
+          "MissingRequiredApplicationIdentifier(235)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "21ABC123\u001D235XYZ",
+        "hri": "(21)ABC123(235)XYZ"
+      }
+    },
+    {
+      "id": "validate-ais-024",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(3940)1234(8111)9999",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (3940) with AI (8111)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3940)",
+          "MutuallyExclusiveApplicationIdentifiers(3940)",
+          "MissingRequiredApplicationIdentifier(8111)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "39401234\u001D81119999",
+        "hri": "(3940)1234(8111)9999"
+      }
+    },
+    {
+      "id": "validate-ais-025",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(3940)1234(3941)9999",
+      "note": "validateAImutex; Match by \"394n\", ignoring self",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (3940) with AI (3941)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3940)",
+          "MutuallyExclusiveApplicationIdentifiers(3940)",
+          "MissingRequiredApplicationIdentifier(3941)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "39401234\u001D39419999",
+        "hri": "(3940)1234(3941)9999"
+      }
+    },
+    {
+      "id": "validate-ais-026",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(3955)123456(3929)123",
+      "note": "validateAImutex; Match by \"392n\"",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (3955) with AI (3929)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3955)",
+          "MutuallyExclusiveApplicationIdentifiers(3955)",
+          "MissingRequiredApplicationIdentifier(3929)",
+          "MissingRequiredApplicationIdentifier(3929)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "3955123456\u001D3929123",
+        "hri": "(3955)123456(3929)123"
+      }
+    },
+    {
+      "id": "validate-ais-027",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(3333)333333(3338)030333",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 3338"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(3338)",
+          "MissingRequiredApplicationIdentifier(3333)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (3338) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-028",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3333)333333(3338)030333",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 3338"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(3338)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (3338) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-029",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(3338)030333(3333)333333",
+      "note": "validateAImutex",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 3338"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(3338)",
+          "MissingRequiredApplicationIdentifier(3333)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (3338) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-030",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(3300)000000(3333)333333(3338)030333",
+      "note": "validateAImutex; Extra 33xx AI shifts sort order",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 3338"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(3338)",
+          "MissingRequiredApplicationIdentifier(3300)",
+          "MissingRequiredApplicationIdentifier(3333)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (3338) (retval: 6)"
+      }
+    },
+    {
+      "id": "validate-ais-031",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(02)12345678901231",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (02) are not satisfied: 37"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(02)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0212345678901231",
+        "hri": "(02)12345678901231"
+      }
+    },
+    {
+      "id": "validate-ais-032",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(02)12345678901231(37)123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (37) are not satisfied: 00"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(37)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "021234567890123137123",
+        "hri": "(02)12345678901231(37)123"
+      }
+    },
+    {
+      "id": "validate-ais-033",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(99)AAA(02)12345678901231(37)123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (37) are not satisfied: 00"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(37)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "99AAA\u001D021234567890123137123",
+        "hri": "(99)AAA(02)12345678901231(37)123"
+      }
+    },
+    {
+      "id": "validate-ais-034",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(02)12345678901231(99)AAA(37)123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (37) are not satisfied: 00"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(37)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "021234567890123199AAA\u001D37123",
+        "hri": "(02)12345678901231(99)AAA(37)123"
+      }
+    },
+    {
+      "id": "validate-ais-035",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(02)12345678901231(37)123(99)AAA",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (37) are not satisfied: 00"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(37)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "021234567890123137123\u001D99AAA",
+        "hri": "(02)12345678901231(37)123(99)AAA"
+      }
+    },
+    {
+      "id": "validate-ais-036",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(02)12345678901231(37)123(00)123456789012345675",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^021234567890123137123^00123456789012345675",
+        "elementString": "021234567890123137123\u001D00123456789012345675",
+        "bracketed": "(02)12345678901231(37)123(00)123456789012345675",
+        "hri": [
+          "(02) 12345678901231",
+          "(37) 123",
+          "(00) 123456789012345675"
+        ],
+        "digitalLink": "https://id.gs1.org/00/123456789012345675?02=12345678901231&37=123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "021234567890123137123\u001D00123456789012345675",
+        "hri": "(02)12345678901231(37)123(00)123456789012345675",
+        "digitalLink": "https://id.gs1.org/00/123456789012345675?02=12345678901231&37=123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "021234567890123137123\u001D00123456789012345675",
+        "hri": "(02)12345678901231(37)123(00)123456789012345675"
+      }
+    },
+    {
+      "id": "validate-ais-037",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(91)XXX(02)12345678901231(92)YYY(37)123(93)ZZZ(00)123456789012345675",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^91XXX^021234567890123192YYY^37123^93ZZZ^00123456789012345675",
+        "elementString": "91XXX\u001D021234567890123192YYY\u001D37123\u001D93ZZZ\u001D00123456789012345675",
+        "bracketed": "(91)XXX(02)12345678901231(92)YYY(37)123(93)ZZZ(00)123456789012345675",
+        "hri": [
+          "(91) XXX",
+          "(02) 12345678901231",
+          "(92) YYY",
+          "(37) 123",
+          "(93) ZZZ",
+          "(00) 123456789012345675"
+        ],
+        "digitalLink": "https://id.gs1.org/00/123456789012345675?02=12345678901231&91=XXX&92=YYY&37=123&93=ZZZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "91XXX\u001D021234567890123192YYY\u001D37123\u001D93ZZZ\u001D00123456789012345675",
+        "hri": "(91)XXX(02)12345678901231(92)YYY(37)123(93)ZZZ(00)123456789012345675",
+        "digitalLink": "https://id.gs1.org/00/123456789012345675?02=12345678901231&37=123&91=XXX&92=YYY&93=ZZZ",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "91XXX\u001D021234567890123192YYY\u001D37123\u001D93ZZZ\u001D00123456789012345675",
+        "hri": "(91)XXX(02)12345678901231(92)YYY(37)123(93)ZZZ(00)123456789012345675"
+      }
+    },
+    {
+      "id": "validate-ais-038",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(21)ABC123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (21) are not satisfied: 01,03,8006"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(21)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "21ABC123",
+        "hri": "(21)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-039",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(21)ABC123(01)12345678901231",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^21ABC123^0112345678901231",
+        "elementString": "21ABC123\u001D0112345678901231",
+        "bracketed": "(21)ABC123(01)12345678901231",
+        "hri": [
+          "(21) ABC123",
+          "(01) 12345678901231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231/21/ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "21ABC123\u001D0112345678901231",
+        "hri": "(21)ABC123(01)12345678901231",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/21/ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "21ABC123\u001D0112345678901231",
+        "hri": "(21)ABC123(01)12345678901231"
+      }
+    },
+    {
+      "id": "validate-ais-040",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(21)ABC123(8006)123456789012310510",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^21ABC123^8006123456789012310510",
+        "elementString": "21ABC123\u001D8006123456789012310510",
+        "bracketed": "(21)ABC123(8006)123456789012310510",
+        "hri": [
+          "(21) ABC123",
+          "(8006) 123456789012310510"
+        ],
+        "digitalLink": "https://id.gs1.org/8006/123456789012310510/21/ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "21ABC123\u001D8006123456789012310510",
+        "hri": "(21)ABC123(8006)123456789012310510",
+        "digitalLink": "https://id.gs1.org/8006/123456789012310510/21/ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "21ABC123\u001D8006123456789012310510",
+        "hri": "(21)ABC123(8006)123456789012310510"
+      }
+    },
+    {
+      "id": "validate-ais-041",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(250)ABC123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (250) are not satisfied: 21"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(250)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231250ABC123",
+        "hri": "(01)12345678901231(250)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-042",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(21)XYZ999(250)ABC123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011234567890123121XYZ999^250ABC123",
+        "elementString": "011234567890123121XYZ999\u001D250ABC123",
+        "bracketed": "(01)12345678901231(21)XYZ999(250)ABC123",
+        "hri": [
+          "(01) 12345678901231",
+          "(21) XYZ999",
+          "(250) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231/21/XYZ999?250=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011234567890123121XYZ999\u001D250ABC123",
+        "hri": "(01)12345678901231(21)XYZ999(250)ABC123",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/21/XYZ999?250=ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123121XYZ999\u001D250ABC123",
+        "hri": "(01)12345678901231(21)XYZ999(250)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-043",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (3925) are not satisfied: 30,31nn,32nn,35nn,36nn"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3925)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599",
+        "hri": "(01)12345678901231(3925)12599"
+      }
+    },
+    {
+      "id": "validate-ais-044",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(30)123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^30123",
+        "elementString": "0112345678901231392512599\u001D30123",
+        "bracketed": "(01)12345678901231(3925)12599(30)123",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(30) 123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3925=12599&30=123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D30123",
+        "hri": "(01)12345678901231(3925)12599(30)123",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?30=123&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D30123",
+        "hri": "(01)12345678901231(3925)12599(30)123"
+      }
+    },
+    {
+      "id": "validate-ais-045",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3100)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3100654321",
+        "elementString": "0112345678901231392512599\u001D3100654321",
+        "bracketed": "(01)12345678901231(3925)12599(3100)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3100) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3100=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3100654321",
+        "hri": "(01)12345678901231(3925)12599(3100)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3100=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3100654321",
+        "hri": "(01)12345678901231(3925)12599(3100)654321"
+      }
+    },
+    {
+      "id": "validate-ais-046",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3105)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3105654321",
+        "elementString": "0112345678901231392512599\u001D3105654321",
+        "bracketed": "(01)12345678901231(3925)12599(3105)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3105) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3105=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3105654321",
+        "hri": "(01)12345678901231(3925)12599(3105)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3105=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3105654321",
+        "hri": "(01)12345678901231(3925)12599(3105)654321"
+      }
+    },
+    {
+      "id": "validate-ais-047",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3160)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3160654321",
+        "elementString": "0112345678901231392512599\u001D3160654321",
+        "bracketed": "(01)12345678901231(3925)12599(3160)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3160) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3160=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3160654321",
+        "hri": "(01)12345678901231(3925)12599(3160)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3160=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3160654321",
+        "hri": "(01)12345678901231(3925)12599(3160)654321"
+      }
+    },
+    {
+      "id": "validate-ais-048",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3165)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3165654321",
+        "elementString": "0112345678901231392512599\u001D3165654321",
+        "bracketed": "(01)12345678901231(3925)12599(3165)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3165) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3165=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3165654321",
+        "hri": "(01)12345678901231(3925)12599(3165)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3165=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3165654321",
+        "hri": "(01)12345678901231(3925)12599(3165)654321"
+      }
+    },
+    {
+      "id": "validate-ais-049",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3295)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3295654321",
+        "elementString": "0112345678901231392512599\u001D3295654321",
+        "bracketed": "(01)12345678901231(3925)12599(3295)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3295) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3295=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3295654321",
+        "hri": "(01)12345678901231(3925)12599(3295)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3295=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3295654321",
+        "hri": "(01)12345678901231(3925)12599(3295)654321"
+      }
+    },
+    {
+      "id": "validate-ais-050",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3500)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3500654321",
+        "elementString": "0112345678901231392512599\u001D3500654321",
+        "bracketed": "(01)12345678901231(3925)12599(3500)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3500) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3500=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3500654321",
+        "hri": "(01)12345678901231(3925)12599(3500)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3500=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3500654321",
+        "hri": "(01)12345678901231(3925)12599(3500)654321"
+      }
+    },
+    {
+      "id": "validate-ais-051",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3575)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3575654321",
+        "elementString": "0112345678901231392512599\u001D3575654321",
+        "bracketed": "(01)12345678901231(3925)12599(3575)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3575) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3575=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3575654321",
+        "hri": "(01)12345678901231(3925)12599(3575)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3575=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3575654321",
+        "hri": "(01)12345678901231(3925)12599(3575)654321"
+      }
+    },
+    {
+      "id": "validate-ais-052",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3600)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3600654321",
+        "elementString": "0112345678901231392512599\u001D3600654321",
+        "bracketed": "(01)12345678901231(3925)12599(3600)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3600) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3600=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3600654321",
+        "hri": "(01)12345678901231(3925)12599(3600)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3600=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3600654321",
+        "hri": "(01)12345678901231(3925)12599(3600)654321"
+      }
+    },
+    {
+      "id": "validate-ais-053",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(01)12345678901231(3925)12599(3695)654321",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231392512599^3695654321",
+        "elementString": "0112345678901231392512599\u001D3695654321",
+        "bracketed": "(01)12345678901231(3925)12599(3695)654321",
+        "hri": [
+          "(01) 12345678901231",
+          "(3925) 12599",
+          "(3695) 654321"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3695=654321&3925=12599"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231392512599\u001D3695654321",
+        "hri": "(01)12345678901231(3925)12599(3695)654321",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?3695=654321&3925=12599",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231392512599\u001D3695654321",
+        "hri": "(01)12345678901231(3925)12599(3695)654321"
+      }
+    },
+    {
+      "id": "validate-ais-054",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8030) are not satisfied: 00,01+21,253,255,8003,8004,8006+21,8010+8011,8017,8018"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG",
+        "hri": "(8030)DIGSIG"
+      }
+    },
+    {
+      "id": "validate-ais-055",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(00)123456789012345675",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^00123456789012345675",
+        "elementString": "8030DIGSIG\u001D00123456789012345675",
+        "bracketed": "(8030)DIGSIG(00)123456789012345675",
+        "hri": [
+          "(8030) DIGSIG",
+          "(00) 123456789012345675"
+        ],
+        "digitalLink": "https://id.gs1.org/00/123456789012345675?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D00123456789012345675",
+        "hri": "(8030)DIGSIG(00)123456789012345675",
+        "digitalLink": "https://id.gs1.org/00/123456789012345675?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D00123456789012345675",
+        "hri": "(8030)DIGSIG(00)123456789012345675"
+      }
+    },
+    {
+      "id": "validate-ais-056",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(01)12345678901231",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8030) are not satisfied: 00,01+21,253,255,8003,8004,8006+21,8010+8011,8017,8018"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D0112345678901231",
+        "hri": "(8030)DIGSIG(01)12345678901231"
+      }
+    },
+    {
+      "id": "validate-ais-057",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(01)12345678901231(21)ABC123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^011234567890123121ABC123",
+        "elementString": "8030DIGSIG\u001D011234567890123121ABC123",
+        "bracketed": "(8030)DIGSIG(01)12345678901231(21)ABC123",
+        "hri": [
+          "(8030) DIGSIG",
+          "(01) 12345678901231",
+          "(21) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231/21/ABC123?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D011234567890123121ABC123",
+        "hri": "(8030)DIGSIG(01)12345678901231(21)ABC123",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/21/ABC123?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D011234567890123121ABC123",
+        "hri": "(8030)DIGSIG(01)12345678901231(21)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-058",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(253)1234567890128X",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^2531234567890128X",
+        "elementString": "8030DIGSIG\u001D2531234567890128X",
+        "bracketed": "(8030)DIGSIG(253)1234567890128X",
+        "hri": [
+          "(8030) DIGSIG",
+          "(253) 1234567890128X"
+        ],
+        "digitalLink": "https://id.gs1.org/253/1234567890128X?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D2531234567890128X",
+        "hri": "(8030)DIGSIG(253)1234567890128X",
+        "digitalLink": "https://id.gs1.org/253/1234567890128X?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D2531234567890128X",
+        "hri": "(8030)DIGSIG(253)1234567890128X"
+      }
+    },
+    {
+      "id": "validate-ais-059",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(255)12345678901280",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^25512345678901280",
+        "elementString": "8030DIGSIG\u001D25512345678901280",
+        "bracketed": "(8030)DIGSIG(255)12345678901280",
+        "hri": [
+          "(8030) DIGSIG",
+          "(255) 12345678901280"
+        ],
+        "digitalLink": "https://id.gs1.org/255/12345678901280?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D25512345678901280",
+        "hri": "(8030)DIGSIG(255)12345678901280",
+        "digitalLink": "https://id.gs1.org/255/12345678901280?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D25512345678901280",
+        "hri": "(8030)DIGSIG(255)12345678901280"
+      }
+    },
+    {
+      "id": "validate-ais-060",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8003)01234567890128X",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^800301234567890128X",
+        "elementString": "8030DIGSIG\u001D800301234567890128X",
+        "bracketed": "(8030)DIGSIG(8003)01234567890128X",
+        "hri": [
+          "(8030) DIGSIG",
+          "(8003) 01234567890128X"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/01234567890128X?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D800301234567890128X",
+        "hri": "(8030)DIGSIG(8003)01234567890128X",
+        "digitalLink": "https://id.gs1.org/8003/01234567890128X?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D800301234567890128X",
+        "hri": "(8030)DIGSIG(8003)01234567890128X"
+      }
+    },
+    {
+      "id": "validate-ais-061",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8004)01234567890",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^800401234567890",
+        "elementString": "8030DIGSIG\u001D800401234567890",
+        "bracketed": "(8030)DIGSIG(8004)01234567890",
+        "hri": [
+          "(8030) DIGSIG",
+          "(8004) 01234567890"
+        ],
+        "digitalLink": "https://id.gs1.org/8004/01234567890?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D800401234567890",
+        "hri": "(8030)DIGSIG(8004)01234567890",
+        "digitalLink": "https://id.gs1.org/8004/01234567890?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D800401234567890",
+        "hri": "(8030)DIGSIG(8004)01234567890"
+      }
+    },
+    {
+      "id": "validate-ais-062",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8006)123456789012310102",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8030) are not satisfied: 00,01+21,253,255,8003,8004,8006+21,8010+8011,8017,8018"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D8006123456789012310102",
+        "hri": "(8030)DIGSIG(8006)123456789012310102"
+      }
+    },
+    {
+      "id": "validate-ais-063",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8006)123456789012310102(21)ABC123",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^8006123456789012310102^21ABC123",
+        "elementString": "8030DIGSIG\u001D8006123456789012310102\u001D21ABC123",
+        "bracketed": "(8030)DIGSIG(8006)123456789012310102(21)ABC123",
+        "hri": [
+          "(8030) DIGSIG",
+          "(8006) 123456789012310102",
+          "(21) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/8006/123456789012310102/21/ABC123?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D8006123456789012310102\u001D21ABC123",
+        "hri": "(8030)DIGSIG(8006)123456789012310102(21)ABC123",
+        "digitalLink": "https://id.gs1.org/8006/123456789012310102/21/ABC123?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D8006123456789012310102\u001D21ABC123",
+        "hri": "(8030)DIGSIG(8006)123456789012310102(21)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-064",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8010)1234567890",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8030) are not satisfied: 00,01+21,253,255,8003,8004,8006+21,8010+8011,8017,8018"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D80101234567890",
+        "hri": "(8030)DIGSIG(8010)1234567890"
+      }
+    },
+    {
+      "id": "validate-ais-065",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8010)1234567890(8011)123456789012",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^80101234567890^8011123456789012",
+        "elementString": "8030DIGSIG\u001D80101234567890\u001D8011123456789012",
+        "bracketed": "(8030)DIGSIG(8010)1234567890(8011)123456789012",
+        "hri": [
+          "(8030) DIGSIG",
+          "(8010) 1234567890",
+          "(8011) 123456789012"
+        ],
+        "digitalLink": "https://id.gs1.org/8010/1234567890/8011/123456789012?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D80101234567890\u001D8011123456789012",
+        "hri": "(8030)DIGSIG(8010)1234567890(8011)123456789012",
+        "digitalLink": "https://id.gs1.org/8010/1234567890/8011/123456789012?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D80101234567890\u001D8011123456789012",
+        "hri": "(8030)DIGSIG(8010)1234567890(8011)123456789012"
+      }
+    },
+    {
+      "id": "validate-ais-066",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8017)123456789012345675",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^8017123456789012345675",
+        "elementString": "8030DIGSIG\u001D8017123456789012345675",
+        "bracketed": "(8030)DIGSIG(8017)123456789012345675",
+        "hri": [
+          "(8030) DIGSIG",
+          "(8017) 123456789012345675"
+        ],
+        "digitalLink": "https://id.gs1.org/8017/123456789012345675?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D8017123456789012345675",
+        "hri": "(8030)DIGSIG(8017)123456789012345675",
+        "digitalLink": "https://id.gs1.org/8017/123456789012345675?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D8017123456789012345675",
+        "hri": "(8030)DIGSIG(8017)123456789012345675"
+      }
+    },
+    {
+      "id": "validate-ais-067",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8030)DIGSIG(8018)123456789012345675",
+      "note": "validateAIrequisites",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8030DIGSIG^8018123456789012345675",
+        "elementString": "8030DIGSIG\u001D8018123456789012345675",
+        "bracketed": "(8030)DIGSIG(8018)123456789012345675",
+        "hri": [
+          "(8030) DIGSIG",
+          "(8018) 123456789012345675"
+        ],
+        "digitalLink": "https://id.gs1.org/8018/123456789012345675?8030=DIGSIG"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8030DIGSIG\u001D8018123456789012345675",
+        "hri": "(8030)DIGSIG(8018)123456789012345675",
+        "digitalLink": "https://id.gs1.org/8018/123456789012345675?8030=DIGSIG",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8030DIGSIG\u001D8018123456789012345675",
+        "hri": "(8030)DIGSIG(8018)123456789012345675"
+      }
+    },
+    {
+      "id": "validate-ais-068",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(253)1234567890128",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^2531234567890128",
+        "elementString": "2531234567890128",
+        "bracketed": "(253)1234567890128",
+        "hri": [
+          "(253) 1234567890128"
+        ],
+        "digitalLink": "https://id.gs1.org/253/1234567890128"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2531234567890128",
+        "hri": "(253)1234567890128",
+        "digitalLink": "https://id.gs1.org/253/1234567890128",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2531234567890128",
+        "hri": "(253)1234567890128"
+      }
+    },
+    {
+      "id": "validate-ais-069",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(253)1234567890128(8030)ABC123",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Serial component must be present for AI (253) when used with AI (8030)"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2531234567890128\u001D8030ABC123",
+        "hri": "(253)1234567890128(8030)ABC123",
+        "digitalLink": "https://id.gs1.org/253/1234567890128?8030=ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2531234567890128\u001D8030ABC123",
+        "hri": "(253)1234567890128(8030)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-070",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(253)1234567890128X(8030)ABC123",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^2531234567890128X^8030ABC123",
+        "elementString": "2531234567890128X\u001D8030ABC123",
+        "bracketed": "(253)1234567890128X(8030)ABC123",
+        "hri": [
+          "(253) 1234567890128X",
+          "(8030) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/253/1234567890128X?8030=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2531234567890128X\u001D8030ABC123",
+        "hri": "(253)1234567890128X(8030)ABC123",
+        "digitalLink": "https://id.gs1.org/253/1234567890128X?8030=ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2531234567890128X\u001D8030ABC123",
+        "hri": "(253)1234567890128X(8030)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-071",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(255)1234567890128",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^2551234567890128",
+        "elementString": "2551234567890128",
+        "bracketed": "(255)1234567890128",
+        "hri": [
+          "(255) 1234567890128"
+        ],
+        "digitalLink": "https://id.gs1.org/255/1234567890128"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2551234567890128",
+        "hri": "(255)1234567890128",
+        "digitalLink": "https://id.gs1.org/255/1234567890128",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2551234567890128",
+        "hri": "(255)1234567890128"
+      }
+    },
+    {
+      "id": "validate-ais-072",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(255)1234567890128(8030)ABC123",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Serial component must be present for AI (255) when used with AI (8030)"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2551234567890128\u001D8030ABC123",
+        "hri": "(255)1234567890128(8030)ABC123",
+        "digitalLink": "https://id.gs1.org/255/1234567890128?8030=ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2551234567890128\u001D8030ABC123",
+        "hri": "(255)1234567890128(8030)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-073",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(255)12345678901280(8030)ABC123",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^25512345678901280^8030ABC123",
+        "elementString": "25512345678901280\u001D8030ABC123",
+        "bracketed": "(255)12345678901280(8030)ABC123",
+        "hri": [
+          "(255) 12345678901280",
+          "(8030) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/255/12345678901280?8030=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "25512345678901280\u001D8030ABC123",
+        "hri": "(255)12345678901280(8030)ABC123",
+        "digitalLink": "https://id.gs1.org/255/12345678901280?8030=ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "25512345678901280\u001D8030ABC123",
+        "hri": "(255)12345678901280(8030)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-074",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8003)01234567890128",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^800301234567890128",
+        "elementString": "800301234567890128",
+        "bracketed": "(8003)01234567890128",
+        "hri": [
+          "(8003) 01234567890128"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/01234567890128"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800301234567890128",
+        "hri": "(8003)01234567890128",
+        "digitalLink": "https://id.gs1.org/8003/01234567890128",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800301234567890128",
+        "hri": "(8003)01234567890128"
+      }
+    },
+    {
+      "id": "validate-ais-075",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8003)01234567890128(8030)ABC123",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Serial component must be present for AI (8003) when used with AI (8030)"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800301234567890128\u001D8030ABC123",
+        "hri": "(8003)01234567890128(8030)ABC123",
+        "digitalLink": "https://id.gs1.org/8003/01234567890128?8030=ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800301234567890128\u001D8030ABC123",
+        "hri": "(8003)01234567890128(8030)ABC123"
+      }
+    },
+    {
+      "id": "validate-ais-076",
+      "group": "syntax-engine/validate-ais",
+      "source": "ai.c test_validateAIs",
+      "inputKind": "Bracketed",
+      "input": "(8003)01234567890128X(8030)ABC123",
+      "note": "validateDigSigRequiresSerialisedKey",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^800301234567890128X^8030ABC123",
+        "elementString": "800301234567890128X\u001D8030ABC123",
+        "bracketed": "(8003)01234567890128X(8030)ABC123",
+        "hri": [
+          "(8003) 01234567890128X",
+          "(8030) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/01234567890128X?8030=ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800301234567890128X\u001D8030ABC123",
+        "hri": "(8003)01234567890128X(8030)ABC123",
+        "digitalLink": "https://id.gs1.org/8003/01234567890128X?8030=ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800301234567890128X\u001D8030ABC123",
+        "hri": "(8003)01234567890128X(8030)ABC123"
+      }
+    }
+  ]
+}

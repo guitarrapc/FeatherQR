@@ -92,9 +92,16 @@ if (command == "probe-fnc1")
     // Findings go to the fixture spec's oracle matrix.
     return Fnc1Probe.Run();
 }
-if (command != "regenerate" && command != "regenerate-structured-append" && command != "regenerate-fnc1")
+if (command == "import-gs1-syntax-dictionary")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|import-structured-append-samples|spot-check-structured-append|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
+    // Copies the pinned Syntax Dictionary release and its list linters from the clone get-gs1-syntax-engine.ps1
+    // makes into Fixtures/Gs1/syntax-dictionary/, with a provenance note.
+    var root = FindRepoRoot();
+    return Gs1FixtureGenerator.Import(root, Path.Combine(root, "tests", "FeatherQR.Tests", "Fixtures"));
+}
+if (command != "regenerate" && command != "regenerate-structured-append" && command != "regenerate-fnc1" && command != "regenerate-gs1")
+{
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|regenerate-gs1|import-gs1-syntax-dictionary|import-structured-append-samples|spot-check-structured-append|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
     return 1;
 }
 
@@ -114,7 +121,7 @@ var structuredAppendGenerators = new IStructuredAppendFixtureGenerator[]
 };
 var structuredAppendTotal = 0;
 
-foreach (var generator in command == "regenerate-fnc1" ? [] : structuredAppendGenerators)
+foreach (var generator in command is "regenerate-fnc1" or "regenerate-gs1" ? [] : structuredAppendGenerators)
 {
     if (!generator.IsAvailable)
     {
@@ -158,7 +165,7 @@ var fnc1Generators = new (IFnc1FixtureGenerator Generator, Fnc1CaseDefinition[] 
 };
 var fnc1Total = 0;
 
-foreach (var (generator, cases) in fnc1Generators)
+foreach (var (generator, cases) in command == "regenerate-gs1" ? [] : fnc1Generators)
 {
     if (!generator.IsAvailable)
     {
@@ -190,6 +197,14 @@ if (command == "regenerate-fnc1")
     Console.WriteLine($"done: {fnc1Total} FNC1 fixtures under {fixturesBase}");
     return 0;
 }
+
+// GS1 data corpus under Gs1/: no symbols, the verdicts of the GS1 data oracles (the Syntax Engine console
+// app, CodeGlyphX, libzint and the zxing-cpp reader) on element strings, (AI) text, Digital Link URIs and
+// scan data, plus the Syntax Engine's and the Syntax Dictionary's own test vectors. Skipped in a full
+// regenerate when the engine is not on this machine, required by regenerate-gs1.
+var gs1Result = Gs1FixtureGenerator.Regenerate(repoRoot, fixturesBase, required: command == "regenerate-gs1");
+if (command == "regenerate-gs1" || gs1Result != 0)
+    return gs1Result;
 
 var standardQrRoot = Path.Combine(fixturesBase, "StandardQr");
 
