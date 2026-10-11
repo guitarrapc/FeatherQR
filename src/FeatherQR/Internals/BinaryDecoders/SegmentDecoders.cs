@@ -38,6 +38,9 @@ internal static class SegmentDecoders
     // ISO/IEC 18004 8.4.5: each Kanji character is one 13-bit compacted Shift_JIS value.
     private const int KanjiBitsPerCharacter = 13;
 
+    // The GS1 field separator (GS), which an Alphanumeric segment under FNC1 writes as % (ISO/IEC 18004 6.4.8.1).
+    private const char FieldSeparator = '\u001D';
+
     /// <summary>Decodes a numeric segment payload of <paramref name="count"/> digits.</summary>
     public static DecodeStatus DecodeNumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
@@ -124,6 +127,77 @@ internal static class SegmentDecoders
         }
 
         return DecodeStatus.Success;
+    }
+
+    /// <summary>
+    /// <see cref="DecodeAlphanumericPayload"/> while an FNC1 mode is active (ISO/IEC 18004 6.4.8.1): a lone <c>%</c> is the field separator and is written as U+001D, and <c>%%</c> is one literal <c>%</c>.
+    /// </summary>
+    /// <remarks>
+    /// The pairs are taken left to right within the segment, <c>%%</c> first, which is how every reader probed reads them (the standard does not say): <c>%%%</c> is <c>%</c> then a separator.
+    /// A <c>%</c> that ends the segment is a separator. The text only shrinks under the rule, so the destination is checked per character written rather than per character read, and a destination sized for the text as it reads is enough.
+    /// Kept apart from the plain decoder so the route without FNC1 keeps its instructions.
+    /// </remarks>
+    public static DecodeStatus DecodeAlphanumericPayloadFnc1(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
+    {
+        // Bitstream sufficiency first; see DecodeNumericPayload for why the order matters.
+        if (totalBits - reader.BitPosition < 11 * (count / 2) + (count % 2) * 6)
+            return DecodeStatus.InvalidBitstream;
+
+        var percentPending = false;
+        while (count >= 2)
+        {
+            var value = reader.Reads(11);
+            if (value >= 45 * 45)
+                return DecodeStatus.InvalidBitstream;
+            if (!TryWriteFnc1Alphanumeric(value / 45, destination, ref charsWritten, ref percentPending)
+                || !TryWriteFnc1Alphanumeric(value % 45, destination, ref charsWritten, ref percentPending))
+                return DecodeStatus.DestinationTooSmall;
+            count -= 2;
+        }
+        if (count == 1)
+        {
+            var value = reader.Reads(6);
+            if (value >= 45)
+                return DecodeStatus.InvalidBitstream;
+            if (!TryWriteFnc1Alphanumeric(value, destination, ref charsWritten, ref percentPending))
+                return DecodeStatus.DestinationTooSmall;
+        }
+
+        if (percentPending)
+        {
+            if (charsWritten >= destination.Length)
+                return DecodeStatus.DestinationTooSmall;
+            destination[charsWritten++] = FieldSeparator;
+        }
+
+        return DecodeStatus.Success;
+    }
+
+    /// <summary>Writes one Alphanumeric character under the FNC1 rule, holding a <c>%</c> back until the next character says whether it is a separator or half of a literal.</summary>
+    private static bool TryWriteFnc1Alphanumeric(int value, Span<char> destination, ref int charsWritten, ref bool percentPending)
+    {
+        var c = AlphanumericChars[value];
+        if (c == '%')
+        {
+            if (!percentPending)
+            {
+                percentPending = true;
+                return true;
+            }
+            percentPending = false; // %% is one literal %
+        }
+        else if (percentPending)
+        {
+            if (charsWritten >= destination.Length)
+                return false;
+            destination[charsWritten++] = FieldSeparator; // a lone % is the separator
+            percentPending = false;
+        }
+
+        if (charsWritten >= destination.Length)
+            return false;
+        destination[charsWritten++] = c;
+        return true;
     }
 
     /// <summary>

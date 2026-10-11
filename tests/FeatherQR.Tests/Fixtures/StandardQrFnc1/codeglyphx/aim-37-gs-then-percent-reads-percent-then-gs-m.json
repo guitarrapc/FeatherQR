@@ -1,0 +1,23 @@
+{
+  "id": "aim-37-gs-then-percent-reads-percent-then-gs-m",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 2,
+  "payloadText": "AB%\u001DCD",
+  "payloadUtf8Hex": "4142251D4344",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "Second",
+    "applicationIndicator": 37,
+    "symbologyIdentifier": "]Q5",
+    "writerInput": "AB\u001D%CD"
+  }
+}

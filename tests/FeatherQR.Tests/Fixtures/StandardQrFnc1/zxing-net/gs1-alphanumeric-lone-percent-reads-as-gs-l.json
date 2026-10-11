@@ -1,0 +1,22 @@
+{
+  "id": "gs1-alphanumeric-lone-percent-reads-as-gs-l",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "L",
+  "mode": "Alphanumeric",
+  "maskPattern": 3,
+  "payloadText": "123\u001D",
+  "payloadUtf8Hex": "3132331D",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3",
+    "writerInput": "123%"
+  }
+}

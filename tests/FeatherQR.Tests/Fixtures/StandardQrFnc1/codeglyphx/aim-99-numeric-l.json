@@ -1,0 +1,22 @@
+{
+  "id": "aim-99-numeric-l",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "L",
+  "mode": "Unknown",
+  "maskPattern": 5,
+  "payloadText": "0123456789",
+  "payloadUtf8Hex": "30313233343536373839",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "Second",
+    "applicationIndicator": 99,
+    "symbologyIdentifier": "]Q5"
+  }
+}

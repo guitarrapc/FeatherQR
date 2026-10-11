@@ -74,7 +74,7 @@ public sealed class ZXingNetFixtureGenerator : IFixtureGenerator
         return new GeneratedFixture(manifest, modules);
     }
 
-    private static ErrorCorrectionLevel ToZXingEccLevel(string ecc) => ecc switch
+    internal static ErrorCorrectionLevel ToZXingEccLevel(string ecc) => ecc switch
     {
         "L" => ErrorCorrectionLevel.L,
         "M" => ErrorCorrectionLevel.M,
@@ -83,7 +83,7 @@ public sealed class ZXingNetFixtureGenerator : IFixtureGenerator
         _ => throw new ArgumentOutOfRangeException(nameof(ecc), $"Unknown ECC level '{ecc}'."),
     };
 
-    private static string ToModeName(Mode mode)
+    internal static string ToModeName(Mode mode)
     {
         if (mode == Mode.NUMERIC) return "Numeric";
         if (mode == Mode.ALPHANUMERIC) return "Alphanumeric";

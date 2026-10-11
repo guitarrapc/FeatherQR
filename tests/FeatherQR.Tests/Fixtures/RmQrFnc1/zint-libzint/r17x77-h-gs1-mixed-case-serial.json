@@ -1,0 +1,23 @@
+{
+  "id": "r17x77-h-gs1-mixed-case-serial",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 30,
+  "versionName": "R17x77",
+  "width": 77,
+  "height": 17,
+  "errorCorrectionLevel": "H",
+  "mode": "Unknown",
+  "maskPattern": 4,
+  "payloadText": "01095240000591092112345678p901\u001D101234567p\u001D17231120",
+  "payloadUtf8Hex": "3031303935323430303030353931303932313132333435363738703930311D313031323334353637701D3137323331313230",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3",
+    "writerInput": "(01)09524000059109(21)12345678p901(10)1234567p(17)231120"
+  }
+}

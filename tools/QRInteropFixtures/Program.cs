@@ -85,9 +85,16 @@ if (command == "import-structured-append-samples")
     }
     return StructuredAppendSampleImporter.Run(FindRepoRoot(), args[1], args[2]);
 }
-if (command != "regenerate" && command != "regenerate-structured-append")
+if (command == "probe-fnc1")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|import-structured-append-samples|spot-check-structured-append|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|generate-kanji-table]");
+    // Which writer can write which FNC1 mode in which symbology, in what input form and header order,
+    // how each handles % and the separator pairs, and how the two pinned readers read each symbol.
+    // Findings go to the fixture spec's oracle matrix.
+    return Fnc1Probe.Run();
+}
+if (command != "regenerate" && command != "regenerate-structured-append" && command != "regenerate-fnc1")
+{
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|import-structured-append-samples|spot-check-structured-append|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
     return 1;
 }
 
@@ -107,7 +114,7 @@ var structuredAppendGenerators = new IStructuredAppendFixtureGenerator[]
 };
 var structuredAppendTotal = 0;
 
-foreach (var generator in structuredAppendGenerators)
+foreach (var generator in command == "regenerate-fnc1" ? [] : structuredAppendGenerators)
 {
     if (!generator.IsAvailable)
     {
@@ -135,6 +142,52 @@ foreach (var generator in structuredAppendGenerators)
 if (command == "regenerate-structured-append")
 {
     Console.WriteLine($"done: {structuredAppendTotal} Structured Append fixtures under {structuredAppendRoot}");
+    return 0;
+}
+
+// FNC1 corpus: three writer lineages (libzint, ZXing.Net, CodeGlyphX), Standard QR under
+// StandardQrFnc1/ and rMQR under RmQrFnc1/, each with its own case list (Fnc1Corpus). Every
+// symbol passes the zxing-cpp gate before it is written: the gate checks the mode, the ECI
+// header and the element string the case claims, and supplies the symbology identifier and
+// the mask libzint does not report.
+var fnc1Generators = new (IFnc1FixtureGenerator Generator, Fnc1CaseDefinition[] Cases)[]
+{
+    (new ZintFnc1FixtureGenerator(), Fnc1Corpus.ZintCases),
+    (new ZXingNetFnc1FixtureGenerator(), Fnc1Corpus.ZXingNetCases),
+    (new CodeGlyphXFnc1FixtureGenerator(), Fnc1Corpus.CodeGlyphXCases),
+};
+var fnc1Total = 0;
+
+foreach (var (generator, cases) in fnc1Generators)
+{
+    if (!generator.IsAvailable)
+    {
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine)");
+        continue;
+    }
+
+    foreach (var root in new[] { "StandardQrFnc1", "RmQrFnc1" })
+    {
+        var generatorDir = Path.Combine(fixturesBase, root, generator.Name);
+        if (Directory.Exists(generatorDir))
+            Directory.Delete(generatorDir, recursive: true);
+    }
+
+    foreach (var caseDefinition in cases)
+    {
+        var fixture = Fnc1SanityGate.Verify(generator.Generate(caseDefinition), caseDefinition);
+        var generatorDir = Path.Combine(fixturesBase, caseDefinition.FixtureRoot, generator.Name);
+        Directory.CreateDirectory(generatorDir);
+        FixtureWriter.Write(generatorDir, fixture);
+        fnc1Total++;
+        var manifest = fixture.Manifest;
+        Console.WriteLine($"wrote: {caseDefinition.FixtureRoot}/{generator.Name}/{manifest.Id} ({manifest.VersionName ?? $"version {manifest.Version}"}, {manifest.ErrorCorrectionLevel}, {manifest.Fnc1!.SymbologyIdentifier}{(manifest.Fnc1.ApplicationIndicator is int indicator ? $" indicator {indicator}" : "")}{(manifest.EciCharset is null ? "" : ", ECI")}, \"{Fnc1Writers.Escape(manifest.PayloadText)}\")");
+    }
+}
+
+if (command == "regenerate-fnc1")
+{
+    Console.WriteLine($"done: {fnc1Total} FNC1 fixtures under {fixturesBase}");
     return 0;
 }
 
@@ -256,7 +309,7 @@ foreach (var (generator, cases) in rmqrGenerators)
     }
 }
 
-Console.WriteLine($"done: {total + structuredAppendTotal} fixtures under {fixturesBase}");
+Console.WriteLine($"done: {total + structuredAppendTotal + fnc1Total} fixtures under {fixturesBase}");
 return 0;
 
 static string FindRepoRoot()

@@ -1,0 +1,23 @@
+{
+  "id": "r11x59-m-gs1-numeric",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "rMQR",
+  "version": 13,
+  "versionName": "R11x59",
+  "width": 59,
+  "height": 11,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 4,
+  "payloadText": "010952400005910917231120",
+  "payloadUtf8Hex": "303130393532343030303035393130393137323331313230",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3",
+    "writerInput": "(01)09524000059109(17)231120"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "gs1-byte-element-string-m",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 3,
+  "width": 29,
+  "height": 29,
+  "errorCorrectionLevel": "M",
+  "mode": "Byte",
+  "maskPattern": 3,
+  "payloadText": "0109524000059109101234567p\u001D17231120",
+  "payloadUtf8Hex": "30313039353234303030303539313039313031323334353637701D3137323331313230",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3"
+  }
+}

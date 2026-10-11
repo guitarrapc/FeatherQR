@@ -5,7 +5,7 @@ using FeatherQR.Internals.BinaryEncoders;
 namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
-/// rMQR bit-stream decoder (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version character count indicator widths, terminator <c>000</c> (possibly shortened at capacity), ECI segments (parsed, mapped to the charsets the shared byte decoder knows), Kanji decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>.
+/// rMQR bit-stream decoder (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version character count indicator widths, terminator <c>000</c> (possibly shortened at capacity), ECI segments (parsed, mapped to the charsets the shared byte decoder knows), Kanji decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>, and both FNC1 indicators (7.4.8) under the Standard QR rules: once, before the first data segment, with ECI headers on either side, and a lone <c>%</c> in an Alphanumeric segment read as the separator.
 /// Segment payloads decode through the shared <see cref="SegmentDecoders"/>.
 /// </summary>
 internal static class RmQRBinaryDecoder
@@ -15,6 +15,10 @@ internal static class RmQRBinaryDecoder
     private const int ModeAlphanumeric = 0b010;
     private const int ModeByte = 0b011;
     private const int ModeKanji = 0b100;
+    // 101 and 110 were once taken for reserved here. zxing-cpp's and qrcode2's mode tables, libzint's
+    // and CodeGlyphX's writers, and zxing-cpp reading their symbols as GS1 all give them these meanings.
+    private const int ModeFnc1First = 0b101;
+    private const int ModeFnc1Second = 0b110;
     private const int ModeEci = 0b111;
 
     // ECI assignment numbers the shared byte decoder can map to a charset.
@@ -23,12 +27,24 @@ internal static class RmQRBinaryDecoder
     private const int EciUtf8 = 26;
     private const int EciAscii = 27;
 
-    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten)
+    /// <summary>
+    /// Decodes the corrected data codewords into characters.
+    /// </summary>
+    /// <param name="data">Corrected data codewords (without ECC).</param>
+    /// <param name="dataBitCount">The number of data bits to read: 8 times the data codewords on the matrix path, since rMQR places its remainder bits after whole codewords. A smaller count ends the stream early, which the tests use.</param>
+    /// <param name="version">The rMQR version, which sets the character count indicator widths.</param>
+    /// <param name="destination">Destination for decoded characters.</param>
+    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
+    /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position; default otherwise.</param>
+    public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int dataBitCount, RmQRVersion version, Span<char> destination, out int charsWritten, out Fnc1Mode fnc1)
     {
         charsWritten = 0;
+        fnc1 = default;
         var reader = new BitReader(data);
         var totalBits = dataBitCount;
         var charset = ByteSegmentCharset.Unspecified;
+        // FNC1 precedes the first data segment, as in Standard QR (see QRBinaryDecoder).
+        var dataSegmentSeen = false;
 
         byte[]? rentedBytes = null;
         try
@@ -59,6 +75,7 @@ internal static class RmQRBinaryDecoder
                             if (totalBits - reader.BitPosition < countBits)
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
+                            dataSegmentSeen = true;
                             if (count == 0)
                                 continue; // empty segment (the encoder emits one only for empty text)
 
@@ -69,7 +86,9 @@ internal static class RmQRBinaryDecoder
                                     status = SegmentDecoders.DecodeNumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
                                     break;
                                 case EncodingMode.Alphanumeric:
-                                    status = SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                                    status = fnc1.IsActive
+                                        ? SegmentDecoders.DecodeAlphanumericPayloadFnc1(ref reader, totalBits, count, destination, ref charsWritten)
+                                        : SegmentDecoders.DecodeAlphanumericPayload(ref reader, totalBits, count, destination, ref charsWritten);
                                     break;
                                 default:
                                     // Data codewords top out at 152 bytes (R17x139-M).
@@ -107,13 +126,33 @@ internal static class RmQRBinaryDecoder
                             if (totalBits - reader.BitPosition < countBits)
                                 return DecodeStatus.InvalidBitstream;
                             var count = reader.Reads(countBits);
+                            dataSegmentSeen = true;
                             var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
                             if (status != DecodeStatus.Success)
                                 return status;
                             break;
                         }
+                    case ModeFnc1First:
+                        // Once, before the first data segment: a late indicator would change how the
+                        // segments before it read, and no conforming encoder writes one.
+                        if (dataSegmentSeen || fnc1.IsActive)
+                            return DecodeStatus.InvalidBitstream;
+                        fnc1 = Fnc1Mode.FirstPosition;
+                        break;
+                    case ModeFnc1Second:
+                        {
+                            // The same placement, then one 8-bit application indicator in the ranges
+                            // of ISO/IEC 18004 6.4.8.2; anything else is malformed.
+                            if (dataSegmentSeen || fnc1.IsActive || totalBits - reader.BitPosition < 8)
+                                return DecodeStatus.InvalidBitstream;
+                            var indicator = reader.Reads(8);
+                            if (!Fnc1Mode.IsValidApplicationIndicator(indicator))
+                                return DecodeStatus.InvalidBitstream;
+                            fnc1 = Fnc1Mode.SecondPosition(indicator);
+                            break;
+                        }
                     default:
-                        return DecodeStatus.InvalidBitstream; // 101, 110 are reserved
+                        return DecodeStatus.InvalidBitstream; // no other 3-bit value is assigned
                 }
             }
 

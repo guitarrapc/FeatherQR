@@ -11,6 +11,7 @@ namespace FeatherQR;
 /// A Byte segment with no ECI header is read as UTF-8 when the bytes are valid UTF-8, and as ISO-8859-1 otherwise.
 /// Kanji is mapped through JIS X 0208, so a cell outside that repertoire fails the whole rMQR code with <see cref="DecodeStatus.UnmappedCharacter"/> rather than substituting a replacement character.
 /// Reed-Solomon runs at full block strength, correcting up to ⌊ecc/2⌋ codewords per block, and reports the count in <see cref="RmQRCodeDecodeInfo.ErrorsCorrected"/>.
+/// FNC1 in first position (GS1 data) and in second position (an industry format with its application indicator) are read: the text is the element string with each separator as U+001D, a <c>%%</c> in an Alphanumeric segment is one <c>%</c>, and the mode is reported on <see cref="RmQRCodeDecodeInfo.Fnc1"/>.
 /// Both a plain matrix and one with a quiet zone are accepted; the border is located and stripped automatically.
 /// Image scanning is a separate entry point, and <see cref="QRCodeDecoder"/> keeps scanning Standard QR only.
 /// </remarks>
@@ -30,7 +31,7 @@ public static class RmQRCodeDecoder
     /// </summary>
     /// <param name="data">The rMQR code to decode.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections, and on success the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <c>null</c>.</exception>
     public static bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info)
@@ -60,7 +61,7 @@ public static class RmQRCodeDecoder
     /// <param name="width">Width in modules, quiet zone included.</param>
     /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections, and on success the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info)
@@ -97,7 +98,7 @@ public static class RmQRCodeDecoder
     /// <param name="height">Height in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
     /// <param name="charsWritten">How many characters were written; 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
-    /// <param name="info">What the attempt found: status, version, level and corrections.</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections, and on success the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the rMQR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
@@ -134,7 +135,7 @@ public static class RmQRCodeDecoder
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
-    /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners).</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners) and the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info)
@@ -165,7 +166,7 @@ public static class RmQRCodeDecoder
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> (with <see cref="RmQRVersion.R17x139"/> when the version is unknown) to size it.</param>
     /// <param name="charsWritten">How many characters were written; 0 when the image does not decode, though <paramref name="destination"/> may still hold text from an attempt that was not kept.</param>
-    /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners).</param>
+    /// <param name="info">What the attempt found: status, version, level and corrections, and on success where the symbol sits in the image (Corners) and the FNC1 mode when the symbol carries one (<see cref="RmQRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when an rMQR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)

@@ -1,0 +1,21 @@
+{
+  "id": "gs1-eci-then-fnc1-utf8-m",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "M",
+  "mode": "Byte",
+  "maskPattern": 2,
+  "payloadText": "10\u00E9\u001D17231120",
+  "payloadUtf8Hex": "3130C3A91D3137323331313230",
+  "eciCharset": "UTF-8",
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3"
+  }
+}

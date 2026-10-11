@@ -6,14 +6,14 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// rMQR bit-stream decoding (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version
 /// count widths, terminator, ECI segments (parsed even though the encoder never
-/// emits them), Kanji decoded as JIS X 0208, malformed streams rejected.
+/// emits them), Kanji decoded as JIS X 0208, malformed streams rejected. The FNC1 indicators (101, 110) are pinned in Fnc1RmQRDecodeTest.
 /// </summary>
 public class RmQRBinaryDecoderUnitTest
 {
     private static (DecodeStatus Status, string Text) Decode(byte[] data, RmQRVersion version)
     {
         var destination = new char[RmQRMatrixDecoder.GetMaxCharCount(version)];
-        var status = RmQRBinaryDecoder.DecodeBitStream(data, data.Length * 8, version, destination, out var written);
+        var status = RmQRBinaryDecoder.DecodeBitStream(data, data.Length * 8, version, destination, out var written, out _);
         return (status, new string(destination, 0, written));
     }
 
@@ -228,16 +228,9 @@ public class RmQRBinaryDecoderUnitTest
                 // outside the contract, and the matrix decoder never produces one.
                 var dataBitCount = random.Next(0, data.Length * 8 + 1);
 
-                RmQRBinaryDecoder.DecodeBitStream(data, dataBitCount, version, destination, out _);
+                RmQRBinaryDecoder.DecodeBitStream(data, dataBitCount, version, destination, out _, out _);
             }
         }
-    }
-
-    [Test]
-    public async Task Decode_ReservedModes_AreInvalidBitstream()
-    {
-        await Assert.That(Decode(Bits("101 0000", 6), RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
-        await Assert.That(Decode(Bits("110 0000", 6), RmQRVersion.R7x43).Status).IsEqualTo(DecodeStatus.InvalidBitstream);
     }
 
     [Test]

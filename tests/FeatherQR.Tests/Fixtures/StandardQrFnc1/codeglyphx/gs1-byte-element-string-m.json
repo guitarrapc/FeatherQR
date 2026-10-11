@@ -1,0 +1,21 @@
+{
+  "id": "gs1-byte-element-string-m",
+  "generator": "codeglyphx",
+  "generatorVersion": "2.1.0\u002B9797fa000b0be4a33616b417403052f21aa2d4a2",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 5,
+  "payloadText": "0109524000059109101234567p\u001D17231120",
+  "payloadUtf8Hex": "30313039353234303030303539313039313031323334353637701D3137323331313230",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3"
+  }
+}

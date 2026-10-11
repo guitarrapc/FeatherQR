@@ -1,0 +1,23 @@
+{
+  "id": "r7x43-m-gs1-date-only",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 1,
+  "versionName": "R7x43",
+  "width": 43,
+  "height": 7,
+  "errorCorrectionLevel": "M",
+  "mode": "Unknown",
+  "maskPattern": 4,
+  "payloadText": "17231120",
+  "payloadUtf8Hex": "3137323331313230",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8,
+  "fnc1": {
+    "position": "First",
+    "symbologyIdentifier": "]Q3",
+    "writerInput": "(17)231120"
+  }
+}
