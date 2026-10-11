@@ -252,10 +252,14 @@ public class DecodeAllocationTest
         FineTexture,
         /// <summary>Standard QR only: <see cref="InferredFinderDecodeTest"/>'s symbol with its top-left finder blanked, read through the third finder inferred from the other two.</summary>
         InferredFinder,
+        /// <summary>Standard QR only: <see cref="TripleSelectionDecodeTest"/>'s tall two-level image, whose strided triple fails and whose symbol reads after the skipped rows are scanned.</summary>
+        UndersampledStride,
+        /// <summary>Standard QR only: <see cref="TripleSelectionDecodeTest"/>'s keystoned grid of nine symbols, read through the crowded list's triples gated by their timing patterns.</summary>
+        Crowded,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -337,6 +341,16 @@ public class DecodeAllocationTest
                 {
                     var (luminance, width, height, _, _) = InferredFinderDecodeTest.Render(InferredFinderDecodeTest.Finder.TopLeft, 200f, 0f);
                     return new Scene(luminance, width, height, InferredFinderDecodeTest.Content);
+                }
+            case ImageScene.UndersampledStride:
+                {
+                    var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderTall(destroyData: false);
+                    return new Scene(luminance, width, height, TripleSelectionDecodeTest.TallContent);
+                }
+            case ImageScene.Crowded:
+                {
+                    var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderGrid(3, 3, 0.12f, _ => Content);
+                    return new Scene(luminance, width, height, Content);
                 }
             default:
                 throw new ArgumentOutOfRangeException(nameof(scene), scene, "not a Standard QR scene");

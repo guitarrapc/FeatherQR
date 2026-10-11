@@ -229,13 +229,62 @@ internal static partial class FinderPatternFinder
         }
     }
 
+    /// <summary>
+    /// The row stride of the strided scan: a v40 symbol filling the frame has module size height/177, its 3-module centre band is 3·height/177 px tall, and a stride of a quarter of that hits it 4 times or more (2 when the symbol occupies half the frame), enough for the count-based confirmation in <see cref="TrySelectBestThree(Span{FinderPattern}, Span{FinderPattern})"/>.
+    /// Smaller strides than 3 do not pay for themselves.
+    /// </summary>
+    internal static int RowStride(int height) => Math.Max(3, 3 * height / (4 * MaxSymbolModules));
+
+    /// <summary>
+    /// Whether the strided scan could not have confirmed the triple's finders: a finder's 3-module centre band shorter than two strides is crossed once or not at all, so a triple of such candidates was selected on counts that say nothing, and the rows between deserve a scan before it is believed.
+    /// A candidate under <see cref="FinderFloorPixels"/> is taken at the floor: smaller than any finder the scan reads, it is noise, and noise at the smallest stride would otherwise be undersampled on every pass.
+    /// </summary>
+    internal static bool IsUndersampled(ReadOnlySpan<FinderPattern> triple, int height)
+    {
+        var smallest = Math.Max(FinderFloorPixels, Math.Min(triple[0].ModuleSize, Math.Min(triple[1].ModuleSize, triple[2].ModuleSize)));
+        return 3f * smallest < 2f * RowStride(height);
+    }
+
+    /// <summary>The module size under which no finder reads, in pixels: at the smallest stride of 3 a band at the floor is exactly two strides, so an image under 944 px tall is never undersampled.</summary>
+    private const float FinderFloorPixels = 2f;
+
+    /// <summary>
+    /// Scans the rows the strided scan skipped, merging into its candidates, and selects the best three from the completed list: what <see cref="TryFind(ReadOnlySpan{byte}, int, int, byte, Span{FinderPattern}, in GreyLevels, Span{FinderPattern}, out int, out bool)"/> does when it finds no triple, for a caller whose strided triple failed.
+    /// </summary>
+    public static bool TryFindSkippedRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, Span<FinderPattern> candidates, ref int candidateCount, Span<FinderPattern> patterns)
+    {
+        var rentedEdges = RentEdgeBuffer(FinderRowKernel.Auto, width);
+        try
+        {
+            ScanSkippedRows(luminance, width, height, threshold, grey, FinderRowKernel.Auto, rentedEdges, candidates.Slice(0, MaxCandidates), ref candidateCount);
+        }
+        finally
+        {
+            ReturnEdgeBuffer(rentedEdges);
+        }
+        Span<FinderPattern> scratch = stackalloc FinderPattern[MaxCandidates];
+        candidates.Slice(0, candidateCount).CopyTo(scratch);
+        return TrySelectBestThree(scratch.Slice(0, candidateCount), patterns);
+    }
+
+    /// <summary>The rows the stride skipped, in order: with the strided rows they are exactly the rows of a full scan.</summary>
+    private static void ScanSkippedRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> candidates, ref int candidateCount)
+    {
+        var stride = RowStride(height);
+        for (var baseY = 0; baseY < height; baseY += stride)
+        {
+            var limit = Math.Min(baseY + stride, height);
+            for (var y = baseY + 1; y < limit; y++)
+            {
+                ScanRow(luminance, width, height, threshold, grey, y, kernel, edges, candidates, ref candidateCount);
+            }
+        }
+    }
+
     private static bool TryFindRows(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, FinderRowKernel kernel, Span<short> edges, Span<FinderPattern> candidates, out int candidateCount, out bool everyRowScanned, Span<FinderPattern> patterns)
     {
         everyRowScanned = true;
-        // Row stride bound: a v40 symbol filling the frame has module size height/177.
-        // Its 3-module center band is 3·height/177 px tall and a stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol occupies half the frame), enough for the Count-based confirmation in TrySelectBestThree.
-        // Smaller strides than 3 don't pay for themselves.
-        var stride = Math.Max(3, 3 * height / (4 * MaxSymbolModules));
+        var stride = RowStride(height);
 
         candidateCount = 0;
 
@@ -257,16 +306,8 @@ internal static partial class FinderPatternFinder
                 return true;
             }
 
-            // Complementary rescan: only the rows the stride pass skipped, keeping its candidates. Covers exactly the rows of a full scan, so the
-            // detection envelope cannot regress. Costs one full sweep in total.
-            for (var baseY = 0; baseY < height; baseY += stride)
-            {
-                var limit = Math.Min(baseY + stride, height);
-                for (var y = baseY + 1; y < limit; y++)
-                {
-                    ScanRow(luminance, width, height, threshold, grey, y, kernel, edges, candidates, ref candidateCount);
-                }
-            }
+            // Complementary rescan: only the rows the stride pass skipped, keeping its candidates, so the detection envelope cannot regress. Costs one full sweep in total.
+            ScanSkippedRows(luminance, width, height, threshold, grey, kernel, edges, candidates, ref candidateCount);
 
             if (strideSelected)
             {
@@ -897,7 +938,7 @@ internal static partial class FinderPatternFinder
     private static float TripleScore(ReadOnlySpan<FinderPattern> triple)
         => TripleScore(triple[0], triple[1], triple[2]);
 
-    private static float TripleScore(in FinderPattern a, in FinderPattern b, in FinderPattern c)
+    internal static float TripleScore(in FinderPattern a, in FinderPattern b, in FinderPattern c)
     {
         var smallest = Math.Min(a.ModuleSize, Math.Min(b.ModuleSize, c.ModuleSize));
         var largest = Math.Max(a.ModuleSize, Math.Max(b.ModuleSize, c.ModuleSize));

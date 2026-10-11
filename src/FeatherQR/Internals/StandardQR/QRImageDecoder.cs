@@ -115,11 +115,35 @@ internal static partial class QRImageDecoder
                     return status;
             }
 
-            // A third finder inferred from two is judged on how many rows confirmed each, which only a list of every row's candidates says
-            if (!everyRowScanned)
-                return status;
             var result = NewResult();
             result.Main(status, charsWritten, info);
+
+            // The strided scan's triple failed. Where the stride could not have confirmed its finders, or the list is crowded, the rows between are scanned and the completed list selected from again; the stages below are judged on how many rows confirmed each candidate, which only a list of every row's says.
+            if (!everyRowScanned)
+            {
+                if (!FinderPatternFinder.IsUndersampled(patterns, height) && !IsCrowded(candidates.Slice(0, candidateCount)))
+                    return status;
+                Span<FinderPattern> swept = stackalloc FinderPattern[3];
+                var sweptFound = FinderPatternFinder.TryFindSkippedRows(luminance, width, height, threshold, grey, candidates, ref candidateCount, swept);
+                if (sweptFound && !SameTriple(swept, patterns))
+                {
+                    var sweptStatus = DecodeTriple(ref corners, image, swept, ref modules, destination, out var sweptCharsWritten, out var sweptInfo);
+                    if (result.Other(sweptStatus, sweptCharsWritten, sweptInfo))
+                        return result.Report(out charsWritten, out info);
+                    if (candidateCount > 3)
+                    {
+                        sweptStatus = DecodeAlternativeTriples(ref corners, image, candidates.Slice(0, candidateCount), swept, ref modules, destination, sweptStatus, ref sweptCharsWritten, ref sweptInfo);
+                        if (result.Other(sweptStatus, sweptCharsWritten, sweptInfo))
+                            return result.Report(out charsWritten, out info);
+                    }
+                    swept.CopyTo(patterns);
+                }
+            }
+
+            var crowdedStatus = DecodeCrowded(ref corners, image, candidates.Slice(0, candidateCount), patterns, ref modules, destination, out var crowdedCharsWritten, out var crowdedInfo);
+            if (result.Other(crowdedStatus, crowdedCharsWritten, crowdedInfo))
+                return result.Report(out charsWritten, out info);
+
             var inferredStatus = DecodeInferred(image, candidates.Slice(0, candidateCount), ref modules, destination, out var inferredCharsWritten, out var inferredInfo);
             result.Other(inferredStatus, inferredCharsWritten, inferredInfo);
             return result.Report(out charsWritten, out info);
@@ -128,6 +152,26 @@ internal static partial class QRImageDecoder
         {
             modules.Dispose();
         }
+    }
+
+    /// <summary>Whether two triples hold the same three finders, each within a module of its match: a completed list selects the strided scan's triple again when it was right, averaged over more rows.</summary>
+    private static bool SameTriple(ReadOnlySpan<FinderPattern> triple, ReadOnlySpan<FinderPattern> other)
+    {
+        foreach (var finder in triple)
+        {
+            var matched = false;
+            foreach (var candidate in other)
+            {
+                if (Math.Abs(candidate.X - finder.X) <= finder.ModuleSize && Math.Abs(candidate.Y - finder.Y) <= finder.ModuleSize)
+                {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched)
+                return false;
+        }
+        return true;
     }
 
     /// <summary>
