@@ -133,7 +133,7 @@ The records list what was tried and refuted on this decoder ([standardqr-decoder
 | 2 | Documented scope from the measurement | Done 2026-10-10 (Progress log): the documents in "Documents to change" state the measured envelope on photographs, with no stage added | Every place listed says what the measurement shows, and none says "out of scope" for a class the decoder reads |
 | 3 | Charset | Done 2026-10-10 (Progress log): the Shift_JIS guess and ECI 20 in the shared Byte segment decoder, and Micro QR writing UTF-8 where its ISO-8859-1 bytes would read as another text. Standard QR and rMQR already declared ECI 3. The rule and its costs were accepted as measured (D2 to D4) | The 11 ZXing images and the 44 corpus reads return their texts. A round trip over Latin-1 payloads, including text whose bytes look like half-width katakana, misreads nothing. The guess's rate on foreign Latin-1 symbols is measured and recorded. Micro QR and rMQR share it |
 | 4 | Image stages | The first, a search at reduced scale, done 2026-10-10 (Progress log): BoofCV 322 to 371 of 536, the gap 77 to 40. Next is the gap that is left, classified again. One sub-phase per class Phase 1 ranks, in its order. Each starts from the failing images, finds the stage that loses them (the true-transform column on synthetic kinds, zxing-cpp's corners on photographs), and follows the accuracy-change rules | Each sub-phase's own exit: the reads gained per set, nothing lost, the failure-path multiple, and the test renders with their mechanism switched off |
-| 4b | Vector tiers for the halving | Done 2026-10-11 on x64 and WebAssembly (Progress log), ARM64 declared and to be timed on the M2: `LuminanceHalver` has a 256-bit tier, a portable 128-bit tier and a WebAssembly tier under the rules of the 128-bit round, with the word-at-a-time loop as the scalar tier and the tail ("The halving's vector tiers" below). It changed no read | Every build class runs the tier it measured faster on, or keeps the word-at-a-time loop with its measured reason beside its row. The failing photographs' multiple is measured again and replaces 1.53 in the records |
+| 4b | Vector tiers for the halving | Done 2026-10-11 on x64, WebAssembly and ARM64 (Progress log, the ARM64 timing in its own entry): `LuminanceHalver` has a 256-bit tier, a portable 128-bit tier and a WebAssembly tier under the rules of the 128-bit round, with the word-at-a-time loop as the scalar tier and the tail ("The halving's vector tiers" below). It changed no read | Every build class runs the tier it measured faster on, or keeps the word-at-a-time loop with its measured reason beside its row. The failing photographs' multiple is measured again and replaces 1.53 in the records |
 | 5 | Fold | Durable results into the decoder records, [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md) and [qrcode-symbologies.md](../specs/qrcode-symbologies.md), the README and XML docs final, this file deleted and the index updated | No completed plan remains |
 
 Phase 2 runs before any stage is built, because today's documents are wrong about today's decoder. Phases 3 and 4 are independent. Phase 3 has to land before the 2.0.0 freeze if D1 holds, and each sub-phase of Phase 4 updates the documents for its own change.
@@ -423,3 +423,59 @@ Lessons:
 - A comparison of the halved image does not see a step one pixel past the row. The fault wrote a byte past the destination and read two past the source, invisible on the heap, and was caught only by spans that end where readable memory ends, a page-end check the writers already had and the halver did not.
 - The plan said no report shape fails to read, so a new one would be needed. Two did, the no-symbol noise and ramp, which the sweep's camera work had never looked for. The shapes were read before anything was added.
 - Timings of a 12-megapixel step on this machine vary by a fifth to a half between runs, the buffers being larger than the cache of whichever core the process lands on. The 740 px pair, which fits, holds within 7 % on all but one build, so the kernel's tier ratio is read off the small pair and the large one gives the size.
+
+### Phase 4b on ARM64: the 128-bit tier timed (2026-10-11)
+
+Done: the branch at 867cc95 was run on the Apple M2 (osx-arm64, SDK 10.0.401, runtimes 8.0.31 and 10.0.12). ARM64 runs the portable 128-bit tier on every build read, the tier takes 0.21 to 0.22 of the word loop's time with the kernel alone, and no read moved. No code changed. The 12-megapixel scene with no symbol costs 1.54 times the build before the search, where the word loop cost 1.61.
+
+- The full suite passes on net8.0 and net10.0 in Release (19,149 and 19,243 tests), in Release with `DOTNET_EnableArm64Dp=0`, and in Debug (19,063 and 19,157).
+- `tests/FeatherQR.AotAnalysis --simd-class Arm64 --parity` passes as four builds: the JIT, the JIT with `DOTNET_EnableArm64Dp=0`, a default NativeAOT publish and one for `armv8-a,-dotprod`. Each reports `Vector128` for the halving and matches all 22 parity cases, the halving's among them.
+- Reads: `corpus` and `sweep all` on this build write the files the word-loop build at 5b6884c wrote, byte for byte, 624 reads of real images and 113,760 renders.
+- .NET 8's JIT was timed and read through a copy of the report project retargeted to net8.0 in a scratch tree. The project is net10.0 only, and two of its other probes call `Vector128.ShuffleNative` and `ConvertToInt32Native`, which the copy swaps for `Shuffle` and `ConvertToInt32`.
+
+The kernel alone, the tier through the dispatch against the scalar entry (`--time`, the pairs in turn within a process, the fastest of five processes of eleven rounds):
+
+| Build | 740 px, tier | Scalar | Ratio | 12 megapixels, tier | Scalar | Ratio |
+|---|---|---|---|---|---|---|
+| JIT, .NET 10 | 13.9 µs | 65.4 µs | 0.21 | 0.31 ms | 1.40 ms | 0.22 |
+| JIT, .NET 8 | 14.0 µs | 66.5 µs | 0.21 | 0.31 ms | 1.42 ms | 0.22 |
+| NativeAOT, default | 13.9 µs | 66.1 µs | 0.21 | 0.31 ms | 1.41 ms | 0.22 |
+
+The ratio of one process is 0.20 to 0.22 at 740 px and 0.21 to 0.23 at 12 megapixels in all fifteen. A process's median is up to 18 % over its fastest round and within 10 % in 56 of the 60 timings, the machine carrying other load.
+
+The same entries by cycle count (4,000 by 3,000 pixels of noise, .NET 10 JIT, a probe reading `proc_pid_rusage`, three processes within 4 %):
+
+| Step | Cycles | Instructions |
+|---|---|---|
+| Halving, a byte at a time | 9.2 M | 69.1 M |
+| Halving, the word loop | 4.7 M | 30.8 M |
+| Halving, the 128-bit tier | 1.0 M | 6.3 M |
+| `LuminanceInverter` over the same bytes | 0.88 M | 5.3 M |
+| A copy of the same bytes | 0.82 M | 1.5 M |
+
+Images with no symbol, three builds in turn (before the search at aa004d5, the word loop at 5b6884c, the tiers), as cycles a call against the build before the search, the least of three processes, .NET 10 JIT. The images are the ones of the ARM64 entry above:
+
+| Image | Word loop | Tiers | Tiers over word loop |
+|---|---|---|---|
+| 740 px, a ramp | 1.53 | 1.43 | 0.93 |
+| 740 px, uniform noise | 1.64 | 1.63 | 0.99 to 1.00 |
+| 740 px, blurred noise | 1.68 | 1.66 | 0.98 |
+| 12 megapixels, a blurred scene | 1.61 | 1.54 | 0.96 |
+
+On every image each process of the tier build counts fewer cycles than any process of the word-loop build. The gain is what the kernel pair predicts: the cycles the tier saves on each level's pixels are 6.6 % of the ramp and 4.5 % of the scene. The report project's own shapes, by time, give 0.94 to 0.95 on `image/none-gradient` and 0.99 on `image/none-noise` on the three builds, each build at the fastest of five processes.
+
+By the same counts the halving is 2.0 % of the ramp and 1.3 % of the scene with the tier, where the word loop was 8.5 % and 5.8 %. The ARM64 entry above gave 7.6 % and 5.5 % from times and the 12-megapixel kernel alone.
+
+The machine code, read on the JIT of .NET 10 and .NET 8 (tiered compilation off) and on ILC:
+
+- The search's own method, `DecodeReduced`, compiles to the same listing as before on all three: 776 bytes on .NET 10, 812 on .NET 8, 146 instructions on ILC.
+- The scalar tier's word loop is 41 instructions on all three, the same ones in `HalveScalar` as in the shipped `Halve`, branch labels aside. It is not the one instruction shorter that x64 recorded, and it costs none for the tiers above it.
+- The tier's loop is 31 instructions for 16 output pixels on all three: four loads, four `and`, six `ushr`, eight `add`, `xtn` and `xtn2`, a store, and six for the index and the branch. `Vector128.Narrow` and each 16-bit shift compile to their instructions on .NET 8 as on .NET 10, so nothing falls back as the shift did on WebAssembly.
+
+Not covered: BoofCV's and ZXing's photographs are not on this machine, so the failing photographs' multiple was not measured again here, and the scene stands in for them. linux-arm64 and win-arm64 are CI's legs. No NativeAOT publish for .NET 8 was built. The tier uses no dot-product instruction, so the builds without it were held to parity and not timed.
+
+Lessons:
+
+- Cycle counts resolve what time between two processes does not on this machine. The report project's ramp, paired process by process, read 0.85 to 1.04 on the NativeAOT build for a gain of 0.94, the clock of the core a process lands on moving more than the tiers do. Cycles a call held within 3 % between processes and separated the two builds on every image. x64 found the tiers' 4 % under what its photograph set resolves, and this is the method that showed it here.
+- A portable tier is held against a copy of its input before a platform form is thought about. The tier passes 12 megapixels in 1.2 times the cycles of a copy and is 2 % of a failing image at most, under the 3 % bar. A step on ARM64's pairwise widening add and rounding narrowing shift would be shorter, and no measurement could put it over the bar, so it was not built.
+- An operation one build compiled badly is read on the next build, not assumed. `Vector128.ShiftRightLogical` on 16-bit lanes was a lane walk on WebAssembly compiled ahead of time, and .NET 8 had run `Vector128.Shuffle` through a fallback on ARM64 before. The loop was read on .NET 8, .NET 10 and ILC before its time was believed: the same 31 instructions on each.
