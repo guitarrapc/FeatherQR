@@ -28,6 +28,44 @@ public class QRCodeVisualCompatibilityTest
         VisualCompatibilityTestHelper.GenerateGoldenFilesReport(directoryName);
     }
 
+    /// <summary>
+    /// The report lists the golden files and leaves out the file a failed comparison writes
+    /// beside its sample.
+    /// </summary>
+    /// <remarks>
+    /// That file stays in the output directory after the run that wrote it. Its name ends in
+    /// <c>.actual.pixels</c>, so a search for <c>*.pixels</c> finds it, and the report then
+    /// read <c>0.actual</c> where a golden file's name has the ECI number. Every later run
+    /// failed in the report until the file was deleted by hand.
+    /// </remarks>
+    [Test]
+    public async Task GenerateGoldenFilesReport_LeavesOutTheFileAFailedComparisonWrote()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "FeatherQR.GoldenReport." + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var sample = Path.Combine(directory, "ABC_eccM_eci0.pixels");
+            var pixels = new byte[29 * 29];
+            SavePixelData(sample, pixels, 29);
+            SavePixelData(VisualCompatibilityTestHelper.ActualPathOf(sample), pixels, 29);
+
+            VisualCompatibilityTestHelper.GenerateGoldenFilesReport(directory);
+
+            var report = File.ReadAllText(Path.Combine(directory, "report.html"));
+            await Assert.That(report).Contains("Total Files:</span> 1<");
+            await Assert.That(report).Contains("ABC_eccM_eci0.pixels");
+            await Assert.That(report).DoesNotContain(".actual.pixels");
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     // tests
 
     [Test]
@@ -222,7 +260,7 @@ public class QRCodeVisualCompatibilityTest
             if (!actualPixels.SequenceEqual(expectedPixels))
             {
                 // Save actual for comparison
-                var actualPath = samplePath.Replace(".pixels", ".actual.pixels");
+                var actualPath = VisualCompatibilityTestHelper.ActualPathOf(samplePath);
                 SavePixelData(actualPath, actualPixels, qr.Size);
 
                 // Calculate difference percentage

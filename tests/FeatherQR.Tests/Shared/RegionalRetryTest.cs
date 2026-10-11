@@ -20,7 +20,7 @@ public class RegionalRetryTest
         public Calls Calls;
         public DecodeStatus[] Results;
 
-        public DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out int info)
+        public readonly DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out int info)
         {
             var index = Calls.Inputs.Count;
             Calls.Inputs.Add(luminance.Slice(0, width * height).ToArray());

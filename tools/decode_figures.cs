@@ -31,9 +31,9 @@ Directory.CreateDirectory(microDir);
 Directory.CreateDirectory(rmqrDir);
 
 const string Payload = "FeatherQR decoder";
-var v2 = Matrix(QRCodeGenerator.Create(Payload, QREccLevel.M, new QRCodeGeneratorOptions(version: QRVersionRange.Exactly(2), quietZoneSize: 0)));
+var v2 = Matrix(QRCodeGenerator.Create(Payload, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(2), QuietZoneSize = 0 }));
 const string MeshPayload = "FeatherQR decoder, a version 14 symbol for the mesh figure";
-var v14 = Matrix(QRCodeGenerator.Create(MeshPayload, QREccLevel.M, new QRCodeGeneratorOptions(version: QRVersionRange.Exactly(14), quietZoneSize: 0)));
+var v14 = Matrix(QRCodeGenerator.Create(MeshPayload, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(14), QuietZoneSize = 0 }));
 // Its bottom-right alignment pattern painted over, so nothing anchors the four-point transform's fourth corner
 for (var r = 73 - 9; r <= 73 - 5; r++)
     for (var c = 73 - 9; c <= 73 - 5; c++)
@@ -99,9 +99,9 @@ Check("large version", v14, MeshPayload, (x, y, s) => Keystone(73, x, y, s, 0.12
 
 // Micro QR: an M3 for the clean figure, so the larger size is tried first, and an M4 for the others
 const string MicroPayload = "FEATHERQR";
-var m3 = MicroMatrix(MicroQRCodeGenerator.Create(MicroPayload, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions(version: MicroQRVersion.M3, quietZoneSize: 0)));
+var m3 = MicroMatrix(MicroQRCodeGenerator.Create(MicroPayload, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3, QuietZoneSize = 0 }));
 const string MicroPayload4 = "FEATHERQR MICRO";
-var m4 = MicroMatrix(MicroQRCodeGenerator.Create(MicroPayload4, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions(version: MicroQRVersion.M4, quietZoneSize: 0)));
+var m4 = MicroMatrix(MicroQRCodeGenerator.Create(MicroPayload4, MicroQREccLevel.M, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M4, QuietZoneSize = 0 }));
 
 void CheckMicro(string name, bool[,] m, string payload, Func<double, double, double, H> shape, int size, int supersample, bool blur = false)
 {
@@ -126,9 +126,9 @@ CheckMicro("low density", m4, MicroPayload4, (x, y, s) => Square(17, x, y, s, 2)
 
 // rMQR: an R11x77 for most figures; each input is a map in image pixels and the image's size
 const string RmqrPayload = "FEATHERQR RMQR";
-var r11 = RmqrMatrix(RmQRCodeGenerator.Create(RmqrPayload, RmQREccLevel.M, new RmQRCodeGeneratorOptions(version: RmQRVersion.R11x77, quietZoneSize: 0)));
+var r11 = RmqrMatrix(RmQRCodeGenerator.Create(RmqrPayload, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x77, QuietZoneSize = 0 }));
 // The strip draws a shorter symbol, so its panels stay legible
-var r43 = RmqrMatrix(RmQRCodeGenerator.Create("FEATHERQR", RmQREccLevel.M, new RmQRCodeGeneratorOptions(version: RmQRVersion.R11x43, quietZoneSize: 0)));
+var r43 = RmqrMatrix(RmQRCodeGenerator.Create("FEATHERQR", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x43, QuietZoneSize = 0 }));
 
 void CheckRmqr(string name, bool[,] m, string payload, (H Map, int Width, int Height) input, int supersample, bool blur = false)
 {

@@ -1,7 +1,5 @@
 using System.Runtime.CompilerServices;
 #if NET8_0_OR_GREATER
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 #endif
 

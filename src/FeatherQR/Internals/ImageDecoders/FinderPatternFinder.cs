@@ -1,9 +1,5 @@
 #if NET8_0_OR_GREATER
-using System.Buffers;
-using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.Arm;
 #endif
 
 namespace FeatherQR.Internals.ImageDecoders;
