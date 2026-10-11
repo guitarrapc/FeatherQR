@@ -4,6 +4,14 @@ namespace FeatherQR.Tests;
 
 public static class VisualCompatibilityTestHelper
 {
+    private const string ActualSuffix = ".actual.pixels";
+
+    /// <summary>
+    /// Where a failed comparison writes what it rendered: beside the sample, under the same
+    /// name with <c>.actual.pixels</c> for <c>.pixels</c>.
+    /// </summary>
+    public static string ActualPathOf(string samplePath) => Path.ChangeExtension(samplePath, null) + ActualSuffix;
+
     /// <summary>
     /// Load pixel data with metadata.
     /// </summary>
@@ -24,7 +32,11 @@ public static class VisualCompatibilityTestHelper
 
     public static void GenerateGoldenFilesReport(string directoryName)
     {
-        var goldenFiles = Directory.GetFiles(directoryName, "*.pixels");
+        // The search also finds what a failed comparison left behind (ActualPathOf). That file is
+        // not a golden one, and its name does not parse as one, so it is left out.
+        var goldenFiles = Directory.GetFiles(directoryName, "*.pixels")
+            .Where(f => !f.EndsWith(ActualSuffix, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
         // Group files by test category
         var testGroups = goldenFiles

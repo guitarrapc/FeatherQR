@@ -380,17 +380,22 @@ static string Render(string assemblyPath)
             var accessors = property.GetAccessors();
             var getter = accessors.Getter.IsNil ? null : (MethodDefinition?)reader.GetMethodDefinition(accessors.Getter);
             var setter = accessors.Setter.IsNil ? null : (MethodDefinition?)reader.GetMethodDefinition(accessors.Setter);
-            var readable = getter is { } g && IsVisibleMethod(g, out _);
-            var writable = setter is { } s && IsVisibleMethod(s, out _);
+            var getterIsPublic = false;
+            var setterIsPublic = false;
+            var readable = getter is { } g && IsVisibleMethod(g, out getterIsPublic);
+            var writable = setter is { } s && IsVisibleMethod(s, out setterIsPublic);
             if (!readable && !writable) continue;
 
+            // A property is as accessible as its more accessible accessor, and the other one is
+            // printed with its own modifier, the way source spells it: { get; protected set; }.
+            // Read off one accessor alone, a setter narrowed to protected looked like a public one.
+            var isPublic = (readable && getterIsPublic) || (writable && setterIsPublic);
             var anchor = readable ? getter!.Value : setter!.Value;
-            IsVisibleMethod(anchor, out var anchorIsPublic);
 
             var signature = property.DecodeSignature(provider, context);
             var text = new StringBuilder("{ ");
-            if (readable) text.Append("get; ");
-            if (writable) text.Append(IsInitOnly(setter!.Value, context) ? "init; " : "set; ");
+            if (readable) text.Append(AccessorAccess(isPublic, getterIsPublic)).Append("get; ");
+            if (writable) text.Append(AccessorAccess(isPublic, setterIsPublic)).Append(IsInitOnly(setter!.Value, context) ? "init; " : "set; ");
             text.Append('}');
 
             // An indexer is a property with parameters; its metadata name ("Item") is not
@@ -402,7 +407,7 @@ static string Render(string assemblyPath)
             var type_ = Annotate(signature.ReturnType, Nullability(property.GetCustomAttributes(), TypeNullableContext(type)));
             // Same modifiers a method carries, off the accessor: a property turning abstract is a
             // break, and reading only "static" here hid one.
-            lines.Add((2, Line(property.GetCustomAttributes(), Access(anchorIsPublic),
+            lines.Add((2, Line(property.GetCustomAttributes(), Access(isPublic),
                 Modifier(anchor.Attributes), null, type_, $"{name} {text}")));
         }
 
@@ -459,6 +464,10 @@ static string Render(string assemblyPath)
     }
 
     static string Access(bool isPublic) => isPublic ? "public" : "protected";
+
+    // The modifier an accessor carries in front of get, set or init: none unless it is narrower
+    // than its property, which among visible members means protected inside a public property.
+    static string AccessorAccess(bool propertyIsPublic, bool accessorIsPublic) => propertyIsPublic && !accessorIsPublic ? "protected " : "";
 
     // Shared by methods and by a property's accessor, so that abstract, virtual and override are
     // recorded wherever they appear: any of them changing is a break a caller feels.

@@ -119,3 +119,11 @@ dotnet_diagnostic.IDE0051.severity = warning
 
 # IDE0052: Remove unread private member
 dotnet_diagnostic.IDE0052.severity = warning
+
+# =================
+# Struct Rulesets
+# =================
+
+# IDE0251: Make member 'readonly'
+# A struct member that writes no state and lacks 'readonly' makes the compiler copy the struct each time that member is called through 'in' or a readonly field.
+dotnet_diagnostic.IDE0251.severity = error

@@ -923,7 +923,7 @@ internal static class SimdParity
         if (!ModeSegmenter.LanesAccelerated)
             return mismatches;
         var random = new Random(20260930);
-        const string alphabet = "0123456789AZ $xéλあ﻿𐀀";
+        const string alphabet = "0123456789AZ $xéλあ\uFEFF\uD800\uDC00";
         int[][] shapes = [[40, 41, 39, 44], [120, 5, 7, 9], [64, 64, 64, 64, 64, 64, 64, 64], [300, 250, 200, 150, 100, 50, 25], [1, 1, 1], [900, 880, 870, 860, 3]];
         foreach (var lengths in shapes)
         {
@@ -964,7 +964,7 @@ internal static class SimdParity
     private static List<string> WalkLaneMismatches()
     {
         var mismatches = new List<string>();
-        var runs = new[] { "0123456789", "ABC $%*+-./:", "order", "é", "🎉", "�", "�", "x﻿﻿" };
+        var runs = new[] { "0123456789", "ABC $%*+-./:", "order", "é", "🎉", "\uD83C", "\uDE00", "x\uFEFF\uFEFF" };
         var expected = new int[StructuredAppendPlanner.MaxSymbols];
         var actual = new int[8 * StructuredAppendPlanner.MaxSymbols];
         var counts = new int[8];

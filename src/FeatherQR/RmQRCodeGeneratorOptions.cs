@@ -9,47 +9,15 @@ namespace FeatherQR;
 /// <remarks>
 /// rMQR specific rather than shared: <see cref="Version"/> is a different type in each symbology, <see cref="QuietZoneSize"/> has a different specified default, and <see cref="FitStrategy"/>, <see cref="Height"/> and <see cref="Segmentation"/> have no meaning outside rMQR.
 /// There is no version range here because rMQR's 32 versions are not totally ordered; fit is constrained by strategy and height instead.
+/// A plain value a caller may assign to and copy with <c>with</c>, for the reasons on <see cref="QRCodeGeneratorOptions"/>.
 /// </remarks>
-public readonly record struct RmQRCodeGeneratorOptions
+public record struct RmQRCodeGeneratorOptions
 {
     // Offset from the specified default, so default(T) carries the ISO/IEC 23941 value of 2
     // rather than 0 (a legitimate caller choice). An offset rather than a value+1 sentinel
     // keeps the canonical form unique, so equality does not report two identical option sets
     // as different.
-    private readonly int _quietZoneSizeOffset;
-
-    /// <summary>
-    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
-    /// </summary>
-    /// <remarks>
-    /// Prefer the object initializer (<c>new RmQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order, and pass constructor arguments by name.
-    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation, bool)"/>.
-    /// </remarks>
-    /// <param name="eciMode">See <see cref="EciMode"/>.</param>
-    /// <param name="version">See <see cref="Version"/>.</param>
-    /// <param name="fitStrategy">See <see cref="FitStrategy"/>.</param>
-    /// <param name="height">See <see cref="Height"/>.</param>
-    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
-    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
-    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
-    public RmQRCodeGeneratorOptions(
-        EciMode eciMode = EciMode.Default,
-        RmQRVersion? version = null,
-        RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea,
-        RmQRHeight? height = null,
-        int quietZoneSize = RmQRConstants.QuietZoneModules,
-        RmQRSegmentation segmentation = RmQRSegmentation.Single,
-        bool allowKanji = false)
-        : this()
-    {
-        EciMode = eciMode;
-        Version = version;
-        FitStrategy = fitStrategy;
-        Height = height;
-        QuietZoneSize = quietZoneSize;
-        Segmentation = segmentation;
-        AllowKanji = allowKanji;
-    }
+    private int _quietZoneSizeOffset;
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static RmQRCodeGeneratorOptions Default => default;
@@ -62,24 +30,24 @@ public readonly record struct RmQRCodeGeneratorOptions
     /// Only <see cref="EciMode.Default"/>, <see cref="EciMode.Iso8859_1"/> and <see cref="EciMode.Utf8"/> are accepted.
     /// Declaring Latin-1 over content it cannot represent throws rather than silently re-encoding.
     /// </remarks>
-    public EciMode EciMode { get; init; }
+    public EciMode EciMode { get; set; }
 
     /// <summary>
     /// A specific version, or <c>null</c> (the default) to fit one automatically by <see cref="FitStrategy"/> and <see cref="Height"/>.
     /// </summary>
-    public RmQRVersion? Version { get; init; }
+    public RmQRVersion? Version { get; set; }
 
     /// <summary>
     /// How to choose among the versions that hold the content.
     /// Defaults to <see cref="RmQRFitStrategy.MinimizeArea"/>, the choice both reference encoders make.
     /// </summary>
-    public RmQRFitStrategy FitStrategy { get; init; }
+    public RmQRFitStrategy FitStrategy { get; set; }
 
     /// <summary>
     /// Restrict automatic fitting to one symbol height, or <c>null</c> (the default) to consider every height.
     /// Must agree with <see cref="Version"/> when both are set.
     /// </summary>
-    public RmQRHeight? Height { get; init; }
+    public RmQRHeight? Height { get; set; }
 
     /// <summary>
     /// Quiet zone width in modules.
@@ -87,8 +55,8 @@ public readonly record struct RmQRCodeGeneratorOptions
     /// </summary>
     public int QuietZoneSize
     {
-        get => RmQRConstants.QuietZoneModules + _quietZoneSizeOffset;
-        init => _quietZoneSizeOffset = value - RmQRConstants.QuietZoneModules;
+        readonly get => RmQRConstants.QuietZoneModules + _quietZoneSizeOffset;
+        set => _quietZoneSizeOffset = value - RmQRConstants.QuietZoneModules;
     }
 
     /// <summary>
@@ -96,7 +64,7 @@ public readonly record struct RmQRCodeGeneratorOptions
     /// Defaults to <see cref="RmQRSegmentation.Single"/>.
     /// Size a destination buffer with the same value you encode with: the two modes can select different versions.
     /// </summary>
-    public RmQRSegmentation Segmentation { get; init; }
+    public RmQRSegmentation Segmentation { get; set; }
 
     /// <summary>
     /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind an 11-bit ECI header.
@@ -114,5 +82,5 @@ public readonly record struct RmQRCodeGeneratorOptions
     /// Neither phone's own scanner reads rMQR at all; Denso Wave's reader and zxing-cpp read it in Kanji mode and in UTF-8 alike.
     /// </para>
     /// </remarks>
-    public bool AllowKanji { get; init; }
+    public bool AllowKanji { get; set; }
 }

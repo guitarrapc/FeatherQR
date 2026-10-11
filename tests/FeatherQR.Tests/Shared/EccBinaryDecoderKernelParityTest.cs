@@ -112,9 +112,9 @@ public class EccBinaryDecoderKernelParityTest
     [Test]
     public async Task GfniIsomorphismConstants_MatchFirstPrinciplesConstruction()
     {
-        // Rebuild the GF(0x11D) 竊・GF(0x11B) isomorphism from scratch and verify the
-        // constants baked into EccBinaryDecoder.X86.cs. ﾎｲ is the first root of
-        // x^8+x^4+x^3+x^2+1 in GF(0x11B); ﾏ・maps by linearity over the ﾎｲ^i basis.
+        // Rebuild the GF(0x11D) → GF(0x11B) isomorphism from scratch and verify the
+        // constants baked into EccBinaryDecoder.X86.cs. β is the first root of
+        // x^8+x^4+x^3+x^2+1 in GF(0x11B); φ maps by linearity over the β^i basis.
         var beta = 0;
         for (var cand = 2; cand < 256; cand++)
         {
@@ -161,11 +161,11 @@ public class EccBinaryDecoderKernelParityTest
             }
         }
 
-        // Baked matrix constants (ﾏ・happens to be an involution: ﾏ・== ﾏ・
+        // Baked matrix constants (φ happens to be an involution: φ == ψ)
         await Assert.That(BuildAffineMatrix(phi)).IsEquivalentTo(EccBinaryDecoder.GfniPhiMatrix);
         await Assert.That(BuildAffineMatrix(psi)).IsEquivalentTo(EccBinaryDecoder.GfniPhiMatrix);
 
-        // Baked per-lane constants: lane i = ﾏ・ﾎｱ^ki) in the 0x11B domain, k = 1..4
+        // Baked per-lane constants: lane i = φ(α^ki) in the 0x11B domain, k = 1..4
         for (var i = 0; i < 32; i++)
         {
             await Assert.That(phi[GaloisField.Exp[i]]).IsEquivalentTo(EccBinaryDecoder.GfniAlphas[i]);

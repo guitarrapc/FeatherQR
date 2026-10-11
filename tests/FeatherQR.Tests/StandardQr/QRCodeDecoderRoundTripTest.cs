@@ -4,7 +4,7 @@ using FeatherQR.Internals.StandardQR;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// Encode 驕ｶ鄙ｫ繝ｻdecode round-trip tests: every QR produced by <see cref="QRCodeGenerator"/>
+/// Encode → decode round-trip tests: every QR produced by <see cref="QRCodeGenerator"/>
 /// must decode back to the original text with the library's own decoder.
 /// </summary>
 public class QRCodeDecoderRoundTripTest
@@ -281,7 +281,7 @@ public class QRCodeDecoderRoundTripTest
     [Test]
     public async Task Decode_FewFlippedModules_IsCorrectedByEcc()
     {
-        // Version 1-M has a single block with 10 ECC codewords 驕ｶ鄙ｫ繝ｻcorrects 5 codewords.
+        // Version 1-M has a single block with 10 ECC codewords → corrects 5 codewords.
         var content = "ECCFIX";
         var qr = QRCodeGenerator.Create(content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = 0 });
         var size = qr.Size;

@@ -6,41 +6,14 @@ namespace FeatherQR;
 /// </summary>
 /// <remarks>
 /// The smallest option set of the three symbologies: Micro QR has no ECI, and no fit strategy because M1-M4 are totally ordered by capacity.
+/// A plain value a caller may assign to and copy with <c>with</c>, for the reasons on <see cref="QRCodeGeneratorOptions"/>.
 /// </remarks>
-public readonly record struct MicroQRCodeGeneratorOptions
+public record struct MicroQRCodeGeneratorOptions
 {
     // Offset from the specified default, for the reasons on QRCodeGeneratorOptions.QuietZoneSize.
-    private readonly int _quietZoneSizeOffset;
+    private int _quietZoneSizeOffset;
 
-    private readonly int? _maskPattern;
-
-    /// <summary>
-    /// Builds an option set without an object initializer, for consumers whose language version predates C# 9.
-    /// </summary>
-    /// <remarks>
-    /// Prefer the object initializer (<c>new MicroQRCodeGeneratorOptions { QuietZoneSize = 0 }</c>): it names only what it sets and does not depend on this parameter order. Pass constructor arguments by name: <paramref name="quietZoneSize"/> and <paramref name="maskPattern"/> are adjacent integers, so a positional call can transpose them and still compile.
-    /// The reasoning is recorded once on <see cref="QRCodeGeneratorOptions(EciMode, bool, QRVersionRange, int, int?, bool, QRSegmentation, bool)"/>.
-    /// </remarks>
-    /// <param name="version">See <see cref="Version"/>.</param>
-    /// <param name="quietZoneSize">See <see cref="QuietZoneSize"/>.</param>
-    /// <param name="maskPattern">See <see cref="MaskPattern"/>.</param>
-    /// <param name="segmentation">See <see cref="Segmentation"/>.</param>
-    /// <param name="allowKanji">See <see cref="AllowKanji"/>.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-3 or <c>null</c>.</exception>
-    public MicroQRCodeGeneratorOptions(
-        MicroQRVersionRange version = default,
-        int quietZoneSize = MicroQRCodeGenerator.DefaultQuietZone,
-        int? maskPattern = null,
-        MicroQRSegmentation segmentation = MicroQRSegmentation.Single,
-        bool allowKanji = false)
-        : this()
-    {
-        Version = version;
-        QuietZoneSize = quietZoneSize;
-        MaskPattern = maskPattern;
-        Segmentation = segmentation;
-        AllowKanji = allowKanji;
-    }
+    private int? _maskPattern;
 
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static MicroQRCodeGeneratorOptions Default => default;
@@ -49,7 +22,7 @@ public readonly record struct MicroQRCodeGeneratorOptions
     /// The versions the generator may choose from.
     /// Defaults to <see cref="MicroQRVersionRange.Any"/>; a <see cref="MicroQRVersion"/> or its nullable converts implicitly, so a <c>null</c> means automatic.
     /// </summary>
-    public MicroQRVersionRange Version { get; init; }
+    public MicroQRVersionRange Version { get; set; }
 
     /// <summary>
     /// Pin one of the four Micro QR data mask patterns (0-3, ISO/IEC 18004 Table 10) instead of the automatic edge-score selection.
@@ -64,8 +37,8 @@ public readonly record struct MicroQRCodeGeneratorOptions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not 0-3 or <c>null</c>.</exception>
     public int? MaskPattern
     {
-        get => _maskPattern;
-        init
+        readonly get => _maskPattern;
+        set
         {
             if (value is < 0 or > 3)
                 throw new ArgumentOutOfRangeException(nameof(MaskPattern), $"Mask pattern must be 0-3, or null for automatic selection, but was {value}");
@@ -79,8 +52,8 @@ public readonly record struct MicroQRCodeGeneratorOptions
     /// </summary>
     public int QuietZoneSize
     {
-        get => MicroQRCodeGenerator.DefaultQuietZone + _quietZoneSizeOffset;
-        init => _quietZoneSizeOffset = value - MicroQRCodeGenerator.DefaultQuietZone;
+        readonly get => MicroQRCodeGenerator.DefaultQuietZone + _quietZoneSizeOffset;
+        set => _quietZoneSizeOffset = value - MicroQRCodeGenerator.DefaultQuietZone;
     }
 
     /// <summary>
@@ -89,7 +62,7 @@ public readonly record struct MicroQRCodeGeneratorOptions
     /// <see cref="MicroQRSegmentation.Optimal"/> never selects a larger version, and emits the identical bit stream when a split would not shrink the symbol.
     /// Size a destination buffer with the same value you encode with.
     /// </summary>
-    public MicroQRSegmentation Segmentation { get; init; }
+    public MicroQRSegmentation Segmentation { get; set; }
 
     /// <summary>
     /// Write text in Kanji mode where it can be: 13 bits a character, where UTF-8 takes 24 bits a kana or kanji.
@@ -107,5 +80,5 @@ public readonly record struct MicroQRCodeGeneratorOptions
     /// Neither phone's own scanner reads Micro QR at all; Denso Wave's reader and zxing-cpp read it in Kanji mode and in UTF-8 alike.
     /// </para>
     /// </remarks>
-    public bool AllowKanji { get; init; }
+    public bool AllowKanji { get; set; }
 }

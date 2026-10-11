@@ -15,12 +15,12 @@ internal ref struct BitReader
     /// <summary>
     /// Current bit position in the buffer.
     /// </summary>
-    public int BitPosition => _bitPosition;
+    public readonly int BitPosition => _bitPosition;
 
     /// <summary>
     /// Check if there are more bits to read
     /// </summary>
-    public bool HasBits => _bitPosition < _data.Length * 8;
+    public readonly bool HasBits => _bitPosition < _data.Length * 8;
 
     public BitReader(ReadOnlySpan<byte> data)
     {

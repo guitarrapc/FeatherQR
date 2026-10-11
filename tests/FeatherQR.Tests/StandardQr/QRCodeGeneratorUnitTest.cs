@@ -9,13 +9,37 @@ namespace FeatherQR.Tests;
 //
 // Version 2, ECC-L, Numeric mode (Minimum data for 42 digits)
 // Total capacity: 44 bytes = 352 bits
-// 髫ｨ荳橸ｽｨ・ｯ隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・// 髫ｨ荳翫・1. Mode indicator: 4 bits                髫ｨ荳翫・// 髫ｨ荳翫・2. Character count: 10 bits              髫ｨ荳翫・// 髫ｨ荳翫・3. Data (42 digits): ~140 bits           髫ｨ荳翫・// 髫ｨ荳翫・4. Terminator: 4 bits                    髫ｨ荳翫・// 髫ｨ荳翫・5. Byte alignment: 0-7 bits              髫ｨ荳翫・// 髫ｨ荳翫・6. Padding: ~190 bits (0xEC 0x11...)     髫ｨ荳翫・// 髫ｨ荳翫・7. ECC: Fixed length                     髫ｨ荳翫・// 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-// 髫ｨ荳翫・Total: 352 bits (44 bytes)               髫ｨ荳翫・// 髫ｨ荳翫・Matrix size: 25 繝ｻ繝ｻ繝ｻ25 (Version 2)         髫ｨ荳翫・// 髫ｨ荳翫・With quiet zone: 33 繝ｻ繝ｻ繝ｻ33                髫ｨ荳翫・// 髫ｨ荵怜繭隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・//
+// ┌──────────────────────────────────────────┐
+// │ 1. Mode indicator: 4 bits                │
+// │ 2. Character count: 10 bits              │
+// │ 3. Data (42 digits): ~140 bits           │
+// │ 4. Terminator: 4 bits                    │
+// │ 5. Byte alignment: 0-7 bits              │
+// │ 6. Padding: ~190 bits (0xEC 0x11...)     │
+// │ 7. ECC: Fixed length                     │
+// ├──────────────────────────────────────────┤
+// │ Total: 352 bits (44 bytes)               │
+// │ Matrix size: 25 × 25 (Version 2)         │
+// │ With quiet zone: 33 × 33                │
+// └──────────────────────────────────────────┘
+//
 // Version 2, ECC-L, Numeric mode (Maximum data for 77 digits)
 // Total capacity: 44 bytes = 352 bits (Same as minimum data for same version)
 //
-// 髫ｨ荳橸ｽｨ・ｯ隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・// 髫ｨ荳翫・1. Mode indicator: 4 bits                髫ｨ荳翫・// 髫ｨ荳翫・2. Character count: 10 bits              髫ｨ荳翫・// 髫ｨ荳翫・3. Data (77 digits): ~257 bits           髫ｨ荳翫・// 髫ｨ荳翫・4. Terminator: 4 bits                    髫ｨ荳翫・// 髫ｨ荳翫・5. Byte alignment: 0-7 bits              髫ｨ荳翫・// 髫ｨ荳翫・6. Padding: ~70 bits (0xEC 0x11...)      髫ｨ荳翫・// 髫ｨ荳翫・7. ECC: Fixed length                     髫ｨ荳翫・// 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-// 髫ｨ荳翫・Total: 352 bits (44 bytes)               髫ｨ荳翫・// 髫ｨ荳翫・Matrix size: 25 繝ｻ繝ｻ繝ｻ25 (Version 2)         髫ｨ荳翫・// 髫ｨ荳翫・With quiet zone: 33 繝ｻ繝ｻ繝ｻ33                 髫ｨ荳翫・// 髫ｨ荵怜繭隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・
+// ┌──────────────────────────────────────────┐
+// │ 1. Mode indicator: 4 bits                │
+// │ 2. Character count: 10 bits              │
+// │ 3. Data (77 digits): ~257 bits           │
+// │ 4. Terminator: 4 bits                    │
+// │ 5. Byte alignment: 0-7 bits              │
+// │ 6. Padding: ~70 bits (0xEC 0x11...)      │
+// │ 7. ECC: Fixed length                     │
+// ├──────────────────────────────────────────┤
+// │ Total: 352 bits (44 bytes)               │
+// │ Matrix size: 25 × 25 (Version 2)         │
+// │ With quiet zone: 33 × 33                 │
+// └──────────────────────────────────────────┘
+
 public class QRCodeGeneratorUnitTest
 {
     [Test]
@@ -28,14 +52,14 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments(1, QREccLevel.L, EncodingMode.Numeric, 152)]         // 19 繝ｻ繝ｻ繝ｻ8
-    [Arguments(1, QREccLevel.M, EncodingMode.Alphanumeric, 128)]    // 16 繝ｻ繝ｻ繝ｻ8
-    [Arguments(1, QREccLevel.Q, EncodingMode.Byte, 104)]            // 13 繝ｻ繝ｻ繝ｻ8
-    [Arguments(1, QREccLevel.H, EncodingMode.Byte, 72)]             // 9 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, QREccLevel.L, EncodingMode.Numeric, 23648)]      // 2956 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, QREccLevel.M, EncodingMode.Alphanumeric, 18672)] // 2334 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, QREccLevel.Q, EncodingMode.Byte, 13328)]         // 1666 繝ｻ繝ｻ繝ｻ8
-    [Arguments(40, QREccLevel.H, EncodingMode.Byte, 10208)]         // 1276 繝ｻ繝ｻ繝ｻ8
+    [Arguments(1, QREccLevel.L, EncodingMode.Numeric, 152)]         // 19 × 8
+    [Arguments(1, QREccLevel.M, EncodingMode.Alphanumeric, 128)]    // 16 × 8
+    [Arguments(1, QREccLevel.Q, EncodingMode.Byte, 104)]            // 13 × 8
+    [Arguments(1, QREccLevel.H, EncodingMode.Byte, 72)]             // 9 × 8
+    [Arguments(40, QREccLevel.L, EncodingMode.Numeric, 23648)]      // 2956 × 8
+    [Arguments(40, QREccLevel.M, EncodingMode.Alphanumeric, 18672)] // 2334 × 8
+    [Arguments(40, QREccLevel.Q, EncodingMode.Byte, 13328)]         // 1666 × 8
+    [Arguments(40, QREccLevel.H, EncodingMode.Byte, 10208)]         // 1276 × 8
     internal async Task CalculateMaxBitStringLength_ReturnsCapacityWithBuffer(int version, QREccLevel eccLevel, EncodingMode encoding, int expected)
     {
         var actual = CalculateMaxBitStringLength(version, eccLevel, encoding);
@@ -55,12 +79,29 @@ public class QRCodeGeneratorUnitTest
     // Encoding Mode Tests - Numeric
 
     // QR Code Data Encoding Overview
-    // 髫ｨ荳橸ｽｨ・ｯ隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・    // 髫ｨ荳翫・Version 1, ECC Level H, Numeric Mode                    髫ｨ荳翫・    // 髫ｨ荳翫・Total Capacity (ECCInfo.TotalDataCodewords)             髫ｨ荳翫・    // 髫ｨ荳翫・= 9 bytes = 72 bits                                     髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・1. Mode indicator (Numeric)                             髫ｨ荳翫・    // 髫ｨ荳翫・   = 4 bits (0001)                                      髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・2. Character count indicator (Version 1-9)              髫ｨ荳翫・    // 髫ｨ荳翫・   = 10 bits (max 1023 digits)                          髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・3. Data (17 digits)                                     髫ｨ荳翫・    // 髫ｨ荳翫・   = 5 groups 繝ｻ繝ｻ繝ｻ10 bits + 1 group 繝ｻ繝ｻ繝ｻ4 bits              髫ｨ荳翫・    // 髫ｨ荳翫・   = 50 + 4 = 54 bits                                   髫ｨ荳翫・    // 髫ｨ荳翫・   (3 digits per group: 000-999 驕ｶ鄙ｫ繝ｻ10 bits)              髫ｨ荳翫・    // 髫ｨ荳翫・   (Last 2 digits: 00-99 驕ｶ鄙ｫ繝ｻ7 bits, but padded to 4)     髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・4. Terminator                                           髫ｨ荳翫・    // 髫ｨ荳翫・   = min(72 - 4 - 10 - 54, 4) = 4 bits (0000)           髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・Total: 4 + 10 + 54 + 4 = 72 bits                        髫ｨ荳翫・    // 髫ｨ荵怜繭隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Version 1, ECC Level H, Numeric Mode                    │
+    // │ Total Capacity (ECCInfo.TotalDataCodewords)             │
+    // │ = 9 bytes = 72 bits                                     │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 1. Mode indicator (Numeric)                             │
+    // │    = 4 bits (0001)                                      │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 2. Character count indicator (Version 1-9)              │
+    // │    = 10 bits (max 1023 digits)                          │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 3. Data (17 digits)                                     │
+    // │    = 5 groups × 10 bits + 1 group × 4 bits              │
+    // │    = 50 + 4 = 54 bits                                   │
+    // │    (3 digits per group: 000-999 → 10 bits)              │
+    // │    (Last 2 digits: 00-99 → 7 bits, but padded to 4)     │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 4. Terminator                                           │
+    // │    = min(72 - 4 - 10 - 54, 4) = 4 bits (0000)           │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ Total: 4 + 10 + 54 + 4 = 72 bits                        │
+    // └─────────────────────────────────────────────────────────┘
+
 
     [Test]
     [Arguments("0123456789", QREccLevel.M)]
@@ -76,9 +117,9 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.L, 41, 1)]   // V1-L max
     [Arguments(QREccLevel.M, 34, 1)]   // V1-M max
     [Arguments(QREccLevel.H, 17, 1)]   // V1-H max
-    [Arguments(QREccLevel.L, 42, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(QREccLevel.M, 35, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(QREccLevel.H, 18, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.L, 42, 2)]   // V1-L max + 1 → should upgrade to V2
+    [Arguments(QREccLevel.M, 35, 2)]   // V1-M max + 1 → should upgrade to V2
+    [Arguments(QREccLevel.H, 18, 2)]   // V1-H max + 1 → should upgrade to V2
     [Arguments(QREccLevel.L, 77, 2)]   // V2-L max
     [Arguments(QREccLevel.M, 48, 2)]   // V2-M max
     [Arguments(QREccLevel.H, 34, 2)]   // V2-H max
@@ -99,12 +140,27 @@ public class QRCodeGeneratorUnitTest
     // Encoding Mode Tests - Alphanumeric (ASCII)
 
     // QR Code Data Encoding Overview
-    // 髫ｨ荳橸ｽｨ・ｯ隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・    // 髫ｨ荳翫・Version 1, ECC Level H, Alphanumeric Mode               髫ｨ荳翫・    // 髫ｨ荳翫・Total Capacity (ECCInfo.TotalDataCodewords)             髫ｨ荳翫・    // 髫ｨ荳翫・= 9 bytes = 72 bits                                     髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・1. Mode indicator (Alphanumeric)                        髫ｨ荳翫・    // 髫ｨ荳翫・   = 4 bits (0010)                                      髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・2. Character count indicator (Version 1-9)              髫ｨ荳翫・    // 髫ｨ荳翫・   = 9 bits (max 511 chars)                             髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・3. Data (10 chars)                                      髫ｨ荳翫・    // 髫ｨ荳翫・   = 5 groups 繝ｻ繝ｻ繝ｻ11 bits = 55 bits                       髫ｨ荳翫・    // 髫ｨ荳翫・   (2 chars per group: 00-44 驕ｶ鄙ｫ繝ｻ11 bits)                 髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・4. Terminator                                           髫ｨ荳翫・    // 髫ｨ荳翫・   = min(72 - 4 - 9 - 55, 4) = 4 bits (0000)            髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・Total: 4 + 9 + 55 + 4 = 72 bits                         髫ｨ荳翫・    // 髫ｨ荵怜繭隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Version 1, ECC Level H, Alphanumeric Mode               │
+    // │ Total Capacity (ECCInfo.TotalDataCodewords)             │
+    // │ = 9 bytes = 72 bits                                     │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 1. Mode indicator (Alphanumeric)                        │
+    // │    = 4 bits (0010)                                      │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 2. Character count indicator (Version 1-9)              │
+    // │    = 9 bits (max 511 chars)                             │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 3. Data (10 chars)                                      │
+    // │    = 5 groups × 11 bits = 55 bits                       │
+    // │    (2 chars per group: 00-44 → 11 bits)                 │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 4. Terminator                                           │
+    // │    = min(72 - 4 - 9 - 55, 4) = 4 bits (0000)            │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ Total: 4 + 9 + 55 + 4 = 72 bits                         │
+    // └─────────────────────────────────────────────────────────┘
+
     [Test]
     [Arguments("HELLO WORLD", QREccLevel.M)]
     [Arguments("ABC-123 $%*+-./:", QREccLevel.Q)]
@@ -119,9 +175,9 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.L, 25, 1)]   // V1-L max
     [Arguments(QREccLevel.M, 20, 1)]   // V1-M max
     [Arguments(QREccLevel.H, 10, 1)]   // V1-H max
-    [Arguments(QREccLevel.L, 26, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(QREccLevel.M, 21, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(QREccLevel.H, 11, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.L, 26, 2)]   // V1-L max + 1 → should upgrade to V2
+    [Arguments(QREccLevel.M, 21, 2)]   // V1-M max + 1 → should upgrade to V2
+    [Arguments(QREccLevel.H, 11, 2)]   // V1-H max + 1 → should upgrade to V2
     [Arguments(QREccLevel.L, 47, 2)]   // V2-L max
     [Arguments(QREccLevel.M, 38, 2)]   // V2-M max
     [Arguments(QREccLevel.H, 20, 2)]   // V2-H max
@@ -142,13 +198,33 @@ public class QRCodeGeneratorUnitTest
     // Encoding Mode Test - Byte (UTF-8)
 
     // QR Code Data Encoding Overview
-    // 髫ｨ荳橸ｽｨ・ｯ隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・    // 髫ｨ荳翫・Version 1, ECC Level H, Byte Mode (with UTF-8 ECI)      髫ｨ荳翫・    // 髫ｨ荳翫・Total Capacity (ECCInfo.TotalDataCodewords)             髫ｨ荳翫・    // 髫ｨ荳翫・= 9 bytes = 72 bits                                     髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・1. ECI header (UTF-8)                                   髫ｨ荳翫・    // 髫ｨ荳翫・   = 4 bits (0111) + 8 bits (26 = UTF-8) = 12 bits      髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・2. Mode indicator (Byte)                                髫ｨ荳翫・    // 髫ｨ荳翫・   = 4 bits (0100)                                      髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・3. Character count indicator (Version 1-9)              髫ｨ荳翫・    // 髫ｨ荳翫・   = 8 bits (max 255 bytes)                             髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・4. Data (7 bytes ASCII = "aaaaaaa")                     髫ｨ荳翫・    // 髫ｨ荳翫・   = 7 bytes 繝ｻ繝ｻ繝ｻ8 bits = 56 bits                         髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・5. Terminator                                           髫ｨ荳翫・    // 髫ｨ荳翫・   = min(72 - 12 - 4 - 8 - 56, 4) = 0 bits (full)       髫ｨ荳翫・    // 髫ｨ荵励飴隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ謫ｾ・ｽ・､
-    // 髫ｨ荳翫・Total: 12 + 4 + 8 + 56 + 0 = 80 bits                    髫ｨ荳翫・    // 髫ｨ荳翫・!! Exceeds 72 bits 驕ｶ鄙ｫ繝ｻUpgrades to Version 2              髫ｨ荳翫・    // 髫ｨ荳翫・                                                        髫ｨ荳翫・    // 髫ｨ荳翫・Without ECI header (EciMode.Default):                   髫ｨ荳翫・    // 髫ｨ荳翫・Total: 4 + 8 + 56 + 4 = 72 bits                         髫ｨ荳翫・    // 髫ｨ荵怜繭隶鯉ｽｳ髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ貂可髫ｨ荳翫・
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Version 1, ECC Level H, Byte Mode (with UTF-8 ECI)      │
+    // │ Total Capacity (ECCInfo.TotalDataCodewords)             │
+    // │ = 9 bytes = 72 bits                                     │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 1. ECI header (UTF-8)                                   │
+    // │    = 4 bits (0111) + 8 bits (26 = UTF-8) = 12 bits      │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 2. Mode indicator (Byte)                                │
+    // │    = 4 bits (0100)                                      │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 3. Character count indicator (Version 1-9)              │
+    // │    = 8 bits (max 255 bytes)                             │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 4. Data (7 bytes ASCII = "aaaaaaa")                     │
+    // │    = 7 bytes × 8 bits = 56 bits                         │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ 5. Terminator                                           │
+    // │    = min(72 - 12 - 4 - 8 - 56, 4) = 0 bits (full)       │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ Total: 12 + 4 + 8 + 56 + 0 = 80 bits                    │
+    // │ !! Exceeds 72 bits → Upgrades to Version 2              │
+    // │                                                         │
+    // │ Without ECI header (EciMode.Default):                   │
+    // │ Total: 4 + 8 + 56 + 4 = 72 bits                         │
+    // └─────────────────────────────────────────────────────────┘
+
     [Test]
     [Arguments("hello world", EciMode.Utf8)]
     [Arguments("こんにちは", EciMode.Utf8)]
@@ -161,12 +237,12 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments(QREccLevel.L, 16, 1)]   // V1-L: 16 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
-    [Arguments(QREccLevel.M, 13, 1)]   // V1-M: 13 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
-    [Arguments(QREccLevel.H, 6, 1)]    // V1-H: 6 bytes 驕ｶ鄙ｫ繝ｻV1 (21+8=29)
-    [Arguments(QREccLevel.L, 17, 2)]   // V1-L max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(QREccLevel.M, 14, 2)]   // V1-M max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
-    [Arguments(QREccLevel.H, 7, 2)]   // V1-H max + 1 驕ｶ鄙ｫ繝ｻshould upgrade to V2
+    [Arguments(QREccLevel.L, 16, 1)]   // V1-L: 16 bytes → V1 (21+8=29)
+    [Arguments(QREccLevel.M, 13, 1)]   // V1-M: 13 bytes → V1 (21+8=29)
+    [Arguments(QREccLevel.H, 6, 1)]    // V1-H: 6 bytes → V1 (21+8=29)
+    [Arguments(QREccLevel.L, 17, 2)]   // V1-L max + 1 → should upgrade to V2
+    [Arguments(QREccLevel.M, 14, 2)]   // V1-M max + 1 → should upgrade to V2
+    [Arguments(QREccLevel.H, 7, 2)]   // V1-H max + 1 → should upgrade to V2
     [Arguments(QREccLevel.L, 31, 2)]   // V2-L max
     [Arguments(QREccLevel.M, 25, 2)]   // V2-M max
     [Arguments(QREccLevel.H, 13, 2)]   // V2-H max
@@ -203,17 +279,17 @@ public class QRCodeGeneratorUnitTest
         var qrIso = QRCodeGenerator.Create("HELLO", QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
         var qrUtf8 = QRCodeGenerator.Create("HELLO", QREccLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
 
-        // Different ECI headers 驕ｶ鄙ｫ繝ｻdifferent QR codes
+        // Different ECI headers → different QR codes
         await Assert.That(SerializeMatrix(qrIso)).IsNotEqualTo(SerializeMatrix(qrDefault));
         await Assert.That(SerializeMatrix(qrUtf8)).IsNotEqualTo(SerializeMatrix(qrIso));
         await Assert.That(SerializeMatrix(qrUtf8)).IsNotEqualTo(SerializeMatrix(qrDefault));
     }
 
     [Test]
-    [Arguments("Zürich", QREccLevel.H, EciMode.Utf8, 2)]  // 髣厄ｽｫ繝ｻ・ｮ髮弱・・ｽ・｣髯溯ｼ斐・ Version 2
-    [Arguments("Zürich", QREccLevel.M, EciMode.Utf8, 1)]  // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
-    [Arguments("Zürich", QREccLevel.L, EciMode.Utf8, 1)]  // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
-    [Arguments("café", QREccLevel.H, EciMode.Utf8, 1)]    // Version 1 驍ｵ・ｺ繝ｻ・ｧ OK
+    [Arguments("Zürich", QREccLevel.H, EciMode.Utf8, 2)]  // 修正後: Version 2
+    [Arguments("Zürich", QREccLevel.M, EciMode.Utf8, 1)]  // Version 1 で OK
+    [Arguments("Zürich", QREccLevel.L, EciMode.Utf8, 1)]  // Version 1 で OK
+    [Arguments("café", QREccLevel.H, EciMode.Utf8, 1)]    // Version 1 で OK
     public async Task Create_VersionSelection_IsCorrect(string content, QREccLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
         var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
@@ -224,10 +300,10 @@ public class QRCodeGeneratorUnitTest
     // UTF-8 BOM Tests
 
     [Test]
-    [Arguments("hello", QREccLevel.H, true, 2)]   // With BOM: 24 bits (3-byte UTF-8 BOM: 0xEF, 0xBB, 0xBF) overhead 驕ｶ鄙ｫ繝ｻVersion 2
-    [Arguments("hello", QREccLevel.H, false, 1)]  // Without BOM 驕ｶ鄙ｫ繝ｻVersion 1
+    [Arguments("hello", QREccLevel.H, true, 2)]   // With BOM: 24 bits (3-byte UTF-8 BOM: 0xEF, 0xBB, 0xBF) overhead → Version 2
+    [Arguments("hello", QREccLevel.H, false, 1)]  // Without BOM → Version 1
     [Arguments("test", QREccLevel.M, true, 1)]    // With BOM but still fits in Version 1
-    [Arguments("test", QREccLevel.M, false, 1)]   // Without BOM 驕ｶ鄙ｫ繝ｻVersion 1
+    [Arguments("test", QREccLevel.M, false, 1)]   // Without BOM → Version 1
     public async Task Create_Utf8BOM_VersionSelection(string text, QREccLevel eccLevel, bool utf8BOM, int expectedVersion)
     {
         var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = EciMode.Utf8 });
@@ -241,15 +317,15 @@ public class QRCodeGeneratorUnitTest
         var qrWithBOM = QRCodeGenerator.Create("こんにちは".AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = true, EciMode = EciMode.Utf8 });
         var qrWithoutBOM = QRCodeGenerator.Create("こんにちは".AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { Utf8Bom = false, EciMode = EciMode.Utf8 });
 
-        // UTF-8 BOM adds 24 bits 驕ｶ鄙ｫ繝ｻdifferent QR codes
+        // UTF-8 BOM adds 24 bits → different QR codes
         await Assert.That(SerializeMatrix(qrWithoutBOM)).IsNotEqualTo(SerializeMatrix(qrWithBOM));
     }
 
     [Test]
-    [Arguments(QREccLevel.H, 6, false, 1)]    // V1-H: 6 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(QREccLevel.H, 7, false, 2)]    // V1-H: 7 bytes without BOM 驕ｶ鄙ｫ繝ｻV2 (exceeds capacity)
-    [Arguments(QREccLevel.H, 3, true, 1)]    // V1-H: 3 bytes with BOM (3 + 3 BOM = 6 bytes) 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(QREccLevel.H, 4, true, 2)]    // V1-H: 4 bytes with BOM (4 + 3 BOM = 7 bytes) 驕ｶ鄙ｫ繝ｻV2
+    [Arguments(QREccLevel.H, 6, false, 1)]    // V1-H: 6 bytes without BOM → V1
+    [Arguments(QREccLevel.H, 7, false, 2)]    // V1-H: 7 bytes without BOM → V2 (exceeds capacity)
+    [Arguments(QREccLevel.H, 3, true, 1)]    // V1-H: 3 bytes with BOM (3 + 3 BOM = 6 bytes) → V1
+    [Arguments(QREccLevel.H, 4, true, 2)]    // V1-H: 4 bytes with BOM (4 + 3 BOM = 7 bytes) → V2
     public async Task Create_Utf8BOM_MaxCapacity(QREccLevel eccLevel, int textLength, bool utf8BOM, int expectedVersion)
     {
         var text = new string('a', textLength);
@@ -502,9 +578,9 @@ public class QRCodeGeneratorUnitTest
     [Arguments("hello", QREccLevel.L, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1, no BOM
     [Arguments("hello", QREccLevel.L, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM
     [Arguments("hello", QREccLevel.H, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM, ECC-H
-    [Arguments("hello", QREccLevel.H, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // UTF-8 ECI, with BOM 驕ｶ鄙ｫ繝ｻVersion 2 (BOM adds 3 bytes)
+    [Arguments("hello", QREccLevel.H, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // UTF-8 ECI, with BOM → Version 2 (BOM adds 3 bytes)
     [Arguments("hello", QREccLevel.H, false, EciMode.Utf8, 4, 29 * 29, 29, 1)]  // UTF-8 ECI, no BOM, with quiet zone
-    [Arguments("hello", QREccLevel.H, true, EciMode.Utf8, 4, 33 * 33, 33, 2)]   // UTF-8 ECI, with BOM, with quiet zone 驕ｶ鄙ｫ繝ｻVersion 2
+    [Arguments("hello", QREccLevel.H, true, EciMode.Utf8, 4, 33 * 33, 33, 2)]   // UTF-8 ECI, with BOM, with quiet zone → Version 2
     [Arguments("Café", QREccLevel.M, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1 encoding
     [Arguments("こんにちは", QREccLevel.M, false, EciMode.Utf8, 0, 25 * 25, 25, 2)]  // Japanese UTF-8
     [Arguments("こんにちは", QREccLevel.M, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // Japanese UTF-8 with BOM
@@ -522,14 +598,14 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments(QREccLevel.H, 6, false, EciMode.Utf8, 1)]    // V1-H: 6 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(QREccLevel.H, 7, false, EciMode.Utf8, 2)]    // V1-H: 7 bytes without BOM 驕ｶ鄙ｫ繝ｻV2 (exceeds V1 capacity)
-    [Arguments(QREccLevel.H, 3, true, EciMode.Utf8, 1)]     // V1-H: 3 bytes + 3 BOM = 6 bytes 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(QREccLevel.H, 4, true, EciMode.Utf8, 2)]     // V1-H: 4 bytes + 3 BOM = 7 bytes 驕ｶ鄙ｫ繝ｻV2
-    [Arguments(QREccLevel.M, 13, false, EciMode.Utf8, 1)]   // V1-M: 13 bytes without BOM 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(QREccLevel.M, 14, false, EciMode.Utf8, 2)]   // V1-M: 14 bytes without BOM 驕ｶ鄙ｫ繝ｻV2
-    [Arguments(QREccLevel.M, 10, true, EciMode.Utf8, 1)]    // V1-M: 10 bytes + 3 BOM = 13 bytes 驕ｶ鄙ｫ繝ｻV1
-    [Arguments(QREccLevel.M, 11, true, EciMode.Utf8, 2)]    // V1-M: 11 bytes + 3 BOM = 14 bytes 驕ｶ鄙ｫ繝ｻV2
+    [Arguments(QREccLevel.H, 6, false, EciMode.Utf8, 1)]    // V1-H: 6 bytes without BOM → V1
+    [Arguments(QREccLevel.H, 7, false, EciMode.Utf8, 2)]    // V1-H: 7 bytes without BOM → V2 (exceeds V1 capacity)
+    [Arguments(QREccLevel.H, 3, true, EciMode.Utf8, 1)]     // V1-H: 3 bytes + 3 BOM = 6 bytes → V1
+    [Arguments(QREccLevel.H, 4, true, EciMode.Utf8, 2)]     // V1-H: 4 bytes + 3 BOM = 7 bytes → V2
+    [Arguments(QREccLevel.M, 13, false, EciMode.Utf8, 1)]   // V1-M: 13 bytes without BOM → V1
+    [Arguments(QREccLevel.M, 14, false, EciMode.Utf8, 2)]   // V1-M: 14 bytes without BOM → V2
+    [Arguments(QREccLevel.M, 10, true, EciMode.Utf8, 1)]    // V1-M: 10 bytes + 3 BOM = 13 bytes → V1
+    [Arguments(QREccLevel.M, 11, true, EciMode.Utf8, 2)]    // V1-M: 11 bytes + 3 BOM = 14 bytes → V2
     public async Task TryGetRequiredBufferSize_Utf8BOM_AffectsVersionSelection(QREccLevel eccLevel, int textLength, bool utf8BOM, EciMode eciMode, int expectedVersion)
     {
         var text = new string('a', textLength); // ASCII = 1 byte each

@@ -255,9 +255,9 @@ public class QRCodeGeneratorVersionBoundaryTest
     /// </summary>
     [Test]
     [Arguments(QREccLevel.L, 1250, 15)]  // v15 max (stack)
-    [Arguments(QREccLevel.L, 1251, 16)]  // v15 overflow 竊・v16 (still stack)
+    [Arguments(QREccLevel.L, 1251, 16)]  // v15 overflow → v16 (still stack)
     [Arguments(QREccLevel.L, 1408, 16)]  // v16 max (stack limit)
-    [Arguments(QREccLevel.L, 1409, 17)]  // v16 overflow 竊・v17 (heap starts)
+    [Arguments(QREccLevel.L, 1409, 17)]  // v16 overflow → v17 (heap starts)
     [Arguments(QREccLevel.L, 1548, 17)]  // v17 max (heap)
     [Arguments(QREccLevel.M, 991, 15)]   // v15 max (M)
     [Arguments(QREccLevel.M, 992, 16)]   // v15 overflow (M)
