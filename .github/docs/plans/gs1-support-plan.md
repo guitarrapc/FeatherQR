@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The maintainer asked for GS1 support on 2026-10-10. [fnc1-support-plan.md](fnc1-support-plan.md) gives the encoders and decoders FNC1, so a GS1 element string can go into a symbol and come back out. This plan covers the layer above it: the AI table, the checks GS1 defines, `(01)…(17)…` text in both directions, Digital Link URIs, and how GS1's carrier rules meet the three symbologies. It also revisits a row of the [2.0.0 plan](featherqr-2.0.0-plan.md), which puts "GS1 syntax validation and human-readable `(AI)` formatting, which need the GS1 AI table" out of scope. This plan is that table and what it costs.
+The maintainer asked for GS1 support on 2026-10-10. [fnc1-support-plan.md](fnc1-support-plan.md) gives the encoders and decoders FNC1, so a GS1 element string can go into a symbol and come back out. This plan covers the layer above it: the AI table, the checks GS1 defines, `(01)…(17)…` text in both directions, Digital Link URIs, and how GS1's carrier rules meet the three symbologies. The [2.0.0 plan](featherqr-2.0.0-plan.md) first put "GS1 syntax validation and human-readable `(AI)` formatting, which need the GS1 AI table" out of scope. This plan is that table and what it costs, and since 2026-10-10 it ships with FNC1 encode (G1).
 
 The research behind it (GS1 sections, the dictionary format, other libraries, the oracles) is in [references/gs1-support-research.md](references/gs1-support-research.md). When the plan completes, its durable content moves into the specs, and the plan and its research file are deleted.
 
@@ -22,7 +22,7 @@ Both carriers rest on the same data rules, so a caller needs three jobs from thi
 
 ## Where it stands (2026-10-10, `main` at f4b74de)
 
-- No GS1 code exists. FNC1 is planned in [fnc1-support-plan.md](fnc1-support-plan.md): `Fnc1Mode` as `Fnc1` on the Standard QR and rMQR options and decode info, an element string with U+001D separators in and out, no GS1 syntax checks, landing before the 2.0.0 freeze. Its decision 1 (the shape of `Fnc1Mode`) is still open, and the recipes below follow its current proposal.
+- No GS1 code exists. FNC1 is planned in [fnc1-support-plan.md](fnc1-support-plan.md): `Fnc1Mode` as `Fnc1` on the Standard QR and rMQR options and decode info, an element string with U+001D separators in and out, no GS1 syntax checks. Its decode ships in 2.0.0 on its own, and its encode ships with this layer (G1). Its decision 1 (the shape of `Fnc1Mode`) is still open, and the recipes below follow its current proposal.
 - A Digital Link URI already encodes and decodes as plain text. What is missing is building one correctly and reading GS1 data out of one.
 - The real-image corpus holds one GS1 symbol (`qrcode-2/gs1-figure-4.15.1-2`), whose element string uses AIs 01, 21, 10, 17 and 8200.
 
@@ -83,7 +83,7 @@ Every conversion is one hop, and the hub is the form the FNC1 encoder takes and 
 
 ### API sketch
 
-Names and signatures are settled in Phase 1. The shape follows the existing pair: builders look like the generators (a one-line form that throws, and a span form), readers look like the decoders (`Try`, with a string or a caller's span).
+Names and signatures are settled in Phase 1. The recipes use the FNC1 plan's decision 1. Its read members (`info.Fnc1.IsFirstPosition`) are public from FNC1 decode in 2.0.0. Its construction members (`Fnc1Mode.FirstPosition`, the options' `Fnc1`) go public with FNC1 encode, which is the release this layer ships in (G1). The shape follows the existing pair: builders look like the generators (a one-line form that throws, and a span form), readers look like the decoders (`Try`, with a string or a caller's span).
 
 ```csharp
 // Build a GS1 QR Code (healthcare, logistics)
@@ -140,7 +140,7 @@ Building writes a separator only where the General Specifications require one (�
 
 | # | Decision | Recommendation |
 |---|---|---|
-| G1 | Release | It does not block 2.0.0. It is additive and changes no output, so it ships in the first release after it is done: 2.0.0 if it lands before the Phase 7 freeze, 2.1.0 otherwise. The 2.0.0 plan's Out row points here once the maintainer accepts this plan |
+| G1 | Release | Decided 2026-10-10 (the 2.0.0 plan's D12): this layer ships in the same release as FNC1 encode ([fnc1-support-plan.md](fnc1-support-plan.md) Phases 3-6), not before it and not after it. That is 2.0.0 if both land before the Phase 7 freeze, 2.1.0 otherwise, and it does not block 2.0.0. An encoder that takes any element string without these builders lets a missing separator write a wrong symbol with no error. FNC1 decode ships in 2.0.0 on its own, since reading needs no GS1 layer |
 | G2 | Package | The core, as static members of `Gs1` in the `FeatherQR` namespace. An application that does not call it trims it away, and the core split record already rejected packages that would save untrimmed consumers 100-130 KB. Phase 0 measures the table, and the recommendation holds while it stays well under that. A `FeatherQR.Gs1` package would avoid an assembly-size cost for untrimmed consumers and could ship table updates without a core release, at the cost of a fourth package to version, validate and document. Revisit when someone asks for GS1 without FeatherQR, or when table updates must ship more often than the core |
 | G3 | Table source and update | Generated from dictionary release 2026-01-27 by a test, as described above, updated once a year |
 | G4 | Encode entry point | No GS1 overload on the generators. The conversion and the FNC1 option compose with every existing overload (span, destination, sizing) on both symbologies, where an overload would need a twin of each |
@@ -192,7 +192,7 @@ A lead outside the scope: the scheme and host of a Digital Link URI are case-ins
 | 6 | Symbols, after the FNC1 plan's Phases 3 and 4: the end-to-end tests, the compliance property, the corpus photograph, the benchmark class | zxing-cpp's reads match. Encode and decode benchmarks within noise |
 | 7 | Playground (GS1 input as `(AI)` text, the Digital Link builder, the decoded AIs, on top of the FNC1 plan's encode selector), the documents below, the approved API listing, then this plan folded and deleted with its research file | The Playground publish green and checked by hand |
 
-Phases 0-5 touch no symbol code and can run beside the FNC1 plan. Only Phase 6 waits for it.
+Phases 0-5 touch no symbol code and can run beside the FNC1 plan. Only Phase 6 waits for it. This layer and the FNC1 plan's encode phases are released together (G1). If the 2.0.0 freeze comes first, both wait on a branch and merge after 2.0.0 is released.
 
 ## Documents to change
 
@@ -200,7 +200,6 @@ Phases 0-5 touch no symbol code and can run beside the FNC1 plan. Only Phase 6 w
 - [qrcode-symbologies.md](../specs/qrcode-symbologies.md): the "GS1 data" section (the table and its update, the check strength per member, the carrier rules), scope rows (GS1 data in, compressed Digital Link, titles and scanner strings out, each with a revisit condition) and lessons.
 - [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md): the GS1 oracles, the Syntax Engine under the toolchain policy, the GS1 fixtures and what each oracle's release explains.
 - [standardqr-encoder.md](../specs/standardqr-encoder.md), [rmqr-encoder.md](../specs/rmqr-encoder.md) and the two decoder records: a link to the GS1 section where they describe FNC1.
-- [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md): the Out row for GS1 syntax and `(AI)` text, once G1 is decided. This plan does not edit it.
 - The third-party notice file (G8) and the XML docs of the new members.
 
 ## Risks
@@ -222,5 +221,13 @@ Lessons:
 - Reading GS1 data needs the AI table as much as checking it does, because predefined-length elements carry no separator. Reading can still accept newer AIs, because the tables that give an AI's length and the predefined lengths are frozen.
 - A reference implementation's output shows its own dictionary release, not the standard. zxing-cpp's hand table and libzint's generated one are older than CodeGlyphX's, so a disagreement needs its release named before it is called a defect.
 - Pairing rules are defined per item, not per symbol, so a per-symbol check can refuse valid data.
+
+Benchmarks: not applicable, no `src/` change.
+
+### Release order (2026-10-10)
+
+Done: the maintainer decided G1. This layer ships in the same release as FNC1 encode, and FNC1 decode ships in 2.0.0 on its own. [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md) (scope row, D12, Phase 6c) and [fnc1-support-plan.md](fnc1-support-plan.md) (phase exits, release paragraph) were updated in the same change.
+
+Lesson: what decides the release is where a caller can go wrong. Reading GS1 data is safe without this layer. Writing it is not, because the encoder cannot tell a missing separator from a long value.
 
 Benchmarks: not applicable, no `src/` change.

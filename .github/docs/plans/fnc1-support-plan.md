@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This plan details Phase 6c of the [2.0.0 plan](featherqr-2.0.0-plan.md) (GS1 / FNC1, D9-D12): reading and writing both FNC1 modes in Standard QR and rMQR. It settles the rMQR indicator question, corrects three premises of D9 and D10, adds what the investigation found about the `%` rule, and orders the work so each step is checked against an outside reader.
+This plan details Phase 6c of the [2.0.0 plan](featherqr-2.0.0-plan.md) (GS1 / FNC1, D9-D12): reading and writing both FNC1 modes in Standard QR and rMQR. It settles the rMQR indicator question, corrects two premises of D10, adds what the investigation found about the `%` rule, and orders the work so each step is checked against an outside reader. Decode ships on its own, in 2.0.0. Encode ships in the same release as the GS1 layer (D12, decided 2026-10-10).
 
 The layer above the bit stream (the GS1 AI table, check digits, `(AI)` text, Digital Link) is in [gs1-support-plan.md](gs1-support-plan.md). This plan gives that layer an encoder that takes an element string with U+001D separators and a decoder that returns one with the mode beside it. The research behind the plan (standard clauses, the oracle probe, the code inventory) is in [references/fnc1-support-research.md](references/fnc1-support-research.md).
 
@@ -57,9 +57,10 @@ No writer produces rMQR second position, so that cell is checked only by zxing-c
 
 ### Premises of the 2.0.0 decisions that do not hold
 
-- D9 says an indicator without second position throws "as contradictions do today". No option combination is refused today: the init accessors validate single values. Decision 1 below makes the combination impossible to express instead.
 - D10 says a misplaced FNC1 is `InvalidBitstream` "as a misplaced Structured Append header is". A Structured Append header is read wherever it sits, and two tests pin that. The FNC1 rule would be the decoder's first placement rule. Decision 6 keeps it for its own reason.
 - D10 names `RmQRDecodeInfo`. The type is `RmQRCodeDecodeInfo`.
+
+D9's premise has a precedent. It says an indicator without second position throws "as contradictions do today", and rMQR refuses a `Version` and a `Height` that disagree, in the generator at the call. No accessor refuses a combination: the accessors validate single values. Decision 1 below makes the combination impossible to express instead.
 
 ## Scope
 
@@ -84,8 +85,8 @@ No writer produces rMQR second position, so that cell is checked only by zxing-c
 
 | # | Decision | Recommendation |
 |---|---|---|
-| 1 | API shape (refines D9, D10) | One value type, `Fnc1Mode`, as `Fnc1` on `QRCodeGeneratorOptions`, `RmQRCodeGeneratorOptions`, `QRCodeDecodeInfo` and `RmQRCodeDecodeInfo`. It is built as `Fnc1Mode.None` (the default), `Fnc1Mode.FirstPosition`, `Fnc1Mode.SecondPosition(int number)` for 00-99 or `Fnc1Mode.SecondPosition(char letter)` for A-Z and a-z, and read as `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`. No contradiction can be expressed, a letter cannot be passed as a number (`(byte)'A'` is 65, a valid number), and a decoded mode goes back into the options unchanged. D9's enum plus an integer is one type fewer but needs a runtime refusal and keeps the 65 trap. Unprefixed like `EciMode`, because it applies to two symbologies and Micro QR has no member |
-| 2 | The application indicator on decode | The codeword (00-99, or the letter plus 100) in `ApplicationIndicator`, not in the text (D10). The docs show how to build the standard's transmission: identifier, the indicator as two digits or one letter, text. A formatting member can be added later |
+| 1 | API shape (refines D9, D10) | One value type, `Fnc1Mode`, as `Fnc1` on `QRCodeGeneratorOptions`, `RmQRCodeGeneratorOptions`, `QRCodeDecodeInfo` and `RmQRCodeDecodeInfo`. It is built as `Fnc1Mode.None` (the default), `Fnc1Mode.FirstPosition`, `Fnc1Mode.SecondPosition(int number)` for 00-99 or `Fnc1Mode.SecondPosition(char letter)` for A-Z and a-z, and read as `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`, an `int?` (decision 2). No contradiction can be expressed, a letter cannot be passed as a number (`(byte)'A'` is 65, a valid number), and a decoded mode goes back into the options unchanged. D9's enum plus an integer is one type fewer but needs a runtime refusal and keeps the 65 trap. Unprefixed like `EciMode`, because it applies to two symbologies and Micro QR has no member. Under the release split (D12) the decode half publishes the type with its read members only, because nothing in that release takes a mode as input. The construction members and the options property become public with the encode half, which adds them without a break. `None` waits with them. In the decode half a symbol without FNC1 reports `default`, where `IsFirstPosition` and `IsSecondPosition` are both false, so a caller needs no name for it, and a name added later breaks nothing. That holds because the option structs have `set` accessors and no constructor ([qrcode-symbologies.md](../specs/qrcode-symbologies.md#public-api-direction)). With the constructor they had until 2026-10-10, a new option would have changed its signature or made calls to it ambiguous. The shape is still settled before Phase 1, because the decode info freezes with 2.0.0 |
+| 2 | The application indicator on decode | `ApplicationIndicator` is an `int?`: the codeword (00-99, or the letter plus 100) in second position and `null` in any other mode. It is not in the text (D10). As an `int` its default 0 would also be the indicator 00. `null` is chosen over -1, the value the decode info gives an unknown `MaskPattern`, because the indicator is a value a caller formats: `(-1).ToString("D2")` is `-01`, and `ToString("D2")` on an `int?` does not compile (CS1501), so the caller has to take the value out first, for example with `is int indicator`. `null` for a value that is absent is also the rule on the builder options ([qrcode-symbologies.md](../specs/qrcode-symbologies.md#public-api-direction)). `null` does not tell no mode from first position, so `IsFirstPosition` stays, and `IsSecondPosition` says what `ApplicationIndicator.HasValue` says. The docs show how to build the standard's transmission: identifier, the indicator as two digits or one letter, text. A formatting member can be added later |
 | 3 | How `%` is read | Within one segment, left to right, `%%` first. Every reader probed does this, and it is the only reading an encoder can target |
 | 4 | GS before GS or `%` in an Alphanumeric segment | Never written. `Single` treats such a text as not Alphanumeric. `Optimal` prices a segment break or a Byte segment there |
 | 5 | Header order on encode | The standard's: ECI, FNC1, the application indicator, data. The decoder reads FNC1 before or after ECI |
@@ -102,6 +103,7 @@ No writer produces rMQR second position, so that cell is checked only by zxing-c
 Decode:
 
 - Mode: none, first, second. Indicators 00, 99, `A` and `z`, and one value from each invalid range.
+- `ApplicationIndicator`: `null` for no mode and for first position, and 0 for the indicator 00.
 - Placement: first, after ECI, before ECI, after a Structured Append header, after a data segment, twice, first then second.
 - Alphanumeric under FNC1: no `%`, `%`, `%%`, `%%%`, `%%%%`, `%` at a segment's start and end, a `%` ending one segment and another starting the next. The same texts without FNC1 stay literal.
 - Byte segments with 0x1D and 0x25 under ISO-8859-1 and UTF-8. Numeric and Kanji segments under FNC1.
@@ -121,13 +123,15 @@ Encode:
 |---|---|---|
 | 0 | Fixtures and probes, tools only. A `probe-fnc1` and a `regenerate-fnc1` command in QRInteropFixtures: libzint `gs1` (Standard QR, rMQR), ZXing.Net `GS1_FORMAT`, CodeGlyphX first and second position (Standard QR) and `EncodeGs1` (rMQR), each read by zxing-cpp. An `fnc1` field in the manifest and `FixtureLoader` | Fixtures committed. The writer defects recorded in [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md). Decision 1 settled |
 | 1 | Standard QR decode: the decode classes, then the decoder, `QRCodeDecodeInfo.Fnc1` and the XML docs that call FNC1 unsupported. A test pins the corpus photograph | The Phase 0 fixtures read with the expected text and mode. The photograph reads in all four rotations. Decode benchmarks within noise |
-| 2 | rMQR decode: the same classes on rMQR streams, `Decode_ReservedModes_AreInvalidBitstream` replaced, the three rMQR records corrected | The libzint and CodeGlyphX rMQR fixtures read. Sweep misreads unchanged on rMQR |
+| 2 | rMQR decode: the same classes on rMQR streams, `Decode_ReservedModes_AreInvalidBitstream` replaced, the three rMQR records corrected | The libzint and CodeGlyphX rMQR fixtures read. Sweep misreads unchanged on rMQR. The decode half of the documents below, the approved API listing and the Playground's decode panel land with it, so decode can ship in 2.0.0 on its own |
 | 3 | Standard QR encode: the option, `Single`, `Optimal`, header order, sizing, the Structured Append refusal | The encode classes round-trip through this decoder and zxing-cpp (identifier, content type, text). The route without FNC1 keeps its listing. Encode benchmarks within noise |
 | 4 | rMQR encode: the same, plus the fit route with FNC1 header bits | The Phase 3 exits for rMQR |
-| 5 | Interop sweep and Playground. Generated GS1-like strings and adversarial `%` / GS sequences, encoded here and read by zxing-cpp, and by ZXing.Net for first position. The Playground's encode selector and decode panel | Every read matches. The Playground publish is green and checked by hand |
-| 6 | The documents below and the approved API listing, then this plan folded into the specs and deleted with its research file | Lands before the 2.0.0 Phase 7 freeze |
+| 5 | Interop sweep and Playground. Generated GS1-like strings and adversarial `%` / GS sequences, encoded here and read by zxing-cpp, and by ZXing.Net for first position. The Playground's encode selector | Every read matches. The Playground publish is green and checked by hand |
+| 6 | The documents below and the approved API listing, then this plan folded into the specs and deleted with its research file | Ships with the GS1 layer (D12) |
 
-Phase 0 comes first and Phase 1 next. Phases 2 and 3 depend on 1, Phase 4 on 2 and 3, and Phase 5 on 3 and 4. Under D12 the work moves to 2.1.0 as a whole if it slips, because it is additive and changes no default output.
+Phase 0 comes first and Phase 1 next. Phases 2 and 3 depend on 1, Phase 4 on 2 and 3, and Phase 5 on 3 and 4.
+
+The two halves ship separately (D12, decided 2026-10-10). Decode (Phases 0-2) ships in 2.0.0: today every GS1 QR Code reads as `UnsupportedContent`, and reading one needs no GS1 layer. Encode (Phases 3-6) ships in the same release as the builders of [gs1-support-plan.md](gs1-support-plan.md), because an encoder that takes any element string lets a missing separator write a wrong symbol with no error. That release is 2.0.0 if both land before the Phase 7 freeze. Otherwise the encode phases wait on a branch and merge after 2.0.0 is released. All of it is additive and changes no default output.
 
 [gs1-support-plan.md](gs1-support-plan.md) builds on this plan. Its end-to-end phase waits for Phases 3 and 4, its Playground work for Phase 5, its API sketch uses the shape of decision 1, and its invariant (a GS1 element string written with default options has no ECI header and no Kanji segment) relies on decisions 8 and 9. A change to any of those decisions updates that plan in the same change.
 
@@ -152,4 +156,17 @@ Lessons:
 
 - A writer's FNC1 output is not evidence of the `%` rule. Two of the three writers return a different text for some input, and both readers agree on what those symbols say.
 - The separator-pair trap is not in the standard. It was found by asking what `%%%` reads as.
-- D9 and D10 cite precedents (refused contradictions, a Structured Append placement rule) that the code does not have. A decision's "as X does today" is a claim to check like any other.
+- D10 cites a precedent, a Structured Append placement rule, that the code does not have. A decision's "as X does today" is a claim to check like any other.
+- A correction is a claim too. This plan first said that no option combination is refused today, and rMQR refuses a `Version` and a `Height` that disagree.
+
+### Release order (2026-10-10)
+
+Done: the maintainer split the release. Decode ships in 2.0.0 on its own, and encode ships in the same release as the GS1 layer. Phase 2 now carries the decode half of the documents, the API listing and the Playground's decode panel. Phase 5 keeps the encode selector. [featherqr-2.0.0-plan.md](featherqr-2.0.0-plan.md) (scope row, D12, Phase 6c) and [gs1-support-plan.md](gs1-support-plan.md) (G1) were updated in the same change. No code changed.
+
+Lesson: an encoder option that writes whatever data it is given is only half a feature without the layer that builds the data correctly. Reading needs no such layer, so the two halves need not ship together.
+
+### Two points of the API shape (2026-10-11)
+
+Done: decisions 1 and 2 now say that `ApplicationIndicator` is an `int?` and that `Fnc1Mode.None` ships with the encode half. Both were worked out in the discussion of decision 1 on 2026-10-10, where the first proposal was -1 for an indicator that does not apply and `None` in the decode release, and the maintainer had them written in. Decision 1 as a whole is still settled at the end of Phase 0. No code changed.
+
+Lesson: the plan gave the indicator a member and did not say what it reads outside second position. A member whose zero is a real value needs its absent case decided with it.

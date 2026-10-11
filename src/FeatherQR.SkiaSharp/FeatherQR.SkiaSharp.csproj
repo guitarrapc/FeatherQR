@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net10.0</TargetFrameworks>
     <RootNamespace>FeatherQR.SkiaSharp</RootNamespace>
+    <!-- Runs the code-style rules of .editorconfig in the build and enforces IDE0251 for struct members -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 
     <!-- NuGet -->
     <IsPackable>true</IsPackable>

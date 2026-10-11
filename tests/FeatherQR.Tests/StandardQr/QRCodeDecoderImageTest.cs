@@ -23,8 +23,8 @@ public class QRCodeDecoderImageTest
     }
 
     [Test]
-    [Arguments("縺薙ｓ縺ｫ縺｡縺ｯ荳也阜")]
-    [Arguments("脂 emoji 至")]
+    [Arguments("こんにちは世界")]
+    [Arguments("🎉 emoji 🎊")]
     public async Task Decode_RenderedBitmap_Utf8(string content)
     {
         using var bitmap = RenderQr(content, QREccLevel.M, pixelsPerModule: 8, eciMode: EciMode.Utf8);
@@ -49,10 +49,10 @@ public class QRCodeDecoderImageTest
     [Test]
     [Arguments(12)]
     [Arguments(13)]
-    [Arguments(14)] // 512px / 81 modules = 6.32 px/module 遯ｶ繝ｻsnapped one version low before the run-boundary fix
+    [Arguments(14)] // 512px / 81 modules = 6.32 px/module — snapped one version low before the run-boundary fix
     [Arguments(15)]
     [Arguments(16)]
-    [Arguments(17)] // 5.51 px/module 遯ｶ繝ｻsame regression
+    [Arguments(17)] // 5.51 px/module — same regression
     [Arguments(18)]
     [Arguments(20)]
     [Arguments(25)]

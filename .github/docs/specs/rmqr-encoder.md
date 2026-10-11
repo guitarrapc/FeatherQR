@@ -48,20 +48,22 @@ public enum RmQREccLevel { M = 0, H = 1 }            // own domain like MicroQRE
 public enum RmQRVersion  { R7x43 = 1, R7x59, R7x77, R7x99, R7x139, R9x43, …, R17x139 = 32 }   // height-major, value = version index + 1 = libzint version number
 public enum RmQRFitStrategy { MinimizeArea = 0, MinimizeWidth = 1, MinimizeHeight = 2 }
 public enum RmQRHeight { H7 = 7, H9 = 9, H11 = 11, H13 = 13, H15 = 15, H17 = 17 }
+public enum RmQRSegmentation { Single = 0, Optimal = 1 }   // one segment in one mode, or the mixed-mode split with the fewest bits
 ```
 
-Generator (`public static class RmQRCodeGenerator`, `DefaultQuietZone = 2`):
+Generator (`public static class RmQRCodeGenerator`):
 
 ```csharp
-public readonly record struct RmQRCodeGeneratorOptions
+public record struct RmQRCodeGeneratorOptions
 {
     static RmQRCodeGeneratorOptions Default { get; }        // == default
-    EciMode EciMode { get; init; }                          // Default; only Default / Iso8859_1 / Utf8 accepted
-    RmQRVersion? Version { get; init; }                     // null = fit automatically
-    RmQRFitStrategy FitStrategy { get; init; }              // MinimizeArea
-    RmQRHeight? Height { get; init; }                       // null = every height
-    int QuietZoneSize { get; init; }                        // 2 (ISO/IEC 23941)
-    RmQRSegmentation Segmentation { get; init; }            // Single
+    EciMode EciMode { get; set; }                           // Default; only Default / Iso8859_1 / Utf8 accepted
+    RmQRVersion? Version { get; set; }                      // null = fit automatically
+    RmQRFitStrategy FitStrategy { get; set; }               // MinimizeArea
+    RmQRHeight? Height { get; set; }                        // null = every height
+    int QuietZoneSize { get; set; }                         // 2 (ISO/IEC 23941)
+    RmQRSegmentation Segmentation { get; set; }             // Single
+    bool AllowKanji { get; set; }                           // false
 }
 
 RmQRCodeData Create(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);

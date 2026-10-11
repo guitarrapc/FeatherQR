@@ -6,7 +6,8 @@ namespace FeatherQR.Tests;
 /// Parity test for the finder-pattern row-scan kernels: the SIMD mask walk
 /// (net8.0+, AVX2) evaluates the 1:1:3:1:1 window at exactly the positions the
 /// scalar walk does, so <see cref="FinderPatternFinder.TryFind"/> and
-/// <see cref="FinderPatternFinder.TryFindScalar"/> must agree bit-for-bit 遯ｶ繝ｻ/// found flag, centers and module sizes 遯ｶ繝ｻacross synthetic QR-like scenes
+/// <see cref="FinderPatternFinder.TryFindScalar"/> must agree bit-for-bit —
+/// found flag, centers and module sizes — across synthetic QR-like scenes
 /// (finder patterns + timing lines + random data modules, 3/2/0 patterns).
 /// </summary>
 public class FinderPatternFinderParityTest
@@ -17,7 +18,7 @@ public class FinderPatternFinderParityTest
     public async Task SimdAndScalarKernels_AgreeBitForBit()
     {
         // (dimension, ppm, finderCount): both benchmark shapes, a 2-finder scene
-        // (found only if noise fakes a third candidate 遯ｶ繝ｻkernels must agree either
+        // (found only if noise fakes a third candidate — kernels must agree either
         // way), and a no-pattern scene.
         var configs = new (int Dimension, int Ppm, int FinderCount)[]
         {
@@ -140,7 +141,7 @@ public class FinderPatternFinderParityTest
     }
 
     /// <summary>
-    /// QR-like scene: quiet zone, up to three 7・・・ finder patterns (dark border,
+    /// QR-like scene: quiet zone, up to three 7×7 finder patterns (dark border,
     /// light ring, dark center) with light separators, timing lines, and ~45%
     /// random dark data modules elsewhere.
     /// </summary>
@@ -193,7 +194,7 @@ public class FinderPatternFinderParityTest
             {
                 for (var dx = 0; dx < 7; dx++)
                 {
-                    // dark border (ring 3), light ring (ring 2), dark 3・・・ center
+                    // dark border (ring 3), light ring (ring 2), dark 3×3 center
                     var ring = Math.Max(Math.Abs(dx - 3), Math.Abs(dy - 3));
                     if (ring != 2)
                     {

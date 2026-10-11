@@ -34,7 +34,7 @@ public class EccBinaryEncoderUnitTest
         EccBinaryEncoder.CalculateECC(data, ecc1, eccCount);
         EccBinaryEncoder.CalculateECC(data, ecc2, eccCount);
 
-        // Assert - Deterministic (same input 遶翫・same output)
+        // Assert - Deterministic (same input → same output)
         await Assert.That(ecc1.SequenceEqual(ecc2)).IsTrue();
     }
 
@@ -179,7 +179,7 @@ public class EccBinaryEncoderUnitTest
     // Polynomial Operation
 
     [Test]
-    [Arguments(7)]  // Degree 6 generator (x-・趣ｽｱ^0)(x-・趣ｽｱ^1)...(x-・趣ｽｱ^6)
+    [Arguments(7)]  // Degree 6 generator (x-α^0)(x-α^1)...(x-α^6)
     [Arguments(10)] // Degree 9 generator
     [Arguments(30)] // Degree 29 generator (max for Version 40-H)
     public async Task CalculateECC_GeneratorPolynomial_ProducesCorrectDegree(int eccCount)
@@ -233,6 +233,6 @@ public class EccBinaryEncoderUnitTest
         EccBinaryEncoder.CalculateECC(data2, ecc2, eccCount);
 
         // Assert
-        await Assert.That(ecc1.SequenceEqual(ecc2)).IsFalse(); // Different inputs 遶翫・different ECC
+        await Assert.That(ecc1.SequenceEqual(ecc2)).IsFalse(); // Different inputs → different ECC
     }
 }

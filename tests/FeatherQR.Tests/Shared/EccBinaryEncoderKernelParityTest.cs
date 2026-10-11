@@ -155,7 +155,7 @@ public class EccBinaryEncoderKernelParityTest
         // EccBinaryEncoder.GfniMatrix is baked into the assembly as constant data;
         // this recomputes every entry from GaloisField.Multiply so the constant can
         // never drift from the field definition. gf2p8affineqb convention: qword
-        // byte (7-i) = matrix row for result bit i, row bit k = bit i of f繝ｻ繧托ｽｽ・ｷ2^k.
+        // byte (7-i) = matrix row for result bit i, row bit k = bit i of f·2^k.
         var table = EccBinaryEncoder.GfniMatrix.ToArray();
          await Assert.That(table.Length).IsEqualTo(256);
 
@@ -198,7 +198,7 @@ public class EccBinaryEncoderKernelParityTest
 
     [Test]
     [Arguments(254)] // largest eccCount whose generator is log-domain representable
-    [Arguments(255)] // generator degenerates to x^255 + 1 (zero coefficients) 驕ｯ・ｶ郢晢ｽｻnaive fallback
+    [Arguments(255)] // generator degenerates to x^255 + 1 (zero coefficients) — naive fallback
     public async Task CalculateECC_MaxEccCounts_MatchesNaiveReference(int eccCount)
     {
         // eccCount == 255 is the only count whose generator polynomial has zero
@@ -246,7 +246,7 @@ public class EccBinaryEncoderKernelParityTest
     /// </summary>
     private static void NaiveReferenceECC(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
-        // Generator polynomial (x - 繝ｻ雜｣・ｽ・ｱ^0)(x - 繝ｻ雜｣・ｽ・ｱ^1)...(x - 繝ｻ雜｣・ｽ・ｱ^(eccCount-1))
+        // Generator polynomial (x - α^0)(x - α^1)...(x - α^(eccCount-1))
         var generator = new byte[eccCount + 1];
         generator[0] = 1;
         var temp = new byte[generator.Length];

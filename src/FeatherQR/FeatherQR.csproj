@@ -5,6 +5,8 @@
     <RootNamespace>FeatherQR</RootNamespace>
     <!-- ARM64 bit expansion reads a destination address only to choose an alignment hint. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Runs the code-style rules of .editorconfig in the build and enforces IDE0251 for struct members -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 
     <!-- NuGet -->
     <IsPackable>true</IsPackable>
