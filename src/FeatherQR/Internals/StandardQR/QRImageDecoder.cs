@@ -24,7 +24,9 @@ namespace FeatherQR.Internals.StandardQR;
 ///       when nothing anchored, four-point transform (alignment-anchored, else the parallelogram), coverage
 ///       re-read (grey levels), mesh when the search anchored, module-space re-read (a grey image in hand, the
 ///       timing patterns alternating), then, each with both re-reads, the parallelogram after an anchored grid
-///       or the frame grid when nothing anchored and the frame foreshortens; neither at the runner-up
+///       or, when nothing anchored, the frame grid where the frame foreshortens and the grid through the fourth
+///       point from the finders' edges, and last the planes fitted to the finders' outlines, with the anchor
+///       and without it; none at the runner-up
 /// 3. When that does not settle, a-d from each other corner whose timing patterns read
 /// 4. When the selected triple does not settle and more than three candidates were found, the next two triples: each a-d once, from the first of its corners whose timing patterns read, or skipped when none does
 /// </code>
@@ -656,6 +658,12 @@ internal static partial class QRImageDecoder
         if (alignmentAnchored)
         {
             DecodeOtherGrid(image, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+            if (!IsSettled(result.Status) && TryFitToFinderOutlines(image, frame, dimension, anchored: true, transform, out var outlineFit, out var anchoredFit))
+            {
+                DecodeOtherGrid(image, anchoredFit, dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+                if (!IsSettled(result.Status))
+                    DecodeOtherGrid(image, outlineFit, dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+            }
             return result.Report(out charsWritten, out info);
         }
 
@@ -666,6 +674,8 @@ internal static partial class QRImageDecoder
         // Last, the fourth point measured on the image, from the two finders' edges that face it: a symbol bent off the plane is neither flat nor in perspective
         if (!IsSettled(result.Status) && TryFourthPointFromEdges(image, topLeft, topRight, bottomLeft, moduleSize, out var edgeX, out var edgeY))
             DecodeOtherGrid(image, BuildEdgePointTransform(topLeft, topRight, bottomLeft, edgeX, edgeY, dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+        if (!IsSettled(result.Status) && TryFitToFinderOutlines(image, frame, dimension, anchored: false, transform, out var fitted, out _))
+            DecodeOtherGrid(image, fitted, dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
         return result.Report(out charsWritten, out info);
     }
 

@@ -262,10 +262,14 @@ public class DecodeAllocationTest
         ModuleSpace,
         /// <summary>Standard QR only: <see cref="ModuleSpaceDecodeTest"/>'s small shadowed symbol, read at the regional pass in module space from the grey image.</summary>
         ModuleSpaceRegional,
+        /// <summary>Standard QR only: <see cref="FinderOutlineFitDecodeTest"/>'s tilted version 2 with its alignment pattern painted over, read through the plane fitted to the finders' outlines.</summary>
+        OutlineFit,
+        /// <summary>Standard QR only: <see cref="FinderOutlineFitDecodeTest"/>'s bent version 3, read through the plane fitted to the outlines and the alignment anchor.</summary>
+        OutlineFitAnchored,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint, ImageScene.ModuleSpace, ImageScene.ModuleSpaceRegional];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint, ImageScene.ModuleSpace, ImageScene.ModuleSpaceRegional, ImageScene.OutlineFit, ImageScene.OutlineFitAnchored];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -346,6 +350,16 @@ public class DecodeAllocationTest
                 {
                     var (luminance, width, height, text) = ModuleSpaceDecodeTest.Shadowed(3, QREccLevel.M, 3f, 20f, 0f, negated: false, destroyData: false);
                     return new Scene(luminance, width, height, text);
+                }
+            case ImageScene.OutlineFit:
+                {
+                    var (photograph, _, text) = FinderOutlineFitDecodeTest.Render(2, QREccLevel.L, 4f, 40f, 0f, 1.2f, 200f, alignmentPaintedOver: true, destroyData: false);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, text);
+                }
+            case ImageScene.OutlineFitAnchored:
+                {
+                    var (photograph, _, text) = FinderOutlineFitDecodeTest.Render(3, QREccLevel.M, 4f, 35f, 45f, 2.5f, 0f, alignmentPaintedOver: false, destroyData: false, bowModules: 3f, blurSigma: 1f);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, text);
                 }
             case ImageScene.FineTexture:
                 {
