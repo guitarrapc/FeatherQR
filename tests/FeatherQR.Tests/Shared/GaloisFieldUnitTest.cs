@@ -70,7 +70,7 @@ public class GaloisFieldUnitTest
     [Test]
     public async Task LogThenExp_AllValues_AreConsistent()
     {
-        // exp(log[v]) = v, v驕ｶ蛹・ｽ｣・ｰ0
+        // exp(log[v]) = v, v≠0
         for (int v = 1; v <= 255; v++) // 0 is not in non-zero field
         {
             byte vb = (byte)v;

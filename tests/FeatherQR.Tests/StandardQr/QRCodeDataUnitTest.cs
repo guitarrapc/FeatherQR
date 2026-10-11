@@ -4,11 +4,11 @@ namespace FeatherQR.Tests;
 public class QRCodeDataUnitTest
 {
     [Test]
-    [Arguments(1, 21)]   // Version 1: 21繝ｻ繝ｻ繝ｻ1 = 441 bits (441 % 8 = 1, padding = 7)
-    [Arguments(2, 25)]   // Version 2: 25繝ｻ繝ｻ繝ｻ5 = 625 bits (625 % 8 = 1, padding = 7)
-    [Arguments(3, 29)]   // Version 3: 29繝ｻ繝ｻ繝ｻ9 = 841 bits (841 % 8 = 1, padding = 7)
-    [Arguments(10, 57)]  // Version 10: 57繝ｻ繝ｻ繝ｻ7 = 3249 bits (3249 % 8 = 1, padding = 7)
-    [Arguments(40, 177)] // Version 40: 177繝ｻ繝ｻ繝ｻ77 = 31329 bits (31329 % 8 = 1, padding = 7)
+    [Arguments(1, 21)]   // Version 1: 21×21 = 441 bits (441 % 8 = 1, padding = 7)
+    [Arguments(2, 25)]   // Version 2: 25×25 = 625 bits (625 % 8 = 1, padding = 7)
+    [Arguments(3, 29)]   // Version 3: 29×29 = 841 bits (841 % 8 = 1, padding = 7)
+    [Arguments(10, 57)]  // Version 10: 57×57 = 3249 bits (3249 % 8 = 1, padding = 7)
+    [Arguments(40, 177)] // Version 40: 177×177 = 31329 bits (31329 % 8 = 1, padding = 7)
     public async Task GetRawData_CorrectPadding_ByVersion(int version, int expectedSize)
     {
         // Create QR code data with specific version
@@ -30,10 +30,10 @@ public class QRCodeDataUnitTest
     }
 
     [Test]
-    [Arguments(1, 0, 21)]   // Version 1, no quiet zone: 21繝ｻ繝ｻ繝ｻ1
-    [Arguments(1, 4, 29)]   // Version 1, quiet zone 4: 29繝ｻ繝ｻ繝ｻ9
-    [Arguments(2, 0, 25)]   // Version 2, no quiet zone: 25繝ｻ繝ｻ繝ｻ5
-    [Arguments(2, 4, 33)]   // Version 2, quiet zone 4: 33繝ｻ繝ｻ繝ｻ3
+    [Arguments(1, 0, 21)]   // Version 1, no quiet zone: 21×21
+    [Arguments(1, 4, 29)]   // Version 1, quiet zone 4: 29×29
+    [Arguments(2, 0, 25)]   // Version 2, no quiet zone: 25×25
+    [Arguments(2, 4, 33)]   // Version 2, quiet zone 4: 33×33
     public async Task GetRawData_CorrectPadding_WithQuietZone(int version, int quietZone, int expectedSize)
     {
         // Create QR code
@@ -58,11 +58,11 @@ public class QRCodeDataUnitTest
     /// </summary>
     [Test]
     [Arguments(0, 0)]    // Already aligned
-    [Arguments(1, 7)]    // 1 bit 驕ｶ鄙ｫ繝ｻneed 7 bits padding
-    [Arguments(7, 1)]    // 7 bits 驕ｶ鄙ｫ繝ｻneed 1 bit padding
-    [Arguments(256, 0)]  // 256 bits (32 bytes) 驕ｶ鄙ｫ繝ｻno padding 驕ｶ鄙ｫ繝ｻEdge case
-    [Arguments(257, 7)]  // 257 bits 驕ｶ鄙ｫ繝ｻ7 bits padding
-    [Arguments(441, 7)]  // Version 1 QR (21繝ｻ繝ｻ繝ｻ1)
+    [Arguments(1, 7)]    // 1 bit → need 7 bits padding
+    [Arguments(7, 1)]    // 7 bits → need 1 bit padding
+    [Arguments(256, 0)]  // 256 bits (32 bytes) → no padding → Edge case
+    [Arguments(257, 7)]  // 257 bits → 7 bits padding
+    [Arguments(441, 7)]  // Version 1 QR (21×21)
     public async Task PaddingFormula_CalculatesCorrectBoundary(int totalBits, int expectedPadding)
     {
         var remainder = totalBits % 8;
@@ -176,21 +176,25 @@ public class QRCodeDataUnitTest
     /// <remarks>
     /// if matrixSize is 21 (Version 1), then the pattern is:
     /// ---------------------------------------------
-    /// (row, col) 驕ｶ鄙ｫ繝ｻ1D index 驕ｶ鄙ｫ繝ｻpattern
+    /// (row, col) → 1D index → pattern
     /// ---------------------------------------------
-    /// (0, 0) 驕ｶ鄙ｫ繝ｻ0 * 21 + 0 = 0   驕ｶ鄙ｫ繝ｻ0 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (0, 1) 驕ｶ鄙ｫ繝ｻ0 * 21 + 1 = 1   驕ｶ鄙ｫ繝ｻ1 % 7 = 1 驕ｶ鄙ｫ繝ｻfalse
-    /// (0, 2) 驕ｶ鄙ｫ繝ｻ0 * 21 + 2 = 2   驕ｶ鄙ｫ繝ｻ2 % 7 = 2 驕ｶ鄙ｫ繝ｻfalse
+    /// (0, 0) → 0 * 21 + 0 = 0   → 0 % 7 = 0 → true  ✅
+    /// (0, 1) → 0 * 21 + 1 = 1   → 1 % 7 = 1 → false
+    /// (0, 2) → 0 * 21 + 2 = 2   → 2 % 7 = 2 → false
     /// ...
-    /// (0, 6) 驕ｶ鄙ｫ繝ｻ0 * 21 + 6 = 6   驕ｶ鄙ｫ繝ｻ6 % 7 = 6 驕ｶ鄙ｫ繝ｻfalse
-    /// (0, 7) 驕ｶ鄙ｫ繝ｻ0 * 21 + 7 = 7   驕ｶ鄙ｫ繝ｻ7 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (0, 14) 驕ｶ鄙ｫ繝ｻ0 * 21 + 14 = 14 驕ｶ鄙ｫ繝ｻ14 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue 髫ｨ・ｨ郢晢ｽｻ    /// (1, 6) 驕ｶ鄙ｫ繝ｻ1 * 21 + 6 = 27  驕ｶ鄙ｫ繝ｻ27 % 7 = 6 驕ｶ鄙ｫ繝ｻfalse
-    /// (1, 7) 驕ｶ鄙ｫ繝ｻ1 * 21 + 7 = 28  驕ｶ鄙ｫ繝ｻ28 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    ///
+    /// (0, 6) → 0 * 21 + 6 = 6   → 6 % 7 = 6 → false
+    /// (0, 7) → 0 * 21 + 7 = 7   → 7 % 7 = 0 → true  ✅
+    /// (0, 14) → 0 * 21 + 14 = 14 → 14 % 7 = 0 → true ✅
+    /// (1, 6) → 1 * 21 + 6 = 27  → 27 % 7 = 6 → false
+    /// (1, 7) → 1 * 21 + 7 = 28  → 28 % 7 = 0 → true  ✅
+    ///
     /// ---------------------------------------------
     /// Visualize
     /// ---------------------------------------------
-    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
+    /// ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □
+    /// □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □
+    /// □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □
+    /// □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □
     /// ...
     /// </remarks>
     [Test]
@@ -248,25 +252,29 @@ public class QRCodeDataUnitTest
     /// <remarks>
     /// if matrixSize is 37 (Version 5), then the pattern is:
     /// ---------------------------------------------
-    /// (row, col) 驕ｶ鄙ｫ繝ｻsum 驕ｶ鄙ｫ繝ｻpattern
+    /// (row, col) → sum → pattern
     /// ---------------------------------------------
-    /// (0, 0) 驕ｶ鄙ｫ繝ｻ0 + 0 = 0 驕ｶ鄙ｫ繝ｻ0 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (0, 1) 驕ｶ鄙ｫ繝ｻ0 + 1 = 1 驕ｶ鄙ｫ繝ｻ1 % 3 = 1 驕ｶ鄙ｫ繝ｻfalse
-    /// (0, 2) 驕ｶ鄙ｫ繝ｻ0 + 2 = 2 驕ｶ鄙ｫ繝ｻ2 % 3 = 2 驕ｶ鄙ｫ繝ｻfalse
-    /// (0, 3) 驕ｶ鄙ｫ繝ｻ0 + 3 = 3 驕ｶ鄙ｫ繝ｻ3 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (1, 0) 驕ｶ鄙ｫ繝ｻ1 + 0 = 1 驕ｶ鄙ｫ繝ｻ1 % 3 = 1 驕ｶ鄙ｫ繝ｻfalse
-    /// (1, 1) 驕ｶ鄙ｫ繝ｻ1 + 1 = 2 驕ｶ鄙ｫ繝ｻ2 % 3 = 2 驕ｶ鄙ｫ繝ｻfalse
-    /// (1, 2) 驕ｶ鄙ｫ繝ｻ1 + 2 = 3 驕ｶ鄙ｫ繝ｻ3 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (2, 1) 驕ｶ鄙ｫ繝ｻ2 + 1 = 3 驕ｶ鄙ｫ繝ｻ3 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// 
+    /// (0, 0) → 0 + 0 = 0 → 0 % 3 = 0 → true  ✅
+    /// (0, 1) → 0 + 1 = 1 → 1 % 3 = 1 → false
+    /// (0, 2) → 0 + 2 = 2 → 2 % 3 = 2 → false
+    /// (0, 3) → 0 + 3 = 3 → 3 % 3 = 0 → true  ✅
+    /// (1, 0) → 1 + 0 = 1 → 1 % 3 = 1 → false
+    /// (1, 1) → 1 + 1 = 2 → 2 % 3 = 2 → false
+    /// (1, 2) → 1 + 2 = 3 → 3 % 3 = 0 → true  ✅
+    /// (2, 1) → 2 + 1 = 3 → 3 % 3 = 0 → true  ✅
+    /// 
     /// ---------------------------------------------
     /// Visualize
     /// ---------------------------------------------
-    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ
-    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡
+    /// ■ □ □ ■ □ □ ■ □ □
+    /// □ □ ■ □ □ ■ □ □ ■
+    /// □ ■ □ □ ■ □ □ ■ □
+    /// ■ □ □ ■ □ □ ■ □ □
+    /// □ □ ■ □ □ ■ □ □ ■
+    /// □ ■ □ □ ■ □ □ ■ □
+    /// ■ □ □ ■ □ □ ■ □ □
+    /// □ □ ■ □ □ ■ □ □ ■
+    /// □ ■ □ □ ■ □ □ ■ □
     /// </remarks>
     [Test]
     public async Task Serialization_RoundTrip()
@@ -278,7 +286,7 @@ public class QRCodeDataUnitTest
         var pattern = 3;
 
         // Arrange
-        var original = new QRCodeData(5, quietZoneSize: quietZoneSize);  // Version 5: 37繝ｻ繝ｻ繝ｻ7
+        var original = new QRCodeData(5, quietZoneSize: quietZoneSize);  // Version 5: 37×37
         var size = original.Size;
 
         // Set recognizable pattern

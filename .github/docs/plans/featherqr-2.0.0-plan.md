@@ -1297,3 +1297,17 @@ Found beside it and left for its own change: the sixteen inputs of that class th
 Lesson: a file a failing test leaves behind is input to the next run, so a reader that searches a directory has to say which files it means.
 
 No library code changed.
+
+### The golden pixel test compares against its committed samples again (2026-10-11)
+
+Done. Sixteen inputs of `QRCodeVisualCompatibilityTest` and twelve of its comment lines were mojibake, UTF-8 text read as code page 932 and saved as UTF-8 again. The test names a sample after its input, so each of the sixteen cases asked for a sample that is not committed, saved its own rendering in the test output directory and passed. The sixteen samples committed for those cases, named after the intended inputs, were compared against by no case. `6ab392f4` (2026-07-12, the move from xUnit to TUnit) introduced it. The inputs and the comments are back as they stand in `d29e9462`, the previous commit of the file. The sixteen names the inputs ask for now are the names of those sixteen committed samples. After a full run both Release output directories hold the 73 committed samples and no other, so no case saved one. With one byte of `こんにちは_eccM_eci0.pixels` changed in the output directory its case fails. The sixteen cases compare again, and they match, so no rendering had changed behind them.
+
+The same commit damaged eleven more test files, in 131 lines: 129 comment lines and two inputs of `QRCodeDecoderImageTest`. A line was damaged once, twice or three times over. A byte that code page 932 reads as the first of two takes the next byte with it, so where such a byte ended a line the line end went too. Thirty of the 131 lines each held several lines that way, in four of them the empty line after a diagram. No code was taken into a comment. All 131 are restored from each file's last commit before `6ab392f4`, as 216 lines. Every restored stretch is checked against the damage itself: a function that reads UTF-8 bytes as code page 932 turns the text from history into exactly the damaged text that was in the file. The same function turns the restored text of the golden test into its 28 damaged lines. With comments and empty lines taken out, the restoration changed eighteen lines in the twelve files, the sixteen inputs and those two.
+
+A missing sample now fails its case when the `CI` environment variable is set, as a missing golden file does in `RenderingApprovalTest`. Without the variable the first run still saves the sample in the test output directory. With the variable set and one sample removed, one case of 77 fails and nothing is saved. Before the change all 77 passed and the sample was saved, which is what the sixteen cases did in every output directory that had no sample of theirs yet. The full suite passes with 38,148 tests.
+
+Seen during the search and left as found, since it is not this damage: `tests/FeatherQR.AotAnalysis/SimdParity.cs` lists the runs of its planner walk, its comment names lone surrogates among them, and the two literals in that place are both U+FFFD, in every commit of the file.
+
+Lesson: a golden test that saves what it cannot find passes when its input is wrong, so a missing file has to fail wherever nobody reads the output directory.
+
+No library code changed.

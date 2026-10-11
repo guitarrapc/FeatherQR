@@ -74,12 +74,12 @@ public class QRCodeVisualCompatibilityTest
     [Arguments("ABC-123", QREccLevel.Q)]
     [Arguments("Test123", QREccLevel.H)]
     [Arguments("Hello, World!", QREccLevel.L)]
-    [Arguments("縺薙ｓ縺ｫ縺｡縺ｯ", QREccLevel.M)]
-    [Arguments("菴螂ｽ荳也阜", QREccLevel.Q)]
-    [Arguments("ﾐ湲ﾐｸﾐｲﾐｵﾑ・ﾐｼﾐｸﾑ", QREccLevel.H)]
-    [Arguments("脂至肢", QREccLevel.L)]
-    [Arguments("cafﾃｩ", QREccLevel.M)]
-    [Arguments("ﾃ双ﾃｱo", QREccLevel.Q)]
+    [Arguments("こんにちは", QREccLevel.M)]
+    [Arguments("你好世界", QREccLevel.Q)]
+    [Arguments("Привет мир", QREccLevel.H)]
+    [Arguments("🎉🎊🎈", QREccLevel.L)]
+    [Arguments("café", QREccLevel.M)]
+    [Arguments("Ñoño", QREccLevel.Q)]
     public async Task Create_Default_PixelsMatchSample(string content, QREccLevel eccLevel)
     {
         await AssertPixelsMatchSample(content, eccLevel, EciMode.Default);
@@ -91,22 +91,22 @@ public class QRCodeVisualCompatibilityTest
     [Arguments("ABC-123", QREccLevel.Q)]
     [Arguments("Test123", QREccLevel.H)]
     [Arguments("Hello, World!", QREccLevel.L)]
-    [Arguments("縺薙ｓ縺ｫ縺｡縺ｯ", QREccLevel.M)]
-    [Arguments("菴螂ｽ荳也阜", QREccLevel.Q)]
-    [Arguments("ﾐ湲ﾐｸﾐｲﾐｵﾑ・ﾐｼﾐｸﾑ", QREccLevel.H)]
-    [Arguments("脂至肢", QREccLevel.L)]
-    [Arguments("cafﾃｩ", QREccLevel.M)]
-    [Arguments("ﾃ双ﾃｱo", QREccLevel.Q)]
+    [Arguments("こんにちは", QREccLevel.M)]
+    [Arguments("你好世界", QREccLevel.Q)]
+    [Arguments("Привет мир", QREccLevel.H)]
+    [Arguments("🎉🎊🎈", QREccLevel.L)]
+    [Arguments("café", QREccLevel.M)]
+    [Arguments("Ñoño", QREccLevel.Q)]
     public async Task Create_Utf8_PixelsMatchSample(string content, QREccLevel eccLevel)
     {
         await AssertPixelsMatchSample(content, eccLevel, EciMode.Utf8);
     }
 
     [Test]
-    [Arguments("Cafﾃｩ", QREccLevel.L)]
-    [Arguments("Rﾃｩsumﾃｩ", QREccLevel.M)]
-    [Arguments("Naﾃｯve", QREccLevel.Q)]
-    [Arguments("Zﾃｼrich", QREccLevel.H)]
+    [Arguments("Café", QREccLevel.L)]
+    [Arguments("Résumé", QREccLevel.M)]
+    [Arguments("Naïve", QREccLevel.Q)]
+    [Arguments("Zürich", QREccLevel.H)]
     public async Task Create_Iso8859_1_PixelsMatchSample(string content, QREccLevel eccLevel)
     {
         await AssertPixelsMatchSample(content, eccLevel, EciMode.Iso8859_1);
@@ -177,28 +177,28 @@ public class QRCodeVisualCompatibilityTest
     {
         // Default mode (no ECI header)
         // Numeric mode
-        // V1-L: 152 bits - 4 (mode) - 10 (count) = 138 bits 遶翫・41 digits
+        // V1-L: 152 bits - 4 (mode) - 10 (count) = 138 bits → 41 digits
         yield return new object[] { new string('1', 41), QREccLevel.L, EciMode.Default, 1 };  // V1-L max
         yield return new object[] { new string('1', 42), QREccLevel.L, EciMode.Default, 2 };  // V2-L min
 
-        // V1-M: 128 bits - 4 - 10 = 114 bits 遶翫・34 digits
+        // V1-M: 128 bits - 4 - 10 = 114 bits → 34 digits
         yield return new object[] { new string('1', 34), QREccLevel.M, EciMode.Default, 1 };  // V1-M max
         yield return new object[] { new string('1', 35), QREccLevel.M, EciMode.Default, 2 };  // V2-M min
 
-        // V1-H: 72 bits - 4 - 10 = 58 bits 遶翫・17 digits
+        // V1-H: 72 bits - 4 - 10 = 58 bits → 17 digits
         yield return new object[] { new string('1', 17), QREccLevel.H, EciMode.Default, 1 };  // V1-H max
         yield return new object[] { new string('1', 18), QREccLevel.H, EciMode.Default, 2 };  // V2-H min
 
         //Alphanumeric mode
-        // V1-L: 152 bits - 4 - 9 = 139 bits 遶翫・25 chars
+        // V1-L: 152 bits - 4 - 9 = 139 bits → 25 chars
         yield return new object[] { new string('A', 25), QREccLevel.L, EciMode.Default, 1 };  // V1-L max
         yield return new object[] { new string('A', 26), QREccLevel.L, EciMode.Default, 2 };  // V2-L min
 
-        // V1-M: 128 bits - 4 - 9 = 115 bits 遶翫・20 chars
+        // V1-M: 128 bits - 4 - 9 = 115 bits → 20 chars
         yield return new object[] { new string('A', 20), QREccLevel.M, EciMode.Default, 1 };  // V1-M max
         yield return new object[] { new string('A', 21), QREccLevel.M, EciMode.Default, 2 };  // V2-M min
 
-        //  V1-H: 72 bits - 4 - 9 = 59 bits 遶翫・10 chars
+        //  V1-H: 72 bits - 4 - 9 = 59 bits → 10 chars
         yield return new object[] { new string('A', 10), QREccLevel.H, EciMode.Default, 1 };  // V1-H max
         yield return new object[] { new string('A', 11), QREccLevel.H, EciMode.Default, 2 };  // V2-H min
 
@@ -206,28 +206,28 @@ public class QRCodeVisualCompatibilityTest
         foreach (var eci in new[] { EciMode.Iso8859_1, EciMode.Utf8 })
         {
             // Numeric mode
-            // V1-L: 152 bits - 12 (ECI) - 4 (mode) - 10 (count) = 126 bits 遶翫・37 digits
+            // V1-L: 152 bits - 12 (ECI) - 4 (mode) - 10 (count) = 126 bits → 37 digits
             yield return new object[] { new string('1', 37), QREccLevel.L, eci, 1 };  // V1-L max
             yield return new object[] { new string('1', 38), QREccLevel.L, eci, 2 };  // V2-L min
 
-            // V1-M: 128 bits - 12 - 4 - 10 = 102 bits 遶翫・30 digits
+            // V1-M: 128 bits - 12 - 4 - 10 = 102 bits → 30 digits
             yield return new object[] { new string('1', 30), QREccLevel.M, eci, 1 };  // V1-M max
             yield return new object[] { new string('1', 31), QREccLevel.M, eci, 2 };  // V2-M min
 
-            // V1-H: 72 bits - 12 - 4 - 10 = 46 bits 遶翫・13 digits
+            // V1-H: 72 bits - 12 - 4 - 10 = 46 bits → 13 digits
             yield return new object[] { new string('1', 13), QREccLevel.H, eci, 1 };  // V1-H max
             yield return new object[] { new string('1', 14), QREccLevel.H, eci, 2 };  // V2-H min
 
             //Alphanumeric mode
-            // V1-L: 152 bits - 12 - 4 - 9 = 127 bits 遶翫・23 chars
+            // V1-L: 152 bits - 12 - 4 - 9 = 127 bits → 23 chars
             yield return new object[] { new string('A', 23), QREccLevel.L, eci, 1 };  // V1-L max
             yield return new object[] { new string('A', 24), QREccLevel.L, eci, 2 };  // V2-L min
 
-            // V1-M: 128 bits - 12 - 4 - 9 = 103 bits 遶翫・18 chars
+            // V1-M: 128 bits - 12 - 4 - 9 = 103 bits → 18 chars
             yield return new object[] { new string('A', 18), QREccLevel.M, eci, 1 };  // V1-M max
             yield return new object[] { new string('A', 19), QREccLevel.M, eci, 2 };  // V2-M min
 
-            //  V1-H: 72 bits - 12 - 4 - 9 = 47 bits 遶翫・8 chars
+            //  V1-H: 72 bits - 12 - 4 - 9 = 47 bits → 8 chars
             yield return new object[] { new string('A', 8), QREccLevel.H, eci, 1 };  // V1-H max
             yield return new object[] { new string('A', 9), QREccLevel.H, eci, 2 };  // V2-H min
         }
@@ -248,6 +248,12 @@ public class QRCodeVisualCompatibilityTest
 
         if (!File.Exists(samplePath))
         {
+            // A case whose sample is not committed has nothing to compare against, and would pass by saving its own.
+            if (Environment.GetEnvironmentVariable("CI") is not null)
+            {
+                Assert.Fail($"Sample file missing on CI: {samplePath}. Generate it locally (run this test), copy it from the test output directory into the project's testdata/pixels and commit it.");
+            }
+
             // First run: save as sample
             SavePixelData(samplePath, actualPixels, qr.Size);
             await Assert.That(File.Exists(samplePath)).IsTrue().Because($"Sample file created: {samplePath}");
