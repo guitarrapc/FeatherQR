@@ -256,10 +256,12 @@ public class DecodeAllocationTest
         UndersampledStride,
         /// <summary>Standard QR only: <see cref="TripleSelectionDecodeTest"/>'s keystoned grid of nine symbols, read through the crowded list's triples gated by their timing patterns.</summary>
         Crowded,
+        /// <summary>Standard QR only: <see cref="EdgeFourthPointDecodeTest"/>'s version 1 bent round a cylinder and tilted, read through the fourth point from the finders' edges.</summary>
+        EdgePoint,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -351,6 +353,11 @@ public class DecodeAllocationTest
                 {
                     var (luminance, width, height, _) = TripleSelectionDecodeTest.RenderGrid(3, 3, 0.12f, _ => Content);
                     return new Scene(luminance, width, height, Content);
+                }
+            case ImageScene.EdgePoint:
+                {
+                    var (photograph, _) = EdgeFourthPointDecodeTest.Render(15f, 0f, 2.5f, 4f, destroyData: false);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, EdgeFourthPointDecodeTest.Content);
                 }
             default:
                 throw new ArgumentOutOfRangeException(nameof(scene), scene, "not a Standard QR scene");

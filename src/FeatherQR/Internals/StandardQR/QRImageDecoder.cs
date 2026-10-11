@@ -632,7 +632,7 @@ internal static partial class QRImageDecoder
                 return result.Report(out charsWritten, out info);
         }
 
-        if (!finderFallback || (!alignmentAnchored && frame.IsAffine))
+        if (!finderFallback)
             return result.Report(out charsWritten, out info);
 
         // The mirror retry above left the first sampling transposed
@@ -641,11 +641,18 @@ internal static partial class QRImageDecoder
         // Alignment fallback: the alignment centre is pixel-resolved, which at about 2 px/module is a third of a module, and the transform extrapolates that error across the bottom-right block as perspective.
         // The finders alone are exact for a flat symbol, and read by coverage too: an alignment pattern drawn as dots anchors a fifth of a module off. Failure-path cost only.
         if (alignmentAnchored)
+        {
             DecodeOtherGrid(image, BuildParallelogramTransform(topLeft, topRight, bottomLeft, dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+            return result.Report(out charsWritten, out info);
+        }
+
         // Nothing anchored the fourth corner, so the parallelogram above assumed the symbol flat; the finders' foreshortening places it under perspective.
         // Not first, because on a flat symbol under 2 px/module that foreshortening is measurement noise of a percent or two
-        else if (!frame.IsAffine)
+        if (!frame.IsAffine)
             DecodeOtherGrid(image, frame.Transform(dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
+        // Last, the fourth point measured on the image, from the two finders' edges that face it: a symbol bent off the plane is neither flat nor in perspective
+        if (!IsSettled(result.Status) && TryFourthPointFromEdges(image, topLeft, topRight, bottomLeft, moduleSize, out var edgeX, out var edgeY))
+            DecodeOtherGrid(image, BuildEdgePointTransform(topLeft, topRight, bottomLeft, edgeX, edgeY, dimension), dimension, ref modules, coverage: image.Grey.IsEnabled, destination, ref result);
         return result.Report(out charsWritten, out info);
     }
 
@@ -749,7 +756,7 @@ internal static partial class QRImageDecoder
     /// Out of line: the JIT would inline it into <see cref="DecodeOtherGrid"/> alone, a failure path, where it only adds code.
     /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out bool transposed)
+    internal static DecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info, out bool transposed)
     {
         transposed = false;
         var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);

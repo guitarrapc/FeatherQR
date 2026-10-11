@@ -332,21 +332,21 @@ BoofCV's QR photographs (`qrcodes_v3`, 536 photographs holding 1,232 labelled co
 | bright_spots | 32 | 22 | 13 | 17 | 0 | 9 |
 | brightness | 28 | 25 | 27 | 20 | 3 | 1 |
 | close | 40 | 40 | 40 | 2 | 0 | 0 |
-| curved | 50 | 30 | 34 | 22 | 4 | 0 |
+| curved | 50 | 35 | 34 | 22 | 0 | 1 |
 | damaged | 37 | 12 | 8 | 4 | 0 | 4 |
 | glare | 50 | 28 | 21 | 12 | 1 | 8 |
 | high_version | 33 | 25 | 32 | 2 | 7 | 0 |
 | lots | 7 | 7 | 7 | 7 | 0 | 0 |
 | monitor | 17 | 17 | 17 | 0 | 0 | 0 |
-| nominal | 65 | 59 | 61 | 47 | 3 | 1 |
+| nominal | 65 | 60 | 61 | 47 | 3 | 2 |
 | noncompliant | 16 | 13 | 11 | 4 | 1 | 3 |
 | pathological | 23 | 17 | 11 | 10 | 1 | 7 |
 | perspective | 35 | 23 | 22 | 15 | 1 | 2 |
 | rotations | 44 | 44 | 44 | 20 | 0 | 0 |
-| shadows | 14 | 12 | 13 | 11 | 1 | 0 |
-| All | 536 | 406 | 391 | 210 | 22 | 37 |
+| shadows | 14 | 13 | 13 | 11 | 1 | 1 |
+| All | 536 | 413 | 391 | 210 | 18 | 40 |
 
-The table is as read with the selection stages of 2026-10-11 (the skipped rows after a failed strided triple, and the triples of a crowded list gated by their timing patterns), which gained four `brightness` photographs and both `lots` ones over the inferred third finder's 400 (gap 28, reverse 37; `brightness` 21, `lots` 5) and lost none. Before the inference, with the reduced-scale search, this library read 371 (gap 40, reverse 20), by category 32, 21, 20, 40, 28, 9, 19, 25, 5, 17, 58, 11, 7, 23, 44 and 12; the inference gained 29 photographs and lost none: 9 under glare, 10 of the drawn `pathological` symbols, 3 damaged, 2 curved, 2 `noncompliant`, and one each of `bright_spots`, `brightness` and `nominal`. Without the reduced-scale search it read 322 (gap 77, reverse 9), by category 29, 15, 17, 39, 25, 6, 12, 25, 4, 7, 55, 6, 7, 22, 42 and 11. zxing-cpp's column grew by one, a read the other columns did not confirm until this library read the same text.
+The table is as read with the fourth point from the finders' edges (2026-10-11), which gained the four curved version 1 photographs and `curved/image018`, `nominal/image042` and `shadows/image011` over the selection stages' 406 (gap 22, reverse 37; `curved` 30, `nominal` 59, `shadows` 12) and lost none. The selection stages of the same day (the skipped rows after a failed strided triple, and the triples of a crowded list gated by their timing patterns) had gained four `brightness` photographs and both `lots` ones over the inferred third finder's 400 (gap 28, reverse 37; `brightness` 21, `lots` 5) and lost none. Before the inference, with the reduced-scale search, this library read 371 (gap 40, reverse 20), by category 32, 21, 20, 40, 28, 9, 19, 25, 5, 17, 58, 11, 7, 23, 44 and 12; the inference gained 29 photographs and lost none: 9 under glare, 10 of the drawn `pathological` symbols, 3 damaged, 2 curved, 2 `noncompliant`, and one each of `bright_spots`, `brightness` and `nominal`. Without the reduced-scale search it read 322 (gap 77, reverse 9), by category 29, 15, 17, 39, 25, 6, 12, 25, 4, 7, 55, 6, 7, 22, 42 and 11. zxing-cpp's column grew by one, a read the other columns did not confirm until this library read the same text.
 
 zxing-cpp's first 390 is 72.8 %, against the 73.1 % go-qr publishes for it on this set, and go-qr publishes 77.1 % for itself. Counted as codes, zxing-cpp read 976 of the 1,232 (975 at first) and this library, which reads one symbol a call, 371. The first run counted 900, and three more gave 960, 965 and 964 with every per-photograph figure unchanged: the tool held neither the pixel buffer nor the wrapper's objects through the native call (below, lessons). With them held, three runs gave 975 row for row. No read of this library's disagreed with another reader's at the same code. Two texts it read, on `damaged/image005` and `image020`, no other read of the set confirms: ZXing.Net reads both the same once given the image scaled down by 8 and by 4. On one thread this library takes a median 1.7 ms a photograph and 2.8 s for the set, and zxing-cpp 6.2 ms and 5.9 s. Before the reduced-scale search it took 1.3 ms and 2.2 s.
 
