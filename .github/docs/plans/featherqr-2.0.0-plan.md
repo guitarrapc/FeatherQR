@@ -1311,3 +1311,17 @@ Seen during the search and left as found, since it is not this damage: `tests/Fe
 Lesson: a golden test that saves what it cannot find passes when its input is wrong, so a missing file has to fail wherever nobody reads the output directory.
 
 No library code changed.
+
+### The parity harness walks lone surrogates again (2026-10-11)
+
+Done. `WalkLaneMismatches` in `tests/FeatherQR.AotAnalysis/SimdParity.cs` builds its text from eight runs, and its comment names lone surrogates among them. Two of the eight were U+FFFD, the same character twice, since the check arrived in `c8e923f9`. `StructuredAppendNeonParityTest` has had the same line since `a40e03d8`, written with `"\uD83C"`, `"\uDE00"` and `"x\uFEFF\uFEFF"`. The harness line was that line with each escape as a character, and a lone surrogate stored as UTF-8 is U+FFFD: the test's eight literals, unescaped and stored as UTF-8, are the eight the harness had. The harness has the test's line now, and builds its text from the same seeds in the same way.
+
+A planted fault shows what that line could not see. With a low surrogate that has no high one before it priced at no bytes in `StructuredAppendPlanner.LaneByteCost`, the harness as committed reported the walk as matching under `DOTNET_EnableAVX=0` and exited with 0. With the test's line it reports 192 mismatches and exits with 1. Without that variable neither form sees the fault on this AVX2 machine, because the 32-bit lanes the dispatch takes there price a character with `ModeSegmenter.ByteCost`, which the scalar walk calls too. The portable 16-bit lanes and the NEON lanes call the copy.
+
+Without the fault all 21 checks of `--parity` match with the test's line in every build made here: the JIT as the CPU is and with `DOTNET_EnableAVX=0`, NativeAOT with the default instruction set and with x86-64-v3, and WebAssembly interpreted and AOT-compiled. ARM64 was not run here. `StructuredAppendNeonParityTest` walks the same text under the JIT there, and the NativeAOT builds for ARM64 meet the lone surrogates first on CI.
+
+The alphabet of `SegmenterLaneMismatches` in the same file held U+FEFF and U+10000 as characters. Both survive UTF-8, so that check drew the mark and the two halves of the pair as its comment says. They are written as `\uFEFF\uD800\uDC00` now, the same 21 UTF-16 code units, so the mark can be seen and the halves can be read.
+
+Lesson: a literal whose escapes have become characters keeps compiling, loses what UTF-8 cannot store and hides what cannot be seen. A literal taken from another file is compared with it by code unit.
+
+No library code changed.
