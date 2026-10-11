@@ -392,19 +392,19 @@ public class Fnc1DecodeTest
 
     /// <summary>
     /// ISO/IEC 18004:2006 6.4.8.2 example: FNC1 in second position with the application indicator 37, AA1234BBB112 in
-    /// Alphanumeric mode and "text text text text" with a line feed in Byte mode, transmitted as ]Q5 37 and the data.
+    /// Alphanumeric mode and "text text text text" with a carriage return (the standard prints it as <CR>) in Byte mode, transmitted as ]Q5 37 and the data.
     /// </summary>
     [Test]
     public async Task IsoExample_SecondPosition_ReadsTheIndicatorAndTheData()
     {
-        var data = Build(Fnc1Second(37), Alphanumeric("AA1234BBB112"), Ascii("text text text text\n"), Terminator());
-        await Assert.That(Convert.ToHexString(data)).IsEqualTo("9252 061C C05E 22CF D1F0 05E8 28E8 CAF0 E840 E8CA F0E8 40E8 CAF0 E840 E8CA F0E8 1400".Replace(" ", ""))
+        var data = Build(Fnc1Second(37), Alphanumeric("AA1234BBB112"), Ascii("text text text text\r"), Terminator());
+        await Assert.That(Convert.ToHexString(data)).IsEqualTo("9252 061C C05E 22CF D1F0 05E8 28E8 CAF0 E840 E8CA F0E8 40E8 CAF0 E840 E8CA F0E8 1A00".Replace(" ", ""))
             .Because("1001 FNC1 second, 00100101 the indicator 37, 0010 Alphanumeric, the 9-bit count 12, six 11-bit pairs, 0100 Byte, the 8-bit count 20, twenty bytes, 0000");
 
         var status = Decode(data, out var text, out var fnc1);
 
         await Assert.That(status).IsEqualTo(DecodeStatus.Success);
-        await Assert.That(text).IsEqualTo("AA1234BBB112text text text text\n");
+        await Assert.That(text).IsEqualTo("AA1234BBB112text text text text\r");
         await Assert.That(fnc1.IsSecondPosition).IsTrue();
         await Assert.That(fnc1.ApplicationIndicator).IsEqualTo(37);
     }

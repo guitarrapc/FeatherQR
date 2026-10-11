@@ -23,8 +23,8 @@ public static class Fnc1Corpus
     private const string MixedCaseSerialElementString = GtinElement + "2112345678p901" + Gs + "101234567p" + Gs + "17231120";
     private const string Utf8ElementString = "10é" + Gs + "17231120";
 
-    /// <summary>ISO/IEC 18004 6.4.8.2's example data for FNC1 in second position, application indicator 37.</summary>
-    public const string IsoSecondPositionExample = "AA1234BBB112text text text text\n";
+    /// <summary>ISO/IEC 18004:2006 6.4.8.2's example data for FNC1 in second position, application indicator 37. The standard prints the last character as <c>&lt;CR&gt;</c>.</summary>
+    public const string IsoSecondPositionExample = "AA1234BBB112text text text text\r";
 
     private const string RmQR = Fnc1CaseDefinition.RmQR;
     private const Fnc1Position Second = Fnc1Position.Second;

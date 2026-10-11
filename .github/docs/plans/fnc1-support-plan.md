@@ -22,6 +22,7 @@ ISO/IEC 18004 (read in its 2006 edition) defines two modes that change how the w
 - Phases 0 to 2 are built: both decoders read both indicators and report `Fnc1Mode` on `QRCodeDecodeInfo.Fnc1` and `RmQRCodeDecodeInfo.Fnc1`, 28 fixtures from three writers are committed, and the rMQR records are corrected. Before this branch the Standard QR decoder returned `UnsupportedContent` for both indicators and the rMQR decoder refused `101` and `110` as reserved.
 - The Micro QR decoder refuses M4 indicators 4-7, which is correct.
 - No generator writes FNC1, and no option asks for it (Phases 3 to 6).
+- The standard's text behind the decode half: ISO/IEC 18004:2006 is on hand (public copy, clauses read and the two examples checked), ISO/IEC 23941:2022 only as a table of contents, so the rMQR mode table rows `101` and `110` still rest on the implementations ([fnc1-support-research.md](references/fnc1-support-research.md), Sources obtained after the merge).
 - The real-image corpus holds one GS1 photograph (`qrcode-2/gs1-figure-4.15.1-2.png`), which the sweep counts in the content column in all four rotations. Its expected text is the element string with raw GS and no identifier, the form this plan returns.
 - No test or tool asks a writer for FNC1.
 
@@ -200,3 +201,9 @@ Lessons:
 - A reviewer's replacement text is a claim too. Four of round 2's five findings were sentences round 1 had just written, each with a figure or a scope word taken from memory of the data rather than from the data.
 - A shape the corpus is said to hold needs a reader that can see it. Header order and segment modes were claimed by file names and asserted through fields that cannot tell them apart, so a writer change could have made the claims false while every test passed.
 - A benchmark comparison keyed by method name alone merged two jobs. The reports held a child-process job and an in-process job, and the first comparison read whichever came last, so the record described one job's method with the other job's numbers until the rows were keyed by job as well.
+
+### Spec sources after the merge (2026-10-12)
+
+Done: the public copy of ISO/IEC 18004:2006 and the public previews of ISO/IEC 23941:2022 were obtained into `.references/specs/` and read against the shipped decode. The two examples of 6.4.8 match the tests' framing, except that the second example ends in `<CR>`, not a line feed, so `Fnc1DecodeTest` and the `aim-37-iso-example-m` fixture were corrected. Annex F's wording for the modifiers 3 to 6 ("ECI protocol not implemented / implemented") backs the review's correction of the `]Q4` remark. The 23941 contents confirm the clause numbers 7.3.8 and 7.4.8 that the code and specs cite, and leave its mode table unread. The sources, their locations and what each settled are in [fnc1-support-research.md](references/fnc1-support-research.md).
+
+Lesson: a research summary of a standard is one reading away from the text. The summary said the second example ends in a line feed, the text says `<CR>`, and a test built from the summary pinned the wrong byte. Read the clause, not the summary, before pinning a vector as the standard's.
