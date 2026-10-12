@@ -62,7 +62,7 @@ public readonly record struct Gs1Error
         Gs1ErrorKind.InvalidValue => "the value fails a rule of its AI",
         Gs1ErrorKind.MissingRequiredAi => "a required AI is missing",
         Gs1ErrorKind.ExcludedAiPair => "two AIs that cannot appear together",
-        Gs1ErrorKind.RepeatedAi => "the same AI twice with different values",
+        Gs1ErrorKind.RepeatedAi => "the same AI twice, with different values in an element string or at all in a Digital Link URI",
         _ => "an error",
     };
 }

@@ -257,6 +257,10 @@ public class Gs1DigitalLinkTest
     [Arguments(Gtin, "https://brand.example.com/", "https://brand.example.com/01/09520123456788")]
     [Arguments(Gtin, "http://x/y/", "http://x/y/01/09520123456788")]
     [Arguments(Gtin, "HTTPS://Brand.Example.com:8443/path", "HTTPS://Brand.Example.com:8443/path/01/09520123456788")]
+    [Arguments(Gtin, "https://[2001:db8::1]:8443", "https://[2001:db8::1]:8443/01/09520123456788")]
+    [Arguments(Gtin, "https://[::ffff:192.0.2.1]", "https://[::ffff:192.0.2.1]/01/09520123456788")]
+    [Arguments(Gtin, "http://192.0.2.1:80", "http://192.0.2.1:80/01/09520123456788")]
+    [Arguments(Gtin, "https://xn--fsq.xn--0zwm56d/", "https://xn--fsq.xn--0zwm56d/01/09520123456788")]
     [Arguments(Gtin + "21123\u001D" + "10ABC\u001D" + "222A", null, "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123")]
     [Arguments(Gtin + "3922" + "0299\u001D" + "17251231" + "3103000195", null, "https://id.gs1.org/01/09520123456788?17=251231&3103=000195&3922=0299")]
     [Arguments(Gtin + "00195201234567891232", null, "https://id.gs1.org/01/09520123456788?00=195201234567891232")]
@@ -297,6 +301,17 @@ public class Gs1DigitalLinkTest
     [Arguments("https://a#x")]
     [Arguments("https://a/b c")]
     [Arguments("a/b")]
+    // An authority that is not a host with an optional port.
+    [Arguments("https://:")]
+    [Arguments("https://:8443")]
+    [Arguments("https://[]")]
+    [Arguments("https://[::1")]
+    [Arguments("https://[zz::1]")]
+    [Arguments("https://a:")]
+    [Arguments("https://a:x")]
+    [Arguments("https://a:1:2")]
+    [Arguments("https://a_b")]
+    [Arguments("https://a%20b")]
     public async Task TryToDigitalLink_ThrowsForAStemThatIsNotAUriPrefix(string stem)
     {
         await Assert.That(() => Gs1ElementString.TryToDigitalLink(Gtin, out _, out _, stem)).Throws<ArgumentException>();
