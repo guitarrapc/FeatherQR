@@ -38,7 +38,8 @@ public class TimingPatternDimensionTest
     /// <summary>
     /// At versions 39 and 40 the snapped finders measure a few percent small, which puts a
     /// 173- or 177-module symbol more than four modules past the largest version. The estimate is
-    /// refused as wild, so the count has to run without it.
+    /// refused as wild, so the count has to run without it. Both copies of the version information
+    /// are painted over: read at the finders, they would name the dimension before the count.
     /// </summary>
     [Test]
     [Arguments(39, 350)]
@@ -52,8 +53,10 @@ public class TimingPatternDimensionTest
     {
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = version });
         using var bitmap = new QRCodeImageBuilder(qr).WithSize(sizePx, sizePx).ToBitmap();
+        var luminance = Luminance(bitmap);
+        PaintVersionInformation(luminance, qr, sizePx);
 
-        var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+        var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out var text, out var info);
 
         await Assert.That(success).IsTrue().Because($"v{version} at {sizePx} px: {info.Status}");
         await Assert.That(text).IsEqualTo(Content);
@@ -87,7 +90,7 @@ public class TimingPatternDimensionTest
     }
 
     /// <summary>
-    /// The same render with four timing modules painted over: nothing counts, and the grid through the finders still puts all but four of the timing modules on alternating modules at version 40, which reads.
+    /// The same render, its version information painted over, with four timing modules painted over too: nothing counts, and the grid through the finders still puts all but four of the timing modules on alternating modules at version 40, which reads.
     /// </summary>
     [Test]
     public async Task Decode_EstimatePastVersion40_FewTimingModulesPainted_ReadByTheTimingMatch()
@@ -95,6 +98,7 @@ public class TimingPatternDimensionTest
         const int sizePx = 540;
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
         var luminance = PaintLightTimingModules(qr, sizePx, [9, 11]);
+        PaintVersionInformation(luminance, qr, sizePx);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out var text, out var info);
 
@@ -104,22 +108,66 @@ public class TimingPatternDimensionTest
     }
 
     /// <summary>
-    /// The same render with every other light timing module painted over, a quarter of the timing modules: no dimension leaves under an eighth of them wrong, and an estimate that was refused stays refused.
+    /// The same render with every other light timing module painted over, a quarter of the timing modules: no dimension leaves under an eighth of them wrong, so neither the count nor the match names one, and the version information beside the far finders, read through each finder's own frame, does.
     /// </summary>
     [Test]
-    public async Task Decode_EstimatePastVersion40_TimingLinesBroken_IsNotDetected()
+    public async Task Decode_EstimatePastVersion40_TimingLinesBroken_ReadsByTheVersionAtTheFinders()
     {
         const int sizePx = 540;
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
-        var modules = new List<int>();
-        for (var module = 9; module < 177 - 8; module += 4)
-            modules.Add(module);
-        var luminance = PaintLightTimingModules(qr, sizePx, [.. modules]);
+        var luminance = PaintLightTimingModules(qr, sizePx, EveryOtherLightTimingModule());
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo(Content);
+        await Assert.That(info.Version).IsEqualTo(40);
+    }
+
+    /// <summary>
+    /// With the version information painted over as well, nothing names a dimension, and an estimate that was refused stays refused.
+    /// </summary>
+    [Test]
+    public async Task Decode_EstimatePastVersion40_TimingLinesAndVersionInformationBroken_IsNotDetected()
+    {
+        const int sizePx = 540;
+        var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = 40 });
+        var luminance = PaintLightTimingModules(qr, sizePx, EveryOtherLightTimingModule());
+        PaintVersionInformation(luminance, qr, sizePx);
 
         var success = QRCodeDecoder.TryDecodeImage(luminance, sizePx, sizePx, out _, out var info);
 
         await Assert.That(success).IsFalse();
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.NotDetected);
+    }
+
+    private static int[] EveryOtherLightTimingModule()
+    {
+        var modules = new List<int>();
+        for (var module = 9; module < 177 - 8; module += 4)
+            modules.Add(module);
+        return [.. modules];
+    }
+
+    /// <summary>Both copies of the version information painted dark, 18 modules each: no codeword is within 3 bits of all ones.</summary>
+    private static void PaintVersionInformation(byte[] luminance, QRCodeData qr, int sizePx)
+    {
+        var pitch = sizePx / (float)qr.Size;
+        var dimension = qr.Size - 2 * QuietZone;
+        for (var along = 0; along < 6; along++)
+        {
+            for (var across = dimension - 11; across < dimension - 8; across++)
+            {
+                foreach (var (row, column) in new[] { (along, across), (across, along) })
+                {
+                    for (var y = (int)((row + QuietZone) * pitch); y < (int)((row + QuietZone + 1) * pitch); y++)
+                    {
+                        for (var x = (int)((column + QuietZone) * pitch); x < (int)((column + QuietZone + 1) * pitch); x++)
+                            luminance[y * sizePx + x] = 0;
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>The symbol drawn by the image builder with the given light timing modules painted dark on both lines, at the average pitch (qr.Size includes the quiet zone).</summary>

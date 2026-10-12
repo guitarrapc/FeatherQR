@@ -6,9 +6,10 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
 internal interface ILuminanceAttempt<TInfo>
 {
-    /// <param name="luminance">The pixels the attempt reads: a binarization, two levels.</param>
-    /// <param name="source">The grey image <paramref name="luminance"/> was binarized from, for a stage that reads grey levels where the binarization placed the symbol.</param>
-    /// <param name="negative">Whether <paramref name="luminance"/> is the binarization of <paramref name="source"/>'s negative, so that its dark pixels are the light ones of <paramref name="source"/>.</param>
+    /// <summary>
+    /// Reads <paramref name="luminance"/>, a binarization of two levels. <paramref name="source"/> is the grey image it was binarized from, for a stage that reads grey levels where the binarization placed the symbol,
+    /// and <paramref name="negative"/> says <paramref name="luminance"/> is the binarization of that image's negative, so that its dark pixels are the light ones there.
+    /// </summary>
     DecodeStatus Decode(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info);
 }
 

@@ -231,7 +231,7 @@ public class FinderOutlineFitDecodeTest
     }
 
     /// <summary>The selected triple of the global threshold, its centres refined and its frame, as the decoder measures them.</summary>
-    private static (QRImageDecoder.FinderFrame Frame, QRImageDecoder.FinderModuleSizes Sizes) Measure(byte[] luminance, int width, int height, out byte threshold, out GreyLevels grey)
+    internal static (QRImageDecoder.FinderFrame Frame, QRImageDecoder.FinderModuleSizes Sizes) Measure(byte[] luminance, int width, int height, out byte threshold, out GreyLevels grey)
     {
         threshold = Binarizer.ComputeOtsuThreshold(luminance, out grey);
         var patterns = new FinderPattern[3];
@@ -245,7 +245,7 @@ public class FinderOutlineFitDecodeTest
     }
 
     /// <summary>Whether the grid decodes any of the three ways a grid is read: by the threshold, by coverage, in module space.</summary>
-    private static bool Decodes(byte[] luminance, int width, int height, byte threshold, GreyLevels grey, in PerspectiveTransform grid, int d)
+    internal static bool Decodes(byte[] luminance, int width, int height, byte threshold, GreyLevels grey, in PerspectiveTransform grid, int d)
     {
         var destination = new char[QRCodeDecoder.GetMaxDecodedLength(6)];
         var modules = new byte[d * d];

@@ -37,8 +37,7 @@ internal readonly ref struct ImageView
     {
     }
 
-    /// <param name="source">The grey image <paramref name="luminance"/> was binarized from, or empty when it is no binarization.</param>
-    /// <param name="negative">Whether it was binarized from <paramref name="source"/>'s negative.</param>
+    /// <summary>A reading with the grey image it was binarized from: <paramref name="source"/>, empty when <paramref name="luminance"/> is no binarization, and <paramref name="negative"/> when it was binarized from that image's negative.</summary>
     public ImageView(ReadOnlySpan<byte> luminance, ReadOnlySpan<byte> source, bool negative, int width, int height, byte threshold, GreyLevels grey)
     {
         Luminance = luminance;

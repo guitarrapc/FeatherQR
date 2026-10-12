@@ -266,10 +266,12 @@ public class DecodeAllocationTest
         OutlineFit,
         /// <summary>Standard QR only: <see cref="FinderOutlineFitDecodeTest"/>'s bent version 3, read through the plane fitted to the outlines and the alignment anchor.</summary>
         OutlineFitAnchored,
+        /// <summary>Standard QR only: <see cref="LensDistortionDecodeTest"/>'s version 25 through a lens, its dimension named by the version information read at the finders and its grid read through the mesh.</summary>
+        Lens,
     }
 
     public static IEnumerable<ImageScene> StandardQRScenes()
-        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint, ImageScene.ModuleSpace, ImageScene.ModuleSpaceRegional, ImageScene.OutlineFit, ImageScene.OutlineFitAnchored];
+        => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.NextTriple, ImageScene.MeshFirst, ImageScene.MeshAfterAnchoredGrid, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight, ImageScene.FineTexture, ImageScene.InferredFinder, ImageScene.UndersampledStride, ImageScene.Crowded, ImageScene.EdgePoint, ImageScene.ModuleSpace, ImageScene.ModuleSpaceRegional, ImageScene.OutlineFit, ImageScene.OutlineFitAnchored, ImageScene.Lens];
 
     public static IEnumerable<ImageScene> MicroQRScenes()
         => [ImageScene.Upright, ImageScene.Turned, ImageScene.Mirrored, ImageScene.Keystone, ImageScene.SnappedToPixels, ImageScene.LowDensity, ImageScene.LightOnDark, ImageScene.UnevenLight];
@@ -359,6 +361,11 @@ public class DecodeAllocationTest
             case ImageScene.OutlineFitAnchored:
                 {
                     var (photograph, _, text) = FinderOutlineFitDecodeTest.Render(3, QREccLevel.M, 4f, 35f, 45f, 2.5f, 0f, alignmentPaintedOver: false, destroyData: false, bowModules: 3f, blurSigma: 1f);
+                    return new Scene(photograph.Luminance, photograph.Width, photograph.Height, text);
+                }
+            case ImageScene.Lens:
+                {
+                    var (photograph, _, text) = LensDistortionDecodeTest.Render(25, 5f, 15f, 300f, 15f, -0.08f, destroyData: false);
                     return new Scene(photograph.Luminance, photograph.Width, photograph.Height, text);
                 }
             case ImageScene.FineTexture:
