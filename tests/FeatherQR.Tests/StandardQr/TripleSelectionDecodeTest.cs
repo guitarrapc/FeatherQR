@@ -51,6 +51,45 @@ public class TripleSelectionDecodeTest
     }
 
     /// <summary>
+    /// Four symbols of which one is whole and the others show one or two finders, as glare or a fold leaves them: six to eight finders, two symbols' worth, with the three that meet where the symbols touch among them.
+    /// The selection and its alternatives take triples that span symbols, and the image reads through the triples gated by their timing patterns, as a fuller grid does.
+    /// </summary>
+    [Test]
+    [Arguments(6, 0.12f)]
+    [Arguments(7, 0.12f)]
+    [Arguments(8, 0.12f)]
+    [Arguments(8, 0.08f)]
+    public async Task PartialGridOfSymbols_ReadsThoughTheSelectionSpansSymbols(int finders, float keystone)
+    {
+        // Symbol 0 whole, the three finders at the crossing of the four symbols, then the top-left ones of symbols 1 and 2
+        (int Symbol, int Finder)[] kept = [(0, 0), (0, 1), (0, 2), (1, 2), (2, 1), (3, 0), (1, 0), (2, 0)];
+        var shown = kept.AsSpan(0, finders).ToArray();
+        var (luminance, width, height, size) = RenderGrid(2, 2, keystone, i => $"FQR PART {i}", (symbol, finder) => shown.Contains((symbol, finder)));
+        var truth = SupersampledGeometry.GridToPixel(2 * size, 2 * size, 4f, 0f, keystone);
+
+        // The premise: the strided scan's list holds the shown finders and no more, each confirmed, and its selection spans symbols
+        var drawn = new List<(int Symbol, float X, float Y)>();
+        foreach (var (symbol, finder) in shown)
+        {
+            var (u, v) = finder switch { 0 => (5.5f, 5.5f), 1 => (size - 5.5f, 5.5f), _ => (5.5f, size - 5.5f) };
+            truth.Transform(symbol % 2 * size + u, symbol / 2 * size + v, out var x, out var y);
+            drawn.Add((symbol, x, y));
+        }
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance, out var grey);
+        var selected = new FinderPattern[3];
+        var list = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];
+        await Assert.That(FinderPatternFinder.TryFind(luminance, width, height, threshold, selected, grey, list, out var count, out _)).IsTrue();
+        await Assert.That(list.AsSpan(0, count).ToArray().Count(static c => c.Count >= 2)).IsEqualTo(finders);
+        foreach (var (symbol, x, y) in drawn)
+            await Assert.That(Nearest(list.AsSpan(0, count), x, y)).IsLessThan(6f).Because($"the finder at ({x}, {y}) of symbol {symbol} is a candidate");
+        await Assert.That(OneSymbol(drawn, selected)).IsFalse().Because("the selection is one symbol's");
+
+        var success = QRCodeDecoder.TryDecodeImage(luminance, width, height, out var text, out var info);
+        await Assert.That(success).IsTrue().Because(info.Status.ToString());
+        await Assert.That(text).IsEqualTo("FQR PART 0");
+    }
+
+    /// <summary>
     /// A symbol at 4 px/module in an image 4,000 px tall, whose stride of 16 rows crosses the centre band of two finders once and the third's not at all, beside a lone finder pattern the stride does cross: the strided scan selects the two and the lone one, unscored since they are three, and returns without the rows between.
     /// The triple fails, and the symbol reads once the skipped rows are scanned: the stride cannot have confirmed a finder whose band is shorter than two strides. The image holds only black and white, so the global passes are all that run.
     /// </summary>
@@ -79,11 +118,22 @@ public class TripleSelectionDecodeTest
     }
 
     /// <summary>A grid of version 1 symbols with 2-module quiet zones, each with its own text, supersampled at 4 px/module under keystone; the size of one symbol's grid is returned.</summary>
-    internal static (byte[] Luminance, int Width, int Height, int Size) RenderGrid(int across, int down, float keystone, Func<int, string> content)
+    internal static (byte[] Luminance, int Width, int Height, int Size) RenderGrid(int across, int down, float keystone, Func<int, string> content, Func<int, int, bool>? showsFinder = null)
     {
         var symbols = Enumerable.Range(0, across * down).Select(i => QRCodeGenerator.Create(content(i), QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(1), QuietZoneSize = 2 })).ToArray();
         var size = symbols[0].Size;
-        bool IsDark(int row, int column) => symbols[row / size * across + column / size][row % size, column % size];
+        bool IsDark(int row, int column)
+        {
+            var symbol = row / size * across + column / size;
+            int r = row % size, c = column % size;
+            // A finder not shown is left light, its seven modules square: top-left 0, top-right 1, bottom-left 2
+            if (showsFinder is not null && (r < 9 || r >= size - 9) && (c < 9 || c >= size - 9) && !(r >= size - 9 && c >= size - 9)
+                && !showsFinder(symbol, r >= size - 9 ? 2 : c >= size - 9 ? 1 : 0))
+            {
+                return false;
+            }
+            return symbols[symbol][r, c];
+        }
         var (luminance, width, height) = SupersampledRenderer.Render(IsDark, across * size, down * size, 4f, 0f, keystone);
         return (luminance, width, height, size);
     }

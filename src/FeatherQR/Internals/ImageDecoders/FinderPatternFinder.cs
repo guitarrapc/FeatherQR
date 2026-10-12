@@ -662,6 +662,7 @@ internal static partial class FinderPatternFinder
     /// </summary>
     /// <remarks>
     /// A line read by like edges takes a shape the ratio refuses, so the finder it belongs to is held to its rings reading in all four directions: texture that passes three lines that way seldom passes the fourth, and a ring is closed all round.
+    /// So is a finder whose centre row does not read and a row beside it does. One whose falling diagonal does not read is taken only as a ring drawn without its corners (<see cref="IsRingWithoutCorners"/>).
     /// </remarks>
     private static bool TryCrossCheck(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in GreyLevels grey, float rowCenterX, int y, int total, int rowShiftSign, bool referenceWalk, out float centerX, out float centerY, out int refinedTotal)
     {
@@ -672,17 +673,56 @@ internal static partial class FinderPatternFinder
             return false;
 
         centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY, vertical: false, total, rowShiftSign, referenceWalk, out refinedTotal, out var rowByLikeEdges, out var rowCentre, default);
+        var rowOffCentre = false;
         if (float.IsNaN(centerX))
-            return false;
+        {
+            // A hole on the centre row is not the ring: a row a quarter of the centre square above or below crosses the same rings. From 4 px a module, where that row is three pixels off; a nearer one reads on texture wherever the scanned row did
+            if (columnCentre < 12)
+                return false;
+            var offset = columnCentre / 4;
+            centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY - offset, vertical: false, total, rowShiftSign, referenceWalk, out refinedTotal, out rowByLikeEdges, out rowCentre, default);
+            if (float.IsNaN(centerX))
+                centerX = CrossCheck(luminance, width, height, threshold, grey, (int)rowCenterX, (int)centerY + offset, vertical: false, total, rowShiftSign, referenceWalk, out refinedTotal, out rowByLikeEdges, out rowCentre, default);
+            if (float.IsNaN(centerX))
+                return false;
+            rowOffCentre = true;
+        }
 
         if (!CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, rowShiftSign, referenceWalk, rising: false, out var diagonalByLikeEdges, out var diagonalCentre, out var diagonalTotal))
-            return false;
+            return !rowOffCentre && IsRingWithoutCorners(luminance, width, height, threshold, (int)centerX, (int)centerY, refinedTotal, rowCentre, columnTotal, columnCentre, referenceWalk);
 
         // A column the row's own 40 % refuses is taken only as the finder a perspective stretches: an affine image of the rings, which every line through the centre crosses 1:1:3:1:1, the other diagonal too
         return (IsTotalInWindow(columnTotal, total, acrossAxes: false)
-                && !(columnByLikeEdges || rowByLikeEdges || diagonalByLikeEdges)
+                && !(columnByLikeEdges || rowByLikeEdges || diagonalByLikeEdges || rowOffCentre)
                 && !IsDiagonalCentreShort(diagonalCentre, diagonalTotal, rowCentre, refinedTotal, columnCentre, columnTotal))
             || CrossCheckDiagonal(luminance, width, height, threshold, grey, (int)centerX, (int)centerY, rowShiftSign, referenceWalk, rising: true, out _, out _, out _);
+    }
+
+    /// <summary>
+    /// A finder whose dark ring is four bars, its corners left out, so that no diagonal crosses it: the rows a module above and below the centre and the columns a module left and right of it, all inside the centre square, each read 1:1:3:1:1 within 40 % of the centre's own row or column.
+    /// </summary>
+    private static bool IsRingWithoutCorners(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, int rowTotal, int rowCentre, int columnTotal, int columnCentre, bool referenceWalk)
+    {
+        // On modules of 2 px or more, where a third of the centre is two pixels off its line
+        int dx = rowCentre / 3, dy = columnCentre / 3;
+        if (dx < 2 || dy < 2)
+            return false;
+        return ReadsBesideCentre(luminance, width, height, threshold, centerX, centerY - dy, vertical: false, rowTotal, referenceWalk)
+            && ReadsBesideCentre(luminance, width, height, threshold, centerX, centerY + dy, vertical: false, rowTotal, referenceWalk)
+            && ReadsBesideCentre(luminance, width, height, threshold, centerX - dx, centerY, vertical: true, columnTotal, referenceWalk)
+            && ReadsBesideCentre(luminance, width, height, threshold, centerX + dx, centerY, vertical: true, columnTotal, referenceWalk);
+
+        static bool ReadsBesideCentre(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int x, int y, bool vertical, int expectedTotal, bool referenceWalk)
+        {
+            Span<int> runs = stackalloc int[5];
+            var measured = referenceWalk
+                ? MeasureAxisRunsReference(luminance, width, height, threshold, x, y, vertical, expectedTotal, runs, out _)
+                : MeasureRunsBounded(luminance, width, height, threshold, x, y, vertical ? 0 : 1, vertical ? 1 : 0, expectedTotal, runs, out _);
+            // Bounded as the row again is, by its own line's total: the same cross section a module to the side
+            return measured
+                && IsTotalInWindow(runs[0] + runs[1] + runs[2] + runs[3] + runs[4], expectedTotal, acrossAxes: false)
+                && IsFinderRatio(runs);
+        }
     }
 
     /// <summary>Seven modules of 2 px: the shortest row whose centre share <see cref="IsDiagonalCentreShort"/> compares.</summary>

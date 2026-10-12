@@ -145,7 +145,7 @@ public class TwoAxisTiltDecodeTest
     }
 
     /// <summary>
-    /// A finder stretched off its own axes by a tilt about both, its column past twice its row by whole pixels, at 3 and 3.8 px/module: a candidate, its column taken inside 5/12 to 12/5 of its row once its rising diagonal reads.
+    /// A finder stretched off its own axes by a tilt about both, its column past twice its row by whole pixels, at 3 and 3.8 px/module: a candidate, its column taken inside 2/7 to 7/2 of its row once its rising diagonal reads.
     /// Twice the row is the stretch a 50 % keystone gives a finder along its own axes; off them the column goes past it, and with the window narrowed to 2 this finder is refused.
     /// </summary>
     [Test]

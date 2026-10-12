@@ -4,8 +4,8 @@ namespace FeatherQR.Internals.StandardQR;
 
 internal static partial class QRImageDecoder
 {
-    /// <summary>Confirmed candidates from which a list is crowded: three symbols' worth of finders.</summary>
-    private const int CrowdedConfirmed = 9;
+    /// <summary>Confirmed candidates from which a list is crowded: two symbols' worth of finders, of which a triple can span symbols whole or cut.</summary>
+    private const int CrowdedConfirmed = 6;
 
     /// <summary>The most compact well-shaped triples kept of a crowded list.</summary>
     private const int MaxCrowdedTriples = 256;
@@ -18,7 +18,7 @@ internal static partial class QRImageDecoder
 
     private const int MaxCrowdedDecodes = 4;
 
-    /// <summary>Whether a list holds three symbols' worth of confirmed candidates, the strided scan's counts included: there the confirmation only filters, and the stage's order and gate do the rest.</summary>
+    /// <summary>Whether a list holds two symbols' worth of confirmed candidates, the strided scan's counts included: there the confirmation only filters, and the stage's order and gate do the rest.</summary>
     private static bool IsCrowded(ReadOnlySpan<FinderPattern> candidates)
     {
         var confirmed = 0;
