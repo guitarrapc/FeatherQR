@@ -448,6 +448,22 @@ Lessons:
 
 Benchmarks: not applicable, no `src/` change.
 
+### Phase 2: the package and the table (2026-10-12)
+
+Done: `src/FeatherQR.Gs1` exists as the fourth package (`FeatherQR.Gs1`, the four target frameworks of the core, lockstep version, package validation, AOT analyzers, SBOM, `InternalsVisibleTo` the tests, a `ProjectReference` to `FeatherQR` and nothing else) and packs with `THIRD-PARTY-NOTICES.md` (G8: the attribution lines, the release and commit, what is derived, and the Apache-2.0 text copied verbatim from the committed LICENSE), beside the README every package carries. `tools/check_package_deps.cs` expects four packages and passes on a local pack: `FeatherQR.Gs1` depends on `FeatherQR` on every framework, the core packages' groups are unchanged. The table: `Gs1AiTable` (lookup by AI over 224 entries covering 541 AIs, each with its components, linters, `req` groups, `ex` patterns and Digital Link qualifier sequences, plus Tables 7-5 and 7-6 hand-coded from the specification text) and `Gs1CodeLists` (ISO 3166 numeric and alpha-2, ISO 4217, media types as bit fields, 431 package types as a sorted list), all internal, all byte span literals with no allocation and no static constructor. `Gs1AiTableGeneratorTest` renders both generated files from the committed dictionary and linter sources, fails on drift and rewrites outside CI, refuses a dictionary that names a linter `Gs1Linter` lacks, and holds the enum to the 34 names the release uses. `Gs1AiTableTest` reads the table back on the plan's AI shapes and pins that the dictionary's `*` flags and AI lengths agree with Tables 7-6 and 7-5 on every entry. `Gs1CodeListsTest` checks every well-formed value of the reference linters' own unit tests (1,000 numeric country codes, 676 alpha-2, 1,000 currency codes, 100 media types, 442 package type vectors) against the lists. `Gs1AssemblyDependencyTest` reads the dependency rule from the assembly. The 218 GS1 tests pass on net8.0 and net10.0.
+
+Size: the generated data is 7,485 bytes (entries 3,584, components 1,111, attributes 718, the four bit fields 348, package types 1,724), against the Phase 0 estimate of about 6 KB. The assembly is 24 KB on net10.0, 25 KB on net8.0, 31 KB on netstandard2.1 and 34 KB on netstandard2.0 (the netstandard builds carry PolySharp's polyfills). The core packages are unchanged.
+
+Deferred to Phase 3, where the first public type arrives: the package's `PublicAPI.approved.txt` and the two CI lines that check it and trim its XML documentation. Both tools (`check_public_api.cs`, `filter_public_docs.cs`) refuse an assembly with no exported surface, by design, so they cannot be wired for a package that is still all internal.
+
+Lessons:
+
+- The reference's unit tests enumerate a list, so they are the list's oracle. Each list linter's tests name every code of its range, and a test that compares the generated bit field with those verdicts needs no second transcription of ISO 3166 or ISO 4217.
+- A range entry is one line and many prefixes. The first test of Table 7-5 took each entry's first AI, missed that `91-99` is one line, and reported prefix 92 as unassigned.
+- A tool's refusal of an empty surface is a feature that bites a new package. The API listing and the documentation filter were written to stop a broken read from emptying a file, and a package with no public type yet reads as exactly that.
+
+Benchmarks: not applicable, no change to the core.
+
 ### Phase 1 complete (2026-10-12)
 
 Done: the maintainer approved the two remaining points as written, the `Try` shapes and the 22 members of `Gs1ErrorKind`, and then removed the throwing `FromHri` and `ToDigitalLink` from the data layer, since the generator entry points take `(AI)` text directly and a `Try` form serves every other caller. `Gs1ElementString` now never throws for its input, and `Gs1FormatException` is thrown by `CreateGs1` and `CreateGs1DigitalLink` only. The API section is the approved listing and Phase 1 is complete. Every open decision but G10 and G11 is now decided. Phase 2 builds the `FeatherQR.Gs1` project and the table from this listing. No code changed.

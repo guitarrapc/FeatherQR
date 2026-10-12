@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>FeatherQR.Gs1</RootNamespace>
+    <!-- Runs the code-style rules of .editorconfig in the build and enforces IDE0251 for struct members -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- NuGet -->
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>FeatherQR.Gs1</PackageId>
+    <Description>GS1 data for FeatherQR: the GS1 Application Identifier table generated from the GS1 Barcode Syntax Dictionary, element string checks, (AI) text and GS1 Digital Link URIs in both directions, and GS1 QR Code entry points on the FeatherQR generators. Apache-2.0 dictionary data, see THIRD-PARTY-NOTICES.md.</Description>
+
+    <!-- API compatibility. Ensures that the package is compatible with the last released version. -->
+    <EnablePackageValidation>true</EnablePackageValidation>
+
+    <!-- Trimming/NativeAOT. IsAotCompatible turns on the trim/AOT/single-file analyzers. -->
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))">true</IsAotCompatible>
+
+    <!-- SBOM -->
+    <GenerateSBOM>true</GenerateSBOM>
+    <SbomGenerationFetchLicenseInformation>true</SbomGenerationFetchLicenseInformation>
+    <SbomGenerationEnablePackageMetadataParsing>true</SbomGenerationEnablePackageMetadataParsing>
+    <SbomGenerationManifestInfo>SPDX:2.2</SbomGenerationManifestInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The AI table is generated from the GS1 Barcode Syntax Dictionary (Apache-2.0). The notice travels with the package that carries the data. -->
+    <None Include="$(MSBuildThisFileDirectory)..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FeatherQR.Tests, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FeatherQR\FeatherQR.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Sbom.Targets">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="PolySharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

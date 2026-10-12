@@ -13,6 +13,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/FeatherQR.Benchmark/FeatherQR.Benchmark.csproj" />
+    <Project Path="src/FeatherQR.Gs1/FeatherQR.Gs1.csproj" />
     <Project Path="src/FeatherQR.Playground/FeatherQR.Playground.csproj" />
     <Project Path="src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj" />
     <Project Path="src/FeatherQR/FeatherQR.csproj" />
