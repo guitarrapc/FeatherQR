@@ -55,7 +55,7 @@ internal static partial class StructuredAppendPlanner
         ref var origin = ref MemoryMarshal.GetReference(text);
         int s0 = start, s1 = start, s2 = start, s3 = start, s4 = start, s5 = start, s6 = start, s7 = start;
 
-        // The vector loop runs until the lane furthest ahead reaches the end of the text; the lanes that closed on the last character finish in scalar code.
+        // The vector loop runs until the lane furthest ahead reaches the end of the text. The lanes that closed on the last character finish in scalar code.
         var step = 0;
         apartSteps = 0;
         var stop = length - start;
@@ -191,7 +191,7 @@ internal static partial class StructuredAppendPlanner
                 continue;
             }
 
-            // Some lane's chunk closes before this character. The lane re-reads its next chunk from the cut; when marks lie between the cut and this character, the character ahead and the marks are priced here and the lane re-reads only this character.
+            // Some lane's chunk closes before this character. The lane re-reads its next chunk from the cut. When marks lie between the cut and this character, the character ahead and the marks are priced here and the lane re-reads only this character.
             var kept = int.MinValue; // not priced yet this step
             for (var lane = 0; lane < Lanes; lane++)
             {

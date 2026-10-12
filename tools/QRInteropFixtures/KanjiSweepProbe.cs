@@ -14,7 +14,7 @@ namespace QRInteropFixtures;
 /// This produces two things the implementation needs: the exact set of cells
 /// where the JIS X 0208 mapping and CP932 disagree (which becomes the generated
 /// table's override list), and the exact set of cells neither assigns. Run by
-/// hand; the report is written next to the tool output.
+/// hand. The report is written next to the tool output.
 /// </summary>
 public static class KanjiSweepProbe
 {
@@ -267,7 +267,7 @@ public static class QrtoolRunner
         return stdout;
     }
 
-    /// <summary>qrtool ascii output is two characters per module ('##' dark); trailing light modules are trimmed.</summary>
+    /// <summary>qrtool ascii output is two characters per module ('##' dark). Trailing light modules are trimmed.</summary>
     public static (byte[] Modules, int Size) ParseAsciiMatrix(string ascii)
     {
         var lines = ascii.Replace("\r\n", "\n").Split('\n').Where(static l => l.Length > 0).ToArray();

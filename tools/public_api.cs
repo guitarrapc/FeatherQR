@@ -22,7 +22,7 @@ using System.Text.Json;
 // Write the page into the Playground's wwwroot and one output serves both ways of looking
 // at it: it is there when the Playground runs locally, and publish copies it to the Pages
 // site. That path is generated but committed, so a fresh clone and an F5 both have it, and
-// so a public API change has to regenerate it in the same commit; nothing checks that it did:
+// so a public API change has to regenerate it in the same commit. Nothing checks that it did:
 //
 //   dotnet run tools/public_api.cs -- --html -o src/FeatherQR.Playground/wwwroot/api/index.html
 //
@@ -30,8 +30,8 @@ using System.Text.Json;
 // surface changes: breaking changes are already caught by package validation against the
 // released baseline, which is the only surface check worth failing a build over.
 //
-// One target framework is enough. No exported type has a framework-conditional member -
-// the conditional compilation in the library all sits on internal types - so net10.0
+// One target framework is enough. The conditional compilation in the library all sits on
+// internal types, so no exported type has a framework-conditional member and net10.0
 // represents netstandard2.0, netstandard2.1 and net8.0 as well.
 
 var outputPath = GetOutputPath(args);
@@ -43,7 +43,7 @@ var version = assemblies[0].GetName().Version;
 var nullability = new NullabilityInfoContext();
 
 // Doc text, keyed by the documentation ID the compiler emits. Exported types never collide
-// across the assemblies; the compiler-generated internals they all carry (PolySharp's
+// across the assemblies. The compiler-generated internals they all carry (PolySharp's
 // polyfills, Microsoft.CodeAnalysis.EmbeddedAttribute) do, and either copy will do.
 var docs = new Dictionary<string, (string Summary, string Remarks)>(StringComparer.Ordinal);
 foreach (var entry in assemblies.SelectMany(LoadDocs)) docs.TryAdd(entry.Key, entry.Value);
@@ -215,7 +215,7 @@ string? SourceHref(MethodBase? method)
     }
 }
 
-// raw.githubusercontent serves the file; github.com/blob is the page a reader wants, and the
+// raw.githubusercontent serves the file, but github.com/blob is the page a reader wants, and the
 // only one of the two that honours a #L line anchor.
 string? BlobUrl(string documentPath, (string Prefix, string Template)[] map)
 {
@@ -285,8 +285,8 @@ string FlattenDoc(System.Xml.Linq.XElement element)
                     var paren = reference.IndexOf('(');
                     if (paren >= 0) reference = reference[..paren];
                     // Take the member name before stripping the arity tick, not after: on a generic type
-                    // the first tick sits in the type name, so cutting there threw the member away and
-                    // every member of SymbolImageBuilderBase`1 rendered as the type itself.
+                    // the first tick sits in the type name, so cutting there throws the member away and
+                    // every member of SymbolImageBuilderBase`1 renders as the type itself.
                     var name = reference[(reference.LastIndexOf('.') + 1)..];
                     var tick = name.IndexOf('`');
                     if (tick >= 0) name = name[..tick];
@@ -368,8 +368,8 @@ string RenderHtml()
                     var searchable = $"{member.Kind} {text} {Summary(member.DocId)}".ToLowerInvariant();
                     body.AppendLine($"""            <div class="member" data-text="{Escape(searchable)}">""");
 
-                    // An enum value is its own heading - "value Deflate" above "Deflate = 1,"
-                    // would say the same thing twice - so it keeps the compact form.
+                    // An enum value is its own heading, so it keeps the compact form: "value Deflate"
+                    // above "Deflate = 1," would say the same thing twice.
                     if (member.Kind != "value")
                     {
                         body.AppendLine($"""              <h4><span class="kind">{member.Kind}</span> {Named(member.Name, member.Href, "source")}{Tag(obsolete)}</h4>""");

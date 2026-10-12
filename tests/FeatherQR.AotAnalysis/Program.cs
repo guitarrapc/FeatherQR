@@ -5,7 +5,7 @@ using System.Text;
 // so ILC analyzes every public and internal member regardless of what runs here.
 // This entry point is a minimal encode/decode smoke so the produced binary is still runnable.
 // With --simd-class, it also holds the SIMD tiers this build takes to SimdTiers.Expected for that
-// build class and fails on a disagreement; CI passes the class each build is meant to be.
+// build class and fails on a disagreement. CI passes the class each build is meant to be.
 // With --time, it times the benchmark shapes on this build instead (TierTiming).
 if (TierTiming.TryRun(args, out var timingExit))
     return timingExit;
@@ -57,7 +57,7 @@ foreach (var (pattern, charset) in new[]
 }
 Console.WriteLine($"Structured Append FNV64: {digest:X16}");
 
-// Which SIMD tier each kernel runs in this native build, held to the table for --simd-class; with --parity, the vector tiers
+// Which SIMD tier each kernel runs in this native build, held to the table for --simd-class. With --parity, the vector tiers
 // held to their scalar forms on the code ILC emitted.
 var tierResult = SimdReport.PrintAndCheck(simdClass);
 var parityResult = SimdParity.Requested(args) ? SimdParity.Run() : 0;

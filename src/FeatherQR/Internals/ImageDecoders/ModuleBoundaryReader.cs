@@ -33,7 +33,7 @@ internal readonly struct AxisAlignedFrame
 /// <remarks>
 /// At that density a crisp render draws each module 1 or 2 px wide. A finder centre is good to half a pixel, a sample has (pitch − 1) / 2 to spare, and no grid extrapolated from a centre keeps that across a symbol.
 /// The boundaries themselves are exact. A timing pattern crosses every one of them past the finder, the finder's centre line crosses four of its own, and the two inside its centre square show in the data modules in line with it. Each module is then read at a pixel known to lie inside it, however wide it came out.
-/// Shared by the symbologies; each knows where its timing patterns run and where they end.
+/// Shared by the symbologies. Each knows where its timing patterns run and where they end.
 /// </remarks>
 internal static class ModuleBoundaryReader
 {
@@ -82,8 +82,8 @@ internal static class ModuleBoundaryReader
 
     /// <summary>
     /// Walks a timing line from a pixel on the finder's edge row: back to the finder's outer edge, then forward over the separator and the timing modules, recording every boundary crossed at its module index.
-    /// The line ends on a far finder's edge row, seven modules of dark, when <paramref name="endsOnFinder"/>; otherwise at the quiet zone after a dark module.
-    /// With <paramref name="allowTriples"/> a dark run of three modules is part of the line (rMQR's alignment and corner patterns sit on its timing rows); its two inner boundaries stay unknown.
+    /// The line ends on a far finder's edge row, seven modules of dark, when <paramref name="endsOnFinder"/>, and otherwise at the quiet zone after a dark module.
+    /// With <paramref name="allowTriples"/> a dark run of three modules is part of the line (rMQR's alignment and corner patterns sit on its timing rows), and its two inner boundaries stay unknown.
     /// A crisp module is 1 or 2 px below <see cref="MaxModuleSize"/>, three are 3 to 6 and seven are 7 or more, so a run's length says which it is.
     /// <paramref name="maxPosition"/> is how far past the starting pixel the line may run, and <paramref name="count"/> the number of modules it crossed: the last boundary's index.
     /// </summary>
@@ -162,7 +162,7 @@ internal static class ModuleBoundaryReader
     }
 
     /// <summary>
-    /// A finder's centre line crosses boundaries 1, 2, 5 and 6 of its seven modules; written at <paramref name="firstIndex"/> + those when the line reads dark-light-dark-light-dark.
+    /// A finder's centre line crosses boundaries 1, 2, 5 and 6 of its seven modules. They are written at <paramref name="firstIndex"/> + those when the line reads dark-light-dark-light-dark.
     /// <paramref name="along"/> is the finder centre's position on the axis.
     /// </summary>
     public static void ReadFinderLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int centerX, int centerY, int dirX, int dirY, int along, Span<int> boundaries, int firstIndex)
@@ -318,7 +318,7 @@ internal static class ModuleBoundaryReader
     }
 
     /// <summary>
-    /// Dark modules on the line past the last column and the last row (one module as wide as the last), read like <see cref="Sample"/>; outside the image counts as light.
+    /// Dark modules on the line past the last column and the last row (one module as wide as the last), read like <see cref="Sample"/>. Outside the image counts as light.
     /// </summary>
     public static int CountQuietZoneDark(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in AxisAlignedFrame frame, ReadOnlySpan<int> columns, int columnCount, ReadOnlySpan<int> rows, int rowCount)
     {

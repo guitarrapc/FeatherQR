@@ -18,7 +18,7 @@ namespace QRInteropFixtures;
 /// <b>Every encoder cell.</b> The 6,872 encoder cells (the JIS X 0208 cells of <c>kanji-sweep.tsv</c> whose zxing-cpp and CP932 readings agree) are
 /// written by this library, chunk after chunk, in Standard QR at a version of each count band (8, 10 and 12 bits), Micro QR M3 and M4, and rMQR at
 /// Kanji count widths 2, 3, 6 and 7. Every symbol is read by every pinned reader of its symbology: zxing-cpp for all three, ZXing.Net and CodeGlyphX
-/// for Standard QR, and this library's decoder. A reader that returns other text is reported with the cells it read otherwise; under K7 a row any
+/// for Standard QR, and this library's decoder. A reader that returns other text is reported with the cells it read otherwise. A row any
 /// reader misreads loses its cells.
 /// </para>
 /// <para>
@@ -28,7 +28,7 @@ namespace QRInteropFixtures;
 /// </para>
 /// <para>
 /// <b>A Kanji segment after ECI 26</b>, the evidence for never writing one (qrcode-symbologies.md, "No Kanji beside an ECI header"). This library does not write one, so the symbols come from QrCodeGenerator, whose
-/// segments are explicit and whose Kanji table is its own; each is read by the four Standard QR readers. Micro QR has no ECI, and rMQR's only other
+/// segments are explicit and whose Kanji table is its own. Each is read by the four Standard QR readers. Micro QR has no ECI, and rMQR's only other
 /// reader is zxing-cpp, whose Kanji decoding is shared across the three symbologies.
 /// </para>
 /// </remarks>

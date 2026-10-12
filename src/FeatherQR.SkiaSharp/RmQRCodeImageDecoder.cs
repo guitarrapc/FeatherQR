@@ -7,7 +7,7 @@ namespace FeatherQR.SkiaSharp;
 
 /// <summary>
 /// Decodes rMQR Codes from SkiaSharp bitmaps.
-/// Extends <see cref="RmQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>RmQRCodeDecoder.TryDecode(bitmap, ...)</c>; on older language versions call them on this class.
+/// Extends <see cref="RmQRCodeDecoder"/>, so with C# 14 the overloads are also reachable as <c>RmQRCodeDecoder.TryDecode(bitmap, ...)</c>. On older language versions call them on this class.
 /// </summary>
 public static class RmQRCodeImageDecoder
 {
@@ -45,7 +45,7 @@ public static class RmQRCodeImageDecoder
 
             var width = bitmap.Width;
             var height = bitmap.Height;
-            // The smallest symbol is 7 modules tall and 27 wide; either axis may be the image's short side
+            // The smallest symbol is 7 modules tall and 27 wide, and either axis may be the image's short side
             if (width < 7 || height < 7 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
             {
                 text = string.Empty;

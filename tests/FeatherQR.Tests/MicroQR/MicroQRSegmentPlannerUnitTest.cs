@@ -74,7 +74,7 @@ public class MicroQRSegmentPlannerUnitTest
     {
         // The scan screens each candidate with cheapest-rate sixths plus the
         // version's cheapest header (mode indicator + narrowest count indicator =
-        // 2 x version bits); a sound lower bound must sit at or below the optimum.
+        // 2 x version bits). A sound lower bound must sit at or below the optimum.
         foreach (var version in new[] { MicroQRVersion.M2, MicroQRVersion.M3, MicroQRVersion.M4 })
         {
             var optimum = MicroQRSegmentPlanner.MinimumPayloadBits(content, charset, version);
@@ -115,7 +115,7 @@ public class MicroQRSegmentPlannerUnitTest
     public async Task TryBuildPlan_DigitIslandBetweenByteRuns_ProducesThreeRuns()
     {
         // Byte(2) + Numeric(5) + Byte(2) at M4: (8+16) + (9+17) + (8+16) = 74 bits
-        // against 80 all-Byte; the island's 23-bit saving beats the 17 extra header
+        // against 80 all-Byte. The island's 23-bit saving beats the 17 extra header
         // bits, so the optimal plan must switch modes twice.
         var content = "ab12345cd";
         var segments = new ModeSegment[content.Length];

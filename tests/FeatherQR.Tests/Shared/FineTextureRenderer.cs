@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 internal static class FineTextureRenderer
 {
-    /// <param name="pixelsPerModule">A module's side in pixels; a multiple of twice <paramref name="cell"/> keeps module edges on block edges when the offsets are too.</param>
+    /// <param name="pixelsPerModule">A module's side in pixels. A multiple of twice <paramref name="cell"/> keeps module edges on block edges when the offsets are too.</param>
     /// <param name="offsetX">Textured pixels left of the grid.</param>
     /// <param name="offsetY">Textured pixels above the grid.</param>
     /// <param name="cell">The checkerboard's cell in pixels.</param>

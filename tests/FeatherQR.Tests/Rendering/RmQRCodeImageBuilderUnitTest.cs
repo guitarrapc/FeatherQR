@@ -137,7 +137,7 @@ public class RmQRCodeImageBuilderUnitTest
     {
         // Width-only sizing (the static helpers' rule and the no-size default) must give the
         // symbol at exactly that width: no letterbox band from the rounded height, and an
-        // opaque image (the wide versions used to lose 1-3 columns to transparent pad).
+        // opaque image. The wide versions are where a rounded height leaves columns of pad.
         var data = RmQRCodeGenerator.Create("RM" + (int)version, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         using var bitmap = new RmQRCodeImageBuilder(data).ToBitmap();
         await Assert.That(bitmap.Width).IsEqualTo(512);
@@ -195,8 +195,8 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithSize_ExplicitCanvas_LetterboxesUniformly_NeverStretches()
     {
-        // 31 × 15 modules into a 400 × 400 canvas: scale = min(400/31, 400/15) = 12.9;
-        // content = 400 × 193.5, centered vertically (pad top ≈ 103), pad keeps the clear color.
+        // 31 × 15 modules into a 400 × 400 canvas: scale = min(400/31, 400/15) = 12.9.
+        // Content = 400 × 193.5, centered vertically (pad top ≈ 103), pad keeps the clear color.
         var data = RmQRCodeGenerator.Create("0123456789", RmQREccLevel.M);
         using var bitmap = new RmQRCodeImageBuilder(data)
             .WithSize(400, 400)
@@ -370,7 +370,7 @@ public class RmQRCodeImageBuilderUnitTest
             canvas.Clear(SKColors.Red);
             SymbolRenderer.Render(canvas, SKRect.Create(0, 0, 200, 200), data, SKColors.Black, SKColors.White);
         }
-        // Background covers the whole area; symbol letterboxed vertically (200/31 = 6.45 per module → 96.8 px high).
+        // Background covers the whole area. The symbol is letterboxed vertically (200/31 = 6.45 per module → 96.8 px high).
         await Assert.That(direct.GetPixel(100, 5)).IsEqualTo(SKColors.White);
         var scale = 200f / 31;
         var top = (200 - 15 * scale) / 2;

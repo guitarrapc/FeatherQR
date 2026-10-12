@@ -20,14 +20,9 @@ internal static partial class FinderPatternFinder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static int ExtractRowEdges(ReadOnlySpan<byte> row, byte threshold, Span<short> starts, Span<short> ends)
     {
-        // How the edges come out of the pixels.
-        //
-        // 1. A row is taken 64 pixels at a time. DarkWord makes the word for the machine (two 32-byte compares on 256-bit
-        //    vectors, the NEON fold on ARM64, four 16-byte compares elsewhere), bit i set where pixel x + i is dark. The word is used at once and never stored, so there is
-        //    no mask buffer to clear, write and read back.
-        //
-        // 2. Edges come from the word and the same word one pixel later:
-        //      previous = (word << 1) | carry      bit i = pixel x + i - 1 is dark; the carry is the last pixel of the word before,
+        // Edges come from a word of 64 dark bits and the same word one pixel later. The word is used at once and never stored,
+        // so there is no mask buffer to clear, write and read back.
+        //      previous = (word << 1) | carry      bit i = pixel x + i - 1 is dark. The carry is the last pixel of the word before,
         //                                          so a run is followed across words. It begins at 0: a row that starts dark starts a run at 0.
         //      rising   = word & ~previous         dark, and the pixel before it light: a run starts here
         //      falling  = ~word & previous         light, and the pixel before it dark: a run ended just before here
@@ -36,18 +31,13 @@ internal static partial class FinderPatternFinder
         //    rising        ^           ^                       ^         ^                  starts 2, 8, 20, 25
         //    falling             ^                       ^           ^       ^              ends   5, 17, 23, 27
         //
-        // 3. Each bit set goes into its own array, lowest bit first: the position of the lowest set bit is one instruction and
-        //    bits &= bits - 1 clears it. Taking every edge from one set (word ^ previous) and sending them alternately to the two
-        //    arrays measured no faster than a single array: every edge then pays for working out where it goes, which cost what
-        //    the split saved the classification. The classification wants them apart because a window is three consecutive
-        //    starts and ends, so six loads give a step of windows.
-        //    Within a word the two sets alternate, start, end, start, end, so one loop takes one of each an iteration and the
-        //    odd one out follows. Each edge is a two-cycle chain (clear the bit, find the next); in one loop the two chains
-        //    overlap, and the loop branches half as often as two loops in a row would.
+        // Starts and ends go to their own arrays: a window is three consecutive starts and ends, so six loads give a step of
+        // windows. Taking every edge from one set (word ^ previous) and dealing them out to the two arrays is no faster,
+        // because every edge then pays for working out where it goes.
         //
-        // 4. A run that reaches the end of the row still needs its end. In a last word that is not full the bits past the row are 0,
-        //    so the end falls out as the falling edge at the row's length. When the length is a multiple of 64 no word holds that bit,
-        //    and the carry left after the loop says the run is still open.
+        // A run that reaches the end of the row still needs its end. In a last word that is not full the bits past the row are 0,
+        // so the end falls out as the falling edge at the row's length. When the length is a multiple of 64 no word holds that bit,
+        // and the carry left after the loop says the run is still open.
         //
         // The worst case for the two arrays is a row that alternates every pixel: (length + 1) / 2 runs.
 
@@ -67,11 +57,10 @@ internal static partial class FinderPatternFinder
         {
             var word = DarkWord(ref pixels, x, width, threshold);
 
-            // previous: each pixel's left neighbour, the carry standing in for the last pixel of the word before
             var previous = (word << 1) | carry;
             carry = word >> 63;
-            var rising = word & ~previous;   // dark after light: a run starts here
-            var falling = ~word & previous;  // light after dark: a run ended just before here
+            var rising = word & ~previous;
+            var falling = ~word & previous;
 
             // Lowest set bit first, so positions come out in row order. Within a word the two alternate, so one loop takes one of
             // each and the odd one out follows: on ARM64 the two bit-clear chains overlap, and on x64 the loop branches half as often
@@ -87,14 +76,13 @@ internal static partial class FinderPatternFinder
             if (falling != 0)
                 Unsafe.Add(ref end, endCount++) = (short)(x + BitOperations.TrailingZeroCount(falling));
         }
-        // A dark run reaching the end of a row whose length is a multiple of 64 ends at the length
         if (carry != 0)
             Unsafe.Add(ref end, endCount++) = (short)width;
 
         return endCount;
     }
 
-    /// <summary>Bit i set where pixel x + i is dark, for the 64 pixels at <paramref name="x"/>; bits past the row stay 0.</summary>
+    /// <summary>Bit i set where pixel x + i is dark, for the 64 pixels at <paramref name="x"/>. Bits past the row stay 0.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong DarkWord(ref byte pixels, int x, int width, byte threshold)
     {
@@ -107,7 +95,7 @@ internal static partial class FinderPatternFinder
         // ARM64: byte-lane LessThan is the unsigned compare (cmhi), but there is no movemask, so the word is folded out of the
         //      compare masks. Each of the four 16-lane masks is ANDed with the weights 1, 2, 4, ..., 128, 1, 2, ..., 128, so a dark
         //      lane holds the bit its pixel has inside its byte of the word. Three pairwise adds then merge neighbouring lanes,
-        //      64 to 32 to 16 to 8 bytes; a lane pair never shares a bit, so no add carries:
+        //      64 to 32 to 16 to 8 bytes. A lane pair never shares a bit, so no add carries:
         //
         //        pixels    0 1 2 3 4 5 6 7 | 8 .. 15 | 16 .. 31 | 32 .. 63       four compares, a weight kept where dark
         //        add 1     (0+1) (2+3) (4+5) (6+7) (8+9) ...                       32 bytes, two pixels' bits each
@@ -131,7 +119,6 @@ internal static partial class FinderPatternFinder
             var thresholdMinus1 = Vector256.Create((byte)(threshold - 1));
             if (x + 64 <= width)
             {
-                // A full word: the sign bits of two 32-byte compares, low half and high half
                 var low = Vector256.LoadUnsafe(ref pixels, (nuint)x);
                 var high = Vector256.LoadUnsafe(ref pixels, (nuint)x + 32);
                 return Vector256.Equals(Vector256.Min(low, thresholdMinus1), low).ExtractMostSignificantBits()
@@ -197,7 +184,7 @@ internal static partial class FinderPatternFinder
     /// The three integer checks on the <see cref="ClassifyWindowLanes"/> windows that begin at dark runs <paramref name="k"/> on: one bit a window in each result.
     /// </summary>
     /// <remarks>
-    /// Window j is runs starts[j]..ends[j], ends[j]..starts[j + 1], starts[j + 1]..ends[j + 1], ends[j + 1]..starts[j + 2], starts[j + 2]..ends[j + 2]; two more starts and ends than lanes are read from <paramref name="k"/> on, whatever they hold.
+    /// Window j is runs starts[j]..ends[j], ends[j]..starts[j + 1], starts[j + 1]..ends[j + 1], ends[j + 1]..starts[j + 2], starts[j + 2]..ends[j + 2]. Two more starts and ends than lanes are read from <paramref name="k"/> on, whatever they hold.
     /// <paramref name="strict"/> is <see cref="IsFinderRatio(int, int, int, int, int)"/>, <paramref name="near"/> is <see cref="IsNearFinderRatio"/>, <paramref name="crisp"/> is <see cref="IsSmallCrispFinderRuns"/>, for runs below <see cref="EdgeListWidthLimit"/> in total.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -239,23 +226,16 @@ internal static partial class FinderPatternFinder
         if (edges.Length < 2 * half || (uint)y >= (uint)height || (long)width * height > luminance.Length)
             throw new ArgumentException($"Edge buffer of {edges.Length} for a row of {width}, or row {y} outside the {width} x {height} image");
 
-        // One row: its dark runs as two arrays, then the windows a step at a time.
-        //
         //   starts   s0   s1   s2   s3 ...      window k is dark runs k, k + 1 and k + 2 and the two gaps between:
         //   ends     e0   e1   e2   e3 ...      e[k] - s[k], s[k+1] - e[k], e[k+1] - s[k+1], s[k+2] - e[k+1], e[k+2] - s[k+2]
         //
-        // A step judges ClassifyWindowLanes windows at once, sixteen with 256-bit vectors and eight with 128-bit ones, and gets one bit
-        // a window for each of the three checks. The lanes past the last window of a row read whatever the buffer holds and
-        // are masked off (live), and the near-miss bits are masked off while the grey levels are off, because the mask walk
-        // skips that check then. Only flagged windows run scalar code, in row order, through the follow-ups the mask walk runs.
-        //
-        // With 128-bit vectors the verdicts arrive as lanes, so the OR of the three is turned into bits first, and a step with
-        // nothing flagged, which on a symbol is nearly every step, pays only that one (on ARM64 each is a short sequence).
+        // The near-miss bits are masked off while the grey levels are off, because the mask walk skips that check then.
+        // Only flagged windows run scalar code, in row order, through the follow-ups the mask walk runs.
         var endCount = ExtractRowEdges(luminance.Slice(y * width, width), threshold, edges.Slice(0, half), edges.Slice(half, half));
         ref var starts = ref MemoryMarshal.GetReference(edges);
         ref var ends = ref Unsafe.Add(ref starts, half);
 
-        // Window k is dark runs k, k + 1 and k + 2 with the two light runs between them, judged where the mask walk judges it: at the end of run k + 2
+        // A window is judged where the mask walk judges it: at the end of its third dark run
         var windows = endCount - 2;
         if (windows <= 0)
             return;

@@ -59,7 +59,7 @@ public class RmQRBinaryEncoderUnitTest
     [Test]
     public async Task Encode_ExactCapacity_ShortensTerminatorToZero()
     {
-        // R7x43-H byte: 3 data codewords = 24 bits; mode 3 + count 3 + 2 bytes 16 = 22 bits → 2-bit terminator, no pad.
+        // R7x43-H byte: 3 data codewords = 24 bits. Mode 3 + count 3 + 2 bytes 16 = 22 bits → 2-bit terminator, no pad.
         var actual = Encode("ab", RmQRVersion.R7x43, RmQREccLevel.H, EncodingMode.Byte, EciMode.Default, 2);
         await Assert.That(actual).IsEquivalentTo(RmQRNaiveReference.NaiveDataCodewords("ab", 3, 0b011, 3, "Byte", utf8: false), CollectionOrdering.Matching);
         // 011 010 01100001 01100010 00 → 0x69 0x85 0x88

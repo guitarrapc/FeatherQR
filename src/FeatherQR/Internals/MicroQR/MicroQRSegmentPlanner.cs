@@ -7,7 +7,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// Mixed-mode segmentation for <see cref="MicroQRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs (and Kanji runs, for a Kanji-eligible text) whose total bit cost is minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
-/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Standard QR and rMQR planners; what lives here is Micro QR's version scan: at most three candidates below the single-mode fit, each screened by the trivial per-character lower bound before a cost run (a Micro QR encode is so cheap that even one wasted dynamic-program pass doubles it).
+/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Standard QR and rMQR planners. What lives here is Micro QR's version scan: at most three candidates below the single-mode fit, each screened by the trivial per-character lower bound before a cost run (a Micro QR encode is so cheap that even one wasted dynamic-program pass doubles it).
 /// What Micro QR adds is per-version mode availability: M1 is Numeric-only and M2 has no Byte mode, so candidates whose mode set cannot carry the content are skipped, and the missing transitions are disabled in the dynamic program.
 /// </remarks>
 internal static class MicroQRSegmentPlanner
@@ -25,9 +25,9 @@ internal static class MicroQRSegmentPlanner
 
     /// <summary>
     /// Version fit for mixed-mode segmentation, restricted to <paramref name="range"/>.
-    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="MicroQRSegmentation.Single"/>.
+    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit. When <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="MicroQRSegmentation.Single"/>.
     /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, MicroQRVersion, MicroQREccLevel, Span{ModeSegment}, out int)"/> and written under <see cref="EciMode.Default"/>.
-    /// <c>false</c> means the content fits neither one mode nor a mixed plan in the range; the caller owns the error.
+    /// <c>false</c> means the content fits neither one mode nor a mixed plan in the range. The caller owns the error.
     /// Throws exactly what the single-mode selector throws for argument errors.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan)
@@ -36,7 +36,7 @@ internal static class MicroQRSegmentPlanner
     /// <summary>
     /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, MicroQREccLevel, MicroQRVersionRange, out MicroQRVersion, out bool, out bool)"/>, keeping the run that priced the Kanji plan it chose.
     /// When <paramref name="kanjiPlan"/> is true, <paramref name="kanjiTable"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="kanjiFinalState"/> at <paramref name="kanjiPlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, MicroQRVersion, MicroQREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
-    /// An empty <paramref name="kanjiTable"/> keeps nothing; otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
+    /// An empty <paramref name="kanjiTable"/> keeps nothing. Otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, Span<byte> kanjiTable, out MicroQRVersion selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
@@ -112,10 +112,10 @@ internal static class MicroQRSegmentPlanner
 
     /// <summary>
     /// The version scan for a Kanji-eligible text with ASCII in it (<see cref="TextAnalysisResult.KanjiPlannable"/>), from <paramref name="min"/> to <paramref name="top"/>, below the single-mode (UTF-8) fit.
-    /// At each candidate the Kanji plan (Kanji runs beside runs of the ASCII) is taken where it fits, otherwise the UTF-8 plan the seven-state program gives the same text; neither carries an ECI header, since Micro QR has none.
+    /// At each candidate the Kanji plan (Kanji runs beside runs of the ASCII) is taken where it fits, otherwise the UTF-8 plan the seven-state program gives the same text. Neither carries an ECI header, since Micro QR has none.
     /// </summary>
     /// <remarks>
-    /// The UTF-8 plan is weighed so that Optimal never needs a larger version than it did before Kanji plans. Both need Byte or Kanji mode, so M1 and M2 are skipped as the mode pre-filter skips them for UTF-8 text.
+    /// The UTF-8 plan is weighed so that Optimal never needs a larger version than the UTF-8 plan alone would. Both need Byte or Kanji mode, so M1 and M2 are skipped as the mode pre-filter skips them for UTF-8 text.
     /// The Kanji screen prices a character with a cell at 13 bits, and a header for every stretch of characters with a cell and every stretch of ASCII (<see cref="KanjiScreenBits(int, int, int, MicroQRVersion)"/>).
     /// At the UTF-8 rate of 24 bits a kana, the screen would reject M3 for 「日本語12345」, whose Kanji plan fits M3-L.
     /// With a <paramref name="kanjiTable"/>, each Kanji cost run keeps its predecessors there, so the one that accepts is the plan's table: the build would run the same program at the same widths.
@@ -236,7 +236,7 @@ internal static class MicroQRSegmentPlanner
 
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
-    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Latin-1 run the charset heuristic reads as UTF-8 or Shift_JIS; a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
+    /// Returns false when the content is unplannable at this version, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Latin-1 run the charset heuristic reads as UTF-8 or Shift_JIS, or a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit. The caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version, MicroQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -256,14 +256,10 @@ internal static class MicroQRSegmentPlanner
             return false;
         }
 
-        // A plan the byte-segment decoder would misread is worse than no plan.
-        // Micro QR has no ECI, so the decoder resolves each Byte run's charset
-        // heuristically; two shapes lose to that once a split isolates them, and
-        // both fall back to the single-mode stream:
-        //  - a mid-content U+FEFF at a run start is consumed as a BOM (the program
-        //    builds no such plan under UTF-8; this refuses a model that disagreed);
-        //  - a Latin-1 run whose narrowed bytes read as UTF-8 or Shift_JIS (the
-        //    disambiguating bytes now live in another run) decodes as different text.
+        // Micro QR has no ECI, so the decoder resolves each Byte run's charset heuristically.
+        // Two shapes are misread once a split isolates them, and both fall back to the single-mode stream:
+        //  - a mid-content U+FEFF at a run start is consumed as a BOM. The program builds no such plan under UTF-8, so this refuses a model that disagreed.
+        //  - a Latin-1 run whose narrowed bytes read as UTF-8 or Shift_JIS, because the disambiguating bytes now live in another run.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount))
             || (charset == EciMode.Iso8859_1 && HasLatin1RunTheHeuristicReadsOtherwise(text, segments.Slice(0, segmentCount))))
         {
@@ -273,9 +269,8 @@ internal static class MicroQRSegmentPlanner
 
         ModeSegmenter.FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
 
-        // Re-cost the reconstructed plan from the byte counts the encoder will
-        // actually emit; disagreement is a cost-model bug and rejects the plan
-        // rather than becoming a stream that overruns the data codewords.
+        // Re-cost the reconstructed plan from the byte counts the encoder will actually emit.
+        // Disagreement is a cost-model bug and rejects the plan rather than becoming a stream that overruns the data codewords.
         var measuredBits = MeasurePlan(version, segments.Slice(0, segmentCount));
         Debug.Assert(measuredBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
@@ -291,7 +286,7 @@ internal static class MicroQRSegmentPlanner
     /// <summary>Exact bit cost of a plan: per run, mode indicator + count indicator + payload.</summary>
     /// <remarks>
     /// The headers are looked up once for the version rather than per run, as rMQR's are: the plan is measured twice (when built and before it is written).
-    /// Kanji's is taken only from M3, the first version that has the mode; below it a plan holds no Kanji run.
+    /// Kanji's is taken only from M3, the first version that has the mode. Below it a plan holds no Kanji run.
     /// </remarks>
     public static int MeasurePlan(MicroQRVersion version, ReadOnlySpan<ModeSegment> segments)
     {
@@ -365,7 +360,7 @@ internal static class MicroQRSegmentPlanner
     private static int KanjiScreenBits(int sixths, int cellRuns, int asciiRuns, MicroQRVersion version)
         => (sixths + 5) / 6 + cellRuns * (2 * (int)version - 1) + asciiRuns * (2 * (int)version);
 
-    /// <summary>The Kanji plan's program at this version's widths; M3 and M4 only, where every mode exists.</summary>
+    /// <summary>The Kanji plan's program at this version's widths. M3 and M4 only, where every mode exists.</summary>
     private static int KanjiPlanCost(ReadOnlySpan<char> text, MicroQRVersion version, Span<byte> parents, out int finalState)
         => ModeSegmenter.ComputeCostsKanji(
             text,

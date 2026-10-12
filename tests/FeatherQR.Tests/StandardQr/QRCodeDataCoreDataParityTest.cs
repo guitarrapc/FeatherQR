@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="QRCodeData.GetCoreData"/> against the per-module read (<see cref="QRCodeData.GetCoreModule"/>), for every version.
-/// The bulk unpack goes through a vector kernel that stores whole words; a symbol's module
+/// The bulk unpack goes through a vector kernel that stores whole words. A symbol's module
 /// count is never a multiple of 8, so the last few modules and the byte after them are the
 /// cases a kernel gets wrong. <see cref="QRCodeData.SetCoreData"/> against an MSB-first pack
 /// written from the definition, over a payload that was all dark before, so a pack that left

@@ -70,7 +70,7 @@ public class StructuredAppendZXingCrossTest
             if (kanjiSet)
                 await Assert.That(parity).IsEqualTo((int)shiftJisParity).Because($"symbol {i} of a Kanji set carries the Shift_JIS parity");
 
-            // ZXing.Net keeps a byte order mark in the text; this library's decoder consumes it.
+            // ZXing.Net keeps a byte order mark in the text, but this library's decoder consumes it.
             var zxingText = result.Text.TrimStart('﻿');
             await Assert.That(zxingText).IsEqualTo(ourText);
             parts.Append(zxingText);

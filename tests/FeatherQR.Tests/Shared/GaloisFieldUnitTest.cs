@@ -52,8 +52,7 @@ public class GaloisFieldUnitTest
     [Test]
     public async Task Divide_ByZero_Throws()
     {
-        // Division by 0 should throw exception
-        Assert.Throws<DivideByZeroException>(() => GaloisField.Divide(0x10, 0x00)); // in galois field, a^i / a^0 = error
+        Assert.Throws<DivideByZeroException>(() => GaloisField.Divide(0x10, 0x00)); // 0 is no power of a, so it has no logarithm
     }
 
     [Test]

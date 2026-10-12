@@ -7,7 +7,7 @@ namespace QRInteropFixtures;
 ///
 /// qrtool's <c>--mode kanji</c> takes the payload as raw Shift_JIS bytes (UTF-8
 /// input fails with "invalid character"), so the corpus has to hand it bytes, not
-/// text. For ordinary payloads CP932 produces them; for the seven cells where
+/// text. For ordinary payloads CP932 produces them, but for the seven cells where
 /// JIS X 0208 and CP932 disagree it cannot, because .NET has no encoder for the
 /// JIS X 0208 reading (U+301C is not in CP932 at all). Those cases carry their
 /// bytes explicitly instead.
@@ -47,7 +47,7 @@ public static class KanjiPayload
     /// output for '?'. That scan cannot work: CP932 substitutes '?' for what it cannot
     /// encode, so a payload that legitimately contains '?' makes the substitution
     /// indistinguishable from the real thing, and the corpus would ship a fixture
-    /// asserting text the symbol does not carry — exactly the failure the corpus exists
+    /// asserting text the symbol does not carry, exactly the failure the corpus exists
     /// to catch.
     /// </remarks>
     public static byte[] ToShiftJisBytes(string payloadText, string? shiftJisHex)

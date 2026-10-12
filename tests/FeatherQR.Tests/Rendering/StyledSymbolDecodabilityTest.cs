@@ -19,7 +19,7 @@ namespace FeatherQR.Tests;
 /// <para>
 /// So the renderer draws the finder as a whole pattern, never as styled modules. These cases are
 /// the guard: they fail with <c>NotDetected</c> if the module shape or size ever reaches the
-/// finder again. The bound they pin is deliberately blunt, "it decodes", because the failure this
+/// finder. The bound they pin is deliberately blunt, "it decodes", because the failure this
 /// prevents is not a loss of accuracy but a total loss of detection.
 /// </para>
 /// </remarks>
@@ -39,8 +39,8 @@ public class StyledSymbolDecodabilityTest
         _ => RectangleModuleShape.Default,
     };
 
-    // 98% is here because that is where the defect first showed: a gap of one fiftieth of a module
-    // is invisible to a reader and still enough to break the run the detector looks for.
+    // 98% is here because a gap of one fiftieth of a module is invisible to a reader and still
+    // enough to break the run the detector looks for.
     [Test]
     [Arguments(Style.Rectangle, 100)]
     [Arguments(Style.Rectangle, 98)]
@@ -181,11 +181,10 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// A decorative finder rounds or cuts its own corner modules, so their centres are fair game;
-    /// what it must never do is reach outside its seven-by-seven box. On a wide canvas the light
-    /// ring once ran past the bottom edge of a stretched finder and over the modules below it.
-    /// The builder now fits the symbol, so the finder here is square; the per-axis drawing that
-    /// fixed the overrun is pinned directly by <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
+    /// A decorative finder rounds or cuts its own corner modules, so their centres are fair game.
+    /// What it must never do is reach outside its seven-by-seven box, where its light ring would
+    /// cover the modules beside it. The builder fits the symbol, so the finder here is square.
+    /// A finder on a non-square grid is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
     [Arguments("rectangle")]
@@ -218,11 +217,9 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// Whether a symbol decodes must not depend on whether it is styled. These canvases were once
-    /// mild stretches, where at 900x820 the styled render failed while the plain one decoded; the
-    /// builder now fits the symbol, so they are square renders at slightly different sizes, and the
-    /// per-axis finder drawing that fixed the stretch is pinned by
-    /// <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
+    /// Whether a symbol decodes must not depend on whether it is styled. The builder fits the
+    /// symbol, so these canvases are square renders at slightly different sizes. A finder on a
+    /// non-square grid is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
     [Arguments(900, 900)]
@@ -234,7 +231,7 @@ public class StyledSymbolDecodabilityTest
 
         using var plain = new QRCodeImageBuilder(data).WithSize(width, height).WithColors(SKColors.Black, SKColors.White).ToBitmap();
         if (!QRCodeImageDecoder.TryDecode(plain, out _, out _))
-            return; // The plain render does not decode either; nothing to compare.
+            return; // The plain render does not decode either, so there is nothing to compare.
 
         using var styled = new QRCodeImageBuilder(data)
             .WithSize(width, height)
@@ -256,7 +253,7 @@ public class StyledSymbolDecodabilityTest
     /// </remarks>
     private static async Task AssertModuleCentres(SKBitmap bitmap, int matrixWidth, int matrixHeight, Func<int, int, bool> isDark, Func<int, int, bool>? skip = null)
     {
-        // Mirrors the builder's own arithmetic, double and epsilon included; a grid computed less
+        // Mirrors the builder's own arithmetic, double and epsilon included, since a grid computed less
         // precisely drifts a pixel from the one the builder drew on.
         var cell = Math.Min((double)bitmap.Width / matrixWidth, (double)bitmap.Height / matrixHeight);
         var left = Math.Max(0d, Math.Floor((bitmap.Width - cell * matrixWidth) / 2 + 1e-6));
@@ -280,9 +277,8 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// Micro QR and rMQR gained <c>WithFinderPatternShape</c> with this rule, and nothing else
-    /// exercises it: a mutant that dropped the argument from both builders and reverted their
-    /// crisp-edges hook passed the whole suite. These cases are what makes that revert fail.
+    /// Nothing else exercises <c>WithFinderPatternShape</c> on Micro QR and rMQR: builders that
+    /// drop the argument and answer a constant for their crisp-edges hook pass every other test.
     /// </summary>
     [Test]
     [Arguments("circle")]
@@ -307,8 +303,8 @@ public class StyledSymbolDecodabilityTest
         await Assert.That(MicroQRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)).IsTrue()
             .Because($"status={info.Status}");
         await Assert.That(text).IsEqualTo("https://githu");
-        // The shape has to reach the renderer, not just be accepted: dropping the builder's new
-        // argument falls back to the plain square, which still decodes and would hide the revert.
+        // The shape has to reach the renderer, not just be accepted: a builder that drops the
+        // argument falls back to the plain square, which still decodes.
         await Assert.That(styled).IsNotEquivalentTo(Render(null));
     }
 
@@ -341,8 +337,8 @@ public class StyledSymbolDecodabilityTest
 
     /// <summary>
     /// A curved finder needs antialiasing, so the SVG must not carry <c>crispEdges</c> once one is
-    /// set; a square one does not, so it must keep it. This is the other half of the same builder
-    /// change: the crisp-edges hook on Micro QR and rMQR was a constant <c>true</c> before it.
+    /// set. A square one does not, so it must keep it. A crisp-edges hook that answers a constant
+    /// <c>true</c> on Micro QR and rMQR fails the first half.
     /// </summary>
     [Test]
     [Arguments("microqr")]
@@ -372,12 +368,10 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// The background's alpha changes the background rect and nothing else in the SVG. Every
-    /// built-in finder shape used to be cut out of its background with a blend mode inside a layer
-    /// when the alpha was below 255, and <c>SKSvgCanvas</c> dropped the layer whole, so the
-    /// translucent document lost its finder patterns: 9 elements on Standard QR, 3 on the others.
-    /// The ring is a hole in the drawing now, so the two documents differ only in the
-    /// <c>fill-opacity</c> of the background.
+    /// The background's alpha changes the background rect and nothing else in the SVG.
+    /// <c>SKSvgCanvas</c> drops a layer whole, so a finder cut out of its background with a blend
+    /// mode inside one would be missing from the translucent document. The ring is a hole in the
+    /// drawing, so the two documents differ only in the <c>fill-opacity</c> of the background.
     /// </summary>
     [Test]
     [Arguments("qr", "rectangle")]
@@ -433,12 +427,11 @@ public class StyledSymbolDecodabilityTest
     /// <remarks>
     /// <para>
     /// The test above compares one alpha against another, which a document that lost its finder at
-    /// both alphas satisfies just as well; this one is the positive claim behind it. Measured as
-    /// mutations that the suite did not catch before it existed: a renderer that skipped
-    /// <c>DrawSingleFinder</c> in SVG output only (Micro QR and rMQR lose their finder, raster
-    /// untouched), the curved shapes skipping the draw that carries their ring, and the square
-    /// shape dropping its four outer bands and keeping only the 3x3 centre. Each is the defect
-    /// this rule exists to prevent, and each passed.
+    /// both alphas satisfies just as well. This one is the positive claim behind it. It is what
+    /// fails for a renderer that skips <c>DrawSingleFinder</c> in SVG output only (Micro QR and
+    /// rMQR lose their finder, raster untouched), for a curved shape that skips the draw carrying
+    /// its ring, and for a square shape that drops its four outer bands and keeps only the 3x3
+    /// centre.
     /// </para>
     /// <para>
     /// Probed at the centre of the pattern and at the middle of each of its four outer edges, all
@@ -547,14 +540,12 @@ public class StyledSymbolDecodabilityTest
     /// Sized so the module grid lands off whole pixels, because that is the only place the crisp
     /// half shows: at 504 for Micro QR or 630 for rMQR the finder edges fall on pixel boundaries
     /// and antialiasing is a no-op for straight edges, which is why the approval goldens (all
-    /// built with <c>WithModulePixelSize</c>) cannot see it and a revert to the old
-    /// "only ever turn it on" form passed the whole suite.
+    /// built with <c>WithModulePixelSize</c>) cannot see a renderer that only ever turns it on.
     /// </para>
     /// <para>
     /// The curved half is the other direction, and it needs saying separately: with only the
     /// square shape asserted, the renderer could assign a constant <see langword="false"/> instead
-    /// of the shape's answer and nothing would fail — measured as a surviving mutation on
-    /// <c>DrawSingleFinder</c>, where a Micro QR circle finder came out aliased.
+    /// of the shape's answer and nothing would fail.
     /// </para>
     /// </remarks>
     [Test]
@@ -674,10 +665,9 @@ public class StyledSymbolDecodabilityTest
     /// </summary>
     /// <remarks>
     /// <c>SKSvgCanvas</c> writes an oval as one <c>&lt;ellipse&gt;</c> and a path as thousands of
-    /// quadratic segments, so the encoding is the difference between a 6 KB document and a 50 KB
-    /// one. The sizes here are the ones that catch a squareness test written too tightly: the fit
-    /// leaves two of the three finder rects a few float ulps off square, and a strict comparison
-    /// sent them down the path branch at every canvas size but one.
+    /// quadratic segments. The sizes here are the ones that catch a squareness test written too
+    /// tightly: the fit leaves two of the three finder rects a few float ulps off square, and a
+    /// strict comparison sends them down the path branch.
     /// </remarks>
     [Test]
     [Arguments(512, 512)]
@@ -706,8 +696,8 @@ public class StyledSymbolDecodabilityTest
     /// one of them has to put it back: the renderer reuses that paint for the next finder and the
     /// icon. The square shape's outer ring is four abutting bands, and abutting antialiased edges
     /// do not composite back to opaque, so it also holds the paint to the straight edges it
-    /// declares — a caller's antialiased paint, or a custom shape that declares antialiasing and
-    /// delegates here, drew a grey line across the ring before it did.
+    /// declares. Otherwise a caller's antialiased paint, or a custom shape that declares
+    /// antialiasing and delegates here, draws a grey line across the ring.
     /// </remarks>
     [Test]
     [Arguments("rectangle")]
@@ -815,8 +805,8 @@ public class StyledSymbolDecodabilityTest
 
     /// <summary>
     /// Every decorative finder decodes in a wide canvas. The builder fits the symbol, so the
-    /// finder is square here; whether the circle-based ones follow a non-square grid, which only a
-    /// direct call can ask of them now, is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
+    /// finder is square here. Whether the circle-based ones follow a non-square grid, which only a
+    /// direct call can ask of them, is <see cref="DecorativeFinder_NonSquareRect_RingsFollowTheGrid"/>.
     /// </summary>
     [Test]
     [Arguments("rectangle")]
@@ -838,9 +828,9 @@ public class StyledSymbolDecodabilityTest
     }
 
     /// <summary>
-    /// Drawn straight into a non-square rect, which a caller can still do, every finder keeps its
+    /// Drawn straight into a non-square rect, which a direct caller can do, every finder keeps its
     /// rings on that rect's own seven-by-seven grid and inside it. Across the middle row and the
-    /// middle column the cells read dark, light, three dark, light, dark whatever the shape; a ring
+    /// middle column the cells read dark, light, three dark, light, dark whatever the shape. A ring
     /// sized from the shorter side would leave the long axis's ring cells light, and one sized from
     /// the longer side would spill past the short edges.
     /// </summary>

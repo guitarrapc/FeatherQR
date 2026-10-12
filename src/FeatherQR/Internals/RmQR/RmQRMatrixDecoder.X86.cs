@@ -14,8 +14,8 @@ namespace FeatherQR.Internals.RmQR;
 /// A column of a symbol spans at most height − 2 = 15 data rows, so it fits in a <see cref="ushort"/> and the transpose covers 16 columns per 256-bit vector.
 /// Two planes are produced in the same pass: one in walk order for upward pairs and a row-reversed one for downward pairs, which lets a single pair of PEXT/PDEP masks serve both directions (see <c>BuildExtractLayout</c> for why the orders line up).
 /// <para>
-/// Requires fast PDEP/PEXT (see <see cref="HardwareCapabilities.HasFastPext"/>); pre-Zen 3 AMD parts and every non-x64 target take the portable tier instead.
-/// Measured 16-64x over the per-module reference walk across R7x43..R17x139, versus 8-12x for the portable tier; AVX-512 (32 columns per step) measured inside noise of AVX2 on Zen 4, so there is no 512-bit tier.
+/// Requires fast PDEP/PEXT (see <see cref="HardwareCapabilities.HasFastPext"/>), so pre-Zen 3 AMD parts and every non-x64 target take the portable tier instead.
+/// There is no 512-bit tier: 32 columns per step gain nothing over 16 on a core that runs a 512-bit operation as two 256-bit halves.
 /// </para>
 /// </remarks>
 internal static partial class RmQRMatrixDecoder
@@ -26,7 +26,7 @@ internal static partial class RmQRMatrixDecoder
     /// </summary>
     private static void ExtractCodewordsBitPlanes(ReadOnlySpan<byte> modules, int width, int height, uint[] pairs, Span<byte> stream)
     {
-        // Two planes of PlaneStride columns each; the second holds the row-reversed copy.
+        // Two planes of PlaneStride columns each. The second holds the row-reversed copy.
         Span<ushort> planes = stackalloc ushort[PlaneStride * 2];
         ref var plane = ref MemoryMarshal.GetReference(planes);
 

@@ -21,7 +21,7 @@ internal interface ISymbolPass<TInfo> : ILuminanceAttempt<TInfo>
     TInfo NotDetected { get; }
 
     /// <summary>
-    /// The pass at the global threshold of <paramref name="histogram"/>, as <see cref="ILuminanceAttempt{TInfo}.Decode"/>; also the threshold and grey levels it used, and whether it found no finder candidate at all, which only a decoder with the midpoint pass reports.
+    /// The pass at the global threshold of <paramref name="histogram"/>, as <see cref="ILuminanceAttempt{TInfo}.Decode"/>, and also the threshold and grey levels it used, and whether it found no finder candidate at all, which only a decoder with the midpoint pass reports.
     /// </summary>
     DecodeStatus DecodeGlobal(ReadOnlySpan<byte> luminance, ReadOnlySpan<int> histogram, int width, int height, Span<char> destination, out int charsWritten, out TInfo info, out bool noFinder, out byte threshold, out GreyLevels grey);
 
@@ -39,9 +39,9 @@ internal interface ISymbolPass<TInfo> : ILuminanceAttempt<TInfo>
 /// A decoder with the reduced-scale search then reads the image halved through the same passes, and halved again, when nothing settled and the image is not black and white alone.
 /// </summary>
 /// <remarks>
-/// A pass runs only when the passes before it read nothing; a read ends the sequence, and so does a verdict on the content, except that the negative pass still runs after one from the positive.
+/// A pass runs only when the passes before it read nothing. A read ends the sequence, and so does a verdict on the content, except that the negative pass still runs after one from the positive.
 /// When nothing reads or gives a verdict, the global positive pass at full size is reported.
-/// The midpoint pass is for a finder the global threshold cannot see: edge greys pull that threshold toward light, and a blurred finder's light ring can keep too few pixels above it; halfway between the two levels the ring reads its width.
+/// The midpoint pass is for a finder the global threshold cannot see: edge greys pull that threshold toward light, and a blurred finder's light ring can keep too few pixels above it. Halfway between the two levels the ring reads its width.
 /// The reduced-scale search is for a symbol under noise or a texture finer than its modules, which breaks a finder's runs at full size and averages out of the image halved.
 /// The rules and why they are so are in the architecture record (qrcode-symbologies.md, image decode passes).
 /// </remarks>
@@ -53,14 +53,14 @@ internal static class ImageDecodePasses
     /// <summary>
     /// Reads the image in the passes, with the decoder's symbol pass.
     /// </summary>
-    /// <typeparam name="TPass">The decoder's symbol pass; a struct, so the calls are direct.</typeparam>
+    /// <typeparam name="TPass">The decoder's symbol pass. It is a struct, so the calls are direct.</typeparam>
     /// <typeparam name="TInfo">The decoder's diagnostic record.</typeparam>
     /// <param name="pass">The decoder's symbol pass.</param>
     /// <param name="luminance">Grayscale pixels, row-major, <paramref name="width"/> × <paramref name="height"/> bytes read.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Where the pass writes the decoded characters.</param>
-    /// <param name="charsWritten">Characters written; 0 unless the image decoded, since a failing pass can stop after a segment was written.</param>
+    /// <param name="charsWritten">Characters written. It is 0 unless the image decoded, since a failing pass can stop after a segment was written.</param>
     /// <param name="info">The reported pass's diagnostics.</param>
     public static DecodeStatus Decode<TPass, TInfo>(ref TPass pass, ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out TInfo info)
         where TPass : struct, ISymbolPass<TInfo>

@@ -14,9 +14,9 @@ namespace FeatherQR.Internals.StandardQR;
 /// <remarks>
 /// <para>
 /// Alphanumeric, sixteen characters a step (the rMQR writer's form, RmQRBinaryEncoder.WriteAlphanumeric, on one pack of two loads): the
-/// value is the character plus an offset chosen by its row, from two pshufb tables over the low nibble and a constant for the letters;
+/// value is the character plus an offset chosen by its row, from two pshufb tables over the low nibble and a constant for the letters.
 /// pmaddubsw (45, 1) forms the pairs and pmaddwd (2048, 1) two pairs in 22 bits, so the step is two 44-bit appends. A membership table
-/// over the low nibble, ANDed with the row's bit, marks a character outside the alphabet; such a step leaves the run to the portable
+/// over the low nibble, ANDed with the row's bit, marks a character outside the alphabet. Such a step leaves the run to the portable
 /// writer, which checks it again and throws there. A character past 0xFF saturates to 0xFF or to 0 in the pack, neither in the alphabet.
 /// </para>
 /// <para>
@@ -25,9 +25,8 @@ namespace FeatherQR.Internals.StandardQR;
 /// is one 40-bit append.
 /// </para>
 /// <para>
-/// A run long enough for a step runs its steps on a local copy of the writer, stored back before anything else writes: with its fields in
-/// registers the steps took 0.86 to 0.93 of their time at 300 to 7,089 characters, against about a nanosecond more for the copy, which a
-/// run too short for a step does not pay (2026-10-05).
+/// A run long enough for a step runs its steps on a local copy of the writer, stored back before anything else writes, so its fields
+/// stay in registers through the steps. A run too short for a step does not pay for the copy.
 /// </para>
 /// </remarks>
 internal ref partial struct QRBinaryEncoder

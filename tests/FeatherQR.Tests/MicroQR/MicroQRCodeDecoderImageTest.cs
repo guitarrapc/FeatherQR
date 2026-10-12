@@ -34,9 +34,9 @@ public class MicroQRCodeDecoderImageTest
 
     /// <summary>
     /// A symbol half a pixel off the pixel grid, edge pixels grey: 64 is below the threshold
-    /// (every dark run a pixel wider), 192 above it (a pixel narrower). The finder's module
-    /// size used to be measured across its two outer edges, which move apart under ink spread
-    /// (regression: M3 failed at 3 px/module).
+    /// (every dark run a pixel wider), 192 above it (a pixel narrower). A module size measured
+    /// across the finder's two outer edges moves with the ink spread, and M3 at 3 px/module
+    /// then fails.
     /// </summary>
     [Test]
     [Arguments(MicroQRVersion.M2, 3, 64)]
@@ -58,11 +58,11 @@ public class MicroQRCodeDecoderImageTest
     }
 
     /// <summary>
-    /// Anti-aliased renders at low density and small rotations: the axis recovery took the
-    /// direction of the shortest span through the finder, a flat minimum that pixel noise
-    /// moved several degrees, and scaled the grid from the measurement that won it.
-    /// M4 at 20 degrees failed; the broader candidate search read the rest either way, and
-    /// they stay to pin the envelope. The estimator itself is pinned in FinderAxisEstimatorTest.
+    /// Anti-aliased renders at low density and small rotations. The direction of the shortest
+    /// span through the finder is a flat minimum that pixel noise moves several degrees. An axis
+    /// taken from it alone, with the grid scaled from the measurement that won it, fails M4 at
+    /// 20 degrees. The broader candidate search reads the rest either way, and they pin the
+    /// envelope. The estimator itself is pinned in FinderAxisEstimatorTest.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(SupersampledRotations))]
@@ -137,9 +137,8 @@ public class MicroQRCodeDecoderImageTest
 
     /// <summary>
     /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
-    /// not square, so it must keep the finder's horizontal and vertical module scales apart. Every
-    /// right-angle rotation decodes to 2.35:1 either way, where the finder cross-check's 12:5 window
-    /// ends; this is 1.25:1, 8 x 10 px.
+    /// not square, so it must keep the finder's horizontal and vertical module scales apart. This is
+    /// 1.25:1, 8 x 10 px, at every right-angle rotation.
     /// </summary>
     [Test]
     [Arguments(0)]

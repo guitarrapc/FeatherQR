@@ -25,7 +25,7 @@ public class FinderPatternSelectionTest
     [Test]
     public async Task Select_ExactlyThree_ReturnsThemWhateverTheirShape()
     {
-        // No new rejection: three candidates that form no right angle still come back.
+        // Three candidates that form no right angle still come back.
         FinderPattern[] candidates = [Fp(35, 35, 8, 8), Fp(179, 35, 8, 8), Fp(179, 155, 8, 3)];
 
         var selected = Select(candidates);
@@ -62,7 +62,7 @@ public class FinderPatternSelectionTest
 
     /// <summary>
     /// Four candidates on the corners of a square make four right isosceles triangles, so
-    /// geometry and module size tie; the corner confirmed on fewer rows is the one left out.
+    /// geometry and module size tie. The corner confirmed on fewer rows is the one left out.
     /// </summary>
     [Test]
     public async Task Select_GeometryAndSizeTie_PrefersTheMoreConfirmedTriple()
@@ -76,9 +76,9 @@ public class FinderPatternSelectionTest
 
     /// <summary>
     /// Keystone: a false candidate near the fourth corner closes a right angle at the top-right
-    /// finder and, measured from a real render, scores 0.016 better than the real triple
-    /// (0.057 against 0.073). The real bottom-left finder was confirmed on more than three
-    /// times as many rows, and within the tie tolerance that decides.
+    /// finder and scores 0.016 better than the real triple (0.057 against 0.073). The real
+    /// bottom-left finder is confirmed on more than three times as many rows, and within
+    /// the tie tolerance that decides.
     /// </summary>
     [Test]
     public async Task Select_KeystoneFourthCornerCandidateScoresSlightlyBetter_CountDecides()
@@ -123,11 +123,10 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
-    /// A builder render at about 1.9 px/module, as measured on v19-H at 195 px: the strided scan
-    /// hit the real bottom-left finder once and a false candidate of twice the module size
-    /// twice. The selection still
-    /// leaves the unconfirmed one out, and says so, which is what sends the scan over the
-    /// rows it skipped.
+    /// The candidates of a builder render at about 1.9 px/module (v19-H at 195 px): the strided
+    /// scan hits the real bottom-left finder once and a false candidate of twice the module size
+    /// twice. The selection still leaves the unconfirmed one out, and says so, which is what
+    /// sends the scan over the rows it skipped.
     /// </summary>
     [Test]
     public async Task Select_ConfirmedThreeAreNoTriple_UnconfirmedLeftOut_IsFlagged()
@@ -224,7 +223,7 @@ public class FinderPatternSelectionTest
     /// <summary>
     /// A corpus symbol whose alignment pattern and two data modules read as a finder, rendered
     /// axis-aligned from its matrix at every density: from 5 px/module up its false candidate is
-    /// confirmed and used to win.
+    /// confirmed, and a selection that does not score geometry takes it.
     /// </summary>
     [Test]
     [Arguments(3)]
@@ -249,9 +248,9 @@ public class FinderPatternSelectionTest
     }
 
     /// <summary>
-    /// Symbols from this library's own encoder that carry a confirmed false finder, found by a
-    /// differential decode sweep: flat renders at 5 and 6 px/module that read one to two
-    /// versions low before the selection scored geometry.
+    /// Symbols from this library's own encoder that carry a confirmed false finder: flat
+    /// renders at 5 and 6 px/module that read one to two versions low when the selection
+    /// does not score geometry.
     /// </summary>
     [Test]
     [Arguments("05327189515657818903205615751649015094209316468065994690971143887664281460389915768574431402316652989488343421105547421", QREccLevel.M, 1, 6)]
@@ -315,9 +314,9 @@ public class FinderPatternSelectionTest
 
     /// <summary>
     /// Two symbols side by side: six candidates, and the selection must take all three from one
-    /// symbol. Selecting by module size alone mixed them whenever both symbols were rendered at
-    /// the same density, since every candidate then measured the same size; different
-    /// densities (the 5/6 case) were already told apart.
+    /// symbol. Module size alone mixes them whenever both symbols are rendered at the same
+    /// density, since every candidate then measures the same size. It tells different
+    /// densities (the 5/6 case) apart.
     /// </summary>
     [Test]
     [Arguments(3, 3)]

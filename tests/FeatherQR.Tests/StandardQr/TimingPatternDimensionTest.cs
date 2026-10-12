@@ -288,7 +288,7 @@ public class TimingPatternDimensionTest
         const int pixelsPerModule = 3;
         var qr = QRCodeGenerator.Create("T", QREccLevel.L, new QRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         var (luminance, width, height) = PixelAligned(qr, pixelsPerModule);
-        // Timing module 9 is light; paint it dark
+        // Timing module 9 is light. Paint it dark.
         var (row, column) = inRow ? (6, 9) : (9, 6);
         for (var y = 0; y < pixelsPerModule; y++)
         {

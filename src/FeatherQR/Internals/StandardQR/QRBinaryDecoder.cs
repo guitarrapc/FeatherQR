@@ -19,13 +19,13 @@ namespace FeatherQR.Internals.StandardQR;
 /// The decoder uses UTF-8 when the payload validates as UTF-8 (or carries a BOM), Shift_JIS when the bytes give it away, and falls back to ISO-8859-1 otherwise, ASCII decodes identically either way.
 /// </para>
 /// <para>
-/// Segment payload decoding (digit/character groups, byte charset resolution) is shared with the other symbology decoders via <see cref="SegmentDecoders"/>; this class owns the Standard QR framing: 4-bit mode indicators, version-dependent count indicator widths, and ECI headers.
+/// Segment payload decoding (digit/character groups, byte charset resolution) is shared with the other symbology decoders via <see cref="SegmentDecoders"/>. This class owns the Standard QR framing: 4-bit mode indicators, version-dependent count indicator widths, and ECI headers.
 /// </para>
 /// </remarks>
 internal static class QRBinaryDecoder
 {
     // Mode indicators (ISO/IEC 18004 Table 2). EncodingMode covers the modes the
-    // encoder writes; the remaining indicators are listed here for classification.
+    // encoder writes. The remaining indicators are listed here for classification.
     private const int ModeTerminator = 0b0000;
     private const int ModeNumeric = 0b0001;
     private const int ModeAlphanumeric = 0b0010;
@@ -50,8 +50,8 @@ internal static class QRBinaryDecoder
     /// <param name="version">QR code version (1-40), determines character count indicator widths.</param>
     /// <param name="destination">Destination for decoded characters.</param>
     /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
-    /// <param name="structuredAppend">The Structured Append header when the stream carries one, accepted at any position; default otherwise.</param>
-    /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position; default otherwise.</param>
+    /// <param name="structuredAppend">The Structured Append header when the stream carries one, accepted at any position. Default otherwise.</param>
+    /// <param name="fnc1">The FNC1 mode when the stream carries one, with its application indicator in second position. Default otherwise.</param>
     public static DecodeStatus DecodeBitStream(ReadOnlySpan<byte> data, int version, Span<char> destination, out int charsWritten, out QRStructuredAppend structuredAppend, out Fnc1Mode fnc1)
     {
         charsWritten = 0;

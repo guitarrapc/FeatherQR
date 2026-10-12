@@ -166,7 +166,7 @@ internal sealed record Fnc1StreamShape(IReadOnlyList<string> Headers, IReadOnlyL
 
     private static void AddHeader(List<string> headers, List<string> modes, string header)
     {
-        // FNC1 belongs before the first data segment (the decoder refuses it later); the other two headers may sit anywhere.
+        // FNC1 belongs before the first data segment, since the decoder refuses it later. The other two headers may sit anywhere.
         if (modes.Count > 0 && header.StartsWith("FNC1", StringComparison.Ordinal))
             throw new InvalidOperationException($"The fixture stream has the indicator {header} after a data segment.");
         headers.Add(header);

@@ -14,7 +14,7 @@ public sealed record FixtureManifest
     public required string GeneratorVersion { get; init; }
     public required string SymbolType { get; init; }
     public required int Version { get; init; }
-    /// <summary>Human-readable version name where the version is not a plain integer (rMQR: "R7x43"); null otherwise.</summary>
+    /// <summary>Human-readable version name where the version is not a plain integer (rMQR: "R7x43"). It is null otherwise.</summary>
     public string? VersionName { get; init; }
     public required int Width { get; init; }
     public required int Height { get; init; }
@@ -26,13 +26,13 @@ public sealed record FixtureManifest
     public string? EciCharset { get; init; }
     public int QuietZoneModules { get; init; }
     public int PixelsPerModule { get; init; }
-    /// <summary>Structured Append header of this symbol; null when the symbol carries none.</summary>
+    /// <summary>Structured Append header of this symbol, or null when the symbol carries none.</summary>
     public StructuredAppendManifest? StructuredAppend { get; init; }
-    /// <summary>FNC1 mode of this symbol; null when the symbol carries none.</summary>
+    /// <summary>FNC1 mode of this symbol, or null when the symbol carries none.</summary>
     public Fnc1Manifest? Fnc1 { get; init; }
 }
 
-/// <summary>The Structured Append header as on the wire: 0-based index, count 1..16, parity byte; <c>SetId</c> groups one set.</summary>
+/// <summary>The Structured Append header as on the wire: 0-based index, count 1..16, parity byte. <c>SetId</c> groups one set.</summary>
 public sealed record StructuredAppendManifest
 {
     public required string SetId { get; init; }
@@ -108,7 +108,7 @@ public static class FixtureLoader
 
     /// <summary>
     /// Parses a rectangular matrix fixture ('1' = dark, '0' = light, row-major, no
-    /// quiet zone) into a byte-per-module buffer; every row must have the same width.
+    /// quiet zone) into a byte-per-module buffer. Every row must have the same width.
     /// </summary>
     public static (byte[] Modules, int Width, int Height) ReadRectangularMatrix(string matrixPath)
     {

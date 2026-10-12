@@ -19,8 +19,7 @@ internal static class AgreeCommand
         // toolchains. Different commits are different code.
         if (first.Machine.Commit != second.Machine.Commit)
             md.AppendLine("- The two runs are of different commits, so a disagreement can be the code, not the machine.");
-        // A hosted x64 runner's CPU model changes between jobs, and ratios change with it: on the first two CI runs (2026-10-05), from Zen 3 to Zen 5,
-        // entries moved by up to 45 %. Such a pair compares the CPUs, not the noise.
+        // A hosted x64 runner's CPU model changes between jobs, and ratios change with it. Such a pair compares the CPUs, not the noise.
         if (Cpu(first.Machine) != Cpu(second.Machine))
             md.AppendLine("- The two runs ran on different CPU models, so a disagreement can be the CPU, not the noise.");
 

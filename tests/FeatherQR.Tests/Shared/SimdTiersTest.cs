@@ -318,7 +318,7 @@ public class SimdTiersTest
         + @"|\bHasFastPext\b",
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
 
-    /// <summary>The source with line and block comments blanked, line breaks kept so line numbers still match; string literals are not parsed, which no flag name appears in.</summary>
+    /// <summary>The source with line and block comments blanked, line breaks kept so line numbers still match. String literals are not parsed, which no flag name appears in.</summary>
     private static string StripComments(string source)
     {
         var chars = source.ToCharArray();

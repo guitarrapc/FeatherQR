@@ -20,8 +20,8 @@ public class QRMatrixDecoderExtractParityTest
 {
     public static IEnumerable<int> AllVersions() => Enumerable.Range(1, 40);
 
-    // 0 light; 1..3 all dark written as 1 / 0xFF / 2 (the contract is "non-zero = dark",
-    // so a kernel that bit-tests instead of comparing against zero fails on 2); the rest
+    // 0 light. 1..3 all dark written as 1 / 0xFF / 2 (the contract is "non-zero = dark",
+    // so a kernel that bit-tests instead of comparing against zero fails on 2). The rest
     // pseudo-random, dark modules carrying arbitrary non-zero bytes.
     private const int GridShapes = 7;
 

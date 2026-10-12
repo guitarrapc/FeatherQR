@@ -6,8 +6,8 @@ namespace FeatherQR.Internals.RmQR;
 /// rMQR Code symbol tables and format information (ISO/IEC 23941).
 /// </summary>
 /// <remarks>
-/// All per-version tables are indexed by the ISO version index <c>(int)version - 1</c> (0-31, height-major: all widths of height 7, then 9, 11, 13, 15, 17); per-version × ECC tables by <c>index * 2 + (int)eccLevel</c> (M = 0, H = 1).
-/// Every value was verified against external oracle symbols before implementation (see specs/rmqr-encoder.md, "Verification record"); the structural and oracle tests in tests/RmQr pin them permanently.
+/// All per-version tables are indexed by the ISO version index <c>(int)version - 1</c> (0-31, height-major: all widths of height 7, then 9, 11, 13, 15, 17), and per-version × ECC tables by <c>index * 2 + (int)eccLevel</c> (M = 0, H = 1).
+/// Every value is verified against external oracle symbols (see specs/rmqr-encoder.md, "Verification record"). The structural and oracle tests in tests/RmQr pin them.
 /// </remarks>
 internal static class RmQRConstants
 {
@@ -65,7 +65,7 @@ internal static class RmQRConstants
         61, 88, 122, 160, 232,
     ];
 
-    // Remainder bits (free modules − 8 × total codewords) per version index; always light.
+    // Remainder bits (free modules − 8 × total codewords) per version index, always light.
     private static ReadOnlySpan<byte> remainderBits =>
     [
         0, 3, 5, 6, 1,
@@ -76,7 +76,7 @@ internal static class RmQRConstants
         1, 2, 0, 3, 4,
     ];
 
-    // Data codewords per version × ECC (index * 2 + ecc; M, H).
+    // Data codewords per version × ECC (index * 2 + ecc, M then H).
     private static ReadOnlySpan<byte> dataCodewords =>
     [
         6, 3, 12, 7, 20, 10, 28, 14, 44, 24,
@@ -87,9 +87,8 @@ internal static class RmQRConstants
         39, 21, 56, 28, 78, 38, 100, 56, 152, 76,
     ];
 
-    // Reed-Solomon block count per version × ECC (M, H). Every block of a symbol
-    // carries the same ECC codeword count ((total − data) / blocks); data codewords
-    // split into blocks whose sizes differ by at most one, smaller blocks first.
+    // Reed-Solomon block count per version × ECC (M, H). Every block of a symbol carries the same ECC codeword count ((total − data) / blocks).
+    // Data codewords split into blocks whose sizes differ by at most one, smaller blocks first.
     private static ReadOnlySpan<byte> blockCounts =>
     [
         1, 1, 1, 1, 1, 1, 1, 1, 1, 2,
@@ -100,21 +99,10 @@ internal static class RmQRConstants
         1, 2, 2, 2, 2, 3, 3, 4, 4, 6,
     ];
 
-    // Error correction capacity t in codewords per RS block, per version × ECC (M, H):
-    // the maximum a decoder may correct in one block. Every entry is the full
-    // Reed-Solomon strength ⌊ECC codewords per block / 2⌋ — unlike ISO/IEC 18004
-    // Micro QR, no misdecode-protection codewords p are reserved (there 2t + p = ecc,
-    // so a decoder wired to full RS strength over-corrects).
-    //
-    // Provenance: derived from the block-structure tables above ((total − data) /
-    // blocks / 2), which are oracle-verified (specs/rmqr-encoder.md, "Verification
-    // record"); the evidence for full strength is the Correction cap decision in
-    // specs/rmqr-decoder.md. The ISO/IEC 23941 Table 8 capacity column itself has NOT
-    // been read: the standard is paywalled and the public preview stops short of
-    // Table 8. Held as data rather than as the ⌊ecc/2⌋ expression so that a future
-    // reading of Table 8 showing a reserved p on some row is a table edit alone;
-    // RmQRMatrixDecoder already applies the value per block. RmQRConstantsUnitTest
-    // pins every row against ECCPerBlock / 2.
+    // Error correction capacity t per RS block, per version × ECC (M, H): the most codewords a decoder may correct in one block.
+    // Every entry is the full Reed-Solomon strength ⌊ECC codewords per block / 2⌋, with no misdecode-protection codewords p reserved, where Micro QR has 2t + p = ecc.
+    // The values are inferred, not read from ISO/IEC 23941 Table 8 (the Correction cap decision in specs/rmqr-decoder.md).
+    // They are held as data rather than as the ⌊ecc/2⌋ expression, so a row found to reserve p is a table edit alone.
     private static ReadOnlySpan<byte> errorCorrectionCapacities =>
     [
         3, 5, 4, 7, 6, 11, 8, 15, 12, 11,
@@ -126,13 +114,7 @@ internal static class RmQRConstants
     ];
 
     // Character count indicator widths per version index (ISO/IEC 23941 Table 3).
-    // Numeric / Alphanumeric / Byte were read back from oracle bit streams (96/96).
-    // The count widths below predate Kanji decode support: no oracle emitted Kanji then, so that
-    // column is pinned by derivation instead: Table 3 takes the narrowest count field
-    // that still expresses the largest count the version's M-level data capacity
-    // allows, a rule that reproduces all 96 verified widths exactly. The column is now read on every Kanji
-    // segment the decoder meets and written on every one the encoder emits, and a published transcription
-    // of Table 3 agrees with it on all 32 versions (RmQRBinaryEncoderKanjiTest).
+    // Each is the narrowest count field that still expresses the largest count the version's M-level data capacity allows.
     private static ReadOnlySpan<byte> numericCountBits =>
     [
         4, 5, 6, 7, 7,
@@ -173,8 +155,8 @@ internal static class RmQRConstants
         5, 6, 6, 6, 7,
     ];
 
-    // Vertical timing / alignment column positions per width (0-based columns);
-    // each column carries a 3×3 alignment pattern at its top and bottom end.
+    // Vertical timing / alignment column positions per width (0-based columns).
+    // Each column carries a 3×3 alignment pattern at its top and bottom end.
     private static ReadOnlySpan<byte> alignmentColumns43 => [21];
     private static ReadOnlySpan<byte> alignmentColumns59 => [19, 39];
     private static ReadOnlySpan<byte> alignmentColumns77 => [25, 51];
@@ -199,7 +181,7 @@ internal static class RmQRConstants
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetWidth(RmQRVersion version) => widths[Index(version)];
 
-    /// <summary>Maps physical dimensions to a version; false when (height, width) is not an rMQR size.</summary>
+    /// <summary>Maps physical dimensions to a version. False when (height, width) is not an rMQR size.</summary>
     public static bool TryGetVersion(int height, int width, out RmQRVersion version)
     {
         for (var i = 0; i < VersionCount; i++)
@@ -229,7 +211,7 @@ internal static class RmQRConstants
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetTotalCodewordCount(RmQRVersion version) => totalCodewords[Index(version)];
 
-    /// <summary>Free modules beyond 8 × total codewords (0..7); placed as light modules.</summary>
+    /// <summary>Free modules beyond 8 × total codewords (0..7), placed as light modules.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetRemainderBitCount(RmQRVersion version) => remainderBits[Index(version)];
 
@@ -244,14 +226,14 @@ internal static class RmQRConstants
     public static int GetBlockCount(RmQRVersion version, RmQREccLevel eccLevel) => blockCounts[Index(version, eccLevel)];
 
     /// <summary>
-    /// Maximum number of codeword errors a decoder may correct in one Reed-Solomon block; see the <c>errorCorrectionCapacities</c> table for its provenance.
+    /// Maximum number of codeword errors a decoder may correct in one Reed-Solomon block. See the <c>errorCorrectionCapacities</c> table for its provenance.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetErrorCorrectionCapacity(RmQRVersion version, RmQREccLevel eccLevel)
         => errorCorrectionCapacities[Index(version, eccLevel)];
 
     /// <summary>
-    /// Reed-Solomon block structure as the shared <see cref="ECCInfo"/> (group 1 = the shorter blocks, group 2 = blocks with one more data codeword; every block has the same ECC codeword count).
+    /// Reed-Solomon block structure as the shared <see cref="ECCInfo"/> (group 1 = the shorter blocks, group 2 = blocks with one more data codeword, and every block has the same ECC codeword count).
     /// <see cref="ECCInfo.Version"/> carries the <see cref="RmQRVersion"/> value and <see cref="ECCInfo.ErrorCorrectionLevel"/> the corresponding <see cref="QREccLevel"/> (M or H).
     /// </summary>
     public static ECCInfo GetEccInfo(RmQRVersion version, RmQREccLevel eccLevel)
@@ -287,7 +269,7 @@ internal static class RmQRConstants
     };
 
     /// <summary>
-    /// Dense index of the encodable modes (Numeric 0, Alphanumeric 1, Byte 2, Kanji 3) for per-mode tables; <see cref="EncodingMode"/> values themselves are the Standard QR mode-indicator bits (1, 2, 4, 8) and are not contiguous.
+    /// Dense index of the encodable modes (Numeric 0, Alphanumeric 1, Byte 2, Kanji 3) for per-mode tables. <see cref="EncodingMode"/> values themselves are the Standard QR mode-indicator bits (1, 2, 4, 8) and are not contiguous.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetModeIndex(EncodingMode mode) => mode switch
@@ -299,7 +281,7 @@ internal static class RmQRConstants
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
     };
 
-    /// <summary>Number of dense-indexed encodable modes (the range of <see cref="GetModeIndex"/>: Numeric, Alphanumeric, Byte, Kanji); ECI is not part of it.</summary>
+    /// <summary>Number of dense-indexed encodable modes (the range of <see cref="GetModeIndex"/>: Numeric, Alphanumeric, Byte, Kanji). ECI is not part of it.</summary>
     public const int ModeCount = 4;
 
     /// <summary>Character count indicator width in bits (ISO/IEC 23941 Table 3).</summary>
@@ -313,15 +295,15 @@ internal static class RmQRConstants
     }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
     /// <summary>
-    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation, by the published transcription of ISO/IEC 23941 Table 3 (<c>RmQRBinaryEncoderKanjiTest</c>), and read for real by the rMQR Kanji fixtures, which cover widths 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139).
+    /// Kanji count indicator width in bits (ISO/IEC 23941 Table 3).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(RmQRVersion version) => kanjiCountBits[Index(version)];
 
     /// <summary>
     /// The module that carries bit <paramref name="bit"/> (0-17) of one format information copy.
-    /// Bits 0-14 fill a block of five rows by three columns, column by column; bits 15-17 are the three modules beyond it.
-    /// The finder-side copy sits right of the finder's separator (rows 1-5 of columns 8-10, then rows 1-3 of column 11); the sub-finder-side copy left of and above the sub-finder (rows h−6 to h−2 of columns w−8 to w−6, then columns w−5 to w−3 of row h−6).
+    /// Bits 0-14 fill a block of five rows by three columns, column by column. Bits 15-17 are the three modules beyond it.
+    /// The finder-side copy sits right of the finder's separator (rows 1-5 of columns 8-10, then rows 1-3 of column 11), and the sub-finder-side copy left of and above the sub-finder (rows h−6 to h−2 of columns w−8 to w−6, then columns w−5 to w−3 of row h−6).
     /// </summary>
     /// <remarks>
     /// These positions are stated once, in <see cref="GetFormatBlock"/> and <see cref="GetFormatTail"/>, which this composes, and so does <see cref="IsFormatModule"/>: the placer writes the copies there, the function-module predicate marks them there, the matrix decoder reads them there, and the image decoder samples them there.
@@ -342,7 +324,7 @@ internal static class RmQRConstants
 
     /// <summary>The top-left module of the block of five rows by three columns that carries bits 0-14 of one copy: bit 5·c + r sits r rows below and c columns right of it.</summary>
     /// <remarks>
-    /// The image decoder's and the matrix decoder's readers walk the block from here with two loops rather than asking <see cref="GetFormatModule"/> for each bit, since they run for every frame and every grid an image decode tries: a bit at a time measured about 1 % slower on an rMQR image that does not read, and on a clean R17x139 matrix (2026-09-29).
+    /// The image decoder's and the matrix decoder's readers walk the block from here with two loops rather than asking <see cref="GetFormatModule"/> for each bit: they run for every frame and every grid an image decode tries, where a call per bit is a visible cost.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void GetFormatBlock(bool subFinderSide, int height, int width, out int row, out int col)

@@ -130,7 +130,7 @@ public class GridReadTest
         await Assert.That(modules).IsEquivalentTo(Dark, TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
-    /// <summary>The grid that already failed decodes the same way again, so a re-read that changes no module is not decoded; it still spent its sampling.</summary>
+    /// <summary>The grid that already failed decodes the same way again, so a re-read that changes no module is not decoded. It still spent its sampling.</summary>
     [Test]
     public async Task Decode_ReadByCoverageChangingNoModule_IsNotDecodedAgain()
     {
@@ -142,7 +142,7 @@ public class GridReadTest
         await Assert.That((status, info, readByCoverage, script.ModulesDecoded.Count)).IsEqualTo((DecodeStatus.DataUncorrectable, 0, true, 1));
     }
 
-    /// <summary>The re-read's result is returned when it went further, a read that does not fit included; otherwise the grid's.</summary>
+    /// <summary>The re-read's result is returned when it went further, a read that does not fit included. Otherwise the grid's is returned.</summary>
     [Test]
     [Arguments(DecodeStatus.DataUncorrectable, DecodeStatus.UnmappedCharacter, DecodeStatus.UnmappedCharacter, 1)]
     [Arguments(DecodeStatus.DataUncorrectable, DecodeStatus.DestinationTooSmall, DecodeStatus.DestinationTooSmall, 1)]

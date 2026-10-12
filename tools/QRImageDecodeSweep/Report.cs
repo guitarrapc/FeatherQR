@@ -5,7 +5,7 @@ namespace QRImageDecodeSweep;
 
 /// <summary>
 /// The gap table as Markdown: one line per row group, this library's reads per column group, then all three readers, the gap (zxing-cpp reads the image and this library does not get through it) and the reverse.
-/// An image this library decodes into another text, or whose content it refuses, got through the image; it is counted apart as content and is not gap.
+/// An image this library decodes into another text, or whose content it refuses, got through the image. It is counted apart as content and is not gap.
 /// </summary>
 internal static class Report
 {
@@ -15,7 +15,7 @@ internal static class Report
     {
         var failed = rows.Where(static r => IsFailure(r.Status)).ToList();
         var read = rows.Where(static r => !IsFailure(r.Status)).ToList();
-        // This library's own symbols first where the split is by encoder; the sort is stable
+        // This library's own symbols first where the split is by encoder. The sort is stable.
         var splits = read.Select(r => r.Key[splitColumn]).Distinct().OrderBy(static s => s != "FeatherQR").ToList();
         var sb = new StringBuilder();
 
@@ -103,7 +103,7 @@ internal static class Report
         return sb.ToString();
     }
 
-    /// <summary>The symbol was located, sampled and error-corrected; what stopped the read, or changed the text, is in the bit stream or its character set.</summary>
+    /// <summary>The symbol was located, sampled and error-corrected. What stopped the read, or changed the text, is in the bit stream or its character set.</summary>
     private static bool IsContent(ResultRow row) => row.Misread || row.Status is "InvalidBitstream" or "UnsupportedContent" or "UnmappedCharacter";
 
     private static bool IsFailure(string status) => status.StartsWith("EncodeFailed", StringComparison.Ordinal) || status.StartsWith("RenderFailed", StringComparison.Ordinal);

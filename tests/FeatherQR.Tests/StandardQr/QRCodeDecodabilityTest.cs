@@ -236,7 +236,7 @@ public class QRCodeDecodabilityTest
     [Test]
     public async Task Create_WithEccBoost_IsDecodableByZXing_AtTheBoostedLevel()
     {
-        // "HELLO" at L auto-selects version 1; boost raises the level to H (v1-H
+        // "HELLO" at L auto-selects version 1, and boost raises the level to H (v1-H
         // alphanumeric capacity 10 >= 5). The boosted format information must be
         // readable by an independent decoder, which also reports the level it saw.
         var qr = QRCodeGenerator.Create("HELLO", QREccLevel.L, new QRCodeGeneratorOptions { BoostEccLevel = true });

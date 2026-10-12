@@ -4,7 +4,7 @@ namespace FeatherQR.Internals.RmQR;
 
 /// <summary>
 /// rMQR final message (ISO/IEC 23941 7.5-7.6): Reed-Solomon ECC per block over the data codewords, then Standard-QR-style block interleaving (data round-robin, ECC round-robin, zero remainder bits).
-/// Composes the shared kernels only (<see cref="EccBinaryEncoder"/>, <see cref="BinaryInterleaver"/>); the block structure comes from <see cref="RmQRConstants.GetEccInfo"/>.
+/// Composes the shared kernels only (<see cref="EccBinaryEncoder"/>, <see cref="BinaryInterleaver"/>). The block structure comes from <see cref="RmQRConstants.GetEccInfo"/>.
 /// Allocation-free: the per-block ECC scratch is a fixed stack budget.
 /// </summary>
 internal static class RmQRCodewordEncoder
@@ -34,7 +34,7 @@ internal static class RmQRCodewordEncoder
         Span<byte> ecc = stackalloc byte[MaxEccCodewords];
         ecc = ecc.Slice(0, eccTotal);
 
-        // Group 1 (shorter blocks) then group 2 (one more data codeword each); every
+        // Group 1 (shorter blocks) then group 2 (one more data codeword each). Every
         // block has the same ECC codeword count.
         EccBinaryEncoder.CalculateECCBlocks(dataCodewords, ecc, info);
 

@@ -11,22 +11,22 @@ namespace FeatherQR.Internals.MicroQR;
 /// </summary>
 /// <remarks>
 /// Pipeline, run in each pass until one reads the symbol: the global threshold, the inverted image, the regional binarization, then, for a polarity whose global pass found no finder, a sweep at the midpoint of its grey levels. A verdict on the content ends the sequence as a read does, except that the inverted pass still runs after one from the global threshold.
-/// The global and regional passes scan with a row stride, then sweep every row unless that read a symbol or read one too long for the destination; the midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data); a successful decode ends the scan and a read that did not fit ends the candidate, whose attempts see only its own results; otherwise each finder scan reports the result that went furthest (<see cref="CandidateScan"/>).
+/// The global and regional passes scan with a row stride, then sweep every row unless that read a symbol or read one too long for the destination. The midpoint pass sweeps only. A scan decodes its first eight candidates, most confirmed first, less any inside a symbol that read but did not fit the destination (a finder-like pattern in that symbol's own data). A successful decode ends the scan and a read that did not fit ends the candidate, whose attempts see only its own results. Otherwise each finder scan reports the result that went furthest (<see cref="CandidateScan"/>).
 /// Each grid is decoded through the matrix level as soon as it is sampled, keeping only the corrections its structure earns (<see cref="MicroQRGridEvidence"/>), then transposed unless it read, a read that did not fit included.
-/// The list gives the stages in order with their main conditions; each method states its own in full.
+/// The list gives the stages in order with their main conditions. Each method states its own in full.
 /// <code>
 /// 1. Module sizes and centre of the candidate (dropped under one pixel per module)
 /// 2. Axis-aligned path, per right-angle orientation:
-///    a. Each size, M4 down to M1: affine grid; coverage re-read (grey levels, exact format word)
+///    a. Each size, M4 down to M1: affine grid, then coverage re-read (grey levels, exact format word)
 ///    b. Timing frame: the grid fitted to the timing patterns
 ///    c. Low density (larger module size under 1.75 px): module boundaries read off the timing patterns
 /// 3. Arbitrary orientation, per axis frame from an angular sweep and per right-angle orientation, within an attempt budget:
-///    each size, M4 down to M1: affine grid; coverage re-read; once a grid gets past its format information,
+///    each size, M4 down to M1: affine grid, then coverage re-read, and once a grid gets past its format information,
 ///    the scale search, then the perspective search, each of their grids with its coverage re-read
 /// </code>
 /// A Micro QR symbol has a single finder pattern, so orientation cannot be derived from finder geometry the way three finders allow for Standard QR.
 /// The detector therefore recovers the finder's local axes from angular dark-light-dark runs and searches the two projective coefficients that remain unknown.
-/// This supports arbitrary rotation and mild perspective; strong perspective remains out of scope.
+/// This supports arbitrary rotation and mild perspective. Strong perspective remains out of scope.
 /// </remarks>
 internal static partial class MicroQRImageDecoder
 {
@@ -177,11 +177,8 @@ internal static partial class MicroQRImageDecoder
             }
         }
 
-        // The fast path above covers the overwhelmingly common axis-aligned
-        // case. On failure, recover the finder square's local axes by sweeping
-        // directions through 90 degrees, then sample along those rotated axes.
-        // A square finder repeats every 90 degrees; the four sign/axis
-        // assignments below recover the symbol orientation.
+        // The frames above cover the axis-aligned case. A symbol they do not read
+        // may be turned, so the finder's own axes are searched.
         return TryDecodeArbitraryOrientation(image, candidate, modules, destination, out charsWritten, out info, ref best);
     }
 
@@ -238,11 +235,10 @@ internal static partial class MicroQRImageDecoder
                     if (IsTerminal(status))
                         return status;
 
-                    // Scale and perspective searches multiply this affine attempt
-                    // by hundreds. Enter them only after either polarity decoded
-                    // valid format information, which a random grid does 14 to 38 %
-                    // of the time by version: the gate thins the grids searched
-                    // rather than ruling texture out.
+                    // The scale and perspective searches multiply this affine attempt
+                    // by hundreds, so they run only for a grid that got past its format
+                    // information either way round. A random grid often does too: the
+                    // gate thins the grids searched rather than ruling texture out.
                     if (!pastFormat)
                         continue;
 
@@ -348,7 +344,7 @@ internal static partial class MicroQRImageDecoder
 
     /// <summary>
     /// A single finder determines a homography's image point and local Jacobian, leaving only the two projective denominator coefficients unknown.
-    /// Search a small grid of mild-perspective values for those two; matrix format and RS validation select the correct transform without image-specific heuristics.
+    /// Search a small grid of mild-perspective values for those two. Matrix format and RS validation select the correct transform without image-specific heuristics.
     /// </summary>
     private static DecodeStatus TryDecodePerspectiveVariants(
         in ImageView image,
@@ -411,8 +407,8 @@ internal static partial class MicroQRImageDecoder
     /// </summary>
     /// <remarks>
     /// It is read again by coverage only when an orientation that got past its format information read that word exactly. A real
-    /// symbol's format modules sit next to the finder, where the frame is best; texture reads a word within 3 bits about half the
-    /// time and an exact one about 1 in 1,000.
+    /// symbol's format modules sit next to the finder, where the frame is best, while texture often reads a word within the
+    /// correctable distance and seldom an exact one.
     /// </remarks>
     internal struct BothWays<TGrid>(TGrid grid, int size) : IGridRead<MicroQRCodeDecodeInfo>
         where TGrid : struct, ICoverageGrid
@@ -441,16 +437,16 @@ internal static partial class MicroQRImageDecoder
     /// </summary>
     /// <remarks>
     /// The transpose is a view over the same grid (<see cref="TransposedModules{TModules}"/>), since the matrix level reads every module through one.
-    /// The other decoders mirror differently, each for a reason of its own: Standard QR transposes its grid in place, because its matrix level reads the modules two at a time along the placement runs, which a view would not keep contiguous; rMQR samples its grid again with the frame's axes swapped, because a transposed rMQR grid is no rMQR grid.
+    /// The other decoders mirror differently, each for a reason of its own: Standard QR transposes its grid in place, because its matrix level reads the modules two at a time along the placement runs, which a view would not keep contiguous. rMQR samples its grid again with the frame's axes swapped, because a transposed rMQR grid is no rMQR grid.
     /// </remarks>
     /// <returns>
-    /// <see cref="DecodeStatus.Success"/> with the corners of the read that made it; the grid as sampled's <see cref="DecodeStatus.DestinationTooSmall"/>, which a sized call would have stopped at as a read; otherwise the transposed grid's status, both failures kept in <paramref name="best"/>.
+    /// <see cref="DecodeStatus.Success"/> with the corners of the read that made it, or the grid as sampled's <see cref="DecodeStatus.DestinationTooSmall"/>, which a sized call would have stopped at as a read, and otherwise the transposed grid's status, both failures kept in <paramref name="best"/>.
     /// <paramref name="straight"/> and <paramref name="mirrored"/> are each grid's own status, the transposed one <see cref="DecodeStatus.NotDetected"/> when the grid as sampled was terminal.
     /// </returns>
     private static DecodeStatus DecodeBothWays<TGrid>(ReadOnlySpan<byte> modules, in TGrid grid, int size, in ImageView image, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, ref SearchResult<MicroQRCodeDecodeInfo> best, out DecodeStatus straight, out DecodeStatus mirrored)
         where TGrid : struct, ISampledGrid
     {
-        // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it; the scan reports it without them
+        // A read that does not fit keeps its corners too, for the scan to skip the candidates inside it. The scan reports it without them.
         straight = grid.Decode(modules, new MatrixModules(size), size, image, destination, out charsWritten, out info);
         if (IsTerminal(straight))
         {
@@ -565,10 +561,10 @@ internal static partial class MicroQRImageDecoder
 
     /// <summary>
     /// The grid frame measured on the timing patterns, row 0 and column 0 from the finder to the symbol's far edge, instead of extrapolated from the finder's module size.
-    /// <paramref name="uX"/>…<paramref name="vY"/> give the orientation and a first scale; the result's origin is the symbol's corner and its axes are one module long.
+    /// <paramref name="uX"/>…<paramref name="vY"/> give the orientation and a first scale. The result's origin is the symbol's corner and its axes are one module long.
     /// </summary>
     /// <remarks>
-    /// Each line is fitted by least squares over every module boundary it crosses (the finder's outer edge, then one boundary per module from column 7 to the far edge), so the half-pixel quantization of each boundary averages out; the dark runs give the size directly.
+    /// Each line is fitted by least squares over every module boundary it crosses (the finder's outer edge, then one boundary per module from column 7 to the far edge), so the half-pixel quantization of each boundary averages out. The dark runs give the size directly.
     /// </remarks>
     private static bool TryTimingFrame(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern candidate, float uX, float uY, float vX, float vY, out float originX, out float originY, out float tuX, out float tuY, out float tvX, out float tvY, out int size)
     {
@@ -601,7 +597,7 @@ internal static partial class MicroQRImageDecoder
 
     /// <summary>
     /// Walks a timing line from the finder's edge row: back to the finder's outer edge, then forward across the separator and the alternating timing modules to the symbol's far edge.
-    /// Fits position = start + pitch · module index over every boundary crossed; false unless the line reads as a timing pattern (runs about one module, a size of 11-17, a pitch near the finder's).
+    /// Fits position = start + pitch · module index over every boundary crossed. False unless the line reads as a timing pattern (runs about one module, a size of 11-17, a pitch near the finder's).
     /// </summary>
     internal static bool TryFitTimingLine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float lineX, float lineY, float dirX, float dirY, float module, out float start, out float pitch, out int size)
     {
@@ -611,12 +607,12 @@ internal static partial class MicroQRImageDecoder
         if (!IsDarkAt(luminance, width, height, threshold, lineX, lineY, out var dark) || !dark)
             return false;
 
-        // Boundaries as (module index, position along the line); the finder's outer edge is index 0
+        // Boundaries as (module index, position along the line). The finder's outer edge is index 0.
         Span<float> indices = stackalloc float[16];
         Span<float> positions = stackalloc float[16];
         var count = 0;
 
-        // Back to the finder's outer edge, about 3.5 modules away; the image edge counts as one
+        // Back to the finder's outer edge, about 3.5 modules away. The image edge counts as one.
         for (var t = -step; ; t -= step)
         {
             if (t < -5f * module)
@@ -691,7 +687,7 @@ internal static partial class MicroQRImageDecoder
         return pitch > 0.7f * module && pitch < 1.4f * module;
     }
 
-    /// <summary>Whether the pixel containing the point is dark; false (and not dark) outside the image.</summary>
+    /// <summary>Whether the pixel containing the point is dark. False (and not dark) outside the image.</summary>
     private static bool IsDarkAt(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float x, float y, out bool dark)
     {
         dark = false;
@@ -706,7 +702,7 @@ internal static partial class MicroQRImageDecoder
     }
 
     /// <summary>
-    /// All four grid corners must land inside the image (with one module of slack for sampling clamp tolerance); orientations pointing off the image cannot contain the symbol and are skipped before sampling.
+    /// All four grid corners must land inside the image (with one module of slack for sampling clamp tolerance). Orientations pointing off the image cannot contain the symbol and are skipped before sampling.
     /// </summary>
     private static bool SymbolFitsImage(float originX, float originY, float uX, float uY, float vX, float vY, int size, int width, int height, float moduleSize)
     {

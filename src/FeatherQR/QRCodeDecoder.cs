@@ -98,7 +98,7 @@ public static class QRCodeDecoder
     /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
     /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">How many characters were written; 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
+    /// <param name="charsWritten">How many characters were written. 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
     /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>) and the FNC1 mode when it carries one (<see cref="QRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when the QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
@@ -168,7 +168,7 @@ public static class QRCodeDecoder
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">How many characters were written; 0 when the image does not decode, though <paramref name="destination"/> may still hold text from an attempt that was not kept.</param>
+    /// <param name="charsWritten">How many characters were written. 0 when the image does not decode, though <paramref name="destination"/> may still hold text from an attempt that was not kept.</param>
     /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners), the Structured Append header when the symbol is one of a set (<see cref="QRCodeDecodeInfo.StructuredAppend"/>) and the FNC1 mode when it carries one (<see cref="QRCodeDecodeInfo.Fnc1"/>).</param>
     /// <returns><c>true</c> when a QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>

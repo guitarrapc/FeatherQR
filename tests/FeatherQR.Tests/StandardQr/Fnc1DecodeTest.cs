@@ -520,7 +520,7 @@ public class Fnc1DecodeTest
         return [(ModeKanji, 4), (1, 8), (((shifted >> 8) * 0xC0) + (shifted & 0xFF), 13)];
     }
 
-    /// <summary>Packs the fields MSB-first; the last byte is zero-padded, which reads as the terminator.</summary>
+    /// <summary>Packs the fields MSB-first. The last byte is zero-padded, which reads as the terminator.</summary>
     private static byte[] Build(params IEnumerable<(int Value, int Bits)>[] parts)
     {
         var fields = parts.SelectMany(p => p).ToList();

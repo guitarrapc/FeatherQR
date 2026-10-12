@@ -12,7 +12,7 @@ public class QRCodeDecoderRobustnessTest
     [Test]
     public void TryDecode_SizeSquareOverflowsInt_ThrowsArgumentException()
     {
-        // 65536² overflows int to 0; the guard must use long arithmetic instead of
+        // 65536² overflows int to 0, so the guard must use long arithmetic instead of
         // wrapping and letting an interior Slice throw something else.
         var modules = new byte[100];
 
@@ -69,7 +69,7 @@ public class QRCodeDecoderRobustnessTest
                 modules[i] = (byte)(random.Next(2));
             }
 
-            // Any result is fine; throwing is not.
+            // Any result is fine, but throwing is not.
             QRCodeDecoder.TryDecode(modules, size, out _, out _);
         }
     }

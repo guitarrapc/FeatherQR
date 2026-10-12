@@ -51,7 +51,7 @@ public class StructuredAppendWriterPlanTest
         foreach (var version in new[] { 9, 12, 40 })
         {
             // Even pieces, uneven pieces, pieces of a character or two beside long ones, one piece
-            // alone; cut anywhere, a surrogate pair included, since a piece is priced as the text it is.
+            // alone. Cut anywhere, a surrogate pair included, since a piece is priced as the text it is.
             foreach (var (lanes, shape) in new[] { (8, 0), (8, 1), (5, 1), (3, 2), (2, 1), (1, 0), (8, 2) })
             {
                 var at = random.Next(0, 50);
@@ -176,7 +176,7 @@ public class StructuredAppendWriterPlanTest
     [Test]
     public async Task OneRunPlans_StopsAtThreeDigitsBecauseTheProgramGivesTheTieToTheSplit()
     {
-        // Seven bytes cost 4 + 8 + 56; four bytes and three digits cost (4 + 8 + 32) + (4 + 10 + 10): the same 68 bits.
+        // Seven bytes cost 4 + 8 + 56, and four bytes and three digits cost (4 + 8 + 32) + (4 + 10 + 10): the same 68 bits.
         var plan = new ModeSegment[7];
         await Assert.That(QRSegmentPlanner.TryBuildPlan("xyz,123", EciMode.Default, 5, QREccLevel.L, plan, out var runs, out var bits)).IsTrue();
         await Assert.That(bits).IsEqualTo(68);

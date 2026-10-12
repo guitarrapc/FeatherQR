@@ -98,7 +98,7 @@ public class ImageBuilderVersionRangeTest
     [Test]
     public async Task StandardQr_RangeThatCannotHoldTheContent_ReportsItAsAnArgumentError()
     {
-        // Before Phase 4 the builder handed the version straight to the encoder, which
+        // The builder once handed the version straight to the encoder, which
         // failed deep inside with ArgumentOutOfRangeException (Parameter 'length'). Going
         // through the options overload means the fit is checked up front instead.
         var builder = new QRCodeImageBuilder(new string('A', 500)).WithVersion(1);
@@ -152,7 +152,7 @@ public class ImageBuilderVersionRangeTest
     [Test]
     public async Task MicroQr_RangeThatCannotCarryTheMode_ReportsItAsAnArgumentError()
     {
-        // Byte content needs M3 or M4; capping the range at M2 leaves nothing usable.
+        // Byte content needs M3 or M4, so capping the range at M2 leaves nothing usable.
         var builder = new MicroQRCodeImageBuilder("hello").WithErrorCorrection(MicroQREccLevel.L).WithVersion(MicroQRVersionRange.AtMost(MicroQRVersion.M2));
 
         await Assert.That(() => builder.ToByteArray()).Throws<ArgumentException>();

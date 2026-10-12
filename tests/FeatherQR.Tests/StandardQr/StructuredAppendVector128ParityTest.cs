@@ -136,7 +136,7 @@ public class StructuredAppendVector128ParityTest
         var counts = new int[8];
         foreach (var charset in new[] { EciMode.Default, EciMode.Utf8 })
         {
-            // The dispatch hands this walk only budgets whose cost room fits 16 bits; the largest ones here sit at its edge
+            // The dispatch hands this walk only budgets whose cost room fits 16 bits, and the largest ones here sit at its edge
             if ((uint)(budget - StructuredAppendPlanner.HeaderBits - charset.GetStandardQrHeaderBits()) >= ushort.MaxValue)
                 continue;
             var count = StructuredAppendPlanner.CountChunks(text, charset, false, QRSegmentation.Optimal, 40, budget, 16, expected);

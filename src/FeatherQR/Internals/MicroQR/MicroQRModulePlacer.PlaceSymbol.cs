@@ -12,8 +12,8 @@ namespace FeatherQR.Internals.MicroQR;
 /// Fused fast-path placement pipeline for Micro QR (<see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/> and its contiguous overload): function patterns, data placement, mask selection/application and format information in one pass over bit-packed rows, unpacked to the byte matrix once at the end.
 ///
 /// Produces matrices byte-identical to the per-module reference methods in MicroQRModulePlacer.cs (guarded by MicroQRModulePlacerParityTest).
-/// Four runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP permutation, 32-module unpack; gated on fast-PEXT hardware, Intel or AMD Zen 3+), SSSE3 and ARM64 NEON (serial packed placement, 16-module unpack sharing one pipeline, only the bit-expand idiom differs), and portable scalar (SWAR spreads).
-/// Measured 3.6-8.4x over the reference across M1-M4 on x64, zero allocations (see the micro-optimization findings log):
+/// Four runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP permutation and a 32-module unpack, gated on fast-PEXT hardware, Intel or AMD Zen 3+), SSSE3 and ARM64 NEON (serial packed placement, 16-module unpack sharing one pipeline, only the bit-expand idiom differs), and portable scalar (SWAR spreads).
+/// It allocates nothing. Its design:
 /// <list type="bullet">
 /// <item>The transmission stream is at most 192 bits (M4), so it is packed once
 /// into three ulongs and consumed MSB-first from a register accumulator instead of per-bit indexed loads with a data/ecc branch.</item>
@@ -21,11 +21,11 @@ namespace FeatherQR.Internals.MicroQR;
 /// <c>right &gt;= 10</c> frees rows 1..size-1, <c>right &lt;= 8</c> frees rows 9..size-1, no per-module function-region predicate, and the stream fills the free modules exactly (ISO capacity tables, validated up front) so no remaining-bits guard is needed.
 /// Every segment's row count is even for all four sizes, so placement runs 2 rows (4 stream bits) per iteration.</item>
 /// <item>Mask scoring reads only the two symbol edges (ISO 7.8.3), taken
-/// straight from the packed rows; every candidate's SUM1/SUM2 is one XOR + popcount against a static per-(size, mask) edge table.</item>
+/// straight from the packed rows. Every candidate's SUM1/SUM2 is one XOR + popcount against a static per-(size, mask) edge table.</item>
 /// <item>The mask apply (a 12-row-periodic template AND the data-region mask)
-/// is fused into the unpack pass instead of a separate XOR pass over the rows; format bits are poked into the packed rows beforehand and live entirely outside the data-region mask, so the fused XOR cannot touch them.</item>
+/// is fused into the unpack pass instead of a separate XOR pass over the rows. Format bits are poked into the packed rows beforehand and live entirely outside the data-region mask, so the fused XOR cannot touch them.</item>
 /// <item>The unpack expands 16 modules per step with the SSSE3
-/// broadcast/shuffle/compare idiom when available, falling back to scalar SWAR spreads (8 modules per step) otherwise; a single code path serves all four sizes (the scalar phase's size-11 byte-domain dispatch lost its advantage once the unpack was vectorized and the placement unrolled, measured).</item>
+/// broadcast/shuffle/compare idiom when available, falling back to scalar SWAR spreads (8 modules per step) otherwise. A single code path serves all four sizes.</item>
 /// <item>All tables are small static arrays built by ordinary code from the
 /// reference implementations (NativeAOT/trimming-safe).</item>
 /// </list>
@@ -36,11 +36,11 @@ internal static partial class MicroQRModulePlacer
     /// Runs the full placement pipeline into a core matrix: function patterns, data/ECC codeword placement, mask selection and application, and format information.
     /// Every module of the matrix is written, so it need not be cleared. Returns the selected mask pattern (0-3).
     /// </summary>
-    /// <param name="matrix">Core matrix, at least size*size bytes; its contents are overwritten.</param>
+    /// <param name="matrix">Core matrix, at least size*size bytes. Its contents are overwritten.</param>
     /// <param name="size">Core side length in modules (11/13/15/17).</param>
     /// <param name="dataCodewords">Data codewords including padding.</param>
     /// <param name="eccCodewords">Error correction codewords.</param>
-    /// <param name="dataBitCount">Number of DATA bits to emit, for M1/M3 this stops after the high nibble of the final (4-bit) data codeword; its forced-zero low nibble is never placed.</param>
+    /// <param name="dataBitCount">Number of DATA bits to emit, for M1/M3 this stops after the high nibble of the final (4-bit) data codeword. Its forced-zero low nibble is never placed.</param>
     /// <param name="version">Micro QR version (drives the format information).</param>
     /// <param name="eccLevel">ECC level (drives the format information).</param>
     /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection. The fused pipeline is mask-index-driven throughout (templates, format bits), so a pinned pattern rides the same tiers.</param>
@@ -63,8 +63,8 @@ internal static partial class MicroQRModulePlacer
     /// <param name="version">Micro QR version (drives the format information).</param>
     /// <param name="eccLevel">ECC level (drives the format information).</param>
     /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection.</param>
-    // Once the entry took the stride, the JIT stopped inlining it into the generator's core writers, where it had inlined the
-    // contiguous one: on x64 without AVX2 the quiet-zone-free M2 and M3 encodes took 1.08 and 1.04 times as long as with it inlined.
+    // Without the attribute the JIT leaves this entry a call in the generator's core writers, which slows the small
+    // quiet-zone-free encodes.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int PlaceSymbol(Span<byte> destination, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
@@ -127,7 +127,7 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// ARM64 NEON mid-tier variant of <see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>, the code path taken at runtime on ARM64 (same <see cref="PlaceCoreVector"/> pipeline as the SSSE3 tier; only the 16-module unpack idiom differs inside <see cref="WriteExpand16"/>), exposed as a named entry point for parity tests.
+    /// ARM64 NEON mid-tier variant of <see cref="PlaceSymbol(Span{byte}, int, int, ReadOnlySpan{byte}, ReadOnlySpan{byte}, int, MicroQRVersion, MicroQREccLevel, int)"/>, the code path taken at runtime on ARM64 (same <see cref="PlaceCoreVector"/> pipeline as the SSSE3 tier, and only the 16-module unpack idiom differs inside <see cref="WriteExpand16"/>), exposed as a named entry point for parity tests.
     /// Caller must ensure AdvSimd.Arm64 support.
     /// </summary>
     internal static int PlaceSymbolAdvSimd(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
@@ -141,8 +141,8 @@ internal static partial class MicroQRModulePlacer
     }
 #endif
 
-    // Not inlined: through the AggressiveInlining entry its interpolated messages went into the generator's span CreateCore on .NET 10
-    // with AVX2, 5.4 KB of code against 3.4 KB with this a call, its prolog zeroing 584 bytes a call against 344.
+    // Not inlined: through the AggressiveInlining entry its interpolated messages would go into the generator's span CreateCore,
+    // growing its code and the stack its prolog zeroes on every call.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ValidateArguments(Span<byte> matrix, int size, int stride, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, int forcedMask)
     {
@@ -164,7 +164,7 @@ internal static partial class MicroQRModulePlacer
 
         // Free data modules: size^2 minus row 0 (size), the rest of column 0
         // (size-1) and rows 1..8 x cols 1..8 (64). The ISO capacity tables make
-        // the stream fill this exactly; the placement loops rely on it.
+        // the stream fill this exactly, and the placement loops rely on it.
         var totalBits = dataBitCount + eccCodewords.Length * 8;
         var freeModules = size * size - 2 * size - 63;
         if (totalBits != freeModules)
@@ -209,7 +209,7 @@ internal static partial class MicroQRModulePlacer
     // ---------------------------------------------------------------
 
     /// <summary>
-    /// Runs placement, scoring, format poking on packed rows and returns the selected mask; the caller-selected unpack pass then materializes the byte matrix with the mask template XORed in on the fly.
+    /// Runs placement, scoring, format poking on packed rows and returns the selected mask. The caller-selected unpack pass then materializes the byte matrix with the mask template XORed in on the fly.
     /// </summary>
     private static int BuildPackedRows(Span<ulong> rows, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
@@ -266,9 +266,8 @@ internal static partial class MicroQRModulePlacer
         // Format information: row 8 cols 1..8 carry bits 14..7, col 8 rows 7..1
         // carry bits 6..0 (same coordinates as PlaceFormat). These modules lie
         // outside the data-region mask, so the fused apply cannot flip them.
-        // Row 8's cols 1..8 hold format bits 14..7 in descending order, the
-        // bit-reversed high byte of (formatBits >> 7) shifted to bit 1, one
-        // masked insert instead of eight.
+        // Row 8 holds its bits in descending order, so the bit-reversed byte of
+        // (formatBits >> 7), shifted to bit 1, goes in as one masked insert.
         var formatBits = _formatBitsTable[(MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask];
         rows[8] = (rows[8] & ~0x1FEul) | ((ulong)_reverseByte[(formatBits >> 7) & 0xFF] << 1);
         for (var row = 7; row >= 1; row--)
@@ -300,11 +299,10 @@ internal static partial class MicroQRModulePlacer
         rows = rows.Slice(0, size);
         var mask = BuildPackedRows(rows, size, stream, version, eccLevel, forcedMask);
 
-        // Unpack with the mask applied on the fly: full 8-byte write steps; a
-        // tail of >= 4 bytes becomes one overlapped spread ending at the row
-        // edge (write-mode overlap is idempotent, unlike XOR), a tail of <= 3
-        // bytes is cheaper as scalar stores. Every write stays inside its row,
-        // and ValidateArguments guaranteed the rows inside the matrix.
+        // A tail of 4 bytes or more becomes one overlapped spread ending at the
+        // row edge, which is safe because the overlap rewrites the same values.
+        // A shorter tail is cheaper as scalar stores. Every write stays inside
+        // its row, and ValidateArguments guaranteed the rows inside the matrix.
         ref var buf = ref MemoryMarshal.GetReference(matrix);
         var rowOffset = 0;
         for (var y = 0; y < size; y++, rowOffset += stride)
@@ -334,7 +332,7 @@ internal static partial class MicroQRModulePlacer
 
     /// <summary>
     /// Scores the four mask patterns from the packed symbol edges (ISO/IEC 18004 Section 7.8.3: SUM1 = right edge dark count, SUM2 = lower edge dark count, score = min*16 + max, HIGHEST wins, ties keep the lowest pattern number).
-    /// Each candidate is one XOR + popcount per edge against the static edge tables; bit 0 of both inputs must be clear (row/column 0 are excluded from the edge sums).
+    /// Each candidate is one XOR + popcount per edge against the static edge tables. Bit 0 of both inputs must be clear (row/column 0 are excluded from the edge sums).
     /// </summary>
     private static int SelectMaskFromEdges(ulong colDark, ulong rowDark, int size)
     {

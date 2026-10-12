@@ -8,20 +8,20 @@ namespace FeatherQR.Tests;
 /// every version over the three capture geometries the decoder actually builds.
 /// </summary>
 /// <remarks>
-/// The N5 contract is stricter than "decodes the same symbol": the vector kernel must
+/// The contract is stricter than "decodes the same symbol": the vector kernel must
 /// sample the exact same pixels as the scalar loop, so this compares module output
 /// byte for byte rather than comparing decode results.
 ///
 /// The three geometries are separate equivalence classes because the kernel dispatches
 /// on the transform:
 /// <list type="bullet">
-/// <item>Affine (a13 = a23 = 0, a33 = 1) — every first attempt on a clean capture, since
+/// <item>Affine (a13 = a23 = 0, a33 = 1): every first attempt on a clean capture, since
 /// the isotropic and anisotropic frames are built with perspectiveX = perspectiveY = 0.
 /// The kernel skips both divisions here (the denominator is exactly 1f).</item>
-/// <item>Rotated affine (a12 != 0) — still affine, but the sampled y varies along a row.
+/// <item>Rotated affine (a12 != 0): still affine, but the sampled y varies along a row.
 /// Without this class every affine case would be axis-aligned and a y-invariant bug
 /// would pass.</item>
-/// <item>Projective — the perspective search, where the divisions are actually taken.</item>
+/// <item>Projective: the perspective search, where the divisions are actually taken.</item>
 /// </list>
 /// Clamping and degenerate transforms get their own tests: sampling off the image is
 /// the outermost-module case the clamp exists for, and a collapsed frame is what a
@@ -124,7 +124,7 @@ public class RmQRSampleGridParityTest
 
     /// <summary>
     /// The production entry point. Its scalar fallback (`columns &lt; 8`) is unreachable
-    /// for real symbols, and that is the property worth pinning — every rMQR width is at
+    /// for real symbols, and that is the property worth pinning. Every rMQR width is at
     /// least 27, so a change that narrowed the vector path would have to break this
     /// invariant first.
     /// </summary>
@@ -144,7 +144,7 @@ public class RmQRSampleGridParityTest
 
     /// <summary>
     /// Degenerate frames the geometry search can hand the sampler: a collapsed axis
-    /// (zero derivative) and projective frames whose denominator reaches zero — one
+    /// (zero derivative) and projective frames whose denominator reaches zero, one
     /// between module centres (large finite coordinates) and one exactly on a centre,
     /// which is what actually produces infinities and NaN. The kernel must land wherever
     /// the scalar loop lands rather than diverge from it.
@@ -172,11 +172,9 @@ public class RmQRSampleGridParityTest
             // Denominator crosses zero between columns. Module centers are half-integers,
             // so this frame yields only large finite coordinates, not infinities.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, -1f / 20f, 0f),
-            // Denominator exactly zero ON a sampled centre: d = perspectiveX·(col+0.5) + 1
-            // vanishes at col 0 for perspectiveX = -2, and -2 is exact in binary, so this
-            // is the only shape that actually produces infinities (and NaN where the
-            // numerator vanishes too). This is what the float→int conversion argument
-            // rests on, and until now nothing exercised it.
+            // Denominator exactly zero on a sampled centre: d = perspectiveX·(col+0.5) + 1
+            // vanishes at col 0 for perspectiveX = -2, and -2 is exact in binary. Only this
+            // shape produces infinities, and NaN where the numerator vanishes too.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, -2f, 0f),
             // Same, on the row axis.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, 0f, -2f),

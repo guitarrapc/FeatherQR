@@ -21,10 +21,8 @@ namespace FeatherQR.Tests;
 /// count only.
 /// </para>
 /// <para>
-/// The hashes, versions, levels and messages were captured from the encoder on 2026-10-04, before the
-/// redundant analysis was removed. A difference is an output change, not a refactoring. One message has
-/// changed on purpose since: a narrowed Micro QR range that does not hold the content now names itself
-/// ("at-least-too-long"), where it used to offer the largest version of all (VersionRangeTest).
+/// The hashes, versions, levels and messages are the encoder's own output, frozen. A difference is an output
+/// change, not a refactoring.
 /// The default path (no range, no boost, single mode) is pinned alongside, since the same pipeline serves it.
 /// </para>
 /// </remarks>

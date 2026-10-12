@@ -6,7 +6,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Splits text across Structured Append symbols: the fewest symbols the version cap allows, all at one version, balanced so the fullest symbol is as empty as it can be.
 /// </summary>
 /// <remarks>
-/// Every symbol pays the 20-bit header and, when the set carries a charset, its own ECI header, so a symbol's payload budget is the version's data capacity less those; a chunk's cost is what the single-mode stream needs, or under <see cref="QRSegmentation.Optimal"/> the cheaper of that and the minimal mixed plan.
+/// Every symbol pays the 20-bit header and, when the set carries a charset, its own ECI header, so a symbol's payload budget is the version's data capacity less those. A chunk's cost is what the single-mode stream needs, or under <see cref="QRSegmentation.Optimal"/> the cheaper of that and the minimal mixed plan.
 /// Cost is monotone in the chunk's length (a longer prefix never plans cheaper), so the longest chunk that fits a budget is well defined and found in one forward step (<see cref="LongestChunkEnd"/>), and a greedy walk at a budget gives the symbol count that budget needs. The three steps of the split are three searches over that count. Under Optimal a walk is a pass of the segmentation program, so one walk near the plan's floor settles the count, the versions of its count indicator band and the ceiling of the budget search at once.
 /// A walk stops once it passes the count it is asked about, and a lower bound on what any split costs (<see cref="CanHold"/>) keeps the searches off versions and budgets that cannot hold the count.
 /// Splits fall on <c>char</c> boundaries and never inside a surrogate pair. Design and the rules behind it: specs/standardqr-encoder.md.
@@ -21,7 +21,7 @@ internal static partial class StructuredAppendPlanner
 
     private const int ModeIndicatorBits = 4;
 
-    /// <summary>Narrowest count indicator of any mode at any version (Byte at versions 1-9); pinned by <c>QRSegmentPlannerUnitTest</c>.</summary>
+    /// <summary>Narrowest count indicator of any mode at any version (Byte at versions 1-9), pinned by <c>QRSegmentPlannerUnitTest</c>.</summary>
     private const int MinCountIndicatorBits = 8;
 
     private const int Impossible = int.MaxValue;
@@ -30,7 +30,7 @@ internal static partial class StructuredAppendPlanner
     /// How far above the plan's floor (the headers plus the count's share of the whole text's minimal plan) the walk that settles the count is placed.
     /// </summary>
     /// <remarks>
-    /// The balanced budget sits 3 to 22 bits above that floor on every content measured, periodic or not: what separates them is one chunk's rounding and a run header or two at the cuts, not the content. 31 keeps the bracket under it at five probes.
+    /// What separates the balanced budget from that floor is one chunk's rounding and a run header or two at the cuts, not the content. 31 covers that and keeps the bracket under it at five probes.
     /// Not a correctness parameter: a walk that fails at it falls back to the walk at the capacity, and the search runs from there.
     /// </remarks>
     private const int FloorMarginBits = 31;
@@ -44,14 +44,14 @@ internal static partial class StructuredAppendPlanner
     internal static int ScalarWalks, LaneBatches;
 
     /// <summary>
-    /// Plans the split. <paramref name="chunkEnds"/> receives the end offset of each chunk (at least <see cref="MaxSymbols"/> entries); <paramref name="chunkCount"/> is 1 when the text fits one symbol within the range even with the set header every chunk is priced with, in which case nothing else is planned. Whether the text fits one symbol without that header, which is what makes it not a set, is the caller's to ask, the way <c>Create</c> asks it, of a text this splits or refuses.
+    /// Plans the split. <paramref name="chunkEnds"/> receives the end offset of each chunk (at least <see cref="MaxSymbols"/> entries). <paramref name="chunkCount"/> is 1 when the text fits one symbol within the range even with the set header every chunk is priced with, in which case nothing else is planned. Whether the text fits one symbol without that header, which is what makes it not a set, is the caller's to ask, the way <c>Create</c> asks it, of a text this splits or refuses.
     /// Returns <c>false</c> when the text needs more than sixteen symbols at <paramref name="maxVersion"/>, or some single character cannot fit a symbol there.
     /// </summary>
     public static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits)
         => TryPlan(text, eccLevel, charset, singleMode, utf8Bom, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, allowLanes: true);
 
     /// <summary>
-    /// <see cref="TryPlan(ReadOnlySpan{char}, QREccLevel, EciMode, EncodingMode, bool, QRSegmentation, int, int, Span{int}, out int, out int, out int)"/> with the choice of walking several budgets at once left to the caller; the plan is the same either way, which is what <c>StructuredAppendLaneWalkTest</c> holds it to.
+    /// <see cref="TryPlan(ReadOnlySpan{char}, QREccLevel, EciMode, EncodingMode, bool, QRSegmentation, int, int, Span{int}, out int, out int, out int)"/> with the choice of walking several budgets at once left to the caller. The plan is the same either way, which is what <c>StructuredAppendLaneWalkTest</c> holds it to.
     /// </summary>
     internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, bool allowLanes)
         => TryPlan(text, eccLevel, charset, singleMode, utf8Bom, segmentation, minVersion, maxVersion, chunkEnds, out chunkCount, out version, out budgetBits, out _, out _, allowLanes);
@@ -61,7 +61,7 @@ internal static partial class StructuredAppendPlanner
     /// </summary>
     /// <remarks>
     /// With <paramref name="kanji"/> the set is a Kanji set of a Kanji-eligible text (standardqr-encoder.md, "A Kanji-eligible text can be a Kanji set"): no ECI header (<paramref name="charset"/> is <see cref="EciMode.Default"/>), and a chunk costs one Kanji segment under <see cref="QRSegmentation.Single"/> (every character has a cell) or its Kanji plan under <see cref="QRSegmentation.Optimal"/> (<see cref="ChunkBitsKanji"/>).
-    /// The three searches are the same; the cost model under them is the eighth-state program's, and the walks stay scalar (standardqr-encoder.md, "The lanes").
+    /// The three searches are the same. The cost model under them is the eighth-state program's, and the walks stay scalar (standardqr-encoder.md, "The lanes").
     /// </remarks>
     internal static bool TryPlan(ReadOnlySpan<char> text, QREccLevel eccLevel, EciMode charset, EncodingMode singleMode, bool utf8Bom, QRSegmentation segmentation, int minVersion, int maxVersion, Span<int> chunkEnds, out int chunkCount, out int version, out int budgetBits, out bool oneRunPlans, out bool mayBeOneSymbol, bool allowLanes, bool kanji = false)
     {
@@ -82,10 +82,10 @@ internal static partial class StructuredAppendPlanner
             return true;
         }
 
-        // What no split can cost less than, priced once; every search below is gated on it.
+        // What no split can cost less than, priced once. Every search below is gated on it.
         var cheapest = kanji ? CheapestPayloadBitsKanji(text) : CheapestPayloadBits(text, charset);
 
-        // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the two are the same number for content holding no run dense enough to repay a mode header. Deciding that once, in one pass, is what keeps the searches below off the segmentation program, whose every probe is a pass of its own, the split it would find is the split the closed-form cost finds, so the searches run as Single and the symbols are still written exactly as the caller asked.
+        // A chunk's cost is the cheaper of its single-mode stream and its minimal plan, and the two are the same number for content holding no run dense enough to repay a mode header. Deciding that once, in one pass, is what keeps the searches below off the segmentation program, whose every probe is a pass of its own. The split it would find is the split the closed-form cost finds, so the searches run as Single and the symbols are still written exactly as the caller asked.
         // A Kanji set is searched as asked: under Optimal its chunks are Kanji plans, which a chunk holding both kinds of character needs.
         var searched = kanji
             ? segmentation
@@ -100,7 +100,7 @@ internal static partial class StructuredAppendPlanner
         // The minimal plan for the whole text, per count indicator band, taken on first use and shared by the count, the version scan and the budget search.
         Span<int> wholeTextPlans = stackalloc int[3];
         wholeTextPlans.Fill(-1);
-        // The walk that last held the count: its split is the answer's when the search ends on its budget; a failing probe overwrites the caller's buffer, so it is kept aside.
+        // The walk that last held the count: its split is the answer's when the search ends on its budget. A failing probe overwrites the caller's buffer, so it is kept aside.
         Span<int> settledEnds = stackalloc int[MaxSymbols];
         var settledBudget = -1;
         var settledCount = 0;
@@ -118,7 +118,7 @@ internal static partial class StructuredAppendPlanner
         var count = -1;
         if (searched == QRSegmentation.Optimal)
         {
-            // One single-mode stream that fits is the walk's own closed form; the program is never asked.
+            // One single-mode stream that fits is the walk's own closed form. The program is never asked.
             var bom = utf8Bom && charset == EciMode.Utf8;
             if (!kanji && text.Length <= QRSegmentPlanner.MaxPlannableChars
                 && SingleModeLength(text, charset, maxVersion, bom, largest - setHeaders - ModeIndicatorBits, out _, out _) == text.Length)
@@ -129,7 +129,7 @@ internal static partial class StructuredAppendPlanner
                 return true;
             }
 
-            // The chunks' plans cost at least the whole text's plan between them, so the count is at least fewest; a walk near the plan's floor that holds fewest chunks therefore settles it, and measured balanced budgets sit within FloorMarginBits of that floor.
+            // The chunks' plans cost at least the whole text's plan between them, so the count is at least fewest. A walk near the plan's floor that holds fewest chunks therefore settles it, and FloorMarginBits above that floor is where a balanced budget is expected.
             var whole = WholeTextPlanBits(text, charset, maxVersion, wholeTextPlans, kanji);
             // No stream of the text costs less than its plan, so a plan the largest symbol does not hold without the set header rules the one symbol out.
             mayBeOneSymbol = whole + charset.GetStandardQrHeaderBits() <= largest;
@@ -150,7 +150,7 @@ internal static partial class StructuredAppendPlanner
                 }
                 else
                 {
-                    // Attempted only with headroom: when the bound's count leaves each symbol less than two margins of slack, packing losses usually put it out of reach and the walk would be wasted, so the walk at the capacity counts as it always did.
+                    // Attempted only with headroom: when the bound's count leaves each symbol less than two margins of slack, packing losses usually put it out of reach and the walk would be wasted, so the walk at the capacity counts instead.
                     var floor = setHeaders + (whole + fewest - 1) / fewest;
                     var target = floor + FloorMarginBits;
                     if (target + FloorMarginBits < largest)
@@ -211,8 +211,8 @@ internal static partial class StructuredAppendPlanner
             return true;
         }
 
-        // Smallest version that still holds that many; a version the bounds rule out is not walked.
-        // Under Optimal a walk is a pass over the text, so a version the rate bound admits is also checked against the whole text's minimal plan, which on mixed content is thousands of bits nearer the truth and turns away the versions just below the answer; and a version whose capacity holds the settled walk's budget at the same count indicator widths holds that very split, so it is not walked either.
+        // Smallest version that still holds that many. A version the bounds rule out is not walked.
+        // Under Optimal a walk is a pass over the text, so a version the rate bound admits is also checked against the whole text's minimal plan, which on mixed content is thousands of bits nearer the truth and turns away the versions just below the answer. A version whose capacity holds the settled walk's budget at the same count indicator widths holds that very split, so it is not walked either.
         version = maxVersion;
         for (var candidate = minVersion; candidate < maxVersion; candidate++)
         {
@@ -242,7 +242,7 @@ internal static partial class StructuredAppendPlanner
         var high = Capacity(version, eccLevel);
         if (searched == QRSegmentation.Optimal)
         {
-            // Under Optimal a probe is a pass, so the bracket is the exact cost model's: below, a split costs at least the whole text's plan, so its fullest chunk is at least the average of that plus the headers every symbol pays; above, the settled walk's budget.
+            // Under Optimal a probe is a pass, so the bracket is the exact cost model's: below, a split costs at least the whole text's plan, so its fullest chunk is at least the average of that plus the headers every symbol pays. Above, the settled walk's budget.
             var answerBand = Band(version);
             var wholeText = WholeTextPlanBits(text, charset, version, wholeTextPlans, kanji);
             if (wholeText < ModeSegmenter.Unreachable)
@@ -263,7 +263,7 @@ internal static partial class StructuredAppendPlanner
                 settledBudget = -1;
 
                 // No walk has bracketed this band yet: the bracket opens from the floor, where the answer is, not from the middle of one that ends at the capacity, in one batch of
-                // lanes where they pay, else by probes in widening steps. Content whose characters are wide (a surrogate pair is 32 bits that cannot be cut) sits 32 to 47 bits above its floor, so the second step keeps the first margin; each step that fails raises the floor.
+                // lanes where they pay, else by probes in widening steps. Content whose characters are wide (a surrogate pair is 32 bits that cannot be cut) sits 32 to 47 bits above its floor, so the second step keeps the first margin. Each step that fails raises the floor.
                 if (lanes)
                     TryNarrowWithLanes(text, charset, version, low, high, count, ref low, ref high, settledEnds, ref settledBudget, ref settledCount, failedEnds, ref failedBudget, fromFloor: true, ceilingHolds: true);
 
@@ -297,7 +297,7 @@ internal static partial class StructuredAppendPlanner
             }
         }
 
-        // Under Optimal the rest of the bracket is walked eight budgets at a time, each batch leaving at most the gap between two of its budgets; what is left of it is bisected.
+        // Under Optimal the rest of the bracket is walked eight budgets at a time, each batch leaving at most the gap between two of its budgets. What is left of it is bisected.
         if (lanes)
         {
             while (high - low >= 2
@@ -380,7 +380,7 @@ internal static partial class StructuredAppendPlanner
 
     /// <summary>
     /// Whether <paramref name="count"/> symbols of <paramref name="capacityBits"/> could hold the text at all: each pays the Structured Append header, the set's ECI header, a mode indicator and the narrowest count indicator, and the payloads sum to at least <paramref name="cheapestPayloadBits"/>.
-    /// A lower bound, so it only rejects; the walk decides the rest.
+    /// A lower bound, so it only rejects. The walk decides the rest.
     /// </summary>
     public static bool CanHold(int capacityBits, int count, int cheapestPayloadBits, EciMode charset)
         => (long)count * (capacityBits - ChunkFloorBits(charset)) >= cheapestPayloadBits;
@@ -418,7 +418,7 @@ internal static partial class StructuredAppendPlanner
     /// Whether <paramref name="count"/> symbols of <paramref name="capacityBits"/> could hold the text, judged by the minimal plan for the whole of it at that version's count indicator widths.
     /// </summary>
     /// <remarks>
-    /// The segment plans of a split concatenate into one plan for the whole text at the same widths, so the chunks' plans cost at least <paramref name="wholeTextPlanBits"/> between them, and each chunk also pays the Structured Append and ECI headers; if even that total does not fit the count, no walk at this version can.
+    /// The segment plans of a split concatenate into one plan for the whole text at the same widths, so the chunks' plans cost at least <paramref name="wholeTextPlanBits"/> between them, and each chunk also pays the Structured Append and ECI headers. If even that total does not fit the count, no walk at this version can.
     /// A lower bound, so it only rejects. <c>StructuredAppendPlannerTest</c> holds it to never refusing a count the walk reaches.
     /// </remarks>
     public static bool CanHoldPlanned(int capacityBits, int count, int wholeTextPlanBits, EciMode charset)
@@ -467,7 +467,7 @@ internal static partial class StructuredAppendPlanner
             numericRun = characterClass == ModeSegmenter.ClassDigit ? numericRun + 1 : 0;
             alnumRun++;
             if (QRSegmentPlanner.PlanCouldBeatSingleMode(numericRun, alnumRun))
-                return true; // both outputs are settled; oneRunPlans remains false
+                return true; // both outputs are settled, and oneRunPlans remains false
             oneRun &= QRSegmentPlanner.PlanIsOneByteRun(numericRun, alnumRun);
         }
         oneRunPlans = oneRun;
@@ -535,7 +535,7 @@ internal static partial class StructuredAppendPlanner
 
     /// <summary>
     /// Greedy walk: how many chunks of at most <paramref name="budgetBits"/> each the text needs at this version, writing each chunk's end offset into <paramref name="chunkEnds"/> while it has room.
-    /// Stops as soon as the text needs more than <paramref name="limit"/> chunks and returns a value greater than the limit; a walk that cannot answer "at most this many" with yes has nothing left to learn.
+    /// Stops as soon as the text needs more than <paramref name="limit"/> chunks and returns a value greater than the limit. A walk that cannot answer "at most this many" with yes has nothing left to learn.
     /// <see cref="Impossible"/> when some single character does not fit the budget.
     /// </summary>
     internal static int CountChunks(ReadOnlySpan<char> text, EciMode charset, bool utf8Bom, QRSegmentation segmentation, int version, int budgetBits, int limit, Span<int> chunkEnds, bool kanji = false)
@@ -566,10 +566,10 @@ internal static partial class StructuredAppendPlanner
     }
 
     /// <summary>
-    /// The cut moved back so that the next chunk does not begin with U+FEFF; -1 when that leaves this chunk nothing.
+    /// The cut moved back so that the next chunk does not begin with U+FEFF, or -1 when that leaves this chunk nothing.
     /// </summary>
     /// <remarks>
-    /// A chunk is a symbol of its own, and the byte-segment decoder takes a segment's leading U+FEFF for a byte order mark and drops it, so a chunk that began with one would lose it; inside a chunk its plan keeps it interior to a Byte run (<see cref="ModeSegmenter.ByteOrderMark"/>).
+    /// A chunk is a symbol of its own, and the byte-segment decoder takes a segment's leading U+FEFF for a byte order mark and drops it, so a chunk that began with one would lose it. Inside a chunk its plan keeps it interior to a Byte run (<see cref="ModeSegmenter.ByteOrderMark"/>).
     /// The character ahead of the mark, a surrogate pair whole, goes to the next chunk with it, and so on back through a run of marks. A shorter chunk still fits its budget, and the end stays monotone in the budget, which the searches rely on.
     /// Only under UTF-8: a declared ISO-8859-1 stops the decoder dropping anything, and the mark is not in that charset to begin with.
     /// The lanes close their chunks by the same rule. A mark at the head of the text is the first symbol's, as it is a single symbol's, and is lost the same way.
@@ -647,16 +647,16 @@ internal static partial class StructuredAppendPlanner
     }
 
     /// <summary>
-    /// The largest end offset such that the chunk from <paramref name="start"/> fits the budget, never inside a surrogate pair; -1 when not even the first character fits.
+    /// The largest end offset such that the chunk from <paramref name="start"/> fits the budget, never inside a surrogate pair, or -1 when not even the first character fits.
     /// </summary>
     /// <remarks>
     /// Found without pricing whole prefixes. The single-mode cost of a prefix is a closed form of its length once its mode is known, and the mode changes at most twice along the text (Numeric, then Alphanumeric, then Byte, each boundary the first character outside the narrower alphabet), so the end is a few arithmetic steps plus, for a UTF-8 Byte run, one pass over the run's own bytes.
-    /// Under <see cref="QRSegmentation.Optimal"/> the mixed plan holds the single-mode plan among its candidates, so its cost is what decides, and one forward pass of the program finds the prefix; except inside an all-digit run, which no split improves, and behind a byte order mark, where only the leading alphanumeric run is planned, since a chunk past it is Byte mode and carries the mark.
-    /// The definition this must agree with is <see cref="ChunkBits"/>; <c>StructuredAppendPlannerTest</c> holds the two together on every boundary budget.
+    /// Under <see cref="QRSegmentation.Optimal"/> the mixed plan holds the single-mode plan among its candidates, so its cost is what decides, and one forward pass of the program finds the prefix, except inside an all-digit run, which no split improves, and behind a byte order mark, where only the leading alphanumeric run is planned, since a chunk past it is Byte mode and carries the mark.
+    /// The definition this must agree with is <see cref="ChunkBits"/>. <c>StructuredAppendPlannerTest</c> holds the two together on every boundary budget.
     /// </remarks>
     internal static int LongestChunkEnd(ReadOnlySpan<char> text, int start, EciMode charset, int version, QRSegmentation segmentation, bool utf8Bom, int budgetBits)
     {
-        // No chunk is longer than the most any symbol holds, so nothing past that is a candidate; the window never ends inside a pair either.
+        // No chunk is longer than the most any symbol holds, so nothing past that is a candidate. The window never ends inside a pair either.
         var length = Math.Min(text.Length - start, QRSegmentPlanner.MaxPlannableChars);
         if (start + length < text.Length && char.IsHighSurrogate(text[start + length - 1]) && char.IsLowSurrogate(text[start + length]))
             length--;
@@ -672,7 +672,7 @@ internal static partial class StructuredAppendPlanner
         if (single == length || single < digitRun)
             return single == 0 ? -1 : start + single;
 
-        // A byte order mark is written only into a Byte-mode chunk, where it costs 24 bits and forces the single-mode stream; a prefix inside the alphanumeric alphabet carries none, so under a mark that prefix is all a plan may cover.
+        // A byte order mark is written only into a Byte-mode chunk, where it costs 24 bits and forces the single-mode stream. A prefix inside the alphanumeric alphabet carries none, so under a mark that prefix is all a plan may cover.
         var planWindow = window;
         if (bom)
         {
@@ -713,7 +713,7 @@ internal static partial class StructuredAppendPlanner
     }
 
     /// <summary>
-    /// The longest prefix of <paramref name="window"/> whose single-mode stream (mode indicator excluded) fits <paramref name="payloadBudget"/>, in characters; 0 when the first character does not.
+    /// The longest prefix of <paramref name="window"/> whose single-mode stream (mode indicator excluded) fits <paramref name="payloadBudget"/>, in characters, or 0 when the first character does not.
     /// <paramref name="digitRun"/> and <paramref name="alnumRun"/> receive the two mode boundaries the walk crosses: how many digits the window starts with, and how many characters of it stay inside the alphanumeric alphabet.
     /// </summary>
     private static int SingleModeLength(ReadOnlySpan<char> window, EciMode charset, int version, bool bom, int payloadBudget, out int digitRun, out int alnumRun)
@@ -750,19 +750,19 @@ internal static partial class StructuredAppendPlanner
 
         if (charset != EciMode.Utf8)
         {
-            // One byte per character; a forced ISO-8859-1 charset can still meet a pair, which is not split.
+            // One byte per character. A forced ISO-8859-1 charset can still meet a pair, which is not split.
             var end = Math.Min(n, bytes);
             if (end < n && char.IsLowSurrogate(window[end]) && char.IsHighSurrogate(window[end - 1]))
                 end--;
             return end;
         }
 
-        // The leading alphanumeric characters are ASCII; spend their bytes before
+        // The leading alphanumeric characters are ASCII, so spend their bytes before
         // scanning the suffix, whose boundary keeps a surrogate pair together.
         return a + StructuredAppendScanner.Utf8PrefixLength(window.Slice(a), bytes - a);
     }
 
-    /// <summary>The most digits whose Numeric payload (10 bits per 3, then 4 or 7) fits the bits; 0 when one does not.</summary>
+    /// <summary>The most digits whose Numeric payload (10 bits per 3, then 4 or 7) fits the bits, or 0 when one does not.</summary>
     private static int MostNumeric(int bits)
     {
         if (bits < 4)
@@ -771,7 +771,7 @@ internal static partial class StructuredAppendPlanner
         return bits / 10 * 3 + (rest >= 7 ? 2 : rest >= 4 ? 1 : 0);
     }
 
-    /// <summary>The most characters whose Alphanumeric payload (11 bits per 2, then 6) fits the bits; 0 when one does not.</summary>
+    /// <summary>The most characters whose Alphanumeric payload (11 bits per 2, then 6) fits the bits, or 0 when one does not.</summary>
     private static int MostAlphanumeric(int bits)
     {
         if (bits < 6)

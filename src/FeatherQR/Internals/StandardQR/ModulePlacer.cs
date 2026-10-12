@@ -29,19 +29,17 @@ internal static partial class ModulePlacer
     /// - Skip timing pattern column (column 6)
     /// - Fill out non-blocked modules
     ///
-    /// Performance (see the micro-optimization findings log, ~2x over the per-module implementation at every version, zero allocations):
-    /// - The stream is consumed strictly sequentially, so the next up-to-64 bits are kept MSB-aligned in a ulong register and refilled 8 bytes at a time, replacing an indexed byte load + variable shift per module.
-    /// - The two modules of a strip row sit at adjacent bit indices (b, b-1) in the blocked mask and ~90% of rows have both free: one 2-bit mask window read + one 2-bit stream consume handles the pair on the fast path.
+    /// Performance:
+    /// - The stream is consumed strictly sequentially, so the next up-to-64 bits are kept MSB-aligned in a ulong register and refilled 8 bytes at a time, instead of an indexed byte load and a variable shift per module.
+    /// - The two modules of a strip row sit at adjacent bit indices (b, b-1) in the blocked mask and most rows have both free: one 2-bit mask window read and one 2-bit stream consume handle the pair on the fast path.
     /// - Once the stream is exhausted nothing can be written again, so the remainder modules end the walk via return instead of a per-module guard.
-    /// - Buffer/mask accesses go through refs so the JIT emits no bounds checks in the row loop (measured ~15% at version 10); the index range is validated once up front instead.
+    /// - Buffer and mask accesses go through refs, so the row loop has no bounds checks. The index range is validated once up front instead.
     /// </remarks>
     public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> interleavedData, ReadOnlySpan<byte> blockedMask)
     {
-        // Ref-based access below elides per-module bounds checks, so validate the whole traversal range here.
-        // size >= 7 keeps the strip column x >= 1 (real QR sizes are 21..177), so b-1 never goes negative.
-        // The module count is computed in long: an int size*size would overflow for size >= 46341 and could wrap below the actual span lengths, letting the unchecked writes run out of bounds.
-        // With long, any size whose square exceeds int range can never satisfy the length checks and throws here;
-        // for every size that passes, the int index arithmetic below is exact.
+        // The ref-based access below has no per-module bounds checks, so the whole traversal range is validated here.
+        // size >= 7 keeps the strip column x >= 1, so b - 1 never goes negative.
+        // The module count is a long: an int size * size overflows from size 46341 and could wrap below the span lengths, letting the unchecked writes run out of bounds.
         if (size < 7)
             throw new ArgumentOutOfRangeException(nameof(size), $"size must be >= 7, got {size}");
         var totalModules = (long)size * size;
@@ -52,7 +50,7 @@ internal static partial class ModulePlacer
 
         var up = true;
 
-        // Next up-to-64 stream bits, MSB-aligned; accBits of them are valid.
+        // Next up-to-64 stream bits, MSB-aligned, of which accBits are valid.
         var acc = 0ul;
         var accBits = 0;
         var bytePos = 0;
@@ -66,15 +64,12 @@ internal static partial class ModulePlacer
             if (x == 6)
                 x--;
 
-            // Walk the strip via the flat index: right module at b = y * size + x, left at b - 1; direction alternates per strip.
+            // Walk the strip via the flat index: right module at b = y * size + x, left at b - 1. Direction alternates per strip.
             var b = up ? (size - 1) * size + x : x;
             var step = up ? -size : size;
 
             for (var rows = 0; rows < size; rows++, b += step)
             {
-                // rightmodule = b, leftmodule = b - 1
-                // b tracks the right module's flat index directly; stepping by ±size avoids per-row y computation and re-multiplication.
-
                 // Blocked bits for the row pair: w bit1 = blocked(b), bit0 = blocked(b-1).
                 // |    `w` |  right `b` | left `b-1` |
                 // | -----: | ---------: | ---------: |
@@ -90,11 +85,8 @@ internal static partial class ModulePlacer
 
                 if (w == 0 && accBits >= 2)
                 {
-                    // Fast path: both modules free AND >= 2 stream bits buffered.
-                    // Taken for ~90% of rows: blocked regions (finder/timing/alignment/format) cover only ~10-15% of the matrix, and the accumulator dips below 2 bits at most once per 64 consumed bits.
-                    // 1. w == 0, both right and left modules are free, so we can consume 2 bits from the accumulator.
-                    // 2. accBits >= 2, we have at least 2 bits in the accumulator to write.
-
+                    // Fast path: both modules are free and at least 2 stream bits are buffered.
+                    // The accumulator dips below 2 bits at most once per 64 consumed bits.
                     Unsafe.Add(ref buf, b) = (byte)(acc >> 63); // place right module (b) with the MSB of acc
                     Unsafe.Add(ref buf, b - 1) = (byte)((acc >> 62) & 1); // place left module (b-1) with the next bit of acc
                     acc <<= 2;
@@ -103,10 +95,9 @@ internal static partial class ModulePlacer
                 else
                 {
                     // Slow path: a module is blocked, or fewer than 2 bits are buffered.
-                    // Handle each module independently; refill happens only when the accumulator is empty (a leftover single bit is consumed first).
+                    // Handle each module independently. Refill happens only when the accumulator is empty (a leftover single bit is consumed first).
                     if ((w & 2) == 0)
                     {
-                        // w bit1 == 0, right module is free
                         if (accBits == 0 && !RefillAccumulator(interleavedData, ref bytePos, ref acc, ref accBits))
                             return;
                         Unsafe.Add(ref buf, b) = (byte)(acc >> 63);
@@ -115,7 +106,6 @@ internal static partial class ModulePlacer
                     }
                     if ((w & 1) == 0)
                     {
-                        // w bit0 == 0, left module is free. Same as above, but for the left module (b-1)
                         if (accBits == 0 && !RefillAccumulator(interleavedData, ref bytePos, ref acc, ref accBits))
                             return;
                         Unsafe.Add(ref buf, b - 1) = (byte)(acc >> 63);
@@ -125,7 +115,6 @@ internal static partial class ModulePlacer
                 }
             }
 
-            // Alternate direction for zigzag pattern
             up = !up;
         }
     }
@@ -415,52 +404,13 @@ internal static partial class ModulePlacer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsModuleBlocked(ReadOnlySpan<byte> mask, int bitIndex)
     {
-        // Performance: O(1) constant-time lookup using bitwise operations.
-        //
-        // Bit extraction:
-        // - Byte index = bitIndex >> 3 (equivalent to bitIndex / 8)
-        // - Bit position = bitIndex & 7 (equivalent to bitIndex % 8)
-        // - Mask = 1 << bit_position
-        // - Result = (byte & mask) != 0
-        //
-        // Example (bitIndex = 10):
-        // - Byte index: 10 >> 3 = 1 (second byte)
-        // - Bit position: 10 & 7 = 2 (third bit from LSB)
-        // - Mask: 1 << 2 = 0b00000100
-
         return (mask[bitIndex >> 3] & (1 << (bitIndex & 7))) != 0;
     }
 
-    // private class/strusts
-
     /// <summary>
-    /// Mask pattern implementations and scoring algorithm using pre-calculated modulo/division values.
-    /// ISO/IEC 18004:2015 defines 8 mask patterns (0-7) to improve QR code readability.
+    /// The eight mask pattern predicates of ISO/IEC 18004:2015 Section 7.8.2 (Data Masking), on row and column values the caller
+    /// has already reduced: modulo 2, modulo 3, the row halved, the column divided by 3.
     /// </summary>
-    /// <remarks>
-    /// Performance optimization strategy:
-    /// <code>
-    /// 1. Pre-calculate modulo and division values for rows/columns
-    /// 2. Use bitwise operations (&amp;, ^) instead of modulo where possible
-    /// 3. Avoid repeated Math.Floor calculations
-    /// </code>
-    ///
-    /// Pre-calculated values (shared across all patterns):
-    /// <code>
-    /// - rMod2[i] = i % 2  (row modulo 2)
-    /// - rDiv2[i] = i / 2  (row integer division by 2)
-    /// - rMod3[i] = i % 3  (row modulo 3)
-    /// - cMod2[i] = i % 2  (column modulo 2)
-    /// - cDiv3[i] = i / 3  (column integer division by 3)
-    /// - cMod3[i] = i % 3  (column modulo 3)
-    /// </code>
-    ///
-    /// For mathematical background, see:
-    /// <code>
-    /// - ISO/IEC 18004:2015 Section 7.8.2 (Data Masking)
-    /// - MaskPattern class for readable reference implementations
-    /// </code>
-    /// </remarks>
     private static class MaskPattern
     {
         /// <summary>

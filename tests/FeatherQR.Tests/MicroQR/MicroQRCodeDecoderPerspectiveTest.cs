@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Micro QR image decoding under keystone, alone and with rotation or mirroring,
-/// across the measured envelope.
+/// across the supported envelope.
 /// </summary>
 public class MicroQRCodeDecoderPerspectiveTest
 {
@@ -52,7 +52,7 @@ public class MicroQRCodeDecoderPerspectiveTest
     }
 
     /// <summary>
-    /// The lowest densities the envelope was measured at: 5 px/module drawn crisp, 3 px/module with grey edges.
+    /// The lowest densities of the envelope: 5 px/module drawn crisp, 3 px/module with grey edges.
     /// </summary>
     [Test]
     [Arguments(5, false)]
@@ -69,7 +69,7 @@ public class MicroQRCodeDecoderPerspectiveTest
     }
 
     /// <summary>
-    /// Keystones only the perspective search read when measured (2026-09-27): with the search removed, each of these fails.
+    /// Keystones only the perspective search reads: with the search removed, each of these fails.
     /// </summary>
     [Test]
     [Arguments(MicroQRVersion.M4, MicroQREccLevel.L, "MICRO QR M4 TEST L", KeystoneEdge.Top, 0, false)]

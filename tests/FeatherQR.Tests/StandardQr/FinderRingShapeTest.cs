@@ -190,7 +190,7 @@ public class FinderRingShapeTest
     {
         const int PixelsPerModule = 6;
         var qr = Symbol(2);
-        // Bars 0 and 1 are the top and the bottom, 2 and 3 the left and the right; a half is the three modules before the centre line or the three after it
+        // Bars 0 and 1 are the top and the bottom, 2 and 3 the left and the right. A half is the three modules before the centre line or the three after it.
         bool IsMissing(int row, int column)
         {
             var (across, along) = bar < 2 ? (row, column) : (column, row);

@@ -10,7 +10,7 @@ public class FinderOutlineTest
 {
     private const string Content = "RMQR 43";
 
-    /// <summary>Square to 40° of shear, 2.5 to 5 px/module; the seed a square frame turned up to 15° off the finder's rows (measured 2026-09-28: every such seed measures these).</summary>
+    /// <summary>Square to 40° of shear, 2.5 to 5 px/module, with the seed a square frame turned up to 15° off the finder's rows.</summary>
     public static IEnumerable<(RmQRVersion Version, float Keystone, float PixelsPerModule, float SeedDegrees)> Finders()
     {
         foreach (var (version, keystone) in new[] { (RmQRVersion.R11x43, 0f), (RmQRVersion.R11x43, 0.2f), (RmQRVersion.R7x99, 0.12f), (RmQRVersion.R17x139, 0.2f), (RmQRVersion.R7x139, 0.2f) })
@@ -122,7 +122,7 @@ public class FinderOutlineTest
 
     /// <summary>
     /// A seed off the centre along the chord: the chord's two reaches differ by twice the offset, and past half a module off (a module between them) the seed is refused as not the finder's centre.
-    /// A quarter of a module off it measures; from 0.4 the outer chords of the second set run along the centre square's edge, whose grey pixels cross the level.
+    /// A quarter of a module off it measures. From 0.4 the outer chords of the second set run along the centre square's edge, whose grey pixels cross the level.
     /// </summary>
     [Test]
     [Arguments(0.25f, true)]

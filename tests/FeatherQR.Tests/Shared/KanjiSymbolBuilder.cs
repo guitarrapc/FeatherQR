@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The generators' pipelines after the data stream, assembled from their internal stages: a symbol from data codewords, for a stream the test wrote itself.
-/// The Standard QR and Micro QR mask is pinned, so the result compares module for module with a generator's symbol made with the same <c>MaskPattern</c>; rMQR has one mask.
+/// The Standard QR and Micro QR mask is pinned, so the result compares module for module with a generator's symbol made with the same <c>MaskPattern</c>. rMQR has one mask.
 /// Every symbol is the core only, row-major, one byte per module.
 /// </summary>
 internal static class KanjiSymbolBuilder

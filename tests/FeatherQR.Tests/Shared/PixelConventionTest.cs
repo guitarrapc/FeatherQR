@@ -6,10 +6,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The image decoders keep coordinates in which integers are pixel edges, so the pixel
-/// containing a point is its floor. The samplers used to round to nearest instead, which
-/// reads half a pixel right of and below every module centre: the neighbouring module at
-/// 1 px/module and a module edge at 1.5-2 px/module, where the builder's fixed-size
-/// renders land. Clean renders at those densities failed in all three symbologies.
+/// containing a point is its floor. Rounding to nearest instead reads half a pixel right
+/// of and below every module centre: the neighbouring module at 1 px/module and a module
+/// edge at 1.5-2 px/module, where the builder's fixed-size renders land.
 /// </summary>
 public class PixelConventionTest
 {
@@ -68,7 +67,7 @@ public class PixelConventionTest
         await Assert.That(text).IsEqualTo(content);
     }
 
-    /// <summary>Fixed-size builder renders between 1.5 and 2.2 px/module, each of which failed before.</summary>
+    /// <summary>Fixed-size builder renders between 1.5 and 2.2 px/module, each of which a sampler that rounds to nearest fails to read.</summary>
     [Test]
     [Arguments(3, 55)]
     [Arguments(10, 97)]

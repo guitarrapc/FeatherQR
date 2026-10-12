@@ -6,8 +6,8 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// Decodes the committed Structured Append corpus (Fixtures/StandardQrStructuredAppend/):
 /// two external encoder lineages with matrix and PNG, plus third-party captures that are
-/// image-only. Every symbol must decode to its own text and report the header it carries;
-/// the set-level test pins the reassembly rules a caller relies on, and the corpus test
+/// image-only. Every symbol must decode to its own text and report the header it carries.
+/// The set-level test pins the reassembly rules a caller relies on, and the corpus test
 /// pins the shapes the contract needs so a regeneration cannot drop them silently.
 /// Regenerate with <c>dotnet run --project tools/QRInteropFixtures -- regenerate-structured-append</c>.
 /// </summary>
@@ -15,7 +15,7 @@ public class StructuredAppendFixtureTest
 {
     private const string Symbology = "StandardQrStructuredAppend";
 
-    // Every manifest is parsed once per process; data sources and set-level tests read from here.
+    // Every manifest is parsed once per process. Data sources and set-level tests read from here.
     private static readonly Lazy<IReadOnlyDictionary<string, FixtureManifest>> Manifests = new(() =>
         FixtureLoader.EnumerateFixtureIds(Symbology).ToDictionary(id => id, id => FixtureLoader.Load(Symbology, id).Manifest));
 

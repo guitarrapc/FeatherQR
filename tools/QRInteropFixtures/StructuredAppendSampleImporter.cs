@@ -13,7 +13,7 @@ namespace QRInteropFixtures;
 /// set's texts concatenated in index order must equal the expected text file when one
 /// sits beside the images. Writes PROVENANCE.md and copies the source LICENSE so the
 /// files can be redistributed. Also reports what this library's image decoder makes of
-/// each capture, which is the Phase 5a red test in miniature.
+/// each capture.
 /// </summary>
 public static class StructuredAppendSampleImporter
 {

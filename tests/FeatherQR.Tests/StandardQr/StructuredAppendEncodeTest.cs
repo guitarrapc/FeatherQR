@@ -61,7 +61,7 @@ public class StructuredAppendEncodeTest
     [Test]
     public async Task Create_ExactlySixteenSymbols_IsAccepted()
     {
-        // Version 2-L holds 30 Byte-mode bytes beside the header; 470 characters need sixteen.
+        // Version 2-L holds 30 Byte-mode bytes beside the header, so 470 characters need sixteen.
         var text = Repeat(Sentence, 470);
         var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(2) };
 
@@ -195,7 +195,7 @@ public class StructuredAppendEncodeTest
     public async Task Create_BoostEccLevel_ClimbsEveryLevelTheSetCanTake(QRSegmentation segmentation)
     {
         // Two symbols at a pinned version each fill about half of it, so the boost has room
-        // to climb more than one level; that is the walk that asks every chunk again per
+        // to climb more than one level. That is the walk that asks every chunk again per
         // level, and the level it stops at must not depend on how the asking is done.
         var text = Repeat(Sentence, 280);
         var options = new QRCodeGeneratorOptions { Version = 10, BoostEccLevel = true, Segmentation = segmentation };
@@ -236,7 +236,7 @@ public class StructuredAppendEncodeTest
     public async Task Create_OptimalSegmentation_OnDigits_IsTheSingleModeSet(int length, int maxVersion, QREccLevel ecc)
     {
         // One Numeric run is the optimum of all-digit content, so the set a plan would
-        // build is the set the single mode builds; the planner may skip planning it, but
+        // build is the set the single mode builds. The planner may skip planning it, but
         // only while the two stay module for module identical.
         var text = Repeat("0123456789", length);
         var single = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(maxVersion) };
@@ -254,7 +254,7 @@ public class StructuredAppendEncodeTest
     public async Task Create_OptimalSegmentation_WithBoost_OnDigits_IsTheSingleModeSet()
     {
         // The boost re-costs every chunk per level, which is the other place planning is
-        // skipped for digits; the boosted set must still match the single-mode one.
+        // skipped for digits. The boosted set must still match the single-mode one.
         var text = Repeat("0123456789", 1201);
         var single = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(6), BoostEccLevel = true };
         var optimal = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(6), BoostEccLevel = true, Segmentation = QRSegmentation.Optimal };
@@ -271,7 +271,7 @@ public class StructuredAppendEncodeTest
     [Test]
     public async Task Create_ForcedEci_StillSplitsAndComesBack()
     {
-        // ASCII text with a forced UTF-8 declaration still splits and comes back; that each symbol
+        // ASCII text with a forced UTF-8 declaration still splits and comes back. That each symbol
         // carries the declaration cannot be seen here, since the decoder reports the same text
         // either way, and is read off the wire in StructuredAppendStreamTest. Its 12 bits a symbol can only add symbols.
         var text = Repeat(Sentence, 300);
@@ -322,7 +322,7 @@ public class StructuredAppendEncodeTest
     [Test]
     public async Task Create_CharacterThatFitsNoSymbol_ThrowsOnOptions()
     {
-        // One emoji under a UTF-8 declaration needs 76 bits; version 1-H holds 72.
+        // One emoji under a UTF-8 declaration needs 76 bits, and version 1-H holds 72.
         var options = new QRCodeGeneratorOptions { Version = QRVersionRange.AtMost(1), EciMode = EciMode.Utf8 };
 
         var exception = Assert.Throws<ArgumentException>(() => QRCodeGenerator.CreateStructuredAppend("🎉🎉", QREccLevel.H, options));

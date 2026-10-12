@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 /// The segmentation program for a Kanji-eligible text as a definition: an all-states relaxation over eight states (Numeric with 0, 1 or 2 digits in the open group, Alphanumeric with 0 or 1 in the open pair, Byte, the start, Kanji), for a text whose characters are ASCII or have an encoder cell.
 /// </summary>
 /// <remarks>
-/// Nothing here comes from the library. An ASCII character is classed from the alphanumeric alphabet as ISO/IEC 18004 lists it and reaches Numeric, Alphanumeric or Byte at one byte; a character outside ASCII reaches only Kanji, since Byte could carry it only under an ECI header, which a Kanji plan never has.
+/// Nothing here comes from the library. An ASCII character is classed from the alphanumeric alphabet as ISO/IEC 18004 lists it and reaches Numeric, Alphanumeric or Byte at one byte. A character outside ASCII reaches only Kanji, since Byte could carry it only under an ECI header, which a Kanji plan never has.
 /// Every width is passed in. States are relaxed in order and a later predecessor replaces an earlier one only when strictly cheaper, the tie rule the library documents, so the plan reconstructed here is the plan the library has to write.
 /// </remarks>
 internal static class KanjiPlanReference
@@ -36,7 +36,7 @@ internal static class KanjiPlanReference
 
     public static Widths RmQr(int versionIndex) => new(3, RmQrCountBits('N', versionIndex), RmQrCountBits('A', versionIndex), RmQrCountBits('B', versionIndex), RmQrCountBits('K', versionIndex));
 
-    /// <summary>The minimal plan's bits, and its last state; <paramref name="parents"/>, when given, receives one predecessor per character and state.</summary>
+    /// <summary>The minimal plan's bits, and its last state. <paramref name="parents"/>, when given, receives one predecessor per character and state.</summary>
     public static int Cost(string text, Widths widths, byte[]? parents, out int finalState)
     {
         var prev = new int[States];

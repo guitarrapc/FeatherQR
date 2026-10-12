@@ -7,9 +7,9 @@ namespace FeatherQR.Tests;
 /// position, <c>110</c> for second), pinned on hand-assembled streams at R7x43 (count widths 4 / 3 / 3 / 2)
 /// with the exact bit count the matrix decoder would pass. The rules are the Standard QR ones: once,
 /// before the first data segment, with ECI headers on either side, the application indicator held to its
-/// ranges, and the <c>%</c> rule in Alphanumeric segments. The two indicators used to be refused as
-/// reserved, which the record of this symbology stated without a source: zxing-cpp's and qrcode2's mode
-/// tables, libzint's and CodeGlyphX's writers, and zxing-cpp reading their symbols as GS1 say otherwise.
+/// ranges, and the <c>%</c> rule in Alphanumeric segments. The two indicators are not reserved:
+/// zxing-cpp's and qrcode2's mode tables, libzint's and CodeGlyphX's writers, and zxing-cpp reading
+/// their symbols as GS1 agree on their meaning.
 /// </summary>
 public class Fnc1RmQRDecodeTest
 {
@@ -113,7 +113,7 @@ public class Fnc1RmQRDecodeTest
     [Test]
     public async Task FirstPosition_OnEitherSideOfEci_IsReported()
     {
-        // 111 ECI, 26 (UTF-8), 011 Byte, count 2, C3 A9 (é), terminator; FNC1 before or after the ECI header.
+        // 111 ECI, 26 (UTF-8), 011 Byte, count 2, C3 A9 (é), terminator. FNC1 before or after the ECI header.
         var afterEci = Decode("111 00011010 101 011 010 11000011 10101001 000");
         var beforeEci = Decode("101 111 00011010 011 010 11000011 10101001 000");
 
@@ -197,7 +197,7 @@ public class Fnc1RmQRDecodeTest
     [Test]
     public async Task FirstPosition_PercentAtASegmentStartOrEnd_IsTheSeparator()
     {
-        // count 2: the pair %A; count 3: the pair AB then %.
+        // Count 2: the pair %A. Count 3: the pair AB then %.
         var atStart = Decode("101 010 010 " + PairPercentA + " 000");
         var atEnd = Decode("101 010 011 " + PairAB + " " + Percent + " 000");
 

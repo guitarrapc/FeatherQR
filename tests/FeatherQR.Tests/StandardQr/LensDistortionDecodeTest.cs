@@ -6,7 +6,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// A symbol photographed through a lens that draws its corners nearer the centre than a pinhole would: its rows and columns bow, the three finder centres still measure well, and no plane through them and an alignment pattern follows the bow across a symbol of version 7 or more.
 /// The mesh over the alignment lattice does, with every pattern of the lattice measured, the ones on the timing lines among them, and each cell curved through three nodes a side.
-/// The shots are versions 7 to 40 through a lens term of 6 to 10 %, each asserted to read by no sampling of the grid through the finders and the fourth point. Four take the geometry of sweep renders, versions 28 to 36 that read only with the offset carried along the timing lines, two of them only with the dimension read at the finders.
+/// The shots are versions 7 to 40 through a lens term of 6 to 10 %, each asserted to read by no sampling of the grid through the finders and the fourth point. Four of them, versions 28 to 36, read only with the offset carried along the timing lines, two of those only with the dimension read at the finders.
 /// </summary>
 public class LensDistortionDecodeTest
 {
@@ -76,7 +76,7 @@ public class LensDistortionDecodeTest
         return null;
     }
 
-    /// <summary>The symbol on a card tilted about an axis in its plane, photographed through a lens with a light blur and noise; with its data modules redrawn at random where asked.</summary>
+    /// <summary>The symbol on a card tilted about an axis in its plane, photographed through a lens with a light blur and noise, with its data modules redrawn at random where asked.</summary>
     internal static (CameraRenderer.Photograph Photograph, QRCodeData Symbol, string Text) Render(int version, float pixelsPerModule, float tiltDegrees, float tiltAxisDegrees, float rollDegrees, float distortion, bool destroyData)
     {
         var text = $"FQR LENS v{version}";
@@ -191,7 +191,7 @@ public class LensDistortionDecodeTest
         await Assert.That(wrong).IsEmpty();
     }
 
-    /// <summary>The dimension the finders estimate, unsnapped, and the one the version information read at them names; from the triple of the global threshold, as the decoder measures it.</summary>
+    /// <summary>The dimension the finders estimate, unsnapped, and the one the version information read at them names. Both are from the triple of the global threshold, as the decoder measures it.</summary>
     private static (float Estimate, int Named) Dimensions(CameraRenderer.Photograph photograph)
     {
         var (frame, sizes) = FinderOutlineFitDecodeTest.Measure(photograph.Luminance, photograph.Width, photograph.Height, out var threshold, out var grey);

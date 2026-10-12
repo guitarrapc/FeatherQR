@@ -8,14 +8,14 @@ namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
 /// Vectorized Reed-Solomon kernel for ARM64 (Apple Silicon / Graviton).
-/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>; produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
+/// Selected at runtime by <see cref="EccBinaryEncoder.CalculateECC"/>. It produces byte-identical output to <see cref="EccBinaryEncoder.CalculateEccScalar"/>.
 /// </summary>
 /// <remarks>
 /// Faithful port of the SSSE3 kernel (see EccBinaryEncoder.X86.cs for the shared architecture notes).
 /// Instruction mapping:
 ///
 /// - PSHUFB → TBL (<see cref="AdvSimd.Arm64.VectorTableLookup(Vector128{byte}, Vector128{byte})"/>).
-///   Both zero out-of-range lanes; the nibble indices here are always 0-15, so the
+///   Both zero out-of-range lanes. The nibble indices here are always 0-15, so the
 ///   semantic difference (PSHUFB keys on bit 7, TBL on index ≥ 16) is never exercised.
 /// - PSRLDQ (byte shift right) → EXT (<see cref="AdvSimd.ExtractVector128(Vector128{byte}, Vector128{byte}, byte)"/>
 ///   with a zero upper operand).

@@ -96,7 +96,7 @@ public static class MicroQRCodeDecoder
     /// <param name="modules">The matrix: one byte per module, 0 light and non-zero dark, row-major. A light quiet zone border is skipped automatically.</param>
     /// <param name="size">Side length in modules, quiet zone included.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">How many characters were written; 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
+    /// <param name="charsWritten">How many characters were written. It is 0 when the matrix does not decode, though <paramref name="destination"/> may still hold the characters read before the failure.</param>
     /// <param name="info">What the attempt found: status, version, level, mask and corrections.</param>
     /// <returns><c>true</c> when the Micro QR code decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
@@ -159,7 +159,7 @@ public static class MicroQRCodeDecoder
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
-    /// <param name="charsWritten">How many characters were written; 0 when the image does not decode, though <paramref name="destination"/> may still hold text from an attempt that was not kept.</param>
+    /// <param name="charsWritten">How many characters were written. It is 0 when the image does not decode, though <paramref name="destination"/> may still hold text from an attempt that was not kept.</param>
     /// <param name="info">What the attempt found: status, version, level, mask and corrections, and on success where the symbol sits in the image (Corners).</param>
     /// <returns><c>true</c> when a Micro QR code was found and decoded.</returns>
     /// <exception cref="ArgumentException">Thrown when the buffer is smaller than the dimensions require.</exception>
@@ -212,7 +212,7 @@ public static class MicroQRCodeDecoder
     /// <summary>
     /// Locates the core matrix inside an input that may carry a light quiet zone border.
     /// Micro QR has a single finder pattern, so unlike Standard QR the right/bottom edges carry data and are not guaranteed dark, the dark bounding box cannot size the core.
-    /// Instead the top-left dark module is the finder corner (core origin); a uniform border implies <c>coreSize = size − 2·origin</c>.
+    /// Instead the top-left dark module is the finder corner (core origin), and a uniform border implies <c>coreSize = size − 2·origin</c>.
     /// </summary>
     private static bool TryLocateCore(ReadOnlySpan<byte> modules, int size, out int origin, out int coreSize)
     {
@@ -221,7 +221,7 @@ public static class MicroQRCodeDecoder
 
         // First row containing a dark module, and the minimum dark column.
         // Until the first dark module is found, left == size, so the full row is
-        // scanned; afterwards only columns left of the current minimum matter.
+        // scanned. Afterwards only columns left of the current minimum matter.
         var top = -1;
         var left = size;
         for (var y = 0; y < size; y++)

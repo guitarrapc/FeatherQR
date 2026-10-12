@@ -35,7 +35,7 @@ public class ModeSegmenterPrefixBudgetTest
         var text = Text(kind);
         foreach (var (cciNumeric, cciAlnum, cciByte) in BandWidths())
         {
-            // The cost of every candidate prefix, in order; a candidate never cuts a surrogate pair.
+            // The cost of every candidate prefix, in order. A candidate never cuts a surrogate pair.
             var candidates = new List<(int Length, int Cost)>();
             for (var length = 1; length <= text.Length; length++)
             {

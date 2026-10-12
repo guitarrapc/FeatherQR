@@ -55,7 +55,7 @@ internal static class KanjiStreamReference
 
     /// <summary>
     /// Every character with an encoder cell, in a fixed shuffled order, so that a small symbol filled from the front of the list carries kana, kanji and symbols rather than one script.
-    /// The set comes from the library's reverse table, whose membership <c>ShiftJisKanjiReverseTableUnitTest</c> pins; the values the reference writes for them do not.
+    /// The set comes from the library's reverse table, whose membership <c>ShiftJisKanjiReverseTableUnitTest</c> pins, but the values the reference writes for them do not.
     /// </summary>
     public static readonly char[] EncoderCells = BuildEncoderCells();
 
@@ -134,7 +134,7 @@ internal static class KanjiStreamReference
     public static byte[] StandardQrStream(int version, int dataCodewords, IEnumerable<Run> runs)
         => Finish(StandardQrBits(version, runs), terminatorLength: 4, dataCodewords * 8, dataCodewords);
 
-    /// <summary>The smallest version whose data capacity at <paramref name="ecc"/> holds the runs, or 0; widths follow each version's count band.</summary>
+    /// <summary>The smallest version whose data capacity at <paramref name="ecc"/> holds the runs, or 0. Widths follow each version's count band.</summary>
     public static int SmallestStandardQrVersion(Run[] runs, QREccLevel ecc)
     {
         for (var version = 1; version <= 40; version++)
@@ -298,7 +298,7 @@ internal static class KanjiStreamReference
     }
 
     /// <summary>
-    /// Terminator (shortened at capacity), zero bits to the byte boundary, then 0xEC / 0x11 pad codewords over the whole bytes the capacity holds; a capacity that ends on half a byte leaves its last 4-bit codeword zero.
+    /// Terminator (shortened at capacity), zero bits to the byte boundary, then 0xEC / 0x11 pad codewords over the whole bytes the capacity holds. A capacity that ends on half a byte leaves its last 4-bit codeword zero.
     /// </summary>
     private static byte[] Finish(string data, int terminatorLength, int capacityBits, int dataCodewords)
     {

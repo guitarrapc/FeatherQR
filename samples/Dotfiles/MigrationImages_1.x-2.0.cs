@@ -13,14 +13,14 @@ using FeatherQR.SkiaSharp;
 // - SymbolRenderer.Render fits the symbol into a non-square area instead of filling it.
 // - Canvas the symbol does not reach takes the background rather than staying transparent.
 //
-// The "before" images are the real old output, not an imitation. Nothing in the library stretches
-// any more, so the stretch is asked for with a canvas scale over a square area, which gives the
-// same pixels the old fill did (checked against the old renderer for both images). The
-// transparent pad is what naming clearColor still produces. If a later change alters either, the
-// decode line below flips and the pad sample stops being transparent, so regenerating says so.
+// The "before" images are the real old output, not an imitation. Nothing in the library stretches,
+// so the stretch is asked for with a canvas scale over a square area, which gives the same pixels
+// the old fill did. The transparent pad is what naming clearColor produces. If a later change
+// alters either, the decode line below flips and the pad sample stops being transparent, so
+// regenerating says so.
 //
 // Output goes to docs/images/ rather than samples/Dotfiles/output/ because these are documentation
-// assets that ship with the guide; samples/Dotfiles/output/ is gitignored.
+// assets that ship with the guide. samples/Dotfiles/output/ is gitignored.
 //
 // Run from the repository root:
 //   dotnet run "samples/Dotfiles/MigrationImages_1.x-2.0.cs"
@@ -169,7 +169,7 @@ static void Save(SKBitmap bitmap, string path)
 }
 
 // The claim each image makes in the guide is which readers find the symbol, so check each one it names.
-// ZXing.Net runs with the settings the test suite's cross-checks use; zxing-cpp with its defaults.
+// ZXing.Net runs with the settings the test suite's cross-checks use, zxing-cpp with its defaults.
 static void Report(string path, SKBitmap bitmap, bool featherQR, bool zxingNet, bool zxingCpp)
 {
     var feather = QRCodeImageDecoder.TryDecode(bitmap, out var text, out _) && text == Content;

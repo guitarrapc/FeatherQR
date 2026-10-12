@@ -8,7 +8,7 @@ namespace FeatherQR.Tests;
 /// <list type="bullet">
 /// <item>errors ≤ t → corrected, reported in <c>ErrorsCorrected</c></item>
 /// <item>t &lt; errors ≤ ⌊ecc/2⌋ → Reed-Solomon could correct, but the capacity
-/// cap must reject (misdecode-protection codewords p; the false-positive class)</item>
+/// cap must reject (misdecode-protection codewords p, the false-positive class)</item>
 /// <item>errors &gt; ⌊ecc/2⌋ → Reed-Solomon itself fails</item>
 /// <item>M1 (t = 0): any data error must be rejected, error detection only</item>
 /// </list>
@@ -216,7 +216,7 @@ public class MicroQRCodeDecoderRobustnessTest
     [Test]
     public async Task MicroDecoder_RejectsStandardQrMatrix()
     {
-        // Standard QR v1 (21×21) bare and with quiet zone; 21 is not a Micro QR size.
+        // Standard QR v1 (21×21) bare and with quiet zone. 21 is not a Micro QR size.
         foreach (var quietZone in (int[])[0, 4])
         {
             var qr = QRCodeGenerator.Create("HELLO WORLD", QREccLevel.M, new QRCodeGeneratorOptions { QuietZoneSize = quietZone });

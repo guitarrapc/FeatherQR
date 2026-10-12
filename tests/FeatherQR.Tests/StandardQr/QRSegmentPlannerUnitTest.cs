@@ -44,7 +44,7 @@ public class QRSegmentPlannerUnitTest
         var costAtLimit = QRSegmentPlanner.MinimumPayloadBits(atLimit, EciMode.Default, 14, 13, 16);
         await Assert.That(costAtLimit).IsEqualTo(capacityBits);
 
-        // One more digit overflows by 4 bits; re-derive rather than nudge on change.
+        // One more digit overflows by 4 bits. Re-derive rather than nudge on change.
         var overLimit = new string('1', QRSegmentPlanner.MaxPlannableChars + 1);
         var costOverLimit = QRSegmentPlanner.MinimumPayloadBits(overLimit, EciMode.Default, 14, 13, 16);
         await Assert.That(costOverLimit).IsEqualTo(capacityBits + 4);
@@ -134,8 +134,8 @@ public class QRSegmentPlannerUnitTest
     [Test]
     public async Task MinCountBitsAny_IsTheNarrowestWidthOfAnyModeAtAnyVersion()
     {
-        // The trivial lower bound adds the cheapest header a stream can carry;
-        // if a narrower count indicator ever appeared it would stop being a bound.
+        // The trivial lower bound adds the cheapest header a stream can carry.
+        // If a narrower count indicator ever appeared it would stop being a bound.
         var narrowest = int.MaxValue;
         foreach (var version in new[] { 1, 9, 10, 26, 27, 40 })
         {
@@ -154,7 +154,7 @@ public class QRSegmentPlannerUnitTest
             return;
 
         // The optimum at the narrowest widths is the smallest cost any version can
-        // see; a sound lower bound must sit at or below it.
+        // see, so a sound lower bound must sit at or below it.
         var optimumAtNarrowest = QRSegmentPlanner.MinimumPayloadBits(content, charset, 10, 9, 8);
         var bound = QRSegmentPlanner.TrivialLowerBoundBits(content, charset);
         await Assert.That(bound).IsLessThanOrEqualTo(optimumAtNarrowest).Because($"content=\"{content}\", charset={charset}");

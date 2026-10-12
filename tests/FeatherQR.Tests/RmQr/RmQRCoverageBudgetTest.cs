@@ -15,7 +15,7 @@ public class RmQRCoverageBudgetTest
     /// <summary>
     /// An R13x99 upscaled bilinearly, so the image has grey levels, with its data band inverted past what Reed-Solomon corrects,
     /// sampled through its own geometry: the grid gets past its format information and fails, so the gate asks only the budget.
-    /// One decode leaves none for the re-read; two pay for both; five leave three.
+    /// One decode leaves none for the re-read, two pay for both, and five leave three.
     /// </summary>
     [Test]
     [Arguments(1, 0)]

@@ -109,14 +109,14 @@ internal static class RmQRVersionSelector
         {
             case EncodingMode.Numeric:
                 {
-                    // 10 bits per 3-digit group; a 2-digit tail costs 7 bits, 1 digit costs 4
+                    // 10 bits per 3-digit group. A 2-digit tail costs 7 bits, 1 digit costs 4.
                     var groups = dataBits / 10;
                     var remainder = dataBits - groups * 10;
                     return groups * 3 + (remainder >= 7 ? 2 : remainder >= 4 ? 1 : 0);
                 }
             case EncodingMode.Alphanumeric:
                 {
-                    // 11 bits per character pair; a single tail character costs 6 bits
+                    // 11 bits per character pair. A single tail character costs 6 bits.
                     var pairs = dataBits / 11;
                     var remainder = dataBits - pairs * 11;
                     return pairs * 2 + (remainder >= 6 ? 1 : 0);
@@ -130,7 +130,7 @@ internal static class RmQRVersionSelector
 
     /// <summary>
     /// Fit-strategy comparator: true when <paramref name="candidate"/> should replace <paramref name="incumbent"/>.
-    /// MinimizeArea: fewer modules, ties → smaller height; MinimizeWidth: smaller width, ties → smaller height; MinimizeHeight: smaller height, ties → smaller width.
+    /// MinimizeArea: fewer modules, ties → smaller height. MinimizeWidth: smaller width, ties → smaller height. MinimizeHeight: smaller height, ties → smaller width.
     /// Equal versions never replace each other.
     /// </summary>
     public static bool IsBetter(RmQRVersion candidate, RmQRVersion incumbent, RmQRFitStrategy strategy)
@@ -159,11 +159,11 @@ internal static class RmQRVersionSelector
 
     /// <summary>
     /// Selects the version for the analyzed content.
-    /// Validates every enum argument; throws <see cref="ArgumentException"/> with an actionable message (actual length, applicable maximum in mode units, remedy) when the content does not fit.
+    /// Validates every enum argument. Throws <see cref="ArgumentException"/> with an actionable message (actual length, applicable maximum in mode units, remedy) when the content does not fit.
     /// </summary>
     public static RmQRVersion Select(EncodingMode mode, int dataLength, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
     {
-        // Deliberately keep the pre-ECI hot path separate. Forwarding this overload through the larger ECI selector measurably changes end-to-end JIT codegen.
+        // Kept apart from the ECI overload on purpose: forwarding through that larger selector changes the JIT's code for this hot path.
         if (!RmQRConstants.IsValidEccLevel(eccLevel))
             throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid rMQR ECC level: {eccLevel}");
         if (fitStrategy is < RmQRFitStrategy.MinimizeArea or > RmQRFitStrategy.MinimizeHeight)
@@ -230,7 +230,7 @@ internal static class RmQRVersionSelector
                 nameof(requestedVersion));
         }
 
-        // Most capacious candidate for the message; failure path only, so the success path never pays for this scan.
+        // Most capacious candidate for the message. Failure path only, so the success path never pays for this scan.
         var largest = (RmQRVersion)0;
         var largestMax = -1;
         for (var i = 1; i <= RmQRConstants.VersionCount; i++)

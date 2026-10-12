@@ -9,7 +9,7 @@ using BenchmarkDotNet.Configs;
 ///
 /// Comparability notes:
 ///
-///   FeatherQR places a quiet zone in the returned matrix; CodeGlyphX returns the
+///   FeatherQR places a quiet zone in the returned matrix, while CodeGlyphX returns the
 ///   bare symbol.
 ///   Both libraries pick one mode for the whole payload by default, so the rows do the
 ///   same work.

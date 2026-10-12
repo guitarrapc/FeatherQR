@@ -1,6 +1,6 @@
 /// <summary>
 /// One line of the corpus manifest (<c>manifest.tsv</c>): an operation on one case's input, which is what a CLI process measures.
-/// The collector writes it with the corpus; the BenchmarkDotNet reference project reads it to time the same entries.
+/// The collector writes it with the corpus, and the BenchmarkDotNet reference project reads it to time the same entries.
 /// </summary>
 /// <param name="Key">The operation and the case, such as <c>decode-image/qr-url</c>.</param>
 /// <param name="Input">The input file, relative to the corpus directory.</param>

@@ -11,7 +11,7 @@ namespace FeatherQR.Tests;
 /// <para>
 /// The status exists so a caller can route the symbols a CP932-capable reader could
 /// still read, and nothing else. That contract is only worth anything if the status
-/// survives the whole matrix path — Reed-Solomon, de-interleaving, the segment loop —
+/// survives the whole matrix path (Reed-Solomon, de-interleaving, the segment loop)
 /// and arrives in <see cref="QRCodeDecodeInfo.Status"/>. A status the caller cannot
 /// observe is the same as no status.
 /// </para>
@@ -104,7 +104,7 @@ public class KanjiUnmappedCharacterEndToEndTest
         await Assert.That(ok).IsFalse();
         await Assert.That(info.Status).IsEqualTo(DecodeStatus.UnmappedCharacter);
         await Assert.That(info.Status).IsNotEqualTo(DecodeStatus.UnsupportedContent);
-        // The symbol itself was read cleanly; only the character could not be mapped.
+        // The symbol itself was read cleanly. Only the character could not be mapped.
         await Assert.That(info.Version).IsEqualTo(Version);
         await Assert.That(info.EccLevel).IsEqualTo(QREccLevel.L);
         await Assert.That(info.ErrorsCorrected).IsEqualTo(0);

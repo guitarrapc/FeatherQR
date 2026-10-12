@@ -113,7 +113,7 @@ public class ModuleBoundaryReaderTest
         return FeatherQR.Internals.StandardQR.QRImageDecoder.TryReadModuleBoundaries(luminance, width, height, threshold, topLeft, topRight, bottomLeft, new int[178], new int[178], out _, out dimension);
     }
 
-    // '#' dark, '.' light; the line starts on the first '#'
+    // '#' dark, '.' light. The line starts on the first '#'.
     private static bool TryRead(string pixels, float moduleSize, bool endsOnFinder, bool allowTriples, out int[] boundaries, out int count)
     {
         var luminance = new byte[pixels.Length];
@@ -199,7 +199,7 @@ public class ModuleBoundaryReaderTest
     }
 
     /// <summary>
-    /// Three modules over four pixels: which of the three is two pixels wide shows only where a neighbouring line changes colour. With two edges seen the boundaries are those; with one the question stays open.
+    /// Three modules over four pixels: which of the three is two pixels wide shows only where a neighbouring line changes colour. With two edges seen the boundaries are those. With one the question stays open.
     /// </summary>
     [Test]
     [Arguments("#.##", 1, 2)]

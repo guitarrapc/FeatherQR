@@ -6,7 +6,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// <remarks>
 /// Each point gives two equations linear in the eight coefficients once the denominator is multiplied out, and the normal equations of all of them are sums of 23 moments of the points.
 /// The image side is moved and scaled to unit size first, about a point and a span the caller names: raw, the sums grow with the fourth power of the pixel coordinates, and a symbol 4,000 px from the origin already leaves them singular in double.
-/// Grid coordinates stay as they are; within a symbol they are small enough.
+/// Grid coordinates stay as they are, since within a symbol they are small enough.
 /// </remarks>
 internal struct ProjectiveFit
 {

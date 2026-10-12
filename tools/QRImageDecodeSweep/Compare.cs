@@ -5,7 +5,7 @@ namespace QRImageDecodeSweep;
 
 /// <summary>
 /// Two result files of the same sweep, image for image: what this library started reading, what it stopped reading, and every image it lost by name.
-/// The two files come from two trees (a worktree at the commit before, and the change). The keys are how each image was made, so they pair whatever the decoder does; the pixel digest then says whether the pair is one image.
+/// The two files come from two trees (a worktree at the commit before, and the change). The keys are how each image was made, so they pair whatever the decoder does. The pixel digest then says whether the pair is one image.
 /// A pair whose pixels differ (an encoder chose another mask, a renderer changed) is counted apart and kept out of gained and lost: a read that moved there says nothing about the decoder.
 /// </summary>
 internal static class Compare

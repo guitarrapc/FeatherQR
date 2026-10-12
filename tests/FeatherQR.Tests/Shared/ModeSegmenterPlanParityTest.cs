@@ -4,7 +4,7 @@ using FeatherQR.Internals;
 namespace FeatherQR.Tests;
 
 /// <summary>
-/// The register-held segmentation program against the all-states relaxation it replaced, on the
+/// The register-held segmentation program against an all-states relaxation, on the
 /// parts the cost alone does not pin: the predecessor chosen on a tie (which decides the plan the
 /// writer emits), the prefix walk's stopping point at every budget it can turn on, and the
 /// character class table behind every loop.
@@ -88,8 +88,7 @@ public class ModeSegmenterPlanParityTest
     }
 
     /// <summary>
-    /// The corpus without its long periodic row, which the prefix search prices at every budget a prefix turns on: a third of the test's time,
-    /// and of the budget and class faults planted by hand it caught none the shorter rows miss.
+    /// The corpus without its long periodic row, which the prefix search would price at every budget a prefix turns on.
     /// </summary>
     public static IEnumerable<(string Name, string Text)> PrefixCorpus() => Corpus().Where(static row => row.Name != "mixed-long");
 
@@ -113,7 +112,7 @@ public class ModeSegmenterPlanParityTest
                     await Assert.That(actual).IsEqualTo(expected).Because(because);
                     await Assert.That(actualState).IsEqualTo(expectedState).Because(because);
 
-                    // The cost-only loop is a different body; it must say the same thing.
+                    // The cost-only loop is a different body. It must say the same thing.
                     var costOnly = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, default, out var costOnlyState, allowAlnum, allowByte);
                     await Assert.That(costOnly).IsEqualTo(expected).Because(because);
                     await Assert.That(costOnlyState).IsEqualTo(expectedState).Because(because);

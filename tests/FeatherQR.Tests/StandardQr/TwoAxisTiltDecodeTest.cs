@@ -65,7 +65,7 @@ public class TwoAxisTiltDecodeTest
         await Assert.That(QRImageDecoder.TimingPatternsRead(luminance, width, height, threshold, grey, drawn[0], drawn[1], drawn[2])).IsTrue();
     }
 
-    /// <summary>The corner the timing patterns name, whichever order the triple comes in; a triple no corner's timing patterns read has none.</summary>
+    /// <summary>The corner the timing patterns name, whichever order the triple comes in. A triple no corner's timing patterns read has none.</summary>
     [Test]
     [Arguments(9, 4.81f, 310.1f, 0.499f, 214.4f)]
     [Arguments(30, 5.96f, 289.8f, 0.488f, 243.7f)]
@@ -146,7 +146,7 @@ public class TwoAxisTiltDecodeTest
 
     /// <summary>
     /// A finder stretched off its own axes by a tilt about both, its column past twice its row by whole pixels, at 3 and 3.8 px/module: a candidate, its column taken inside 2/7 to 7/2 of its row once its rising diagonal reads.
-    /// Twice the row is the stretch a 50 % keystone gives a finder along its own axes; off them the column goes past it, and with the window narrowed to 2 this finder is refused.
+    /// Twice the row is the stretch a 50 % keystone gives a finder along its own axes. Off them the column goes past it, and with the window narrowed to 2 this finder is refused.
     /// </summary>
     [Test]
     [Arguments(3f, 22f, 102f)]
@@ -208,7 +208,7 @@ public class TwoAxisTiltDecodeTest
         return (luminance, width, height, SupersampledGeometry.GridToPixel(size, size, pixelsPerModule, degrees, keystone, tiltDegrees), size);
     }
 
-    /// <summary>The full sweep's candidate nearest each drawn finder, top-left, top-right, bottom-left; each within 1.5 modules.</summary>
+    /// <summary>The full sweep's candidate nearest each drawn finder, top-left, top-right, bottom-left, each within 1.5 modules.</summary>
     private static async Task<FinderPattern[]> DrawnTriple(byte[] luminance, int width, int height, byte threshold, GreyLevels grey, PerspectiveTransform truth, int size)
     {
         var candidates = new FinderPattern[FinderPatternFinder.MaxFinderCandidates];

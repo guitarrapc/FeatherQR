@@ -14,7 +14,7 @@ public class SmallLatticeMeshDecodeTest
         => QRCodeGenerator.Create($"FQR LATTICE v{version} 0123456789", QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(version), QuietZoneSize = 0 });
 
     /// <summary>
-    /// One render a version; each fails on the commit before and reads under nudges of ±0.05 px/module, ±0.5° and ±0.05 module of bow.
+    /// One render a version, each bowed past what the four-point transform reads.
     /// </summary>
     [Test]
     [Arguments(7, 5.953f, 202.83f, 1.439f)]
@@ -48,11 +48,10 @@ public class SmallLatticeMeshDecodeTest
     }
 
     /// <summary>
-    /// Each node is searched close to where the frame puts it before further out: on this symbol of dots shifted off their module centres, the tight window finds all four nodes and the wider one alone finds none.
-    /// Reads under nudges of ±0.05 px/module, ±0.5° and ±0.02 module of shift; with the wider window alone it fails at 8 of those 9.
+    /// A version 7 symbol drawn as dots shifted off their module centres decodes.
     /// </summary>
     [Test]
-    public async Task DottedSymbol_ReadsWithTheTightWindowFirst()
+    public async Task DottedSymbol_ShiftedOffItsModuleCentres_Decodes()
     {
         const string Content = "FQR DOTS 00563";
         var qr = QRCodeGenerator.Create(Content, QREccLevel.M, new QRCodeGeneratorOptions { Version = QRVersionRange.Exactly(7) });

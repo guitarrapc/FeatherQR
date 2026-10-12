@@ -8,7 +8,7 @@ internal static partial class QRImageDecoder
     private const int VersionInformationFromDimension = 17 + 4 * 7;
 
     /// <summary>
-    /// The dimension the two copies of the version information name, each read through the frame of the finder it stands beside, the centre and the axes of that finder's inner outline; or 0 when neither finder's outline is measured or neither copy is within 3 bits of a codeword.
+    /// The dimension the two copies of the version information name, each read through the frame of the finder it stands beside, the centre and the axes of that finder's inner outline, or 0 when neither finder's outline is measured or neither copy is within 3 bits of a codeword.
     /// </summary>
     /// <remarks>
     /// A copy lies within seven modules of its finder's centre, where that finder's own frame holds whatever the symbol's dimension is.

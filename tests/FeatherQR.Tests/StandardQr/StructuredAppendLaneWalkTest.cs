@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The planner's walk at eight budgets at once against the scalar walk it stands in for: lane by
 /// lane the same chunk ends and the same count, from the start of the text and resumed after a
-/// shared chunk; and the plan as a whole, which has to be the same plan whether the lanes are used
+/// shared chunk, and the plan as a whole, which has to be the same plan whether the lanes are used
 /// or not. Content is long enough for the lanes to be taken, in every charset, with pairs and lone
 /// surrogates, and at budgets a few bits apart, which is where lanes close their chunks a character
 /// or two from each other.
@@ -30,7 +30,7 @@ public class StructuredAppendLaneWalkTest
         yield return ("bom-inside", Repeat("x" + (char)0xFEFF + "y 12345678 ", 4_000));
         // A mark a line, so that some cut of some walk lands just before one and is moved off it.
         yield return ("marks-after-line-feeds", Repeat("order 20260915 item 0000123456 qty 42" + (char)0x0A + (char)0xFEFF, 9_000));
-        // A mark where the unconstrained plan would open a Byte run, which no plan does; and one behind a pair, which a cut clears whole.
+        // A mark where the unconstrained plan would open a Byte run, which no plan does, and one behind a pair, which a cut clears whole.
         yield return ("marks-after-digits", Repeat("order 20260915 item 0000123456" + (char)0xFEFF + " qty 42 ", 9_000));
         yield return ("marks-after-pairs", Repeat("🎉" + (char)0xFEFF + "12345678 ", 5_000));
         // At the head of the text the mark is the first chunk's to open a run at, as it is a single symbol's.
@@ -83,7 +83,7 @@ public class StructuredAppendLaneWalkTest
         return Repeat("order 20260915 item 0000123456 qty 42" + character + new string((char)0xFEFF, marks), length);
     }
 
-    /// <summary>Runs of 200 marks after five kinds of character a cut kept off one leaves at the head of the next chunk. Every budget runs out deep inside a run, so every close resumes; <see cref="KeptOffCorpus"/> pins the price in the 32-bit lanes.</summary>
+    /// <summary>Runs of 200 marks after five kinds of character a cut kept off one leaves at the head of the next chunk. Every budget runs out deep inside a run, so every close resumes. <see cref="KeptOffCorpus"/> pins the price in the 32-bit lanes.</summary>
     public static IEnumerable<string> MarkRuns() => ["after-digits", "after-a-space", "after-a-letter", "after-a-three-byte-character", "after-a-pair"];
 
     internal static string MarkRun(string name)
@@ -137,8 +137,8 @@ public class StructuredAppendLaneWalkTest
         var laneEnds = new int[8 * StructuredAppendPlanner.MaxSymbols];
         var counts = new int[8];
         var worstApart = 0;
-        // The last version below the first count indicator edge, both sides of the second edge and the largest version; the full batch and the smallest.
-        // A mid-band version and a middle lane count caught no planted lane fault the others miss; the spacing of 4 did.
+        // The last version below the first count indicator edge, both sides of the second edge and the largest version. The full batch and the smallest.
+        // A mid-band version and a middle lane count caught no planted lane fault the others miss, but the spacing of 4 did.
         foreach (var version in new[] { 9, 26, 27, 40 })
         {
             var capacity = StructuredAppendPlanner.Capacity(version, QREccLevel.L);
@@ -150,7 +150,7 @@ public class StructuredAppendLaneWalkTest
                         budgets[lane] = capacity - spacing * (lanes - 1 - lane);
 
                     // From the start of the text, and resumed after the first chunk of the lowest budget,
-                    // which every lane shares only when it ends where theirs does; the walk is asked to
+                    // which every lane shares only when it ends where theirs does. The walk is asked to
                     // resume there regardless, as the planner does only when it is shared, so the scalar
                     // walk is resumed at the same place to compare like with like.
                     foreach (var resumed in new[] { false, true })
@@ -188,7 +188,7 @@ public class StructuredAppendLaneWalkTest
         }
 
         // The lanes ahead wait for the one behind, so they are apart for a few steps a close, and a lane closes a few times in a
-        // thousand characters (a failed lane keeps closing, unrecorded); left apart they would stay so for the rest of the text.
+        // thousand characters (a failed lane keeps closing, unrecorded). Left apart they would stay so for the rest of the text.
         await Assert.That(worstApart).IsGreaterThan(0).Because(name);
         await Assert.That(worstApart).IsLessThan(text.Length / 4).Because(name);
     }
@@ -362,7 +362,7 @@ public class StructuredAppendLaneWalkTest
 
     /// <summary>
     /// 2,000 marks are more than a version 9 symbol holds. A lane that still counts reports the text unplannable, as the
-    /// scalar walk does; one already past its limit reports nothing more and walks on, so the batch still answers.
+    /// scalar walk does. One already past its limit reports nothing more and walks on, so the batch still answers.
     /// </summary>
     internal static async Task AssertARunNoChunkHoldsStopsALiveLaneAndLetsAFailedOneThrough(LaneWalk walk)
     {
@@ -438,7 +438,7 @@ public class StructuredAppendLaneWalkTest
         await Assert.That(near.Settled).IsGreaterThanOrEqualTo(balanced).And.IsLessThan(balanced + 6);
         await Assert.That(near.Failed).IsLessThan(balanced).And.IsGreaterThanOrEqualTo(balanced - 6);
 
-        // Every budget of the first batch fails 200 bits below it; the second, from the highest that failed and spread
+        // Every budget of the first batch fails 200 bits below it. The second, from the highest that failed and spread
         // across the run, settles it within a step of its own.
         var far = Narrow(balanced - 200);
         await Assert.That(far.Settled).IsGreaterThanOrEqualTo(balanced).And.IsLessThan(balanced + 32);
@@ -471,7 +471,7 @@ public class StructuredAppendLaneWalkTest
     {
         // Which ceilings may take the second batch is invisible in the plan, so the walks are counted. In the first row the
         // count is asked below a capacity that does not hold it (the set needs one symbol more), and a second batch there
-        // would be walked and repeated by the walk at the capacity; in the second the bracket's ceiling holds the count and
+        // would be walked and repeated by the walk at the capacity. In the second the bracket's ceiling holds the count and
         // the batch saves scalar probes. A change of search that moves these must say why, with a measurement.
         if (!Vector256.IsHardwareAccelerated && !System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
             return;

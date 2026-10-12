@@ -66,7 +66,7 @@ public class MicroQRTimingLineTest
         => await Assert.That(Fit(TimingRow(15), out _, out _, out _, module: PixelsPerModule / 0.65f)).IsFalse();
 
     /// <summary>
-    /// The walk starts on the finder's dark edge row; a light start is not that row. One light
+    /// The walk starts on the finder's dark edge row, so a light start is not that row. One light
     /// pixel under the start and the finder dark around it, so every later check would pass.
     /// </summary>
     [Test]

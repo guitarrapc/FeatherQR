@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// The matrix span overloads report no characters written when they return <c>false</c>, as the image overloads do.
 /// Each symbol carries more than one segment, so a destination too short for the last one fails after the earlier
-/// segments were written; until 2.0.0 the overloads counted those.
+/// segments were written, and those are not counted.
 /// </summary>
 /// <remarks>
 /// A module matrix with a quiet zone is decoded from a copy of its core, one without it in place, and the
@@ -107,7 +107,7 @@ public class MatrixDecodeCharsWrittenTest
 
     /// <summary>
     /// Micro QR M4-L and rMQR R11x43-M, each holding the digits "12" and then one Kanji cell: with a cell CP932 adds to JIS X
-    /// 0208 the decode fails after the digits were written and writes no characters; with a mappable cell it reads, so the
+    /// 0208 the decode fails after the digits were written and writes no characters. With a mappable cell it reads, so the
     /// failure is the cell's.
     /// </summary>
     [Test]

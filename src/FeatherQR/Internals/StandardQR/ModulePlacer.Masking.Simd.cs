@@ -11,11 +11,8 @@ namespace FeatherQR.Internals.StandardQR;
 
 /// <summary>
 /// 128-bit mask pattern selection for the targets with neither the AVX2 nor the ARM64 tier: x64 without AVX2, and WebAssembly.
-/// Versions 1-11 run the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call; versions 12-40 the
-/// transposed scorer (ModulePlacer.Masking.Transposed.Vector128.cs), which took 0.39 to 0.59 of the scalar bit-packed paths' time at
-/// versions 12 to 27 and 0.56 to 0.71 at 28 to 40 on the JIT without AVX2, default NativeAOT, WebAssembly AOT and interpreted
-/// (2026-10-05), and 0.67 to 0.73 of the scalar path rewritten on 2026-10-07 at versions 12, 20, 27, 28 and 40 on the JIT with AVX off
-/// (2026-10-08).
+/// Versions 1-11 run the AVX2 tier's lane-per-pattern scorer with two candidates a vector, four groups a call, and versions 12-40 the
+/// transposed scorer (ModulePlacer.Masking.Transposed.Vector128.cs).
 /// </summary>
 /// <remarks>
 /// Popcounts accumulate in 16-bit lanes and reduce to totals only at the checkpoint and the end of a scoring call (a group of two
@@ -34,7 +31,7 @@ internal static partial class ModulePlacer
     /// <summary>Nibble table for the SSSE3 popcount.</summary>
     private static readonly Vector128<byte> PopLut128 = Vector128.Create((byte)0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
 
-    /// <summary>Adds the set bits of <paramref name="v"/> to <paramref name="acc"/>; each 64-bit lane's total is the sum of its four 16-bit lanes.</summary>
+    /// <summary>Adds the set bits of <paramref name="v"/> to <paramref name="acc"/>. Each 64-bit lane's total is the sum of its four 16-bit lanes.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Vector128<ushort> AddPopCount(Vector128<ushort> acc, Vector128<ulong> v)
     {
@@ -68,7 +65,7 @@ internal static partial class ModulePlacer
     /// <summary>Each 64-bit lane's total of an <see cref="AddPopCount"/> accumulator.</summary>
     /// <remarks>
     /// The high pair takes the low pair in and the shift brings the sum down, with no mask of the low pair: .NET 8's unoptimized ARM64 JIT
-    /// loads <c>Vector128.Create(0xFFFFFFFFul)</c> as all ones, which left the high pair in every total and aborted lanes at the checkpoint.
+    /// loads <c>Vector128.Create(0xFFFFFFFFul)</c> as all ones, which leaves the high pair in every total and aborts lanes at the checkpoint.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Vector128<ulong> LaneTotals(Vector128<ushort> acc)
@@ -134,11 +131,11 @@ internal static partial class ModulePlacer
 
     internal static int MaskCode64Vector128(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, QREccLevel eccLevel)
     {
-        // The per-version tables come from the version's canonical blocked mask, as in the AVX2 tier; every production caller passes that mask.
+        // The per-version tables come from the version's canonical blocked mask, as in the AVX2 tier. Every production caller passes that mask.
         var layout = GetMaskLayout64Vector128(version, size);
         System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCode64Vector128 requires the version's canonical blocked mask");
 
-        // Defense in depth for the unchecked wide loads / table indexing below; the production caller already guarantees both.
+        // Defense in depth for the unchecked wide loads / table indexing below. The production caller already guarantees both.
         if (buffer.Length < size * size)
             throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
         if ((uint)eccLevel > 3)
@@ -163,9 +160,8 @@ internal static partial class ModulePlacer
             }
         }
 
-        // rows2[y] = row y of the group's two candidates (masked, format bits in); scratch for the vertical-equality rows. The
-        // complements are computed where they are read: without a third buffer to zero, default NativeAOT and WebAssembly ran
-        // versions 1-10 faster by 2 to 6 %, and the JIT without AVX2 read level end to end.
+        // rows2[y] = row y of the group's two candidates (masked, format bits in). Scratch for the vertical-equality rows. The
+        // complements are computed where they are read, which saves a third buffer to zero on every call.
         Span<Vector128<ulong>> rows2 = stackalloc Vector128<ulong>[64];
         Span<Vector128<ulong>> eq2 = stackalloc Vector128<ulong>[64];
 
@@ -206,7 +202,7 @@ internal static partial class ModulePlacer
     }
 
     /// <summary>
-    /// Packs every row into bits, 16 modules a compare and movemask; rows 0..size-2 may read past their own end into the next row (masked
+    /// Packs every row into bits, 16 modules a compare and movemask. Rows 0..size-2 may read past their own end into the next row (masked
     /// off), the last row takes the exact-length packer so nothing is read past the buffer.
     /// </summary>
     private static void PackRows64Vector128(ReadOnlySpan<byte> buffer, int size, Span<ulong> packed)
@@ -241,7 +237,7 @@ internal static partial class ModulePlacer
         => PackedSimd.IsSupported ? PackedSimd.ShiftLeft(v, count) : Vector128.ShiftLeft(v, count);
 
     /// <summary>
-    /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of two candidates; returns their two ISO/IEC 18004 penalty scores.
+    /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of two candidates. Returns their two ISO/IEC 18004 penalty scores.
     /// The AVX2 tier's <see cref="ScoreLanes64"/> on half the lanes, down to the checkpoint that skips column rule 3 when both lanes already exceed <paramref name="abortAbove"/>.
     /// <paramref name="rows"/> is used as scratch for the column finder windows: the caller rebuilds it for each group.
     /// </summary>

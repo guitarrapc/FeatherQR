@@ -39,7 +39,7 @@ internal static class FormatInformationDecoder
     /// <returns>False when neither copy is within correction distance of a valid pattern.</returns>
     public static bool TryDecode(ushort rawCopy1, ushort rawCopy2, out QREccLevel eccLevel, out int maskPattern)
     {
-        // Prefer the copy with the smaller best-distance; each copy is an
+        // Prefer the copy with the smaller best-distance. Each copy is an
         // independent BCH codeword, so distances must not be mixed across copies.
         var best1 = FindBestCandidate(rawCopy1, out var distance1);
         var best2 = FindBestCandidate(rawCopy2, out var distance2);

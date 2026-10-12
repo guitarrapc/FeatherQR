@@ -4,7 +4,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The encoder's reverse table, checked against the decoder's forward table and against JIS X 0208 as published.
-/// The reverse table is generated separately, so a stale or hand-edited copy cannot agree with the forward table by construction; every test here would fail on it.
+/// The reverse table is generated separately, so a stale or hand-edited copy cannot agree with the forward table by construction. Every test here would fail on it.
 /// </summary>
 public class ShiftJisKanjiReverseTableUnitTest
 {
@@ -82,7 +82,7 @@ public class ShiftJisKanjiReverseTableUnitTest
     /// Writing either would make a symbol two readers decode differently.
     /// </summary>
     [Test]
-    [Arguments('\\')] // 0x815F, JIS X 0208; also ASCII, cheaper in Byte mode
+    [Arguments('\\')] // 0x815F, JIS X 0208. Also ASCII, cheaper in Byte mode.
     [Arguments('＼')] // 0x815F, CP932
     [Arguments('〜')] // 0x8160, JIS X 0208 wave dash
     [Arguments('～')] // 0x8160, CP932 fullwidth tilde
@@ -174,8 +174,8 @@ public class ShiftJisKanjiReverseTableUnitTest
     }
 
     /// <summary>
-    /// Pins every lookup at once, including the misses. The inverse test above already ties the table to the forward one; this digest makes a regeneration that changes it visible in review on its own.
-    /// Update it only together with a deliberate, reviewed regeneration; `generate-kanji-table` prints the new value.
+    /// Pins every lookup at once, including the misses. The inverse test above already ties the table to the forward one. This digest makes a regeneration that changes it visible in review on its own.
+    /// Update it only together with a deliberate, reviewed regeneration. `generate-kanji-table` prints the new value.
     /// </summary>
     [Test]
     public async Task Lookups_MatchTheirGoldenDigest()

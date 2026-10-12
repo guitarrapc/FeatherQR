@@ -2,17 +2,16 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// Input definition of one rMQR corpus case. Version (height × width) and ECC
-/// are pinned per case; the mode is forced on the generator so the corpus can
+/// are pinned per case. The mode is forced on the generator so the corpus can
 /// pin per-mode facts (count-indicator widths) from the bit stream, and it is
 /// recorded in the manifest.
 /// </summary>
 /// <param name="ErrorCorrectionLevel">"M" or "H", the RmQREccLevel name.</param>
 /// <param name="Height">Symbol height in modules (7, 9, 11, 13, 15, 17).</param>
 /// <param name="Width">Symbol width in modules (27, 43, 59, 77, 99, 139).</param>
-/// <param name="Mode">"Numeric", "Alphanumeric", "Byte" or "Kanji". Kanji is decode-only
-/// for this library, so those cases exist purely to exercise the decoder; only qrtool
-/// can produce them (libzint emits Byte mode with ECI 20 for the same input).</param>
-/// <param name="Utf8">Whether the payload needs a UTF-8-capable generator; libzint cases must leave this false.</param>
+/// <param name="Mode">"Numeric", "Alphanumeric", "Byte" or "Kanji". Only qrtool can produce
+/// the Kanji cases (libzint emits Byte mode with ECI 20 for the same input).</param>
+/// <param name="Utf8">Whether the payload needs a UTF-8-capable generator. Cases for libzint must leave this false.</param>
 /// <param name="ShiftJisHex">
 /// Kanji cases only: the exact Shift_JIS bytes to hand the generator, hex-encoded.
 /// Normally left null, and the bytes come from CP932-encoding <paramref name="PayloadText"/>.
@@ -42,7 +41,7 @@ public interface IRmQRFixtureGenerator
 /// <summary>
 /// The 32 rMQR versions in ISO/IEC 23941 index order (height-major), with the
 /// data capacities used to build capacity-boundary corpus payloads. Values are the
-/// oracle-verified tables recorded in .github/docs/specs/rmqr-encoder.md; the
+/// oracle-verified tables recorded in .github/docs/specs/rmqr-encoder.md. The
 /// tool keeps its own copy on purpose (it must not depend on the library it
 /// produces oracles for).
 /// </summary>

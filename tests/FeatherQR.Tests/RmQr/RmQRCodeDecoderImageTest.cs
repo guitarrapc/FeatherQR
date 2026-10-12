@@ -18,7 +18,7 @@ public class RmQRCodeDecoderImageTest
         foreach (var version in Enum.GetValues<RmQRVersion>())
         {
             // Short payloads fit every version at both levels ("R7x43-H" holds 3 alphanumerics
-            // per the capacity tables; a numeric string of 4 digits fits every version).
+            // per the capacity tables, and a numeric string of 4 digits fits every version).
             yield return (version, RmQREccLevel.M, "1234");
             yield return (version, RmQREccLevel.H, "1234");
         }
@@ -30,15 +30,15 @@ public class RmQRCodeDecoderImageTest
     internal static SKBitmap RenderBitmap(RmQRCodeData data, int modulePixelSize)
         => new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
 
-    /// <summary>R7x43-M holds 7 alphanumerics; every other version takes the longer payload.</summary>
+    /// <summary>R7x43-M holds 7 alphanumerics. Every other version takes the longer payload.</summary>
     internal static string ContentFor(RmQRVersion version)
         => version == RmQRVersion.R7x43 ? "RMQR 43" : "RMQR IMAGE 123";
 
     /// <summary>
     /// A symbol half a pixel off the pixel grid, edge pixels grey: 64 is below the threshold
-    /// (every dark run a pixel wider), 192 above it (a pixel narrower). The finder's module
-    /// size used to be measured across its two outer edges, which move apart under ink spread,
-    /// and at 3 px/module that failed every version (regression).
+    /// (every dark run a pixel wider), 192 above it (a pixel narrower). A module size measured
+    /// across the finder's two outer edges moves with the ink spread, and at 3 px/module every
+    /// version then fails.
     /// </summary>
     [Test]
     [Arguments(RmQRVersion.R7x43, 3, 64)]
@@ -64,11 +64,11 @@ public class RmQRCodeDecoderImageTest
     }
 
     /// <summary>
-    /// Anti-aliased renders at low density and small rotations: the axis recovery took the
-    /// direction of the shortest span through the finder, a flat minimum that pixel noise
-    /// moved several degrees, and scaled the grid from the measurement that won it.
-    /// R11x77 at 8 degrees failed; the broader candidate search read the rest either way, and
-    /// they stay to pin the envelope. The estimator itself is pinned in FinderAxisEstimatorTest.
+    /// Anti-aliased renders at low density and small rotations. The direction of the shortest
+    /// span through the finder is a flat minimum that pixel noise moves several degrees. An axis
+    /// taken from it alone, with the grid scaled from the measurement that won it, fails R11x77
+    /// at 8 degrees. The broader candidate search reads the rest either way, and they pin the
+    /// envelope. The estimator itself is pinned in FinderAxisEstimatorTest.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(SupersampledRotations))]
@@ -152,9 +152,8 @@ public class RmQRCodeDecoderImageTest
 
     /// <summary>
     /// A thermal printer, a laser marker or a camera at an angle hands the decoder modules that are
-    /// not square, so the two finder axes must keep independent module scales. Every right-angle
-    /// rotation decodes to 2.35:1 either way, where the finder cross-check's 12:5 window ends; this is
-    /// 1.25:1, 8 x 10 px.
+    /// not square, so the two finder axes must keep independent module scales. This is 1.25:1,
+    /// 8 x 10 px, at every right-angle rotation.
     /// </summary>
     [Test]
     [Arguments(0)]
@@ -217,7 +216,7 @@ public class RmQRCodeDecoderImageTest
 
     /// <summary>
     /// Modules wider than tall with rows under 2 px, drawn crisp: the grid turned onto the sub-finder turns a tenth to a fifth of a degree and misses the rows at the far end, and only the grid scaled per axis without a turn reads.
-    /// Outside the non-square envelope above; this input class is why that grid is kept.
+    /// Outside the non-square envelope above. This input class is why that grid is kept.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(CrispRowsUnderTwoPixels))]

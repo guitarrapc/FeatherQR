@@ -8,7 +8,7 @@ namespace FeatherQR.Internals.StandardQR;
 
 internal static partial class ModulePlacer
 {
-    /// <summary>ARM64 expansion using per-byte table selection and variable logical shifts; requires AdvSimd.Arm64.</summary>
+    /// <summary>ARM64 expansion using per-byte table selection and variable logical shifts. Requires AdvSimd.Arm64.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static unsafe void ExpandBitsAdvSimd(ReadOnlySpan<byte> message, int byteCount, Span<byte> bits)
     {
@@ -31,7 +31,7 @@ internal static partial class ModulePlacer
         }
         nint k = 0;
         // One scalar byte aligns the common 8-byte-offset destination for the bulk loop.
-        // Restrict this setup to long streams; short streams keep their original start.
+        // Restrict this setup to long streams. Short streams keep their original start.
         if (byteCount >= 256 && ((nuint)Unsafe.AsPointer(ref dst) & 15) == 8)
         {
             // Only inspect the address for an alignment hint. All accesses still use tracked refs and unaligned stores, so a GC move cannot affect correctness.

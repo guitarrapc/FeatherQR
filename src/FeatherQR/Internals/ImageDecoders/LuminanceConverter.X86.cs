@@ -14,13 +14,13 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// That is what makes this vector form exact rather than approximate.
 /// <para>
 /// <c>pmaddubsw</c> multiplies adjacent byte pairs into signed 16-bit lanes, so it saturates above a pair weight of 128. The weights sum to 256, so a split into two pairs of exactly 128 exists: cut green as 51 + 99 and shuffle each pixel into the byte quad <c>[R, G, G, B]</c> against weights <c>[77, 51, 99, 29]</c>.
-/// Each partial peaks at 255 · 128 = 32,640 and cannot saturate; <c>pmaddwd</c> with ones then adds the pair back to 77R + 150G + 29B exactly.
+/// Each partial peaks at 255 · 128 = 32,640 and cannot saturate. <c>pmaddwd</c> with ones then adds the pair back to 77R + 150G + 29B exactly.
 /// </para>
 /// <para>
 /// Alpha is handled without leaving the vector path in the two shapes that occur in practice.
-/// Straight alpha: fully transparent pixels composite to white, and white is exactly luminance 255, so the pixel is replaced by 0xFFFFFFFF before the shuffle; a partial alpha falls back to the scalar formula for the rest of the row.
-/// Premultiplied: the composite adds 255 − a to every channel, which (because the weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to adding 255 − a to the luminance — exact for every alpha, so that path never falls back.
-/// Measured 14-30x over the per-pixel loop; see LuminanceConverterParityTest for the equivalence proof by test.
+/// Straight alpha: fully transparent pixels composite to white, and white is exactly luminance 255, so the pixel is replaced by 0xFFFFFFFF before the shuffle. A partial alpha falls back to the scalar formula for the rest of the row.
+/// Premultiplied: the composite adds 255 − a to every channel, which (because the weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to adding 255 − a to the luminance. That is exact for every alpha, so that path never falls back.
+/// See LuminanceConverterParityTest for the equivalence proof by test.
 /// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
@@ -55,8 +55,8 @@ internal static partial class LuminanceConverter
     /// </summary>
     internal static void ConvertRgbaAvx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha, bool premultiplied)
     {
-        // Two loops rather than one with a mode flag: a single fused method measured
-        // 2-3x slower than either, on code size alone (5.7 KB vs 1.4 KB).
+        // Two loops rather than one with a mode flag: a single fused method is
+        // slower than either, on code size alone.
         if (hasAlpha && premultiplied)
             ConvertPremultipliedAvx2(pixels, luminance, width, height, rowBytes, bgra);
         else
@@ -65,7 +65,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// No alpha, or straight (non-premultiplied) alpha.
-    /// Opaque and fully transparent pixels stay on the vector path; a partial alpha finishes the row scalar.
+    /// Opaque and fully transparent pixels stay on the vector path. A partial alpha finishes the row scalar.
     /// </summary>
     private static void ConvertStraightAvx2(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, bool bgra, bool hasAlpha)
     {
@@ -209,7 +209,7 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Replaces every fully transparent pixel with white; false when some alpha is partial.
+    /// Replaces every fully transparent pixel with white. False when some alpha is partial.
     /// Straight alpha only: there a = 0 gives (c·0 + 255·255)/255 = 255 whatever c was, while a premultiplied buffer that violates c ≤ a would not.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -240,7 +240,7 @@ internal static partial class LuminanceConverter
         StoreOctet(ref dest, x, PremultipliedLuma(v, shuffle, weights, ones), shift: false);
     }
 
-    /// <summary>Packs 8 dword sums into 8 bytes and stores them; the two 128-bit lanes hold pixels 0-3 and 4-7.</summary>
+    /// <summary>Packs 8 dword sums into 8 bytes and stores them. The two 128-bit lanes hold pixels 0-3 and 4-7.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void StoreOctet(ref byte dest, nint x, Vector256<int> sums, bool shift)
     {
@@ -255,7 +255,7 @@ internal static partial class LuminanceConverter
 
     /// <summary>
     /// Finishes a row from <paramref name="x"/> with the exact per-pixel formula.
-    /// The shifts locate red and blue inside the little-endian pixel word; green is always at bit 8 and alpha at bit 24.
+    /// The shifts locate red and blue inside the little-endian pixel word. Green is always at bit 8 and alpha at bit 24.
     /// </summary>
     private static void ConvertScalarRange(ref byte row, ref byte dest, nint x, int width, int redShift, int blueShift, bool hasAlpha, bool premultiplied)
     {

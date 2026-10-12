@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 public class FinderDiagonalCentreTest
 {
     /// <summary>
-    /// A cross whose row and column carry the finder's runs and whose falling diagonal is 1:1:1:1:1. Its 45° walk takes the corner pixels beside the one-module centre into that run and passes the ratio, with or without the grey levels, at these scales and offsets; the rising diagonal crosses no ring.
+    /// A cross whose row and column carry the finder's runs and whose falling diagonal is 1:1:1:1:1. Its 45° walk takes the corner pixels beside the one-module centre into that run and passes the ratio, with or without the grey levels, at these scales and offsets. The rising diagonal crosses no ring.
     /// </summary>
     [Test]
     [Arguments(2.00f, 0.25f, 0.125f)]
@@ -67,7 +67,7 @@ public class FinderDiagonalCentreTest
         await Assert.That(FinderPatternFinder.IsDiagonalCentreShort(diagonalCentre, diagonalTotal, rowCentre, rowTotal, columnCentre, columnTotal)).IsEqualTo(expected);
     }
 
-    /// <summary>The falling diagonal's ring cells (1, 1) and (5, 5) dark and its centre's neighbours light; the rising diagonal holds only the centre.</summary>
+    /// <summary>The falling diagonal's ring cells (1, 1) and (5, 5) dark and its centre's neighbours light. The rising diagonal holds only the centre.</summary>
     private static bool DiagonalDecoyPattern(int row, int column)
     {
         var r = row - 4;

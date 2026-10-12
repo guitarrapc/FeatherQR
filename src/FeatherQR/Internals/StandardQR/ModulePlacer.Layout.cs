@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.StandardQR;
 /// Table-driven placement for Standard QR: everything the placer derives from the version alone is built once per version by the reference painters and cached (<see cref="PlacementLayout"/>): the painted function-module template, the blocked-module bitmask, the zigzag walk over free modules as core indices, and the walk segmented into runs of rows where both strip columns are free.
 /// </summary>
 /// <remarks>
-/// Benchmark-driven (kernel 4.5-9x over the per-call painters + acc64 walk at v40..v1, see the Performance section of specs/standardqr-encoder.md); the reference implementations (<see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>, <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>) remain the source of truth: they build the tables and the parity tests hold the fast paths to them byte for byte.
+/// The reference implementations (<see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>, <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>) remain the source of truth: they build the tables and the parity tests hold the fast paths to them byte for byte.
 /// Memory per version used: size² template + size²/8 mask + 2 B per free module + a few hundred ops (≤ 95 KB at v40, ~1.3 MB if all 40 versions were ever used).
 /// </remarks>
 internal static partial class ModulePlacer
@@ -18,7 +18,7 @@ internal static partial class ModulePlacer
     internal readonly struct PlacementOp
     {
         public readonly int Start;   // first stream bit of the segment
-        public readonly int Count;   // run: rows; scatter: modules
+        public readonly int Count;   // run: rows, scatter: modules
         public readonly int Core;    // run: core index of the LEFT module (x-1) on the first row
         public readonly int RowStep; // run: +size (downward) / -size (upward)
         public readonly bool IsRun;
@@ -138,7 +138,7 @@ internal static partial class ModulePlacer
     /// </summary>
     /// <param name="buffer">Core matrix (size × size bytes) with the function template in place.</param>
     /// <param name="layout">The version's placement tables.</param>
-    /// <param name="interleavedData">Interleaved data + ECC codewords (+ remainder byte); bits beyond the free modules are ignored.</param>
+    /// <param name="interleavedData">Interleaved data + ECC codewords (+ remainder byte). Bits beyond the free modules are ignored.</param>
     public static void PlaceDataWords(Span<byte> buffer, PlacementLayout layout, ReadOnlySpan<byte> interleavedData)
     {
         var size = layout.Size;
@@ -175,7 +175,7 @@ internal static partial class ModulePlacer
     private const int StackBitBudget = 512;
     private const int VectorSlack = 32; // the AVX2 expand step stores 32 bytes per 4 stream bytes
 
-    /// <summary>Store pass over the walk segments; stops at the stream end (segments are in stream order).</summary>
+    /// <summary>Store pass over the walk segments. Stops at the stream end (segments are in stream order).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void PlaceExpanded(ref byte dest, ref byte src, PlacementLayout layout, int streamBits)
     {
@@ -194,7 +194,7 @@ internal static partial class ModulePlacer
                 var stride = op.RowStep;
                 for (var r = 0; r < rows; r++)
                 {
-                    // walk order: right module (bit k) then left (bit k + 1); memory order is left, right
+                    // walk order: right module (bit k) then left (bit k + 1), but memory order is left, right
                     Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                     k += 2;
                     d = ref Unsafe.Add(ref d, stride);
@@ -213,10 +213,10 @@ internal static partial class ModulePlacer
         }
     }
 
-    // The bit array holds (right module, left module) in walk order; memory wants the
+    // The bit array holds (right module, left module) in walk order, but memory wants the
     // left module first. Read and write go through the same host endianness, so a
     // ReverseEndianness in between always swaps the two BYTES in memory order,
-    // whatever the host is — the swap is unconditional by design.
+    // whatever the host is. The swap is unconditional by design.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ushort SwapPair(ushort v) => BinaryPrimitives.ReverseEndianness(v);
 }

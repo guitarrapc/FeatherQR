@@ -7,7 +7,7 @@ namespace QRInteropFixtures;
 /// <param name="Id">Case name, and the file stem of the three fixture files.</param>
 /// <param name="PayloadText">Expected decode result.</param>
 /// <param name="ErrorCorrectionLevel">"L", "M", "Q" or "H", requested and honored by the generator.</param>
-/// <param name="Utf8">Requests a UTF-8 ECI segment; recorded as <c>eciCharset</c> in the manifest.</param>
+/// <param name="Utf8">Requests a UTF-8 ECI segment, recorded as <c>eciCharset</c> in the manifest.</param>
 /// <param name="Mode">
 /// Normally null: the generator picks the mode and reports what it chose. Set to "Kanji"
 /// to force ISO/IEC 18004 Kanji mode, which ZXing.Net selects only when the requested
@@ -28,7 +28,7 @@ public sealed record FixtureManifest
     public required string GeneratorVersion { get; init; }
     public required string SymbolType { get; init; }
     public required int Version { get; init; }
-    /// <summary>Human-readable version name where the version is not a plain integer (rMQR: "R7x43"); omitted otherwise.</summary>
+    /// <summary>Human-readable version name where the version is not a plain integer (rMQR: "R7x43"), omitted otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? VersionName { get; init; }
     public required int Width { get; init; }
@@ -41,18 +41,18 @@ public sealed record FixtureManifest
     public string? EciCharset { get; init; }
     public int QuietZoneModules { get; init; }
     public int PixelsPerModule { get; init; }
-    /// <summary>Structured Append header of this symbol; omitted when the symbol carries none.</summary>
+    /// <summary>Structured Append header of this symbol, omitted when the symbol carries none.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public StructuredAppendManifest? StructuredAppend { get; init; }
 
-    /// <summary>FNC1 mode of this symbol (position, application indicator, the reader's symbology identifier); omitted when the symbol carries none.</summary>
+    /// <summary>FNC1 mode of this symbol (position, application indicator, the reader's symbology identifier), omitted when the symbol carries none.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public Fnc1Manifest? Fnc1 { get; init; }
 }
 
 /// <summary>
 /// The Structured Append header as it is on the wire: 0-based position, total symbols
-/// (1..16) and the parity byte. <c>SetId</c> groups the symbols of one set; the case
+/// (1..16) and the parity byte. <c>SetId</c> groups the symbols of one set, and the case
 /// id is <c>{setId}-{index}of{count}</c>.
 /// </summary>
 public sealed record StructuredAppendManifest

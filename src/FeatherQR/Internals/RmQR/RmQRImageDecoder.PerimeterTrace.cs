@@ -9,11 +9,11 @@ internal static partial class RmQRImageDecoder
 
     /// <summary>
     /// The symbol's grid from its edges: the top row traced from the finder rightward, the left column downward and the bottom row rightward, module by module, and one homography fitted to every edge met.
-    /// The trace starts from the finder centre (<paramref name="centerX"/>, <paramref name="centerY"/>), grid (3.5, 3.5), and one module toward increasing column (<paramref name="uX"/>, <paramref name="uY"/>) and row (<paramref name="vX"/>, <paramref name="vY"/>) there; pixels at or above <paramref name="level"/> are light.
+    /// The trace starts from the finder centre (<paramref name="centerX"/>, <paramref name="centerY"/>), grid (3.5, 3.5), and one module toward increasing column (<paramref name="uX"/>, <paramref name="uY"/>) and row (<paramref name="vX"/>, <paramref name="vY"/>) there. Pixels at or above <paramref name="level"/> are light.
     /// </summary>
     /// <remarks>
     /// Every edge of an rMQR symbol is a timing pattern, so each dark run along it has two ends at known columns and faces the quiet zone.
-    /// A trace predicts the next run from the step the last ones measured, so it follows perspective however strong: over a wide symbol the step changes by a quarter from one end to the other and the columns lean up to 40° either way, which no frame measured at the finder extrapolates.
+    /// A trace predicts the next run from the step the last ones measured, so it follows perspective however strong: over a wide symbol the step changes from one end to the other and the columns lean, which no frame measured at the finder extrapolates.
     /// The runs expected are the ones the encoder paints (<see cref="RmQRModulePlacer.GetFunctionTemplate"/>).
     /// False when a line misses more than <see cref="MaxMissedRuns"/> runs in a row or reads none, or the points do not determine a plane.
     /// </remarks>
@@ -33,12 +33,12 @@ internal static partial class RmQRImageDecoder
             centerY + (halfWidth - FinderCenter) * uY + (halfHeight - FinderCenter) * vY,
             moduleLength * halfWidth);
 
-        // Top row, from the first column past the separator; the quiet zone is up
+        // Top row, from the first column past the separator, with the quiet zone up
         var top = EdgeWalk.At(centerX, centerY, uX, uY, vX, vY, 8f, 0.5f, 8f, uX, uY, -vX, -vY);
         if (!TryTraceEdge(luminance, width, height, level, template, symbolWidth, alongRow: true, line: 0, outward: -1, first: 8, last: symbolWidth - 1, ref top, ref fit))
             return false;
 
-        // The bottom row starts under the finder on a height-7 symbol, whose finder spans it; otherwise at the corner the left column leads down to
+        // The bottom row starts under the finder on a height-7 symbol, whose finder spans it, and otherwise at the corner the left column leads down to
         EdgeWalk bottom;
         int bottomFirst;
         if (symbolHeight > 7)
@@ -96,7 +96,7 @@ internal static partial class RmQRImageDecoder
 
     /// <summary>
     /// Traces the dark runs of row or column <paramref name="line"/> from module <paramref name="first"/> to <paramref name="last"/>: each run's two ends, found near where the step puts them, and the symbol's outer edge beside it, found from the quiet zone inward.
-    /// Both ends of every run go into <paramref name="fit"/>, and a row's outer edges too, since the corners are read off that boundary; the step is measured again from each run, and the line's centre put back half a module inside the outer edge.
+    /// Both ends of every run go into <paramref name="fit"/>, and a row's outer edges too, since the corners are read off that boundary. The step is measured again from each run, and the line's centre put back half a module inside the outer edge.
     /// </summary>
     private static bool TryTraceEdge(ReadOnlySpan<byte> luminance, int width, int height, float level, ReadOnlySpan<byte> template, int symbolWidth, bool alongRow, int line, int outward, int first, int last, ref EdgeWalk walk, ref ProjectiveFit fit)
     {
@@ -184,7 +184,7 @@ internal static partial class RmQRImageDecoder
         => (alongRow ? template[line * symbolWidth + k] : template[k * symbolWidth + line]) != 0;
 
     /// <summary>
-    /// The crossing of <paramref name="level"/> nearest (<paramref name="x"/>, <paramref name="y"/>) between it ∓ <paramref name="half"/> of (<paramref name="dx"/>, <paramref name="dy"/>), light to dark or dark to light in that direction; interpolated between the samples either side.
+    /// The crossing of <paramref name="level"/> nearest (<paramref name="x"/>, <paramref name="y"/>) between it ∓ <paramref name="half"/> of (<paramref name="dx"/>, <paramref name="dy"/>), light to dark or dark to light in that direction, interpolated between the samples either side.
     /// Of two crossings as near, the one toward −(<paramref name="dx"/>, <paramref name="dy"/>).
     /// </summary>
     /// <remarks>
@@ -210,7 +210,7 @@ internal static partial class RmQRImageDecoder
             return false;
         }
 
-        // Samples lo..hi are taken; pair i is samples i − 1 and i, its crossing at i − 1 plus a fraction
+        // Samples lo..hi are taken, and pair i is samples i − 1 and i, its crossing at i − 1 plus a fraction
         var middle = steps * 0.5f;
         var lo = steps / 2;
         var hi = lo;

@@ -168,7 +168,7 @@ public class SearchResultTest
     }
 
     /// <summary>
-    /// Of every pair of statuses, in either order, the one that got further is reported, the first on a tie; main or not makes no difference.
+    /// Of every pair of statuses, in either order, the one that got further is reported, the first on a tie. Main or not makes no difference.
     /// Not detected gets nowhere, so a pair of them reports the initial diagnostics.
     /// </summary>
     [Test]

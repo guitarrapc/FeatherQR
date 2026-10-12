@@ -14,7 +14,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// 3. Codeword extraction: inverse two-column zigzag, unmasking on the fly
 ///    (single Reed-Solomon block, so there is no deinterleaving stage)
 /// 4. Reed-Solomon error correction, capped at the ISO Table 9 capacity t
-///    (the ECC codewords include misdecode-protection codewords p; M1 is
+///    (the ECC codewords include misdecode-protection codewords p, and M1 is
 ///    error detection only, t = 0) and, on a grid sampled from an image, at
 ///    what its structure earns (MicroQRGridEvidence)
 /// 5. Bitstream decoding (mode segments → text), bounded by the bit capacity
@@ -33,7 +33,7 @@ internal static class MicroQRMatrixDecoder
     /// <param name="modules">Core module matrix, one byte per module (0 = light, non-zero = dark), row-major, no quiet zone.</param>
     /// <param name="size">Matrix size in modules per side (11/13/15/17).</param>
     /// <param name="destination">Destination buffer for decoded characters.</param>
-    /// <param name="charsWritten">Number of characters written; 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
+    /// <param name="charsWritten">Number of characters written. It is 0 unless the decode succeeds, whatever the segments before a failure wrote.</param>
     /// <param name="info">Diagnostic information (version, ECC level, mask, corrected errors).</param>
     public static DecodeStatus DecodeMatrix(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
     {
@@ -71,7 +71,6 @@ internal static class MicroQRMatrixDecoder
     {
         charsWritten = 0;
 
-        // 1. Version from size
         var version = MicroQRConstants.VersionFromSize(size);
         if (version == 0)
         {
@@ -79,7 +78,6 @@ internal static class MicroQRMatrixDecoder
             return DecodeStatus.InvalidMatrix;
         }
 
-        // 2. Format information (symbol number → version/ECC, mask pattern)
         var rawFormat = ReadFormatBits(pixels, modules);
         if (!MicroQRFormatInformationDecoder.TryDecode(rawFormat, out var formatVersion, out var eccLevel, out var maskPattern, out var formatDistance)
             || formatVersion != version)
@@ -94,16 +92,15 @@ internal static class MicroQRMatrixDecoder
         var dataCodewords = MicroQRConstants.GetDataCodewordCount(version, eccLevel);
         var eccCodewords = MicroQRConstants.GetEccCodewordCount(version, eccLevel);
 
-        // Single block [data | ecc]; the M1/M3 half codeword occupies a full byte
+        // Single block [data | ecc]. The M1/M3 half codeword occupies a full byte
         // with a zero low nibble (the same byte value Reed-Solomon was computed over).
         Span<byte> block = stackalloc byte[MaxTotalCodewords].Slice(0, dataCodewords + eccCodewords);
         block.Clear();
 
-        // 3. Extract codewords (inverse zigzag + unmask)
         ExtractCodewords(pixels, modules, size, maskPattern, dataBitCount, dataCodewords, block);
 
-        // 4. Reed-Solomon correction, capped at the ISO Table 9 capacity and, on a sampled grid, at what its
-        //    structure earns: counted only for a read, which texture rarely reaches, the quiet zone last
+        // The correction is capped at the ISO Table 9 capacity and, on a sampled grid, at what its structure earns.
+        // The structure is counted only for a read, which texture rarely reaches, the quiet zone last.
         if (!EccBinaryDecoder.TryCorrect(block, eccCodewords, out var errorsCorrected)
             || errorsCorrected > MicroQRConstants.GetErrorCorrectionCapacity(version, eccLevel)
             || (sampled && !MicroQRGridEvidence.SuspendedOnThisThread && !Earns(pixels, modules, size, version, eccLevel, formatDistance, errorsCorrected, luminance, width, height, threshold, quietZone)))
@@ -112,7 +109,6 @@ internal static class MicroQRMatrixDecoder
             return DecodeStatus.DataUncorrectable;
         }
 
-        // 5. Bitstream → text
         var status = MicroQRBinaryDecoder.DecodeBitStream(block.Slice(0, dataCodewords), dataBitCount, version, destination, out charsWritten);
         if (status != DecodeStatus.Success)
             charsWritten = 0; // only a read counts its characters, not the segments written before a failure
@@ -124,7 +120,7 @@ internal static class MicroQRMatrixDecoder
     /// Upper bound of decoded characters for a version, across all ECC levels and modes.
     /// </summary>
     /// <remarks>
-    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters; 3× codewords is a safe bound.
+    /// Numeric mode is the densest: 10 bits → 3 characters, so one data codeword (8 bits) yields at most 2.4 characters, and 3× codewords is a safe bound.
     /// The L (or detection-only) level has the most data codewords per version.
     /// </remarks>
     public static int GetMaxCharCount(MicroQRVersion version)
@@ -143,7 +139,7 @@ internal static class MicroQRMatrixDecoder
             || errorsCorrected <= MicroQRGridEvidence.MaxCorrections(version, eccLevel, formatDistance, timingMismatches, quietZone.CountDark(luminance, width, height, threshold, size));
     }
 
-    /// <summary>Timing modules (row 0 and column 0 from index 8, dark on even indices) that read the other way; the same count for a grid and its transpose.</summary>
+    /// <summary>Timing modules (row 0 and column 0 from index 8, dark on even indices) that read the other way. The count is the same for a grid and its transpose.</summary>
     private static int CountTimingMismatches<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size)
         where TModules : struct, IMicroQRModules
     {
@@ -191,7 +187,7 @@ internal static class MicroQRMatrixDecoder
 
     /// <summary>
     /// Reads data/ECC codeword bits from the matrix in placement order (inverse of <see cref="MicroQRModulePlacer.PlaceDataCodewords"/>), unmasking each module on the fly.
-    /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>); ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
+    /// Data bits fill <paramref name="block"/> from byte 0 (the M1/M3 half codeword ends as a high nibble because the stream stops at <paramref name="dataBitCount"/>). ECC bits fill full bytes from <paramref name="dataCodewords"/> on.
     /// </summary>
     internal static void ExtractCodewords<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, int size, int maskPattern, int dataBitCount, int dataCodewords, Span<byte> block)
         where TModules : struct, IMicroQRModules
@@ -211,8 +207,7 @@ internal static class MicroQRMatrixDecoder
     /// <remarks>
     /// The bits gather in a register with no branch on a module's value. A branch per module mispredicts about half the time on a symbol
     /// the predictor has not seen, and setting one bit of a stored byte at a time makes every module wait on the store before it.
-    /// On an Apple M2 that made M4's 192 modules about four times slower on symbols that change from call to call, under the JIT and NativeAOT alike.
-    /// A benchmark that decodes one symbol over and over hides most of it, because the predictor learns that symbol's pattern.
+    /// A benchmark that decodes one symbol over and over hides most of that cost, because the predictor learns that symbol's pattern.
     /// </remarks>
     private static void ReadRun<TModules>(ReadOnlySpan<byte> pixels, in TModules modules, PlacedModule[] placement, int maskPattern, int start, int end, Span<byte> destination)
         where TModules : struct, IMicroQRModules
@@ -245,7 +240,7 @@ internal static class MicroQRMatrixDecoder
     {
         var placement = new List<PlacedModule>(size * size);
         var upward = true;
-        // Column pairs (size-1, size-2) … (2, 1); column 0 is all function modules.
+        // Column pairs (size-1, size-2) … (2, 1). Column 0 is all function modules.
         for (var right = size - 1; right >= 2; right -= 2)
         {
             for (var step = 0; step < size; step++)

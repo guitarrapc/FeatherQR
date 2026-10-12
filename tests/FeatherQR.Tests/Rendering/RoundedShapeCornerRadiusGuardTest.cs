@@ -62,7 +62,7 @@ public class RoundedShapeCornerRadiusGuardTest
 
     /// <summary>
     /// The premise the guard rests on: a rounded module is visibly not a square one, so the
-    /// rectangle a non-finite radius used to produce was a silent downgrade rather than a no-op.
+    /// rectangle Skia draws for a non-finite radius is a silent downgrade rather than a no-op.
     /// </summary>
     [Test]
     public async Task ARealRadius_DrawsSomethingOtherThanASquare()

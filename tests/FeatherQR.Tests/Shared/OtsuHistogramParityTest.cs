@@ -7,7 +7,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// Every tier of <see cref="Binarizer.FillHistogram"/> against a per-pixel count written here, bin for bin.
-/// The threshold and the grey levels are functions of the histogram alone, so the 256 bins are the whole contract; <c>OtsuThresholdParityTest</c> compares thresholds, which a wrong count in a bin the search never weighs can leave unchanged.
+/// The threshold and the grey levels are functions of the histogram alone, so the 256 bins are the whole contract. <c>OtsuThresholdParityTest</c> compares thresholds, which a wrong count in a bin the search never weighs can leave unchanged.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,7 +15,7 @@ namespace FeatherQR.Tests;
 /// So the inputs are chosen by what a block holds, not by what the image shows: pure blocks, blocks with a few intruders, blocks on both sides of the dense cut-over, blocks of neither value, and module boundaries at every phase of a 32- and 8-pixel block.
 /// </para>
 /// <para>
-/// The ARM64 tier does the same with 128-bit vectors, counts the zeros in byte counters it drains every so many blocks, and counts the dense blocks into four sub-histograms it rents and merges; so the inputs also run long enough to drain many times, and one test hands it lanes left dirty by a previous call.
+/// The ARM64 tier does the same with 128-bit vectors, counts the zeros in byte counters it drains every so many blocks, and counts the dense blocks into four sub-histograms it rents and merges. So the inputs also run long enough to drain many times, and one test hands it lanes left dirty by a previous call.
 /// </para>
 /// <para>
 /// Each tier is entered directly. The dispatcher reaches one tier per machine, so a test through it alone would never run the scalar tier on a machine with vectors.
@@ -58,7 +58,7 @@ public class OtsuHistogramParityTest
     }
 
     /// <summary>
-    /// The sub-histograms are rented, and a rental can come back holding the counts of the call before; a constant image after a noise image is where a lane left uncleared shows up in every bin.
+    /// The sub-histograms are rented, and a rental can come back holding the counts of the call before. A constant image after a noise image is where a lane left uncleared shows up in every bin.
     /// </summary>
     [Test]
     public async Task AdvSimdTier_AfterAnotherImage_CountsOnlyThisOne()

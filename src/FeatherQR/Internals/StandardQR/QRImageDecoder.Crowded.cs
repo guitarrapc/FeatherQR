@@ -43,7 +43,7 @@ internal static partial class QRImageDecoder
     /// </summary>
     /// <remarks>
     /// Where symbols of one size stand side by side, the three finders meeting at a corner of three symbols form a right isosceles triangle as well shaped as a symbol's own, as confirmed, and smaller: no shape or count tells them apart, and the selection and the alternatives, ordered by shape and confirmation, pick such triples among hundreds.
-    /// What a symbol's own triple has is the two timing patterns between its finders, so the well-shaped triples are walked most compact first and each is asked whether its timing patterns read, the gate an alternative already passes before it costs a decode; the first two that do are decoded.
+    /// What a symbol's own triple has is the two timing patterns between its finders, so the well-shaped triples are walked most compact first and each is asked whether its timing patterns read, the gate an alternative already passes before it costs a decode. The first two that do are decoded.
     /// Most compact first because the gate is paid per triple and a symbol's own triple is among the smallest of the well shaped: the crossroads triples that are smaller still fail the gate at once.
     /// </remarks>
     private static DecodeStatus DecodeCrowded<TAttempt>(ref TAttempt attempt, in ImageView image, ReadOnlySpan<FinderPattern> candidates, ReadOnlySpan<FinderPattern> selected, ref ModuleWorkspace modules, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)

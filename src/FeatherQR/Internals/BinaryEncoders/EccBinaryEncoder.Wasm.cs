@@ -11,11 +11,11 @@ namespace FeatherQR.Internals.BinaryEncoders;
 /// </summary>
 /// <remarks>
 /// WebAssembly has no byte shift across a vector, so the register's shift is a swizzle by constant indices, whose indices past
-/// 15 bring in the zero lanes; across the two halves of a 32-byte register it is two swizzles and an OR.
+/// 15 bring in the zero lanes. Across the two halves of a 32-byte register it is two swizzles and an OR.
 /// </remarks>
 internal static partial class EccBinaryEncoder
 {
-    // Data bytes times ECC codewords below which the interpreter's setup costs more than the scalar division; one flag gates both
+    // Data bytes times ECC codewords below which the interpreter's setup costs more than the scalar division. One flag gates both
     // WebAssembly builds. Checked here rather than in the dispatch, where reading the span's length changed the JIT's code for x64.
     private const int MinPackedSimdBlockWork = 90;
 

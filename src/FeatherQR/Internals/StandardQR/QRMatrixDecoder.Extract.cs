@@ -11,7 +11,7 @@ internal static partial class QRMatrixDecoder
     /// Same result as <see cref="ExtractCodewordsReference"/> over a cleared output, without a per-module test: four rows of a run are one output byte, and the mask under that byte comes from <see cref="RunMask"/>.
     /// </summary>
     /// <remarks>
-    /// Writes every byte of <paramref name="output"/> the free modules reach, so a full-length output needs no clear; an output shorter than the stream is its prefix, and a longer one receives the remainder bits and keeps its tail.
+    /// Writes every byte of <paramref name="output"/> the free modules reach, so a full-length output needs no clear. An output shorter than the stream is its prefix, and a longer one receives the remainder bits and keeps its tail.
     /// Reads no per-version table beyond the ones <see cref="ModulePlacer.GetLayout"/> already holds for the encoder.
     /// </remarks>
     /// <param name="modules">Core module matrix, one byte per module (0 = light, non-zero = dark), row-major, no quiet zone.</param>
@@ -22,7 +22,7 @@ internal static partial class QRMatrixDecoder
     /// <exception cref="ArgumentException">Thrown when <paramref name="modules"/> is smaller than the layout's matrix.</exception>
     internal static void ExtractCodewords(ReadOnlySpan<byte> modules, ModulePlacer.PlacementLayout layout, int maskPattern, Span<byte> output)
     {
-        // The walk below indexes both without bounds checks; these two are what make that safe.
+        // The walk below indexes both without bounds checks. These two are what make that safe.
         if ((uint)maskPattern >= RunMask.Patterns)
             throw new ArgumentOutOfRangeException(nameof(maskPattern), $"Mask pattern must be 0-7, got {maskPattern}");
         var size = layout.Size;
@@ -57,7 +57,7 @@ internal static partial class QRMatrixDecoder
                 var step = op.RowStep;
                 var up = step < 0;
                 var y = op.Core / size;
-                var x = op.Core - y * size + 1; // Core is the left module; phases follow the right one
+                var x = op.Core - y * size + 1; // Core is the left module, but phases follow the right one
                 ref var t = ref Unsafe.Add(ref mask, ((up ? 0 : RunMask.ColumnPhases) + x % RunMask.ColumnPhases) * RunMask.RowPhases);
                 var ym = y % RunMask.RowPhases;
                 ref var s = ref Unsafe.Add(ref m, op.Core);

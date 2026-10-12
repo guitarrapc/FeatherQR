@@ -212,7 +212,7 @@ public class MicroQRCodeImageBuilderUnitTest
     [Test]
     public async Task ContentBuilder_IllegalVersionEccCombination_ThrowsOnRender()
     {
-        // M1 supports error detection only; requesting ECC L on M1 must fail.
+        // M1 supports error detection only, so requesting ECC L on M1 must fail.
         var builder = new MicroQRCodeImageBuilder("123")
             .WithErrorCorrection(MicroQREccLevel.L)
             .WithVersion(MicroQRVersion.M1);

@@ -207,7 +207,7 @@ public class RmQRBinaryEncoderSegmentedTest
     public async Task EncodeSegmented_PlanThatDoesNotFit_Throws()
     {
         var content = new string('a', 40);
-        // R7x43-M holds 5 bytes; a Byte run over 40 characters cannot be written.
+        // R7x43-M holds 5 bytes, so a Byte run over 40 characters cannot be written.
         ModeSegment[] plan = [new ModeSegment(2, 0, content.Length, content.Length)];
         await Assert.That(() => EncodeRaw(content, RmQRVersion.R7x43, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
@@ -264,7 +264,7 @@ public class RmQRBinaryEncoderSegmentedTest
     public async Task EncodeSegmented_Utf8RunWithAWrongByteBudget_Throws()
     {
         const string content = "日本語";
-        // Three characters, nine UTF-8 bytes; a plan claiming three bytes must not write.
+        // Three characters, nine UTF-8 bytes. A plan claiming three bytes must not write.
         ModeSegment[] plan = [new ModeSegment(2, 0, 3, 3)];
         await Assert.That(() => EncodeRaw(content, RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Utf8, plan)).Throws<ArgumentException>();
     }

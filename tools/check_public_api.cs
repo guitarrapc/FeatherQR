@@ -19,8 +19,8 @@ using System.Text;
 // be the same everywhere, and nothing else checks that.
 //
 // This is the gate public_api.cs deliberately is not. The two render the same listing from
-// the same assembly - public_api.cs through reflection, for a page with documentation and
-// source links; this one through metadata, for four target frameworks and a diff. Their
+// the same assembly: public_api.cs through reflection, for a page with documentation and
+// source links, and this one through metadata, for four target frameworks and a diff. Their
 // type and member text is expected to match line for line, which is how each keeps the
 // other honest.
 //
@@ -133,8 +133,8 @@ static void WriteDiff(string expected, string actual, string indent)
     }
 
     // A block is one type, keyed by the name a reader would say out loud. Its declaration is
-    // kept as the first line of the block, so a change to the declaration alone - a class that
-    // became sealed, a base type that moved - is a line in the diff rather than a silent pass.
+    // kept as the first line of the block, so a change to the declaration alone, such as a class that
+    // became sealed or a base type that moved, is a line in the diff rather than a silent pass.
     static Dictionary<string, List<string>> Blocks(string text)
     {
         var blocks = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -203,7 +203,7 @@ static string Render(string assemblyPath)
     {
         var sb = new StringBuilder();
         sb.Append('\n');
-        // A ref struct carries a compiler-emitted [Obsolete] for compilers that predate it; that is not the author's attribute.
+        // A ref struct carries a compiler-emitted [Obsolete] for compilers that predate it. That is not the author's attribute.
         if (HasAttribute(type.GetCustomAttributes(), "ObsoleteAttribute") && !HasAttribute(type.GetCustomAttributes(), "IsByRefLikeAttribute")) sb.Append("    [Obsolete]\n");
         sb.Append("    ").Append(TypeHeader(type)).Append('\n').Append("    {\n");
         foreach (var member in Members(type)) sb.Append("        ").Append(member).Append('\n');
@@ -213,7 +213,7 @@ static string Render(string assemblyPath)
 
     // Nested protected counts as reachable: a consumer gets at those by deriving. Compiler-generated
     // nested types do not: a C# 14 extension block emits public marker types with unspeakable names
-    // (<G>$hash, <M>$hash) that no caller can spell; the members themselves are listed on the
+    // (<G>$hash, <M>$hash) that no caller can spell. The members themselves are listed on the
     // enclosing class, which is where a caller finds them.
     bool IsVisibleType(TypeDefinition type)
     {
@@ -234,7 +234,7 @@ static string Render(string assemblyPath)
         return type.IsNested ? $"{BareName(reader.GetTypeDefinition(type.GetDeclaringType()))}.{name}" : name;
     }
 
-    // A nested type carries no namespace of its own; it belongs to the one its outermost
+    // A nested type carries no namespace of its own. It belongs to the one its outermost
     // declaring type is in.
     string NamespaceOf(TypeDefinition type) => type.IsNested
         ? NamespaceOf(reader.GetTypeDefinition(type.GetDeclaringType()))
@@ -279,7 +279,7 @@ static string Render(string assemblyPath)
     }
 
     // Namespace-qualified, because the framework bases below are recognised by name. A
-    // constructed generic base is a type specification and has no name of its own; null is
+    // constructed generic base is a type specification and has no name of its own. Null is
     // right for it, since it is never one of those.
     string? BaseFullName(TypeDefinition type) => type.BaseType.Kind switch
     {
@@ -334,7 +334,7 @@ static string Render(string assemblyPath)
 
     // Members of one type, sorted so the listing is stable: metadata order is declaration
     // order, which would make the diff churn on an edit that changed nothing a caller sees.
-    // Enum values are the exception - their order is their meaning, so it is kept.
+    // Enum values are the exception: their order is their meaning, so it is kept.
     IEnumerable<string> Members(TypeDefinition type)
     {
         if (BaseFullName(type) == "System.Enum")
@@ -390,7 +390,7 @@ static string Render(string assemblyPath)
 
             // A property is as accessible as its more accessible accessor, and the other one is
             // printed with its own modifier, the way source spells it: { get; protected set; }.
-            // Read off one accessor alone, a setter narrowed to protected looked like a public one.
+            // Read off one accessor alone, a setter narrowed to protected looks like a public one.
             var isPublic = (readable && getterIsPublic) || (writable && setterIsPublic);
             var anchor = readable ? getter!.Value : setter!.Value;
 
@@ -400,7 +400,7 @@ static string Render(string assemblyPath)
             if (writable) text.Append(AccessorAccess(isPublic, setterIsPublic)).Append(IsInitOnly(setter!.Value, context) ? "init; " : "set; ");
             text.Append('}');
 
-            // An indexer is a property with parameters; its metadata name ("Item") is not
+            // An indexer is a property with parameters. Its metadata name ("Item") is not
             // what a caller writes.
             var name = signature.ParameterTypes.Length > 0
                 ? $"this[{Parameters(readable ? getter!.Value : setter!.Value, context)}]"
@@ -408,7 +408,7 @@ static string Render(string assemblyPath)
 
             var type_ = Annotate(signature.ReturnType, Nullability(property.GetCustomAttributes(), TypeNullableContext(type)));
             // Same modifiers a method carries, off the accessor: a property turning abstract is a
-            // break, and reading only "static" here hid one.
+            // break, and reading only "static" here hides it.
             lines.Add((2, Line(property.GetCustomAttributes(), Access(isPublic),
                 Modifier(anchor.Attributes), null, type_, $"{name} {text}")));
         }
@@ -557,7 +557,7 @@ static string Render(string assemblyPath)
 
     // Only the outermost annotation is rendered, so only the first byte of the encoding is
     // read: NullableAttribute holds one byte when every part of the type shares a state, and
-    // an array in declaration order otherwise. 2 is "may be null"; 1 and 0 are not.
+    // an array in declaration order otherwise. 2 is "may be null". 1 and 0 are not.
     byte Nullability(CustomAttributeHandleCollection? attributes, byte inherited)
     {
         if (attributes is null) return inherited;
@@ -566,7 +566,7 @@ static string Render(string assemblyPath)
             var attribute = reader.GetCustomAttribute(handle);
             if (AttributeName(attribute) != "NullableAttribute") continue;
             var blob = reader.GetBlobBytes(attribute.Value);
-            // Prolog(2) value(1) named-argument count(2) for the single-byte form; the array
+            // Prolog(2) value(1) named-argument count(2) for the single-byte form. The array
             // form carries a 4-byte length before its elements.
             if (blob.Length == 5) return blob[2];
             if (blob.Length >= 7) return blob[6];

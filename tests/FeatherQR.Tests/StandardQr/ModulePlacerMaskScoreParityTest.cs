@@ -20,7 +20,7 @@ namespace FeatherQR.Tests;
 /// <para>
 /// The early abort is held to its contract: with the bound at or above the score the result is the score, and below it the
 /// result is the score or <see cref="int.MaxValue"/>, never another value. The lane scorers are held to it lane by lane. ARM64's
-/// single-word scorer has no abort; its transposed tier's abort is held in <see cref="ModulePlacerMaskTransposedParityTest"/>.
+/// single-word scorer has no abort. Its transposed tier's abort is held in <see cref="ModulePlacerMaskTransposedParityTest"/>.
 /// </para>
 /// <para>
 /// Every call gets fresh row buffers: a scorer may use its rows as scratch for the column finder windows.

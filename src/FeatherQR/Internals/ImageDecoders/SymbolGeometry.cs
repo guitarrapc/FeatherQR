@@ -5,10 +5,10 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Runs on a read, in Standard QR one that fit the destination and in Micro QR and rMQR one that did not too, and always through the mapping that produced the decoded modules — a projective transform, Micro QR's affine frame, or the finder-plus-mesh fit Standard QR builds for a mesh-sampled decode — never a sibling estimate the decode did not validate. The corners of a read that fit are reported; those of one that did not are kept only by the Micro QR and rMQR scans, which skip the later candidates inside it (<see cref="Contains"/>), and reported empty, as every failure's are. The square decoders retry a mirrored capture by transposing the sampled matrix rather than the mapping, so when that retry is the one that decoded, the grid's column axis is the symbol's row axis and the top-right and bottom-left corners swap; <c>transposed</c> carries that fact. rMQR never transposes: its frames carry the swap in the axes themselves, so its mapping is always in symbol order.
+/// Runs on a read, in Standard QR one that fit the destination and in Micro QR and rMQR one that did not too, and always through the mapping that produced the decoded modules (a projective transform, Micro QR's affine frame, or the finder-plus-mesh fit Standard QR builds for a mesh-sampled decode), never a sibling estimate the decode did not validate. The corners of a read that fit are reported. Those of one that did not are kept only by the Micro QR and rMQR scans, which skip the later candidates inside it (<see cref="Contains"/>), and reported empty, as every failure's are. The square decoders retry a mirrored capture by transposing the sampled matrix rather than the mapping, so when that retry is the one that decoded, the grid's column axis is the symbol's row axis and the top-right and bottom-left corners swap. <c>transposed</c> carries that fact. rMQR never transposes: its frames carry the swap in the axes themselves, so its mapping is always in symbol order.
 /// </para>
 /// <para>
-/// No half-pixel shift is applied. The finder centres that anchor every mapping come from run boundaries whose end index is exclusive, so they are already continuous coordinates in which integer values are pixel edges; a symbol drawn from pixel 48 maps grid (0, 0) to exactly 48.0. (Measured: adding 0.5 here put every finder-anchored corner half a pixel outside the symbol.) The samplers read the pixel containing each module centre, <c>(int)x</c>, in the same coordinates. They used to round to nearest, <c>(int)(x + 0.5f)</c>, which reads half a pixel right of and below the centre: a whole module at 1 px/module.
+/// No half-pixel shift is applied. The finder centres that anchor every mapping come from run boundaries whose end index is exclusive, so they are already continuous coordinates in which integer values are pixel edges. A symbol drawn from pixel 48 maps grid (0, 0) to exactly 48.0, and adding 0.5 would put every finder-anchored corner half a pixel outside the symbol. The samplers read the pixel containing each module centre, <c>(int)x</c>, in the same coordinates.
 /// </para>
 /// </remarks>
 internal static class SymbolGeometry
@@ -34,7 +34,7 @@ internal static class SymbolGeometry
 
     /// <summary>
     /// <paramref name="corners"/>, found on the image reduced to one pixel for every <paramref name="scale"/> by <paramref name="scale"/>, in the pixels of the full image.
-    /// A reduced pixel is the block that starts at <paramref name="scale"/> times its own corner, so the coordinates multiply and nothing is added; empty corners stay empty.
+    /// A reduced pixel is the block that starts at <paramref name="scale"/> times its own corner, so the coordinates multiply and nothing is added. Empty corners stay empty.
     /// </summary>
     public static SymbolCorners Scaled(in SymbolCorners corners, int scale)
         => new(Scaled(corners.TopLeft, scale), Scaled(corners.TopRight, scale), Scaled(corners.BottomRight, scale), Scaled(corners.BottomLeft, scale));
@@ -42,7 +42,7 @@ internal static class SymbolGeometry
     private static ImagePoint Scaled(ImagePoint point, int scale) => new(point.X * scale, point.Y * scale);
 
     /// <summary>
-    /// Corners already mapped to image coordinates, given in grid order — grid (0, 0), (columns, 0), (columns, rows), (0, rows) — reordered into the symbol's frame.
+    /// Corners already mapped to image coordinates, reordered into the symbol's frame. They are given in grid order: grid (0, 0), (columns, 0), (columns, rows), (0, rows).
     /// </summary>
     public static SymbolCorners FromMapped(float tlX, float tlY, float gridTrX, float gridTrY, float brX, float brY, float gridBlX, float gridBlY, bool transposed)
     {

@@ -9,7 +9,7 @@ internal sealed record Symbol(bool[] Modules, int Width, int Height, string Vers
 /// <summary>A grayscale image, one byte a pixel, with the density it was drawn at.</summary>
 internal sealed record Rendered(byte[] Luminance, int Width, int Height, float PixelsPerModule);
 
-/// <summary>One payload at one version and level; every encoder gets the same one.</summary>
+/// <summary>One payload at one version and level. Every encoder gets the same one.</summary>
 internal sealed record CaseDefinition(string Symbology, int CaseId, string Text, string Mode, string Ecc, int Version, string VersionName, int RmqrHeight, int RmqrWidth);
 
 /// <summary>An encoder library: its matrix, and its own image writer where it has one.</summary>
@@ -18,7 +18,7 @@ internal sealed record Encoder(string Name, Func<CaseDefinition, Symbol?> Encode
 /// <summary>A way of turning a matrix into an image.</summary>
 internal sealed record Kind(string Name, Func<Symbol, CaseDefinition, Encoder, Random, Rendered?> Render);
 
-/// <summary>What the three readers made of one image. <see cref="Key"/> names the image by how it was made and is stable between runs and trees; <see cref="Image"/> is a digest of its pixels, so that a comparison can tell a changed decoder from a changed image; <see cref="Note"/> says how a misread differs and is not part of the result file.</summary>
+/// <summary>What the three readers made of one image. <see cref="Key"/> names the image by how it was made and is stable between runs and trees. <see cref="Image"/> is a digest of its pixels, so that a comparison can tell a changed decoder from a changed image. <see cref="Note"/> says how a misread differs and is not part of the result file.</summary>
 internal sealed record ResultRow(string[] Key, string Image, string Status, bool FeatherQr, bool Misread, bool ZXingCpp, bool ZXingNet, string? Note = null);
 
 internal static class Symbologies

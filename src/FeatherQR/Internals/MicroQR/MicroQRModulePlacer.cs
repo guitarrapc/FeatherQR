@@ -9,7 +9,7 @@ namespace FeatherQR.Internals.MicroQR;
 /// <remarks>
 /// Micro QR layout: a single finder pattern at the top-left, separators along its right/bottom edges, timing patterns along row 0 and column 0, and 15 format modules adjacent to the finder.
 /// The entire function region reduces to the predicate <c>row == 0 || col == 0 || (row &lt;= 8 &amp;&amp; col &lt;= 8)</c>: no alignment patterns, no dark module, no version information.
-/// The fused fast-path pipeline lives in MicroQRModulePlacer.PlaceSymbol.cs; the per-module implementations in this file are the readable reference.
+/// The fused fast-path pipeline lives in MicroQRModulePlacer.PlaceSymbol.cs. The per-module implementations in this file are the readable reference.
 /// </remarks>
 internal static partial class MicroQRModulePlacer
 {
@@ -56,14 +56,14 @@ internal static partial class MicroQRModulePlacer
     /// <param name="size">Core side length in modules.</param>
     /// <param name="dataCodewords">Data codewords including padding.</param>
     /// <param name="eccCodewords">Error correction codewords.</param>
-    /// <param name="dataBitCount">Number of DATA bits to emit, for M1/M3 this stops after the high nibble of the final (4-bit) data codeword; its forced-zero low nibble is never placed.</param>
+    /// <param name="dataBitCount">Number of DATA bits to emit, for M1/M3 this stops after the high nibble of the final (4-bit) data codeword. Its forced-zero low nibble is never placed.</param>
     public static void PlaceDataCodewords(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
     {
         var totalBits = dataBitCount + eccCodewords.Length * 8;
         var bitIndex = 0;
         var upward = true;
 
-        // Column pairs (size-1, size-2) … (2, 1); column 0 is all function modules.
+        // Column pairs (size-1, size-2) … (2, 1). Column 0 is all function modules.
         for (var right = size - 1; right >= 2; right -= 2)
         {
             for (var step = 0; step < size; step++)
@@ -91,7 +91,7 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// Reads bit <paramref name="bitIndex"/> of the transmission stream: data bits first (MSB-first per codeword; naturally covers only the high nibble of a final half codeword because <paramref name="dataBitCount"/> stops there), then ECC bits.
+    /// Reads bit <paramref name="bitIndex"/> of the transmission stream: data bits first (MSB-first per codeword, which naturally covers only the high nibble of a final half codeword because <paramref name="dataBitCount"/> stops there), then ECC bits.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static byte GetStreamBit(int bitIndex, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
@@ -110,7 +110,7 @@ internal static partial class MicroQRModulePlacer
     /// Returns the selected mask pattern (0-3).
     /// </summary>
     /// <remarks>
-    /// ISO/IEC 18004 Micro QR evaluation: count dark modules on the right edge (SUM1) and lower edge (SUM2), both excluding row/column 0; score is <c>min·16 + max</c> and the HIGHEST score wins (more dark edge modules make the symbol easier to distinguish from its quiet zone).
+    /// ISO/IEC 18004 Micro QR evaluation: count dark modules on the right edge (SUM1) and lower edge (SUM2), both excluding row/column 0. The score is <c>min·16 + max</c> and the HIGHEST score wins (more dark edge modules make the symbol easier to distinguish from its quiet zone).
     /// Ties keep the lowest pattern number.
     /// Scoring reads only the two edges with the candidate mask applied on the fly, so no trial matrices are materialized.
     /// </remarks>
@@ -163,7 +163,7 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// Micro QR mask conditions (ISO/IEC 18004 Table 10; they correspond to Standard QR patterns 1, 4, 6 and 7 respectively).
+    /// Micro QR mask conditions (ISO/IEC 18004 Table 10). They correspond to Standard QR patterns 1, 4, 6 and 7 respectively.
     /// True = flip the module.
     /// Shared with the decoder (<see cref="MicroQRMatrixDecoder"/>) so both sides always agree on the mask templates.
     /// </summary>

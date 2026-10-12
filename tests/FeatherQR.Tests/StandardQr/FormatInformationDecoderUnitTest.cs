@@ -31,7 +31,7 @@ public class FormatInformationDecoderUnitTest
     [Arguments(3)]
     public async Task BitErrorsWithinBchCapacity_AreCorrected(int errorBits)
     {
-        // Flip N distinct bits in every valid pattern; BCH(15,5) has minimum
+        // Flip N distinct bits in every valid pattern. BCH(15,5) has minimum
         // distance 7, so up to 3 errors must decode to the original.
         for (var level = 0; level < 4; level++)
         {

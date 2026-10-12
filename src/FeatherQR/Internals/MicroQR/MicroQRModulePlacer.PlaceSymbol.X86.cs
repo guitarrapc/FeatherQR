@@ -10,7 +10,6 @@ internal static partial class MicroQRModulePlacer
 {
     /// <summary>
     /// BMI2+AVX2 pipeline: placement is a static per-row PEXT/PDEP permutation of the packed stream words (the zigzag is a fixed bit permutation per size, so each row's data bits are gathered/scattered branch-free with no cross-row dependency), the stream word count is dispatched per size (M1 fits one word, M2 two), and the unpack expands 32 modules per AVX2 step.
-    /// Measured over the SSSE3 pipeline: M4 -29%, M3 -22%, M2 -10%, M1 -5% (kernel benchmark rounds 8-11).
     /// </summary>
     private static int PlaceCoreBmi2(Span<byte> matrix, int size, int stride, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
@@ -22,8 +21,7 @@ internal static partial class MicroQRModulePlacer
         rows = rows.Slice(0, size);
         FuncPackedRows(size).CopyTo(rows);
 
-        // Zero extract masks would make unused words no-ops, but the loads and
-        // BMI ops are not free: sizes 11/13 skip the guaranteed-zero words.
+        // Zero extract masks would make unused words no-ops, but the loads and BMI ops are not free: sizes 11/13 skip the guaranteed-zero words.
         var tbl = _pextPlaceTables[(size - 11) >> 1];
         ref var te = ref MemoryMarshal.GetArrayDataReference(tbl);
         if (size >= 15)
@@ -73,12 +71,9 @@ internal static partial class MicroQRModulePlacer
             rows[row] = (rows[row] & ~(1ul << 8)) | (bit << 8);
         }
 
-        // Unpack with the mask applied on the fly: one 32-module AVX2 step per
-        // row while the store ends at or before the last row's last module
-        // (bits >= size are zero, so the overrun writes light modules: the
-        // bytes between rows stay light, and following rows are rewritten in
-        // ascending order), 16-module steps for the last rows, scalar-safe tail
-        // for the final row.
+        // A row takes one 32-module AVX2 step while the store ends at or before the last row's last module.
+        // Bits >= size are zero, so the overrun writes light modules: the bytes between rows stay light, and following rows are rewritten in ascending order.
+        // The last rows take 16-module steps and the final row the exact tail.
         ref var buf = ref MemoryMarshal.GetReference(matrix);
         var windowEnd = (size - 1) * stride + size;
         var rowOffset = 0;

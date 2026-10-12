@@ -26,7 +26,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     [Test]
     public async Task TransparentClearWithPadding_KeepsAlpha()
     {
-        // Transparent surroundings are asked for by name; the pad follows the background
+        // Transparent surroundings are asked for by name. The pad follows the background
         // otherwise, so the surface has to keep its alpha channel only when they are.
         const int modulePixelSize = 4;
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
@@ -46,7 +46,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
 
     /// <summary>
     /// The same canvas without that request: the pad takes the opaque background, so the image is
-    /// opaque and a JPEG of it has no black bands where the alpha used to be.
+    /// opaque and a JPEG of it has no black bands in place of a transparent pad.
     /// </summary>
     [Test]
     public async Task DefaultClearWithPadding_ProducesOpaqueImage()
@@ -104,7 +104,7 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     [Test]
     public async Task TranslucentBackground_OverOpaqueClear_ProducesOpaqueImage()
     {
-        // The opaque cleared canvas is the base layer; the translucent background
+        // The opaque cleared canvas is the base layer. The translucent background
         // blends over it and every pixel stays opaque.
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         var translucentWhite = new SKColor(0xFF, 0xFF, 0xFF, 0x80);
@@ -120,8 +120,8 @@ public class QRCodeImageBuilderOpaqueEncodingTest
     [Test]
     public async Task OpaquePng_DecodesToSamePixelsAsPremulRender()
     {
-        // The encoded PNG must stay visually identical to the premul render;
-        // only the alpha channel representation may differ.
+        // The encoded PNG must stay visually identical to the premul render.
+        // Only the alpha channel representation may differ.
         var qr = QRCodeGenerator.Create(TestContent, QREccLevel.M);
         const int size = 300;
 

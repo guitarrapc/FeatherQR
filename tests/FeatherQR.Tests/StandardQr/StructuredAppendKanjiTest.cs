@@ -10,10 +10,10 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every option here sets <c>AllowKanji</c> unless a test says otherwise; without it every set is the UTF-8 set it was before Kanji mode existed.
+/// Every option here sets <c>AllowKanji</c> unless a test says otherwise. Without it every set is the UTF-8 set it was before Kanji mode existed.
 /// The rules the expectations are written from: a set is eligible when the whole text is, and an eligible set carries no ECI header and the XOR of the whole text's Shift_JIS bytes as its parity.
-/// Text whose every character has a cell is a Kanji set under both segmentations, every chunk under <c>Single</c> one Kanji segment; it is never larger than its UTF-8 set, character for character 13 bits against 16 or 24 and no ECI header.
-/// Text with ASCII in it is a Kanji set only under <c>Optimal</c>, every chunk its Kanji plan, and only when that set needs fewer symbols than today's UTF-8 set, or as many at a lower version; otherwise it is today's set.
+/// Text whose every character has a cell is a Kanji set under both segmentations, every chunk under <c>Single</c> one Kanji segment. It is never larger than its UTF-8 set, character for character 13 bits against 16 or 24 and no ECI header.
+/// Text with ASCII in it is a Kanji set only under <c>Optimal</c>, every chunk its Kanji plan, and only when that set needs fewer symbols than today's UTF-8 set, or as many at a lower version. Otherwise it is today's set.
 /// A text that fits one symbol is <c>Create</c>'s symbol.
 /// </para>
 /// <para>
@@ -233,7 +233,7 @@ public class StructuredAppendKanjiTest
 
     /// <summary>
     /// Where ASCII and cells take turns the runs decide: 「a日b本c」 × 12 is 50 bits of characters in every 5 and 49 stretches.
-    /// At version 1-L (152 bits a symbol, 32 of them each symbol's header and first run) the characters alone fit 5 symbols; with a run for every stretch 8 do not, 9 do to the bit, and the walk needs at least that.
+    /// At version 1-L (152 bits a symbol, 32 of them each symbol's header and first run) the characters alone fit 5 symbols. With a run for every stretch 8 do not, 9 do to the bit, and the walk needs at least that.
     /// </summary>
     [Test]
     public async Task CanHoldKanji_CountsARunForEveryStretch()
@@ -374,7 +374,7 @@ public class StructuredAppendKanjiTest
     ];
 
     /// <summary>
-    /// Text with ASCII in it: under Optimal the Kanji set where it needs fewer symbols than today's UTF-8 set, or as many at a lower version, and today's set otherwise; under Single today's set.
+    /// Text with ASCII in it: under Optimal the Kanji set where it needs fewer symbols than today's UTF-8 set, or as many at a lower version, and today's set otherwise. Under Single today's set.
     /// </summary>
     [Test]
     [MethodDataSource(nameof(WithAsciiSets))]
@@ -445,7 +445,7 @@ public class StructuredAppendKanjiTest
     }
 
     /// <summary>
-    /// At the last bit: seven cells in one Kanji segment are 4 + 8 + 13 × 7 = 103 of version 1-Q's 104 bits, so the set is Create's one symbol; an eighth cell makes it a set of two.
+    /// At the last bit: seven cells in one Kanji segment are 4 + 8 + 13 × 7 = 103 of version 1-Q's 104 bits, so the set is Create's one symbol. An eighth cell makes it a set of two.
     /// </summary>
     [Test]
     [Arguments(QRSegmentation.Single)]
@@ -472,7 +472,7 @@ public class StructuredAppendKanjiTest
             var options = Pinned with { Version = QRVersionRange.AtMost(maxVersion), Segmentation = QRSegmentation.Optimal };
             var plain = QRCodeGenerator.CreateStructuredAppend(text, ecc, options);
             if (IsUtf8Set(plain, text, ecc, options))
-                continue; // a UTF-8 set; its boost is the existing one's
+                continue; // a UTF-8 set, and its boost is the existing one's
 
             var chunks = plain.Select(s => Decode(s).Text).ToArray();
             var version = plain[0].Version;
@@ -621,7 +621,7 @@ public class StructuredAppendKanjiTest
 
     /// <summary>
     /// A Kanji set takes the scalar program (standardqr-encoder.md, "The lanes"), whose eighth state the lanes do not have: neither the Kanji set's budget search nor its writer runs lanes.
-    /// The UTF-8 set it is compared with is the seven-state program's and may; so may the same text asked for as UTF-8, which it does where the machine accelerates lanes, and that is what makes the zeros mean something.
+    /// The UTF-8 set it is compared with is the seven-state program's and may. So may the same text asked for as UTF-8, which it does where the machine accelerates lanes, and that is what makes the zeros mean something.
     /// </summary>
     [Test]
     public async Task KanjiSet_TakesTheScalarProgram()

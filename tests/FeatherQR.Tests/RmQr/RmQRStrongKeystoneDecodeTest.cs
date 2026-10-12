@@ -5,7 +5,7 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// rMQR symbols in strong perspective: a plane narrowed by 12 to 20 % along the symbol's short axis, its long axis, or toward a corner, turned and drawn with grey edges at 3.5-4.5 px/module.
-/// On a wide symbol the finder is sheared up to 40° and the sub-finder leans the other way, so neither the finder's square frame nor a search round it reaches the far end; the frame comes from the finder's measured outline and the symbol's traced perimeter.
+/// On a wide symbol the finder is sheared up to 40° and the sub-finder leans the other way, so neither the finder's square frame nor a search round it reaches the far end. The frame comes from the finder's measured outline and the symbol's traced perimeter.
 /// </summary>
 public class RmQRStrongKeystoneDecodeTest
 {
@@ -13,7 +13,7 @@ public class RmQRStrongKeystoneDecodeTest
     private const string ShortContent = "RMQR 43";
 
     /// <summary>
-    /// Each case was checked (2026-09-28) to read, plain and mirrored, under every combination of ±0.05 px/module, ±0.5° and ±0.005 keystone, and to fail at those 27 points on the decoder before the traced frame, but one mirrored nudge of the R15x43 case.
+    /// No case reads without the traced frame, plain or mirrored.
     /// </summary>
     public static IEnumerable<(RmQRVersion Version, float PixelsPerModule, float Degrees, float Keystone, float Tilt)> Cases()
     {
@@ -59,8 +59,7 @@ public class RmQRStrongKeystoneDecodeTest
     }
 
     /// <summary>
-    /// Keystones of 6 to 20 %, plain, at 2-3 px/module, blurred or squeezed into low contrast with noise, each read only with one part of the frame as it is.
-    /// Checked 2026-09-28 in a scratch build with that part changed, and each reads at 23 to 27 of 27 nudges of ±0.05 px/module, ±0.5° and ±0.005 keystone.
+    /// Keystones of 6 to 20 %, plain, at 2 to 6 px/module, blurred or squeezed into low contrast with noise, each read only with one part of the frame as it is.
     /// </summary>
     public static IEnumerable<(string Part, RmQRVersion Version, RmQREccLevel Level, string Content, int Seed, float MinPixelsPerModule, float MaxPixelsPerModule, float Tilt, Degradation Degradation)> DegradedCases()
     {

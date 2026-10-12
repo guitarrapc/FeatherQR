@@ -15,7 +15,7 @@ namespace FeatherQR.Tests;
 /// nothing to say. The count assertions below fail instead.
 /// </para>
 /// <para>
-/// These fixtures are the Kanji symbols other encoders wrote; this library's own Kanji
+/// These fixtures are the Kanji symbols other encoders wrote. This library's own Kanji
 /// output is checked where it is written (the *BinaryEncoderKanjiTest classes and
 /// KanjiEligibilityTest) and against these same symbols (KanjiEncoderOracleTest). Generators: ZXing.Net (Standard QR,
 /// mode self-reported by its encoder) and qrtool (Micro QR M3/M4, rMQR). libzint
@@ -71,7 +71,7 @@ public class KanjiFixtureTest
         var manifest = fixture.Manifest;
         var (modules, size) = FixtureLoader.ReadMatrix(fixture.MatrixPath);
 
-        // Kanji mode exists only in M3 and M4; narrower mode indicators cannot express it.
+        // Kanji mode exists only in M3 and M4, since narrower mode indicators cannot express it.
         await Assert.That(manifest.Version).IsGreaterThanOrEqualTo(3);
 
         await Assert.That(MicroQRCodeDecoder.TryDecode(modules, size, out var fromMatrix, out var info)).IsTrue();

@@ -282,8 +282,8 @@ public class MicroQRBinaryEncoderParityTest
             }
         }
 
-        // alternating pad codewords over whole bytes after the data bits;
-        // the final half codeword (M1/M3) stays 0000
+        // alternating pad codewords over whole bytes after the data bits,
+        // and the final half codeword (M1/M3) stays 0000
         var padStart = (bitString.Length + 7) / 8;
         var fullBytes = capacityBits / 8;
         var padIndex = 0;

@@ -6,12 +6,8 @@ namespace FeatherQR.Tests;
 /// </summary>
 /// <remarks>
 /// specs/rmqr-encoder.md states that argument errors are raised "with the same type, message
-/// and precedence" across the surface. The options <c>Create</c> overloads originally broke
-/// that: they resolve the version as an argument expression, so the fit ran before the
-/// overload they forwarded to could validate anything, and a negative quiet zone was reported
-/// as "content does not fit". The sizing overloads were already correct, which made the
-/// options surface inconsistent with itself. The parameter list overloads this was once
-/// compared against were removed in 2.0.0; the agreement is now between <c>Create</c>, the
+/// and precedence" across the surface. A fit that runs before the validation reports a
+/// negative quiet zone as "content does not fit". The agreement is between <c>Create</c>, the
 /// destination overload and <c>TryGetRequiredBufferSize</c>.
 /// </remarks>
 public class ArgumentErrorPrecedenceTest
@@ -35,7 +31,7 @@ public class ArgumentErrorPrecedenceTest
     public async Task MicroQr_NegativeQuietZoneWins_OverAVersionThatCannotCarryTheMode()
     {
         // M1 offers neither Byte mode nor ECC L, so both a "does not fit" and an ECC
-        // contradiction are available; the quiet zone is still the first thing reported.
+        // contradiction are available, but the quiet zone is still the first thing reported.
         var options = new MicroQRCodeGeneratorOptions { Version = MicroQRVersionRange.Exactly(MicroQRVersion.M1), QuietZoneSize = -1 };
 
         await AssertQuietZone(() => MicroQRCodeGenerator.Create(ByteContent, MicroQREccLevel.L, options));
@@ -60,9 +56,7 @@ public class ArgumentErrorPrecedenceTest
     public async Task EveryEntryPoint_ReportsTheSameArgumentError()
     {
         // The contract is not merely "an argument error" but the same one, so a caller
-        // moving between the entry points debugs the same problem. Until 2.0.0 the
-        // comparison was against the parameter list overloads; they are gone, and the
-        // surviving spellings are what has to agree now.
+        // moving between the entry points debugs the same problem.
         var options = new QRCodeGeneratorOptions { Version = 1, QuietZoneSize = -1 };
 
         var viaCreate = Assert.Throws<ArgumentOutOfRangeException>(

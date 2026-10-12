@@ -29,7 +29,7 @@ internal static class ModuleRunScanner
 
     /// <summary>
     /// Allocates an exact-size array of the merged runs, the shared implementation of the <c>GetModuleRectangles()</c> overloads.
-    /// Counting and scanning use the same enumerator over the same matrix, so the guard is unreachable by construction; it exists to turn any future divergence between the two passes into a loud failure instead of a silently truncated or zero-padded result.
+    /// Counting and scanning use the same enumerator over the same matrix, so the guard is unreachable by construction. It exists to turn any future divergence between the two passes into a loud failure instead of a silently truncated or zero-padded result.
     /// </summary>
     public static ModuleRect[] ScanToArray<TView>(in TView view)
         where TView : struct, IModuleMatrixView
@@ -69,7 +69,7 @@ internal static class ModuleRunScanner
 /// <summary>
 /// Enumerates maximal horizontal runs of dark core modules in row-major order.
 /// A run never crosses a light module and, when <c>skipFinderPatterns</c> is set, never crosses into a finder pattern module (those are drawn separately by the styled finder path).
-/// Coordinates are core-relative; callers add the quiet zone.
+/// Coordinates are core-relative. Callers add the quiet zone.
 /// </summary>
 internal ref struct ModuleRunEnumerator<TView>(TView view, bool skipFinderPatterns)
     where TView : struct, IModuleMatrixView

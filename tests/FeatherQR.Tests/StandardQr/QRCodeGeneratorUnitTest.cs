@@ -8,15 +8,15 @@ namespace FeatherQR.Tests;
 // NOTE: Actual QR Code size is always same for same version and ECC level,
 //
 // Version 2, ECC-L, Numeric mode (Minimum data for 42 digits)
-// Total capacity: 44 bytes = 352 bits
+// Total capacity: 44 codewords = 352 bits (34 of data, 10 of ECC)
 // ┌──────────────────────────────────────────┐
 // │ 1. Mode indicator: 4 bits                │
 // │ 2. Character count: 10 bits              │
-// │ 3. Data (42 digits): ~140 bits           │
+// │ 3. Data (42 digits): 140 bits            │
 // │ 4. Terminator: 4 bits                    │
-// │ 5. Byte alignment: 0-7 bits              │
-// │ 6. Padding: ~190 bits (0xEC 0x11...)     │
-// │ 7. ECC: Fixed length                     │
+// │ 5. Byte alignment: 2 bits                │
+// │ 6. Padding: 112 bits (0xEC 0x11...)      │
+// │ 7. ECC: 80 bits (10 codewords)           │
 // ├──────────────────────────────────────────┤
 // │ Total: 352 bits (44 bytes)               │
 // │ Matrix size: 25 × 25 (Version 2)         │
@@ -24,16 +24,16 @@ namespace FeatherQR.Tests;
 // └──────────────────────────────────────────┘
 //
 // Version 2, ECC-L, Numeric mode (Maximum data for 77 digits)
-// Total capacity: 44 bytes = 352 bits (Same as minimum data for same version)
+// Total capacity: 44 codewords = 352 bits (same as the minimum data for the same version)
 //
 // ┌──────────────────────────────────────────┐
 // │ 1. Mode indicator: 4 bits                │
 // │ 2. Character count: 10 bits              │
-// │ 3. Data (77 digits): ~257 bits           │
-// │ 4. Terminator: 4 bits                    │
-// │ 5. Byte alignment: 0-7 bits              │
-// │ 6. Padding: ~70 bits (0xEC 0x11...)      │
-// │ 7. ECC: Fixed length                     │
+// │ 3. Data (77 digits): 257 bits            │
+// │ 4. Terminator: 1 bit (cut at capacity)   │
+// │ 5. Byte alignment: 0 bits                │
+// │ 6. Padding: 0 bits                       │
+// │ 7. ECC: 80 bits (10 codewords)           │
 // ├──────────────────────────────────────────┤
 // │ Total: 352 bits (44 bytes)               │
 // │ Matrix size: 25 × 25 (Version 2)         │
@@ -91,15 +91,15 @@ public class QRCodeGeneratorUnitTest
     // │    = 10 bits (max 1023 digits)                          │
     // ├─────────────────────────────────────────────────────────┤
     // │ 3. Data (17 digits)                                     │
-    // │    = 5 groups × 10 bits + 1 group × 4 bits              │
-    // │    = 50 + 4 = 54 bits                                   │
+    // │    = 5 groups × 10 bits + 2 digits × 7 bits             │
+    // │    = 50 + 7 = 57 bits                                   │
     // │    (3 digits per group: 000-999 → 10 bits)              │
-    // │    (Last 2 digits: 00-99 → 7 bits, but padded to 4)     │
+    // │    (Last 2 digits: 00-99 → 7 bits)                      │
     // ├─────────────────────────────────────────────────────────┤
     // │ 4. Terminator                                           │
-    // │    = min(72 - 4 - 10 - 54, 4) = 4 bits (0000)           │
+    // │    = min(72 - 4 - 10 - 57, 4) = 1 bit (0)               │
     // ├─────────────────────────────────────────────────────────┤
-    // │ Total: 4 + 10 + 54 + 4 = 72 bits                        │
+    // │ Total: 4 + 10 + 57 + 1 = 72 bits                        │
     // └─────────────────────────────────────────────────────────┘
 
 
@@ -286,10 +286,10 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Test]
-    [Arguments("Zürich", QREccLevel.H, EciMode.Utf8, 2)]  // 修正後: Version 2
-    [Arguments("Zürich", QREccLevel.M, EciMode.Utf8, 1)]  // Version 1 で OK
-    [Arguments("Zürich", QREccLevel.L, EciMode.Utf8, 1)]  // Version 1 で OK
-    [Arguments("café", QREccLevel.H, EciMode.Utf8, 1)]    // Version 1 で OK
+    [Arguments("Zürich", QREccLevel.H, EciMode.Utf8, 2)]  // 7 UTF-8 bytes under the ECI header make 80 bits, past version 1-H's 72
+    [Arguments("Zürich", QREccLevel.M, EciMode.Utf8, 1)]  // fits version 1
+    [Arguments("Zürich", QREccLevel.L, EciMode.Utf8, 1)]  // fits version 1
+    [Arguments("café", QREccLevel.H, EciMode.Utf8, 1)]    // 5 UTF-8 bytes: 64 bits
     public async Task Create_VersionSelection_IsCorrect(string content, QREccLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
         var qr = QRCodeGenerator.Create(content, eccLevel, new QRCodeGeneratorOptions { EciMode = eciMode });
@@ -344,10 +344,8 @@ public class QRCodeGeneratorUnitTest
         var qrString = QRCodeGenerator.Create(text, level, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = EciMode.Utf8, QuietZoneSize = 4 });
         var qrSpan = QRCodeGenerator.Create(text.AsSpan(), level, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = EciMode.Utf8, QuietZoneSize = 4 });
 
-        // Compare sizes
         await Assert.That(qrSpan.Size).IsEqualTo(qrString.Size);
 
-        // Compare every module
         for (int y = 0; y < qrString.Size; y++)
         {
             for (int x = 0; x < qrString.Size; x++)
@@ -416,7 +414,7 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.H, 424)]  // V40-H byte max
     public async Task Create_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
-        // All-kana text goes out in Kanji mode at the default charset; this one is about Byte mode.
+        // All-kana text goes out in Kanji mode at the default charset. This one is about Byte mode.
         var text = new string('\u3042', maxChars);
 
         var qr = QRCodeGenerator.Create(text, eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
@@ -430,7 +428,7 @@ public class QRCodeGeneratorUnitTest
     [Arguments(QREccLevel.H, 424)]  // V40-H byte max
     public async Task Create_Span_MaxByte_FitsInVersion40(QREccLevel eccLevel, int maxChars)
     {
-        // All-kana text goes out in Kanji mode at the default charset; this one is about Byte mode.
+        // All-kana text goes out in Kanji mode at the default charset. This one is about Byte mode.
         var text = new string('\u3042', maxChars);
 
         var qr = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
@@ -508,7 +506,7 @@ public class QRCodeGeneratorUnitTest
     [Arguments("0123456789", QREccLevel.H, 5)]
     public async Task Create_Binary_MatchesTextImplementation(string text, QREccLevel level, int version)
     {
-        // -1 was the released parameter list's "pick a version"; the range spells it Any
+        // -1 in the arguments stands for "pick a version". The range spells it Any
         // and rejects -1, so a defaulted field cannot pass for automatic selection.
         var options = new QRCodeGeneratorOptions
         {
@@ -519,11 +517,9 @@ public class QRCodeGeneratorUnitTest
         var qrText = QRCodeGenerator.Create(text, level, options);
         var qrBinary = QRCodeGenerator.Create(text.AsSpan(), level, options);
 
-        // Compare sizes
         await Assert.That(qrBinary.Size).IsEqualTo(qrText.Size);
         await Assert.That(qrBinary.Version).IsEqualTo(qrText.Version);
 
-        // Compare every module
         for (int y = 0; y < qrText.Size; y++)
         {
             for (int x = 0; x < qrText.Size; x++)
@@ -533,10 +529,8 @@ public class QRCodeGeneratorUnitTest
         }
     }
 
-    // Sizing tests. The throwing GetRequiredBufferSize these were written against was
-    // removed in 2.0.0 (specs/qrcode-symbologies.md, Public API direction); they now go
-    // through TryGetRequiredBufferSize, via the Sizing helper where the fit is a
-    // precondition rather than the subject.
+    // Sizing tests. They go through the Sizing helper where the fit is a precondition
+    // rather than the subject.
 
     [Test]
     public async Task TryGetRequiredBufferSize_MatchesActualQrCodeGeneration()
@@ -545,13 +539,10 @@ public class QRCodeGeneratorUnitTest
         var eccLevel = QREccLevel.L;
         var quietZoneSize = 4;
 
-        // Calculate expected size
         var expected = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
 
-        // Generate actual QR code
         var qrCode = QRCodeGenerator.Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
-        // Verify
         await Assert.That(qrCode.Version).IsEqualTo(expected.Version);
         await Assert.That(qrCode.Size).IsEqualTo(expected.Size);
         await Assert.That(qrCode.Size * qrCode.Size).IsEqualTo(expected.BufferSize);
@@ -564,10 +555,8 @@ public class QRCodeGeneratorUnitTest
     [Arguments("https://example.com/foobar", QREccLevel.L, 4, 33 * 33, 33, 2)]  // Version 2 with quiet zone
     public async Task TryGetRequiredBufferSize_ReturnsCorrectSize(string text, QREccLevel eccLevel, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
-        // Act
         var (bufferSize, qrSize, version) = Read(Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize));
 
-        // Assert
         await Assert.That(bufferSize).IsEqualTo(expectedBufferSize);
         await Assert.That(qrSize).IsEqualTo(expectedQrSize);
         await Assert.That(version).IsEqualTo(expectedVersion);
@@ -588,10 +577,8 @@ public class QRCodeGeneratorUnitTest
     [Arguments("🎉", QREccLevel.M, true, EciMode.Utf8, 0, 21 * 21, 21, 1)]       // Emoji UTF-8 with BOM (still fits V1)
     public async Task TryGetRequiredBufferSize_WithEciAndBOM_ReturnsCorrectSize(string text, QREccLevel eccLevel, bool utf8BOM, EciMode eciMode, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
-        // Act
         var (bufferSize, qrSize, version) = Read(Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode, QuietZoneSize = quietZoneSize }));
 
-        // Assert
         await Assert.That(bufferSize).IsEqualTo(expectedBufferSize);
         await Assert.That(qrSize).IsEqualTo(expectedQrSize);
         await Assert.That(version).IsEqualTo(expectedVersion);
@@ -610,10 +597,8 @@ public class QRCodeGeneratorUnitTest
     {
         var text = new string('a', textLength); // ASCII = 1 byte each
 
-        // Act
         var version = Sizing.Required(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { Utf8Bom = utf8BOM, EciMode = eciMode }).Version;
 
-        // Assert
         await Assert.That(version).IsEqualTo(expectedVersion);
     }
 
@@ -623,14 +608,12 @@ public class QRCodeGeneratorUnitTest
     [Arguments("HELLO", EciMode.Iso8859_1, EciMode.Utf8)]
     public async Task TryGetRequiredBufferSize_DifferentEciModes_MayProduceDifferentVersions(string text, EciMode eciMode1, EciMode eciMode2)
     {
-        // Act
         var (bufferSize1, qrSize1, version1) = Read(Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode1 }));
 
         var (bufferSize2, qrSize2, version2) = Read(Sizing.Required(text.AsSpan(), QREccLevel.M, new QRCodeGeneratorOptions { EciMode = eciMode2 }));
 
-        // Assert - Different ECI modes may produce different buffer sizes due to ECI header overhead
-        // For short text like "HELLO", all should fit in Version 1, but buffer sizes differ based on final QR size
-        // This test documents the behavior rather than asserting specific values
+        // The ECI header costs 12 bits, so two modes may land on different versions.
+        // Between two different modes only the range of each version is asserted.
         if (eciMode1 == eciMode2)
         {
             await Assert.That(bufferSize2).IsEqualTo(bufferSize1);
@@ -638,8 +621,6 @@ public class QRCodeGeneratorUnitTest
         }
         else
         {
-            // ECI header overhead might not affect version for short text
-            // but we document that different modes can produce different results
             await Assert.That(version1 >= 1 && version1 <= 40).IsTrue();
             await Assert.That(version2 >= 1 && version2 <= 40).IsTrue();
         }
@@ -659,13 +640,12 @@ public class QRCodeGeneratorUnitTest
         var calculated = Sizing.Required(text.AsSpan(), eccLevel, quietZoneSize);
         var buffer = new byte[calculated.BufferSize];
 
-        // Act
         var written = Create(text.AsSpan(), eccLevel, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
-        // Assert - written bytes match the size calculation API
+        // The written bytes match the size calculation API
         await Assert.That(written).IsEqualTo(calculated.BufferSize);
 
-        // Assert - every module matches the class-based API
+        // Every module matches the class-based API
         var qrCode = Create(text.AsSpan(), eccLevel, new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
         await Assert.That(qrCode.Size).IsEqualTo(calculated.Size);
         for (var row = 0; row < qrCode.Size; row++)
@@ -688,10 +668,8 @@ public class QRCodeGeneratorUnitTest
         var qrCode = Create(text.AsSpan(), QREccLevel.L, new QRCodeGeneratorOptions { Version = requestedVersion, QuietZoneSize = quietZoneSize });
         var buffer = new byte[qrCode.Size * qrCode.Size];
 
-        // Act
         var written = Create(text.AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { Version = requestedVersion, QuietZoneSize = quietZoneSize });
 
-        // Assert
         await Assert.That(written).IsEqualTo(qrCode.Size * qrCode.Size);
         for (var row = 0; row < qrCode.Size; row++)
         {
@@ -724,10 +702,9 @@ public class QRCodeGeneratorUnitTest
         var buffer = new byte[calculated.BufferSize + 100];
         buffer.AsSpan().Fill(0xFF);
 
-        // Act
         var written = Create(text.AsSpan(), QREccLevel.L, buffer.AsSpan(), new QRCodeGeneratorOptions { QuietZoneSize = quietZoneSize });
 
-        // Assert - written region contains only 0/1 and the quiet zone is light
+        // The written region contains only 0/1 and the quiet zone is light
         await Assert.That(written).IsEqualTo(calculated.BufferSize);
         var qrSize = calculated.Size;
         for (var row = 0; row < qrSize; row++)
@@ -746,7 +723,7 @@ public class QRCodeGeneratorUnitTest
             }
         }
 
-        // Assert - bytes beyond the written region are untouched
+        // Bytes beyond the written region are untouched
         for (var i = written; i < buffer.Length; i++)
         {
             await Assert.That(buffer[i]).IsEqualTo((byte)0xFF);
@@ -801,7 +778,7 @@ public class QRCodeGeneratorUnitTest
                 await Assert.That(dirty[i]).IsEqualTo(fill);
         }
 
-        // Class API: its pooled work buffer is deliberately not cleared; the result must
+        // Class API: its pooled work buffer is deliberately not cleared. The result must
         // agree with the span path module for module. Poison the pool bucket the generator
         // will rent (same length, returned dirty) so a fresh pool cannot hide an unwritten
         // module.
@@ -826,18 +803,16 @@ public class QRCodeGeneratorUnitTest
         var bufferFromString = new byte[calculated.BufferSize];
         var bufferFromSpan = new byte[calculated.BufferSize];
 
-        // Act
         var writtenFromString = Create(text, QREccLevel.M, bufferFromString.AsSpan());
         var writtenFromSpan = Create(text.AsSpan(), QREccLevel.M, bufferFromSpan.AsSpan());
 
-        // Assert
         await Assert.That(writtenFromString).IsEqualTo(writtenFromSpan);
         await Assert.That(bufferFromString).IsEquivalentTo(bufferFromSpan, CollectionOrdering.Matching);
     }
 
 #if !DEBUG
     // Release-only: unoptimized (Debug) JIT allocates small temporaries inside the
-    // SIMD ECC kernel that the optimizing JIT eliminates; the zero-allocation
+    // SIMD ECC kernel that the optimizing JIT eliminates. The zero-allocation
     // guarantee applies to shipped (Release) binaries.
     [Test]
     public async Task Create_SpanDestination_DoesNotAllocate()
@@ -908,7 +883,7 @@ public class QRCodeGeneratorUnitTest
     [MethodDataSource(nameof(RoutesWithUndefinedEcis))]
     public async Task Entry_UndefinedEciMode_ThrowsNamingTheEci(Route route, EciMode eciMode)
     {
-        // Most routes carry Alphanumeric text, on which an undefined ECI used to reach the header
+        // Most routes carry Alphanumeric text, on which an unchecked ECI would reach the header as it is
         var error = Assert.Throws<ArgumentOutOfRangeException>(() => Enter(route, QREccLevel.M, quietZoneSize: 4, eciMode));
         await Assert.That(error.ParamName).IsEqualTo("eciMode");
     }
@@ -981,9 +956,9 @@ public class QRCodeGeneratorUnitTest
     // Helpers
 
     /// <summary>
-    /// The three sizing numbers as a tuple. <see cref="QRCodeCalculatedSize"/> is a plain
-    /// readonly struct since 2.0.0 (one value kind across the three symbologies), so it no
-    /// longer deconstructs; these tests read all three at once and say so once here.
+    /// The three sizing numbers as a tuple. <see cref="QRCodeCalculatedSize"/> is declared
+    /// without positional parameters, so it does not deconstruct. These tests read all three
+    /// at once and say so once here.
     /// </summary>
     private static (int BufferSize, int Size, int Version) Read(QRCodeCalculatedSize size)
         => (size.BufferSize, size.Size, size.Version);
@@ -997,7 +972,6 @@ public class QRCodeGeneratorUnitTest
     /// <returns>QR code version (1-40).</returns>
     private static int CalculateVersion(int matrixSize, int quietZoneSize = 4)
     {
-        // Remove quiet zone
         var sizeWithoutQuietZone = matrixSize - (quietZoneSize * 2);
 
         // Formula: size = 21 + (version - 1) * 4
@@ -1008,9 +982,6 @@ public class QRCodeGeneratorUnitTest
     /// <summary>
     /// Calculate QR code size from version.
     /// </summary>
-    /// <param name="version"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
     private static int CalculateSize(int version, int quietZoneSize = 4)
     {
         if (version is < 1 or > 40)

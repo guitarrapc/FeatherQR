@@ -9,14 +9,14 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// Reflectance reversal: writes the photographic negative of a luminance buffer, so a light-on-dark symbol can be retried as dark-on-light.
 /// </summary>
 /// <remarks>
-/// Shared by all three image decoders, and paid on every image that fails to decode in its first polarity — which makes it a fixed cost of the failure path rather than of the success path.
-/// <c>255 - x</c> on a byte is the ones' complement, so the vector form is a single NOT per lane; measured 17-20x over the per-byte loop across 33k-922k pixels on AVX2.
+/// Shared by all three image decoders, and paid on every image that fails to decode in its first polarity, which makes it a fixed cost of the failure path rather than of the success path.
+/// <c>255 - x</c> on a byte is the ones' complement, so the vector form is a single NOT per lane.
 /// Two vector widths rather than one: 256-bit where it is accelerated, otherwise 128-bit, which keeps ARM64 (NEON is 128-bit, so <c>Vector256.IsHardwareAccelerated</c> is false there) off the scalar loop.
 /// </remarks>
 internal static class LuminanceInverter
 {
     /// <summary>Writes <c>255 - source[i]</c> for every byte of <paramref name="destination"/>.</summary>
-    /// <param name="source">Luminance to negate; must be at least as long as <paramref name="destination"/>.</param>
+    /// <param name="source">Luminance to negate. Must be at least as long as <paramref name="destination"/>.</param>
     /// <param name="destination">Receives the negated bytes. May alias <paramref name="source"/> exactly.</param>
     /// <exception cref="ArgumentException"><paramref name="source"/> is shorter than <paramref name="destination"/>.</exception>
     internal static void Invert(ReadOnlySpan<byte> source, Span<byte> destination)
@@ -32,11 +32,9 @@ internal static class LuminanceInverter
         ref var src = ref MemoryMarshal.GetReference(source);
         ref var dst = ref MemoryMarshal.GetReference(destination);
 
-        // The tail is scalar rather than an overlapping final vector. Re-reading bytes
-        // the aligned loop has already written would invert them a second time whenever
-        // the caller passes the same buffer for both spans, and a negate that is only
-        // correct when the spans are distinct is a trap for a one-line helper. At most
-        // 31 bytes of a buffer that is hundreds of thousands long, so it costs nothing.
+        // The tail is scalar rather than an overlapping final vector. An overlapping vector
+        // re-reads bytes the loop has already written, which inverts them a second time
+        // when the caller passes the same buffer for both spans.
         if (Vector256.IsHardwareAccelerated && destination.Length >= Vector256<byte>.Count)
         {
             var last = destination.Length - Vector256<byte>.Count;

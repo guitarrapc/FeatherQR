@@ -7,15 +7,15 @@ namespace FeatherQR.Internals.RmQR;
 /// Mixed-mode segmentation for <see cref="RmQRSegmentation.Optimal"/>: the split of the content into Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
-/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Standard QR and Micro QR planners; what lives here is rMQR's version scan.
+/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared with the Standard QR and Micro QR planners. What lives here is rMQR's version scan.
 /// Unlike Standard QR's banded widths, the 32 rMQR versions carry 13 distinct count indicator width triples across a strategy-ordered ranking, so the scan bounds each candidate before pricing it.
-/// When the content fits in a single mode that fit caps the search, so a plan is produced only when it lowers the core module count; otherwise the single-mode stream is emitted unchanged.
+/// When the content fits in a single mode that fit caps the search, so a plan is produced only when it lowers the core module count. Otherwise the single-mode stream is emitted unchanged.
 /// Design rationale, bounds and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
 /// </remarks>
 internal static partial class RmQRSegmentPlanner
 {
     /// <summary>
-    /// Upper bound on the runs a plan can contain; the largest capacity cannot hold more than 76, and <c>RmQRSegmentPlannerUnitTest</c> pins that maximum below this.
+    /// Upper bound on the runs a plan can contain. The largest capacity cannot hold more than 76, and <c>RmQRSegmentPlannerUnitTest</c> pins that maximum below this.
     /// </summary>
     public const int MaxSegments = 96;
 
@@ -32,20 +32,20 @@ internal static partial class RmQRSegmentPlanner
 
     /// <summary>
     /// Count indicator triples memoised during a version scan.
-    /// The 32 versions share 13 distinct triples, but the bounds narrow the band so far that measured sweeps never stored more than 3. Sized for that plus headroom: undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
+    /// The 32 versions share 13 distinct triples, but the bounds narrow the band to a few of them. Undersizing is safe, not wrong, because the store is guarded and a miss simply recomputes.
     /// </summary>
     private const int MemoCapacity = 8;
 
-    // Narrowest count indicator any version uses, per mode (ISO/IEC 23941 Table 3; pinned by RmQRSegmentPlannerUnitTest).
+    // Narrowest count indicator any version uses, per mode (ISO/IEC 23941 Table 3, pinned by RmQRSegmentPlannerUnitTest).
     // A cost run at these widths is a lower bound for every version, because widening a count indicator can only raise the price of the run that carries it, and the minimum over plans of a pointwise larger cost is itself larger.
     private const int MinCountBitsNumeric = 4;
     private const int MinCountBitsAlnum = 3;
     private const int MinCountBitsByte = 3;
 
-    /// <summary>Narrowest count indicator of any mode at any version; the minimum of the three widths pinned by RmQRSegmentPlannerUnitTest.</summary>
+    /// <summary>Narrowest count indicator of any mode at any version, the minimum of the three widths pinned by RmQRSegmentPlannerUnitTest.</summary>
     private const int MinCountBitsAny = 3;
 
-    // Kanji's narrowest count indicator (R7x43 and R11x27), for the Kanji plan's floor and screen; pinned by RmQRSegmentPlannerUnitTest.
+    // Kanji's narrowest count indicator (R7x43 and R11x27), for the Kanji plan's floor and screen. Pinned by RmQRSegmentPlannerUnitTest.
     private const int MinCountBitsKanji = 2;
 
     /// <summary>rMQR ECI prefix: 3-bit mode indicator 111 plus a one-byte assignment designator.</summary>
@@ -53,7 +53,7 @@ internal static partial class RmQRSegmentPlanner
 
     /// <summary>
     /// Version fit for mixed-mode segmentation.
-    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit; when <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="RmQRSegmentation.Single"/>.
+    /// Returns the version to encode at and whether a mixed-mode plan is what makes it fit. When <paramref name="useSegments"/> is false the caller emits the ordinary single-mode stream, bit-identical to <see cref="RmQRSegmentation.Single"/>.
     /// When <paramref name="kanjiPlan"/> is true the plan is the Kanji plan of a Kanji-eligible text, built by <see cref="TryBuildKanjiPlan"/> and written with no ECI header.
     /// Throws exactly what <see cref="RmQRVersionSelector"/> throws.
     /// </summary>
@@ -68,7 +68,7 @@ internal static partial class RmQRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="SelectVersion"/> without the capacity throw; argument errors still throw, in the same order and with the same messages.
+    /// <see cref="SelectVersion"/> without the capacity throw. Argument errors still throw, in the same order and with the same messages.
     /// </summary>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)
     {
@@ -78,12 +78,12 @@ internal static partial class RmQRSegmentPlanner
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
 
-        // Validate before any planning so argument errors keep their current type, message and precedence; the selector re-validates on the paths reaching it.
+        // Validate before any planning so argument errors keep the selector's type, message and precedence. The selector re-validates on the paths reaching it.
         RmQRVersionSelector.ValidateFitArguments(eccLevel, fitStrategy, height, requestedVersion, charset);
 
         // All-Numeric content is already at the optimum: splitting a Numeric run never lowers its payload and every extra run adds a header.
         // So is Kanji content: the analyser chooses it only when every character has a Kanji cell, so none of them fits another mode more cheaply, and Byte would need an ECI header.
-        // Not Alphanumeric or Byte — those payloads can still hide a digit run worth splitting off.
+        // Not Alphanumeric or Byte, since those payloads can still hide a digit run worth splitting off.
         if (mode is EncodingMode.Numeric or EncodingMode.Kanji)
             return RmQRVersionSelector.TrySelect(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height, out selected);
 
@@ -91,13 +91,13 @@ internal static partial class RmQRSegmentPlanner
 
         if (requestedVersion is { } requested)
         {
-            // Single mode already fits: mixing cannot shrink a fixed version, so the stream stays exactly as it is today.
+            // Single mode already fits: mixing cannot shrink a fixed version, so the stream stays the single-mode one.
             selected = requested;
             if (Fits(requested, eccLevel, mode, dataLength, charset))
                 return true;
 
-            // One candidate, so pricing it here would decide what building the plan decides anyway; TryBuildPlan rejects a plan the version cannot hold and the caller falls back to the single-mode selector, which owns the error.
-            // A Kanji-eligible text has two plans, and which one to build is this call's to say, so its Kanji plan is priced here; where it does not fit, the UTF-8 plan is left to TryBuildPlan like any other.
+            // One candidate, so pricing it here would decide what building the plan decides anyway. TryBuildPlan rejects a plan the version cannot hold and the caller falls back to the single-mode selector, which owns the error.
+            // A Kanji-eligible text has two plans, and which one to build is this call's to say, so its Kanji plan is priced here. Where it does not fit, the UTF-8 plan is left to TryBuildPlan like any other.
             useSegments = true;
             if (analysis.KanjiPlannable && text.Length is > 0 and <= MaxPlannableChars)
                 kanjiPlan = KanjiPlanCost(text, requested, default, out _) <= 8 * RmQRConstants.GetDataCodewordCount(requested, eccLevel);
@@ -122,7 +122,7 @@ internal static partial class RmQRSegmentPlanner
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
 
         // Three filters, cheapest first, so a candidate only reaches an expensive one when the cheap ones could not answer.
-        // Soundness in one line each: the trivial bound and the floor are lower bounds, so they may only reject; the ceiling is the price of a real plan, so it may only accept.
+        // Soundness in one line each: the trivial bound and the floor are lower bounds, so they may only reject. The ceiling is the price of a real plan, so it may only accept.
         // Rationale and measurements: specs/rmqr-encoder.md, "Bounding the scan".
         var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
 
@@ -154,7 +154,7 @@ internal static partial class RmQRSegmentPlanner
                 continue; // cannot hold even the cheapest count indicators
             if (capacityBits >= UpperBound(floorPayload, runsNumeric, runsAlnum, runsByte, candidate) + eciBits)
             {
-                // Holds the floor plan re-priced at this version, so it holds the optimum too; no cost run needed.
+                // Holds the floor plan re-priced at this version, so it holds the optimum too. No cost run needed.
                 useSegments = true;
                 selected = candidate;
                 return true;
@@ -177,8 +177,8 @@ internal static partial class RmQRSegmentPlanner
     /// At each candidate, in the strategy's order, the Kanji plan (Kanji runs beside runs of the ASCII, no ECI header) is taken where it fits, otherwise the UTF-8 plan the seven-state program gives the same text.
     /// </summary>
     /// <remarks>
-    /// The UTF-8 plan is weighed so that Optimal never needs a larger symbol than it did before Kanji plans: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
-    /// Each program has its own three filters, the ones <see cref="TrySelectVersion"/> describes. The Kanji plan's are re-derived for its eighth state: the screen prices a character with a cell at 13 bits, and the floor runs at Kanji's narrowest count indicator, 2 bits, so that a plan filling R7x43 exactly is not skipped; the upper bound re-prices the floor plan's Kanji runs too; and the memo key carries Kanji's width, which tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
+    /// The UTF-8 plan is weighed so that a Kanji-eligible text never needs a larger symbol than its UTF-8 plan gives: finely interleaved kanji and ASCII pay a header per run as Kanji, and there one UTF-8 Byte run can be the smaller plan.
+    /// Each program has its own three filters, the ones <see cref="TrySelectVersion"/> describes. The Kanji plan's are re-derived for its eighth state: the screen prices a character with a cell at 13 bits, and the floor runs at Kanji's narrowest count indicator, 2 bits, so that a plan filling R7x43 exactly is not skipped. The upper bound re-prices the floor plan's Kanji runs too. The memo key carries Kanji's width, which tells apart versions whose other three widths agree (R13x77 and R15x59, R13x139 and R17x99).
     /// </remarks>
     private static bool TrySelectVersionKanji(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRVersion single, bool hasSingle, out RmQRVersion selected, out bool useSegments, out bool kanjiPlan)
     {
@@ -314,7 +314,7 @@ internal static partial class RmQRSegmentPlanner
 
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
-    /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
+    /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit. The caller answers all four by falling back to the single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -349,7 +349,7 @@ internal static partial class RmQRSegmentPlanner
         }
 
         // A plan that opens a Byte run at a mid-content U+FEFF would lose it to the decoder's BOM consumption (which fires even behind an explicit UTF-8 ECI).
-        // Under UTF-8 the program builds none, so this is the refusal of a model that disagreed; the single-mode fallback keeps the character.
+        // Under UTF-8 the program builds none, so this is the refusal of a model that disagreed. The single-mode fallback keeps the character.
         if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
         {
             segmentCount = 0;
@@ -415,7 +415,7 @@ internal static partial class RmQRSegmentPlanner
         => ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, default, out _);
 
     /// <summary>
-    /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the upper bound the version scan uses to accept a candidate without pricing it — the floor plan re-priced at <paramref name="version"/>, in payload bits (no ECI prefix).
+    /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the upper bound the version scan uses to accept a candidate without pricing it. It is the floor plan re-priced at <paramref name="version"/>, in payload bits (no ECI prefix).
     /// </summary>
     public static int FloorPlanUpperBound(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version)
     {

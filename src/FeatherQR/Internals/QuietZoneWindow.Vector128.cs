@@ -14,9 +14,9 @@ internal static partial class QuietZoneWindow
     /// </summary>
     // Vector stores on every build: .NET 8 leaves a constant clear in a block its profile did not see run as a call (see ClearGap),
     // and 32-bit x86 on .NET 10 compiles a constant 16-byte clear as a call to SpanHelpers.ClearWithoutReferences, where the vector
-    // store is one instruction (2026-10-07). The caller's slice checks the gap once and the stores fall inside it. A checked slice and
-    // copy a store, four a gap, used up the JIT's inline budget of the .NET 10 span encodes that inline this through ClearMargins and
-    // CenterCore, and Micro QR's and Standard QR's then compiled the 8- and 16-byte clears as calls, once a row (2026-10-08).
+    // store is one instruction. The caller's slice checks the gap once and the stores fall inside it. A checked slice and copy a
+    // store would use up the inline budget of the span encodes that inline this through ClearMargins and CenterCore, which then
+    // compile their 8- and 16-byte clears as calls, once a row.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ClearByStores(Span<byte> gap)
     {

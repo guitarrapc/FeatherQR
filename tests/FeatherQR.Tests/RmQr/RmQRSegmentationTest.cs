@@ -9,7 +9,7 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// <see cref="RmQRSegmentation.Optimal"/> end to end. The three properties every
 /// case is held to are: the symbol never has more core modules than the single-mode
-/// default (which is not the same as never rendering larger — see
+/// default (which is not the same as never rendering larger, see
 /// <see cref="Optimal_FewerCoreModulesCanStillRenderLarger"/>), it
 /// still decodes to the original content, and when it lands on the same version as
 /// the single-mode default it is byte-for-byte the same matrix (the blast radius
@@ -222,7 +222,7 @@ public class RmQRSegmentationTest
             int cost;
             if (content.Length == 0)
             {
-                // Empty content never plans; the single-mode fit is the answer.
+                // Empty content never plans. The single-mode fit is the answer.
                 cost = 3 + RmQRConstants.GetCountIndicatorLength(version, analysis.EncodingMode);
             }
             else if (analysis.EncodingMode == EncodingMode.Kanji)
@@ -387,7 +387,7 @@ public class RmQRSegmentationTest
     [Test]
     public async Task Optimal_RequestedVersion_FitsWhereSingleModeDoesNot()
     {
-        // R7x99-M holds 27 Byte-mode characters; this is 30 characters as Byte but
+        // R7x99-M holds 27 Byte-mode characters. This is 30 characters as Byte but
         // fits once the digit tail becomes a Numeric run.
         const string content = "abcdefghij1234567890abcdefghij";
         const RmQRVersion version = RmQRVersion.R7x99;
@@ -404,7 +404,7 @@ public class RmQRSegmentationTest
     /// The requested-version path commits to planning without pricing it first and lets
     /// the plan build decide, so this pins the whole outcome space of that path over
     /// every version: either it encodes and round-trips, or it throws exactly what the
-    /// single-mode path throws. It also pins the direction — Optimal must never throw
+    /// single-mode path throws. It also pins the direction. Optimal must never throw
     /// where Single succeeds.
     /// </summary>
     [Test]
@@ -529,8 +529,7 @@ public class RmQRSegmentationTest
 
     /// <summary>
     /// The mixed-only path with no single-mode ceiling, across the remaining
-    /// strategies and charsets: those combinations only had coverage where a
-    /// single-mode fit existed to bound the scan.
+    /// strategies and charsets. No single-mode fit exists here to bound the scan.
     /// </summary>
     [Test]
     public async Task Optimal_TooLongForEverySingleMode_AcrossStrategiesAndCharsets()
@@ -622,11 +621,9 @@ public class RmQRSegmentationTest
     public async Task Optimal_LeadingBom_DecodesLikeSingle()
     {
         // A content-leading U+FEFF is stream-initial under Single too, so both arms
-        // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
-        // and the two must decode identically (not necessarily to the input). The
-        // area assertion is strict: the split genuinely wins here, so losing the
-        // exemption (which silently falls back to the identical single-mode
-        // symbol) fails this test instead of passing it vacuously.
+        // drop it on decode and must decode identically, not necessarily to the input.
+        // The area assertion is strict: without the run-at-offset-0 exemption the plan
+        // falls back to the identical single-mode symbol, which would decode the same.
         var content = "\uFEFF" + new string('1', 30) + "a";
         var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
@@ -641,7 +638,7 @@ public class RmQRSegmentationTest
     public async Task Optimal_TrailingBomNoSingleModeHolds_IsPlannedBehindTheDigitBeforeIt()
     {
         // 303 UTF-8 bytes fit no single mode. The unconstrained minimum opens a Byte
-        // run at the trailing U+FEFF, where the decoder would consume it; the plan
+        // run at the trailing U+FEFF, where the decoder would consume it. The plan
         // takes the last digit into that run instead.
         var content = new string('1', 300) + "\uFEFF";
         var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
@@ -679,10 +676,9 @@ public class RmQRSegmentationTest
     public async Task Optimal_MidContentBom_StaysInsideAByteRun()
     {
         // The byte-segment decoder consumes a leading EF BB BF of every non-Latin-1
-        // segment as a BOM, even behind an explicit UTF-8 ECI, so no plan opens a
-        // Byte run at a mid-content U+FEFF: the run opens a digit early and the mark
-        // sits interior, where it survives. The digits ahead of it still go to
-        // Numeric, which the area shows.
+        // segment as a BOM, even behind an explicit UTF-8 ECI. The Byte run opens a digit
+        // before a mid-content U+FEFF, so the mark sits interior and survives. The digits
+        // ahead of it still go to Numeric, which the area shows.
         var content = new string('1', 30) + "\uFEFF" + "a";
         var single = RmQRCodeGenerator.Create(content, RmQREccLevel.M);
         var optimal = RmQRCodeGenerator.Create(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
@@ -837,18 +833,17 @@ public class RmQRSegmentationTest
 
 #if !DEBUG
     /// <summary>
-    /// The span destination is the library's zero-allocation path; the mixed-mode
+    /// The span destination is the library's zero-allocation path. The mixed-mode
     /// planner must keep it that way (its parent table rents from the pool rather
-    /// than allocating). Debug builds are excluded per repo notes.
+    /// than allocating).
     /// </summary>
     /// <remarks>
     /// Runs alone. Pooled branches take their buffers from <see cref="System.Buffers.ArrayPool{T}"/>,
     /// whose per-core stacks are shared with every other thread: a test running concurrently can
     /// empty the bucket between this thread's return and its next rent, and the rent that would
     /// have hit the cache allocates a fresh array instead. That shows up here as a multiple of one
-    /// array (measured: 1,048 bytes and up, in a full parallel run roughly one time in three) and it
-    /// is the pool being a shared resource, not the encoder allocating. Exclusivity is the fix rather
-    /// than a tolerance, which would blunt the guard this test exists to be.
+    /// array, and it is the pool being a shared resource, not the encoder allocating. A tolerance
+    /// would blunt the guard this test exists to be.
     /// </remarks>
     [Test]
     [NotInParallel]

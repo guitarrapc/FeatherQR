@@ -119,7 +119,7 @@ public class RmQRBinaryDecoderUnitTest
         await Assert.That(text).IsEqualTo("日本");
     }
 
-    /// <summary>A wider version uses a wider count indicator; R13x139 Kanji is 7 bits.</summary>
+    /// <summary>A wider version uses a wider count indicator. R13x139 Kanji is 7 bits.</summary>
     [Test]
     public async Task Decode_Kanji_UsesThePerVersionCountWidth()
     {
@@ -210,7 +210,7 @@ public class RmQRBinaryDecoderUnitTest
 
     /// <summary>
     /// The decoder parses untrusted input, so no stream may make it throw. This is what
-    /// protects every bounds guard in the loop, including ones no targeted test names;
+    /// protects every bounds guard in the loop, including ones no targeted test names.
     /// Standard QR has had the equivalent since its decoder shipped.
     /// </summary>
     [Test]

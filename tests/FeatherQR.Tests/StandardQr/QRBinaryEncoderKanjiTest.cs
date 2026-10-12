@@ -144,7 +144,7 @@ public class QRBinaryEncoderKanjiTest
 
     // ---- what the writers refuse ---------------------------------------------------
 
-    /// <summary>A character with no encoder cell reaching the Kanji writer is a defect upstream; the writer refuses rather than write some other character.</summary>
+    /// <summary>A character with no encoder cell reaching the Kanji writer is a defect upstream. The writer refuses rather than write some other character.</summary>
     [Test]
     [Arguments("日本A")]      // ASCII
     [Arguments("〜")]         // JIS X 0208 reading of a divergent cell
@@ -162,7 +162,7 @@ public class QRBinaryEncoderKanjiTest
         await Assert.That(() => EncodeSegmented("12～", 10, QREccLevel.L, [new Run('N', "12"), new Run('K', "～")])).Throws<ArgumentException>();
     }
 
-    /// <summary>Kanji beside an ECI header is out of scope (plan K4): the single-segment writer refuses it too.</summary>
+    /// <summary>Kanji beside an ECI header is out of scope: the single-segment writer refuses it too.</summary>
     [Test]
     [Arguments(EciMode.Utf8)]
     [Arguments(EciMode.Iso8859_1)]
@@ -176,7 +176,7 @@ public class QRBinaryEncoderKanjiTest
         }).Throws<ArgumentException>();
     }
 
-    /// <summary>Kanji beside an ECI header is out of scope (plan K4): the segmented writer refuses a plan that would write it.</summary>
+    /// <summary>Kanji beside an ECI header is out of scope: the segmented writer refuses a plan that would write it.</summary>
     [Test]
     [Arguments(EciMode.Utf8)]
     [Arguments(EciMode.Iso8859_1)]

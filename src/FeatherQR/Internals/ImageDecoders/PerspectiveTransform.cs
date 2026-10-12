@@ -5,7 +5,7 @@ namespace FeatherQR.Internals.ImageDecoders;
 /// </summary>
 /// <remarks>
 /// Standard homogeneous 3×3 formulation: a unit-square-to-quadrilateral transform is built directly from the target quad, its inverse comes from the adjugate matrix (a projective transform needs no normalization, so the adjugate substitutes for the true inverse), and quad-to-quad is the composition of the two.
-/// Mild keystone distortion is exactly representable; the affine case falls out naturally when the fourth point matches the parallelogram estimate.
+/// Mild keystone distortion is exactly representable. The affine case falls out naturally when the fourth point matches the parallelogram estimate.
 /// </remarks>
 internal readonly struct PerspectiveTransform
 {
@@ -26,15 +26,14 @@ internal readonly struct PerspectiveTransform
 
     /// <summary>
     /// Builds the transform mapping source quadrilateral (x0..x3, y0..y3) onto the destination quadrilateral (x0p..x3p, y0p..y3p).
-    /// Point order: the four correspondences are taken pairwise; any consistent order works.
+    /// Point order: the four correspondences are taken pairwise, so any consistent order works.
     /// </summary>
     public static PerspectiveTransform QuadrilateralToQuadrilateral(
         float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3,
         float x0p, float y0p, float x1p, float y1p, float x2p, float y2p, float x3p, float y3p)
     {
         // Composition order follows the element convention of Times (row-vector
-        // application): squareToQuad ∘ quadToSquare, verified by the corner
-        // correspondence unit tests.
+        // application): squareToQuad ∘ quadToSquare.
         var quadToSquare = SquareToQuadrilateral(x0, y0, x1, y1, x2, y2, x3, y3).BuildAdjoint();
         var squareToQuad = SquareToQuadrilateral(x0p, y0p, x1p, y1p, x2p, y2p, x3p, y3p);
         return squareToQuad.Times(quadToSquare);
@@ -42,7 +41,7 @@ internal readonly struct PerspectiveTransform
 
     /// <summary>
     /// Builds a grid-to-image homography from a known point, its two local axis derivatives, and the two projective denominator coefficients.
-    /// A single Micro QR finder supplies the point and local frame; bounded searches over <paramref name="perspectiveX"/> and <paramref name="perspectiveY"/> recover the remaining two degrees of freedom.
+    /// A single Micro QR finder supplies the point and local frame, and bounded searches over <paramref name="perspectiveX"/> and <paramref name="perspectiveY"/> recover the remaining two degrees of freedom.
     /// </summary>
     internal static PerspectiveTransform FromLocalFrame(
         float gridX,

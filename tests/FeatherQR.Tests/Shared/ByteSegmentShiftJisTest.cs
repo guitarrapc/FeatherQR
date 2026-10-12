@@ -67,7 +67,7 @@ public class ByteSegmentShiftJisTest
     /// <summary>
     /// ISO-8859-1 text as people write it. None of it is well formed Shift_JIS with a run of three half-width katakana or a byte from 0x80 to 0x9F:
     /// a lowercase accented letter before a space or at the end is a lead byte with no trail, ñ, ö and ü are no lead byte at all, and uppercase accented letters seldom stand three in a row.
-    /// A lowercase accented letter before another letter is a well formed pair, and French puts three of them in a row; pairs alone do not make the segment Shift_JIS.
+    /// A lowercase accented letter before another letter is a well formed pair, and French puts three of them in a row. Pairs alone do not make the segment Shift_JIS.
     /// </summary>
     [Test]
     [Arguments("café")]

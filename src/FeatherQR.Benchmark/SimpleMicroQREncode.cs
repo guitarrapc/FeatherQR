@@ -8,7 +8,7 @@ using BenchmarkDotNet.Configs;
 ///
 /// Comparability notes:
 ///
-///   FeatherQR and QRCoder place a quiet zone in the returned matrix; CodeGlyphX
+///   FeatherQR and QRCoder place a quiet zone in the returned matrix, but CodeGlyphX
 ///   returns the bare symbol.
 ///   FeatherQR picks the encoding mode from the payload, while CodeGlyphX exposes
 ///   one entry point per mode, so each row calls the CodeGlyphX method for the mode this

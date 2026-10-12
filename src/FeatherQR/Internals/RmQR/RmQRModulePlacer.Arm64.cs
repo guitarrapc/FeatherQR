@@ -12,7 +12,7 @@ namespace FeatherQR.Internals.RmQR;
 /// </summary>
 /// <remarks>
 /// The zigzag walk fills the bit array column-pair by column-pair while the matrix is row-major, so the store pass is a transpose.
-/// Four consecutive clean pairs — eight consecutive columns — are turned inside out in registers (UZP1/UZP2 to separate a pair's two column vectors, TBL to flip the upward-walked ones back into row order, a three-stage ZIP network to leave symbol row <c>i</c> in 64-bit lane <c>i &amp; 1</c> of vector <c>i / 2</c>), so one symbol row is one 8-byte store.
+/// Four consecutive clean pairs, eight consecutive columns, are turned inside out in registers (UZP1/UZP2 to separate a pair's two column vectors, TBL to flip the upward-walked ones back into row order, a three-stage ZIP network to leave symbol row <c>i</c> in 64-bit lane <c>i &amp; 1</c> of vector <c>i / 2</c>), so one symbol row is one 8-byte store.
 /// <para>
 /// What the eight columns cannot cover falls to row RUNS rather than to per-module scatter: stretches of rows where both columns of a pair are ordinary data keep the 16-bit pair store, and only the genuinely isolated modules are scattered a byte at a time.
 /// Ref-based loads and stores throughout, because LD2/ST1-lane take pointers, and the library keeps unsafe code to one alignment hint (<c>ModulePlacer.ExpandBitsAdvSimd</c>).
@@ -25,7 +25,7 @@ internal static partial class RmQRModulePlacer
 {
     /// <summary>
     /// Writes every data module: transpose blocks first, then the row runs, then the isolated modules.
-    /// <paramref name="pitch"/> is the destination row stride, so the tight and quiet-zoned destinations share one implementation; only the isolated modules need the separate row/col table when the pitch is not the symbol width.
+    /// <paramref name="pitch"/> is the destination row stride, so the tight and quiet-zoned destinations share one implementation. Only the isolated modules need the separate row/col table when the pitch is not the symbol width.
     /// </summary>
     private static void ScatterNeon(Span<byte> destination, Span<byte> bits, Layout layout, int height, int pitch, bool strided)
     {
@@ -142,7 +142,7 @@ internal static partial class RmQRModulePlacer
         }
 
         // Stretches of rows where both columns of a pair are data: the same byte-swapped
-        // 16-bit store per row as the portable tier, but no longer conditional on the
+        // 16-bit store per row as the portable tier, but not conditional on the
         // whole pair being clean.
         var runs = layout.Runs;
         for (var i = 0; i < runs.Length; i++)
@@ -195,7 +195,7 @@ internal static partial class RmQRModulePlacer
 
     /// <summary>
     /// Splits one column pair's 32 bit-array bytes into its two column vectors: the walk alternates right column, left column on every row, so the even byte lanes are the right column and the odd ones the left.
-    /// Reads a fixed 32 bytes (a pair spans at most 30); the bit scratch always carries the slack.
+    /// Reads a fixed 32 bytes (a pair spans at most 30). The bit scratch always carries the slack.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static (Vector128<byte> Right, Vector128<byte> Left) SplitColumns(ref byte src, nuint offset)

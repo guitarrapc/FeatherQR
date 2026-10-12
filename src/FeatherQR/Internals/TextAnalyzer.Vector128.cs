@@ -82,7 +82,7 @@ internal static partial class TextAnalyzer
         return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
 
-    /// <summary>Classifies 16 chars; true when one above U+00FF settled every flag.</summary>
+    /// <summary>Classifies 16 chars. True when one above U+00FF settled every flag.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool ClassifyBlockVector128(Vector128<ushort> lo, Vector128<ushort> hi,
         ref bool hasNonNumeric, ref bool hasNonAlphanumeric, ref bool hasNonAscii, ref bool hasNonIso88591)

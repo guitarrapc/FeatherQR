@@ -5,14 +5,13 @@ namespace FeatherQR.Internals.BinaryEncoders;
 
 /// <summary>
 /// Reed-Solomon block interleaving (ISO/IEC 18004 7.6, ISO/IEC 23941 7.6): data codewords round-robin across blocks, then ECC codewords round-robin, then zero remainder bits.
-/// Shared across symbologies: the layout depends only on the <see cref="ECCInfo"/> block structure, never on a symbology-specific version (Standard QR and rMQR interleave identically; Micro QR has one block and no interleaving stage).
-/// Lifted from Internals.StandardQR when rMQR became the second consumer.
+/// Shared across symbologies: the layout depends only on the <see cref="ECCInfo"/> block structure, never on a symbology-specific version (Standard QR and rMQR interleave identically, and Micro QR has one block and no interleaving stage).
 /// The matrix decoders' inverse is <see cref="BinaryDecoders.EccBlockDecoder.Deinterleave"/>, held to this by EccBlockDecoderTest over every block structure.
 /// </summary>
 internal static class BinaryInterleaver
 {
     /// <summary>
-    /// Calculates the final interleaved data capacity including data codewords, ECC codewords, and remainder bits.
+    /// Interleaves the data codewords, then the ECC codewords, round-robin across blocks, and zeroes the remainder bits.
     /// </summary>
     /// <param name="data">Array of data codewords to interleave.</param>
     /// <param name="ecc">Array of ECC codewords to interleave.</param>
@@ -26,8 +25,8 @@ internal static class BinaryInterleaver
         // 2. ECC codewords are interleaved in round-robin order from all blocks
         // 3. Final sequence follows QR code specification for optimal error correction
         //
-        // Writing the output sequentially makes the source access strided (block length);
-        // the reverse (sequential reads, strided writes) measured consistently slower in benchmarks.
+        // Writing the output sequentially makes the source access strided (block length).
+        // The reverse, sequential reads with strided writes, is slower.
         //
         // Image
         // data:  [D1 D2 D3 | D4 D5 D6]
@@ -62,7 +61,7 @@ internal static class BinaryInterleaver
             output.Slice(dataLen + eccLen).Clear();
 
         // Single block: interleaving is the identity permutation (versions 1-2 at most
-        // ECC levels, v5L, ...), two sequential copies, ~5x faster than the loop
+        // ECC levels, v5L, ...), so two sequential copies do it
         if (totalBlocks == 1)
         {
             data.Slice(0, dataLen).CopyTo(output);
@@ -187,7 +186,6 @@ internal static class BinaryInterleaver
         var totalDataBytes = eccInfo.TotalDataCodewords;
         var totalEccBytes = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
 
-        // Calculate total size in bits, then round up to bytes
         var totalBits = totalDataBytes * 8 + totalEccBytes * 8 + remainderBits;
         return (totalBits + 7) / 8;
     }

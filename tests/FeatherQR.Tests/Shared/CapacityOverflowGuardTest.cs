@@ -10,7 +10,7 @@ namespace FeatherQR.Tests;
 /// </summary>
 public class CapacityOverflowGuardTest
 {
-    // 8 x this exceeds int.MaxValue; the largest symbol of any symbology holds 7,089 units.
+    // 8 x this exceeds int.MaxValue. The largest symbol of any symbology holds 7,089 units.
     private const int OverflowingByteLength = 300_000_000;
 
     [Test]
@@ -25,8 +25,8 @@ public class CapacityOverflowGuardTest
     [Test]
     public async Task RmQR_TrySelect_RequestedVersion_RejectsWrappingLength()
     {
-        // The auto-fit scan compares against a capacity table and was never at risk;
-        // the requested-version branch is the one that prices the content itself.
+        // The auto-fit scan compares against a capacity table and was never at risk.
+        // The requested-version branch is the one that prices the content itself.
         await Assert.That(RmQRVersionSelector.TrySelect(EncodingMode.Byte, OverflowingByteLength, EciMode.Default, RmQREccLevel.M, RmQRVersion.R7x43, RmQRFitStrategy.MinimizeArea, null, out _)).IsFalse();
         await Assert.That(RmQRVersionSelector.TrySelect(EncodingMode.Byte, OverflowingByteLength, EciMode.Default, RmQREccLevel.M, null, RmQRFitStrategy.MinimizeArea, null, out _)).IsFalse();
     }
@@ -76,7 +76,7 @@ public class CapacityOverflowGuardTest
     [Test]
     public async Task RmQR_Fits_ReportsTheModeError_AtEveryLength()
     {
-        // Whether a mode is priceable must not depend on how long the content is; a
+        // Whether a mode is priceable must not depend on how long the content is. A
         // length fast-path ahead of the mode switch makes the same call throw at 10 and
         // answer false at 300M.
         await Assert.That(() => RmQRVersionSelector.Fits(RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.ECI, 10)).Throws<ArgumentOutOfRangeException>();
