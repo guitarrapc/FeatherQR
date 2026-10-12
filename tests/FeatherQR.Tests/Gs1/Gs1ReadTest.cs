@@ -104,7 +104,7 @@ public class Gs1ReadTest
         // Reading checks what splitting needs and no more: a bad check digit reads, an unknown AI in a URI does not.
         await Assert.That(Gs1ElementString.TryRead("https://id.gs1.org/01/09520123456789", default, out read, out _)).IsTrue();
         await Assert.That(read).IsEqualTo("(01)09520123456789");
-        await Assert.That(Gs1ElementString.TryRead("https://id.gs1.org/01/09520123456788?4000=X", default, out _, out error)).IsFalse();
+        await Assert.That(Gs1ElementString.TryRead("https://id.gs1.org/01/09520123456788?" + Gs1UnassignedAi.Ai7050 + "=X", default, out _, out error)).IsFalse();
         await Assert.That((error.Kind, error.Offset, error.Length)).IsEqualTo((Gs1ErrorKind.UnknownAi, 37, 4));
 
         // The text is escaped as TryToHri escapes it, from either carrier.

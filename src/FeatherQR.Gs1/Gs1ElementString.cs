@@ -27,6 +27,13 @@ namespace FeatherQR.Gs1;
 public static partial class Gs1ElementString
 {
     /// <summary>
+    /// The release of the GS1 Barcode Syntax Dictionary this library's table was generated from, as the dictionary
+    /// names it (<c>2026-01-27</c>). An AI assigned after that release is read as data but not checked or built, so
+    /// <see cref="Gs1ErrorKind.UnknownAi"/> from a building member means an AI newer than this release or a typo.
+    /// </summary>
+    public static string DictionaryRelease => Gs1AiTable.DictionaryRelease;
+
+    /// <summary>
     /// Runs every check on an element string: AI lengths and character sets, check digits and check character
     /// pairs, dates and the other linters, requisite and exclusive pairings, repeated AIs. <c>true</c> with
     /// <c>default</c> error when it passes.

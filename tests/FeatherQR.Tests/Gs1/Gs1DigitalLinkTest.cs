@@ -170,7 +170,7 @@ public class Gs1DigitalLinkTest
     [Arguments("https://id.gs1.org/01/09520123456788?8200=x", Gs1ErrorKind.AiNotAllowedInUri, 37, 4)]
     [Arguments("https://id.gs1.org/01/09520123456788/21/ABC?235=XYZ", Gs1ErrorKind.AiNotAllowedInUri, 44, 3)]
     [Arguments("https://id.gs1.org/01/09520123456788?8040=123456789012345", Gs1ErrorKind.AiNotAllowedInUri, 37, 4)]
-    [Arguments("https://id.gs1.org/01/09520123456788?4000=ABC", Gs1ErrorKind.UnknownAi, 37, 4)]
+    [Arguments("https://id.gs1.org/01/09520123456788?" + Gs1UnassignedAi.Ai7050 + "=ABC", Gs1ErrorKind.UnknownAi, 37, 4)]
     [Arguments("https://id.gs1.org/01/09520123456788?17=", Gs1ErrorKind.EmptyValue, 40, 0)]
     [Arguments("https://id.gs1.org/01/09520123456788/10/", Gs1ErrorKind.EmptyValue, 40, 0)]
     [Arguments("https://id.gs1.org/01/09520123456788/10/ABC?10=ABC", Gs1ErrorKind.RepeatedAi, 44, 2)]
@@ -384,7 +384,7 @@ public class Gs1DigitalLinkTest
         await Assert.That((e1, e2, e3)).IsEqualTo((e1, e1, e1));
         await Assert.That(e1.Kind).IsEqualTo(Gs1ErrorKind.MissingPrimaryKey);
 
-        var badUri = "https://id.gs1.org/01/09520123456788?4000=ABC";
+        var badUri = "https://id.gs1.org/01/09520123456788?" + Gs1UnassignedAi.Ai7050 + "=ABC";
         await Assert.That(Gs1ElementString.TryGetFromDigitalLinkLength(badUri, out length, out var e4)).IsFalse();
         await Assert.That((length, e4.Kind)).IsEqualTo((0, Gs1ErrorKind.UnknownAi));
         await Assert.That(Gs1ElementString.TryFromDigitalLink(badUri, new char[2], out written, out var e5)).IsFalse();

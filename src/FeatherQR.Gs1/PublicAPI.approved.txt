@@ -21,6 +21,7 @@ namespace FeatherQR.Gs1
 
     public static class Gs1ElementString
     {
+        public static string DictionaryRelease { get; }
         public static Gs1ElementEnumerator EnumerateElements(ReadOnlySpan<char> elementString);
         public static bool TryFromDigitalLink(ReadOnlySpan<char> uri, Span<char> destination, out int charsWritten, out Gs1Error error);
         public static bool TryFromDigitalLink(ReadOnlySpan<char> uri, out string elementString, out Gs1Error error);

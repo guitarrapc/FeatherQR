@@ -120,9 +120,10 @@ public class Gs1ElementStringValidateTest
     [Arguments("010952012345678810ABC\u001D\u001D17251231", false, Gs1ErrorKind.UnexpectedSeparator)]
     [Arguments("010952012345678810ABC\u001D", true, Gs1ErrorKind.None)]
     [Arguments("010952012345678810ABC17251231", true, Gs1ErrorKind.None)]
+    // Prefix 40 gives three-digit AIs (Table 7-5), so this is (400) with the value 0ABC, not an unknown (4000).
     [Arguments("0109520123456788" + "4000ABC", true, Gs1ErrorKind.None)]
     [Arguments("0109520123456788" + "89ABC", false, Gs1ErrorKind.UnknownAi)]
-    [Arguments("0109520123456788" + "234ABC", false, Gs1ErrorKind.UnknownAi)]
+    [Arguments("0109520123456788" + Gs1UnassignedAi.Ai234 + "ABC", false, Gs1ErrorKind.UnknownAi)]
     [Arguments("0109520123456788" + "10", false, Gs1ErrorKind.EmptyValue)]
     [Arguments("01095201234567", false, Gs1ErrorKind.ValueTooShort)]
     [Arguments("010952012345678A", false, Gs1ErrorKind.InvalidCharacter)]
@@ -194,7 +195,7 @@ public class Gs1ElementStringValidateTest
         await Assert.That((aiLetter.Kind, aiLetter.Offset, aiLetter.Length)).IsEqualTo((Gs1ErrorKind.UnknownAi, 16, 4));
 
         // An unknown AI under a predefined-length prefix is read by that length (Table 7-6), so a short one is cut, not unknown.
-        Gs1Validator.TryValidate("310612345", Year, out var unknownCut);
+        Gs1Validator.TryValidate(Gs1UnassignedAi.Ai3106 + "12345", Year, out var unknownCut);
         await Assert.That((unknownCut.Kind, unknownCut.Offset, unknownCut.Length)).IsEqualTo((Gs1ErrorKind.ValueTooShort, 4, 5));
 
         // The key that lacks its serial component is the place, where the engine points too.

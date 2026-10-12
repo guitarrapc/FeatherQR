@@ -105,8 +105,8 @@ public class Gs1AiTableTest
     [Arguments("010")]
     [Arguments("0A")]
     [Arguments("89")]
-    [Arguments("4000")]
-    [Arguments("3106")]
+    [Arguments(Gs1UnassignedAi.Ai7050)]
+    [Arguments(Gs1UnassignedAi.Ai3106)]
     [Arguments("12345")]
     public async Task TryFind_UnknownAi_IsFalse(string ai)
     {

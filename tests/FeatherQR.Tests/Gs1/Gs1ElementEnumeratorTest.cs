@@ -35,8 +35,8 @@ public class Gs1ElementEnumeratorTest
     [Test]
     public async Task EnumerateElements_ReadsAnUnknownAiToTheNextSeparator()
     {
-        var elements = Split("0109520123456788" + "234ABC\u001D" + "10DEF");
-        await Assert.That(elements).IsEquivalentTo([("01", "09520123456788"), ("234", "ABC"), ("10", "DEF")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        var elements = Split("0109520123456788" + Gs1UnassignedAi.Ai234 + "ABC\u001D" + "10DEF");
+        await Assert.That(elements).IsEquivalentTo([("01", "09520123456788"), (Gs1UnassignedAi.Ai234, "ABC"), ("10", "DEF")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
     [Test]
@@ -50,10 +50,10 @@ public class Gs1ElementEnumeratorTest
     [Test]
     public async Task EnumerateElements_ReadsAnUnknownAiOfPredefinedLengthByItsLength()
     {
-        await Assert.That(Split("3106123456" + "10ABC")).IsEquivalentTo([("3106", "123456"), ("10", "ABC")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
-        await Assert.That(Split("3106123456" + "0109520123456788")).IsEquivalentTo([("3106", "123456"), ("01", "09520123456788")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
-        await Assert.That(Split("4181234567890123" + "10ABC")).IsEquivalentTo([("418", "1234567890123"), ("10", "ABC")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
-        await Assert.That(Split("310612345")).IsEmpty();
+        await Assert.That(Split(Gs1UnassignedAi.Ai3106 + "123456" + "10ABC")).IsEquivalentTo([(Gs1UnassignedAi.Ai3106, "123456"), ("10", "ABC")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(Split(Gs1UnassignedAi.Ai3106 + "123456" + "0109520123456788")).IsEquivalentTo([(Gs1UnassignedAi.Ai3106, "123456"), ("01", "09520123456788")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(Split(Gs1UnassignedAi.Ai418 + "1234567890123" + "10ABC")).IsEquivalentTo([(Gs1UnassignedAi.Ai418, "1234567890123"), ("10", "ABC")], TUnit.Assertions.Enums.CollectionOrdering.Matching);
+        await Assert.That(Split(Gs1UnassignedAi.Ai3106 + "12345")).IsEmpty();
         await Assert.That(Split("01" + "0952012345678\u001D" + "10ABC")).IsEmpty();
     }
 

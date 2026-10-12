@@ -147,7 +147,7 @@ public class Gs1HriTest
     [Arguments("(12345)1", Gs1ErrorKind.InvalidText, 1, 5)]
     [Arguments(" (01)09520123456788", Gs1ErrorKind.InvalidText, 0, 1)]
     [Arguments("(89)ABC", Gs1ErrorKind.UnknownAi, 1, 2)]
-    [Arguments("(01)09520123456788(4000)ABC", Gs1ErrorKind.UnknownAi, 19, 4)]
+    [Arguments("(01)09520123456788(" + Gs1UnassignedAi.Ai7050 + ")ABC", Gs1ErrorKind.UnknownAi, 19, 4)]
     [Arguments("(01)09520123456788(10)", Gs1ErrorKind.EmptyValue, 22, 0)]
     [Arguments("(01)0952012345678", Gs1ErrorKind.ValueTooShort, 4, 13)]
     [Arguments("(01) 09520123456788", Gs1ErrorKind.InvalidCharacter, 4, 1)]
@@ -175,8 +175,8 @@ public class Gs1HriTest
     {
         await Assert.That(Gs1ElementString.TryToHri("0109520123456788" + "10A(1)B", out var hri, out _)).IsTrue();
         await Assert.That(hri).IsEqualTo("(01)09520123456788(10)A\\(1)B");
-        await Assert.That(Gs1ElementString.TryToHri("0109520123456788" + "234XYZ\u001D" + "10ABC\u001D", out hri, out _)).IsTrue();
-        await Assert.That(hri).IsEqualTo("(01)09520123456788(234)XYZ(10)ABC");
+        await Assert.That(Gs1ElementString.TryToHri("0109520123456788" + Gs1UnassignedAi.Ai234 + "XYZ\u001D" + "10ABC\u001D", out hri, out _)).IsTrue();
+        await Assert.That(hri).IsEqualTo("(01)09520123456788(" + Gs1UnassignedAi.Ai234 + ")XYZ(10)ABC");
         await Assert.That(Gs1ElementString.TryToHri("0109520123456788\u001D17251231", out hri, out _)).IsTrue();
         await Assert.That(hri).IsEqualTo("(01)09520123456788(17)251231");
 
