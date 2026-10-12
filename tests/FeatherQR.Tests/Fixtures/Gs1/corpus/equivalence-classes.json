@@ -1,0 +1,4099 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "gs1-support-plan.md equivalence classes",
+  "cases": [
+    {
+      "id": "eq-ai-2-digit",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)251231",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678817251231",
+        "elementString": "010952012345678817251231",
+        "bracketed": "(01)09520123456788(17)251231",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 251231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=251231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678817251231",
+        "hri": "(01)09520123456788(17)251231",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=251231",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817251231",
+        "hri": "(01)09520123456788(17)251231"
+      }
+    },
+    {
+      "id": "eq-ai-3-digit",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(253)9526064000028000001(10)ABC",
+      "note": "GDTI with its optional serial component and a batch, where (10) requires a key (01) that is absent",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2539526064000028000001\u001D10ABC",
+        "hri": "(253)9526064000028000001(10)ABC"
+      }
+    },
+    {
+      "id": "eq-ai-3-digit-serial-component",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(253)9526064000028000001",
+      "note": "GDTI with the optional X..17 serial component present",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^2539526064000028000001",
+        "elementString": "2539526064000028000001",
+        "bracketed": "(253)9526064000028000001",
+        "hri": [
+          "(253) 9526064000028000001"
+        ],
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2539526064000028000001",
+        "hri": "(253)9526064000028000001",
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2539526064000028000001",
+        "hri": "(253)9526064000028000001"
+      }
+    },
+    {
+      "id": "eq-ai-4-digit",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8200)http://example.com/",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567888200http://example.com/",
+        "elementString": "01095201234567888200http://example.com/",
+        "bracketed": "(01)09520123456788(8200)http://example.com/",
+        "hri": [
+          "(01) 09520123456788",
+          "(8200) http://example.com/"
+        ],
+        "digitalLinkError": "AI (8200) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567888200http://example.com/",
+        "hri": "(01)09520123456788(8200)http://example.com/",
+        "digitalLinkError": "Application Identifier '8200' is not permitted as a GS1 Digital Link data attribute.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567888200http://example.com/",
+        "hri": "(01)09520123456788(8200)http://example.com/"
+      }
+    },
+    {
+      "id": "eq-ai-range-decimal-digit",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(3103)000195",
+      "note": "3103: three decimal places",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567883103000195",
+        "elementString": "01095201234567883103000195",
+        "bracketed": "(01)09520123456788(3103)000195",
+        "hri": [
+          "(01) 09520123456788",
+          "(3103) 000195"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567883103000195",
+        "hri": "(01)09520123456788(3103)000195",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?3103=000195",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567883103000195",
+        "hri": "(01)09520123456788(3103)000195"
+      }
+    },
+    {
+      "id": "eq-ai-range-decimal-digit-variable",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(30)5(3923)3000200",
+      "note": "392n needs (30) or 31nn-36nn",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0109520123456788305^39233000200",
+        "elementString": "0109520123456788305\u001D39233000200",
+        "bracketed": "(01)09520123456788(30)5(3923)3000200",
+        "hri": [
+          "(01) 09520123456788",
+          "(30) 5",
+          "(3923) 3000200"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?30=5&3923=3000200"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788305\u001D39233000200",
+        "hri": "(01)09520123456788(30)5(3923)3000200",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?30=5&3923=3000200",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456788305\u001D39233000200",
+        "hri": "(01)09520123456788(30)5(3923)3000200"
+      }
+    },
+    {
+      "id": "eq-ai-predefined-fixed",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)251231(10)ABC",
+      "note": "no separator after (01) and (17)",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567881725123110ABC",
+        "elementString": "01095201234567881725123110ABC",
+        "bracketed": "(01)09520123456788(17)251231(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 251231",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?17=251231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567881725123110ABC",
+        "hri": "(01)09520123456788(17)251231(10)ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?17=251231",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567881725123110ABC",
+        "hri": "(01)09520123456788(17)251231(10)ABC"
+      }
+    },
+    {
+      "id": "eq-ai-fixed-outside-predefined",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8005)000365(10)ABC",
+      "note": "(8005) is N6 but not in Table 7-6, so a separator follows it",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567888005000365^10ABC",
+        "elementString": "01095201234567888005000365\u001D10ABC",
+        "bracketed": "(01)09520123456788(8005)000365(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(8005) 000365",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?8005=000365"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567888005000365\u001D10ABC",
+        "hri": "(01)09520123456788(8005)000365(10)ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?8005=000365",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567888005000365\u001D10ABC",
+        "hri": "(01)09520123456788(8005)000365(10)ABC"
+      }
+    },
+    {
+      "id": "eq-ai-variable",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)ABC(21)XYZ",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC^21XYZ",
+        "elementString": "010952012345678810ABC\u001D21XYZ",
+        "bracketed": "(01)09520123456788(10)ABC(21)XYZ",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC",
+          "(21) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC/21/XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC\u001D21XYZ",
+        "hri": "(01)09520123456788(10)ABC(21)XYZ",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC/21/XYZ",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC\u001D21XYZ",
+        "hri": "(01)09520123456788(10)ABC(21)XYZ"
+      }
+    },
+    {
+      "id": "eq-ai-optional-component-absent",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(7007)251231",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567887007251231",
+        "elementString": "01095201234567887007251231",
+        "bracketed": "(01)09520123456788(7007)251231",
+        "hri": [
+          "(01) 09520123456788",
+          "(7007) 251231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?7007=251231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567887007251231",
+        "hri": "(01)09520123456788(7007)251231",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?7007=251231",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567887007251231",
+        "hri": "(01)09520123456788(7007)251231"
+      }
+    },
+    {
+      "id": "eq-ai-optional-component-present",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(7007)251231261231",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567887007251231261231",
+        "elementString": "01095201234567887007251231261231",
+        "bracketed": "(01)09520123456788(7007)251231261231",
+        "hri": [
+          "(01) 09520123456788",
+          "(7007) 251231261231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?7007=251231261231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567887007251231261231",
+        "hri": "(01)09520123456788(7007)251231261231",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?7007=251231261231",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567887007251231261231",
+        "hri": "(01)09520123456788(7007)251231261231"
+      }
+    },
+    {
+      "id": "eq-ai-multi-component-8008-minimum",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8008)25123123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0109520123456788800825123123",
+        "elementString": "0109520123456788800825123123",
+        "bracketed": "(01)09520123456788(8008)25123123",
+        "hri": [
+          "(01) 09520123456788",
+          "(8008) 25123123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8008=25123123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788800825123123",
+        "hri": "(01)09520123456788(8008)25123123",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8008=25123123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456788800825123123",
+        "hri": "(01)09520123456788(8008)25123123"
+      }
+    },
+    {
+      "id": "eq-ai-multi-component-8008-minutes",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8008)2512312359",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678880082512312359",
+        "elementString": "010952012345678880082512312359",
+        "bracketed": "(01)09520123456788(8008)2512312359",
+        "hri": [
+          "(01) 09520123456788",
+          "(8008) 2512312359"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8008=2512312359"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678880082512312359",
+        "hri": "(01)09520123456788(8008)2512312359",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8008=2512312359",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678880082512312359",
+        "hri": "(01)09520123456788(8008)2512312359"
+      }
+    },
+    {
+      "id": "eq-ai-multi-component-8008-seconds",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8008)251231235959",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567888008251231235959",
+        "elementString": "01095201234567888008251231235959",
+        "bracketed": "(01)09520123456788(8008)251231235959",
+        "hri": [
+          "(01) 09520123456788",
+          "(8008) 251231235959"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8008=251231235959"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567888008251231235959",
+        "hri": "(01)09520123456788(8008)251231235959",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8008=251231235959",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567888008251231235959",
+        "hri": "(01)09520123456788(8008)251231235959"
+      }
+    },
+    {
+      "id": "eq-ai-multi-component-8008-odd-length",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8008)251231235",
+      "note": "9 digits: a partial component",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8008) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567888008251231235",
+        "hri": "(01)09520123456788(8008)251231235",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?8008=251231235",
+        "issues": []
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (8008) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-ai-multi-component-7040",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(417)9520123456788(7040)1AB-",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^417952012345678870401AB-",
+        "elementString": "417952012345678870401AB-",
+        "bracketed": "(417)9520123456788(7040)1AB-",
+        "hri": [
+          "(417) 9520123456788",
+          "(7040) 1AB-"
+        ],
+        "digitalLink": "https://id.gs1.org/417/9520123456788/7040/1AB-"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "417952012345678870401AB-",
+        "hri": "(417)9520123456788(7040)1AB-",
+        "digitalLink": "https://id.gs1.org/417/9520123456788/7040/1AB-",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "417952012345678870401AB-",
+        "hri": "(417)9520123456788(7040)1AB-"
+      }
+    },
+    {
+      "id": "eq-sep-after-variable-not-last",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810ABC\u001D17251231",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC^17251231",
+        "elementString": "010952012345678810ABC\u001D17251231",
+        "bracketed": "(01)09520123456788(10)ABC(17)251231",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC",
+          "(17) 251231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?17=251231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC\u001D17251231",
+        "hri": "(01)09520123456788(10)ABC(17)251231",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?17=251231",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC\u001D17251231",
+        "hri": "(01)09520123456788(10)ABC(17)251231"
+      }
+    },
+    {
+      "id": "eq-sep-after-fixed-outside-predefined",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "01095201234567888005000365\u001D10ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567888005000365^10ABC",
+        "elementString": "01095201234567888005000365\u001D10ABC",
+        "bracketed": "(01)09520123456788(8005)000365(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(8005) 000365",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?8005=000365"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567888005000365\u001D10ABC",
+        "hri": "(01)09520123456788(8005)000365(10)ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?8005=000365",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567888005000365\u001D10ABC",
+        "hri": "(01)09520123456788(8005)000365(10)ABC"
+      }
+    },
+    {
+      "id": "eq-sep-none-after-predefined",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "01095201234567881725123110ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567881725123110ABC",
+        "elementString": "01095201234567881725123110ABC",
+        "bracketed": "(01)09520123456788(17)251231(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 251231",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?17=251231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567881725123110ABC",
+        "hri": "(01)09520123456788(17)251231(10)ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?17=251231",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567881725123110ABC",
+        "hri": "(01)09520123456788(17)251231(10)ABC"
+      }
+    },
+    {
+      "id": "eq-sep-none-after-last-variable",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC",
+        "elementString": "010952012345678810ABC",
+        "bracketed": "(01)09520123456788(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC",
+        "hri": "(01)09520123456788(10)ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC",
+        "hri": "(01)09520123456788(10)ABC"
+      }
+    },
+    {
+      "id": "eq-sep-redundant-after-predefined",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "0109520123456788\u001D17251231",
+      "note": "7.8.6.3: a processing routine shall tolerate a single separator after any element",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0109520123456788^17251231",
+        "elementString": "0109520123456788\u001D17251231",
+        "bracketed": "(01)09520123456788(17)251231",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 251231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=251231"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnexpectedFnc1Separator(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456788\u001D17251231",
+        "hri": "(01)09520123456788(17)251231"
+      }
+    },
+    {
+      "id": "eq-sep-trailing",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810ABC\u001D",
+      "note": "a trailing separator after the last element",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC^",
+        "elementString": "010952012345678810ABC\u001D",
+        "bracketed": "(01)09520123456788(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput(10)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC\u001D",
+        "hri": "(01)09520123456788(10)ABC"
+      }
+    },
+    {
+      "id": "eq-sep-two-in-a-row",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810ABC\u001D\u001D17251231",
+      "note": "an empty field",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No known AI is a prefix of: ^172..."
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC\u001D\u001D17251231",
+        "hri": "010952012345678810ABC<GS><GS>17251231"
+      }
+    },
+    {
+      "id": "eq-sep-missing-after-variable",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810ABC17251231",
+      "note": "the missing separator makes the batch ABC17251231: no error, a different meaning",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC17251231",
+        "elementString": "010952012345678810ABC17251231",
+        "bracketed": "(01)09520123456788(10)ABC17251231",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC17251231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC17251231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC17251231",
+        "hri": "(01)09520123456788(10)ABC17251231",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC17251231",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC17251231",
+        "hri": "(01)09520123456788(10)ABC17251231"
+      }
+    },
+    {
+      "id": "eq-sep-missing-makes-too-long",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810ABCDEFGHIJKLMN17251231",
+      "note": "the missing separator makes the batch 22 characters, past X..20",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(10)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABCDEFGHIJKLMN17251231",
+        "hri": "010952012345678810ABCDEFGHIJKLMN17251231"
+      }
+    },
+    {
+      "id": "eq-sep-leading",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "\u001D0109520123456788",
+      "note": "a separator before the first element",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No known AI is a prefix of: ^010..."
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "\u001D0109520123456788",
+        "hri": "<GS>0109520123456788"
+      }
+    },
+    {
+      "id": "eq-cset82-boundary",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)!\"%&'*+,-./:;<=>?_Az",
+      "note": "CSET 82 characters that need no escape",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810!\"%&'*+,-./:;<=>?_Az",
+        "elementString": "010952012345678810!\"%&'*+,-./:;<=>?_Az",
+        "bracketed": "(01)09520123456788(10)!\"%&'*+,-./:;<=>?_Az",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) !\"%&'*+,-./:;<=>?_Az"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/%21%22%25%26%27%2A%2B%2C-.%2F%3A%3B%3C%3D%3E%3F_Az"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810!\"%&'*+,-./:;<=>?_Az",
+        "hri": "(01)09520123456788(10)!\"%&'*+,-./:;<=>?_Az",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/%21%22%25%26%27%2A%2B%2C-.%2F%3A%3B%3C%3D%3E%3F_Az",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810!\"%&'*+,-./:;<=>?_Az",
+        "hri": "(01)09520123456788(10)!\"%&'*+,-./:;<=>?_Az"
+      }
+    },
+    {
+      "id": "eq-cset82-escaped-parenthesis",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)A\\(1)B",
+      "note": "a literal parenthesis escaped as \\( in bracketed input",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810A(1)B",
+        "elementString": "010952012345678810A(1)B",
+        "bracketed": "(01)09520123456788(10)A\\(1)B",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) A(1)B"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/A%281%29B"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput(1)",
+          "InvalidCharacter(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810A(1)B",
+        "hri": "(01)09520123456788(10)A(1)B"
+      }
+    },
+    {
+      "id": "eq-cset82-parenthesis-element-string",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810A(1)B",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810A(1)B",
+        "elementString": "010952012345678810A(1)B",
+        "bracketed": "(01)09520123456788(10)A\\(1)B",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) A(1)B"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/A%281%29B"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810A(1)B",
+        "hri": "(01)09520123456788(10)A(1)B",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/A%281%29B",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810A(1)B",
+        "hri": "(01)09520123456788(10)A(1)B"
+      }
+    },
+    {
+      "id": "eq-cset82-space",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)A B",
+      "note": "space is outside CSET 82",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(10)A| |B"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810A B",
+        "hri": "(01)09520123456788(10)A B"
+      }
+    },
+    {
+      "id": "eq-cset82-hash",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)A#B",
+      "note": "# is outside CSET 82",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(10)A|#|B"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810A#B",
+        "hri": "(01)09520123456788(10)A#B"
+      }
+    },
+    {
+      "id": "eq-cset82-non-ascii",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)é",
+      "note": "a non-ASCII character",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(10)|�|�"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810e",
+        "hri": "(01)09520123456788(10)e"
+      }
+    },
+    {
+      "id": "eq-cset82-non-ascii-element-string",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "010952012345678810é",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(10)|�|�"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810é",
+        "hri": "(01)09520123456788(10)é"
+      }
+    },
+    {
+      "id": "eq-cset82-control-character",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)A\tB",
+      "note": "a control character",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(10)A|\t|B"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 251: Control characters are not supported by GS1 (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-cset39-boundary",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8010)0628165987ABC-#/",
+      "note": "CSET 39: digits, upper case, #, - and /",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^80100628165987ABC-#/",
+        "elementString": "80100628165987ABC-#/",
+        "bracketed": "(8010)0628165987ABC-#/",
+        "hri": [
+          "(8010) 0628165987ABC-#/"
+        ],
+        "digitalLink": "https://id.gs1.org/8010/0628165987ABC-%23%2F"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "80100628165987ABC-#/",
+        "hri": "(8010)0628165987ABC-#/",
+        "digitalLink": "https://id.gs1.org/8010/0628165987ABC-%23%2F",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80100628165987ABC-#/",
+        "hri": "(8010)0628165987ABC-#/"
+      }
+    },
+    {
+      "id": "eq-cset39-lower-case",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8010)0628165987abc",
+      "note": "lower case is outside CSET 39",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8010): A non-CSET 39 character was found where a CSET 39 character is expected.",
+        "errorMarkup": "(8010)0628165987|a|bc"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(8010)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80100628165987abc",
+        "hri": "(8010)0628165987abc"
+      }
+    },
+    {
+      "id": "eq-cset64-boundary",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(21)ABC(8030)QUJDREVGRw==",
+      "note": "base64url with = padding",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678821ABC^8030QUJDREVGRw==",
+        "elementString": "010952012345678821ABC\u001D8030QUJDREVGRw==",
+        "bracketed": "(01)09520123456788(21)ABC(8030)QUJDREVGRw==",
+        "hri": [
+          "(01) 09520123456788",
+          "(21) ABC",
+          "(8030) QUJDREVGRw=="
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/ABC?8030=QUJDREVGRw%3D%3D"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678821ABC\u001D8030QUJDREVGRw==",
+        "hri": "(01)09520123456788(21)ABC(8030)QUJDREVGRw==",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/ABC?8030=QUJDREVGRw%3D%3D",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678821ABC\u001D8030QUJDREVGRw==",
+        "hri": "(01)09520123456788(21)ABC(8030)QUJDREVGRw=="
+      }
+    },
+    {
+      "id": "eq-cset64-no-padding",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(21)ABC(8030)QUJDREVGRw",
+      "note": "base64url without padding",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678821ABC^8030QUJDREVGRw",
+        "elementString": "010952012345678821ABC\u001D8030QUJDREVGRw",
+        "bracketed": "(01)09520123456788(21)ABC(8030)QUJDREVGRw",
+        "hri": [
+          "(01) 09520123456788",
+          "(21) ABC",
+          "(8030) QUJDREVGRw"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/ABC?8030=QUJDREVGRw"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678821ABC\u001D8030QUJDREVGRw",
+        "hri": "(01)09520123456788(21)ABC(8030)QUJDREVGRw",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/ABC?8030=QUJDREVGRw",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678821ABC\u001D8030QUJDREVGRw",
+        "hri": "(01)09520123456788(21)ABC(8030)QUJDREVGRw"
+      }
+    },
+    {
+      "id": "eq-cset64-invalid-character",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(21)ABC(8030)ABC:123",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8030): A non-CSET 64 character was found where a CSET 64 character is expected.",
+        "errorMarkup": "(8030)ABC|:|123"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(8030)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678821ABC\u001D8030ABC:123",
+        "hri": "(01)09520123456788(21)ABC(8030)ABC:123"
+      }
+    },
+    {
+      "id": "eq-cset64-invalid-padding",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(21)ABC(8030)123=",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8030): Incorrect number of CSET 64 pad characters.",
+        "errorMarkup": "(8030)123|=|"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678821ABC\u001D8030123=",
+        "hri": "(01)09520123456788(21)ABC(8030)123=",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/21/ABC?8030=123%3D",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678821ABC\u001D8030123=",
+        "hri": "(01)09520123456788(21)ABC(8030)123="
+      }
+    },
+    {
+      "id": "eq-numeric-with-letter",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)0952012345678A",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(01)0952012345678|A|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678A",
+        "hri": "(01)0952012345678A"
+      }
+    },
+    {
+      "id": "eq-numeric-with-space",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)0952012345678 ",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(01)0952012345678| |"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678 ",
+        "hri": "(01)0952012345678 "
+      }
+    },
+    {
+      "id": "eq-length-fixed-short",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)0952012345678",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (01) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-length-fixed-long",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)095201234567881",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(01)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (01) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-length-variable-max",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRST",
+      "note": "20 characters",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABCDEFGHIJKLMNOPQRST",
+        "elementString": "010952012345678810ABCDEFGHIJKLMNOPQRST",
+        "bracketed": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRST",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABCDEFGHIJKLMNOPQRST"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABCDEFGHIJKLMNOPQRST"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABCDEFGHIJKLMNOPQRST",
+        "hri": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRST",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABCDEFGHIJKLMNOPQRST",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABCDEFGHIJKLMNOPQRST",
+        "hri": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRST"
+      }
+    },
+    {
+      "id": "eq-length-variable-over",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRSTU",
+      "note": "21 characters",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(10)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (10) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-length-variable-empty",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)",
+      "note": "an empty value",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(10)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 258: Empty data field in input (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-length-variable-empty-not-last",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)(17)251231",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(10)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 258: Empty data field in input (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-csum-gtin-valid",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0109520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788"
+      }
+    },
+    {
+      "id": "eq-csum-gtin-invalid",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456789",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): The numeric check digit is incorrect.",
+        "errorMarkup": "(01)0952012345678|9|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(01)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456789",
+        "hri": "(01)09520123456789"
+      }
+    },
+    {
+      "id": "eq-csum-sscc-valid",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(00)195201234567891232",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^00195201234567891232",
+        "elementString": "00195201234567891232",
+        "bracketed": "(00)195201234567891232",
+        "hri": [
+          "(00) 195201234567891232"
+        ],
+        "digitalLink": "https://id.gs1.org/00/195201234567891232"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00195201234567891232",
+        "hri": "(00)195201234567891232",
+        "digitalLink": "https://id.gs1.org/00/195201234567891232",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00195201234567891232",
+        "hri": "(00)195201234567891232"
+      }
+    },
+    {
+      "id": "eq-csum-sscc-invalid",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(00)195201234567891233",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (00): The numeric check digit is incorrect.",
+        "errorMarkup": "(00)19520123456789123|3|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(00)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "00195201234567891233",
+        "hri": "(00)195201234567891233"
+      }
+    },
+    {
+      "id": "eq-csum-grai",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8003)09520123456788ABC",
+      "note": "GRAI: the check digit is over the N13 after the leading 0",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^800309520123456788ABC",
+        "elementString": "800309520123456788ABC",
+        "bracketed": "(8003)09520123456788ABC",
+        "hri": [
+          "(8003) 09520123456788ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/09520123456788ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800309520123456788ABC",
+        "hri": "(8003)09520123456788ABC",
+        "digitalLink": "https://id.gs1.org/8003/09520123456788ABC",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800309520123456788ABC",
+        "hri": "(8003)09520123456788ABC"
+      }
+    },
+    {
+      "id": "eq-csumalpha-gmn-valid",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8013)1987654Ad4X4bL5ttr2310c2K",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^80131987654Ad4X4bL5ttr2310c2K",
+        "elementString": "80131987654Ad4X4bL5ttr2310c2K",
+        "bracketed": "(8013)1987654Ad4X4bL5ttr2310c2K",
+        "hri": [
+          "(8013) 1987654Ad4X4bL5ttr2310c2K"
+        ],
+        "digitalLink": "https://id.gs1.org/8013/1987654Ad4X4bL5ttr2310c2K"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "80131987654Ad4X4bL5ttr2310c2K",
+        "hri": "(8013)1987654Ad4X4bL5ttr2310c2K",
+        "digitalLink": "https://id.gs1.org/8013/1987654Ad4X4bL5ttr2310c2K",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80131987654Ad4X4bL5ttr2310c2K",
+        "hri": "(8013)1987654Ad4X4bL5ttr2310c2K"
+      }
+    },
+    {
+      "id": "eq-csumalpha-gmn-invalid",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8013)1987654Ad4X4bL5ttr2310c2L",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8013): The alphanumeric check-character pair are incorrect.",
+        "errorMarkup": "(8013)1987654Ad4X4bL5ttr2310c|2L|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8013)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80131987654Ad4X4bL5ttr2310c2L",
+        "hri": "(8013)1987654Ad4X4bL5ttr2310c2L"
+      }
+    },
+    {
+      "id": "eq-date-day-00-allowed",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)251200",
+      "note": "yymmd0: day 00 means end of month",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678817251200",
+        "elementString": "010952012345678817251200",
+        "bracketed": "(01)09520123456788(17)251200",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 251200"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=251200"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678817251200",
+        "hri": "(01)09520123456788(17)251200",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=251200",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817251200",
+        "hri": "(01)09520123456788(17)251200"
+      }
+    },
+    {
+      "id": "eq-date-day-00-refused",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(7006)251200",
+      "note": "yymmdd on (7006): a real day is required",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7006): The date contains an illegal day of the month.",
+        "errorMarkup": "(7006)2512|00|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7006)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567887006251200",
+        "hri": "(01)09520123456788(7006)251200"
+      }
+    },
+    {
+      "id": "eq-date-leap-day-2024",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)240229",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678817240229",
+        "elementString": "010952012345678817240229",
+        "bracketed": "(01)09520123456788(17)240229",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 240229"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=240229"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678817240229",
+        "hri": "(01)09520123456788(17)240229",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=240229",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817240229",
+        "hri": "(01)09520123456788(17)240229"
+      }
+    },
+    {
+      "id": "eq-date-leap-day-2025",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)250229",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (17): The date contains an illegal day of the month.",
+        "errorMarkup": "(17)2502|29|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(17)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817250229",
+        "hri": "(01)09520123456788(17)250229"
+      }
+    },
+    {
+      "id": "eq-date-leap-day-2000",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)000229",
+      "note": "year 00 reads as 2000 while 2000 is inside the -49/+50 window, until 2050",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678817000229",
+        "elementString": "010952012345678817000229",
+        "bracketed": "(01)09520123456788(17)000229",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 000229"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=000229"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678817000229",
+        "hri": "(01)09520123456788(17)000229",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=000229",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817000229",
+        "hri": "(01)09520123456788(17)000229"
+      }
+    },
+    {
+      "id": "eq-date-month-00",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)250031",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (17): The date contains an illegal month of the year.",
+        "errorMarkup": "(17)25|00|31"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(17)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817250031",
+        "hri": "(01)09520123456788(17)250031"
+      }
+    },
+    {
+      "id": "eq-date-month-13",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)251331",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (17): The date contains an illegal month of the year.",
+        "errorMarkup": "(17)25|13|31"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(17)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817251331",
+        "hri": "(01)09520123456788(17)251331"
+      }
+    },
+    {
+      "id": "eq-date-day-32",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(17)251232",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (17): The date contains an illegal day of the month.",
+        "errorMarkup": "(17)2512|32|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(17)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678817251232",
+        "hri": "(01)09520123456788(17)251232"
+      }
+    },
+    {
+      "id": "eq-date-yyyymmdd",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8018)795260646688514634(7250)20251231",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8018795260646688514634^725020251231",
+        "elementString": "8018795260646688514634\u001D725020251231",
+        "bracketed": "(8018)795260646688514634(7250)20251231",
+        "hri": [
+          "(8018) 795260646688514634",
+          "(7250) 20251231"
+        ],
+        "digitalLink": "https://id.gs1.org/8018/795260646688514634?7250=20251231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8018795260646688514634\u001D725020251231",
+        "hri": "(8018)795260646688514634(7250)20251231",
+        "digitalLink": "https://id.gs1.org/8018/795260646688514634?7250=20251231",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8018795260646688514634\u001D725020251231",
+        "hri": "(8018)795260646688514634(7250)20251231"
+      }
+    },
+    {
+      "id": "eq-date-yyyymmdd-invalid",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8018)795260646688514634(7250)20251301",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7250): The date contains an illegal month of the year.",
+        "errorMarkup": "(7250)2025|13|01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(7250)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8018795260646688514634\u001D725020251301",
+        "hri": "(8018)795260646688514634(7250)20251301"
+      }
+    },
+    {
+      "id": "eq-req-missing",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(10)ABC",
+      "note": "(10) requires 01, 02, 03, 8006 or 8026",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "10ABC",
+        "hri": "(10)ABC"
+      }
+    },
+    {
+      "id": "eq-req-satisfied",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC",
+        "elementString": "010952012345678810ABC",
+        "bracketed": "(01)09520123456788(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC",
+        "hri": "(01)09520123456788(10)ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC",
+        "hri": "(01)09520123456788(10)ABC"
+      }
+    },
+    {
+      "id": "eq-req-satisfied-by-alternative",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8006)095201234567880102(10)ABC",
+      "note": "(10) satisfied by (8006)",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^8006095201234567880102^10ABC",
+        "elementString": "8006095201234567880102\u001D10ABC",
+        "bracketed": "(8006)095201234567880102(10)ABC",
+        "hri": [
+          "(8006) 095201234567880102",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/8006/095201234567880102/10/ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8006095201234567880102\u001D10ABC",
+        "hri": "(8006)095201234567880102(10)ABC",
+        "digitalLink": "https://id.gs1.org/8006/095201234567880102/10/ABC",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8006095201234567880102\u001D10ABC",
+        "hri": "(8006)095201234567880102(10)ABC"
+      }
+    },
+    {
+      "id": "eq-req-compound-missing-both",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(8040)123456789012345",
+      "note": "(8040) requires 01 with 21",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8040) are not satisfied: 01+21"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8040)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8040123456789012345",
+        "hri": "(8040)123456789012345"
+      }
+    },
+    {
+      "id": "eq-req-compound-missing-one",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8040)123456789012345",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8040) are not satisfied: 01+21"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8040)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567888040123456789012345",
+        "hri": "(01)09520123456788(8040)123456789012345"
+      }
+    },
+    {
+      "id": "eq-req-compound-satisfied",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(21)ABC(8040)123456789012345",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678821ABC^8040123456789012345",
+        "elementString": "010952012345678821ABC\u001D8040123456789012345",
+        "bracketed": "(01)09520123456788(21)ABC(8040)123456789012345",
+        "hri": [
+          "(01) 09520123456788",
+          "(21) ABC",
+          "(8040) 123456789012345"
+        ],
+        "digitalLinkError": "AI (8040) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678821ABC\u001D8040123456789012345",
+        "hri": "(01)09520123456788(21)ABC(8040)123456789012345",
+        "digitalLinkError": "Application Identifier '8040' is not permitted as a GS1 Digital Link data attribute.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678821ABC\u001D8040123456789012345",
+        "hri": "(01)09520123456788(21)ABC(8040)123456789012345"
+      }
+    },
+    {
+      "id": "eq-ex-serial-and-tpx",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(21)ABC(235)XYZ",
+      "note": "(21) excludes (235)",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (21) with AI (235)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MutuallyExclusiveApplicationIdentifiers(21)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678821ABC\u001D235XYZ",
+        "hri": "(01)09520123456788(21)ABC(235)XYZ"
+      }
+    },
+    {
+      "id": "eq-ex-gtin-and-content",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(02)09520123456788(37)5",
+      "note": "(02) excludes (01)",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (01) with AI (37)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MutuallyExclusiveApplicationIdentifiers(01)",
+          "MutuallyExclusiveApplicationIdentifiers(02)",
+          "MissingRequiredApplicationIdentifier(37)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567880209520123456788375",
+        "hri": "(01)09520123456788(02)09520123456788(37)5"
+      }
+    },
+    {
+      "id": "eq-ex-pattern",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(3103)000195(3104)000195",
+      "note": "310n excludes 310n",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "It is invalid to pair AI (3103) with AI (3104)"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MutuallyExclusiveApplicationIdentifiers(3103)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678831030001953104000195",
+        "hri": "(01)09520123456788(3103)000195(3104)000195"
+      }
+    },
+    {
+      "id": "eq-repeat-equal",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)ABC(10)ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC^10ABC",
+        "elementString": "010952012345678810ABC\u001D10ABC",
+        "bracketed": "(01)09520123456788(10)ABC(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC\u001D10ABC",
+        "hri": "(01)09520123456788(10)ABC(10)ABC",
+        "digitalLinkError": "Application Identifier '10' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC\u001D10ABC",
+        "hri": "(01)09520123456788(10)ABC(10)ABC"
+      }
+    },
+    {
+      "id": "eq-repeat-unequal",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)ABC(10)DEF",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Multiple instances of AI (10) have different values"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC\u001D10DEF",
+        "hri": "(01)09520123456788(10)ABC(10)DEF",
+        "digitalLinkError": "Application Identifier '10' occurs more than once.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810ABC\u001D10DEF",
+        "hri": "(01)09520123456788(10)ABC(10)DEF"
+      }
+    },
+    {
+      "id": "eq-unknown-ai-2-digit",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(89)ABC",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 89"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(89)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (89) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-unknown-ai-4-digit",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(4000)ABC",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 4000"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(4000)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 260: Invalid AI (4000) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-unknown-ai-element-string-last",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "01095201234567884000ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567884000ABC",
+        "elementString": "01095201234567884000ABC",
+        "bracketed": "(01)09520123456788(400)0ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(400) 0ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?400=0ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567884000ABC",
+        "hri": "(01)09520123456788(400)0ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?400=0ABC",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567884000ABC",
+        "hri": "(01)09520123456788(400)0ABC"
+      }
+    },
+    {
+      "id": "eq-unknown-ai-element-string-separated",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "01095201234567884000ABC\u001D10DEF",
+      "note": "an unknown AI read as variable length up to the separator",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567884000ABC^10DEF",
+        "elementString": "01095201234567884000ABC\u001D10DEF",
+        "bracketed": "(01)09520123456788(400)0ABC(10)DEF",
+        "hri": [
+          "(01) 09520123456788",
+          "(400) 0ABC",
+          "(10) DEF"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/DEF?400=0ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567884000ABC\u001D10DEF",
+        "hri": "(01)09520123456788(400)0ABC(10)DEF",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/DEF?400=0ABC",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567884000ABC\u001D10DEF",
+        "hri": "(01)09520123456788(400)0ABC(10)DEF"
+      }
+    },
+    {
+      "id": "eq-text-unbalanced-open",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(0109520123456788",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 253: Malformed AI in input (brackets don't match) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-unbalanced-close",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "01)09520123456788",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier",
+          "InvalidCharacter(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 855: Data does not start with an AI or Digital Link URI (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-non-digit-ai",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(0A)09520123456788",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 0A"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput(0A)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 257: Invalid AI at position 1 in input (non-numeric characters in AI) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-space-after-ai",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01) 09520123456788",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(01)",
+          "InvalidCharacter(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (01) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-leading-space",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": " (01)09520123456788",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 855: Data does not start with an AI or Digital Link URI (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-trailing-space",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788 ",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(01)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (01) (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-square-brackets",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "[01]09520123456788",
+      "note": "libzint's bracket convention",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788"
+      }
+    },
+    {
+      "id": "eq-text-element-string-given-as-bracketed",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "010952012345678810ABC",
+      "note": "no brackets at all",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810ABC",
+        "hri": "(01)09520123456788(10)ABC",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC",
+        "issues": []
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 855: Data does not start with an AI or Digital Link URI (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-empty",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Missing FNC1 in first position"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Can not create a barcode from NULL or empty data"
+      }
+    },
+    {
+      "id": "eq-element-string-empty",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      }
+    },
+    {
+      "id": "eq-element-string-fnc1-caret",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ElementString",
+      "input": "^0109520123456788",
+      "note": "the Syntax Engine's ^ is not a separator in an element string",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No known AI is a prefix of: ^010..."
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "^0109520123456788",
+        "hri": "^0109520123456788"
+      }
+    },
+    {
+      "id": "eq-text-ai-only",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Failed to parse AI data"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(01)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 258: Empty data field in input (retval: 6)"
+      }
+    },
+    {
+      "id": "eq-text-ai-with-leading-zero",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(010)9520123456788",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unrecognised AI: 010"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(010)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788"
+      }
+    },
+    {
+      "id": "eq-dl-key-00",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/00/195201234567891232",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/00/195201234567891232",
+        "elementString": "00195201234567891232",
+        "bracketed": "(00)195201234567891232",
+        "hri": [
+          "(00) 195201234567891232"
+        ],
+        "digitalLink": "https://id.gs1.org/00/195201234567891232"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "00195201234567891232",
+        "hri": "(00)195201234567891232",
+        "digitalLink": "https://id.gs1.org/00/195201234567891232",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-01",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-253",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/253/9526064000028000001",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/253/9526064000028000001",
+        "elementString": "2539526064000028000001",
+        "bracketed": "(253)9526064000028000001",
+        "hri": [
+          "(253) 9526064000028000001"
+        ],
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "2539526064000028000001",
+        "hri": "(253)9526064000028000001",
+        "digitalLink": "https://id.gs1.org/253/9526064000028000001",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-255",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/255/95201234567881234",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/255/95201234567881234",
+        "elementString": "25595201234567881234",
+        "bracketed": "(255)95201234567881234",
+        "hri": [
+          "(255) 95201234567881234"
+        ],
+        "digitalLink": "https://id.gs1.org/255/95201234567881234"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "25595201234567881234",
+        "hri": "(255)95201234567881234",
+        "digitalLink": "https://id.gs1.org/255/95201234567881234",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-401",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/401/9521234ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/401/9521234ABC",
+        "elementString": "4019521234ABC",
+        "bracketed": "(401)9521234ABC",
+        "hri": [
+          "(401) 9521234ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/401/9521234ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "4019521234ABC",
+        "hri": "(401)9521234ABC",
+        "digitalLink": "https://id.gs1.org/401/9521234ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-402",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/402/95212345678901234",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (402): The numeric check digit is incorrect.",
+        "errorMarkup": "(402)9521234567890123|4|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(402)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-key-414",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/414/9520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/414/9520123456788",
+        "elementString": "4149520123456788",
+        "bracketed": "(414)9520123456788",
+        "hri": [
+          "(414) 9520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/414/9520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "4149520123456788",
+        "hri": "(414)9520123456788",
+        "digitalLink": "https://id.gs1.org/414/9520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-415",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/415/9520123456788/8020/INV123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/415/9520123456788/8020/INV123",
+        "elementString": "41595201234567888020INV123",
+        "bracketed": "(415)9520123456788(8020)INV123",
+        "hri": [
+          "(415) 9520123456788",
+          "(8020) INV123"
+        ],
+        "digitalLink": "https://id.gs1.org/415/9520123456788/8020/INV123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "41595201234567888020INV123",
+        "hri": "(415)9520123456788(8020)INV123",
+        "digitalLink": "https://id.gs1.org/415/9520123456788/8020/INV123",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-417",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/417/9520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/417/9520123456788",
+        "elementString": "4179520123456788",
+        "bracketed": "(417)9520123456788",
+        "hri": [
+          "(417) 9520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/417/9520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "4179520123456788",
+        "hri": "(417)9520123456788",
+        "digitalLink": "https://id.gs1.org/417/9520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-8003",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/8003/09520123456788ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/8003/09520123456788ABC",
+        "elementString": "800309520123456788ABC",
+        "bracketed": "(8003)09520123456788ABC",
+        "hri": [
+          "(8003) 09520123456788ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/09520123456788ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800309520123456788ABC",
+        "hri": "(8003)09520123456788ABC",
+        "digitalLink": "https://id.gs1.org/8003/09520123456788ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-8004",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/8004/9520614141234567",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/8004/9520614141234567",
+        "elementString": "80049520614141234567",
+        "bracketed": "(8004)9520614141234567",
+        "hri": [
+          "(8004) 9520614141234567"
+        ],
+        "digitalLink": "https://id.gs1.org/8004/9520614141234567"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "80049520614141234567",
+        "hri": "(8004)9520614141234567",
+        "digitalLink": "https://id.gs1.org/8004/9520614141234567",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-8006",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/8006/095201234567880102/21/ABC",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/8006/095201234567880102/21/ABC",
+        "elementString": "8006095201234567880102\u001D21ABC",
+        "bracketed": "(8006)095201234567880102(21)ABC",
+        "hri": [
+          "(8006) 095201234567880102",
+          "(21) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/8006/095201234567880102/21/ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8006095201234567880102\u001D21ABC",
+        "hri": "(8006)095201234567880102(21)ABC",
+        "digitalLink": "https://id.gs1.org/8006/095201234567880102/21/ABC",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-8010",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/8010/0628165987ABC/8011/123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/8010/0628165987ABC/8011/123",
+        "elementString": "80100628165987ABC\u001D8011123",
+        "bracketed": "(8010)0628165987ABC(8011)123",
+        "hri": [
+          "(8010) 0628165987ABC",
+          "(8011) 123"
+        ],
+        "digitalLink": "https://id.gs1.org/8010/0628165987ABC/8011/123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "80100628165987ABC\u001D8011123",
+        "hri": "(8010)0628165987ABC(8011)123",
+        "digitalLink": "https://id.gs1.org/8010/0628165987ABC/8011/123",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-8013",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/8013/1987654Ad4X4bL5ttr2310c2K",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/8013/1987654Ad4X4bL5ttr2310c2K",
+        "elementString": "80131987654Ad4X4bL5ttr2310c2K",
+        "bracketed": "(8013)1987654Ad4X4bL5ttr2310c2K",
+        "hri": [
+          "(8013) 1987654Ad4X4bL5ttr2310c2K"
+        ],
+        "digitalLink": "https://id.gs1.org/8013/1987654Ad4X4bL5ttr2310c2K"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "80131987654Ad4X4bL5ttr2310c2K",
+        "hri": "(8013)1987654Ad4X4bL5ttr2310c2K",
+        "digitalLink": "https://id.gs1.org/8013/1987654Ad4X4bL5ttr2310c2K",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-8017",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/8017/795260646688514634/8019/1",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/8017/795260646688514634/8019/1",
+        "elementString": "8017795260646688514634\u001D80191",
+        "bracketed": "(8017)795260646688514634(8019)1",
+        "hri": [
+          "(8017) 795260646688514634",
+          "(8019) 1"
+        ],
+        "digitalLink": "https://id.gs1.org/8017/795260646688514634/8019/1"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8017795260646688514634\u001D80191",
+        "hri": "(8017)795260646688514634(8019)1",
+        "digitalLink": "https://id.gs1.org/8017/795260646688514634/8019/1",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-key-8018",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/8018/795260646688514634",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/8018/795260646688514634",
+        "elementString": "8018795260646688514634",
+        "bracketed": "(8018)795260646688514634",
+        "hri": [
+          "(8018) 795260646688514634"
+        ],
+        "digitalLink": "https://id.gs1.org/8018/795260646688514634"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "8018795260646688514634",
+        "hri": "(8018)795260646688514634",
+        "digitalLink": "https://id.gs1.org/8018/795260646688514634",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-qualifiers-in-order",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123",
+        "elementString": "0109520123456788222A\u001D10ABC\u001D21123",
+        "bracketed": "(01)09520123456788(22)2A(10)ABC(21)123",
+        "hri": [
+          "(01) 09520123456788",
+          "(22) 2A",
+          "(10) ABC",
+          "(21) 123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788222A\u001D10ABC\u001D21123",
+        "hri": "(01)09520123456788(22)2A(10)ABC(21)123",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-qualifiers-out-of-order",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/ABC/22/2A",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AIs in the path are not a valid key-qualifier sequence for the key"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(22)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-qualifier-alternative-235",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/235/XYZ",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/235/XYZ",
+        "elementString": "0109520123456788235XYZ",
+        "bracketed": "(01)09520123456788(235)XYZ",
+        "hri": [
+          "(01) 09520123456788",
+          "(235) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/235/XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788235XYZ",
+        "hri": "(01)09520123456788(235)XYZ",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/235/XYZ",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-qualifiers-mixed-alternatives",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/22/2A/235/XYZ",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AIs in the path are not a valid key-qualifier sequence for the key"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788222A\u001D235XYZ",
+        "hri": "(01)09520123456788(22)2A(235)XYZ",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A/235/XYZ",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-query-attributes",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?17=251231&3103=000195",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?17=251231&3103=000195",
+        "elementString": "0109520123456788172512313103000195",
+        "bracketed": "(01)09520123456788(17)251231(3103)000195",
+        "hri": [
+          "(01) 09520123456788",
+          "(17) 251231",
+          "(3103) 000195"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=251231&3103=000195"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788172512313103000195",
+        "hri": "(01)09520123456788(17)251231(3103)000195",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?17=251231&3103=000195",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-query-8200",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?8200=http%3A%2F%2Fexample.com",
+      "note": "(8200) cannot be a Digital Link attribute",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8200) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(8200)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-query-03",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?03=09520123456788",
+      "note": "(03) is not permitted in a Digital Link URI",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (03) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(03)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-query-8014",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?8014=1987654Ad4X4bL5ttr2310c2K",
+      "note": "(8014) is not permitted in a Digital Link URI",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8014) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(8014)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-query-8040",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/21/ABC?8040=123456789012345",
+      "note": "a data attribute URI Syntax 1.7.0 added for GenSpecs 26.0, not flagged ? in dictionary 2026-01-27",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8040) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(8040)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-percent-encoded-reserved",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/A%2FB",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/10/A%2FB",
+        "elementString": "010952012345678810A/B",
+        "bracketed": "(01)09520123456788(10)A/B",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) A/B"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/A%2FB"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810A/B",
+        "hri": "(01)09520123456788(10)A/B",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/A%2FB",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-percent-encoded-unreserved",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/%41%42",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/10/%41%42",
+        "elementString": "010952012345678810AB",
+        "bracketed": "(01)09520123456788(10)AB",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) AB"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/AB"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678810AB",
+        "hri": "(01)09520123456788(10)AB",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/AB",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-percent-malformed",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/10/A%2",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788/10/A%2",
+        "elementString": "010952012345678810A%2",
+        "bracketed": "(01)09520123456788(10)A%2",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) A%2"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/A%252"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPercentEncoding"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-stem-with-path",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://brand.example.com/some-extra/pathinfo/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://brand.example.com/some-extra/pathinfo/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-http",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "http://example.com/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "http://example.com/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-uppercase-scheme",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "HTTPS://id.gs1.org/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "HTTPS://id.gs1.org/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-uppercase-host",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://ID.GS1.ORG/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://ID.GS1.ORG/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-trailing-slash",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPath(path)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-no-scheme",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "id.gs1.org/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "id.gs1.org/01/09520123456788",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedUri"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-unknown-numeric-key",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?4000=ABC",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unknown AI (4000) in query parameters"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier(4000)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-extension-key",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?foo=bar",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?foo=bar",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-extension-linktype",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?linkType=gs1:pip",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788?linkType=gs1:pip",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-repeated-key",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?17=251231&17=261231",
+      "note": "a repeated key, which the engine refuses even with equal values",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (17) is duplicated"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DuplicateApplicationIdentifier(17)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-compressed",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/DBHKVAdpQgqrAg",
+      "note": "a compressed URI (legacy compression, frozen at 1.1.4)",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-no-primary-key",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/10/ABC",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-qualifier-without-key",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/21/ABC",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No GS1 DL keys found in path info"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingPrimaryIdentifier(path)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-gtin-short",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/9520123456788",
+      "note": "a 13-digit GTIN: removed in 1.3.0 (4.1)",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) value is too short"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-gtin-bad-check-digit",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456789",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): The numeric check digit is incorrect.",
+        "errorMarkup": "(01)0952012345678|9|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidApplicationIdentifier(01)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-fragment",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788#section",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788#section",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      }
+    },
+    {
+      "id": "eq-dl-empty-query-value",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788?17=",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (17) value query element is empty"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidPercentEncoding(17)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-pairing-ex",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "DigitalLink",
+      "input": "https://id.gs1.org/01/09520123456788/21/ABC?235=XYZ",
+      "note": "(21) excludes (235)",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (235) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidQuery(235)"
+        ]
+      }
+    },
+    {
+      "id": "eq-dl-build-two-primary-keys",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(00)195201234567891232",
+      "note": "an element string with two primary keys: which one leads the URI",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678800195201234567891232",
+        "elementString": "010952012345678800195201234567891232",
+        "bracketed": "(01)09520123456788(00)195201234567891232",
+        "hri": [
+          "(01) 09520123456788",
+          "(00) 195201234567891232"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788?00=195201234567891232"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678800195201234567891232",
+        "hri": "(01)09520123456788(00)195201234567891232",
+        "digitalLink": "https://id.gs1.org/01/09520123456788?00=195201234567891232",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678800195201234567891232",
+        "hri": "(01)09520123456788(00)195201234567891232"
+      }
+    },
+    {
+      "id": "eq-dl-build-no-primary-key",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(10)ABC",
+      "note": "no primary key, and (10) requires one",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "10ABC",
+        "hri": "(10)ABC"
+      }
+    },
+    {
+      "id": "eq-dl-build-key-and-qualifiers",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(21)123(10)ABC(22)2A",
+      "note": "qualifiers given out of path order",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678821123^10ABC^222A",
+        "elementString": "010952012345678821123\u001D10ABC\u001D222A",
+        "bracketed": "(01)09520123456788(21)123(10)ABC(22)2A",
+        "hri": [
+          "(01) 09520123456788",
+          "(21) 123",
+          "(10) ABC",
+          "(22) 2A"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952012345678821123\u001D10ABC\u001D222A",
+        "hri": "(01)09520123456788(21)123(10)ABC(22)2A",
+        "digitalLink": "https://id.gs1.org/01/09520123456788/22/2A/10/ABC/21/123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678821123\u001D10ABC\u001D222A",
+        "hri": "(01)09520123456788(21)123(10)ABC(22)2A"
+      }
+    },
+    {
+      "id": "eq-dl-build-attribute-only-ai",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(8200)http://example.com/x",
+      "note": "(8200) cannot go into a URI",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095201234567888200http://example.com/x",
+        "elementString": "01095201234567888200http://example.com/x",
+        "bracketed": "(01)09520123456788(8200)http://example.com/x",
+        "hri": [
+          "(01) 09520123456788",
+          "(8200) http://example.com/x"
+        ],
+        "digitalLinkError": "AI (8200) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095201234567888200http://example.com/x",
+        "hri": "(01)09520123456788(8200)http://example.com/x",
+        "digitalLinkError": "Application Identifier '8200' is not permitted as a GS1 Digital Link data attribute.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095201234567888200http://example.com/x",
+        "hri": "(01)09520123456788(8200)http://example.com/x"
+      }
+    },
+    {
+      "id": "eq-dl-build-reserved-characters",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)A/B?C#D%E&F=G+H",
+      "note": "every reserved character of CSET 82 in a path element",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (10): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(10)A/B?C|#|D%E&F=G+H"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952012345678810A/B?C#D%E&F=G+H",
+        "hri": "(01)09520123456788(10)A/B?C#D%E&F=G+H"
+      }
+    },
+    {
+      "id": "eq-dl-build-qualifier-as-attribute",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(00)195201234567891232(02)09520123456788(37)5(10)ABC",
+      "note": "(10) is an attribute of SSCC, a qualifier of GTIN",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^001952012345678912320209520123456788375^10ABC",
+        "elementString": "001952012345678912320209520123456788375\u001D10ABC",
+        "bracketed": "(00)195201234567891232(02)09520123456788(37)5(10)ABC",
+        "hri": [
+          "(00) 195201234567891232",
+          "(02) 09520123456788",
+          "(37) 5",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/00/195201234567891232?02=09520123456788&37=5&10=ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "001952012345678912320209520123456788375\u001D10ABC",
+        "hri": "(00)195201234567891232(02)09520123456788(37)5(10)ABC",
+        "digitalLink": "https://id.gs1.org/00/195201234567891232?02=09520123456788&10=ABC&37=5",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "001952012345678912320209520123456788375\u001D10ABC",
+        "hri": "(00)195201234567891232(02)09520123456788(37)5(10)ABC"
+      }
+    },
+    {
+      "id": "eq-scan-q3",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]Q3010952012345678810ABC\u001D17251231",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC^17251231",
+        "elementString": "010952012345678810ABC\u001D17251231",
+        "bracketed": "(01)09520123456788(10)ABC(17)251231",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC",
+          "(17) 251231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC?17=251231"
+      }
+    },
+    {
+      "id": "eq-scan-q3-trailing-separator",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]Q3010952012345678810ABC\u001D",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952012345678810ABC^",
+        "elementString": "010952012345678810ABC\u001D",
+        "bracketed": "(01)09520123456788(10)ABC",
+        "hri": [
+          "(01) 09520123456788",
+          "(10) ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788/10/ABC"
+      }
+    },
+    {
+      "id": "eq-scan-q1-plain",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]Q1Hello",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "Hello",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "eq-scan-q1-digital-link",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]Q1https://id.gs1.org/01/09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "https://id.gs1.org/01/09520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      }
+    },
+    {
+      "id": "eq-scan-q1-element-string",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]Q10109520123456788",
+      "note": "GS1 data without FNC1 is plain text",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "0109520123456788",
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      }
+    },
+    {
+      "id": "eq-scan-q4-eci",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]Q40109520123456788",
+      "note": "first position under the ECI protocol: not a GS1 transmission",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unsupported symbology identifier"
+      }
+    },
+    {
+      "id": "eq-scan-q5-second-position",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]Q5370109520123456788",
+      "note": "second position with indicator 37",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Unsupported symbology identifier"
+      }
+    },
+    {
+      "id": "eq-scan-d2-datamatrix",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "]d20109520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0109520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      }
+    },
+    {
+      "id": "eq-scan-no-identifier",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "ScanData",
+      "input": "0109520123456788",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Missing symbology identifier"
+      }
+    },
+    {
+      "id": "eq-length-one-element",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0109520123456788",
+        "elementString": "0109520123456788",
+        "bracketed": "(01)09520123456788",
+        "hri": [
+          "(01) 09520123456788"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09520123456788"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788",
+        "digitalLink": "https://id.gs1.org/01/09520123456788",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109520123456788",
+        "hri": "(01)09520123456788"
+      }
+    },
+    {
+      "id": "eq-length-long",
+      "group": "corpus/equivalence-classes",
+      "source": "gs1-support-plan.md equivalence classes",
+      "inputKind": "Bracketed",
+      "input": "(01)09520123456788(10)ABCDEFGHIJKLMNOPQRST(21)ABCDEFGHIJKLMNOPQRST(240)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(241)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(250)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(251)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123(4300)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789(4301)ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789(8200)http://example.com/ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      "note": "more than most symbols hold",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (4300) value is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(4300)",
+          "DataTooLong(4301)",
+          "MissingRequiredApplicationIdentifier(4300)",
+          "MissingRequiredApplicationIdentifier(4301)"
+        ]
+      },
+      "libzint": {
+        "valid": false,
+        "error": "Error 259: Invalid data length for AI (4300) (retval: 6)"
+      }
+    }
+  ]
+}

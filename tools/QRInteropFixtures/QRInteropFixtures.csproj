@@ -6,6 +6,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Pinned clones of external oracles (get-gs1-syntax-engine.ps1) live under external/; their sources are data, not part of this tool. -->
+    <Compile Remove="external/**" />
+    <None Remove="external/**" />
+    <EmbeddedResource Remove="external/**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
     <PackageReference Include="ZXing.Net" />

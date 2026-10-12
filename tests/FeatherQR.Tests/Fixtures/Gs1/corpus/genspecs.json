@@ -1,0 +1,689 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 General Specifications, Release 26.0",
+  "cases": [
+    {
+      "id": "genspecs-figure-7-10",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 Figure 7-10 (7.8.6.1)",
+      "inputKind": "Bracketed",
+      "input": "(01)95012345678903(3102)000400",
+      "note": "GTIN with net weight 4.00 kg in one symbol, no separator after the predefined-length element",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01950123456789033102000400",
+        "elementString": "01950123456789033102000400",
+        "bracketed": "(01)95012345678903(3102)000400",
+        "hri": [
+          "(01) 95012345678903",
+          "(3102) 000400"
+        ],
+        "digitalLink": "https://id.gs1.org/01/95012345678903?3102=000400"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01950123456789033102000400",
+        "hri": "(01)95012345678903(3102)000400",
+        "digitalLink": "https://id.gs1.org/01/95012345678903?3102=000400",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01950123456789033102000400",
+        "hri": "(01)95012345678903(3102)000400"
+      }
+    },
+    {
+      "id": "genspecs-figure-7-12",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 Figure 7-12 (7.8.6.2)",
+      "inputKind": "Bracketed",
+      "input": "(8005)000365(10)123456",
+      "note": "price per unit of measure and batch, a separator required after (8005). Both AIs require a key the figure omits",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8005)",
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8005000365\u001D10123456",
+        "hri": "(8005)000365(10)123456"
+      }
+    },
+    {
+      "id": "genspecs-figure-7-13",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 Figure 7-13 (7.8.6.3, also 5.5.2.3.1)",
+      "inputKind": "Bracketed",
+      "input": "(01)90614141000015(3202)000150",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01906141410000153202000150",
+        "elementString": "01906141410000153202000150",
+        "bracketed": "(01)90614141000015(3202)000150",
+        "hri": [
+          "(01) 90614141000015",
+          "(3202) 000150"
+        ],
+        "digitalLink": "https://id.gs1.org/01/90614141000015?3202=000150"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01906141410000153202000150",
+        "hri": "(01)90614141000015(3202)000150",
+        "digitalLink": "https://id.gs1.org/01/90614141000015?3202=000150",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01906141410000153202000150",
+        "hri": "(01)90614141000015(3202)000150"
+      }
+    },
+    {
+      "id": "genspecs-figure-7-14",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 Figure 7-14 (7.8.6.3)",
+      "inputKind": "Bracketed",
+      "input": "(15)021231",
+      "note": "best before date alone, the GTIN in another symbol: the pairing rule is per item, not per symbol",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (15) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(15)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "15021231",
+        "hri": "(15)021231"
+      }
+    },
+    {
+      "id": "genspecs-section-7-8-7-a",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 7.8.7",
+      "inputKind": "Bracketed",
+      "input": "(3943)1020",
+      "note": "implied decimal point: 1.020",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (3943) are not satisfied: 255"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3943)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "39431020",
+        "hri": "(3943)1020"
+      }
+    },
+    {
+      "id": "genspecs-section-7-8-7-b",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 7.8.7",
+      "inputKind": "Bracketed",
+      "input": "(3929)300123456789",
+      "note": "implied decimal point: 300.123456789",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (3929) are not satisfied: 01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3929)",
+          "MissingRequiredApplicationIdentifier(3929)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "3929300123456789",
+        "hri": "(3929)300123456789"
+      }
+    },
+    {
+      "id": "genspecs-section-7-8-7-c",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 7.8.7",
+      "inputKind": "Bracketed",
+      "input": "(3923)3000200",
+      "note": "implied decimal point: 3000.200",
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (3923) are not satisfied: 01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(3923)",
+          "MissingRequiredApplicationIdentifier(3923)"
+        ]
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "39233000200",
+        "hri": "(3923)3000200"
+      }
+    },
+    {
+      "id": "genspecs-section-5-7-4-3-scan",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.7.4.3",
+      "inputKind": "ScanData",
+      "input": "]Q30110012345678902",
+      "note": "GS1 QR Code transmission with the symbology identifier",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0110012345678902",
+        "elementString": "0110012345678902",
+        "bracketed": "(01)10012345678902",
+        "hri": [
+          "(01) 10012345678902"
+        ],
+        "digitalLink": "https://id.gs1.org/01/10012345678902"
+      }
+    },
+    {
+      "id": "genspecs-section-5-7-4-3-element",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.7.4.3",
+      "inputKind": "ElementString",
+      "input": "0110012345678902",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0110012345678902",
+        "elementString": "0110012345678902",
+        "bracketed": "(01)10012345678902",
+        "hri": [
+          "(01) 10012345678902"
+        ],
+        "digitalLink": "https://id.gs1.org/01/10012345678902"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0110012345678902",
+        "hri": "(01)10012345678902",
+        "digitalLink": "https://id.gs1.org/01/10012345678902",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0110012345678902",
+        "hri": "(01)10012345678902"
+      }
+    },
+    {
+      "id": "genspecs-section-2-1-transmitted",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 1.4.2 (transmitted element string example)",
+      "inputKind": "ElementString",
+      "input": "010952123450000110ABC123\u001D11250504",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952123450000110ABC123^11250504",
+        "elementString": "010952123450000110ABC123\u001D11250504",
+        "bracketed": "(01)09521234500001(10)ABC123(11)250504",
+        "hri": [
+          "(01) 09521234500001",
+          "(10) ABC123",
+          "(11) 250504"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09521234500001/10/ABC123?11=250504"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952123450000110ABC123\u001D11250504",
+        "hri": "(01)09521234500001(10)ABC123(11)250504",
+        "digitalLink": "https://id.gs1.org/01/09521234500001/10/ABC123?11=250504",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952123450000110ABC123\u001D11250504",
+        "hri": "(01)09521234500001(10)ABC123(11)250504"
+      }
+    },
+    {
+      "id": "genspecs-section-2-1-bracketed",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 1.4.2 (bracketed example)",
+      "inputKind": "Bracketed",
+      "input": "(01)09521234500001(10)ABC123(11)250504",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010952123450000110ABC123^11250504",
+        "elementString": "010952123450000110ABC123\u001D11250504",
+        "bracketed": "(01)09521234500001(10)ABC123(11)250504",
+        "hri": [
+          "(01) 09521234500001",
+          "(10) ABC123",
+          "(11) 250504"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09521234500001/10/ABC123?11=250504"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010952123450000110ABC123\u001D11250504",
+        "hri": "(01)09521234500001(10)ABC123(11)250504",
+        "digitalLink": "https://id.gs1.org/01/09521234500001/10/ABC123?11=250504",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010952123450000110ABC123\u001D11250504",
+        "hri": "(01)09521234500001(10)ABC123(11)250504"
+      }
+    },
+    {
+      "id": "genspecs-section-2-6-epc",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 1.3 (SGTIN-96 example)",
+      "inputKind": "Bracketed",
+      "input": "(01)09506000134352(21)123456789",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010950600013435221123456789",
+        "elementString": "010950600013435221123456789",
+        "bracketed": "(01)09506000134352(21)123456789",
+        "hri": [
+          "(01) 09506000134352",
+          "(21) 123456789"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09506000134352/21/123456789"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010950600013435221123456789",
+        "hri": "(01)09506000134352(21)123456789",
+        "digitalLink": "https://id.gs1.org/01/09506000134352/21/123456789",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010950600013435221123456789",
+        "hri": "(01)09506000134352(21)123456789"
+      }
+    },
+    {
+      "id": "genspecs-figure-4-14-1",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 4.14.1 (healthcare HRI figure)",
+      "inputKind": "Bracketed",
+      "input": "(01)09524000059109",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0109524000059109",
+        "elementString": "0109524000059109",
+        "bracketed": "(01)09524000059109",
+        "hri": [
+          "(01) 09524000059109"
+        ],
+        "digitalLink": "https://id.gs1.org/01/09524000059109"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0109524000059109",
+        "hri": "(01)09524000059109",
+        "digitalLink": "https://id.gs1.org/01/09524000059109",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0109524000059109",
+        "hri": "(01)09524000059109"
+      }
+    },
+    {
+      "id": "genspecs-section-5-11-2-a",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.11.2 (symbol structure figure)",
+      "inputKind": "Bracketed",
+      "input": "(01)13112345678906(17)010615(10)A123456",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01131123456789061701061510A123456",
+        "elementString": "01131123456789061701061510A123456",
+        "bracketed": "(01)13112345678906(17)010615(10)A123456",
+        "hri": [
+          "(01) 13112345678906",
+          "(17) 010615",
+          "(10) A123456"
+        ],
+        "digitalLink": "https://id.gs1.org/01/13112345678906/10/A123456?17=010615"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01131123456789061701061510A123456",
+        "hri": "(01)13112345678906(17)010615(10)A123456",
+        "digitalLink": "https://id.gs1.org/01/13112345678906/10/A123456?17=010615",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01131123456789061701061510A123456",
+        "hri": "(01)13112345678906(17)010615(10)A123456"
+      }
+    },
+    {
+      "id": "genspecs-section-5-11-2-b",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.11.2 (symbol structure figure)",
+      "inputKind": "Bracketed",
+      "input": "(01)03812345678908(10)ABCD123456(410)3898765432108",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010381234567890810ABCD123456^4103898765432108",
+        "elementString": "010381234567890810ABCD123456\u001D4103898765432108",
+        "bracketed": "(01)03812345678908(10)ABCD123456(410)3898765432108",
+        "hri": [
+          "(01) 03812345678908",
+          "(10) ABCD123456",
+          "(410) 3898765432108"
+        ],
+        "digitalLink": "https://id.gs1.org/01/03812345678908/10/ABCD123456?410=3898765432108"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010381234567890810ABCD123456\u001D4103898765432108",
+        "hri": "(01)03812345678908(10)ABCD123456(410)3898765432108",
+        "digitalLink": "https://id.gs1.org/01/03812345678908/10/ABCD123456?410=3898765432108",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010381234567890810ABCD123456\u001D4103898765432108",
+        "hri": "(01)03812345678908(10)ABCD123456(410)3898765432108"
+      }
+    },
+    {
+      "id": "genspecs-section-5-11-4-1",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.11.4.1 (default transmission mode example)",
+      "inputKind": "Bracketed",
+      "input": "(01)10012345678902(10)ABC123",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^011001234567890210ABC123",
+        "elementString": "011001234567890210ABC123",
+        "bracketed": "(01)10012345678902(10)ABC123",
+        "hri": [
+          "(01) 10012345678902",
+          "(10) ABC123"
+        ],
+        "digitalLink": "https://id.gs1.org/01/10012345678902/10/ABC123"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "011001234567890210ABC123",
+        "hri": "(01)10012345678902(10)ABC123",
+        "digitalLink": "https://id.gs1.org/01/10012345678902/10/ABC123",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011001234567890210ABC123",
+        "hri": "(01)10012345678902(10)ABC123"
+      }
+    },
+    {
+      "id": "genspecs-section-5-11-8-a",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.11.8 (sample Composite symbols)",
+      "inputKind": "Bracketed",
+      "input": "(01)03612345678904(11)990102",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010361234567890411990102",
+        "elementString": "010361234567890411990102",
+        "bracketed": "(01)03612345678904(11)990102",
+        "hri": [
+          "(01) 03612345678904",
+          "(11) 990102"
+        ],
+        "digitalLink": "https://id.gs1.org/01/03612345678904?11=990102"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010361234567890411990102",
+        "hri": "(01)03612345678904(11)990102",
+        "digitalLink": "https://id.gs1.org/01/03612345678904?11=990102",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010361234567890411990102",
+        "hri": "(01)03612345678904(11)990102"
+      }
+    },
+    {
+      "id": "genspecs-section-5-11-8-b",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.11.8 (sample Composite symbols)",
+      "inputKind": "Bracketed",
+      "input": "(01)03412345678900(17)010200",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^010341234567890017010200",
+        "elementString": "010341234567890017010200",
+        "bracketed": "(01)03412345678900(17)010200",
+        "hri": [
+          "(01) 03412345678900",
+          "(17) 010200"
+        ],
+        "digitalLink": "https://id.gs1.org/01/03412345678900?17=010200"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "010341234567890017010200",
+        "hri": "(01)03412345678900(17)010200",
+        "digitalLink": "https://id.gs1.org/01/03412345678900?17=010200",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "010341234567890017010200",
+        "hri": "(01)03412345678900(17)010200"
+      }
+    },
+    {
+      "id": "genspecs-section-5-11-8-c",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 5.11.8 (sample Composite symbols)",
+      "inputKind": "Bracketed",
+      "input": "(01)93712345678904(3103)001234",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01937123456789043103001234",
+        "elementString": "01937123456789043103001234",
+        "bracketed": "(01)93712345678904(3103)001234",
+        "hri": [
+          "(01) 93712345678904",
+          "(3103) 001234"
+        ],
+        "digitalLink": "https://id.gs1.org/01/93712345678904?3103=001234"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01937123456789043103001234",
+        "hri": "(01)93712345678904(3103)001234",
+        "digitalLink": "https://id.gs1.org/01/93712345678904?3103=001234",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01937123456789043103001234",
+        "hri": "(01)93712345678904(3103)001234"
+      }
+    },
+    {
+      "id": "genspecs-figure-4-15-1-2-photograph",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 Figure 4.15.1-2, the real-image corpus symbol qrcode-2/gs1-figure-4.15.1-2",
+      "inputKind": "ElementString",
+      "input": "01095040000591012112345678p901\u001D101234567p\u001D171411208200http://www.gs1.org/demo/",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095040000591012112345678p901^101234567p^171411208200http://www.gs1.org/demo/",
+        "elementString": "01095040000591012112345678p901\u001D101234567p\u001D171411208200http://www.gs1.org/demo/",
+        "bracketed": "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/",
+        "hri": [
+          "(01) 09504000059101",
+          "(21) 12345678p901",
+          "(10) 1234567p",
+          "(17) 141120",
+          "(8200) http://www.gs1.org/demo/"
+        ],
+        "digitalLinkError": "AI (8200) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095040000591012112345678p901\u001D101234567p\u001D171411208200http://www.gs1.org/demo/",
+        "hri": "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/",
+        "digitalLinkError": "Application Identifier '8200' is not permitted as a GS1 Digital Link data attribute.",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095040000591012112345678p901\u001D101234567p\u001D171411208200http://www.gs1.org/demo/",
+        "hri": "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/"
+      }
+    },
+    {
+      "id": "genspecs-figure-4-15-1-2-bracketed",
+      "group": "corpus/genspecs",
+      "source": "GS1 General Specifications 26.0 Figure 4.15.1-2",
+      "inputKind": "Bracketed",
+      "input": "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/",
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^01095040000591012112345678p901^101234567p^171411208200http://www.gs1.org/demo/",
+        "elementString": "01095040000591012112345678p901\u001D101234567p\u001D171411208200http://www.gs1.org/demo/",
+        "bracketed": "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/",
+        "hri": [
+          "(01) 09504000059101",
+          "(21) 12345678p901",
+          "(10) 1234567p",
+          "(17) 141120",
+          "(8200) http://www.gs1.org/demo/"
+        ],
+        "digitalLinkError": "AI (8200) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "01095040000591012112345678p901\u001D101234567p\u001D171411208200http://www.gs1.org/demo/",
+        "hri": "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/",
+        "digitalLinkError": "Application Identifier '8200' is not permitted as a GS1 Digital Link data attribute.",
+        "issues": []
+      },
+      "libzint": {
+        "valid": true
+      },
+      "reader": {
+        "writer": "zint-libzint",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01095040000591012112345678p901\u001D101234567p\u001D171411208200http://www.gs1.org/demo/",
+        "hri": "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/"
+      }
+    }
+  ]
+}

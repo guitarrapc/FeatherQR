@@ -1,0 +1,2188 @@
+{
+  "oracles": {
+    "syntaxEngine": {
+      "version": "1.4.1 (the library reports its build date, May 28 2026)",
+      "dictionary": "2026-01-27 (--syndict)"
+    },
+    "codeGlyphX": {
+      "version": "2.1.0+9797fa000b0be4a33616b417403052f21aa2d4a2",
+      "dictionary": "2026-01-27"
+    },
+    "libzint": {
+      "version": "ZXingCpp 0.5.2 bundled libzint",
+      "dictionary": "generated from the dictionary's main branch at zint's build (release not recorded)"
+    },
+    "zxingCpp": {
+      "version": "ZXingCpp 0.5.2 bundled zxing-cpp",
+      "dictionary": "hand-maintained table citing 2025-12-08"
+    }
+  },
+  "source": "GS1 Barcode Syntax Engine 1.4.1 unit tests, ai.c test_ai_processAIdata",
+  "cases": [
+    {
+      "id": "process-ai-data-000",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "",
+      "note": "FNC1 in first but no AIs",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "The AI data is empty"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput"
+        ]
+      }
+    },
+    {
+      "id": "process-ai-data-001",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "891234",
+      "note": "No such AI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No known AI is a prefix of: 8912..."
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "891234",
+        "hri": "891234"
+      }
+    },
+    {
+      "id": "process-ai-data-002",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "991234",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^991234",
+        "elementString": "991234",
+        "bracketed": "(99)1234",
+        "hri": [
+          "(99) 1234"
+        ],
+        "digitalLinkError": "Cannot create a DL URI without a primary key AI"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "991234",
+        "hri": "(99)1234",
+        "digitalLinkError": "At least one GS1 Digital Link primary Application Identifier is required.",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "991234",
+        "hri": "(99)1234"
+      }
+    },
+    {
+      "id": "process-ai-data-003",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "99~ABC",
+      "note": "Bad CSET82 character",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (99): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(99)|~|ABC"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(99)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "99~ABC",
+        "hri": "(99)~ABC"
+      }
+    },
+    {
+      "id": "process-ai-data-004",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "99ABC~",
+      "note": "Bad CSET82 character",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (99): A non-CSET 82 character was found where a CSET 82 character is expected.",
+        "errorMarkup": "(99)ABC|~|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(99)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "99ABC~",
+        "hri": "(99)ABC~"
+      }
+    },
+    {
+      "id": "process-ai-data-005",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "0112345678901231",
+      "note": "N14, no FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231",
+        "elementString": "0112345678901231",
+        "bracketed": "(01)12345678901231",
+        "hri": [
+          "(01) 12345678901231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231",
+        "hri": "(01)12345678901231",
+        "digitalLink": "https://id.gs1.org/01/12345678901231",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231",
+        "hri": "(01)12345678901231"
+      }
+    },
+    {
+      "id": "process-ai-data-006",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "01A2345678901231",
+      "note": "Bad numeric character",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(01)|A|2345678901231"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01A2345678901231",
+        "hri": "(01)A2345678901231"
+      }
+    },
+    {
+      "id": "process-ai-data-007",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "011234567890123A",
+      "note": "Bad numeric character",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): A non-digit character was found where a digit is expected.",
+        "errorMarkup": "(01)1234567890123|A|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123A",
+        "hri": "(01)1234567890123A"
+      }
+    },
+    {
+      "id": "process-ai-data-008",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "0112345678901234",
+      "note": "Incorrect check digit (csum linter)",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): The numeric check digit is incorrect.",
+        "errorMarkup": "(01)1234567890123|4|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901234",
+        "hri": "(01)12345678901234"
+      }
+    },
+    {
+      "id": "process-ai-data-009",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "011234567890123",
+      "note": "Too short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123",
+        "hri": "011234567890123"
+      }
+    },
+    {
+      "id": "process-ai-data-010",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "01123456789012312",
+      "note": "No such AI (2). Can't be \"too long\" since FNC1 not required",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No known AI is a prefix of: 2..."
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012312",
+        "hri": "01123456789012312"
+      }
+    },
+    {
+      "id": "process-ai-data-011",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "0112345678901231\u001D",
+      "note": "Tolerate superfluous FNC1",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231^",
+        "elementString": "0112345678901231\u001D",
+        "bracketed": "(01)12345678901231",
+        "hri": [
+          "(01) 12345678901231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnexpectedFnc1Separator(01)",
+          "MalformedInput(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231\u001D",
+        "hri": "(01)12345678901231"
+      }
+    },
+    {
+      "id": "process-ai-data-012",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "011234567890123\u001D",
+      "note": "Short, with superfluous FNC1",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidCharacter(01)",
+          "InvalidData(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "011234567890123\u001D",
+        "hri": "(01)1234567890123\u001D"
+      }
+    },
+    {
+      "id": "process-ai-data-013",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "01123456789012345\u001D",
+      "note": "Long, with superfluous FNC1 (no following AIs)",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): The numeric check digit is incorrect.",
+        "errorMarkup": "(01)1234567890123|4|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier",
+          "InvalidData(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012345\u001D",
+        "hri": "01123456789012345<GS>"
+      }
+    },
+    {
+      "id": "process-ai-data-014",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "01123456789012345\u001D991234",
+      "note": "Long, with superfluous FNC1 and meaningless AI (5^..)",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (01): The numeric check digit is incorrect.",
+        "errorMarkup": "(01)1234567890123|4|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier",
+          "InvalidData(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "01123456789012345\u001D991234",
+        "hri": "01123456789012345<GS>991234"
+      }
+    },
+    {
+      "id": "process-ai-data-015",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "0112345678901231991234",
+      "note": "Fixed-length, run into next AI (01)...(99)...",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231991234",
+        "elementString": "0112345678901231991234",
+        "bracketed": "(01)12345678901231(99)1234",
+        "hri": [
+          "(01) 12345678901231",
+          "(99) 1234"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?99=1234"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231991234",
+        "hri": "(01)12345678901231(99)1234",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?99=1234",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231991234",
+        "hri": "(01)12345678901231(99)1234"
+      }
+    },
+    {
+      "id": "process-ai-data-016",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "0112345678901231\u001D991234",
+      "note": "Tolerate superfluous FNC1",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231^991234",
+        "elementString": "0112345678901231\u001D991234",
+        "bracketed": "(01)12345678901231(99)1234",
+        "hri": [
+          "(01) 12345678901231",
+          "(99) 1234"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?99=1234"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnexpectedFnc1Separator(01)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231\u001D991234",
+        "hri": "(01)12345678901231(99)1234"
+      }
+    },
+    {
+      "id": "process-ai-data-017",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "2421",
+      "note": "N1..6; FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (242) are not satisfied: 01,02,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2421",
+        "hri": "(242)1"
+      }
+    },
+    {
+      "id": "process-ai-data-018",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "24212",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (242) are not satisfied: 01,02,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "24212",
+        "hri": "(242)12"
+      }
+    },
+    {
+      "id": "process-ai-data-019",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "242123",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (242) are not satisfied: 01,02,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "242123",
+        "hri": "(242)123"
+      }
+    },
+    {
+      "id": "process-ai-data-020",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "2421234",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (242) are not satisfied: 01,02,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2421234",
+        "hri": "(242)1234"
+      }
+    },
+    {
+      "id": "process-ai-data-021",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "24212345",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (242) are not satisfied: 01,02,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "24212345",
+        "hri": "(242)12345"
+      }
+    },
+    {
+      "id": "process-ai-data-022",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "242123456",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (242) are not satisfied: 01,02,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "242123456",
+        "hri": "(242)123456"
+      }
+    },
+    {
+      "id": "process-ai-data-023",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "242123456\u001D10ABC123",
+      "note": "Limit, then following AI",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(242)",
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "242123456\u001D10ABC123",
+        "hri": "(242)123456(10)ABC123"
+      }
+    },
+    {
+      "id": "process-ai-data-024",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "242123456\u001D",
+      "note": "Tolerant of FNC1 at end of data",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (242) are not satisfied: 01,02,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MalformedInput(242)",
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "242123456\u001D",
+        "hri": "(242)123456"
+      }
+    },
+    {
+      "id": "process-ai-data-025",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "2421234567",
+      "note": "Data too long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (242) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(242)",
+          "MissingRequiredApplicationIdentifier(242)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "2421234567",
+        "hri": "2421234567"
+      }
+    },
+    {
+      "id": "process-ai-data-026",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "81111234",
+      "note": "N4; FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8111) are not satisfied: 255"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8111)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81111234",
+        "hri": "(8111)1234"
+      }
+    },
+    {
+      "id": "process-ai-data-027",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "8111123",
+      "note": "Too short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8111) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(8111)",
+          "MissingRequiredApplicationIdentifier(8111)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8111123",
+        "hri": "8111123"
+      }
+    },
+    {
+      "id": "process-ai-data-028",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "811112345",
+      "note": "Too long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8111) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(8111)",
+          "MissingRequiredApplicationIdentifier(8111)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "811112345",
+        "hri": "811112345"
+      }
+    },
+    {
+      "id": "process-ai-data-029",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "81111234\u001D10ABC123",
+      "note": "Followed by another AI",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8111)",
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "81111234\u001D10ABC123",
+        "hri": "(8111)1234(10)ABC123"
+      }
+    },
+    {
+      "id": "process-ai-data-030",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800112341234512398",
+      "note": "N4-5-3-1-1; FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (8001) are not satisfied: 01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(8001)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800112341234512398",
+        "hri": "(8001)12341234512398"
+      }
+    },
+    {
+      "id": "process-ai-data-031",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "80011234123451239",
+      "note": "Too short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(8001)",
+          "MissingRequiredApplicationIdentifier(8001)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80011234123451239",
+        "hri": "80011234123451239"
+      }
+    },
+    {
+      "id": "process-ai-data-032",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "8001123412345123981",
+      "note": "Too long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(8001)",
+          "MissingRequiredApplicationIdentifier(8001)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8001123412345123981",
+        "hri": "8001123412345123981"
+      }
+    },
+    {
+      "id": "process-ai-data-033",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800112341234512398\u001D0112345678901231",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^800112341234512398^0112345678901231",
+        "elementString": "800112341234512398\u001D0112345678901231",
+        "bracketed": "(8001)12341234512398(01)12345678901231",
+        "hri": [
+          "(8001) 12341234512398",
+          "(01) 12345678901231"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231?8001=12341234512398"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800112341234512398\u001D0112345678901231",
+        "hri": "(8001)12341234512398(01)12345678901231",
+        "digitalLink": "https://id.gs1.org/01/12345678901231?8001=12341234512398",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800112341234512398\u001D0112345678901231",
+        "hri": "(8001)12341234512398(01)12345678901231"
+      }
+    },
+    {
+      "id": "process-ai-data-034",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "80011234123451239\u001D0112345678901231",
+      "note": "Too short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(8001)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "80011234123451239\u001D0112345678901231",
+        "hri": "(8001)1234123451239\u001D(01)12345678901231"
+      }
+    },
+    {
+      "id": "process-ai-data-035",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "8001123412345123981\u001D01123456789012312",
+      "note": "Too long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8001) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier",
+          "DataTooLong(8001)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "8001123412345123981\u001D01123456789012312",
+        "hri": "8001123412345123981<GS>01123456789012312"
+      }
+    },
+    {
+      "id": "process-ai-data-036",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "7007211225211231",
+      "note": "N6 [N6]; FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (7007) are not satisfied: 01,02"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7007211225211231",
+        "hri": "(7007)211225211231"
+      }
+    },
+    {
+      "id": "process-ai-data-037",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "7007211225",
+      "note": "No optional component",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (7007) are not satisfied: 01,02"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7007211225",
+        "hri": "(7007)211225"
+      }
+    },
+    {
+      "id": "process-ai-data-038",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "70072112252",
+      "note": "Incorrect length",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7007) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "70072112252",
+        "hri": "(7007)2112252"
+      }
+    },
+    {
+      "id": "process-ai-data-039",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "700721122521",
+      "note": "Incorrect length",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7007) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "700721122521",
+        "hri": "(7007)21122521"
+      }
+    },
+    {
+      "id": "process-ai-data-040",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "7007211225211",
+      "note": "Incorrect length",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7007) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7007211225211",
+        "hri": "(7007)211225211"
+      }
+    },
+    {
+      "id": "process-ai-data-041",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "70072112252112",
+      "note": "Incorrect length",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7007) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "70072112252112",
+        "hri": "(7007)2112252112"
+      }
+    },
+    {
+      "id": "process-ai-data-042",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "700721122521123",
+      "note": "Incorrect length",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7007) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "700721122521123",
+        "hri": "(7007)21122521123"
+      }
+    },
+    {
+      "id": "process-ai-data-043",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "70072112252212311",
+      "note": "Too long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7007) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(7007)",
+          "MissingRequiredApplicationIdentifier(7007)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "70072112252212311",
+        "hri": "70072112252212311"
+      }
+    },
+    {
+      "id": "process-ai-data-044",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800302112345678900ABC",
+      "note": "N1 N13,csum X0..16; FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^800302112345678900ABC",
+        "elementString": "800302112345678900ABC",
+        "bracketed": "(8003)02112345678900ABC",
+        "hri": [
+          "(8003) 02112345678900ABC"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/02112345678900ABC"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800302112345678900ABC",
+        "hri": "(8003)02112345678900ABC",
+        "digitalLink": "https://id.gs1.org/8003/02112345678900ABC",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800302112345678900ABC",
+        "hri": "(8003)02112345678900ABC"
+      }
+    },
+    {
+      "id": "process-ai-data-045",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800302112345678901ABC",
+      "note": "Bad check digit on N13 component",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8003): The numeric check digit is incorrect.",
+        "errorMarkup": "(8003)0211234567890|1|"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "InvalidData(8003)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800302112345678901ABC",
+        "hri": "(8003)02112345678901ABC"
+      }
+    },
+    {
+      "id": "process-ai-data-046",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800302112345678900",
+      "note": "Empty final component",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^800302112345678900",
+        "elementString": "800302112345678900",
+        "bracketed": "(8003)02112345678900",
+        "hri": [
+          "(8003) 02112345678900"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/02112345678900"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800302112345678900",
+        "hri": "(8003)02112345678900",
+        "digitalLink": "https://id.gs1.org/8003/02112345678900",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800302112345678900",
+        "hri": "(8003)02112345678900"
+      }
+    },
+    {
+      "id": "process-ai-data-047",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800302112345678900\u001D10ABC123",
+      "note": "Empty final component and following AI",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (10) are not satisfied: 01,02,03,8006,8026"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(10)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800302112345678900\u001D10ABC123",
+        "hri": "(8003)02112345678900(10)ABC123"
+      }
+    },
+    {
+      "id": "process-ai-data-048",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800302112345678900ABCDEFGHIJKLMNOP",
+      "note": "Empty final component and following AI",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^800302112345678900ABCDEFGHIJKLMNOP",
+        "elementString": "800302112345678900ABCDEFGHIJKLMNOP",
+        "bracketed": "(8003)02112345678900ABCDEFGHIJKLMNOP",
+        "hri": [
+          "(8003) 02112345678900ABCDEFGHIJKLMNOP"
+        ],
+        "digitalLink": "https://id.gs1.org/8003/02112345678900ABCDEFGHIJKLMNOP"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "800302112345678900ABCDEFGHIJKLMNOP",
+        "hri": "(8003)02112345678900ABCDEFGHIJKLMNOP",
+        "digitalLink": "https://id.gs1.org/8003/02112345678900ABCDEFGHIJKLMNOP",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800302112345678900ABCDEFGHIJKLMNOP",
+        "hri": "(8003)02112345678900ABCDEFGHIJKLMNOP"
+      }
+    },
+    {
+      "id": "process-ai-data-049",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "800302112345678900ABCDEFGHIJKLMNOPQ",
+      "note": "Empty final component and following AI",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (8003) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(8003)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "800302112345678900ABCDEFGHIJKLMNOPQ",
+        "hri": "800302112345678900ABCDEFGHIJKLMNOPQ"
+      }
+    },
+    {
+      "id": "process-ai-data-050",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "7230121234567890123456789012345678",
+      "note": "X2 X1..28; FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (7230) are not satisfied: 01,8004"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7230)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7230121234567890123456789012345678",
+        "hri": "(7230)121234567890123456789012345678"
+      }
+    },
+    {
+      "id": "process-ai-data-051",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "72301212345678901234567890123456789",
+      "note": "Too long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7230) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(7230)",
+          "MissingRequiredApplicationIdentifier(7230)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "72301212345678901234567890123456789",
+        "hri": "72301212345678901234567890123456789"
+      }
+    },
+    {
+      "id": "process-ai-data-052",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "7230123",
+      "note": "Shortest",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (7230) are not satisfied: 01,8004"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(7230)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "7230123",
+        "hri": "(7230)123"
+      }
+    },
+    {
+      "id": "process-ai-data-053",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "723012",
+      "note": "Too short",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (7230) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(7230)",
+          "MissingRequiredApplicationIdentifier(7230)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "723012",
+        "hri": "(7230)12"
+      }
+    },
+    {
+      "id": "process-ai-data-054",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "235ABC",
+      "note": "X..28; FNC1 required",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (235) are not satisfied: 01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(235)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "235ABC",
+        "hri": "(235)ABC"
+      }
+    },
+    {
+      "id": "process-ai-data-055",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "235ABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+      "note": "X..28 at max",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (235) are not satisfied: 01"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(235)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "235ABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+        "hri": "(235)ABCDEFGHIJKLMNOPQRSTUVWXYZ12"
+      }
+    },
+    {
+      "id": "process-ai-data-056",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "235ABCDEFGHIJKLMNOPQRSTUVWXYZ123",
+      "note": "Over max",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (235) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(235)",
+          "MissingRequiredApplicationIdentifier(235)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "235ABCDEFGHIJKLMNOPQRSTUVWXYZ123",
+        "hri": "235ABCDEFGHIJKLMNOPQRSTUVWXYZ123"
+      }
+    },
+    {
+      "id": "process-ai-data-057",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "0112345678901231235XYZ",
+      "note": "(01) NO_FNC1 -> no ^ before 235",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231235XYZ",
+        "elementString": "0112345678901231235XYZ",
+        "bracketed": "(01)12345678901231(235)XYZ",
+        "hri": [
+          "(01) 12345678901231",
+          "(235) XYZ"
+        ],
+        "digitalLink": "https://id.gs1.org/01/12345678901231/235/XYZ"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231235XYZ",
+        "hri": "(01)12345678901231(235)XYZ",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/235/XYZ",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231235XYZ",
+        "hri": "(01)12345678901231(235)XYZ"
+      }
+    },
+    {
+      "id": "process-ai-data-058",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "0112345678901231235XYZ\u001D10BATCH",
+      "note": "(235) DO_FNC1 -> ^ before next AI",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": true,
+        "dataString": "^0112345678901231235XYZ^10BATCH",
+        "elementString": "0112345678901231235XYZ\u001D10BATCH",
+        "bracketed": "(01)12345678901231(235)XYZ(10)BATCH",
+        "hri": [
+          "(01) 12345678901231",
+          "(235) XYZ",
+          "(10) BATCH"
+        ],
+        "digitalLinkError": "AI (235) is not a valid DL URI data attribute"
+      },
+      "codeGlyphX": {
+        "valid": true,
+        "elementString": "0112345678901231235XYZ\u001D10BATCH",
+        "hri": "(01)12345678901231(235)XYZ(10)BATCH",
+        "digitalLink": "https://id.gs1.org/01/12345678901231/10/BATCH/235/XYZ",
+        "issues": []
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "0112345678901231235XYZ\u001D10BATCH",
+        "hri": "(01)12345678901231(235)XYZ(10)BATCH"
+      }
+    },
+    {
+      "id": "process-ai-data-059",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "423",
+      "note": "List of 3-digit ISO-3166 codes",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data is empty"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(423)",
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "423",
+        "hri": "423"
+      }
+    },
+    {
+      "id": "process-ai-data-060",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "4235",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(423)",
+          "InvalidData(423)",
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4235",
+        "hri": "(423)5"
+      }
+    },
+    {
+      "id": "process-ai-data-061",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "42352",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooShort(423)",
+          "InvalidData(423)",
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "42352",
+        "hri": "(423)52"
+      }
+    },
+    {
+      "id": "process-ai-data-062",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "423528",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (423) are not satisfied: 01,02"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "423528",
+        "hri": "(423)528"
+      }
+    },
+    {
+      "id": "process-ai-data-063",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "4235285",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4235285",
+        "hri": "(423)5285"
+      }
+    },
+    {
+      "id": "process-ai-data-064",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "42352852",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "42352852",
+        "hri": "(423)52852"
+      }
+    },
+    {
+      "id": "process-ai-data-065",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "423528528",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (423) are not satisfied: 01,02"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "423528528",
+        "hri": "(423)528528"
+      }
+    },
+    {
+      "id": "process-ai-data-066",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "4235285285",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4235285285",
+        "hri": "(423)5285285"
+      }
+    },
+    {
+      "id": "process-ai-data-067",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "42352852852",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "42352852852",
+        "hri": "(423)52852852"
+      }
+    },
+    {
+      "id": "process-ai-data-068",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "423528528528",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (423) are not satisfied: 01,02"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "423528528528",
+        "hri": "(423)528528528"
+      }
+    },
+    {
+      "id": "process-ai-data-069",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "4235285285285",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4235285285285",
+        "hri": "(423)5285285285"
+      }
+    },
+    {
+      "id": "process-ai-data-070",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "42352852852852",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "42352852852852",
+        "hri": "(423)52852852852"
+      }
+    },
+    {
+      "id": "process-ai-data-071",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "423528528528528",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (423) are not satisfied: 01,02"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "423528528528528",
+        "hri": "(423)528528528528"
+      }
+    },
+    {
+      "id": "process-ai-data-072",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "4235285285285285",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4235285285285285",
+        "hri": "(423)5285285285285"
+      }
+    },
+    {
+      "id": "process-ai-data-073",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "42352852852852852",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data has incorrect length"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "42352852852852852",
+        "hri": "(423)52852852852852"
+      }
+    },
+    {
+      "id": "process-ai-data-074",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "423528528528528528",
+      "expected": {
+        "valid": true
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "Required AIs for AI (423) are not satisfied: 01,02"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "423528528528528528",
+        "hri": "(423)528528528528528"
+      }
+    },
+    {
+      "id": "process-ai-data-075",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "4235285285285285285",
+      "note": "Too long",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "AI (423) data is too long"
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "DataTooLong(423)",
+          "MissingRequiredApplicationIdentifier(423)"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "4235285285285285285",
+        "hri": "4235285285285285285"
+      }
+    },
+    {
+      "id": "process-ai-data-076",
+      "group": "syntax-engine/process-ai-data",
+      "source": "ai.c test_processAIdata",
+      "inputKind": "ElementString",
+      "input": "891234",
+      "expected": {
+        "valid": false
+      },
+      "syntaxEngine": {
+        "valid": false,
+        "error": "No known AI is a prefix of: 8912..."
+      },
+      "codeGlyphX": {
+        "valid": false,
+        "issues": [
+          "UnknownApplicationIdentifier"
+        ]
+      },
+      "reader": {
+        "writer": "zxing-net",
+        "symbologyIdentifier": "]Q3",
+        "elementString": "891234",
+        "hri": "891234"
+      }
+    }
+  ]
+}

@@ -18,6 +18,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FeatherQR\FeatherQR.csproj" />
     <ProjectReference Include="..\..\src\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
+    <ProjectReference Include="..\..\src\FeatherQR.Gs1\FeatherQR.Gs1.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The GS1 table generator (Gs1AiTableGeneratorTest) reads the pinned Syntax Dictionary with the same parser
+         the fixture tool uses, so the two cannot drift apart. -->
+    <Compile Include="..\..\tools\QRInteropFixtures\Gs1SyntaxDictionary.cs" Link="Gs1\Gs1SyntaxDictionary.cs" />
   </ItemGroup>
 
   <ItemGroup>
