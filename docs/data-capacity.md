@@ -17,6 +17,8 @@ The actual capacity depends on the QR code type, encoding mode, ECC level, and v
 >
 > Kanji: the same 'あ' in Kanji mode, which the generators write only with `AllowKanji` (13 bits a character and no ECI header, about 1.85× the UTF-8 column). It applies to text whose every character has a Kanji-mode cell (JIS X 0208, kana and kanji included); see [Kanji mode on request](migration.md#kanji-mode-on-request).
 
+> FNC1: a symbol written with `QRCodeGeneratorOptions.Fnc1` spends 4 bits of the data capacity on the indicator in first position (GS1) and 12 in second position (the indicator and its 8-bit application indicator), and in an Alphanumeric segment a literal `%` costs two characters (it is written `%%`) while the separator U+001D costs one. Content at a version's edge can therefore move to the next version. In rMQR (`RmQRCodeGeneratorOptions.Fnc1`) the indicator costs 3 bits in first position and 11 in second, with the same `%` rule.
+
 **Full capacity tables** for all Standard QR Code versions (1-40) and ECC levels are available in the [Data Capacity Tables](#data-capacity-tables) section below.
 
 ### Data Capacity Tables

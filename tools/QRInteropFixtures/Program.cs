@@ -23,6 +23,12 @@ if (command == "probe-creator")
     // Checks whether the pinned ZXingCpp native build can create Micro QR / rMQR.
     return CreatorProbe.Run();
 }
+if (command == "spot-check-fnc1")
+{
+    // Every FNC1 symbol this library writes (both positions, Single and Optimal, each level) read by zxing-cpp
+    // and, for first position, ZXing.Net. Findings go to the fixture spec and the FNC1 plan.
+    return Fnc1SpotCheck.Run();
+}
 if (command == "spot-check-rmqr")
 {
     // Decodes FeatherQR-generated rMQR symbols (all versions × ECC × modes) with zxing-cpp.
@@ -100,7 +106,7 @@ if (command == "import-gs1-syntax-dictionary")
 }
 if (command != "regenerate" && command != "regenerate-structured-append" && command != "regenerate-fnc1" && command != "regenerate-gs1")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|regenerate-gs1|import-gs1-syntax-dictionary|import-structured-append-samples|spot-check-structured-append|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|regenerate-structured-append|regenerate-fnc1|regenerate-gs1|import-gs1-syntax-dictionary|import-structured-append-samples|spot-check-structured-append|spot-check-fnc1|spot-check-kanji|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|probe-fnc1|generate-kanji-table]");
     return 1;
 }
 

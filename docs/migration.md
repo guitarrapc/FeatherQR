@@ -410,7 +410,7 @@ Behavior change, not source or binary breaking: code that branches on `Unsupport
 - **A symbol without FNC1 reports `default`**, on which both position members are `false`, and so does a failed decode.
 - **Micro QR has no FNC1 mode**, so its result has no such member.
 - **A misplaced or repeated indicator is `InvalidBitstream`.** FNC1 belongs once before the first data segment, with an ECI or Structured Append header on either side. zxing-cpp accepts a late first-position indicator and this library does not, because the mode changes how every Alphanumeric segment reads.
-- **Writing FNC1 is not in this release.** The generator options have no FNC1 member yet. It comes with the GS1 layer (application identifiers and check digits), which keeps an element string from being written wrong with no error.
+- **Writing FNC1 is additive.** `QRCodeGeneratorOptions.Fnc1` and `RmQRCodeGeneratorOptions.Fnc1` take `Fnc1Mode.FirstPosition`, `Fnc1Mode.SecondPosition(int)` (00 to 99) or `Fnc1Mode.SecondPosition(char)` (A to Z, a to z), and default to `Fnc1Mode.None`. The content is the element string the decoder returns, with U+001D as the separator and no identifier or indicator. The generator does not check that it is valid GS1 data, which the `FeatherQR.Gs1` package does. The indicator costs 4 bits in first position and 12 in second in Standard QR, 3 and 11 in rMQR, and a literal `%` in an Alphanumeric segment costs two characters, so size a buffer with the same options. `CreateStructuredAppend` refuses the option.
 
 ### A failed matrix decode reports no characters written
 

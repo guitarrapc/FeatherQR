@@ -90,12 +90,13 @@ FeatherQR supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unl
 
 ## Installation
 
-Pick the package for what you need. All three ship together at the same version.
+Pick the package for what you need. All four ship together at the same version.
 
 | Package | Install when | Namespaces |
 |---|---|---|
 | [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | You want images: PNG, JPEG, WebP, SVG, canvas rendering, or decoding from an `SKBitmap`. Brings `FeatherQR` and SkiaSharp | `FeatherQR`, `FeatherQR.SkiaSharp` |
 | [FeatherQR](https://www.nuget.org/packages/FeatherQR) | You only need module matrices or decoding from your own pixel data, with no image library at all | `FeatherQR` |
+| [FeatherQR.Gs1](https://www.nuget.org/packages/FeatherQR.Gs1) | You handle GS1 data: checking an element string, converting it to and from `(AI)` text or a GS1 Digital Link URI, or reading the text a GS1 QR Code decoded to. Brings `FeatherQR` and no image library | `FeatherQR`, `FeatherQR.Gs1` |
 | [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | You are upgrading an existing project and want to keep its install line. An empty package that depends on `FeatherQR.SkiaSharp` | same as `FeatherQR.SkiaSharp` |
 
 ```bash
@@ -282,6 +283,7 @@ var rmqr = RmQRCodeGenerator.Create("content", RmQREccLevel.M, new RmQRCodeGener
 | `FitStrategy` | — | — | `MinimizeArea` |
 | `Height` | — | — | `null` (any height) |
 | `Segmentation` | `Single` | `Single` | `Single` |
+| `Fnc1` | `None` | — | `None` |
 | `AllowKanji` | `false` | `false` | `false` |
 
 The quiet zone defaults differ because the specifications do: ISO/IEC 18004 requires 4 modules for Standard QR and 2 for Micro QR, ISO/IEC 23941 requires 2 for rMQR. `0` is a valid setting for all three.
@@ -533,7 +535,7 @@ The bitmap overloads live in `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and
 
 To decode from any other image source, convert the pixels to 8-bit luminance yourself, compositing transparent pixels against white, and call `TryDecodeImage(luminance, width, height, ...)` on the decoder.
 
-A symbol that carries FNC1, the GS1 mode (first position) or an industry format registered with AIM (second position, with an application indicator), decodes to its element string with each separator as U+001D, and the decode information reports the mode as `Fnc1` (`Fnc1Mode`): `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`, the 8-bit codeword (00 to 99 as its value, or a letter as its ASCII value plus 100, `null` outside second position). Standard QR and rMQR carry it. Micro QR has no FNC1 mode. The text holds no symbology identifier and no application indicator, so an application that formats GS1 data as `(01)…(17)…` needs the GS1 application identifier table, which this library does not ship. Writing FNC1 symbols is not available yet.
+A symbol that carries FNC1, the GS1 mode (first position) or an industry format registered with AIM (second position, with an application indicator), decodes to its element string with each separator as U+001D, and the decode information reports the mode as `Fnc1` (`Fnc1Mode`): `IsFirstPosition`, `IsSecondPosition` and `ApplicationIndicator`, the 8-bit codeword (00 to 99 as its value, or a letter as its ASCII value plus 100, `null` outside second position). Standard QR and rMQR carry it. Micro QR has no FNC1 mode. The text holds no symbology identifier and no application indicator, so an application that formats GS1 data as `(01)…(17)…` needs the GS1 application identifier table, which the `FeatherQR.Gs1` package (`dotnet add package FeatherQR.Gs1`) provides. Both generators write FNC1 through the `Fnc1` option (`Fnc1Mode.FirstPosition`, or `Fnc1Mode.SecondPosition` with the application indicator), taking the element string as the text.
 
 ```csharp
 if (QRCodeDecoder.TryDecode(qrData, out var text, out var info) && info.Fnc1.IsFirstPosition)
@@ -1199,7 +1201,7 @@ Runnable examples: [ConsoleApp patterns 27–29](samples/ConsoleApp).
 
 When releasing a new version, follow these steps:
 
-1. (manual) From the repository root, bump version strings in `.props`, `.md` files. The three packages (`FeatherQR`, `FeatherQR.SkiaSharp`, `SkiaSharp.QrCode`) share one version and are packed and pushed together.
+1. (manual) From the repository root, bump version strings in `.props`, `.md` files. The four packages (`FeatherQR`, `FeatherQR.SkiaSharp`, `FeatherQR.Gs1`, `SkiaSharp.QrCode`) share one version and are packed and pushed together.
 
 ```sh
 dotnet ./tools/bump_version.cs patch   # e.g. 0.1.0 → 0.1.1

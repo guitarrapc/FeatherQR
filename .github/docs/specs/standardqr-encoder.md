@@ -64,11 +64,11 @@ The encoder overwrites every byte of the region it writes: the core is written w
 | Segmentation | One segment in one mode by default. Opt-in mixed-mode segmentation (`QRSegmentation.Optimal`) splits the content into the Numeric / Alphanumeric / Byte runs with the fewest bits |
 | Quiet zone | Configurable non-negative size. Span sizing and span output reject dimensions that cannot fit an `int`-sized matrix |
 | Structured Append | `CreateStructuredAppend` splits text across the fewest symbols (2 to 16) at one shared version within `QRCodeGeneratorOptions.Version`, balanced so the fullest symbol is as empty as possible. Text that fits one symbol in the range returns the plain symbol. See [Structured Append](#structured-append) |
+| FNC1 | Both modes through `QRCodeGeneratorOptions.Fnc1`: first position for GS1 data and second position with an application indicator (a two-digit number or one letter). The content is the text a reader returns, with U+001D as the separator. See [FNC1](#fnc1) |
 | Output | Bit-packed `QRCodeData` or byte-per-module `Span<byte>` |
 
 ### Not implemented
 
-- FNC1
 - Arbitrary ECI assignment numbers
 - Arbitrary binary payload input
 - Micro QR and rMQR
@@ -313,6 +313,18 @@ A refusal advises only what would work. Advice to "widen the version range" at v
 The refusal also states two reasons the set's size does not show: a run of U+FEFF that no symbol holds together with the character ahead of it, and marks whose kept-off cuts cost the text its sixteen symbols, which the same text shows by fitting with an ordinary character of the mark's width in place of the marks. The refusal's first sentence names the text's mode, charset and length, as `Create`'s refusal does. The trials run on the throw path only. Advising the caller to drop a byte order mark or a declared charset was rejected, because both change the bytes the caller asked for.
 
 ---
+
+### FNC1
+
+ISO/IEC 18004 6.4.8 defines two modes that change how a whole symbol is read: FNC1 in first position (`0101`) marks GS1 data, FNC1 in second position (`1001`, then an 8-bit application indicator) marks data in an industry format registered with AIM. `QRCodeGeneratorOptions.Fnc1` writes either. The content is the text a reader returns: a GS1 element string with U+001D as the separator after each variable-length value another follows, no symbology identifier, no application indicator. Whether it is valid GS1 data is the `FeatherQR.Gs1` package's business, which builds element strings from `(AI)` text and checks them.
+
+The indicator goes where the standard puts it, after any ECI header and before the first data segment, and a Structured Append set refuses the option, since no reader is known to read FNC1 across a set. A requested byte order mark follows the indicator as data.
+
+In an Alphanumeric segment the separator is written as `%` and a literal `%` as `%%`, read left to right within the segment with `%%` first, which is how every reader probed reads them. So a separator followed by a separator or a literal `%` cannot share an Alphanumeric segment: the reader would take the `%%` first. Under `QRSegmentation.Single` such content is not Alphanumeric and takes Byte mode, where the separator is the byte 0x1D. Under `QRSegmentation.Optimal` the separator pair is a cost: the program's Alphanumeric states split into "the last character was a separator" and "it was not", and from the separator states a separator or a literal `%` can only open a new run or go to Byte, so a long run breaks in two (one more header) and a short one goes to Byte, whichever is smaller. The program under FNC1 has its own scalar walk and parent table (nine states, one byte a character and state, against the three-bit packing of the walk without FNC1), plans Numeric, Alphanumeric and Byte runs only, and reproduces the two examples of 6.4.8 bit for bit.
+
+The indicator costs 4 bits in first position and 12 in second, and a literal `%` costs two Alphanumeric characters, so content at a version's edge can move to the next version. Sizing takes the same option.
+
+The route without FNC1 keeps its instructions. The options struct holds the segmentation and the FNC1 mode in one field, so `Create` tells the default from everything else with the one compare it already made on the segmentation, and the FNC1 route is written as its own methods (the version fit with the indicator's bits, the stream with the indicator, the core writer) rather than as parameters of the default route's methods, which are inlined into it. The mixed-mode route's single-mode fallback chooses between the two writers by the mode: the FNC1 writer applies the `%` rule to an Alphanumeric stream, so without FNC1 it would write a literal `%` twice under a count that holds it once. The first version sent every fallback through it and did exactly that ([fnc1-support-plan.md](../plans/fnc1-support-plan.md), the record after the review). The JIT's listings of `Create` and the span `Create` are byte-identical before and after. `TryGetRequiredBufferSize` moved its Optimal handling to the cold route and shrank. A paired timing of the segmentation benchmark's rows against the commit before read `Optimal` at 0.97 to 1.03, the spread of the `Single` rows, whose machine code is the same. The rMQR generator took the same shape in Phase 4 ([rMQR Encoder](rmqr-encoder.md#fnc1)).
 
 ## Pipeline
 
@@ -630,6 +642,7 @@ The encoder produces a module matrix, not an image. Color, pixels per module, sh
 - Structured Append is one method, with the count taken from the version cap. It has no explicit-count overload, no set sizing API (`TryGetRequiredBufferSize` stays single-symbol) and no combine helper. The first two can come in a minor release on request. A combine helper would fix an irreversible reassembly policy (a missing symbol, a duplicate, a parity mismatch), and the four rules on `QRStructuredAppend` are all a caller needs.
 - A set of one is never written: its header costs 20 bits and tells a reader nothing. The decoder still accepts one.
 - Stack buffers stay zero-initialized: the encoder uses no `[SkipLocalsInit]`. Skipping the zeroing measured 1 to 12 % of a version 1 to 10 encode (2026-10-02) and nothing on larger symbols. Under the memory safety rules C# 15 starts in preview, a `stackalloc` without an initializer in such a member is an unsafe operation, and in an encoder a read before a write would not fail but put stale stack bytes into a symbol that leaves the process. The zeroing's cost is cut instead by allocating less (see Lessons Learned, Performance). The library's only `unsafe` method is `ModulePlacer.ExpandBitsAdvSimd`, for an alignment hint, and the encoder's performance work added none.
+- FNC1 is an option on the same `Create`, not an entry point of its own, and the content is the text a reader returns (U+001D as the separator, no identifier or indicator), so a decoded symbol re-encodes from its decode info. Decided in [fnc1-support-plan.md](../plans/fnc1-support-plan.md) (decisions 1, 4, 5, 8 to 12) until that plan is folded here. The rest of the rules are under [FNC1](#fnc1).
 - The parity follows the bytes, so Kanji encoding changes Japanese text's parity: in Kanji mode (with `AllowKanji`) it is the XOR of Shift_JIS bytes, not UTF-8 ones. A set stays consistent, so no reader breaks, but a pinned value of this encoder's parity for Japanese input depends on the option: 「こんにちは世界、QRコードの分割テストです。」×3 carries 176 as a Kanji set and 6 as the UTF-8 set. `StructuredAppendKanjiTest` checks the Kanji sets' parity, and older tests check ASCII, Latin-1 and UTF-8. The decode corpus holds Japanese sets both ways, since the decoder reports what is on the wire.
 
 ---

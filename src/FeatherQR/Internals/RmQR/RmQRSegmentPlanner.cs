@@ -12,7 +12,7 @@ namespace FeatherQR.Internals.RmQR;
 /// When the content fits in a single mode that fit caps the search, so a plan is produced only when it lowers the core module count. Otherwise the single-mode stream is emitted unchanged.
 /// Design rationale, bounds and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
 /// </remarks>
-internal static class RmQRSegmentPlanner
+internal static partial class RmQRSegmentPlanner
 {
     /// <summary>
     /// Upper bound on the runs a plan can contain. The largest capacity cannot hold more than 76, and <c>RmQRSegmentPlannerUnitTest</c> pins that maximum below this.

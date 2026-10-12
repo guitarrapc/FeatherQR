@@ -30,6 +30,10 @@ namespace FeatherQR
         public bool IsFirstPosition { get; }
         public bool IsSecondPosition { get; }
         public int? ApplicationIndicator { get; }
+        public static Fnc1Mode FirstPosition { get; }
+        public static Fnc1Mode None { get; }
+        public static Fnc1Mode SecondPosition(char letter);
+        public static Fnc1Mode SecondPosition(int number);
     }
 
     public readonly struct ImagePoint : IEquatable<ImagePoint>
@@ -209,6 +213,7 @@ namespace FeatherQR
     public struct QRCodeGeneratorOptions : IEquatable<QRCodeGeneratorOptions>
     {
         public EciMode EciMode { get; set; }
+        public Fnc1Mode Fnc1 { get; set; }
         public QRSegmentation Segmentation { get; set; }
         public QRVersionRange Version { get; set; }
         public bool AllowKanji { get; set; }
@@ -317,6 +322,7 @@ namespace FeatherQR
     public struct RmQRCodeGeneratorOptions : IEquatable<RmQRCodeGeneratorOptions>
     {
         public EciMode EciMode { get; set; }
+        public Fnc1Mode Fnc1 { get; set; }
         public RmQRFitStrategy FitStrategy { get; set; }
         public RmQRHeight? Height { get; set; }
         public RmQRSegmentation Segmentation { get; set; }

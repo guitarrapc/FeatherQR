@@ -7,7 +7,7 @@ namespace FeatherQR;
 /// <c>default</c> is the complete default configuration and is what an omitted argument sends, so the shortest correct call is <c>Create(text, eccLevel)</c>.
 /// </summary>
 /// <remarks>
-/// rMQR specific rather than shared: <see cref="Version"/> is a different type in each symbology, <see cref="QuietZoneSize"/> has a different specified default, and <see cref="FitStrategy"/>, <see cref="Height"/> and <see cref="Segmentation"/> have no meaning outside rMQR.
+/// rMQR specific rather than shared: <see cref="Version"/> is a different type in each symbology, <see cref="QuietZoneSize"/> has a different specified default, and <see cref="FitStrategy"/>, <see cref="Height"/> and <see cref="Segmentation"/> have no meaning outside rMQR. <see cref="Fnc1"/> is the same type as Standard QR's, with rMQR's costs.
 /// There is no version range here because rMQR's 32 versions are not totally ordered. Fit is constrained by strategy and height instead.
 /// A plain value a caller may assign to and copy with <c>with</c>, for the reasons on <see cref="QRCodeGeneratorOptions"/>.
 /// </remarks>
@@ -64,7 +64,49 @@ public record struct RmQRCodeGeneratorOptions
     /// Defaults to <see cref="RmQRSegmentation.Single"/>.
     /// Size a destination buffer with the same value you encode with: the two modes can select different versions.
     /// </summary>
-    public RmQRSegmentation Segmentation { get; set; }
+    public RmQRSegmentation Segmentation
+    {
+        readonly get => (RmQRSegmentation)(_route & SegmentationMask);
+        set => _route = (_route & ~SegmentationMask) | ((uint)value <= SegmentationMask ? (int)value : SegmentationMask);
+    }
+
+    /// <summary>
+    /// The FNC1 mode to write (ISO/IEC 23941 7.4.8, as ISO/IEC 18004 6.4.8): <see cref="Fnc1Mode.FirstPosition"/> for GS1 data, or second position with an application indicator for an industry format registered with AIM.
+    /// Defaults to <see cref="Fnc1Mode.None"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The content is the data as a reader returns it: a GS1 element string with U+001D as the separator after each variable-length value another follows, without a symbology identifier or the application indicator.
+    /// The indicator is written after any ECI header and before the data, and in an Alphanumeric segment the separator is written as <c>%</c> and a literal <c>%</c> as <c>%%</c>, so the content reads back as given.
+    /// A separator followed by a separator or a literal <c>%</c> cannot share an Alphanumeric segment, since a reader takes the <c>%%</c> first: such content takes Byte mode under <see cref="RmQRSegmentation.Single"/>, and <see cref="RmQRSegmentation.Optimal"/> breaks the run or uses Byte mode, whichever is smaller.
+    /// </para>
+    /// <para>
+    /// The mode costs 3 bits in first position and 11 in second (the 3-bit indicator and the 8-bit application indicator), which can move content at a version's edge to another version under the fit strategy, or out of a requested version. Size a destination buffer with the same value you encode with.
+    /// Whether the data is valid GS1 data is not checked here. The <c>FeatherQR.Gs1</c> package checks element strings and builds them from <c>(AI)</c> text.
+    /// Few readers read rMQR at all. Of those, zxing-cpp reads both modes, and no other writer is known to write second position in rMQR.
+    /// </para>
+    /// </remarks>
+    public Fnc1Mode Fnc1
+    {
+        readonly get => Fnc1Mode.FromRouteBits((int)((uint)_route >> Fnc1Shift));
+        set => _route = (_route & SegmentationMask) | (value.RouteBits << Fnc1Shift);
+    }
+
+    // One field holds the segmentation (the low 22 bits) and the FNC1 mode (the top 10 bits), so the generator's
+    // default route tells "nothing but Single and no FNC1" from everything else with the one compare it already
+    // made on the segmentation alone: a non-zero field sends the call to the cold route, which reads both out.
+    // An undefined segmentation value is kept as given when the 22 bits hold it and saturated to the mask when
+    // they do not, so the cold route refuses either (a masked value could read back as Single). Declared where
+    // the segmentation's own field was, so the struct keeps its layout.
+    private int _route;
+    private const int SegmentationMask = (1 << Fnc1Shift) - 1;
+    private const int Fnc1Shift = 22;
+
+    /// <summary>The largest segmentation value the field keeps as given. A value below 0 or above it reads back as the next one up, so an error cannot name the value the caller gave.</summary>
+    internal const int LargestKeptSegmentation = SegmentationMask - 1;
+
+    /// <summary>Whether a call takes the cold route: a segmentation other than <see cref="RmQRSegmentation.Single"/>, an FNC1 mode, or both.</summary>
+    internal readonly bool TakesColdRoute => _route != 0;
 
     /// <summary>
     /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind an 11-bit ECI header.
