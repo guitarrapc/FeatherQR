@@ -6,6 +6,7 @@ namespace FeatherQR.Tests;
 /// Parity test for the bounded walk of the axis cross-checks.
 /// <see cref="FinderPatternFinder.MeasureRunsBounded"/> measures the centre run first and gives the walk up the moment a run passes what any accepted cross section allows. The reference walks all five runs and lets the verdict refuse.
 /// The two may differ only where the verdict is a refusal, so they are compared at the cross-check itself (the returned centre and total, bit for bit) and at the walk (equal runs whenever the bounded walk finishes, a refusal by the reference whenever it does not).
+/// A refused cross-check still reports its total, 0 unless the walk measured five runs inside its bounds, and the row beside the centre row is asked on it. So the total is compared on a refusal too, and the bounds are held to admit the reference's runs exactly where the bounded walk finishes.
 /// </summary>
 public class FinderCrossCheckParityTest
 {
@@ -123,6 +124,9 @@ public class FinderCrossCheckParityTest
                                 bounded.Fill(unchecked((int)0xA5A5A5A5));
                                 var ok = FinderPatternFinder.MeasureRunsBounded(image, width, height, 128, x, y, vertical ? 0 : 1, vertical ? 1 : 0, expected, bounded, out var end);
                                 var referenceOk = FinderPatternFinder.MeasureAxisRunsReference(image, width, height, 128, x, y, vertical, expected, reference, out var referenceEnd);
+                                var admits = referenceOk && FinderPatternFinder.AxisRunBounds.From(expected, acrossAxes: vertical).Admits(reference);
+                                if (ok != admits)
+                                    first ??= $"module={module}, expected={expected}, vertical={vertical}, centre=({x},{y}): the walk {(ok ? "finished" : "gave up")} and the bounds {(admits ? "admit" : "refuse")} [{string.Join(",", reference.ToArray())}]";
                                 if (ok)
                                 {
                                     finished++;
@@ -171,7 +175,11 @@ public class FinderCrossCheckParityTest
                     if (BitConverter.SingleToInt32Bits(bounded) != BitConverter.SingleToInt32Bits(reference))
                         return $"centre=({x},{y}), crispMode={crispMode}: bounded {bounded}, reference {reference}";
                     if (float.IsNaN(reference))
-                        continue; // the total of a refused cross section is not read by any caller
+                    {
+                        if (boundedTotal != referenceTotal)
+                            return $"centre=({x},{y}), crispMode={crispMode}, row shift {rowShiftSign}: refused with bounded total {boundedTotal}, reference {referenceTotal}";
+                        continue;
+                    }
                     accepted++;
                     if (crispMode)
                         acceptedHandingRunsBack++;

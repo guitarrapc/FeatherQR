@@ -88,4 +88,4 @@ The photograph decode plan (where the image decoders stand against zxing-cpp and
 - [qrcode-symbologies.md](specs/qrcode-symbologies.md): the shared finder scan, the scope rows for several symbols in one image, the builds not timed and the leads left open.
 - [microqr-decoder.md](specs/microqr-decoder.md) and [rmqr-decoder.md](specs/rmqr-decoder.md): what of it reaches them.
 
-It left out per-stage narration, test and planted-fault counts, timing tables that decided nothing, and one machine's shell and toolchain traps. Open at the fold: whether the two costs the stages put on symbols that already read (the version read at the finders, the row beside a centre row) are taken back.
+It left out per-stage narration, test and planted-fault counts, timing tables that decided nothing, and one machine's shell and toolchain traps. Open at the fold was whether the two costs the stages put on symbols that already read (the version read at the finders, the row beside a centre row) are taken back. Both were on 2026-10-13, each by a condition the decoder's Decisions record.
