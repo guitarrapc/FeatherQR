@@ -35,15 +35,20 @@ internal static class Gs1Validator
         return CheckPairings(text, out error);
     }
 
-    /// <summary>One element's value against its entry: component by component, lengths, then character set, then linters.</summary>
     private static bool CheckValue(ReadOnlySpan<char> text, in Gs1SplitElement element, int year, out Gs1Error error)
+        => CheckValue(text.Slice(element.ValueStart, element.ValueLength), element.ValueStart, element.Entry, year, out error);
+
+    /// <summary>
+    /// One element's value against its entry: component by component, lengths, then character set, then linters.
+    /// The error's offset is <paramref name="valueOffset"/> plus the place in <paramref name="value"/>, so a
+    /// builder that holds the value apart from its text can map it back.
+    /// </summary>
+    public static bool CheckValue(ReadOnlySpan<char> value, int valueOffset, in Gs1AiTable.Gs1AiEntry entry, int year, out Gs1Error error)
     {
         error = default;
-        var entry = element.Entry;
-        var value = text.Slice(element.ValueStart, element.ValueLength);
         if (value.Length == 0)
         {
-            error = new Gs1Error(Gs1ErrorKind.EmptyValue, element.ValueStart, 0);
+            error = new Gs1Error(Gs1ErrorKind.EmptyValue, valueOffset, 0);
             return false;
         }
 
@@ -56,7 +61,7 @@ internal static class Gs1Validator
             {
                 if (component.IsOptional)
                     break;
-                error = new Gs1Error(Gs1ErrorKind.ValueTooShort, element.ValueStart, element.ValueLength);
+                error = new Gs1Error(Gs1ErrorKind.ValueTooShort, valueOffset, value.Length);
                 return false;
             }
 
@@ -66,7 +71,7 @@ internal static class Gs1Validator
                 take = rest.Length;
                 if (take > component.MaxLength)
                 {
-                    error = new Gs1Error(Gs1ErrorKind.ValueTooLong, element.ValueStart + consumed + component.MaxLength, take - component.MaxLength);
+                    error = new Gs1Error(Gs1ErrorKind.ValueTooLong, valueOffset + consumed + component.MaxLength, take - component.MaxLength);
                     return false;
                 }
             }
@@ -75,13 +80,13 @@ internal static class Gs1Validator
                 take = component.MaxLength;
                 if (rest.Length < take)
                 {
-                    error = new Gs1Error(Gs1ErrorKind.ValueTooShort, element.ValueStart, element.ValueLength);
+                    error = new Gs1Error(Gs1ErrorKind.ValueTooShort, valueOffset, value.Length);
                     return false;
                 }
             }
 
             var part = rest.Slice(0, take);
-            var partStart = element.ValueStart + consumed;
+            var partStart = valueOffset + consumed;
             var invalid = Gs1Charsets.FirstInvalid(component.Type, part, out var invalidLength);
             if (invalid >= 0)
             {
@@ -108,7 +113,7 @@ internal static class Gs1Validator
 
         if (consumed < value.Length)
         {
-            error = new Gs1Error(Gs1ErrorKind.ValueTooLong, element.ValueStart + consumed, value.Length - consumed);
+            error = new Gs1Error(Gs1ErrorKind.ValueTooLong, valueOffset + consumed, value.Length - consumed);
             return false;
         }
         return true;
@@ -119,7 +124,7 @@ internal static class Gs1Validator
     /// order the Syntax Engine reports them: a repeated AI with another value, then every exclusion, then every
     /// requisite. Each is a pass over the elements.
     /// </summary>
-    private static bool CheckPairings(ReadOnlySpan<char> text, out Gs1Error error)
+    public static bool CheckPairings(ReadOnlySpan<char> text, out Gs1Error error)
     {
         error = default;
         var position = 0;

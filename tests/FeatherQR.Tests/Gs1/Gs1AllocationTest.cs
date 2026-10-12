@@ -4,8 +4,9 @@ namespace FeatherQR.Tests;
 
 /// <summary>
 /// The GS1 data layer allocates nothing on its span paths (gs1-support-plan.md, "What has to stay true"):
-/// <see cref="Gs1ElementString.TryValidate"/> on an accepted and on a refused element string, and a
-/// <c>foreach</c> over <see cref="Gs1ElementString.EnumerateElements"/>. Release only, as
+/// <see cref="Gs1ElementString.TryValidate"/> on an accepted and on a refused element string, a
+/// <c>foreach</c> over <see cref="Gs1ElementString.EnumerateElements"/>, and the span forms and length twins
+/// of the (AI) text conversions. Release only, as
 /// <see cref="DecodeAllocationTest"/> is, since a Debug build allocates where an optimized one does not.
 /// </summary>
 [NotInParallel]
@@ -36,6 +37,19 @@ public class Gs1AllocationTest
         var refused = "0109520123456788" + "10ABC" + "\u001D" + "10DEF";
         await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryValidate(accepted.AsSpan(), out _))).IsEqualTo(0);
         await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryValidate(refused.AsSpan(), out _))).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task HriSpanForms_AllocateNothing()
+    {
+        var text = Photograph;
+        var hri = "(01)09504000059101(21)12345678p901(10)1234567p(17)141120(8200)http://www.gs1.org/demo/";
+        var hriBuffer = new char[Photograph.Length * 2];
+        var esBuffer = new char[hri.Length];
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryToHri(text.AsSpan(), hriBuffer, out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetToHriLength(text.AsSpan(), out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryFromHri(hri.AsSpan(), esBuffer, out _, out _))).IsEqualTo(0);
+        await Assert.That(SteadyStateBytes(() => Gs1ElementString.TryGetFromHriLength(hri.AsSpan(), out _, out _))).IsEqualTo(0);
     }
 
     [Test]

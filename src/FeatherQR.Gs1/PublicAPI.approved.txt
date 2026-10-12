@@ -22,6 +22,12 @@ namespace FeatherQR.Gs1
     public static class Gs1ElementString
     {
         public static Gs1ElementEnumerator EnumerateElements(ReadOnlySpan<char> elementString);
+        public static bool TryFromHri(ReadOnlySpan<char> hri, Span<char> destination, out int charsWritten, out Gs1Error error);
+        public static bool TryFromHri(ReadOnlySpan<char> hri, out string elementString, out Gs1Error error);
+        public static bool TryGetFromHriLength(ReadOnlySpan<char> hri, out int length, out Gs1Error error);
+        public static bool TryGetToHriLength(ReadOnlySpan<char> elementString, out int length, out Gs1Error error);
+        public static bool TryToHri(ReadOnlySpan<char> elementString, Span<char> destination, out int charsWritten, out Gs1Error error);
+        public static bool TryToHri(ReadOnlySpan<char> elementString, out string hri, out Gs1Error error);
         public static bool TryValidate(ReadOnlySpan<char> elementString, out Gs1Error error);
     }
 

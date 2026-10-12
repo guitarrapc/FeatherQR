@@ -5,9 +5,9 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// Test-side text helpers for the GS1 fixtures: the (AI) text of a fixture or of the Syntax Engine's output
 /// as (AI, value) pairs, and an element string built from such pairs with the separators the General
-/// Specifications require. They stand in for the library's own conversions until those exist (Phase 4), and
-/// they skip rather than guess: text with an AI the table does not know or that is not <c>(digits)value</c>
-/// pairs returns <c>null</c>.
+/// Specifications require. They are independent of the library's own conversions (<c>TryFromHri</c>,
+/// <c>TryToHri</c>), so a comparison through them is not circular, and they skip rather than guess: text with
+/// an AI the table does not know or that is not <c>(digits)value</c> pairs returns <c>null</c>.
 /// </summary>
 public static class Gs1TestText
 {

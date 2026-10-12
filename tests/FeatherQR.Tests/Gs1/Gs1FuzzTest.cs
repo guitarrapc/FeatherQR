@@ -5,9 +5,9 @@ namespace FeatherQR.Tests;
 /// <summary>
 /// No <c>Try</c> form throws for any input text (gs1-support-plan.md, "What has to stay true"): mutations of
 /// every corpus input (characters inserted, deleted and replaced, separators and non-ASCII among them) and
-/// random strings go through <see cref="Gs1ElementString.TryValidate"/> and
-/// <see cref="Gs1ElementString.EnumerateElements"/> without an exception, and an accepted string always
-/// enumerates at least one element.
+/// random strings go through <see cref="Gs1ElementString.TryValidate"/>, <see cref="Gs1ElementString.EnumerateElements"/>
+/// and the (AI) text conversions in both directions without an exception, an accepted string always
+/// enumerates at least one element, and an accepted string formats and its text reads back.
 /// </summary>
 public class Gs1FuzzTest
 {
@@ -67,6 +67,16 @@ public class Gs1FuzzTest
         if (valid && elements == 0)
             throw new InvalidOperationException($"accepted but no element: \"{text}\"");
         _ = error.ToString();
+
+        // The (AI) text conversions never throw either, in both directions, and an accepted string formats.
+        var formats = Gs1ElementString.TryToHri(text, out var hri, out var hriError);
+        if (valid && !formats)
+            throw new InvalidOperationException($"accepted but not formatted: \"{text}\" ({hriError})");
+        if (formats && !Gs1ElementString.TryFromHri(hri, out var back, out _) && valid)
+            throw new InvalidOperationException($"accepted, formatted, and the text does not read back: \"{text}\"");
+        _ = Gs1ElementString.TryFromHri(text, out _, out _);
+        Gs1ElementString.TryGetToHriLength(text, out _, out _);
+        Gs1ElementString.TryGetFromHriLength(text, out _, out _);
     }
 
     private static string Mutate(string input, Random random)
