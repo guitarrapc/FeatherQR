@@ -279,7 +279,31 @@ The rules the listing rests on:
 - Output: RVA data and a lookup by AI, with no allocation and no static constructor, like `ShiftJisKanjiTable`. Titles are not stored.
 - The list linters (`iso3166`, `iso3166alpha2`, `iso3166999`, `iso4217`, `iso5218`, `mediatype`, `packagetype`) need data the dictionary does not hold. Phase 0 found it in the same repository at the same tag, `src/lint_*.c`: bit fields for the ISO 3166 numeric, alpha-2 and ISO 4217 codes and the media types, a 431-entry string list for the package types, and the `iso5218` and `iso3166999` rules in code. The seven files are committed beside the dictionary with the same provenance note.
 - The generator refuses a dictionary that names a linter the code does not implement, so a release that adds one cannot be pinned without it.
-- Update: once a year, after GS1's January release, as its own pull request that lists the release's GSCNs and the fixtures it changes.
+- Update: as its own pull request after each dictionary release, by the procedure under "Updating the dictionary" below.
+
+### Updating the dictionary
+
+The cadence. The dictionary's releases are date tags: 2022-08-10, 2022-11-24, 2023-03-22, 2023-07-04, 2023-09-22, 2023-12-11, 2024-06-10, 2025-01-30 and 2026-01-27 (the tag list checked on 2026-10-12, nothing newer). Since 2025 there has been one a year, at the end of January, tracking the General Specifications release ratified that month (26.0 for 2026-01-27). Before that there were several a year, each carrying one GSCN. So "once a year in January" is the recent pattern and not a rule, a mid-year release can carry an urgent GSCN, and the next one is expected in late January 2027 with General Specifications 27.0.
+
+What a release can change, with the past releases as the record: new AIs (8040 to 8043 and 717 in 2026, 7041, 716, 03 and 8014 in 2025, 7250 to 7259 in 2024), changed flags (8020 lost `?` in 2025, `?` itself arrived in 2024), renamed linters (key and keyoff1 became gcppos1 and gcppos2 in 2026, hhmm became hhmi in 2025), new linters (the 8-digit dates, iso5218 and posinseqslash in 2024, hyphen in 2023), changed linter rules (csumalpha and iban in 2023-12), code list updates (ISO 4217 924 in 2025, currency codes in 2026) and changes to the file's own syntax (`+` requisites in 2023-12, the `?` flag in 2024). Each kind lands in a known place in this repository, listed next.
+
+What an update touches:
+
+- The pins: the release and commit in `tools/QRInteropFixtures/get-gs1-syntax-engine.ps1` and `Gs1FixtureGenerator`, `PROVENANCE.md` with each file's SHA-256, `THIRD-PARTY-NOTICES.md`, and the release named in the "GS1 data" section of the symbologies record.
+- The generated table and code lists, rewritten by `Gs1AiTableGeneratorTest` (it fails in CI on drift and rewrites outside CI), and the dictionary parser `Gs1SyntaxDictionary.cs` when the file's syntax changed.
+- The hand-written parts the generator holds to the file: the `Gs1Linter` enum and `Gs1Linters` (a new or renamed linter makes the generator refuse the release until the code and its imported vectors exist), the frozen Tables 7-5 and 7-6 (cross-checked against the dictionary by `Gs1AiTableTest`), and the counts pinned in `Gs1AiTableTest` (224 entries, 541 AIs) and `Gs1FixtureTest` (541 per-AI cases, 34 linters).
+- The fixtures: `regenerate-gs1` rebuilds the corpus against the oracles, and the per-AI group follows the dictionary. The Syntax Engine console app loads the new dictionary through `--syndict`, so its verdicts follow the release without a new engine, but a release that adds a linter needs the engine release that implements it. CodeGlyphX and libzint stay at their pinned versions and fall behind the dictionary, so their disagreement lists in the fixture spec grow, each case with its cause.
+- Decisions a release can settle: G9's (7041) and (8040) to (8043), refused until the dictionary flags them.
+
+The procedure, one pull request per release:
+
+1. Set the new release tag and commit in `get-gs1-syntax-engine.ps1` and `Gs1FixtureGenerator`, run the script, then `import-gs1-syntax-dictionary` (it copies the dictionary, the seven `lint_*.c` files, the license, the linter vectors and writes `PROVENANCE.md`).
+2. Run `Gs1AiTableGeneratorTest` outside CI to regenerate the table and code lists. If it refuses a linter, implement it in `Gs1Linters` with its `Gs1Linter` member and hold it to the imported vectors in `Gs1LinterTest`, as Phase 3 did for the 34.
+3. Run `regenerate-gs1` and read the disagreement report by cause. A new disagreement is either the pinned oracle falling behind (recorded in the fixture spec) or a defect (fixed before the pull request).
+4. Update the pinned counts, `THIRD-PARTY-NOTICES.md` and the specs, and run the full suite on both frameworks.
+5. The pull request lists the release's GSCNs, the AIs, flags, linters and code lists that changed, and the fixtures that moved.
+
+Who notices a release and how the package ships it is G12.
 
 ### Separators and order
 
@@ -309,6 +333,7 @@ Building writes a separator only where the General Specifications require one (�
 | G9 | Digital Link | Decided 2026-10-12 with the API, the two points left to Phase 5 settled the same day. Uncompressed, URI Syntax 1.7.0. Output in the canonical form. Input with any stem, percent-decoded. A repeated AI, equal values included, is refused as the Syntax Engine refuses it (decided 2026-10-12 after Phase 5, replacing the last-wins rule the Phase 0 note had read into URI Syntax 1.7.0: the engine is GS1's reference and a reader that drops data in silence is the worse default). Non-numeric extension keys are ignored. A compressed URI is refused with its own kind. When an element string holds two primary keys, the first in element-string order leads the URI, as the Syntax Engine does. Phase 0 found that 1.7.0 lists (7041) and (8040) to (8043) as data attributes while dictionary 2026-01-27 does not flag them `?`, and both dictionary-driven oracles refuse them in a URI. Phase 5 decided for the table: the flags are the dictionary's to give, the oracles agree, and the next release the table is regenerated from lifts them. Every other key, qualifier and attribute of 1.7.0 is in the dictionary with the same flags, so 1.7.0 needs no data newer than the pinned release |
 | G10 | rMQR | No refusal. The layer does not see the symbol, and readers do read GS1 rMQR. The docs say GS1 does not list rMQR as a carrier (General Specifications Release 26.0), so a GS1 scanner may not accept it |
 | G11 | Where the record lives | A "GS1 data" section in [qrcode-symbologies.md](../specs/qrcode-symbologies.md), since shared content lives only there. If it outgrows a section, a `gs1-data.md` design record and a guidelines change, decided with the maintainer then |
+| G12 | Dictionary updates: who notices, how it ships | Open (raised 2026-10-12). The procedure is under "Updating the dictionary". Two points for the maintainer. Noticing: a scheduled workflow (monthly) that compares the newest tag of gs1/gs1-syntax-dictionary with the pinned release and opens an issue when they differ, against a checklist item each February after GS1's January release, which misses a mid-year release. Shipping: the packages are versioned in lockstep (G2), so a dictionary update, which changes `FeatherQR.Gs1` alone, would release all four packages at a minor bump, unless `FeatherQR.Gs1` leaves the lockstep for its own version, which `check_package_deps` and the release workflow would then have to allow |
 
 A lead outside the scope: the scheme and host of a Digital Link URI are case-insensitive, so an uppercase stem would let Alphanumeric mode carry it under `Optimal`. It needs the Digital Link standard's view and phone readers checked first.
 
@@ -347,8 +372,8 @@ A lead outside the scope: the scheme and host of a Digital Link URI are case-ins
 | 3 | Reading and checks: the split, the linters, the pairings, `TryValidate`, `EnumerateElements` | Verdicts match the Syntax Engine fixtures, disagreements listed by cause. No allocation. A fuzz run never throws |
 | 4 | `(AI)` text: `TryToHri` and `TryFromHri`, their span forms and length twins | The `(AI)` text and separator checks above. Round trips |
 | 5 | Digital Link: both directions, and `TryRead` | The Syntax Engine's Digital Link vectors and fixtures match. CodeGlyphX agrees where URI Syntax 1.6.0 and 1.7.0 agree |
-| 6 | Symbols, after the FNC1 plan's Phases 3 and 4: the end-to-end tests, the compliance property, the corpus photograph, the benchmark class | zxing-cpp's reads match. Encode and decode benchmarks within noise |
-| 7 | Playground (GS1 input as `(AI)` text, the Digital Link builder, the decoded AIs, on top of the FNC1 plan's encode selector), the documents below, the approved API listing, then this plan folded and deleted with its research file | The Playground publish green and checked by hand |
+| 6 | Symbols, after the FNC1 plan's Phases 3 and 4: the end-to-end tests, the compliance property, the corpus photograph (the data layer's benchmark class was built before the pull request, 2026-10-12) | zxing-cpp's reads match. Encode and decode benchmarks within noise |
+| 7 | Playground (GS1 input as `(AI)` text, the Digital Link builder, the decoded AIs, on top of the FNC1 plan's encode selector), the documents below, the approved API listing, the dictionary update procedure moved to the fetch script and the specs with G12 decided (and the scheduled staleness check, if chosen), then this plan folded and deleted with its research file | The Playground publish green and checked by hand |
 
 Phases 0-5 touch no symbol code and can run beside the FNC1 plan. Only Phase 6 waits for it. This layer and the FNC1 plan's encode phases are released together (G1). If the 2.0.0 freeze comes first, both wait on a branch and merge after 2.0.0 is released.
 
@@ -360,6 +385,7 @@ Phases 0-5 touch no symbol code and can run beside the FNC1 plan. Only Phase 6 w
 - [qrcode-test-fixtures.md](../specs/qrcode-test-fixtures.md): the GS1 oracles, the Syntax Engine under the toolchain policy, the GS1 fixtures and what each oracle's release explains.
 - [standardqr-encoder.md](../specs/standardqr-encoder.md), [rmqr-encoder.md](../specs/rmqr-encoder.md) and the two decoder records: a link to the GS1 section where they describe FNC1.
 - The third-party notice file (G8) and the XML docs of the new members.
+- The dictionary update procedure, which this plan holds until Phase 7: the steps move into the header of `tools/QRInteropFixtures/get-gs1-syntax-engine.ps1` beside the pins they change, and the cadence, what a release can change and the shipping decision (G12) into the "GS1 data" section of [qrcode-symbologies.md](../specs/qrcode-symbologies.md).
 
 ## Risks
 
@@ -529,3 +555,19 @@ Done: an adversarial review of the branch against the Syntax Engine's source (fo
 Also from the review: tests for every rented-buffer path (inputs over 512 characters), the escape mapping of a value error in (AI) text, the remaining percent-decoding branches, a query qualifier of a partly matched sequence, the splitter's AI-shape branches, the engine's refusal message classes on every refused URI, a pinned count of the validation cases that pass through the split under test, and an error-message test that can fail. One low finding was decided by the maintainer after the round: a value ending in `\` followed by another element formatted as text that read back as one element, since only `(` was escaped, and a decoded symbol with non-GS1 data shown by `TryRead` and re-encoded from that text would have changed in silence. `TryToHri` now writes a backslash as `\\` and `TryFromHri` reads it back, which changes no text of valid data (no GS1 character set holds a backslash) and makes the re-encoding of such a symbol fail on the backslash instead. The document corrections of the review are in the specs and in this plan's earlier entries.
 
 Benchmarks: not applicable, no change to the core.
+
+### Benchmarks of the data layer (2026-10-12)
+
+Done: the benchmark class the Verification section asks for, `Gs1DataLayer` in `src/FeatherQR.Benchmark`, built before the pull request rather than in Phase 6 at the maintainer's request. Three element strings, retail (01)(17)(10), logistics (00)(02)(11)(37)(10) and weighed (01)(3103)(3922)(17), the Digital Link standard's variable-measure example, each through `TryValidate`, the (AI) text and the URI in both directions and `TryRead` of the URI, all span forms into buffers sized by the length twins. CodeGlyphX 2.1.0's `Gs1Validator.Validate` on the same data as (AI) text stands beside `TryValidate` for scale, not as a baseline, since it also builds its element list. Recorded, not tuned. ShortRun, .NET 10.0.9, Ryzen 9 7950X3D, 2026-10-12:
+
+| Operation | retail | logistics | weighed | Allocated |
+|---|---|---|---|---|
+| `TryValidate` | 0.63 µs | 1.55 µs | 1.21 µs | 0 |
+| CodeGlyphX `Gs1Validator.Validate` | 0.74 µs | 1.27 µs | 0.68 µs | 1,456 to 2,184 B |
+| `TryToHri` | 0.16 µs | 0.27 µs | 0.16 µs | 0 |
+| `TryFromHri` | 0.65 µs | 1.73 µs | 1.16 µs | 0 |
+| `TryToDigitalLink` | 1.60 µs | 3.14 µs | 2.17 µs | 0 |
+| `TryFromDigitalLink` | 0.36 µs | 0.80 µs | 0.49 µs | 0 |
+| `TryRead` of the URI | 0.42 µs | 0.94 µs | 0.58 µs | 0 |
+
+What the numbers say: every span form allocates nothing, as the Release test holds. The readers (`TryToHri`, `TryFromDigitalLink`, `TryRead`) cost well under a microsecond. The members that run every check cost one to three microseconds, and `TryToDigitalLink` is the dearest because it validates and then chooses the key's qualifier sequence and sorts the attributes by re-splitting the string per candidate instead of keeping a list. The pairing checks are quadratic in the element count by design (no allocation), which is why the five-element logistics string costs more than the four-element weighed one. Against a symbol encode or decode, which costs tens of microseconds and more, none of this registers. Nothing was tuned, and the figures are the record a later change is measured against.
