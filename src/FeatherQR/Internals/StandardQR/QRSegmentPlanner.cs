@@ -94,14 +94,15 @@ internal static class QRSegmentPlanner
     /// The scan needs no floor/ceiling machinery: count indicator widths are constant within the three version bands, so the optimal cost is computed at most once per band (three O(n) runs in the worst case, no reconstruction table), and capacity grows monotonically inside a band, so the first version that holds the band cost is the smallest.
     /// </remarks>
     public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, out int selected, out bool useSegments, out bool kanjiPlan)
-        => TrySelectVersion(text, in analysis, eccLevel, minVersion, maxVersion, default, out selected, out useSegments, out kanjiPlan, out _, out _);
+        => TrySelectVersion(text, in analysis, eccLevel, minVersion, maxVersion, default, default, out selected, out useSegments, out kanjiPlan, out _, out _);
 
     /// <summary>
     /// <see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, out int, out bool, out bool)"/>, keeping the run that priced the Kanji plan it chose.
     /// When <paramref name="kanjiPlan"/> is true, <paramref name="kanjiTable"/> holds that program's predecessors at the selected version's widths, which ended in <paramref name="kanjiFinalState"/> at <paramref name="kanjiPlannedBits"/>, and <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, ReadOnlySpan{byte}, int, int, Span{ModeSegment}, out int)"/> builds the plan from it without running the program again.
     /// An empty <paramref name="kanjiTable"/> keeps nothing; otherwise it holds at least <see cref="ModeSegmenter.ParentBytesPerChar"/> bytes a character.
+    /// Under FNC1 (<paramref name="fnc1"/> active) the indicator's bits join the stream's headers, the single-mode ceiling and the costs come from the FNC1 program, and no Kanji plan is priced.
     /// </summary>
-    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> kanjiTable, out int selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, QREccLevel eccLevel, int minVersion, int maxVersion, Span<byte> kanjiTable, Fnc1Mode fnc1, out int selected, out bool useSegments, out bool kanjiPlan, out int kanjiFinalState, out int kanjiPlannedBits)
     {
         kanjiPlan = false;
         kanjiFinalState = 0;
@@ -114,7 +115,7 @@ internal static class QRSegmentPlanner
 
         // Ceiling: the version single-mode encoding lands on, when there is one.
         // When there is none the scan runs to the window's end instead of stopping early, because content that overflows every version in one mode can still fit once the modes are mixed (3000 letters followed by 4000 digits is 7000 Byte-mode characters, far over the largest Byte capacity, but fits as two runs).
-        var hasSingle = QRCodeGenerator.TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, charset, utf8BOM: false, minVersion, maxVersion, out var single);
+        var hasSingle = QRCodeGenerator.TryGetVersionInRangeFnc1(analysis.DataLength, analysis.EncodingMode, eccLevel, charset, utf8BOM: false, fnc1.StandardQrHeaderBits, minVersion, maxVersion, out var single);
 
         if (!CanPlanBeatSingleMode(analysis.EncodingMode))
         {
@@ -129,7 +130,7 @@ internal static class QRSegmentPlanner
             return hasSingle;
         }
 
-        var eciBits = charset == EciMode.Default ? 0 : EciHeaderBits;
+        var eciBits = (charset == EciMode.Default ? 0 : EciHeaderBits) + fnc1.StandardQrHeaderBits;
 
         // Strictly below the single-mode fit: at that version the single-mode stream already fits, and emitting it unchanged is the blast-radius bound the feature is designed around.
         var top = hasSingle ? Math.Min(single - 1, maxVersion) : maxVersion;
@@ -141,7 +142,7 @@ internal static class QRSegmentPlanner
 
         // One O(n) pass pricing each character at the cheapest rate any mode could give it: a lower bound on any plan at any version, so it may only reject.
         // It is what keeps Optimal roughly free on content no split can shrink — a candidate only pays for a cost run when it could hold at least this much.
-        var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
+        var trivialBits = (fnc1.IsActive ? TrivialLowerBoundBitsFnc1(text, charset) : TrivialLowerBoundBits(text, charset)) + eciBits;
 
         var band = -1;
         var bandCost = 0;
@@ -155,12 +156,19 @@ internal static class QRSegmentPlanner
             if (candidateBand != band)
             {
                 band = candidateBand;
-                bandCost = ModeSegmenter.ComputeCosts(
-                    text, charset, ModeIndicatorBits,
-                    EncodingMode.Numeric.GetCountIndicatorLength(version),
-                    EncodingMode.Alphanumeric.GetCountIndicatorLength(version),
-                    EncodingMode.Byte.GetCountIndicatorLength(version),
-                    default, out _);
+                bandCost = fnc1.IsActive
+                    ? ModeSegmenter.ComputeCostsFnc1(
+                        text, charset, ModeIndicatorBits,
+                        EncodingMode.Numeric.GetCountIndicatorLength(version),
+                        EncodingMode.Alphanumeric.GetCountIndicatorLength(version),
+                        EncodingMode.Byte.GetCountIndicatorLength(version),
+                        default, out _)
+                    : ModeSegmenter.ComputeCosts(
+                        text, charset, ModeIndicatorBits,
+                        EncodingMode.Numeric.GetCountIndicatorLength(version),
+                        EncodingMode.Alphanumeric.GetCountIndicatorLength(version),
+                        EncodingMode.Byte.GetCountIndicatorLength(version),
+                        default, out _);
             }
 
             if (bandCost + eciBits <= capacityBits)
@@ -299,6 +307,10 @@ internal static class QRSegmentPlanner
     public static int TrivialLowerBoundBits(ReadOnlySpan<char> text, EciMode charset)
         => (ModeSegmenter.CheapestSixths(text, charset) + 5) / 6 + ModeIndicatorBits + MinCountBitsAny;
 
+    /// <summary><see cref="TrivialLowerBoundBits"/> under the FNC1 character classes.</summary>
+    public static int TrivialLowerBoundBitsFnc1(ReadOnlySpan<char> text, EciMode charset)
+        => (ModeSegmenter.CheapestSixthsFnc1(text, charset) + 5) / 6 + ModeIndicatorBits + MinCountBitsAny;
+
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into <paramref name="segments"/>.
     /// Returns false when the content is unplannable, the plan needs more runs than the caller lent room for, the plan would be misread on decode (a Byte run opened at a mid-content U+FEFF, which the program does not build), or the exact re-costed stream would not fit; the caller answers all four by falling back to the single-mode stream.
@@ -306,8 +318,11 @@ internal static class QRSegmentPlanner
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
         => TryBuildPlan(text, charset, version, eccLevel, segments, out segmentCount, out _);
 
-    /// <summary>The same, handing over what the plan measures (no ECI prefix), for a caller with a header of its own to add to it.</summary>
-    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount, out int planBits)
+    /// <summary>
+    /// The same, handing over what the plan measures (no ECI prefix), for a caller with a header of its own to add to it.
+    /// Under FNC1 (<paramref name="fnc1"/> active) the plan comes from the FNC1 program, its Alphanumeric runs count their literal percents twice, and the indicator's bits join the capacity check.
+    /// </summary>
+    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount, out int planBits, Fnc1Mode fnc1 = default)
     {
         segmentCount = 0;
         planBits = 0;
@@ -318,7 +333,7 @@ internal static class QRSegmentPlanner
         var cciAlnum = EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
         var cciByte = EncodingMode.Byte.GetCountIndicatorLength(version);
 
-        var parentLength = text.Length * ModeSegmenter.ParentBytesPerChar;
+        var parentLength = text.Length * (fnc1.IsActive ? ModeSegmenter.Fnc1ParentBytesPerChar : ModeSegmenter.ParentBytesPerChar);
         byte[]? rented = null;
         Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
             ? stackalloc byte[ModeSegmenter.MaxStackParents]
@@ -327,8 +342,18 @@ internal static class QRSegmentPlanner
         try
         {
             var window = parents.Slice(0, parentLength);
-            plannedBits = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, window, out var finalState);
-            if (!ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount))
+            bool reconstructed;
+            if (fnc1.IsActive)
+            {
+                plannedBits = ModeSegmenter.ComputeCostsFnc1(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, window, out var fnc1State);
+                reconstructed = ModeSegmenter.ReconstructFnc1(text, window, fnc1State, segments, out segmentCount);
+            }
+            else
+            {
+                plannedBits = ModeSegmenter.ComputeCosts(text, charset, ModeIndicatorBits, cciNumeric, cciAlnum, cciByte, window, out var finalState);
+                reconstructed = ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount);
+            }
+            if (!reconstructed)
             {
                 segmentCount = 0;
                 return false;
@@ -340,7 +365,7 @@ internal static class QRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
-        return TryAcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits);
+        return TryAcceptPlan(text, charset, version, eccLevel, plannedBits, segments, ref segmentCount, out planBits, fnc1);
     }
 
     /// <summary>
@@ -383,7 +408,7 @@ internal static class QRSegmentPlanner
     }
 
     /// <summary>
-    /// <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, Span{ModeSegment}, out int)"/> from the table the version scan kept for the plan it chose (<see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, Span{byte}, out int, out bool, out bool, out int, out int)"/>), without running the program again.
+    /// <see cref="TryBuildKanjiPlan(ReadOnlySpan{char}, int, QREccLevel, Span{ModeSegment}, out int)"/> from the table the version scan kept for the plan it chose (<see cref="TrySelectVersion(ReadOnlySpan{char}, in TextAnalysisResult, QREccLevel, int, int, Span{byte}, Fnc1Mode, out int, out bool, out bool, out int, out int)"/>), without running the program again.
     /// </summary>
     public static bool TryBuildKanjiPlan(ReadOnlySpan<char> text, int version, QREccLevel eccLevel, ReadOnlySpan<byte> table, int finalState, int plannedBits, Span<ModeSegment> segments, out int segmentCount)
     {
@@ -408,7 +433,7 @@ internal static class QRSegmentPlanner
     /// <summary>Fewest symbols of a set worth planning together; below it each plans alone.</summary>
     public const int MinLaneChunks = 3;
 
-    /// <summary>The program of <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int, out int)"/> for up to <see cref="ModeSegmenter.Lanes"/> chunks of one text at once; see <see cref="ModeSegmenter.ComputeCostsLanes"/>.</summary>
+    /// <summary>The program of <see cref="TryBuildPlan(ReadOnlySpan{char}, EciMode, int, QREccLevel, Span{ModeSegment}, out int, out int, Fnc1Mode)"/> for up to <see cref="ModeSegmenter.Lanes"/> chunks of one text at once; see <see cref="ModeSegmenter.ComputeCostsLanes"/>.</summary>
     public static void PlanChunks(ReadOnlySpan<char> text, ReadOnlySpan<int> starts, ReadOnlySpan<int> lengths, EciMode charset, int version, Span<byte> table, Span<int> costs, Span<int> finalStates)
         => ModeSegmenter.ComputeCostsLanes(text, starts, lengths, charset, ModeIndicatorBits,
             EncodingMode.Numeric.GetCountIndicatorLength(version), EncodingMode.Alphanumeric.GetCountIndicatorLength(version), EncodingMode.Byte.GetCountIndicatorLength(version),
@@ -431,15 +456,15 @@ internal static class QRSegmentPlanner
     /// <summary>
     /// What follows the walk back, for a plan of <paramref name="plannedBits"/>: the unit counts, the refusal of a plan the decoder would misread, and the re-measurement against the program and the capacity.
     /// </summary>
-    private static bool TryAcceptPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, int plannedBits, Span<ModeSegment> segments, ref int segmentCount, out int planBits)
+    private static bool TryAcceptPlan(ReadOnlySpan<char> text, EciMode charset, int version, QREccLevel eccLevel, int plannedBits, Span<ModeSegment> segments, ref int segmentCount, out int planBits, Fnc1Mode fnc1 = default)
     {
         // Re-cost the reconstructed plan from the byte counts the encoder will actually emit.
         // Disagreeing with the dynamic programming cost model is a bug in the model (the version scan would have compared the wrong number against a capacity), so it fails loudly in Debug and rejects the plan in Release rather than becoming a stream that overruns the data codewords.
-        planBits = PricePlan(text, charset, version, segments.Slice(0, segmentCount));
+        planBits = PricePlan(text, charset, version, segments.Slice(0, segmentCount), fnc1);
         Debug.Assert(planBits < 0 || planBits == plannedBits, "the reconstructed plan must cost exactly what the dynamic program computed");
 
         var capacityBits = QRCodeConstants.GetEccInfo(version, eccLevel).TotalDataCodewords * 8;
-        if (planBits != plannedBits || planBits + (charset == EciMode.Default ? 0 : EciHeaderBits) > capacityBits)
+        if (planBits != plannedBits || planBits + (charset == EciMode.Default ? 0 : EciHeaderBits) + fnc1.StandardQrHeaderBits > capacityBits)
         {
             // A plan the decoder would misread, a model that disagreed, or a version that simply cannot hold the plan (a legitimate answer for a caller that asked about a specific version).
             segmentCount = 0;
@@ -453,7 +478,7 @@ internal static class QRSegmentPlanner
     /// <summary>
     /// Fills each run with the value its count indicator carries and returns what the plan measures, in one pass over the runs; -1 for a plan that opens a Byte run at a mid-content U+FEFF under UTF-8, which the program never builds (<see cref="ModeSegmenter.ByteOrderMark"/>) and the caller treats as a model that disagreed.
     /// </summary>
-    private static int PricePlan(ReadOnlySpan<char> text, EciMode charset, int version, Span<ModeSegment> segments)
+    private static int PricePlan(ReadOnlySpan<char> text, EciMode charset, int version, Span<ModeSegment> segments, Fnc1Mode fnc1 = default)
     {
         var numericHeader = ModeIndicatorBits + EncodingMode.Numeric.GetCountIndicatorLength(version);
         var alnumHeader = ModeIndicatorBits + EncodingMode.Alphanumeric.GetCountIndicatorLength(version);
@@ -470,6 +495,9 @@ internal static class QRSegmentPlanner
                     total += numericHeader + ModeSegmenter.PayloadBits(EncodingMode.Numeric, units);
                     break;
                 case 1:
+                    // Under FNC1 a literal % is written twice, so the run's unit count is its characters plus its percents.
+                    if (fnc1.IsActive)
+                        units = ModeSegmenter.AlphanumericUnitsFnc1(text.Slice(segment.Start, segment.Length));
                     total += alnumHeader + ModeSegmenter.PayloadBits(EncodingMode.Alphanumeric, units);
                     break;
                 case 3:

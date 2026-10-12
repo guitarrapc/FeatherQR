@@ -133,7 +133,7 @@ public class KanjiPlanTableReuseTest
                 foreach (var (min, max) in new[] { (1, 40), (10, 40), (5, 30) })
                 {
                     var because = $"「{text}」 at {level}, versions {min}-{max}";
-                    var selected = QRSegmentPlanner.TrySelectVersion(text, in analysis, level, min, max, table, out var version, out var useSegments, out var kanjiPlan, out var finalState, out var plannedBits);
+                    var selected = QRSegmentPlanner.TrySelectVersion(text, in analysis, level, min, max, table, default, out var version, out var useSegments, out var kanjiPlan, out var finalState, out var plannedBits);
                     var expected = QRSegmentPlanner.TrySelectVersion(text, in analysis, level, min, max, out var expectedVersion, out var expectedUseSegments, out var expectedKanjiPlan);
                     await Assert.That((selected, version, useSegments, kanjiPlan)).IsEqualTo((expected, expectedVersion, expectedUseSegments, expectedKanjiPlan)).Because(because);
                     if (!kanjiPlan)

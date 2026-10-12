@@ -102,7 +102,44 @@ public record struct QRCodeGeneratorOptions
     /// <see cref="QRSegmentation.Optimal"/> never selects a larger version, emits the identical bit stream when a split would not shrink the symbol, and defers to the single-mode stream when <see cref="Utf8Bom"/> would actually write a byte order mark.
     /// Size a destination buffer with the same value you encode with.
     /// </summary>
-    public QRSegmentation Segmentation { get; set; }
+    public QRSegmentation Segmentation
+    {
+        readonly get => (QRSegmentation)(_route & SegmentationMask);
+        set => _route = (_route & ~SegmentationMask) | ((int)value & SegmentationMask);
+    }
+
+    /// <summary>
+    /// The FNC1 mode to write (ISO/IEC 18004 6.4.8): <see cref="Fnc1Mode.FirstPosition"/> for GS1 data, or second position with an application indicator for an industry format registered with AIM.
+    /// Defaults to <see cref="Fnc1Mode.None"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The content is the data as a reader returns it: a GS1 element string with U+001D as the separator after each variable-length value another follows, without a symbology identifier or the application indicator.
+    /// The indicator is written after any ECI header and before the data, and in an Alphanumeric segment the separator is written as <c>%</c> and a literal <c>%</c> as <c>%%</c>, so the content reads back as given.
+    /// A separator followed by a separator or a literal <c>%</c> cannot share an Alphanumeric segment, since a reader takes the <c>%%</c> first: such content takes Byte mode under <see cref="QRSegmentation.Single"/>, and <see cref="QRSegmentation.Optimal"/> breaks the run or uses Byte mode, whichever is smaller.
+    /// </para>
+    /// <para>
+    /// The mode costs 4 bits in first position and 12 in second, which can move content at a version's edge to the next version. Size a destination buffer with the same value you encode with.
+    /// A Structured Append set refuses FNC1 (<see cref="QRCodeGenerator.CreateStructuredAppend(ReadOnlySpan{char}, QREccLevel, in QRCodeGeneratorOptions)"/> throws <see cref="ArgumentException"/>), as no reader is known to read FNC1 across a set.
+    /// Whether the data is valid GS1 data is not checked here; the <c>FeatherQR.Gs1</c> package checks element strings and builds them from <c>(AI)</c> text.
+    /// </para>
+    /// </remarks>
+    public Fnc1Mode Fnc1
+    {
+        readonly get => Fnc1Mode.FromRouteBits((int)((uint)_route >> Fnc1Shift));
+        set => _route = (_route & SegmentationMask) | (value.RouteBits << Fnc1Shift);
+    }
+
+    // One field holds the segmentation (the low 22 bits, which keeps an undefined enum value as it was given so
+    // the generator can refuse it) and the FNC1 mode (the top 10 bits), so the generators' default route tells
+    // "nothing but Single and no FNC1" from everything else with the one compare it already made on the
+    // segmentation alone: a non-zero field sends the call to the cold route, which reads both out.
+    private int _route;
+    private const int SegmentationMask = (1 << Fnc1Shift) - 1;
+    private const int Fnc1Shift = 22;
+
+    /// <summary>Whether a call takes the cold route: a segmentation other than <see cref="QRSegmentation.Single"/>, an FNC1 mode, or both.</summary>
+    internal readonly bool TakesColdRoute => _route != 0;
 
     /// <summary>
     /// Write text in Kanji mode where it can be: 13 bits a character and no ECI header, where UTF-8 takes 24 bits a kana or kanji behind a 12-bit ECI header.

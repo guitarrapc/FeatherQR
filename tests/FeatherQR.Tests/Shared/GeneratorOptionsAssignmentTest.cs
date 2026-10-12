@@ -76,6 +76,9 @@ public class GeneratorOptionsAssignmentTest
         new(nameof(QRCodeGeneratorOptions.AllowKanji),
             (ref QRCodeGeneratorOptions o) => o.AllowKanji = true, new() { AllowKanji = true }, default(QRCodeGeneratorOptions) with { AllowKanji = true },
             (ref QRCodeGeneratorOptions o) => o.AllowKanji = false, new() { AllowKanji = false }, default(QRCodeGeneratorOptions) with { AllowKanji = false }),
+        new(nameof(QRCodeGeneratorOptions.Fnc1),
+            (ref QRCodeGeneratorOptions o) => o.Fnc1 = Fnc1Mode.SecondPosition('z'), new() { Fnc1 = Fnc1Mode.SecondPosition('z') }, default(QRCodeGeneratorOptions) with { Fnc1 = Fnc1Mode.SecondPosition('z') },
+            (ref QRCodeGeneratorOptions o) => o.Fnc1 = Fnc1Mode.None, new() { Fnc1 = Fnc1Mode.None }, default(QRCodeGeneratorOptions) with { Fnc1 = Fnc1Mode.None }),
     ];
 
     private static readonly OptionCase<MicroQRCodeGeneratorOptions>[] MicroQrOptions =
@@ -120,6 +123,9 @@ public class GeneratorOptionsAssignmentTest
         new(nameof(RmQRCodeGeneratorOptions.AllowKanji),
             (ref RmQRCodeGeneratorOptions o) => o.AllowKanji = true, new() { AllowKanji = true }, default(RmQRCodeGeneratorOptions) with { AllowKanji = true },
             (ref RmQRCodeGeneratorOptions o) => o.AllowKanji = false, new() { AllowKanji = false }, default(RmQRCodeGeneratorOptions) with { AllowKanji = false }),
+        new(nameof(RmQRCodeGeneratorOptions.Fnc1),
+            (ref RmQRCodeGeneratorOptions o) => o.Fnc1 = Fnc1Mode.SecondPosition(37), new() { Fnc1 = Fnc1Mode.SecondPosition(37) }, default(RmQRCodeGeneratorOptions) with { Fnc1 = Fnc1Mode.SecondPosition(37) },
+            (ref RmQRCodeGeneratorOptions o) => o.Fnc1 = Fnc1Mode.None, new() { Fnc1 = Fnc1Mode.None }, default(RmQRCodeGeneratorOptions) with { Fnc1 = Fnc1Mode.None }),
     ];
 
     [Test]
@@ -134,6 +140,7 @@ public class GeneratorOptionsAssignmentTest
             BoostEccLevel = true,
             Segmentation = QRSegmentation.Optimal,
             AllowKanji = true,
+            Fnc1 = Fnc1Mode.SecondPosition('z'),
         });
 
     [Test]
@@ -158,6 +165,7 @@ public class GeneratorOptionsAssignmentTest
             QuietZoneSize = 0,
             Segmentation = RmQRSegmentation.Optimal,
             AllowKanji = true,
+            Fnc1 = Fnc1Mode.SecondPosition(37),
         });
 
     private static async Task CheckEveryOption<T>(OptionCase<T>[] cases, T everyOptionSet) where T : struct

@@ -22,6 +22,14 @@ internal sealed record Fnc1StreamShape(IReadOnlyList<string> Headers, IReadOnlyL
 {
     public static Fnc1StreamShape OfStandardQr(byte[] modules, int size, int version, QREccLevel eccLevel, int maskPattern)
     {
+        var data = DataCodewordsOfStandardQr(modules, size, version, eccLevel, maskPattern);
+        return Walk(data, data.Length * 8, modeBits: 4, StandardQrToken,
+            mode => mode == EncodingMode.Kanji ? EncodingModeExtensions.GetKanjiCountIndicatorLength(version) : mode.GetCountIndicatorLength(version));
+    }
+
+    /// <summary>The data codewords of a Standard QR symbol, read with the reference extraction and corrected, so a stream can be compared byte for byte.</summary>
+    public static byte[] DataCodewordsOfStandardQr(byte[] modules, int size, int version, QREccLevel eccLevel, int maskPattern)
+    {
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
         var totalCodewords = eccInfo.TotalDataCodewords + (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
         var layout = ModulePlacer.GetLayout(version);
@@ -29,18 +37,24 @@ internal sealed record Fnc1StreamShape(IReadOnlyList<string> Headers, IReadOnlyL
         QRMatrixDecoder.ExtractCodewordsReference(modules, size, layout.BlockedMask, maskPattern, interleaved);
         var blocks = new byte[totalCodewords];
         if (!EccBlockDecoder.TryCorrect(interleaved, blocks, eccInfo, eccInfo.ECCPerBlock / 2, out _))
-            throw new InvalidOperationException("The fixture's codewords are not correctable, so its stream cannot be read.");
-        return Walk(interleaved.AsSpan(0, eccInfo.TotalDataCodewords), eccInfo.TotalDataCodewords * 8, modeBits: 4, StandardQrToken,
-            mode => mode == EncodingMode.Kanji ? EncodingModeExtensions.GetKanjiCountIndicatorLength(version) : mode.GetCountIndicatorLength(version));
+            throw new InvalidOperationException("The symbol's codewords are not correctable, so its stream cannot be read.");
+        return interleaved.AsSpan(0, eccInfo.TotalDataCodewords).ToArray();
     }
 
     public static Fnc1StreamShape OfRmQr(byte[] modules, int width, int height, RmQRVersion version, RmQREccLevel eccLevel)
     {
+        var data = DataCodewordsOfRmQr(modules, width, height, version, eccLevel);
+        return Walk(data, data.Length * 8, modeBits: 3, RmQrToken,
+            mode => mode == EncodingMode.Kanji ? RmQRConstants.GetKanjiCountIndicatorLength(version) : RmQRConstants.GetCountIndicatorLength(version, mode));
+    }
+
+    /// <summary>The data codewords of an rMQR symbol, read with the naive reference extraction (uncorrected, so a freshly written symbol), so a stream can be compared byte for byte.</summary>
+    public static byte[] DataCodewordsOfRmQr(byte[] modules, int width, int height, RmQRVersion version, RmQREccLevel eccLevel)
+    {
         var eccInfo = RmQRConstants.GetEccInfo(version, eccLevel);
         var stream = RmQRNaiveReference.ExtractInterleavedStream(modules, height, width, out _);
         var data = RmQRNaiveReference.DeinterleaveData(stream, eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2, eccInfo.BlocksInGroup1, eccInfo.CodewordsInGroup1);
-        return Walk(data.AsSpan(0, eccInfo.TotalDataCodewords), eccInfo.TotalDataCodewords * 8, modeBits: 3, RmQrToken,
-            mode => mode == EncodingMode.Kanji ? RmQRConstants.GetKanjiCountIndicatorLength(version) : RmQRConstants.GetCountIndicatorLength(version, mode));
+        return data.AsSpan(0, eccInfo.TotalDataCodewords).ToArray();
     }
 
     // ISO/IEC 18004 Table 2 and ISO/IEC 23941 Table 2, as tokens.

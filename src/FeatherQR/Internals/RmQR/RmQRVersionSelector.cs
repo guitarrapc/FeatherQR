@@ -92,8 +92,15 @@ internal static class RmQRVersionSelector
 
     /// <summary>Largest data length after accounting for the optional ECI prefix.</summary>
     public static int GetMaxDataLength(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, EciMode eciMode)
+        => GetMaxDataLength(version, eccLevel, mode, GetEciHeaderBits(eciMode) + RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode));
+
+    /// <summary>Largest data length after accounting for the optional ECI prefix and the FNC1 indicator's bits (3 in first position, 11 in second, 0 for none).</summary>
+    public static int GetMaxDataLengthFnc1(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, EciMode eciMode, int fnc1HeaderBits)
+        => GetMaxDataLength(version, eccLevel, mode, GetEciHeaderBits(eciMode) + fnc1HeaderBits + RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode));
+
+    /// <summary>The inverse of the bit cost against the data bit capacity, for a header of <paramref name="headerBits"/>.</summary>
+    private static int GetMaxDataLength(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int headerBits)
     {
-        var headerBits = GetEciHeaderBits(eciMode) + RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode);
         var dataBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel) - headerBits;
         if (dataBits <= 0)
             return 0;
@@ -201,13 +208,13 @@ internal static class RmQRVersionSelector
     /// <summary>
     /// The actionable "content is too long" error, built off the success path: the applicable maximum in mode units, and which constraint produced it.
     /// </summary>
-    private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRHeight? height)
+    private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRHeight? height, int fnc1HeaderBits = 0)
     {
         if (requestedVersion is { } version)
         {
             return new ArgumentException(
                 $"Content is too long for rMQR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
-                $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode, eciMode), mode)}. " +
+                $"but the maximum is {FormatDataLength(GetMaxDataLengthFnc1(version, eccLevel, mode, eciMode, fnc1HeaderBits), mode)}{(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
                 "Shorten the content, lower the ECC level, choose a larger version, or use Standard QR (QRCodeGenerator) for longer content.",
                 nameof(requestedVersion));
         }
@@ -221,7 +228,7 @@ internal static class RmQRVersionSelector
             if (height is { } wanted && RmQRConstants.GetHeight(candidate) != (int)wanted)
                 continue;
 
-            var candidateMax = GetMaxDataLength(candidate, eccLevel, mode, eciMode);
+            var candidateMax = GetMaxDataLengthFnc1(candidate, eccLevel, mode, eciMode, fnc1HeaderBits);
             if (candidateMax > largestMax)
             {
                 largestMax = candidateMax;
@@ -232,7 +239,7 @@ internal static class RmQRVersionSelector
         var scope = height is { } hh ? $"rMQR height {hh}" : "rMQR";
         return new ArgumentException(
             $"Content is too long for {scope}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
-            $"but ECC level {eccLevel} fits at most {FormatDataLength(largestMax, mode)} ({largest}). " +
+            $"but ECC level {eccLevel} fits at most {FormatDataLength(largestMax, mode)} ({largest}){(fnc1HeaderBits > 0 ? " under FNC1" : "")}. " +
             (height is null
                 ? "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content."
                 : "Shorten the content, lower the ECC level, allow a taller symbol, or use Standard QR (QRCodeGenerator) for longer content."));
@@ -341,6 +348,55 @@ internal static class RmQRVersionSelector
         }
 
         return TrySelectAutoFit(mode, dataLength, eciMode, eccLevel, fitStrategy, height, out version);
+    }
+
+    /// <summary>Whether the data, the optional ECI prefix and the FNC1 indicator's bits fit the version at the ECC level.</summary>
+    public static bool FitsFnc1(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int dataLength, EciMode eciMode, int fnc1HeaderBits)
+        => GetRequiredBits(version, mode, dataLength, eciMode) + fnc1HeaderBits <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
+
+    /// <summary>
+    /// <see cref="TrySelect"/> with the FNC1 indicator's bits (3 in first position, 11 in second) in the header beside the ECI prefix.
+    /// The automatic fit walks the strategy's order pricing each version, since the capacity tables have no FNC1 axis; the route is cold, so the walk is affordable.
+    /// </summary>
+    public static bool TrySelectFnc1(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int fnc1HeaderBits, out RmQRVersion version)
+    {
+        ValidateFitArguments(eccLevel, fitStrategy, height, requestedVersion, eciMode);
+
+        if (requestedVersion is { } requested)
+        {
+            if (!FitsFnc1(requested, eccLevel, mode, dataLength, eciMode, fnc1HeaderBits))
+            {
+                version = default;
+                return false;
+            }
+
+            version = requested;
+            return true;
+        }
+
+        var order = GetFitOrder(fitStrategy);
+        var heightMask = GetFitHeightMask(fitStrategy, height);
+        for (var j = 0; j < order.Length; j++)
+        {
+            var candidate = (RmQRVersion)order[j];
+            if ((heightMask & (1u << j)) != 0 && FitsFnc1(candidate, eccLevel, mode, dataLength, eciMode, fnc1HeaderBits))
+            {
+                version = candidate;
+                return true;
+            }
+        }
+
+        version = default;
+        return false;
+    }
+
+    /// <summary><see cref="TrySelectFnc1"/> that throws the "content is too long" error of the <c>Select</c> overloads, with the FNC1 maximum in it.</summary>
+    public static RmQRVersion SelectFnc1(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int fnc1HeaderBits)
+    {
+        if (TrySelectFnc1(mode, dataLength, eciMode, eccLevel, requestedVersion, fitStrategy, height, fnc1HeaderBits, out var version))
+            return version;
+
+        throw NotFittingError(mode, dataLength, eciMode, eccLevel, requestedVersion, height, fnc1HeaderBits);
     }
 
     /// <summary>

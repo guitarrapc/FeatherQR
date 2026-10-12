@@ -188,7 +188,7 @@ internal static class QRBinaryDecoder
                             var indicator = reader.Reads(8);
                             if (!Fnc1Mode.IsValidApplicationIndicator(indicator))
                                 return DecodeStatus.InvalidBitstream;
-                            fnc1 = Fnc1Mode.SecondPosition(indicator);
+                            fnc1 = Fnc1Mode.FromCodeword(indicator);
                             break;
                         }
                     default:
